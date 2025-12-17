@@ -1,114 +1,61 @@
 ---
-# Install and configure webMethods API Gateway
+# Install and configure webMethods API Gateway using Docker
 
-- name: Create webMethods installation directory
+- name: Ensure Docker is installed
+  yum:
+    name: docker
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Start and enable Docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Create webMethods data directories
   file:
-    path: /opt/softwareag
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: '0755'
+  loop:
+    - /opt/webmethods/data
+    - /opt/webmethods/config
+    - /opt/webmethods/logs
 
-- name: Check if webMethods is already installed
-  stat:
-    path: /opt/softwareag/profiles/IS_default/bin/startup.sh
-  register: webmethods_installed
+- name: Pull webMethods API Gateway Docker image
+  docker_image:
+    name: "{{ webmethods_docker_image }}"
+    source: pull
+    force_source: yes
+  register: docker_pull
 
-- name: Download webMethods installer from S3
-  aws_s3:
-    bucket: "{{ artifacts_bucket }}"
-    object: "installers/webmethods/{{ webmethods_installer }}"
-    dest: "/tmp/{{ webmethods_installer }}"
-    mode: get
-  when: not webmethods_installed.stat.exists
-
-- name: Extract webMethods installer
-  unarchive:
-    src: "/tmp/{{ webmethods_installer }}"
-    dest: /opt/softwareag
-    remote_src: yes
-    creates: /opt/softwareag/install/products
-  when: not webmethods_installed.stat.exists
-
-- name: Copy webMethods installation script
+- name: Create docker-compose file for webMethods
   template:
-    src: install-script.txt.j2
-    dest: /tmp/webmethods-install.txt
-  when: not webmethods_installed.stat.exists
-
-- name: Run webMethods silent installation
-  shell: |
-    cd /opt/softwareag/install
-    ./installer.sh -readScript /tmp/webmethods-install.txt -console
-  args:
-    creates: /opt/softwareag/profiles/IS_default/bin/startup.sh
-  when: not webmethods_installed.stat.exists
-
-- name: Configure API Gateway port
-  lineinfile:
-    path: /opt/softwareag/IntegrationServer/instances/default/config/server.cnf
-    regexp: '^watt.server.port='
-    line: 'watt.server.port=5555'
-  notify: restart webmethods
-
-- name: Configure API Gateway administrator port
-  lineinfile:
-    path: /opt/softwareag/IntegrationServer/instances/default/config/server.cnf
-    regexp: '^watt.server.adminPort='
-    line: 'watt.server.adminPort=9072'
-  notify: restart webmethods
-
-- name: Create systemd service for webMethods
-  template:
-    src: webmethods.service.j2
-    dest: /etc/systemd/system/webmethods.service
+    src: docker-compose.yml.j2
+    dest: /opt/webmethods/docker-compose.yml
     mode: '0644'
-  notify:
-    - reload systemd
-    - restart webmethods
 
-- name: Create webMethods environment file
+- name: Create environment file for webMethods
   template:
     src: webmethods.env.j2
-    dest: /opt/softwareag/webmethods.env
-    mode: '0644'
+    dest: /opt/webmethods/.env
+    mode: '0600'
 
-- name: Configure API Gateway to use external Elasticsearch (OpenSearch)
-  template:
-    src: elasticsearch.yml.j2
-    dest: /opt/softwareag/InternalDataStore/config/elasticsearch.yml
-  notify: restart webmethods
-  when: use_external_opensearch | default(false)
+- name: Install docker-compose
+  get_url:
+    url: "https://github.com/docker/compose/releases/download/v2.23.0/docker-compose-linux-x86_64"
+    dest: /usr/local/bin/docker-compose
+    mode: '0755'
 
-- name: Retrieve license from Vault
+- name: Start webMethods container with docker-compose
   shell: |
-    export VAULT_ADDR="{{ vault_addr }}"
-    vault login -method=aws role=api-gateway
-    vault kv get -field=license secret/webmethods/license > /opt/softwareag/license.xml
+    cd /opt/webmethods
+    docker-compose up -d
   args:
-    creates: /opt/softwareag/license.xml
-  when: vault_addr is defined
-
-- name: Install API Gateway license
-  copy:
-    src: /opt/softwareag/license.xml
-    dest: /opt/softwareag/IntegrationServer/instances/default/config/licenseKey.xml
-    remote_src: yes
-  notify: restart webmethods
-  when: vault_addr is defined
-
-- name: Configure API Gateway logging
-  template:
-    src: log4j2.xml.j2
-    dest: /opt/softwareag/IntegrationServer/instances/default/config/log4j2.xml
-  notify: restart webmethods
-
-- name: Enable and start webMethods service
-  systemd:
-    name: webmethods
-    enabled: yes
-    state: started
-    daemon_reload: yes
+    chdir: /opt/webmethods
 
 - name: Wait for API Gateway to be ready
   uri:
@@ -126,7 +73,7 @@
     url: "http://localhost:9072/rest/apigateway/configurations/password"
     method: PUT
     user: Administrator
-    password: "manage"  # Default password
+    password: "manage"
     force_basic_auth: yes
     body_format: json
     body:
@@ -134,7 +81,7 @@
     status_code: 200
   when: webmethods_admin_password is defined
 
-- name: Create API Gateway Team for tenant isolation
+- name: Create API Gateway Teams for multi-tenancy
   uri:
     url: "http://localhost:9072/rest/apigateway/teams"
     method: POST
@@ -148,6 +95,7 @@
     status_code: 201
   loop: "{{ api_gateway_teams | default([]) }}"
   when: webmethods_admin_password is defined
+  ignore_errors: yes
 
 - name: Configure CloudWatch logs for API Gateway
   template:
@@ -155,10 +103,10 @@
     dest: /opt/aws/amazon-cloudwatch-agent/etc/apim-gateway-config.json
   notify: restart cloudwatch-agent
 
-- name: Create backup script
+- name: Create backup script for Docker volumes
   template:
-    src: backup.sh.j2
-    dest: /opt/softwareag/bin/backup.sh
+    src: backup-docker.sh.j2
+    dest: /opt/webmethods/backup.sh
     mode: '0755'
 
 - name: Schedule daily backups
@@ -166,14 +114,16 @@
     name: "webMethods API Gateway backup"
     minute: "0"
     hour: "2"
-    job: "/opt/softwareag/bin/backup.sh"
+    job: "/opt/webmethods/backup.sh"
     user: root
 
 - name: Display API Gateway info
   debug:
     msg: |
-      webMethods API Gateway installation completed!
+      webMethods API Gateway (Docker) installation completed!
+      - Container: {{ webmethods_docker_image }}
       - Admin UI: http://{{ ansible_default_ipv4.address }}:9072
       - Runtime Port: 5555
       - Default User: Administrator
-      - Check health: curl http://localhost:9072/rest/apigateway/health
+      - Check: docker ps
+      - Logs: docker logs webmethods-gateway

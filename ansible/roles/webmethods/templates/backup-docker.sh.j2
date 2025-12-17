@@ -1,0 +1,39 @@
+#!/bin/bash
+# Backup script for webMethods API Gateway (Docker version)
+
+set -e
+
+BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/tmp/webmethods-backup-${BACKUP_DATE}"
+S3_BUCKET="{{ backup_bucket | default('apim-backups-dev') }}"
+
+echo "Starting webMethods Docker backup at $(date)"
+
+# Create backup directory
+mkdir -p ${BACKUP_DIR}
+
+# Backup Docker volumes (data, config, packages)
+echo "Backing up Docker volumes..."
+tar czf ${BACKUP_DIR}/data.tar.gz -C /opt/webmethods/data . 2>/dev/null || true
+tar czf ${BACKUP_DIR}/config.tar.gz -C /opt/webmethods/config . 2>/dev/null || true
+tar czf ${BACKUP_DIR}/packages.tar.gz -C /opt/webmethods/packages . 2>/dev/null || true
+
+# Backup docker-compose configuration
+echo "Backing up Docker configuration..."
+cp /opt/webmethods/docker-compose.yml ${BACKUP_DIR}/
+cp /opt/webmethods/.env ${BACKUP_DIR}/ 2>/dev/null || true
+
+# Export container image info
+echo "Saving container info..."
+docker inspect webmethods-gateway > ${BACKUP_DIR}/container-info.json 2>/dev/null || true
+
+# Upload to S3
+echo "Uploading to S3..."
+aws s3 sync ${BACKUP_DIR}/ s3://${S3_BUCKET}/webmethods-docker/${BACKUP_DATE}/ \
+  --region {{ aws_region | default('eu-west-1') }}
+
+# Cleanup local backup
+rm -rf ${BACKUP_DIR}
+
+echo "Backup completed successfully at $(date)"
+echo "Backup location: s3://${S3_BUCKET}/webmethods-docker/${BACKUP_DATE}/"

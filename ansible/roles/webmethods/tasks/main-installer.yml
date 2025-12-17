@@ -1,0 +1,179 @@
+---
+# Install and configure webMethods API Gateway
+
+- name: Create webMethods installation directory
+  file:
+    path: /opt/softwareag
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Check if webMethods is already installed
+  stat:
+    path: /opt/softwareag/profiles/IS_default/bin/startup.sh
+  register: webmethods_installed
+
+- name: Download webMethods installer from S3
+  aws_s3:
+    bucket: "{{ artifacts_bucket }}"
+    object: "installers/webmethods/{{ webmethods_installer }}"
+    dest: "/tmp/{{ webmethods_installer }}"
+    mode: get
+  when: not webmethods_installed.stat.exists
+
+- name: Extract webMethods installer
+  unarchive:
+    src: "/tmp/{{ webmethods_installer }}"
+    dest: /opt/softwareag
+    remote_src: yes
+    creates: /opt/softwareag/install/products
+  when: not webmethods_installed.stat.exists
+
+- name: Copy webMethods installation script
+  template:
+    src: install-script.txt.j2
+    dest: /tmp/webmethods-install.txt
+  when: not webmethods_installed.stat.exists
+
+- name: Run webMethods silent installation
+  shell: |
+    cd /opt/softwareag/install
+    ./installer.sh -readScript /tmp/webmethods-install.txt -console
+  args:
+    creates: /opt/softwareag/profiles/IS_default/bin/startup.sh
+  when: not webmethods_installed.stat.exists
+
+- name: Configure API Gateway port
+  lineinfile:
+    path: /opt/softwareag/IntegrationServer/instances/default/config/server.cnf
+    regexp: '^watt.server.port='
+    line: 'watt.server.port=5555'
+  notify: restart webmethods
+
+- name: Configure API Gateway administrator port
+  lineinfile:
+    path: /opt/softwareag/IntegrationServer/instances/default/config/server.cnf
+    regexp: '^watt.server.adminPort='
+    line: 'watt.server.adminPort=9072'
+  notify: restart webmethods
+
+- name: Create systemd service for webMethods
+  template:
+    src: webmethods.service.j2
+    dest: /etc/systemd/system/webmethods.service
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart webmethods
+
+- name: Create webMethods environment file
+  template:
+    src: webmethods.env.j2
+    dest: /opt/softwareag/webmethods.env
+    mode: '0644'
+
+- name: Configure API Gateway to use external Elasticsearch (OpenSearch)
+  template:
+    src: elasticsearch.yml.j2
+    dest: /opt/softwareag/InternalDataStore/config/elasticsearch.yml
+  notify: restart webmethods
+  when: use_external_opensearch | default(false)
+
+- name: Retrieve license from Vault
+  shell: |
+    export VAULT_ADDR="{{ vault_addr }}"
+    vault login -method=aws role=api-gateway
+    vault kv get -field=license secret/webmethods/license > /opt/softwareag/license.xml
+  args:
+    creates: /opt/softwareag/license.xml
+  when: vault_addr is defined
+
+- name: Install API Gateway license
+  copy:
+    src: /opt/softwareag/license.xml
+    dest: /opt/softwareag/IntegrationServer/instances/default/config/licenseKey.xml
+    remote_src: yes
+  notify: restart webmethods
+  when: vault_addr is defined
+
+- name: Configure API Gateway logging
+  template:
+    src: log4j2.xml.j2
+    dest: /opt/softwareag/IntegrationServer/instances/default/config/log4j2.xml
+  notify: restart webmethods
+
+- name: Enable and start webMethods service
+  systemd:
+    name: webmethods
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Wait for API Gateway to be ready
+  uri:
+    url: "http://localhost:9072/rest/apigateway/health"
+    method: GET
+    status_code: 200
+    timeout: 300
+  retries: 30
+  delay: 10
+  register: result
+  until: result.status == 200
+
+- name: Configure API Gateway administrator password
+  uri:
+    url: "http://localhost:9072/rest/apigateway/configurations/password"
+    method: PUT
+    user: Administrator
+    password: "manage"  # Default password
+    force_basic_auth: yes
+    body_format: json
+    body:
+      newPassword: "{{ webmethods_admin_password }}"
+    status_code: 200
+  when: webmethods_admin_password is defined
+
+- name: Create API Gateway Team for tenant isolation
+  uri:
+    url: "http://localhost:9072/rest/apigateway/teams"
+    method: POST
+    user: Administrator
+    password: "{{ webmethods_admin_password }}"
+    force_basic_auth: yes
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      description: "{{ item.description }}"
+    status_code: 201
+  loop: "{{ api_gateway_teams | default([]) }}"
+  when: webmethods_admin_password is defined
+
+- name: Configure CloudWatch logs for API Gateway
+  template:
+    src: cloudwatch-config.json.j2
+    dest: /opt/aws/amazon-cloudwatch-agent/etc/apim-gateway-config.json
+  notify: restart cloudwatch-agent
+
+- name: Create backup script
+  template:
+    src: backup.sh.j2
+    dest: /opt/softwareag/bin/backup.sh
+    mode: '0755'
+
+- name: Schedule daily backups
+  cron:
+    name: "webMethods API Gateway backup"
+    minute: "0"
+    hour: "2"
+    job: "/opt/softwareag/bin/backup.sh"
+    user: root
+
+- name: Display API Gateway info
+  debug:
+    msg: |
+      webMethods API Gateway installation completed!
+      - Admin UI: http://{{ ansible_default_ipv4.address }}:9072
+      - Runtime Port: 5555
+      - Default User: Administrator
+      - Check health: curl http://localhost:9072/rest/apigateway/health

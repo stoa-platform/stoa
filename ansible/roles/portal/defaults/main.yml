@@ -1,7 +1,7 @@
 ---
-# Default variables for Developer Portal role
+# Default variables for Developer Portal Docker deployment
 
-portal_installer: "webmethods-developerportal-10.15.zip"
-artifacts_bucket: "apim-artifacts-dev"
+portal_docker_image: "softwareag/developerportal:10.15"
 portal_port: 18101
-api_gateway_url: "http://webmethods-instance:9072"
+api_gateway_url: "http://{{ groups['webmethods'][0] }}:9072"
+portal_admin_password: "{{ lookup('env', 'PORTAL_ADMIN_PASSWORD') | default('manage') }}"

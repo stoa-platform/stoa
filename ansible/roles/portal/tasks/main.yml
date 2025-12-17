@@ -1,77 +1,72 @@
 ---
-# Install and configure webMethods Developer Portal
+# Install and configure webMethods Developer Portal using Docker
 
-- name: Create portal installation directory
+- name: Ensure Docker is installed
+  yum:
+    name: docker
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Start and enable Docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Create Portal data directories
   file:
-    path: /opt/softwareag/portal
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: '0755'
+  loop:
+    - /opt/portal/data
+    - /opt/portal/logs
 
-- name: Check if Developer Portal is already installed
-  stat:
-    path: /opt/softwareag/portal/bin/startup.sh
-  register: portal_installed
+- name: Pull Developer Portal Docker image
+  docker_image:
+    name: "{{ portal_docker_image }}"
+    source: pull
+    force_source: yes
 
-- name: Download Developer Portal installer from S3
-  aws_s3:
-    bucket: "{{ artifacts_bucket }}"
-    object: "installers/portal/{{ portal_installer }}"
-    dest: "/tmp/{{ portal_installer }}"
-    mode: get
-  when: not portal_installed.stat.exists
-
-- name: Extract Developer Portal
-  unarchive:
-    src: "/tmp/{{ portal_installer }}"
-    dest: /opt/softwareag/portal
-    remote_src: yes
-  when: not portal_installed.stat.exists
-
-- name: Configure Developer Portal port
-  lineinfile:
-    path: /opt/softwareag/portal/config/portal.properties
-    regexp: '^portal.port='
-    line: 'portal.port=18101'
-  notify: restart portal
-
-- name: Configure connection to API Gateway
-  lineinfile:
-    path: /opt/softwareag/portal/config/portal.properties
-    regexp: '^apigateway.url='
-    line: 'apigateway.url={{ api_gateway_url }}'
-  notify: restart portal
-
-- name: Create systemd service for Developer Portal
-  template:
-    src: portal.service.j2
-    dest: /etc/systemd/system/portal.service
-    mode: '0644'
-  notify:
-    - reload systemd
-    - restart portal
-
-- name: Enable and start Developer Portal
-  systemd:
-    name: portal
-    enabled: yes
+- name: Run Developer Portal container
+  docker_container:
+    name: developer-portal
+    image: "{{ portal_docker_image }}"
     state: started
-    daemon_reload: yes
+    restart_policy: unless-stopped
+    ports:
+      - "18101:18101"
+    env:
+      ACCEPT_LICENSE: "true"
+      API_GATEWAY_URL: "{{ api_gateway_url }}"
+      PORTAL_ADMIN_PASSWORD: "{{ portal_admin_password | default('manage') }}"
+    volumes:
+      - /opt/portal/data:/opt/softwareag/portal/data
+      - /opt/portal/logs:/opt/softwareag/portal/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18101/portal"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
 - name: Wait for portal to be ready
   uri:
     url: "http://localhost:18101/portal"
     method: GET
-    status_code: 200
+    status_code: [200, 302]
   retries: 30
   delay: 10
   register: result
-  until: result.status == 200
+  until: result.status in [200, 302]
 
 - name: Display portal info
   debug:
     msg: |
-      Developer Portal installation completed!
+      Developer Portal (Docker) installation completed!
+      - Container: {{ portal_docker_image }}
       - URL: http://{{ ansible_default_ipv4.address }}:18101/portal
-      - Connected to API Gateway: {{ api_gateway_url }}
+      - Connected to Gateway: {{ api_gateway_url }}
+      - Check: docker logs developer-portal

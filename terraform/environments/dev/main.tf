@@ -77,6 +77,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
     id     = "archive-old-backups"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = 30
       storage_class = "GLACIER"

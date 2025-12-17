@@ -1,0 +1,95 @@
+---
+# Install and configure Jenkins
+
+- name: Add Jenkins repository
+  yum_repository:
+    name: jenkins
+    description: Jenkins Repository
+    baseurl: https://pkg.jenkins.io/redhat-stable/
+    gpgkey: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+    gpgcheck: yes
+
+- name: Install Java 17 for Jenkins
+  yum:
+    name:
+      - java-17-openjdk
+      - java-17-openjdk-devel
+    state: present
+
+- name: Install Jenkins
+  yum:
+    name: jenkins
+    state: present
+
+- name: Create Jenkins home directory
+  file:
+    path: /var/lib/jenkins
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+
+- name: Configure Jenkins to listen on port 8080
+  lineinfile:
+    path: /etc/sysconfig/jenkins
+    regexp: '^JENKINS_PORT='
+    line: 'JENKINS_PORT="8080"'
+  notify: restart jenkins
+
+- name: Start and enable Jenkins
+  systemd:
+    name: jenkins
+    enabled: yes
+    state: started
+
+- name: Wait for Jenkins to start
+  wait_for:
+    port: 8080
+    delay: 10
+    timeout: 300
+
+- name: Get Jenkins initial admin password
+  slurp:
+    src: /var/lib/jenkins/secrets/initialAdminPassword
+  register: jenkins_password
+  changed_when: false
+
+- name: Install Jenkins plugins
+  jenkins_plugin:
+    name: "{{ item }}"
+    url: "http://localhost:8080"
+    url_username: admin
+    url_password: "{{ jenkins_password.content | b64decode | trim }}"
+  loop:
+    - git
+    - workflow-aggregator
+    - docker-workflow
+    - aws-credentials
+    - terraform
+    - ansible
+  ignore_errors: yes
+
+- name: Create Jenkins AWS credentials
+  template:
+    src: aws-credentials.xml.j2
+    dest: /var/lib/jenkins/credentials.xml
+    owner: jenkins
+    group: jenkins
+    mode: '0600'
+
+- name: Configure Jenkins for Terraform and Ansible
+  copy:
+    content: |
+      TERRAFORM_HOME=/usr/local/bin
+      ANSIBLE_HOME=/usr/bin
+    dest: /var/lib/jenkins/terraform-ansible.env
+    owner: jenkins
+    group: jenkins
+
+- name: Display Jenkins info
+  debug:
+    msg: |
+      Jenkins installation completed!
+      - URL: http://{{ ansible_default_ipv4.address }}:8080
+      - Initial admin password: {{ jenkins_password.content | b64decode | trim }}
+      - Complete setup wizard in browser

@@ -1,0 +1,10 @@
+---
+- name: restart cloudwatch-agent
+  systemd:
+    name: amazon-cloudwatch-agent
+    state: restarted
+
+- name: restart sshd
+  systemd:
+    name: sshd
+    state: restarted

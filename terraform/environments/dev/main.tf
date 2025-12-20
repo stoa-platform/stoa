@@ -406,3 +406,321 @@ output "portal_instance_id" {
   value       = aws_instance.portal.id
   description = "Portal EC2 instance ID"
 }
+
+# =============================================================================
+# AUTO STOP/START SYSTEM
+# =============================================================================
+
+# IAM Role for Lambda
+resource "aws_iam_role" "lambda_ec2_control" {
+  name = "${local.project}-lambda-ec2-control-${local.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy" "lambda_ec2_control" {
+  name = "${local.project}-lambda-ec2-control"
+  role = aws_iam_role.lambda_ec2_control.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:StartInstances",
+          "ec2:StopInstances",
+          "ec2:DescribeInstances"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "ec2:ResourceTag/Project" = "APIM"
+          }
+        }
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ec2:DescribeInstances"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:GetMetricStatistics"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+# Lambda: Auto-Stop (inactivity detection)
+resource "aws_lambda_function" "auto_stop" {
+  filename         = data.archive_file.auto_stop.output_path
+  function_name    = "${local.project}-auto-stop-${local.environment}"
+  role             = aws_iam_role.lambda_ec2_control.arn
+  handler          = "index.handler"
+  source_code_hash = data.archive_file.auto_stop.output_base64sha256
+  runtime          = "python3.11"
+  timeout          = 60
+
+  environment {
+    variables = {
+      INSTANCE_IDS       = "${aws_instance.webmethods.id},${aws_instance.portal.id}"
+      CPU_THRESHOLD      = "5"
+      INACTIVE_MINUTES   = "30"
+    }
+  }
+
+  tags = local.tags
+}
+
+data "archive_file" "auto_stop" {
+  type        = "zip"
+  output_path = "${path.module}/lambda_auto_stop.zip"
+
+  source {
+    content  = <<-PYTHON
+import boto3
+import os
+from datetime import datetime, timedelta
+
+def handler(event, context):
+    ec2 = boto3.client('ec2')
+    cloudwatch = boto3.client('cloudwatch')
+
+    instance_ids = os.environ['INSTANCE_IDS'].split(',')
+    cpu_threshold = float(os.environ.get('CPU_THRESHOLD', '5'))
+    inactive_minutes = int(os.environ.get('INACTIVE_MINUTES', '30'))
+
+    # Get running instances
+    response = ec2.describe_instances(InstanceIds=instance_ids)
+    running_instances = []
+
+    for reservation in response['Reservations']:
+        for instance in reservation['Instances']:
+            if instance['State']['Name'] == 'running':
+                running_instances.append(instance['InstanceId'])
+
+    if not running_instances:
+        print("No running instances found")
+        return {'stopped': []}
+
+    # Check CPU for each running instance
+    instances_to_stop = []
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(minutes=inactive_minutes)
+
+    for instance_id in running_instances:
+        metrics = cloudwatch.get_metric_statistics(
+            Namespace='AWS/EC2',
+            MetricName='CPUUtilization',
+            Dimensions=[{'Name': 'InstanceId', 'Value': instance_id}],
+            StartTime=start_time,
+            EndTime=end_time,
+            Period=300,
+            Statistics=['Average']
+        )
+
+        if metrics['Datapoints']:
+            avg_cpu = sum(d['Average'] for d in metrics['Datapoints']) / len(metrics['Datapoints'])
+            print(f"Instance {instance_id}: avg CPU = {avg_cpu:.2f}%")
+
+            if avg_cpu < cpu_threshold:
+                instances_to_stop.append(instance_id)
+        else:
+            print(f"Instance {instance_id}: no metrics yet, skipping")
+
+    # Stop idle instances
+    if instances_to_stop:
+        print(f"Stopping idle instances: {instances_to_stop}")
+        ec2.stop_instances(InstanceIds=instances_to_stop)
+        return {'stopped': instances_to_stop}
+
+    return {'stopped': []}
+PYTHON
+    filename = "index.py"
+  }
+}
+
+# CloudWatch Event: Check every 10 minutes
+resource "aws_cloudwatch_event_rule" "auto_stop_schedule" {
+  name                = "${local.project}-auto-stop-schedule-${local.environment}"
+  description         = "Check for idle instances every 10 minutes"
+  schedule_expression = "rate(10 minutes)"
+
+  tags = local.tags
+}
+
+resource "aws_cloudwatch_event_target" "auto_stop" {
+  rule      = aws_cloudwatch_event_rule.auto_stop_schedule.name
+  target_id = "auto-stop-lambda"
+  arn       = aws_lambda_function.auto_stop.arn
+}
+
+resource "aws_lambda_permission" "auto_stop" {
+  statement_id  = "AllowEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.auto_stop.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.auto_stop_schedule.arn
+}
+
+# Lambda: Start on demand
+resource "aws_lambda_function" "start_instances" {
+  filename         = data.archive_file.start_instances.output_path
+  function_name    = "${local.project}-start-instances-${local.environment}"
+  role             = aws_iam_role.lambda_ec2_control.arn
+  handler          = "index.handler"
+  source_code_hash = data.archive_file.start_instances.output_base64sha256
+  runtime          = "python3.11"
+  timeout          = 60
+
+  environment {
+    variables = {
+      INSTANCE_IDS = "${aws_instance.webmethods.id},${aws_instance.portal.id}"
+      ALB_DNS      = aws_lb.main.dns_name
+    }
+  }
+
+  tags = local.tags
+}
+
+data "archive_file" "start_instances" {
+  type        = "zip"
+  output_path = "${path.module}/lambda_start.zip"
+
+  source {
+    content  = <<-PYTHON
+import boto3
+import os
+import time
+
+def handler(event, context):
+    ec2 = boto3.client('ec2')
+    instance_ids = os.environ['INSTANCE_IDS'].split(',')
+    alb_dns = os.environ.get('ALB_DNS', '')
+
+    # Get current state
+    response = ec2.describe_instances(InstanceIds=instance_ids)
+
+    stopped_instances = []
+    running_instances = []
+
+    for reservation in response['Reservations']:
+        for instance in reservation['Instances']:
+            if instance['State']['Name'] == 'stopped':
+                stopped_instances.append(instance['InstanceId'])
+            elif instance['State']['Name'] == 'running':
+                running_instances.append(instance['InstanceId'])
+
+    if stopped_instances:
+        print(f"Starting instances: {stopped_instances}")
+        ec2.start_instances(InstanceIds=stopped_instances)
+
+        # Wait for instances to be running
+        waiter = ec2.get_waiter('instance_running')
+        waiter.wait(InstanceIds=stopped_instances, WaiterConfig={'Delay': 5, 'MaxAttempts': 24})
+
+        return {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'text/html'},
+            'body': f'''
+                <html>
+                <head><meta http-equiv="refresh" content="60;url=http://{alb_dns}/gateway"></head>
+                <body>
+                    <h1>APIM Starting...</h1>
+                    <p>Instances started: {stopped_instances}</p>
+                    <p>Redirecting to gateway in 60 seconds...</p>
+                    <p><a href="http://{alb_dns}/gateway">Click here if not redirected</a></p>
+                </body>
+                </html>
+            '''
+        }
+
+    return {
+        'statusCode': 200,
+        'headers': {'Content-Type': 'text/html'},
+        'body': f'''
+            <html>
+            <head><meta http-equiv="refresh" content="3;url=http://{alb_dns}/gateway"></head>
+            <body>
+                <h1>APIM Already Running</h1>
+                <p>Redirecting to gateway...</p>
+            </body>
+            </html>
+        '''
+    }
+PYTHON
+    filename = "index.py"
+  }
+}
+
+# API Gateway for start endpoint
+resource "aws_apigatewayv2_api" "start" {
+  name          = "${local.project}-start-api-${local.environment}"
+  protocol_type = "HTTP"
+
+  tags = local.tags
+}
+
+resource "aws_apigatewayv2_integration" "start" {
+  api_id                 = aws_apigatewayv2_api.start.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.start_instances.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "start" {
+  api_id    = aws_apigatewayv2_api.start.id
+  route_key = "GET /start"
+  target    = "integrations/${aws_apigatewayv2_integration.start.id}"
+}
+
+resource "aws_apigatewayv2_stage" "start" {
+  api_id      = aws_apigatewayv2_api.start.id
+  name        = "$default"
+  auto_deploy = true
+
+  tags = local.tags
+}
+
+resource "aws_lambda_permission" "api_gateway" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.start_instances.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.start.execution_arn}/*/*"
+}
+
+# Outputs for start/stop system
+output "start_url" {
+  value       = "${aws_apigatewayv2_api.start.api_endpoint}/start"
+  description = "URL to start instances on demand"
+}
+
+output "auto_stop_info" {
+  value       = "Instances will auto-stop after 30 min of inactivity (CPU < 5%)"
+  description = "Auto-stop configuration"
+}

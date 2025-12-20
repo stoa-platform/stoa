@@ -476,6 +476,7 @@ resource "aws_iam_role_policy" "lambda_ec2_control" {
 }
 
 # Lambda: Auto-Stop (inactivity detection)
+# Uses tags to auto-discover instances - no need to update when adding new EC2s
 resource "aws_lambda_function" "auto_stop" {
   filename         = data.archive_file.auto_stop.output_path
   function_name    = "${local.project}-auto-stop-${local.environment}"
@@ -487,9 +488,10 @@ resource "aws_lambda_function" "auto_stop" {
 
   environment {
     variables = {
-      INSTANCE_IDS       = "${aws_instance.webmethods.id},${aws_instance.portal.id}"
-      CPU_THRESHOLD      = "5"
-      INACTIVE_MINUTES   = "30"
+      PROJECT_TAG      = "APIM"
+      ENVIRONMENT_TAG  = local.environment
+      CPU_THRESHOLD    = "5"
+      INACTIVE_MINUTES = "30"
     }
   }
 
@@ -510,22 +512,37 @@ def handler(event, context):
     ec2 = boto3.client('ec2')
     cloudwatch = boto3.client('cloudwatch')
 
-    instance_ids = os.environ['INSTANCE_IDS'].split(',')
+    project_tag = os.environ.get('PROJECT_TAG', 'APIM')
+    environment_tag = os.environ.get('ENVIRONMENT_TAG', 'dev')
     cpu_threshold = float(os.environ.get('CPU_THRESHOLD', '5'))
     inactive_minutes = int(os.environ.get('INACTIVE_MINUTES', '30'))
 
-    # Get running instances
-    response = ec2.describe_instances(InstanceIds=instance_ids)
-    running_instances = []
+    # Auto-discover instances by tags
+    response = ec2.describe_instances(
+        Filters=[
+            {'Name': 'tag:Project', 'Values': [project_tag]},
+            {'Name': 'tag:Environment', 'Values': [environment_tag]},
+            {'Name': 'instance-state-name', 'Values': ['running']}
+        ]
+    )
 
+    running_instances = []
     for reservation in response['Reservations']:
         for instance in reservation['Instances']:
-            if instance['State']['Name'] == 'running':
+            # Check if instance has AutoStop=false tag (skip those)
+            auto_stop = True
+            for tag in instance.get('Tags', []):
+                if tag['Key'] == 'AutoStop' and tag['Value'].lower() == 'false':
+                    auto_stop = False
+                    break
+            if auto_stop:
                 running_instances.append(instance['InstanceId'])
 
     if not running_instances:
-        print("No running instances found")
+        print("No running instances found (or all have AutoStop=false)")
         return {'stopped': []}
+
+    print(f"Found {len(running_instances)} running instances: {running_instances}")
 
     # Check CPU for each running instance
     instances_to_stop = []
@@ -588,6 +605,7 @@ resource "aws_lambda_permission" "auto_stop" {
 }
 
 # Lambda: Start on demand
+# Uses tags to auto-discover instances - no need to update when adding new EC2s
 resource "aws_lambda_function" "start_instances" {
   filename         = data.archive_file.start_instances.output_path
   function_name    = "${local.project}-start-instances-${local.environment}"
@@ -595,12 +613,13 @@ resource "aws_lambda_function" "start_instances" {
   handler          = "index.handler"
   source_code_hash = data.archive_file.start_instances.output_base64sha256
   runtime          = "python3.11"
-  timeout          = 60
+  timeout          = 120
 
   environment {
     variables = {
-      INSTANCE_IDS = "${aws_instance.webmethods.id},${aws_instance.portal.id}"
-      ALB_DNS      = aws_lb.main.dns_name
+      PROJECT_TAG     = "APIM"
+      ENVIRONMENT_TAG = local.environment
+      ALB_DNS         = aws_lb.main.dns_name
     }
   }
 
@@ -615,28 +634,39 @@ data "archive_file" "start_instances" {
     content  = <<-PYTHON
 import boto3
 import os
-import time
 
 def handler(event, context):
     ec2 = boto3.client('ec2')
-    instance_ids = os.environ['INSTANCE_IDS'].split(',')
+    project_tag = os.environ.get('PROJECT_TAG', 'APIM')
+    environment_tag = os.environ.get('ENVIRONMENT_TAG', 'dev')
     alb_dns = os.environ.get('ALB_DNS', '')
 
-    # Get current state
-    response = ec2.describe_instances(InstanceIds=instance_ids)
+    # Auto-discover stopped instances by tags
+    response = ec2.describe_instances(
+        Filters=[
+            {'Name': 'tag:Project', 'Values': [project_tag]},
+            {'Name': 'tag:Environment', 'Values': [environment_tag]},
+            {'Name': 'instance-state-name', 'Values': ['stopped']}
+        ]
+    )
 
     stopped_instances = []
-    running_instances = []
-
     for reservation in response['Reservations']:
         for instance in reservation['Instances']:
-            if instance['State']['Name'] == 'stopped':
-                stopped_instances.append(instance['InstanceId'])
-            elif instance['State']['Name'] == 'running':
-                running_instances.append(instance['InstanceId'])
+            stopped_instances.append(instance['InstanceId'])
+
+    # Also check running instances
+    running_response = ec2.describe_instances(
+        Filters=[
+            {'Name': 'tag:Project', 'Values': [project_tag]},
+            {'Name': 'tag:Environment', 'Values': [environment_tag]},
+            {'Name': 'instance-state-name', 'Values': ['running']}
+        ]
+    )
+    running_count = sum(len(r['Instances']) for r in running_response['Reservations'])
 
     if stopped_instances:
-        print(f"Starting instances: {stopped_instances}")
+        print(f"Starting {len(stopped_instances)} instances: {stopped_instances}")
         ec2.start_instances(InstanceIds=stopped_instances)
 
         # Wait for instances to be running
@@ -648,12 +678,24 @@ def handler(event, context):
             'headers': {'Content-Type': 'text/html'},
             'body': f'''
                 <html>
-                <head><meta http-equiv="refresh" content="60;url=http://{alb_dns}/gateway"></head>
+                <head>
+                    <meta http-equiv="refresh" content="90;url=http://{alb_dns}/gateway">
+                    <style>
+                        body {{ font-family: Arial; padding: 40px; background: #f5f5f5; }}
+                        .container {{ background: white; padding: 30px; border-radius: 8px; max-width: 500px; margin: auto; }}
+                        h1 {{ color: #2e7d32; }}
+                        .loader {{ border: 4px solid #f3f3f3; border-top: 4px solid #2e7d32; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }}
+                        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+                    </style>
+                </head>
                 <body>
-                    <h1>APIM Starting...</h1>
-                    <p>Instances started: {stopped_instances}</p>
-                    <p>Redirecting to gateway in 60 seconds...</p>
-                    <p><a href="http://{alb_dns}/gateway">Click here if not redirected</a></p>
+                    <div class="container">
+                        <h1>APIM Starting...</h1>
+                        <div class="loader"></div>
+                        <p><strong>{len(stopped_instances)}</strong> instance(s) starting</p>
+                        <p>Please wait ~90 seconds for services to initialize...</p>
+                        <p><a href="http://{alb_dns}/gateway">Click here if not redirected</a></p>
+                    </div>
                 </body>
                 </html>
             '''
@@ -665,8 +707,9 @@ def handler(event, context):
         'body': f'''
             <html>
             <head><meta http-equiv="refresh" content="3;url=http://{alb_dns}/gateway"></head>
-            <body>
-                <h1>APIM Already Running</h1>
+            <body style="font-family: Arial; padding: 40px;">
+                <h1 style="color: #2e7d32;">APIM Already Running</h1>
+                <p>{running_count} instance(s) running</p>
                 <p>Redirecting to gateway...</p>
             </body>
             </html>

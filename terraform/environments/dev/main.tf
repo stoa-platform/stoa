@@ -1,152 +1,63 @@
+# APIM Platform - Simplified Architecture v2
+# Only webMethods + Portal + ALB (HTTP only)
+
 locals {
   environment = "dev"
   aws_region  = "eu-west-1"
+  project     = "apim"
 
   tags = {
     Project     = "APIM"
     Environment = local.environment
     ManagedBy   = "Terraform"
-    CostCenter  = "Platform"
   }
 }
 
-# VPC Module
+# =============================================================================
+# VPC MODULE
+# =============================================================================
 module "vpc" {
   source = "../../modules/vpc"
 
   vpc_cidr           = "10.0.0.0/16"
   availability_zones = ["eu-west-1a", "eu-west-1b"]
   environment        = local.environment
-  project_name       = "apim"
+  project_name       = local.project
   aws_region         = local.aws_region
   tags               = local.tags
 }
 
-# IAM Module
-module "iam" {
-  source = "../../modules/iam"
-
-  environment  = local.environment
-  project_name = "apim"
-  tags         = local.tags
-}
-
-# S3 Buckets
+# =============================================================================
+# S3 BUCKET (artifacts only)
+# =============================================================================
 resource "aws_s3_bucket" "artifacts" {
-  bucket = "apim-artifacts-${local.environment}"
-
-  tags = merge(
-    local.tags,
-    {
-      Name = "APIM Artifacts"
-    }
-  )
+  bucket = "${local.project}-artifacts-${local.environment}"
+  tags   = merge(local.tags, { Name = "APIM Artifacts" })
 }
 
 resource "aws_s3_bucket_versioning" "artifacts" {
   bucket = aws_s3_bucket.artifacts.id
-
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-resource "aws_s3_bucket" "backups" {
-  bucket = "apim-backups-${local.environment}"
+# =============================================================================
+# SECURITY GROUPS
+# =============================================================================
 
-  tags = merge(
-    local.tags,
-    {
-      Name = "APIM Backups"
-    }
-  )
-}
-
-resource "aws_s3_bucket_versioning" "backups" {
-  bucket = aws_s3_bucket.backups.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "backups" {
-  bucket = aws_s3_bucket.backups.id
-
-  rule {
-    id     = "archive-old-backups"
-    status = "Enabled"
-
-    filter {}
-
-    transition {
-      days          = 30
-      storage_class = "GLACIER"
-    }
-
-    expiration {
-      days = 90
-    }
-  }
-}
-
-resource "aws_s3_bucket" "vault_storage" {
-  bucket = "apim-vault-storage-${local.environment}"
-
-  tags = merge(
-    local.tags,
-    {
-      Name = "Vault Storage Backend"
-    }
-  )
-}
-
-resource "aws_s3_bucket_versioning" "vault_storage" {
-  bucket = aws_s3_bucket.vault_storage.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# KMS Key for Vault Auto-Unseal
-resource "aws_kms_key" "vault" {
-  description             = "KMS key for Vault auto-unseal"
-  deletion_window_in_days = 10
-
-  tags = merge(
-    local.tags,
-    {
-      Name = "vault-unseal-key"
-    }
-  )
-}
-
-resource "aws_kms_alias" "vault" {
-  name          = "alias/apim-vault-${local.environment}"
-  target_key_id = aws_kms_key.vault.key_id
-}
-
-# Security Groups
+# ALB Security Group - HTTP only for now
 resource "aws_security_group" "alb" {
-  name        = "apim-alb-sg-${local.environment}"
+  name        = "${local.project}-alb-sg-${local.environment}"
   description = "Security group for Application Load Balancer"
   vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTPS from internet"
-  }
 
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTP from internet (redirect to HTTPS)"
+    description = "HTTP from internet"
   }
 
   egress {
@@ -156,16 +67,12 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(
-    local.tags,
-    {
-      Name = "apim-alb-sg"
-    }
-  )
+  tags = merge(local.tags, { Name = "${local.project}-alb-sg" })
 }
 
+# webMethods Security Group
 resource "aws_security_group" "webmethods" {
-  name        = "apim-webmethods-sg-${local.environment}"
+  name        = "${local.project}-webmethods-sg-${local.environment}"
   description = "Security group for webMethods Gateway"
   vpc_id      = module.vpc.vpc_id
 
@@ -192,16 +99,12 @@ resource "aws_security_group" "webmethods" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(
-    local.tags,
-    {
-      Name = "apim-webmethods-sg"
-    }
-  )
+  tags = merge(local.tags, { Name = "${local.project}-webmethods-sg" })
 }
 
+# Portal Security Group
 resource "aws_security_group" "portal" {
-  name        = "apim-portal-sg-${local.environment}"
+  name        = "${local.project}-portal-sg-${local.environment}"
   description = "Security group for Developer Portal"
   vpc_id      = module.vpc.vpc_id
 
@@ -210,7 +113,7 @@ resource "aws_security_group" "portal" {
     to_port         = 18101
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
-    description     = "Portal HTTPS from ALB"
+    description     = "Portal from ALB"
   }
 
   egress {
@@ -220,204 +123,286 @@ resource "aws_security_group" "portal" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(
-    local.tags,
-    {
-      Name = "apim-portal-sg"
-    }
-  )
+  tags = merge(local.tags, { Name = "${local.project}-portal-sg" })
 }
 
-resource "aws_security_group" "jenkins" {
-  name        = "apim-jenkins-sg-${local.environment}"
-  description = "Security group for Jenkins"
-  vpc_id      = module.vpc.vpc_id
+# =============================================================================
+# IAM
+# =============================================================================
+resource "aws_iam_role" "ec2" {
+  name = "${local.project}-ec2-role-${local.environment}"
 
-  ingress {
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-    description     = "Jenkins from ALB"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(
-    local.tags,
-    {
-      Name = "apim-jenkins-sg"
-    }
-  )
-}
-
-resource "aws_security_group" "vault" {
-  name        = "apim-vault-sg-${local.environment}"
-  description = "Security group for Vault"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port   = 8200
-    to_port     = 8200
-    protocol    = "tcp"
-    cidr_blocks = [module.vpc.vpc_cidr]
-    description = "Vault API from VPC"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(
-    local.tags,
-    {
-      Name = "apim-vault-sg"
-    }
-  )
-}
-
-# EC2 Instances Module
-module "ec2" {
-  source = "../../modules/ec2"
-
-  environment  = local.environment
-  project_name = "apim"
-  vpc_id       = module.vpc.vpc_id
-
-  private_subnet_ids = module.vpc.private_subnet_ids
-
-  webmethods_instance_type = var.webmethods_instance_type
-  portal_instance_type     = var.portal_instance_type
-  jenkins_instance_type    = var.jenkins_instance_type
-  vault_instance_type      = var.vault_instance_type
-
-  webmethods_security_group_id = aws_security_group.webmethods.id
-  portal_security_group_id     = aws_security_group.portal.id
-  jenkins_security_group_id    = aws_security_group.jenkins.id
-  vault_security_group_id      = aws_security_group.vault.id
-
-  webmethods_instance_profile = module.iam.webmethods_instance_profile
-  portal_instance_profile     = module.iam.portal_instance_profile
-  jenkins_instance_profile    = module.iam.jenkins_instance_profile
-  vault_instance_profile      = module.iam.vault_instance_profile
-
-  kms_key_id       = aws_kms_key.vault.id
-  vault_bucket     = aws_s3_bucket.vault_storage.bucket
-  artifacts_bucket = aws_s3_bucket.artifacts.bucket
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+  })
 
   tags = local.tags
 }
 
-# Application Load Balancer Module
-module "alb" {
-  source = "../../modules/alb"
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
 
-  environment  = local.environment
-  project_name = "apim"
-  vpc_id       = module.vpc.vpc_id
+resource "aws_iam_role_policy" "s3_access" {
+  name = "${local.project}-s3-access"
+  role = aws_iam_role.ec2.id
 
-  public_subnet_ids     = module.vpc.public_subnet_ids
-  alb_security_group_id = aws_security_group.alb.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
+      Resource = [aws_s3_bucket.artifacts.arn, "${aws_s3_bucket.artifacts.arn}/*"]
+    }]
+  })
+}
 
-  webmethods_instance_id = module.ec2.webmethods_instance_id
-  portal_instance_id     = module.ec2.portal_instance_id
-  jenkins_instance_id    = module.ec2.jenkins_instance_id
+resource "aws_iam_instance_profile" "ec2" {
+  name = "${local.project}-ec2-profile-${local.environment}"
+  role = aws_iam_role.ec2.name
+}
+
+# =============================================================================
+# EC2 INSTANCES
+# =============================================================================
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# webMethods API Gateway
+resource "aws_instance" "webmethods" {
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = var.webmethods_instance_type
+  subnet_id              = module.vpc.private_subnet_ids[0]
+  vpc_security_group_ids = [aws_security_group.webmethods.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2.name
+
+  root_block_device {
+    volume_size = 50
+    volume_type = "gp3"
+    encrypted   = true
+  }
+
+  tags = merge(local.tags, {
+    Name    = "${local.project}-webmethods-${local.environment}"
+    Service = "webMethods"
+  })
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
+}
+
+# Developer Portal
+resource "aws_instance" "portal" {
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = var.portal_instance_type
+  subnet_id              = module.vpc.private_subnet_ids[0] # Same AZ as webMethods
+  vpc_security_group_ids = [aws_security_group.portal.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2.name
+
+  root_block_device {
+    volume_size = 30
+    volume_type = "gp3"
+    encrypted   = true
+  }
+
+  tags = merge(local.tags, {
+    Name    = "${local.project}-portal-${local.environment}"
+    Service = "Portal"
+  })
+
+  depends_on = [aws_instance.webmethods]
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
+}
+
+# =============================================================================
+# APPLICATION LOAD BALANCER
+# =============================================================================
+resource "aws_lb" "main" {
+  name               = "${local.project}-alb-${local.environment}"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = module.vpc.public_subnet_ids
 
   tags = local.tags
 }
 
-# Outputs
+# Target Groups
+resource "aws_lb_target_group" "webmethods" {
+  name     = "${local.project}-wm-tg-${local.environment}"
+  port     = 9072
+  protocol = "HTTP"
+  vpc_id   = module.vpc.vpc_id
+
+  health_check {
+    enabled             = true
+    path                = "/rest/apigateway/health"
+    matcher             = "200"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+  }
+
+  tags = merge(local.tags, { Service = "webMethods" })
+}
+
+resource "aws_lb_target_group" "portal" {
+  name     = "${local.project}-portal-tg-${local.environment}"
+  port     = 18101
+  protocol = "HTTP"
+  vpc_id   = module.vpc.vpc_id
+
+  health_check {
+    enabled             = true
+    path                = "/portal"
+    matcher             = "200,302"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+  }
+
+  tags = merge(local.tags, { Service = "Portal" })
+}
+
+# Target Group Attachments
+resource "aws_lb_target_group_attachment" "webmethods" {
+  target_group_arn = aws_lb_target_group.webmethods.arn
+  target_id        = aws_instance.webmethods.id
+  port             = 9072
+}
+
+resource "aws_lb_target_group_attachment" "portal" {
+  target_group_arn = aws_lb_target_group.portal.arn
+  target_id        = aws_instance.portal.id
+  port             = 18101
+}
+
+# HTTP Listener
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/html"
+      message_body = "<h1>APIM Platform</h1><p>Use /gateway or /portal paths</p>"
+      status_code  = "200"
+    }
+  }
+}
+
+# Listener Rules
+resource "aws_lb_listener_rule" "webmethods" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.webmethods.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/gateway*", "/rest/*", "/invoke/*", "/apigateway/*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "portal" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 200
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.portal.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/portal*"]
+    }
+  }
+}
+
+# =============================================================================
+# OUTPUTS
+# =============================================================================
 output "vpc_id" {
   value       = module.vpc.vpc_id
   description = "VPC ID"
 }
 
-output "private_subnet_ids" {
-  value       = module.vpc.private_subnet_ids
-  description = "Private subnet IDs"
-}
-
-output "public_subnet_ids" {
-  value       = module.vpc.public_subnet_ids
-  description = "Public subnet IDs"
-}
-
-output "kms_key_id" {
-  value       = aws_kms_key.vault.id
-  description = "KMS key ID for Vault"
+output "alb_dns_name" {
+  value       = aws_lb.main.dns_name
+  description = "ALB DNS name"
 }
 
 output "webmethods_private_ip" {
-  value       = module.ec2.webmethods_private_ip
+  value       = aws_instance.webmethods.private_ip
   description = "webMethods private IP"
 }
 
 output "portal_private_ip" {
-  value       = module.ec2.portal_private_ip
+  value       = aws_instance.portal.private_ip
   description = "Portal private IP"
-}
-
-output "jenkins_private_ip" {
-  value       = module.ec2.jenkins_private_ip
-  description = "Jenkins private IP"
-}
-
-output "vault_private_ip" {
-  value       = module.ec2.vault_private_ip
-  description = "Vault private IP"
-}
-
-output "alb_dns_name" {
-  value       = module.alb.alb_dns_name
-  description = "ALB DNS name - Use this to access all services"
-}
-
-output "webmethods_url" {
-  value       = module.alb.webmethods_url
-  description = "webMethods Gateway URL"
-}
-
-output "portal_url" {
-  value       = module.alb.portal_url
-  description = "Developer Portal URL"
-}
-
-output "jenkins_url" {
-  value       = module.alb.jenkins_url
-  description = "Jenkins URL"
 }
 
 output "access_instructions" {
   value = <<-EOT
 
-  🎉 APIM Platform deployed successfully!
+  APIM Platform v2 - Simplified Architecture
 
-  Access your services:
-  - webMethods Gateway: ${module.alb.webmethods_url}
-  - Developer Portal:   ${module.alb.portal_url}
-  - Jenkins:           ${module.alb.jenkins_url}
+  ALB URL: http://${aws_lb.main.dns_name}
 
-  Private IPs (for Ansible):
-  - webMethods: ${module.ec2.webmethods_private_ip}
-  - Portal:     ${module.ec2.portal_private_ip}
-  - Jenkins:    ${module.ec2.jenkins_private_ip}
-  - Vault:      ${module.ec2.vault_private_ip}
+  Services:
+  - webMethods: http://${aws_lb.main.dns_name}/gateway
+  - Portal:     http://${aws_lb.main.dns_name}/portal
 
-  Next steps:
-  1. Configure services with Ansible:
-     cd ansible
-     ansible-playbook -i inventory/dev.ini playbooks/site.yml
+  Private IPs (for Ansible/SSM):
+  - webMethods: ${aws_instance.webmethods.private_ip}
+  - Portal:     ${aws_instance.portal.private_ip}
 
-  2. Stop instances when not in use to save costs:
-     ../scripts/stop-instances.sh dev
+  Connect via SSM:
+    aws ssm start-session --target ${aws_instance.webmethods.id}
+
   EOT
-  description = "Instructions for accessing the platform"
+  description = "Access instructions"
+}
+
+output "webmethods_instance_id" {
+  value       = aws_instance.webmethods.id
+  description = "webMethods EC2 instance ID"
+}
+
+output "portal_instance_id" {
+  value       = aws_instance.portal.id
+  description = "Portal EC2 instance ID"
 }

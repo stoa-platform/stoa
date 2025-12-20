@@ -1,0 +1,172 @@
+{
+  "access_instructions": {
+    "sensitive": false,
+    "type": "string",
+    "value": "\n🎉 APIM Platform deployed successfully!\n\nAccess your services:\n- webMethods Gateway: http://apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com:9072\n- Developer Portal:   http://apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com:18101/portal\n- Jenkins:           http://apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com:8080\n\nPrivate IPs (for Ansible):\n- webMethods: 10.0.10.87\n- Portal:     10.0.11.24\n- Jenkins:    10.0.10.104\n- Vault:      10.0.11.233\n\nNext steps:\n1. Configure services with Ansible:\n   cd ansible\n   ansible-playbook -i inventory/dev.ini playbooks/site.yml\n\n2. Stop instances when not in use to save costs:\n   ../scripts/stop-instances.sh dev\n"
+  },
+  "acm_certificate_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:acm:eu-west-1:848853684735:certificate/e7559f61-d180-46f4-92bd-cd15dab40ff7"
+  },
+  "acm_certificate_validation_options": {
+    "sensitive": false,
+    "type": [
+      "set",
+      [
+        "object",
+        {
+          "domain_name": "string",
+          "resource_record_name": "string",
+          "resource_record_type": "string",
+          "resource_record_value": "string"
+        }
+      ]
+    ],
+    "value": [
+      {
+        "domain_name": "*.apim.cab-i.com",
+        "resource_record_name": "_aae77ca1414d7deedc075905a82822fe.apim.cab-i.com.",
+        "resource_record_type": "CNAME",
+        "resource_record_value": "_82b7ce20122b8821dd8be7cdbb6f293d.jkddzztszm.acm-validations.aws."
+      },
+      {
+        "domain_name": "apim.cab-i.com",
+        "resource_record_name": "_aae77ca1414d7deedc075905a82822fe.apim.cab-i.com.",
+        "resource_record_type": "CNAME",
+        "resource_record_value": "_82b7ce20122b8821dd8be7cdbb6f293d.jkddzztszm.acm-validations.aws."
+      }
+    ]
+  },
+  "alb_dns_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com"
+  },
+  "dns_instructions": {
+    "sensitive": false,
+    "type": "string",
+    "value": "\n============================================================\nDNS CONFIGURATION FOR HOSTPAPA\n============================================================\n\nAdd the following CNAME records in your HostPapa DNS settings:\n\n1. Certificate Validation (REQUIRED FIRST):\n   Check 'acm_certificate_validation_options' output for the\n   exact CNAME record needed to validate the SSL certificate.\n\n2. Service DNS Records:\n\n   Host                          Type    Points to\n   ----                          ----    ---------\n   auth.apim         CNAME   apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com\n   api.apim          CNAME   apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com\n   admin.apim        CNAME   apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com\n   gateway.apim      CNAME   apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com\n   portal.apim       CNAME   apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com\n   jenkins.apim      CNAME   apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com\n\nOR use a wildcard:\n   *.apim            CNAME   apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com\n\n============================================================\n"
+  },
+  "jenkins_private_ip": {
+    "sensitive": false,
+    "type": "string",
+    "value": "10.0.10.104"
+  },
+  "jenkins_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "http://apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com:8080"
+  },
+  "k3s_connection_instructions": {
+    "sensitive": false,
+    "type": "string",
+    "value": "\nK3s Cluster Connection Instructions:\n\n1. Get kubeconfig via SSM:\n   aws ssm get-parameter --name \"/k3s/dev/kubeconfig\" --with-decryption --query Parameter.Value --output text \u003e ~/.kube/config-k3s-dev\n   export KUBECONFIG=~/.kube/config-k3s-dev\n\n2. Connect via SSM Session Manager:\n   aws ssm start-session --target i-0f68a981d204e82a8\n\n3. On the instance, kubectl is available:\n   sudo kubectl get nodes\n   sudo kubectl get pods -A\n\n"
+  },
+  "k3s_server_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "i-0f68a981d204e82a8"
+  },
+  "k3s_server_ip": {
+    "sensitive": false,
+    "type": "string",
+    "value": "10.0.10.97"
+  },
+  "keycloak_instance_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "i-0c844399fa2f70884"
+  },
+  "keycloak_private_ip": {
+    "sensitive": false,
+    "type": "string",
+    "value": "10.0.10.21"
+  },
+  "keycloak_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "http://apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com:8180"
+  },
+  "kms_key_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "62812b02-ef47-48cf-955b-355b831e2c9e"
+  },
+  "portal_private_ip": {
+    "sensitive": false,
+    "type": "string",
+    "value": "10.0.11.24"
+  },
+  "portal_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "http://apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com:18101/portal"
+  },
+  "private_subnet_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "subnet-0ccaad7473290c6cb",
+      "subnet-020d367b03dfaa70b"
+    ]
+  },
+  "public_subnet_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "subnet-0a10a297cb6fbbf99",
+      "subnet-062d25cec2f53b479"
+    ]
+  },
+  "service_urls": {
+    "sensitive": false,
+    "type": [
+      "object",
+      {
+        "gateway": "string",
+        "jenkins": "string",
+        "keycloak": "string",
+        "portal": "string"
+      }
+    ],
+    "value": {
+      "gateway": "https://gateway.apim.cab-i.com",
+      "jenkins": "https://jenkins.apim.cab-i.com",
+      "keycloak": "https://auth.apim.cab-i.com",
+      "portal": "https://portal.apim.cab-i.com"
+    }
+  },
+  "vault_private_ip": {
+    "sensitive": false,
+    "type": "string",
+    "value": "10.0.11.233"
+  },
+  "vpc_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpc-0543d8ac2b5b9024e"
+  },
+  "webmethods_private_ip": {
+    "sensitive": false,
+    "type": "string",
+    "value": "10.0.10.87"
+  },
+  "webmethods_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "http://apim-alb-dev-102669695.eu-west-1.elb.amazonaws.com:9072"
+  }
+}

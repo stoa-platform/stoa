@@ -1,7 +1,0 @@
----
-vault_version: "1.15.4"
-vault_port: 8200
-vault_storage_backend: "s3"
-vault_s3_bucket: "apim-vault-storage-dev"
-vault_kms_key_id: ""  # Set from Terraform outputs
-aws_region: "eu-west-1"

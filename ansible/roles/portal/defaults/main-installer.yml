@@ -1,7 +1,0 @@
----
-# Default variables for Developer Portal role
-
-portal_installer: "webmethods-developerportal-10.15.zip"
-artifacts_bucket: "apim-artifacts-dev"
-portal_port: 18101
-api_gateway_url: "http://webmethods-instance:9072"

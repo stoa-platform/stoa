@@ -1,9 +1,0 @@
----
-- name: reload systemd
-  systemd:
-    daemon_reload: yes
-
-- name: restart vault
-  systemd:
-    name: vault
-    state: restarted

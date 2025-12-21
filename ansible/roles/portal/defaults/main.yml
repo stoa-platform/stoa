@@ -1,7 +1,0 @@
----
-# Default variables for Developer Portal Docker deployment
-
-portal_docker_image: "softwareag/developerportal:10.15"
-portal_port: 18101
-api_gateway_url: "http://{{ groups['webmethods'][0] }}:9072"
-portal_admin_password: "{{ lookup('env', 'PORTAL_ADMIN_PASSWORD') | default('manage') }}"

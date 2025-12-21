@@ -27,10 +27,11 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_SECRET: str = ""
     KEYCLOAK_VERIFY_SSL: bool = True
 
-    # GitLab Integration
+    # GitLab Integration (apim-gitops repository)
     GITLAB_URL: str = "https://gitlab.com"
     GITLAB_TOKEN: str = ""
-    GITLAB_PROJECT_ID: str = ""
+    GITLAB_PROJECT_ID: str = "77260481"  # PotoMitan1/apim-gitops
+    GITLAB_PROJECT_PATH: str = "PotoMitan1/apim-gitops"
     GITLAB_WEBHOOK_SECRET: str = ""
     GITLAB_DEFAULT_BRANCH: str = "main"
 

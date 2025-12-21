@@ -8,10 +8,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
-### En cours
-- Phase 2: GitOps + ArgoCD
-
-### Ajouté (Phase 2)
+### Ajouté (Phase 2) - COMPLÉTÉ
 - **GitOps Templates** (`gitops-templates/`) - Modèles pour initialiser GitLab
   - `_defaults.yaml` - Variables globales par défaut
   - `environments/{dev,staging,prod}/config.yaml` - Config par environnement
@@ -43,6 +40,11 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - **Script Init GitLab** - `scripts/init-gitlab-gitops.sh`
   - Initialise le repo GitLab apim-gitops
   - Copie les templates et configurations
+
+- **GitLab apim-gitops** - Repository configuré
+  - URL: https://gitlab.com/PotoMitan1/apim-gitops
+  - Structure: `_defaults.yaml`, `environments/`, `tenants/`
+  - Connecté à ArgoCD pour GitOps
 
 ---
 
@@ -118,16 +120,15 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## Roadmap
 
-### Phase 2: GitOps + ArgoCD (Priorité Haute) - EN COURS
-- [x] Structure GitOps par tenant (`gitops/`)
+### Phase 2: GitOps + ArgoCD (Priorité Haute) - COMPLÉTÉ ✅
+- [x] Structure GitOps par tenant (`gitops-templates/`)
 - [x] Variable Resolver (templates avec placeholders `${VAR}`)
 - [x] IAM Sync Service (Git → Keycloak)
 - [x] Routers API/Tenants avec intégration GitLab
 - [x] ArgoCD Helm chart avec SSO Keycloak
 - [x] ApplicationSets multi-tenant
-- [x] Demo tenant avec Hello API
-- [ ] Installation ArgoCD sur EKS (scripts prêts)
-- [ ] Configuration repository GitLab
+- [x] Installation ArgoCD sur EKS
+- [x] Repository GitLab `apim-gitops` configuré
 
 ### Phase 3: Secrets & Gateway Alias (Priorité Moyenne)
 - [ ] HashiCorp Vault

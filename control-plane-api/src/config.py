@@ -1,5 +1,6 @@
 """Configuration settings"""
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import List
 
 class Settings(BaseSettings):
@@ -25,12 +26,15 @@ class Settings(BaseSettings):
     AWX_URL: str = "https://awx.dev.apim.cab-i.com"
     AWX_TOKEN: str = ""
 
-    # CORS
-    CORS_ORIGINS: List[str] = [
-        "https://console.dev.apim.cab-i.com",
-        "https://console.staging.apim.cab-i.com",
-        "http://localhost:3000",
-    ]
+    # CORS - accepts comma-separated string or list
+    CORS_ORIGINS: str = "https://devops.apim.cab-i.com,http://localhost:3000"
+
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Return CORS origins as a list"""
+        if isinstance(self.CORS_ORIGINS, list):
+            return self.CORS_ORIGINS
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     class Config:
         env_file = ".env"

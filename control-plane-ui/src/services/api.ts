@@ -4,7 +4,8 @@ import type {
   API, APICreate,
   Application, ApplicationCreate,
   Deployment, DeploymentRequest,
-  CommitInfo, MergeRequest
+  CommitInfo, MergeRequest,
+  TraceSummary, PipelineTrace, TraceTimeline, TraceStats
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -141,6 +142,36 @@ class ApiService {
     const params = eventTypes ? `?event_types=${eventTypes.join(',')}` : '';
     const url = `${API_BASE_URL}/v1/events/stream/${tenantId}${params}`;
     return new EventSource(url);
+  }
+
+  // Pipeline Traces
+  async getTraces(limit?: number, tenantId?: string, status?: string): Promise<{ traces: TraceSummary[], total: number }> {
+    const params: Record<string, any> = {};
+    if (limit) params.limit = limit;
+    if (tenantId) params.tenant_id = tenantId;
+    if (status) params.status = status;
+    const { data } = await this.client.get('/v1/traces', { params });
+    return data;
+  }
+
+  async getTrace(traceId: string): Promise<PipelineTrace> {
+    const { data } = await this.client.get(`/v1/traces/${traceId}`);
+    return data;
+  }
+
+  async getTraceTimeline(traceId: string): Promise<TraceTimeline> {
+    const { data } = await this.client.get(`/v1/traces/${traceId}/timeline`);
+    return data;
+  }
+
+  async getTraceStats(): Promise<TraceStats> {
+    const { data } = await this.client.get('/v1/traces/stats');
+    return data;
+  }
+
+  async getLiveTraces(): Promise<{ traces: PipelineTrace[], count: number }> {
+    const { data } = await this.client.get('/v1/traces/live');
+    return data;
   }
 }
 

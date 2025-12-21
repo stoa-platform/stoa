@@ -661,6 +661,140 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    - Fusion: _defaults.yaml + {env}.yaml + global config
    - Résolution des références Vault au moment du déploiement
 
+7. **Gestion des Tenants et Rôles (IAM)** 🔲
+
+   **Architecture IAM** - Gestion des utilisateurs et leurs rôles par tenant:
+
+   ```
+   ┌─────────────────────────────────────────────────────────────────────────────────────┐
+   │                              SOURCES D'IDENTITÉ                                      │
+   │                                                                                      │
+   │   PHASE 1 (Actuel)              PHASE 2 (Cible)                                     │
+   │   ─────────────────             ────────────────                                     │
+   │                                                                                      │
+   │   ┌─────────────────┐           ┌─────────────────┐                                 │
+   │   │   GitLab File   │           │   Référentiel   │                                 │
+   │   │                 │           │   Entreprise    │                                 │
+   │   │ iam/tenants.yaml│    →→→    │                 │                                 │
+   │   │ - CPI           │           │ • LDAP / AD     │                                 │
+   │   │ - DevOps        │           │ • API RH        │                                 │
+   │   │ - Viewers       │           │ • SCIM          │                                 │
+   │   └────────┬────────┘           └────────┬────────┘                                 │
+   │            │                             │                                           │
+   │            └──────────────┬──────────────┘                                          │
+   │                           ▼                                                          │
+   │            ┌──────────────────────────────┐                                         │
+   │            │      Keycloak (IdP)          │                                         │
+   │            │  • Sync users & groups       │                                         │
+   │            │  • Map roles to tenants      │                                         │
+   │            │  • Issue JWT with claims     │                                         │
+   │            └──────────────┬───────────────┘                                         │
+   │                           ▼                                                          │
+   │            ┌──────────────────────────────┐                                         │
+   │            │     Control-Plane API        │                                         │
+   │            │  JWT: tenant_id, roles[]     │                                         │
+   │            └──────────────────────────────┘                                         │
+   └─────────────────────────────────────────────────────────────────────────────────────┘
+   ```
+
+   **Structure GitOps IAM**:
+   ```
+   apim-gitops/
+   ├── iam/                              # Identity & Access Management
+   │   ├── tenants.yaml                  # Définition tenants + membres
+   │   ├── global-admins.yaml            # CPI Admins globaux
+   │   └── service-accounts.yaml         # Comptes CI/CD, monitoring
+   │
+   └── tenants/
+       └── ...
+   ```
+
+   **Exemple tenants.yaml**:
+   ```yaml
+   apiVersion: apim.cab-i.com/v1
+   kind: TenantRegistry
+   metadata:
+     name: tenant-registry
+     lastUpdated: "2024-12-21T10:00:00Z"
+
+   tenants:
+     - id: tenant-finance
+       displayName: "Finance Department"
+       status: active
+       owner:
+         email: "jean.dupont@cab-i.com"
+         name: "Jean Dupont"
+       quotas:
+         maxApis: 50
+         maxApplications: 20
+       environments:
+         - dev
+         - staging
+       members:
+         cpi:                               # Tenant Admins
+           - email: "jean.dupont@cab-i.com"
+             name: "Jean Dupont"
+             addedAt: "2024-01-15T10:00:00Z"
+             addedBy: "admin@apim.local"
+         devops:                            # Deploy & Promote
+           - email: "pierre.durand@cab-i.com"
+             name: "Pierre Durand"
+             addedAt: "2024-01-20T14:00:00Z"
+             addedBy: "jean.dupont@cab-i.com"
+         viewers:                           # Read-only
+           - email: "audit@cab-i.com"
+             name: "Audit Team"
+             addedAt: "2024-01-15T10:00:00Z"
+             addedBy: "admin@apim.local"
+   ```
+
+   **Exemple global-admins.yaml**:
+   ```yaml
+   apiVersion: apim.cab-i.com/v1
+   kind: GlobalAdminRegistry
+   metadata:
+     name: global-admins
+
+   admins:
+     - email: "admin@apim.local"
+       name: "Platform Admin"
+       role: "cpi-admin"
+       permissions: ["tenants:*", "apis:*", "users:*"]
+   ```
+
+   **IAM Sync Service** (CronJob toutes les 5 min):
+   - Parse `iam/tenants.yaml` depuis Git
+   - Détecte les changements (diff)
+   - Synchronise vers Keycloak (users, groups, roles)
+   - Publie événement `iam-sync` sur Kafka
+
+   **API Endpoints IAM**:
+   | Endpoint | Description |
+   |----------|-------------|
+   | `GET /v1/iam/tenants/{id}/members` | Liste les membres d'un tenant |
+   | `POST /v1/iam/tenants/{id}/members` | Ajoute un membre (commit Git + sync) |
+   | `DELETE /v1/iam/tenants/{id}/members` | Retire un membre |
+   | `POST /v1/iam/sync` | Force une synchronisation Git → Keycloak |
+
+   **Workflow ajout membre**:
+   ```
+   1. CPI ajoute un membre via UI
+            ↓
+   2. API met à jour iam/tenants.yaml (Git commit)
+            ↓
+   3. CronJob IAM Sync (5 min) ou sync immédiat
+            ↓
+   4. Keycloak: User + Group + Role
+            ↓
+   5. User se connecte → JWT avec tenant_id + roles
+   ```
+
+   **Phase 2 (Cible) - Référentiel Entreprise**:
+   - LDAP/AD Federation dans Keycloak
+   - Groupes AD: `GRP_APIM_{TENANT}_{ROLE}` (ex: `GRP_APIM_FINANCE_CPI`)
+   - Git = Override pour externes et service accounts
+   - Mapping automatique département → tenant
+
 #### Phase 3 : Secrets & Gateway Alias (Priorité Moyenne)
 
 **Approche Hybride : Git + Gateway Alias**
@@ -793,76 +927,186 @@ Les **Alias webMethods Gateway** permettent de stocker endpoints et credentials 
    └─────────────────────────────────────────────────────────────────────────────┘
    ```
 
-#### Phase 4 : Observabilité (Priorité Moyenne)
+#### Phase 4 : Observabilité avec OpenSearch (Priorité Moyenne)
 
-Stack complète d'observabilité pour APIM Platform:
+Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearch** pour le stockage centralisé des traces et métriques.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      OBSERVABILITY STACK                             │
-│                                                                      │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐         │
-│  │   METRICS      │  │    LOGS        │  │   TRACES       │         │
-│  │   Prometheus   │  │    Loki        │  │ OpenTelemetry  │         │
-│  └───────┬────────┘  └───────┬────────┘  └───────┬────────┘         │
-│          │                   │                   │                   │
-│          └───────────────────┼───────────────────┘                   │
-│                              ▼                                       │
-│                    ┌─────────────────┐                              │
-│                    │     GRAFANA     │                              │
-│                    │   Dashboards    │                              │
-│                    │   + Alerting    │                              │
-│                    └─────────────────┘                              │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      OBSERVABILITY STACK                                      │
+│                                                                               │
+│  ┌──────────────────────────────────────────────────────────────────────┐    │
+│  │                     COLLECTORS                                        │    │
+│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐          │    │
+│  │  │  Control-Plane │  │    FluentBit   │  │  Prometheus    │          │    │
+│  │  │  Trace Events  │  │ (Log Shipping) │  │   (Metrics)    │          │    │
+│  │  └───────┬────────┘  └───────┬────────┘  └───────┬────────┘          │    │
+│  └──────────┼───────────────────┼───────────────────┼────────────────────┘    │
+│             │                   │                   │                          │
+│             ▼                   ▼                   ▼                          │
+│  ┌──────────────────────────────────────────────────────────────────────┐    │
+│  │               Amazon OpenSearch (t3.small.search)                     │    │
+│  │                                                                       │    │
+│  │  Indices:                                                             │    │
+│  │  ├── apim-traces-*       (Pipeline traces GitLab→Kafka→AWX→Gateway)  │    │
+│  │  ├── apim-logs-*         (Application logs)                          │    │
+│  │  ├── apim-metrics-*      (Time-series metrics)                       │    │
+│  │  └── apim-analytics-*    (API usage analytics par tenant)            │    │
+│  │                                                                       │    │
+│  │  Features:                                                            │    │
+│  │  ├── Full-text search sur commit messages, erreurs                   │    │
+│  │  ├── Agrégations temps réel (stats pipelines)                        │    │
+│  │  ├── Rétention automatique (30 jours traces, 7 jours logs)           │    │
+│  │  └── Alerting intégré (anomalie detection)                           │    │
+│  └──────────────────────────────────────────────────────────────────────┘    │
+│                              │                                                │
+│                              ▼                                                │
+│  ┌──────────────────────────────────────────────────────────────────────┐    │
+│  │                    VISUALIZATION LAYER                                │    │
+│  │                                                                       │    │
+│  │  ┌────────────────────────────┐  ┌────────────────────────────┐      │    │
+│  │  │   OpenSearch Dashboards    │  │    Control-Plane UI         │      │    │
+│  │  │   (Kibana-compatible)      │  │    Page Monitoring          │      │    │
+│  │  │   • Dashboards prédéfinis  │  │    • Timeline pipelines     │      │    │
+│  │  │   • Alerting rules         │  │    • Stats en temps réel    │      │    │
+│  │  │   • Anomaly detection      │  │    • Drill-down par trace   │      │    │
+│  │  └────────────────────────────┘  └────────────────────────────┘      │    │
+│  └──────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Prometheus Stack** (kube-prometheus-stack)
-   - Métriques Kubernetes (nodes, pods, services)
-   - Métriques API Gateway (requests, latency, errors)
-   - Métriques Control-Plane API (FastAPI metrics)
-   - ServiceMonitors pour tous les composants
-   - Helm: `prometheus-community/kube-prometheus-stack`
+**Architecture Pipeline Tracing avec OpenSearch**:
 
-2. **Grafana Loki** (Logs aggregation)
-   - Logs centralisés de tous les pods
-   - Logs API Gateway transactions
-   - Logs Control-Plane API (audit, errors)
-   - Retention configurable par namespace
-   - Helm: `grafana/loki-stack`
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  GitLab  │───▶│ Control- │───▶│  Kafka   │───▶│   AWX    │───▶│ Gateway  │
+│  Push    │    │  Plane   │    │ (Events) │    │  (Jobs)  │    │ (Deploy) │
+└──────────┘    └────┬─────┘    └──────────┘    └──────────┘    └──────────┘
+                     │                                                │
+                     │ PipelineTrace Events                          │
+                     ▼                                                ▼
+              ┌────────────────────────────────────────────────────────────┐
+              │                      OpenSearch                             │
+              │  Index: apim-traces-2024.12                                 │
+              │  {                                                          │
+              │    "trace_id": "trc-abc123",                                │
+              │    "trigger_type": "gitlab-push",                           │
+              │    "git_author": "john.doe",                                │
+              │    "git_commit_sha": "abc123",                              │
+              │    "git_commit_message": "Update payment API",              │
+              │    "tenant_id": "tenant-finance",                           │
+              │    "api_name": "payment-api",                               │
+              │    "steps": [                                               │
+              │      {"name": "webhook_received", "status": "success", ...},│
+              │      {"name": "kafka_publish", "status": "success", ...},   │
+              │      {"name": "awx_trigger", "status": "success", ...}      │
+              │    ],                                                       │
+              │    "status": "success",                                     │
+              │    "total_duration_ms": 4523                                │
+              │  }                                                          │
+              └────────────────────────────────────────────────────────────┘
+```
 
-3. **OpenTelemetry** (Distributed Tracing)
-   - Traces end-to-end: UI → API → Kafka → AWX → Gateway
-   - Correlation IDs pour debug
-   - Instrumentation auto pour FastAPI
-   - OpenTelemetry Collector
-   - Helm: `open-telemetry/opentelemetry-collector`
+1. **Amazon OpenSearch Service** (~$35/mois)
+   - Instance: t3.small.search (1 node partagé DEV+STAGING)
+   - Storage: 20GB EBS gp3
+   - Indices:
+     - `apim-traces-YYYY.MM` - Pipeline traces (rétention 30 jours)
+     - `apim-logs-YYYY.MM.DD` - Application logs (rétention 7 jours)
+     - `apim-metrics-*` - Métriques (rétention 14 jours)
+     - `apim-analytics-{tenant}` - Analytics API Gateway par tenant
 
-4. **Grafana Dashboards**
-   - **APIM Overview**: APIs déployées, requêtes/sec, latence P99
-   - **Pipeline Status**: Control-Plane → Kafka → AWX → Gateway
-   - **Tenant Analytics**: Usage par tenant, quotas
-   - **Deployment History**: Succès/échecs, rollbacks
-   - **Error Analysis**: Top errors, traces associées
+2. **Intégration Control-Plane API → OpenSearch**
+   - OpenSearchService dans `services/opensearch_service.py`
+   - Indexation des PipelineTrace à chaque étape
+   - Mise à jour du status en temps réel
+   - Recherche full-text sur commit messages, erreurs
 
-5. **Alerting** (Grafana + AlertManager)
-   - Slack/Email/PagerDuty notifications
-   - Alertes critiques:
-     - Gateway down
-     - Deployment failed
-     - High error rate (>5%)
-     - Latency spike (P99 > 500ms)
-     - Disk space low
-   - Alertes warning:
-     - Pod restarts
-     - Memory pressure
-     - Kafka lag
+3. **FluentBit** (Log Shipping)
+   - DaemonSet sur EKS
+   - Parse logs JSON de tous les pods
+   - Enrichissement: tenant_id, api_name, trace_id
+   - Output vers OpenSearch
+   - Helm: `fluent/fluent-bit`
 
-**URLs Observabilité (à déployer)**:
+4. **Prometheus + Remote Write** (Metrics)
+   - Prometheus pour collecte locale
+   - Remote Write vers OpenSearch (via Prometheus Exporter)
+   - Métriques: latency, error_rate, requests/sec
+   - Alerting: AlertManager → OpenSearch → Slack
+
+5. **OpenSearch Dashboards** (Visualization)
+   - URL: https://opensearch.apim.cab-i.com/_dashboards
+   - Dashboards prédéfinis:
+     - **Pipeline Overview**: Success rate, avg duration, errors/hour
+     - **Deployment History**: Timeline par tenant/API
+     - **Error Analysis**: Top errors, traces associées
+     - **Commit Activity**: Heatmap GitLab pushes
+   - Anomaly Detection: ML built-in pour spike detection
+
+6. **Control-Plane UI - Page Monitoring** (✅ Déjà implémentée)
+   - Lecture depuis OpenSearch au lieu de mémoire
+   - Timeline interactive par trace
+   - Filtres: tenant, status, date range
+   - Export CSV des traces
+
+7. **API Traces Endpoints** (à mettre à jour)
+   ```python
+   # Actuellement: in-memory store (TraceStore)
+   # Cible: OpenSearch queries
+
+   GET /v1/traces                    # OpenSearch query
+   GET /v1/traces/{trace_id}         # OpenSearch get
+   GET /v1/traces/stats              # OpenSearch aggregations
+   GET /v1/traces/search             # Full-text search (nouveau)
+   ```
+
+8. **Index Templates & ILM**
+   ```json
+   {
+     "index_patterns": ["apim-traces-*"],
+     "template": {
+       "settings": {
+         "number_of_shards": 1,
+         "number_of_replicas": 0
+       },
+       "mappings": {
+         "properties": {
+           "trace_id": { "type": "keyword" },
+           "git_commit_message": { "type": "text" },
+           "git_author": { "type": "keyword" },
+           "tenant_id": { "type": "keyword" },
+           "status": { "type": "keyword" },
+           "created_at": { "type": "date" },
+           "total_duration_ms": { "type": "integer" }
+         }
+       }
+     }
+   }
+   ```
+
+9. **Alerting Rules**
+   - Pipeline failed > 3 fois/heure → Slack #apim-alerts
+   - Duration P95 > 30s → Warning
+   - AWX job timeout → Critical
+   - Kafka consumer lag > 100 → Warning
+
+**Avantages OpenSearch vs in-memory**:
+| Aspect | In-Memory (actuel) | OpenSearch (cible) |
+|--------|-------------------|-------------------|
+| Persistance | ❌ Perdu au restart | ✅ Persistent |
+| Recherche | ❌ Basique | ✅ Full-text, agrégations |
+| Rétention | ❌ Limitée (500 traces) | ✅ Configurable (30 jours+) |
+| Scalabilité | ❌ Single node | ✅ Cluster possible |
+| Dashboards | ❌ UI custom uniquement | ✅ OpenSearch Dashboards |
+| Coût | ✅ Gratuit | ⚠️ ~$35/mois |
+
+**URLs Observabilité**:
 | Service | URL |
 |---------|-----|
-| Grafana | https://grafana.apim.cab-i.com |
-| Prometheus | https://prometheus.apim.cab-i.com (interne) |
-| Loki | Interne (via Grafana datasource) |
+| OpenSearch Dashboards | https://opensearch.apim.cab-i.com/_dashboards |
+| Control-Plane Monitoring | https://devops.apim.cab-i.com/monitoring |
+| Prometheus (interne) | prometheus.apim-system.svc.cluster.local:9090 |
 
 #### Phase 5 : Multi-Environment (Priorité Basse)
 1. **Environnement STAGING**
@@ -872,6 +1116,588 @@ Stack complète d'observabilité pour APIM Platform:
 2. **OpenSearch Analytics**
    - Global Policy par tenant
    - Index pattern: {env}-{tenant}-analytics
+
+#### Phase 6 : Tenant Démo & SSO Unifié (Beta Testing)
+
+**Objectif**: Créer un tenant de démonstration avec des utilisateurs beta testeurs, et unifier l'authentification SSO sur toutes les interfaces (UI DevOps + Developer Portal).
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           SSO UNIFIÉ - KEYCLOAK                                      │
+│                                                                                      │
+│                        ┌──────────────────────────┐                                 │
+│                        │       KEYCLOAK           │                                 │
+│                        │   Realm: apim-platform   │                                 │
+│                        │                          │                                 │
+│                        │  Clients:                │                                 │
+│                        │  ├── control-plane-ui    │                                 │
+│                        │  ├── control-plane-api   │                                 │
+│                        │  └── developer-portal    │  ⬅️ NOUVEAU                    │
+│                        └────────────┬─────────────┘                                 │
+│                                     │                                                │
+│              ┌──────────────────────┼──────────────────────┐                        │
+│              │                      │                      │                        │
+│              ▼                      ▼                      ▼                        │
+│   ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐               │
+│   │   UI DevOps     │    │ Control-Plane   │    │   Developer     │               │
+│   │   (React)       │    │     API         │    │    Portal       │               │
+│   │                 │    │   (FastAPI)     │    │  (webMethods)   │               │
+│   │ devops.apim...  │    │  api.apim...    │    │ portal.apim...  │               │
+│   └─────────────────┘    └─────────────────┘    └─────────────────┘               │
+│          │                       │                      │                          │
+│          └───────────────────────┼──────────────────────┘                          │
+│                                  │                                                  │
+│                    ┌─────────────┴─────────────┐                                   │
+│                    │     TENANT: tenant-demo   │                                   │
+│                    │                           │                                   │
+│                    │  Users:                   │                                   │
+│                    │  ├── demo-cpi@cab-i.com   │  (CPI - Full access)             │
+│                    │  └── demo-devops@cab-i.com│  (DevOps - Deploy only)          │
+│                    │                           │                                   │
+│                    │  APIs démo:               │                                   │
+│                    │  ├── petstore-api         │                                   │
+│                    │  └── weather-api          │                                   │
+│                    └───────────────────────────┘                                   │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Créer le Tenant Démo dans GitOps** 🔲
+
+   ```yaml
+   # iam/tenants.yaml - Ajout tenant-demo
+   tenants:
+     - id: tenant-demo
+       displayName: "Demo Tenant (Beta Testing)"
+       description: "Tenant de démonstration pour les beta testeurs"
+       status: active
+       createdAt: "2024-12-21T00:00:00Z"
+
+       owner:
+         email: "demo-cpi@cab-i.com"
+         name: "Demo CPI Admin"
+
+       quotas:
+         maxApis: 10
+         maxApplications: 5
+         maxRequestsPerDay: 10000
+
+       environments:
+         - dev
+
+       members:
+         cpi:
+           - email: "demo-cpi@cab-i.com"
+             name: "Demo CPI Admin"
+             addedAt: "2024-12-21T00:00:00Z"
+             addedBy: "admin@apim.local"
+
+         devops:
+           - email: "demo-devops@cab-i.com"
+             name: "Demo DevOps"
+             addedAt: "2024-12-21T00:00:00Z"
+             addedBy: "admin@apim.local"
+
+         viewers: []
+   ```
+
+2. **Créer les Utilisateurs Beta dans Keycloak** 🔲
+
+   | User | Email | Rôle | Accès |
+   |------|-------|------|-------|
+   | Demo CPI | demo-cpi@cab-i.com | `tenant-admin` | UI DevOps + Portal (full CRUD) |
+   | Demo DevOps | demo-devops@cab-i.com | `devops` | UI DevOps + Portal (deploy only) |
+
+   **Configuration Keycloak**:
+   ```yaml
+   # Groupe: tenant-demo
+   users:
+     - username: demo-cpi
+       email: demo-cpi@cab-i.com
+       firstName: Demo
+       lastName: CPI Admin
+       enabled: true
+       credentials:
+         - type: password
+           value: "DemoCPI2024!"
+           temporary: false
+       groups:
+         - tenant-demo
+       realmRoles:
+         - tenant-admin
+       attributes:
+         tenant_id: ["tenant-demo"]
+
+     - username: demo-devops
+       email: demo-devops@cab-i.com
+       firstName: Demo
+       lastName: DevOps
+       enabled: true
+       credentials:
+         - type: password
+           value: "DemoDevOps2024!"
+           temporary: false
+       groups:
+         - tenant-demo
+       realmRoles:
+         - devops
+       attributes:
+         tenant_id: ["tenant-demo"]
+   ```
+
+3. **Configurer SSO Developer Portal (webMethods)** 🔲
+
+   Le Developer Portal webMethods doit être configuré pour utiliser Keycloak comme IdP.
+
+   **Keycloak - Nouveau Client pour Portal**:
+   ```yaml
+   # Client: developer-portal
+   clientId: developer-portal
+   name: "Developer Portal"
+   protocol: openid-connect
+   publicClient: false
+   redirectUris:
+     - "https://portal.dev.apim.cab-i.com/*"
+     - "https://portal.staging.apim.cab-i.com/*"
+   webOrigins:
+     - "https://portal.dev.apim.cab-i.com"
+     - "https://portal.staging.apim.cab-i.com"
+   standardFlowEnabled: true
+   directAccessGrantsEnabled: false
+
+   # Mappers pour claims JWT
+   protocolMappers:
+     - name: tenant_id
+       protocol: openid-connect
+       protocolMapper: oidc-usermodel-attribute-mapper
+       config:
+         user.attribute: tenant_id
+         claim.name: tenant_id
+         jsonType.label: String
+
+     - name: roles
+       protocol: openid-connect
+       protocolMapper: oidc-usermodel-realm-role-mapper
+       config:
+         claim.name: roles
+         multivalued: "true"
+   ```
+
+   **webMethods Portal - Configuration OIDC**:
+   ```
+   Portal Administration > Security > Identity Providers
+
+   Provider Type: OpenID Connect
+   Provider Name: Keycloak
+   Discovery URL: https://keycloak.dev.apim.cab-i.com/realms/apim-platform/.well-known/openid-configuration
+   Client ID: developer-portal
+   Client Secret: *** (depuis Vault)
+   Scope: openid profile email
+
+   User Mapping:
+   - Username: preferred_username
+   - Email: email
+   - Groups: tenant_id
+   ```
+
+4. **APIs Démo Pré-déployées** 🔲
+
+   Créer des APIs de démonstration dans le tenant-demo pour que les beta testeurs puissent les explorer.
+
+   ```
+   apim-gitops/
+   └── tenants/
+       └── tenant-demo/
+           └── apis/
+               ├── petstore-api/
+               │   ├── api.yaml
+               │   ├── openapi.yaml         # Swagger Petstore
+               │   └── environments/
+               │       └── dev.yaml
+               │
+               └── weather-api/
+                   ├── api.yaml
+                   ├── openapi.yaml         # OpenWeatherMap wrapper
+                   └── environments/
+                       └── dev.yaml
+   ```
+
+   **Exemple petstore-api/api.yaml**:
+   ```yaml
+   apiVersion: apim.cab-i.com/v1
+   kind: API
+   metadata:
+     name: petstore-api
+     tenant: tenant-demo
+   spec:
+     displayName: "Petstore API (Demo)"
+     version: "1.0.0"
+     description: "API de démonstration basée sur Swagger Petstore"
+     backend:
+       url: "https://petstore.swagger.io/v2"
+     security:
+       type: apiKey
+       apiKeyHeader: "api_key"
+     policies:
+       - rateLimit:
+           requests: 100
+           period: minute
+   ```
+
+5. **Workflow Beta Testeur** 🔲
+
+   ```
+   ┌─────────────────────────────────────────────────────────────────────────────────────┐
+   │                        PARCOURS BETA TESTEUR                                         │
+   │                                                                                      │
+   │  1. CONNEXION                                                                        │
+   │     ┌─────────────────────────────────────────────────────────────────────────────┐ │
+   │     │  Accès: https://devops.apim.cab-i.com                                       │ │
+   │     │  → Redirect vers Keycloak                                                   │ │
+   │     │  → Login: demo-cpi@cab-i.com / DemoCPI2024!                                 │ │
+   │     │  → Redirect vers UI DevOps (JWT avec tenant_id=tenant-demo)                │ │
+   │     └─────────────────────────────────────────────────────────────────────────────┘ │
+   │                                                                                      │
+   │  2. UI DEVOPS - GESTION APIs                                                        │
+   │     ┌─────────────────────────────────────────────────────────────────────────────┐ │
+   │     │  • Voir les APIs du tenant-demo (petstore-api, weather-api)                │ │
+   │     │  • Créer une nouvelle API de test                                          │ │
+   │     │  • Déployer sur l'environnement DEV                                        │ │
+   │     │  • Voir les traces du pipeline (GitLab → Kafka → AWX → Gateway)           │ │
+   │     └─────────────────────────────────────────────────────────────────────────────┘ │
+   │                                                                                      │
+   │  3. DEVELOPER PORTAL - CONSOMMATION APIs                                            │
+   │     ┌─────────────────────────────────────────────────────────────────────────────┐ │
+   │     │  Accès: https://portal.dev.apim.cab-i.com                                  │ │
+   │     │  → SSO Keycloak (même session, pas de re-login)                            │ │
+   │     │  • Voir les APIs publiées du tenant-demo                                   │ │
+   │     │  • Créer une Application                                                    │ │
+   │     │  • Souscrire à une API                                                      │ │
+   │     │  • Obtenir les credentials (API Key)                                        │ │
+   │     │  • Tester l'API via le Portal                                               │ │
+   │     └─────────────────────────────────────────────────────────────────────────────┘ │
+   │                                                                                      │
+   └─────────────────────────────────────────────────────────────────────────────────────┘
+   ```
+
+6. **Permissions par Rôle sur les Interfaces** 🔲
+
+   | Interface | CPI (demo-cpi) | DevOps (demo-devops) |
+   |-----------|----------------|----------------------|
+   | **UI DevOps** | | |
+   | Voir APIs tenant | ✅ | ✅ |
+   | Créer/Modifier API | ✅ | ✅ |
+   | Supprimer API | ✅ | ❌ |
+   | Déployer API | ✅ | ✅ |
+   | Gérer membres tenant | ✅ | ❌ |
+   | Voir traces pipeline | ✅ | ✅ |
+   | **Developer Portal** | | |
+   | Voir APIs publiées | ✅ | ✅ |
+   | Créer Application | ✅ | ✅ |
+   | Souscrire API | ✅ | ✅ |
+   | Gérer souscriptions | ✅ | ❌ (ses propres apps) |
+   | Approuver souscriptions | ✅ | ❌ |
+
+7. **Checklist Déploiement Phase 6** 🔲
+
+   - [ ] Créer tenant-demo dans `iam/tenants.yaml` + commit GitLab
+   - [ ] Sync IAM → Keycloak (créer groupe + users)
+   - [ ] Configurer client `developer-portal` dans Keycloak
+   - [ ] Configurer OIDC dans webMethods Portal
+   - [ ] Créer APIs démo (petstore, weather) dans GitOps
+   - [ ] Déployer APIs démo sur Gateway DEV
+   - [ ] Publier APIs démo sur Portal
+   - [ ] Tester parcours complet avec demo-cpi
+   - [ ] Tester parcours complet avec demo-devops
+   - [ ] Documenter accès beta testeurs
+
+8. **Credentials Beta Testeurs**
+
+   | User | URL | Login | Password |
+   |------|-----|-------|----------|
+   | Demo CPI | https://devops.apim.cab-i.com | demo-cpi@cab-i.com | DemoCPI2024! |
+   | Demo CPI | https://portal.dev.apim.cab-i.com | (SSO) | (SSO) |
+   | Demo DevOps | https://devops.apim.cab-i.com | demo-devops@cab-i.com | DemoDevOps2024! |
+   | Demo DevOps | https://portal.dev.apim.cab-i.com | (SSO) | (SSO) |
+
+   > **Note**: Les credentials seront stockés dans Vault après validation beta.
+
+9. **Documentation Utilisateur** 🔲
+
+   Générer une documentation complète pour les beta testeurs et futurs utilisateurs de la plateforme.
+
+   **Structure Documentation**:
+   ```
+   docs/
+   ├── user-guide/
+   │   ├── README.md                    # Index documentation
+   │   ├── 01-getting-started.md        # Premiers pas
+   │   ├── 02-ui-devops-guide.md        # Guide UI DevOps
+   │   ├── 03-developer-portal-guide.md # Guide Developer Portal
+   │   ├── 04-api-lifecycle.md          # Cycle de vie d'une API
+   │   ├── 05-rbac-roles.md             # Rôles et permissions
+   │   └── 06-troubleshooting.md        # Dépannage
+   │
+   ├── tutorials/
+   │   ├── create-first-api.md          # Tutoriel: Créer sa première API
+   │   ├── deploy-api.md                # Tutoriel: Déployer une API
+   │   ├── consume-api.md               # Tutoriel: Consommer une API
+   │   └── manage-team.md               # Tutoriel: Gérer son équipe
+   │
+   └── images/
+       ├── login-flow.png
+       ├── ui-dashboard.png
+       └── portal-subscribe.png
+   ```
+
+   **01-getting-started.md**:
+   ```markdown
+   # Guide de Démarrage Rapide
+
+   ## Accès à la Plateforme APIM
+
+   La plateforme APIM CAB-I dispose de deux interfaces principales:
+
+   | Interface | URL | Description |
+   |-----------|-----|-------------|
+   | UI DevOps | https://devops.apim.cab-i.com | Gestion des APIs, déploiements, monitoring |
+   | Developer Portal | https://portal.dev.apim.cab-i.com | Catalogue APIs, souscriptions, documentation |
+
+   ## Connexion (SSO Keycloak)
+
+   Toutes les interfaces utilisent **Keycloak** pour l'authentification.
+   Une seule connexion vous donne accès à toutes les applications.
+
+   ### Étapes de connexion:
+   1. Accédez à l'URL de l'interface souhaitée
+   2. Vous êtes redirigé vers la page de connexion Keycloak
+   3. Entrez votre email et mot de passe
+   4. Vous êtes redirigé vers l'application
+
+   ### Rôles Utilisateurs
+
+   | Rôle | Description | Permissions |
+   |------|-------------|-------------|
+   | **CPI (Tenant Admin)** | Administrateur du tenant | CRUD complet sur APIs, Apps, Users |
+   | **DevOps** | Développeur/Opérateur | Créer/Modifier APIs, Déployer |
+   | **Viewer** | Lecture seule | Consulter APIs et statistiques |
+
+   ## Votre Premier Déploiement
+
+   1. **Connectez-vous** à l'UI DevOps
+   2. **Créez une API** via le formulaire ou import OpenAPI
+   3. **Déployez** sur l'environnement DEV
+   4. **Vérifiez** le déploiement dans la page Monitoring
+   5. **Publiez** sur le Developer Portal
+   6. **Testez** l'API depuis le Portal
+   ```
+
+   **02-ui-devops-guide.md**:
+   ```markdown
+   # Guide UI DevOps
+
+   ## Dashboard
+
+   Le dashboard affiche une vue d'ensemble de votre tenant:
+   - Nombre d'APIs
+   - Déploiements récents
+   - Statut des pipelines
+   - Alertes en cours
+
+   ## Gestion des APIs
+
+   ### Créer une API
+   1. Cliquez sur **+ Nouvelle API**
+   2. Remplissez les informations:
+      - Nom (unique dans le tenant)
+      - Version
+      - Description
+      - Backend URL
+   3. (Optionnel) Importez un fichier OpenAPI
+   4. Cliquez sur **Créer**
+
+   ### Déployer une API
+   1. Sélectionnez l'API dans la liste
+   2. Cliquez sur **Déployer**
+   3. Choisissez l'environnement (DEV, STAGING, PROD)
+   4. Confirmez le déploiement
+   5. Suivez le pipeline dans l'onglet **Monitoring**
+
+   ### Pipeline de Déploiement
+   ```
+   GitLab Commit → Kafka Event → AWX Job → Gateway Deploy
+   ```
+   Chaque étape est visible en temps réel dans la page Monitoring.
+
+   ## Monitoring
+
+   ### Timeline des Pipelines
+   - Vue chronologique de tous les déploiements
+   - Filtres par statut, API, environnement
+   - Détail de chaque étape avec durée
+
+   ### Statuts
+   - 🟢 **Success**: Déploiement réussi
+   - 🟡 **Pending**: En cours
+   - 🔴 **Failed**: Échec (cliquez pour voir l'erreur)
+
+   ## Gestion de l'Équipe (CPI uniquement)
+
+   ### Ajouter un membre
+   1. Allez dans **Paramètres > Équipe**
+   2. Cliquez sur **+ Ajouter un membre**
+   3. Entrez l'email et le nom
+   4. Sélectionnez le rôle (CPI, DevOps, Viewer)
+   5. Confirmez
+
+   L'utilisateur recevra un accès automatiquement après synchronisation Keycloak.
+   ```
+
+   **03-developer-portal-guide.md**:
+   ```markdown
+   # Guide Developer Portal
+
+   ## Catalogue d'APIs
+
+   Le Developer Portal affiche toutes les APIs publiées auxquelles vous avez accès.
+
+   ### Rechercher une API
+   - Utilisez la barre de recherche
+   - Filtrez par catégorie ou tenant
+   - Consultez la documentation OpenAPI intégrée
+
+   ## Applications
+
+   Une **Application** représente votre client qui va consommer des APIs.
+
+   ### Créer une Application
+   1. Allez dans **Mes Applications**
+   2. Cliquez sur **+ Nouvelle Application**
+   3. Donnez un nom et une description
+   4. Votre Application est créée avec des credentials (API Key)
+
+   ### Souscrire à une API
+   1. Trouvez l'API dans le catalogue
+   2. Cliquez sur **Souscrire**
+   3. Sélectionnez votre Application
+   4. Choisissez le plan (Basic, Premium, etc.)
+   5. Attendez l'approbation (si nécessaire)
+
+   ## Tester une API
+
+   Le Portal intègre un client de test:
+   1. Ouvrez la documentation de l'API
+   2. Sélectionnez un endpoint
+   3. Remplissez les paramètres
+   4. Cliquez sur **Try it out**
+   5. Visualisez la réponse
+
+   ## Vos Credentials
+
+   ### API Key
+   - Visible dans **Mes Applications > [App] > Credentials**
+   - À inclure dans le header `X-API-Key`
+
+   ### Exemple cURL
+   ```bash
+   curl -X GET "https://gateway.dev.apim.cab-i.com/petstore/v2/pet/1" \
+        -H "X-API-Key: YOUR_API_KEY"
+   ```
+   ```
+
+   **04-api-lifecycle.md**:
+   ```markdown
+   # Cycle de Vie d'une API
+
+   ## États d'une API
+
+   ```
+   ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+   │  DRAFT  │ →  │   DEV    │ →  │ STAGING  │ →  │   PROD   │
+   └─────────┘    └──────────┘    └──────────┘    └──────────┘
+        │              │               │               │
+        │              │               │               │
+   Création       Déployé DEV     Promotion       Production
+   dans Git       Tests internes   UAT            Live
+   ```
+
+   ## Workflow de Promotion
+
+   1. **Développement (DEV)**
+      - Créer l'API dans l'UI DevOps
+      - Commit automatique dans GitLab
+      - Déployer sur Gateway DEV
+      - Tests d'intégration
+
+   2. **Staging (STAGING)**
+      - Promouvoir depuis DEV
+      - Tests d'acceptation (UAT)
+      - Validation métier
+
+   3. **Production (PROD)**
+      - Approbation requise
+      - Déploiement Blue-Green
+      - Monitoring renforcé
+
+   ## Rollback
+
+   En cas de problème:
+   1. Allez dans **Monitoring > Historique**
+   2. Sélectionnez une version précédente
+   3. Cliquez sur **Rollback**
+   4. Confirmez
+   ```
+
+   **Génération Automatique (MkDocs)**:
+   ```yaml
+   # mkdocs.yml
+   site_name: APIM Platform - Documentation
+   site_url: https://docs.apim.cab-i.com
+   theme:
+     name: material
+     palette:
+       primary: indigo
+     features:
+       - navigation.tabs
+       - search.suggest
+
+   nav:
+     - Accueil: index.md
+     - Guide Utilisateur:
+       - Premiers Pas: user-guide/01-getting-started.md
+       - UI DevOps: user-guide/02-ui-devops-guide.md
+       - Developer Portal: user-guide/03-developer-portal-guide.md
+       - Cycle de Vie API: user-guide/04-api-lifecycle.md
+       - Rôles & Permissions: user-guide/05-rbac-roles.md
+       - Dépannage: user-guide/06-troubleshooting.md
+     - Tutoriels:
+       - Créer sa première API: tutorials/create-first-api.md
+       - Déployer une API: tutorials/deploy-api.md
+       - Consommer une API: tutorials/consume-api.md
+       - Gérer son équipe: tutorials/manage-team.md
+     - API Reference: api-reference/
+
+   plugins:
+     - search
+     - mkdocstrings  # Auto-génère doc depuis code Python
+   ```
+
+   **Déploiement Documentation**:
+   - URL: https://docs.apim.cab-i.com
+   - CI/CD: GitLab Pages ou S3 + CloudFront
+   - Build: `mkdocs build`
+
+   **Checklist Documentation**:
+   - [ ] Écrire 01-getting-started.md
+   - [ ] Écrire 02-ui-devops-guide.md avec screenshots
+   - [ ] Écrire 03-developer-portal-guide.md avec screenshots
+   - [ ] Écrire 04-api-lifecycle.md
+   - [ ] Écrire 05-rbac-roles.md
+   - [ ] Écrire 06-troubleshooting.md (FAQ)
+   - [ ] Créer tutoriels pas-à-pas
+   - [ ] Capturer screenshots des interfaces
+   - [ ] Configurer MkDocs + thème Material
+   - [ ] Déployer sur GitLab Pages
+   - [ ] Ajouter lien "Documentation" dans UI DevOps
 
 ---
 

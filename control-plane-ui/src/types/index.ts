@@ -132,3 +132,84 @@ export interface MergeRequest {
   created_at: string;
   author: string;
 }
+
+// Pipeline Trace types
+export type TraceStatus = 'pending' | 'in_progress' | 'success' | 'failed' | 'skipped';
+
+export interface TraceStep {
+  name: string;
+  status: TraceStatus;
+  started_at?: string;
+  completed_at?: string;
+  duration_ms?: number;
+  details?: Record<string, unknown>;
+  error?: string;
+}
+
+export interface TraceSummary {
+  id: string;
+  trigger_type: string;
+  trigger_source: string;
+  tenant_id?: string;
+  api_name?: string;
+  git_author?: string;
+  git_commit_sha?: string;
+  git_commit_message?: string;
+  status: TraceStatus;
+  created_at: string;
+  total_duration_ms?: number;
+  steps_count: number;
+  steps_completed: number;
+  steps_failed: number;
+}
+
+export interface PipelineTrace {
+  id: string;
+  trigger_type: string;
+  trigger_source: string;
+  git_commit_sha?: string;
+  git_commit_message?: string;
+  git_branch?: string;
+  git_author?: string;
+  git_author_email?: string;
+  git_project?: string;
+  git_files_changed?: string[];
+  tenant_id?: string;
+  api_id?: string;
+  api_name?: string;
+  environment?: string;
+  created_at: string;
+  completed_at?: string;
+  total_duration_ms?: number;
+  status: TraceStatus;
+  steps: TraceStep[];
+  error_summary?: string;
+}
+
+export interface TraceTimeline {
+  trace_id: string;
+  trigger: {
+    type: string;
+    source: string;
+    author?: string;
+    commit?: string;
+    message?: string;
+  };
+  target: {
+    tenant_id?: string;
+    api_name?: string;
+    environment?: string;
+  };
+  status: TraceStatus;
+  created_at: string;
+  total_duration_ms?: number;
+  timeline: TraceStep[];
+  error_summary?: string;
+}
+
+export interface TraceStats {
+  total: number;
+  by_status: Record<string, number>;
+  avg_duration_ms: number;
+  success_rate: number;
+}

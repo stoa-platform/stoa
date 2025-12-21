@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .config import settings
-from .routers import tenants, apis, applications, deployments, git, events, webhooks
+from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .workers.deployment_worker import deployment_worker
 
@@ -74,17 +74,67 @@ async def lifespan(app: FastAPI):
     await awx_service.awx_service.disconnect()
     await keycloak_service.keycloak_service.disconnect()
 
+API_DESCRIPTION = """
+## APIM Control-Plane API
+
+Multi-tenant API Management Control Plane with GitOps integration.
+
+### Features
+
+- **Multi-tenant Management**: Create and manage isolated API tenants
+- **API Lifecycle**: Full CRUD operations for APIs with versioning
+- **GitOps Integration**: Automatic sync with GitLab repositories
+- **Event-Driven Architecture**: Kafka/Redpanda message bus for async operations
+- **Pipeline Monitoring**: End-to-end tracing of deployments
+- **RBAC**: Role-based access control via Keycloak
+
+### Changelog
+
+#### v2.0.0 (Current)
+- Added Pipeline Tracing (`/v1/traces`) for end-to-end monitoring
+- Added GitLab Webhook integration (`/webhooks/gitlab`)
+- Added Kafka integration for event-driven deployments
+- Added AWX integration for automated Gateway deployments
+
+#### v1.0.0
+- Initial release with tenant, API, and application management
+- Basic deployment endpoints
+- Git operations (commits, merge requests)
+
+### Authentication
+
+All endpoints require a valid JWT token from Keycloak (realm: `apim`).
+Include the token in the `Authorization: Bearer <token>` header.
+"""
+
 app = FastAPI(
     title="APIM Control-Plane API",
-    description="Multi-tenant API Management Control Plane",
+    description=API_DESCRIPTION,
     version=settings.VERSION,
     lifespan=lifespan,
+    openapi_tags=[
+        {"name": "Tenants", "description": "Tenant management operations"},
+        {"name": "APIs", "description": "API lifecycle management"},
+        {"name": "Applications", "description": "Application and subscription management"},
+        {"name": "Deployments", "description": "Deployment operations and status"},
+        {"name": "Git", "description": "GitLab integration (commits, MRs, files)"},
+        {"name": "Events", "description": "Real-time event streaming (SSE)"},
+        {"name": "Webhooks", "description": "GitLab webhook handlers for GitOps"},
+        {"name": "traces", "description": "Pipeline monitoring and tracing"},
+    ],
+    contact={
+        "name": "CAB Ingenierie",
+        "email": "admin@cab-i.com",
+    },
+    license_info={
+        "name": "Proprietary",
+    },
 )
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -98,6 +148,7 @@ app.include_router(deployments.router)
 app.include_router(git.router)
 app.include_router(events.router)
 app.include_router(webhooks.router)
+app.include_router(traces.router)
 
 @app.get("/health")
 async def health():

@@ -11,6 +11,7 @@ import {
   LogOut,
   User,
   ChevronDown,
+  Activity,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
   { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
   { name: 'Git', href: '/git', icon: GitBranch, permission: 'apis:read' },
+  { name: 'Monitoring', href: '/monitoring', icon: Activity, permission: 'apis:read' },
 ];
 
 export function Layout({ children }: LayoutProps) {

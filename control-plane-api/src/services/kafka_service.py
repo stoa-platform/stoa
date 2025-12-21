@@ -29,19 +29,31 @@ class KafkaService:
         self._consumers: dict[str, KafkaConsumer] = {}
 
     async def connect(self):
-        """Initialize Kafka producer"""
-        try:
-            self._producer = KafkaProducer(
-                bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS.split(","),
-                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-                key_serializer=lambda k: k.encode("utf-8") if k else None,
-                acks="all",
-                retries=3,
-            )
-            logger.info("Kafka producer connected")
-        except KafkaError as e:
-            logger.error(f"Failed to connect to Kafka: {e}")
-            raise
+        """Initialize Kafka producer with retry logic"""
+        import time
+        max_retries = 5
+        retry_delay = 2
+
+        for attempt in range(max_retries):
+            try:
+                self._producer = KafkaProducer(
+                    bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS.split(","),
+                    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                    key_serializer=lambda k: k.encode("utf-8") if k else None,
+                    acks="all",
+                    retries=3,
+                    request_timeout_ms=10000,
+                    api_version_auto_timeout_ms=10000,
+                )
+                logger.info("Kafka producer connected")
+                return
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Kafka connection attempt {attempt + 1} failed: {e}, retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"Failed to connect to Kafka after {max_retries} attempts: {e}")
+                    raise
 
     async def disconnect(self):
         """Close Kafka connections"""

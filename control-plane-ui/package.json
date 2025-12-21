@@ -11,16 +11,18 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.17.0",
+    "@types/js-yaml": "^4.0.9",
     "axios": "^1.6.5",
+    "clsx": "^2.1.0",
+    "js-yaml": "^4.1.1",
+    "lucide-react": "^0.309.0",
+    "oidc-client-ts": "^2.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-oidc-context": "^2.3.1",
     "react-router-dom": "^6.21.2",
-    "oidc-client-ts": "^2.4.0",
-    "zustand": "^4.4.7",
-    "lucide-react": "^0.309.0",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.0"
+    "tailwind-merge": "^2.2.0",
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@types/react": "^18.2.48",

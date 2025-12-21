@@ -8,14 +8,31 @@ from contextlib import asynccontextmanager
 
 from .config import settings
 from .routers import tenants, apis, applications, deployments, git, events
+from .services import kafka_service, git_service, awx_service, keycloak_service
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print(f"Starting APIM Control-Plane API v{settings.VERSION}")
+
+    # Initialize services
+    try:
+        await kafka_service.kafka_service.connect()
+        await git_service.git_service.connect()
+        await awx_service.awx_service.connect()
+        await keycloak_service.keycloak_service.connect()
+        print("All services connected")
+    except Exception as e:
+        print(f"Warning: Failed to connect some services: {e}")
+
     yield
+
     # Shutdown
     print("Shutting down...")
+    await kafka_service.kafka_service.disconnect()
+    await git_service.git_service.disconnect()
+    await awx_service.awx_service.disconnect()
+    await keycloak_service.keycloak_service.disconnect()
 
 app = FastAPI(
     title="APIM Control-Plane API",

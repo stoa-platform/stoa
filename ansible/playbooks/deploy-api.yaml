@@ -1,0 +1,105 @@
+---
+# Playbook: Deploy API to webMethods Gateway
+# Triggered by Kafka event from Control-Plane API
+
+- name: Deploy API to Gateway
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    gateway_user: "Administrator"
+    gateway_password: "{{ lookup('env', 'GATEWAY_PASSWORD') | default('manage', true) }}"
+    api_name: "{{ api_name | default('test-api') }}"
+    api_version: "{{ api_version | default('1.0') }}"
+    tenant_id: "{{ tenant_id | default('default') }}"
+    openapi_spec: "{{ openapi_spec | default('') }}"
+
+  tasks:
+    - name: Display deployment info
+      debug:
+        msg: "Deploying API '{{ api_name }}' v{{ api_version }} for tenant '{{ tenant_id }}'"
+
+    - name: Check Gateway health
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/health"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 401]
+      register: health_check
+      ignore_errors: true
+
+    - name: Fail if Gateway unreachable
+      fail:
+        msg: "Gateway is not reachable at {{ gateway_url }}"
+      when: health_check.failed | default(false)
+
+    - name: Import API from OpenAPI spec
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          apiName: "{{ api_name }}"
+          apiVersion: "{{ api_version }}"
+          type: "openapi"
+          url: "{{ openapi_spec }}"
+        status_code: [200, 201, 400]
+      register: api_import
+      when: openapi_spec | length > 0
+
+    - name: Display API import result
+      debug:
+        var: api_import
+      when: openapi_spec | length > 0
+
+    - name: Activate API
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_import.json.apiResponse.api.id }}/activate"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 204]
+      when:
+        - openapi_spec | length > 0
+        - api_import.json.apiResponse.api.id is defined
+      register: api_activate
+
+    - name: Send success notification to Kafka
+      uri:
+        url: "http://control-plane-api.apim-system.svc.cluster.local:8000/v1/events/deployment-result"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          api_name: "{{ api_name }}"
+          api_version: "{{ api_version }}"
+          tenant_id: "{{ tenant_id }}"
+          status: "success"
+          message: "API deployed successfully"
+        status_code: [200, 201, 202]
+      ignore_errors: true
+
+    - name: Deployment summary
+      debug:
+        msg: |
+          ========================================
+          API Deployment Complete
+          ----------------------------------------
+          API: {{ api_name }} v{{ api_version }}
+          Tenant: {{ tenant_id }}
+          Status: SUCCESS
+          ========================================

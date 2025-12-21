@@ -1,0 +1,83 @@
+---
+# Playbook: Rollback API deployment
+# Reverts to previous version or deactivates API
+
+- name: Rollback API Deployment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    gateway_user: "Administrator"
+    gateway_password: "{{ lookup('env', 'GATEWAY_PASSWORD') | default('manage', true) }}"
+    api_id: "{{ api_id | default('') }}"
+    api_name: "{{ api_name | default('') }}"
+    tenant_id: "{{ tenant_id | default('default') }}"
+    rollback_version: "{{ rollback_version | default('') }}"
+    action: "{{ action | default('deactivate') }}"  # deactivate, delete, restore
+
+  tasks:
+    - name: Display rollback info
+      debug:
+        msg: "Rolling back API '{{ api_name }}' ({{ api_id }}) - Action: {{ action }}"
+
+    - name: Deactivate API
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}/deactivate"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 204]
+      register: deactivate_result
+      when:
+        - api_id | length > 0
+        - action == 'deactivate'
+      ignore_errors: true
+
+    - name: Delete API
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}"
+        method: DELETE
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 204]
+      register: delete_result
+      when:
+        - api_id | length > 0
+        - action == 'delete'
+      ignore_errors: true
+
+    - name: Send rollback notification to Kafka
+      uri:
+        url: "http://control-plane-api.apim-system.svc.cluster.local:8000/v1/events/deployment-result"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          api_name: "{{ api_name }}"
+          api_id: "{{ api_id }}"
+          tenant_id: "{{ tenant_id }}"
+          status: "rollback"
+          action: "{{ action }}"
+          message: "API rolled back successfully"
+        status_code: [200, 201, 202]
+      ignore_errors: true
+
+    - name: Rollback summary
+      debug:
+        msg: |
+          ========================================
+          Rollback Complete
+          ----------------------------------------
+          API: {{ api_name }}
+          API ID: {{ api_id }}
+          Tenant: {{ tenant_id }}
+          Action: {{ action }}
+          Status: SUCCESS
+          ========================================

@@ -664,6 +664,154 @@ Stack complète d'observabilité pour APIM Platform:
    - Global Policy par tenant
    - Index pattern: {env}-{tenant}-analytics
 
+### Gestion des Variables d'Environnement
+
+#### Problématique
+
+Une API doit pointer vers des backends différents selon l'environnement, sans stocker de secrets dans Git et sans modifier l'API à chaque promotion.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  payment-api doit pointer vers :                                     │
+│    DEV     → https://payment-dev.internal.cab-i.com                  │
+│    STAGING → https://payment-staging.internal.cab-i.com              │
+│    PROD    → https://payment.internal.cab-i.com                      │
+│                                                                       │
+│  ✅ Solution : Templates avec placeholders + Vault pour secrets      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Architecture de Résolution
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│                      SOURCES DE CONFIGURATION                              │
+│                                                                            │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐           │
+│  │      GIT        │  │     VAULT       │  │   CONFIGMAP     │           │
+│  │   (Templates)   │  │   (Secrets)     │  │ (Env-specific)  │           │
+│  │                 │  │                 │  │                 │           │
+│  │ api.yaml avec   │  │ Credentials     │  │ URLs, Timeouts  │           │
+│  │ ${BACKEND_URL}  │  │ API Keys        │  │ Feature flags   │           │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘           │
+│           │                    │                    │                     │
+│           └────────────────────┼────────────────────┘                     │
+│                                ▼                                          │
+│                 ┌──────────────────────────────┐                          │
+│                 │    CONTROL-PLANE API         │                          │
+│                 │   (Variable Resolution)      │                          │
+│                 └──────────────┬───────────────┘                          │
+│                                ▼                                          │
+│                 ┌──────────────────────────────┐                          │
+│                 │     AWX / Ansible Job        │                          │
+│                 │  (Inject at deploy time)     │                          │
+│                 └──────────────┬───────────────┘                          │
+│                                ▼                                          │
+│                 ┌──────────────────────────────┐                          │
+│                 │     webMethods Gateway       │                          │
+│                 │   (Runtime + Alias System)   │                          │
+│                 └──────────────────────────────┘                          │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Structure GitOps Étendue
+
+```
+apim-gitops/
+├── tenants/
+│   └── tenant-finance/
+│       └── apis/
+│           └── payment-api/
+│               ├── api.yaml              # Template avec ${PLACEHOLDERS}
+│               ├── openapi.yaml          # Spec OpenAPI
+│               ├── policies.yaml         # Policies
+│               └── environments/         # Config par environnement
+│                   ├── _defaults.yaml    # Valeurs par défaut
+│                   ├── dev.yaml          # Overrides DEV
+│                   ├── staging.yaml      # Overrides STAGING
+│                   └── prod.yaml         # Overrides PROD
+│
+├── environments/                         # Configuration globale par env
+│   ├── dev/
+│   │   ├── config.yaml                   # Config globale DEV
+│   │   └── secrets-refs.yaml             # Références Vault
+│   ├── staging/
+│   │   ├── config.yaml
+│   │   └── secrets-refs.yaml
+│   └── prod/
+│       ├── config.yaml
+│       └── secrets-refs.yaml
+│
+└── policies/
+    └── ...
+```
+
+#### Exemple de Template API (api.yaml)
+
+```yaml
+apiVersion: apim.cab-i.com/v1
+kind: API
+metadata:
+  name: payment-api
+  tenant: tenant-finance
+spec:
+  backend:
+    url: "${BACKEND_URL}"                    # Résolu au déploiement
+    timeout: "${BACKEND_TIMEOUT:30s}"        # Valeur par défaut: 30s
+    authentication:
+      type: "${BACKEND_AUTH_TYPE:oauth2}"
+      credentials:
+        clientIdRef: "${BACKEND_CLIENT_ID_REF}"      # Référence Vault
+        clientSecretRef: "${BACKEND_CLIENT_SECRET_REF}"
+        tokenUrl: "${BACKEND_TOKEN_URL}"
+```
+
+#### Exemple de Configuration Environnement (dev.yaml)
+
+```yaml
+apiVersion: apim.cab-i.com/v1
+kind: APIEnvironmentConfig
+metadata:
+  name: payment-api-dev
+  environment: dev
+variables:
+  BACKEND_URL: "https://payment-dev.internal.cab-i.com"
+  BACKEND_TOKEN_URL: "https://auth-dev.internal.cab-i.com/oauth/token"
+  # Références Vault (pas les valeurs!)
+  BACKEND_CLIENT_ID_REF: "vault:secret/data/dev/payment-api#client_id"
+  BACKEND_CLIENT_SECRET_REF: "vault:secret/data/dev/payment-api#client_secret"
+  # Overrides DEV
+  LOG_LEVEL: "DEBUG"
+  RATE_LIMIT_RPS: "1000"
+```
+
+#### Structure Vault
+
+```
+vault/
+└── secret/data/
+    ├── dev/
+    │   ├── payment-api/
+    │   │   ├── client_id
+    │   │   └── client_secret
+    │   └── _global/
+    ├── staging/
+    │   └── ...
+    └── prod/
+        └── ...
+```
+
+#### Bonnes Pratiques
+
+| Ce qui va dans Git | Ce qui va dans Vault |
+|-------------------|---------------------|
+| URLs backends | Credentials backend |
+| Timeouts, Rate limits | API Keys |
+| Feature flags, Log levels | Client secrets OAuth |
+| Références Vault (`vault:path#key`) | Certificats, Tokens |
+
+---
+
 ### Architecture Cible Complète
 
 ```

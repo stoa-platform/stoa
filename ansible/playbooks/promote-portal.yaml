@@ -1,0 +1,64 @@
+---
+# Playbook: Promote API to Developer Portal
+# Publishes API documentation to the portal
+
+- name: Promote API to Developer Portal
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    portal_url: "http://devportal.apim-system.svc.cluster.local:8083"
+    gateway_user: "Administrator"
+    gateway_password: "{{ lookup('env', 'GATEWAY_PASSWORD') | default('manage', true) }}"
+    api_id: "{{ api_id | default('') }}"
+    api_name: "{{ api_name | default('') }}"
+    tenant_id: "{{ tenant_id | default('default') }}"
+
+  tasks:
+    - name: Display promotion info
+      debug:
+        msg: "Promoting API '{{ api_name }}' ({{ api_id }}) to Portal for tenant '{{ tenant_id }}'"
+
+    - name: Get API details from Gateway
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200]
+      register: api_details
+      when: api_id | length > 0
+
+    - name: Publish API to Portal
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}/publish"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          portalGatewayId: "portal"
+        status_code: [200, 204]
+      register: publish_result
+      when: api_id | length > 0
+      ignore_errors: true
+
+    - name: Promotion summary
+      debug:
+        msg: |
+          ========================================
+          Portal Promotion Complete
+          ----------------------------------------
+          API: {{ api_name }}
+          API ID: {{ api_id }}
+          Tenant: {{ tenant_id }}
+          Status: {{ 'SUCCESS' if not publish_result.failed | default(false) else 'FAILED' }}
+          ========================================

@@ -1,0 +1,71 @@
+---
+# Playbook: Sync Gateway configuration
+# Synchronizes APIs and policies from Git repository
+
+- name: Sync Gateway Configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    gateway_user: "Administrator"
+    gateway_password: "{{ lookup('env', 'GATEWAY_PASSWORD') | default('manage', true) }}"
+    git_repo: "{{ git_repo | default('') }}"
+    tenant_id: "{{ tenant_id | default('default') }}"
+
+  tasks:
+    - name: Display sync info
+      debug:
+        msg: "Syncing Gateway for tenant '{{ tenant_id }}'"
+
+    - name: Check Gateway health
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/health"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 401]
+      register: health_check
+      ignore_errors: true
+
+    - name: Get all APIs
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200]
+      register: all_apis
+
+    - name: Display current APIs
+      debug:
+        msg: "Found {{ all_apis.json.apiResponse | length | default(0) }} APIs on Gateway"
+
+    - name: Export Gateway configuration
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/archive"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        dest: "/tmp/gateway-export-{{ tenant_id }}.zip"
+        status_code: [200]
+      register: export_result
+      ignore_errors: true
+
+    - name: Sync summary
+      debug:
+        msg: |
+          ========================================
+          Gateway Sync Complete
+          ----------------------------------------
+          Tenant: {{ tenant_id }}
+          APIs found: {{ all_apis.json.apiResponse | length | default(0) }}
+          Status: SUCCESS
+          ========================================

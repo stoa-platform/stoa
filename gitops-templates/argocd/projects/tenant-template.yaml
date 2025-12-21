@@ -1,0 +1,78 @@
+# ArgoCD AppProject Template for Tenants
+# Each tenant gets their own project with isolated access
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: '{{TENANT_ID}}'
+  namespace: argocd
+  labels:
+    tenant: '{{TENANT_ID}}'
+    managed-by: gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: 'APIM Tenant: {{TENANT_DISPLAY_NAME}}'
+
+  # Source repositories - tenant can only access GitOps repo
+  sourceRepos:
+    - 'https://gitlab.com/potomitan/apim-gitops.git'
+
+  # Destination - tenant can only deploy to their namespaces
+  destinations:
+    - namespace: 'apim-{{TENANT_ID}}'
+      server: https://kubernetes.default.svc
+    - namespace: 'apim-{{TENANT_ID}}-dev'
+      server: https://kubernetes.default.svc
+    - namespace: 'apim-{{TENANT_ID}}-staging'
+      server: https://kubernetes.default.svc
+
+  # Limited cluster-scoped resources
+  clusterResourceWhitelist: []
+
+  # Allowed namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: networking.k8s.io
+      kind: Ingress
+
+  # Deny Secrets by default (use SealedSecrets or ExternalSecrets)
+  namespaceResourceBlacklist:
+    - group: ''
+      kind: Secret
+
+  # Role definitions for tenant
+  roles:
+    - name: admin
+      description: 'Tenant admin for {{TENANT_ID}}'
+      policies:
+        - 'p, proj:{{TENANT_ID}}:admin, applications, *, {{TENANT_ID}}/*, allow'
+      groups:
+        - '/tenants/{{TENANT_ID}}/tenant-admin'
+
+    - name: deployer
+      description: 'Deployer for {{TENANT_ID}}'
+      policies:
+        - 'p, proj:{{TENANT_ID}}:deployer, applications, get, {{TENANT_ID}}/*, allow'
+        - 'p, proj:{{TENANT_ID}}:deployer, applications, sync, {{TENANT_ID}}/*, allow'
+      groups:
+        - '/tenants/{{TENANT_ID}}/devops'
+
+    - name: viewer
+      description: 'Viewer for {{TENANT_ID}}'
+      policies:
+        - 'p, proj:{{TENANT_ID}}:viewer, applications, get, {{TENANT_ID}}/*, allow'
+      groups:
+        - '/tenants/{{TENANT_ID}}/viewer'
+
+  # Orphaned resources monitoring
+  orphanedResources:
+    warn: true
+    ignore:
+      - group: ''
+        kind: ConfigMap
+        name: kube-root-ca.crt

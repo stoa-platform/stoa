@@ -1,0 +1,67 @@
+# Application Template
+# Consumer applications that subscribe to APIs
+# Variables are resolved using ${VAR} or ${VAR:default} syntax
+
+apiVersion: apim.cab-i.com/v1
+kind: Application
+metadata:
+  name: ${APP_NAME}
+  tenant: ${TENANT_ID}
+  labels:
+    environment: ${ENVIRONMENT}
+    managed-by: gitops
+
+spec:
+  displayName: ${APP_DISPLAY_NAME:${APP_NAME}}
+  description: ${APP_DESCRIPTION:}
+  status: ${APP_STATUS:active}
+
+  # Application owner
+  owner:
+    name: ${OWNER_NAME:}
+    email: ${OWNER_EMAIL:}
+    team: ${OWNER_TEAM:}
+
+  # OAuth2 client configuration
+  oauth2:
+    clientId: ${OAUTH_CLIENT_ID:}
+    clientSecret: vault:secret/data/${TENANT_ID}/applications/${APP_NAME}#client_secret
+    grantTypes:
+      - client_credentials
+      - authorization_code
+    redirectUris: ${REDIRECT_URIS:}
+    scopes: ${APP_SCOPES:}
+
+  # Rate limiting (per application)
+  rateLimiting:
+    enabled: ${APP_RATE_LIMIT_ENABLED:true}
+    requestsPerMinute: ${APP_RATE_LIMIT:1000}
+    dailyQuota: ${APP_DAILY_QUOTA:100000}
+
+  # API subscriptions
+  subscriptions: []
+  # Example:
+  # - apiName: payment-api
+  #   apiVersion: "1.0"
+  #   environments:
+  #     - dev
+  #     - staging
+  #   approvedAt: "2024-01-15T10:00:00Z"
+  #   approvedBy: "admin@example.com"
+
+  # Webhook notifications
+  webhooks:
+    enabled: ${WEBHOOKS_ENABLED:false}
+    endpoints: []
+    # Example:
+    # - url: https://myapp.example.com/webhooks/apim
+    #   events:
+    #     - api.deployed
+    #     - subscription.approved
+    #   secret: vault:secret/data/${TENANT_ID}/applications/${APP_NAME}#webhook_secret
+
+  # Application metadata
+  metadata:
+    createdAt: ${CREATED_AT:}
+    createdBy: ${CREATED_BY:}
+    updatedAt: ${UPDATED_AT:}

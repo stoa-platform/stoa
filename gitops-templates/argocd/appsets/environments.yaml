@@ -1,0 +1,54 @@
+# ApplicationSet for Environment-specific deployments
+# Manages deployments per environment (dev, staging, prod)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: environment-deployments
+  namespace: argocd
+spec:
+  generators:
+    # Matrix generator - combines tenants x environments
+    - matrix:
+        generators:
+          # List of environments
+          - list:
+              elements:
+                - environment: dev
+                  cluster: https://kubernetes.default.svc
+                  namespace_suffix: dev
+                - environment: staging
+                  cluster: https://kubernetes.default.svc
+                  namespace_suffix: staging
+          # Git generator for tenants
+          - git:
+              repoURL: https://gitlab.com/potomitan/apim-gitops.git
+              revision: HEAD
+              directories:
+                - path: tenants/*
+
+  template:
+    metadata:
+      name: '{{path.basename}}-{{environment}}'
+      labels:
+        tenant: '{{path.basename}}'
+        environment: '{{environment}}'
+    spec:
+      project: '{{path.basename}}'
+      source:
+        repoURL: https://gitlab.com/potomitan/apim-gitops.git
+        targetRevision: HEAD
+        path: 'tenants/{{path.basename}}'
+        # Helm with values from environment config
+        helm:
+          valueFiles:
+            - ../../environments/{{environment}}/config.yaml
+            - environments/{{environment}}.yaml
+      destination:
+        server: '{{cluster}}'
+        namespace: 'apim-{{path.basename}}-{{namespace_suffix}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

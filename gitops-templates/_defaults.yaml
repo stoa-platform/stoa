@@ -1,0 +1,45 @@
+# Global Default Variables
+# These are overridden by environment-specific and tenant-specific configs
+
+variables:
+  # Backend defaults
+  BACKEND_TIMEOUT: "30"
+  BACKEND_RETRY_COUNT: "3"
+  BACKEND_RETRY_DELAY: "1000"
+
+  # Rate limiting defaults
+  RATE_LIMIT_REQUESTS: "100"
+  RATE_LIMIT_WINDOW: "60"
+  RATE_LIMIT_BURST: "20"
+
+  # Caching defaults
+  CACHE_ENABLED: "true"
+  CACHE_TTL: "300"
+
+  # Logging defaults
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+
+  # Security defaults
+  CORS_ENABLED: "true"
+  CORS_MAX_AGE: "3600"
+
+  # Monitoring defaults
+  METRICS_ENABLED: "true"
+  TRACING_ENABLED: "true"
+  TRACING_SAMPLE_RATE: "0.1"
+
+# Default policies applied to all APIs
+default_policies:
+  - name: rate-limiting
+    enabled: true
+  - name: cors
+    enabled: true
+  - name: request-validation
+    enabled: true
+
+# Default environments available
+environments:
+  - dev
+  - staging
+  - prod

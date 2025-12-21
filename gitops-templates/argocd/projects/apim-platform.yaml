@@ -1,0 +1,87 @@
+# ArgoCD AppProject for APIM Platform
+# Defines access control and allowed resources
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apim-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: APIM Platform GitOps Project
+
+  # Source repositories
+  sourceRepos:
+    - 'https://gitlab.com/potomitan/apim-gitops.git'
+    - 'https://gitlab.com/potomitan/apim-aws.git'
+
+  # Destination clusters and namespaces
+  destinations:
+    # Allow deployment to apim-system namespace
+    - namespace: apim-system
+      server: https://kubernetes.default.svc
+    # Allow deployment to tenant namespaces
+    - namespace: 'apim-*'
+      server: https://kubernetes.default.svc
+
+  # Allowed cluster-scoped resources
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: networking.k8s.io
+      kind: Ingress
+
+  # Allowed namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: ''
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: batch
+      kind: Job
+    - group: batch
+      kind: CronJob
+
+  # Role definitions
+  roles:
+    - name: admin
+      description: Full access to APIM Platform project
+      policies:
+        - p, proj:apim-platform:admin, applications, *, apim-platform/*, allow
+        - p, proj:apim-platform:admin, repositories, *, apim-platform/*, allow
+      groups:
+        - cpi-admin
+
+    - name: deployer
+      description: Can sync and manage applications
+      policies:
+        - p, proj:apim-platform:deployer, applications, get, apim-platform/*, allow
+        - p, proj:apim-platform:deployer, applications, sync, apim-platform/*, allow
+        - p, proj:apim-platform:deployer, applications, action/*, apim-platform/*, allow
+      groups:
+        - devops
+        - tenant-admin
+
+    - name: viewer
+      description: Read-only access
+      policies:
+        - p, proj:apim-platform:viewer, applications, get, apim-platform/*, allow
+      groups:
+        - viewer
+
+  # Sync windows - production deployments only during business hours
+  syncWindows:
+    - kind: deny
+      schedule: '0 0 * * 0'  # Deny on Sundays
+      duration: 24h
+      applications:
+        - '*-prod'
+      manualSync: true

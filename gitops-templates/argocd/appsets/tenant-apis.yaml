@@ -1,0 +1,47 @@
+# ApplicationSet for Tenant APIs
+# Automatically creates ArgoCD Applications for each tenant's APIs
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: tenant-apis
+  namespace: argocd
+spec:
+  generators:
+    # Git directory generator - discovers tenants from GitOps repo
+    - git:
+        repoURL: https://gitlab.com/potomitan/apim-gitops.git
+        revision: HEAD
+        directories:
+          - path: tenants/*/apis/*
+
+  template:
+    metadata:
+      name: '{{path[1]}}-{{path[3]}}'  # tenant-apiname
+      labels:
+        tenant: '{{path[1]}}'
+        type: api
+    spec:
+      project: '{{path[1]}}'  # Project per tenant
+      source:
+        repoURL: https://gitlab.com/potomitan/apim-gitops.git
+        targetRevision: HEAD
+        path: '{{path}}'
+        # Plugin to resolve variables before apply
+        plugin:
+          name: variable-resolver
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'apim-{{path[1]}}'  # Namespace per tenant
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - PruneLast=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m

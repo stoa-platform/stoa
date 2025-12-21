@@ -1,0 +1,164 @@
+# ArgoCD Values for APIM Platform
+# This configures ArgoCD for GitOps-based deployment
+
+global:
+  domain: argocd.apim.cab-i.com
+
+# Server configuration
+server:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    hosts:
+      - argocd.apim.cab-i.com
+    tls:
+      - secretName: argocd-tls
+        hosts:
+          - argocd.apim.cab-i.com
+
+  # RBAC configuration
+  rbacConfig:
+    policy.default: role:readonly
+    policy.csv: |
+      p, role:admin, applications, *, */*, allow
+      p, role:admin, clusters, *, *, allow
+      p, role:admin, repositories, *, *, allow
+      p, role:admin, projects, *, *, allow
+      g, admin, role:admin
+
+# Dex configuration for SSO with Keycloak
+dex:
+  enabled: true
+
+configs:
+  # Repositories configuration
+  repositories:
+    apim-gitops:
+      url: https://gitlab.com/potomitan/apim-gitops.git
+      name: apim-gitops
+      type: git
+
+  # SSO with Keycloak
+  cm:
+    url: https://argocd.apim.cab-i.com
+    dex.config: |
+      connectors:
+        - type: oidc
+          id: keycloak
+          name: Keycloak
+          config:
+            issuer: https://auth.apim.cab-i.com/realms/apim
+            clientID: argocd
+            clientSecret: $dex.keycloak.clientSecret
+            redirectURI: https://argocd.apim.cab-i.com/api/dex/callback
+            scopes:
+              - openid
+              - profile
+              - email
+              - groups
+
+  # Credentials template for GitLab
+  credentialTemplates:
+    gitlab-ssh:
+      url: git@gitlab.com
+      sshPrivateKey: |
+        # Will be set via secret
+
+  # RBAC model
+  rbac:
+    policy.default: role:readonly
+    policy.csv: |
+      # CPI Admin - full access
+      p, role:cpi-admin, applications, *, */*, allow
+      p, role:cpi-admin, clusters, *, *, allow
+      p, role:cpi-admin, repositories, *, *, allow
+      p, role:cpi-admin, projects, *, *, allow
+
+      # Tenant Admin - manage own tenant apps
+      p, role:tenant-admin, applications, get, {{.tenant}}/* , allow
+      p, role:tenant-admin, applications, sync, {{.tenant}}/* , allow
+      p, role:tenant-admin, applications, action, {{.tenant}}/* , allow
+
+      # DevOps - deploy and sync
+      p, role:devops, applications, get, */*, allow
+      p, role:devops, applications, sync, */*, allow
+
+      # Viewer - read only
+      p, role:viewer, applications, get, */*, allow
+
+      # Group mappings from Keycloak
+      g, cpi-admin, role:cpi-admin
+      g, tenant-admin, role:tenant-admin
+      g, devops, role:devops
+      g, viewer, role:viewer
+
+# Application controller
+controller:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Repo server
+repoServer:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+# ApplicationSet controller for multi-tenant
+applicationSet:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+# Notifications for deployment events
+notifications:
+  enabled: true
+  argocdUrl: https://argocd.apim.cab-i.com
+
+  # Kafka notification template
+  templates:
+    template.deployment-started: |
+      message: |
+        Application {{.app.metadata.name}} deployment started
+      kafka:
+        topic: deploy-results
+
+    template.deployment-succeeded: |
+      message: |
+        Application {{.app.metadata.name}} deployed successfully
+      kafka:
+        topic: deploy-results
+
+    template.deployment-failed: |
+      message: |
+        Application {{.app.metadata.name}} deployment failed
+      kafka:
+        topic: deploy-results
+
+  triggers:
+    trigger.on-deployed: |
+      - when: app.status.operationState.phase in ['Succeeded']
+        send: [deployment-succeeded]
+    trigger.on-sync-running: |
+      - when: app.status.operationState.phase in ['Running']
+        send: [deployment-started]
+    trigger.on-sync-failed: |
+      - when: app.status.operationState.phase in ['Failed', 'Error']
+        send: [deployment-failed]

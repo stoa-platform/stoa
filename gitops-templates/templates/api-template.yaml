@@ -1,0 +1,106 @@
+# API Template
+# Use this as a starting point for new API definitions
+# Variables are resolved using ${VAR} or ${VAR:default} syntax
+
+apiVersion: apim.cab-i.com/v1
+kind: API
+metadata:
+  name: ${API_NAME}
+  tenant: ${TENANT_ID}
+  version: ${API_VERSION:1.0.0}
+  labels:
+    environment: ${ENVIRONMENT}
+    managed-by: gitops
+
+spec:
+  displayName: ${API_DISPLAY_NAME:${API_NAME}}
+  description: ${API_DESCRIPTION:}
+  status: ${API_STATUS:draft}
+
+  # Backend configuration
+  backend:
+    url: ${BACKEND_URL}
+    timeout: ${BACKEND_TIMEOUT:30}
+    retries:
+      count: ${BACKEND_RETRY_COUNT:3}
+      delay: ${BACKEND_RETRY_DELAY:1000}
+    healthCheck:
+      enabled: ${HEALTH_CHECK_ENABLED:true}
+      path: ${HEALTH_CHECK_PATH:/health}
+      interval: ${HEALTH_CHECK_INTERVAL:30}
+
+  # Gateway configuration
+  gateway:
+    basePath: ${API_BASE_PATH:/${API_NAME}}
+    stripBasePath: ${STRIP_BASE_PATH:true}
+    protocols:
+      - https
+
+  # Authentication
+  authentication:
+    type: ${AUTH_TYPE:oauth2}
+    oauth2:
+      tokenEndpoint: ${OAUTH_TOKEN_ENDPOINT:}
+      clientId: ${OAUTH_CLIENT_ID:}
+      clientSecret: ${OAUTH_CLIENT_SECRET:}
+      scopes: ${OAUTH_SCOPES:}
+
+  # Policies
+  policies:
+    rateLimiting:
+      enabled: ${RATE_LIMIT_ENABLED:true}
+      requestsPerMinute: ${RATE_LIMIT_REQUESTS:100}
+      burstLimit: ${RATE_LIMIT_BURST:20}
+
+    cors:
+      enabled: ${CORS_ENABLED:true}
+      allowedOrigins: ${CORS_ALLOWED_ORIGINS:*}
+      allowedMethods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+        - X-Request-ID
+      maxAge: ${CORS_MAX_AGE:3600}
+
+    caching:
+      enabled: ${CACHE_ENABLED:false}
+      ttl: ${CACHE_TTL:300}
+      varyHeaders:
+        - Accept
+        - Authorization
+
+    requestValidation:
+      enabled: ${REQUEST_VALIDATION_ENABLED:true}
+      validateBody: true
+      validateParameters: true
+
+  # Monitoring
+  monitoring:
+    metrics:
+      enabled: ${METRICS_ENABLED:true}
+    tracing:
+      enabled: ${TRACING_ENABLED:true}
+      sampleRate: ${TRACING_SAMPLE_RATE:0.1}
+    logging:
+      level: ${LOG_LEVEL:INFO}
+      format: ${LOG_FORMAT:json}
+
+  # Deployment tracking
+  deployments:
+    dev:
+      deployed: false
+      version: ""
+      deployedAt: ""
+    staging:
+      deployed: false
+      version: ""
+      deployedAt: ""
+    prod:
+      deployed: false
+      version: ""
+      deployedAt: ""

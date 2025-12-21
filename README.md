@@ -1736,6 +1736,270 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    - [ ] Déployer sur GitLab Pages
    - [ ] Ajouter lien "Documentation" dans UI DevOps
 
+#### Phase 7 : Sécurité Opérationnelle (Batch Jobs)
+
+**Objectif**: Mettre en place des jobs automatisés pour la sécurité opérationnelle : vérification des certificats, rotation des secrets, reporting d'utilisation, et scan de sécurité GitLab.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         SECURITY OPERATIONS CENTER                                   │
+│                                                                                      │
+│   ┌──────────────────────────────────────────────────────────────────────────────┐  │
+│   │                        4 JOBS DE SÉCURITÉ                                     │  │
+│   │                                                                               │  │
+│   │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │  │
+│   │  │ Certificate │  │   Secret    │  │   Usage     │  │   GitLab    │          │  │
+│   │  │ Expiry      │  │   Rotation  │  │   Reporting │  │   Security  │          │  │
+│   │  │ Check       │  │             │  │             │  │   Scan      │          │  │
+│   │  │             │  │             │  │             │  │             │          │  │
+│   │  │ Daily 6AM   │  │ Weekly Sun  │  │ Daily 1AM   │  │ On commit   │          │  │
+│   │  │             │  │ Monthly 1st │  │ Weekly Mon  │  │ Daily 3AM   │          │  │
+│   │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘          │  │
+│   │                                                                               │  │
+│   └──────────────────────────────────────────────────────────────────────────────┘  │
+│                                      │                                               │
+│                                      ▼                                               │
+│   ┌──────────────────────────────────────────────────────────────────────────────┐  │
+│   │                           ALERTING                                            │  │
+│   │                                                                               │  │
+│   │  Kafka → Email / Slack / Teams / PagerDuty → Grafana Dashboards              │  │
+│   │                                                                               │  │
+│   └──────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Job 1 : Vérification Expiration Certificats** 🔲
+
+   **Sources vérifiées**:
+   | Source | Type | Exemple |
+   |--------|------|---------|
+   | Kubernetes | TLS Secrets | Ingress certificates, mTLS |
+   | Vault | PKI Certificates | API certs, Client certs |
+   | External | Endpoints HTTPS | Backend URLs, Partner APIs |
+
+   **Seuils d'alerte**:
+   | Niveau | Jours restants | Action |
+   |--------|----------------|--------|
+   | 🔴 CRITICAL | < 7 jours | Email + Slack + PagerDuty |
+   | 🟠 WARNING | < 30 jours | Email + Slack |
+   | 🟡 INFO | < 60 jours | Slack |
+   | 🟢 OK | > 60 jours | - |
+
+   **CronJob**: Daily 6AM
+   ```yaml
+   apiVersion: batch/v1
+   kind: CronJob
+   metadata:
+     name: certificate-checker
+   spec:
+     schedule: "0 6 * * *"
+     jobTemplate:
+       spec:
+         template:
+           spec:
+             containers:
+               - name: checker
+                 image: apim-security-jobs:latest
+                 command: ["python", "-m", "src.jobs.certificate_checker"]
+   ```
+
+2. **Job 2 : Rotation Automatique des Secrets** 🔲
+
+   **Policies de rotation**:
+   | Type de Secret | Fréquence | Auto-Rotate | Notifier avant |
+   |----------------|-----------|-------------|----------------|
+   | API Keys | 30 jours | ✅ Oui | 7 jours |
+   | OAuth Client Secrets | 90 jours | ✅ Oui | 14 jours |
+   | Database Passwords | 90 jours | ✅ Oui | 14 jours |
+   | Service Accounts | 180 jours | ✅ Oui | 30 jours |
+   | Encryption Keys | 365 jours | ❌ Manual | 60 jours |
+
+   **Fonctionnalités**:
+   - Génération de nouveaux secrets (alphanumeric, special chars)
+   - Mise à jour dans Vault avec metadata (last_rotated, rotated_by)
+   - Propagation vers Kubernetes Secrets et Keycloak Clients
+   - Post-rotation actions (restart deployments si nécessaire)
+
+   **CronJobs**:
+   - Weekly: Sunday 2AM
+   - Monthly (forced): 1st of month 3AM
+
+3. **Job 3 : Reporting d'Utilisation par Tenant** 🔲
+
+   **Métriques collectées**:
+   | Catégorie | Métriques |
+   |-----------|-----------|
+   | API Calls | Total, Success, Failed, Error Rate |
+   | Bandwidth | Inbound MB, Outbound MB, Total |
+   | Latency | Avg, P50, P95, P99 |
+   | Resources | Active APIs, Apps, Users |
+   | Quota | Usage %, Exceeded |
+
+   **Sources de données**:
+   ```
+   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+   │   Prometheus    │   │   webMethods    │   │   PostgreSQL    │
+   │   (Metrics)     │   │   Gateway       │   │   (Control      │
+   │                 │   │   (Analytics)   │   │   Plane DB)     │
+   └────────┬────────┘   └────────┬────────┘   └────────┬────────┘
+            │                     │                     │
+            └─────────────────────┼─────────────────────┘
+                                  │
+                                  ▼
+                     ┌──────────────────────────┐
+                     │   Usage Reporting Job    │
+                     │                          │
+                     │   Aggregation per Tenant │
+                     │   PDF Generation         │
+                     │   Email Distribution     │
+                     └──────────────────────────┘
+   ```
+
+   **CronJobs**:
+   - Daily: 1AM (rapport quotidien)
+   - Weekly: Monday 2AM (rapport PDF hebdomadaire)
+
+4. **Job 4 : Scan Sécurité GitLab** 🔲
+
+   **Types de scan**:
+   | Scan | Outil | Détection |
+   |------|-------|-----------|
+   | Secret Detection | Gitleaks | API Keys, Passwords, Tokens, Certs |
+   | SAST | Semgrep | SQL Injection, XSS, Hardcoded creds |
+   | Dependency Check | Trivy | CVE, Outdated packages |
+   | License Compliance | pip-licenses | GPL/LGPL, Proprietary |
+
+   **Règles Gitleaks** (`.gitleaks.toml`):
+   - AWS Access Keys (`AKIA...`)
+   - Generic API Keys
+   - Passwords
+   - Private Keys (RSA, EC, DSA)
+   - JWT Tokens (`eyJ...`)
+   - Vault Tokens (`hvs....`)
+   - Database Connection Strings
+
+   **GitLab CI/CD Integration**:
+   ```yaml
+   stages:
+     - security-scan
+     - validate
+     - build
+
+   secret-detection:
+     stage: security-scan
+     image: zricethezav/gitleaks:latest
+     script:
+       - gitleaks detect --source . --config .gitleaks.toml --exit-code 1
+     rules:
+       - if: $CI_PIPELINE_SOURCE == "push"
+       - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+   security-gate:
+     stage: security-scan
+     script:
+       - |
+         if [ "$CRITICAL_SECRETS" -gt "0" ]; then
+           echo "❌ BLOCKED: Secrets detected!"
+           exit 1
+         fi
+   ```
+
+   **CronJob**: Daily 3AM + On-commit (webhook)
+
+5. **Service de Notification** 🔲
+
+   | Niveau | Canaux |
+   |--------|--------|
+   | 🔴 CRITICAL | Email + Slack + PagerDuty |
+   | 🟠 WARNING | Email + Slack |
+   | 🟡 INFO | Slack |
+
+   **Configuration**:
+   ```yaml
+   notifications:
+     email:
+       smtp_host: smtp.cab-i.com
+       recipients:
+         critical: ["security-team@cab-i.com"]
+         warning: ["platform-admins@cab-i.com"]
+     slack:
+       webhook: vault:secret/data/notifications#slack_webhook
+       channel: "#apim-alerts"
+     pagerduty:
+       routing_key: vault:secret/data/notifications#pagerduty_key
+   ```
+
+6. **Structure des Jobs** 🔲
+
+   ```
+   control-plane-api/
+   └── src/
+       └── jobs/
+           ├── __init__.py
+           ├── certificate_checker.py      # Job 1
+           ├── secret_rotation.py          # Job 2
+           ├── usage_reporting.py          # Job 3
+           └── security_scanner.py         # Job 4
+
+   charts/apim-platform/
+   └── templates/
+       └── security-jobs/
+           ├── certificate-checker.yaml
+           ├── secret-rotation.yaml
+           ├── usage-reporting.yaml
+           └── gitlab-security-scan.yaml
+   ```
+
+7. **Helm Values** 🔲
+
+   ```yaml
+   # values.yaml
+   securityJobs:
+     enabled: true
+     image: apim-security-jobs:latest
+
+     certificateChecker:
+       schedule: "0 6 * * *"
+       criticalDays: 7
+       warningDays: 30
+
+     secretRotation:
+       weeklySchedule: "0 2 * * 0"
+       monthlySchedule: "0 3 1 * *"
+       policies:
+         - name: api-keys
+           frequency: 30d
+           autoRotate: true
+
+     usageReporting:
+       dailySchedule: "0 1 * * *"
+       weeklySchedule: "0 2 * * 1"
+       generatePdf: true
+
+     gitlabSecurityScan:
+       schedule: "0 3 * * *"
+       tools:
+         - gitleaks
+         - semgrep
+         - trivy
+   ```
+
+8. **Checklist Déploiement Phase 7** 🔲
+
+   - [ ] Créer image Docker `apim-security-jobs` avec Python + outils
+   - [ ] Implémenter `certificate_checker.py`
+   - [ ] Implémenter `secret_rotation.py` avec intégration Vault
+   - [ ] Implémenter `usage_reporting.py` avec génération PDF
+   - [ ] Implémenter `security_scanner.py` avec Gitleaks/Semgrep/Trivy
+   - [ ] Créer `NotificationService` (Email/Slack/PagerDuty)
+   - [ ] Ajouter CronJobs dans Helm chart
+   - [ ] Configurer `.gitleaks.toml` dans repos GitLab
+   - [ ] Ajouter stages security-scan dans `.gitlab-ci.yml`
+   - [ ] Configurer alerting dans Grafana
+   - [ ] Tester chaque job manuellement
+   - [ ] Documenter les procédures de réponse aux alertes
+
 ---
 
 ### Architecture Cible Complète
@@ -1794,3 +2058,4 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 | Phase 4 | OpenSearch + Monitoring | À planifier |
 | Phase 5 | Multi-environnements (dev/staging/prod) | À planifier |
 | Phase 6 | Demo Tenant + SSO Unifié + Documentation | À planifier |
+| Phase 7 | Sécurité Opérationnelle (Batch Jobs) | À planifier |

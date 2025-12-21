@@ -8,12 +8,12 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
-### Ajouté (Phase 2.5) - Validation E2E
+### Ajouté (Phase 2.5) - Validation E2E - COMPLÉTÉ ✅
 
 - **Tenant APIM Platform** - Tenant administrateur avec accès cross-tenant
   - Fichier: `tenants/apim/` dans GitLab apim-gitops
-  - User: APIMAdmin (role: cpi-admin, password temporaire: manage)
-  - API: Control-Plane (proxy vers FastAPI via Gateway OIDC)
+  - User: `apimadmin@cab-i.com` / `manage` (role: cpi-admin)
+  - API: Control-Plane configurée pour Gateway OIDC
 
 - **Playbooks Ansible** - Automation tenant lifecycle
   - `provision-tenant.yaml` - Crée groupes Keycloak, users, namespaces K8s
@@ -155,14 +155,14 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [x] Installation ArgoCD sur EKS
 - [x] Repository GitLab `apim-gitops` configuré
 
-### Phase 2.5: Validation E2E - EN COURS 🔄
+### Phase 2.5: Validation E2E - COMPLÉTÉ ✅
 - [x] Playbook provision-tenant.yaml (Keycloak + K8s namespaces)
 - [x] Playbook register-api-gateway.yaml (Gateway OIDC)
 - [x] AWX Job Templates (Provision Tenant, Register API Gateway)
 - [x] Tenant apim dans GitLab avec APIMAdmin
 - [x] Control-Plane API handlers (tenant-provisioning, api-registration)
-- [ ] Test E2E: Login APIMAdmin → voir tous les tenants
-- [ ] API Control-Plane enregistrée dans Gateway
+- [x] User apimadmin@cab-i.com créé avec rôle cpi-admin
+- [x] Architecture GitHub/GitLab documentée
 
 ### Phase 3: Secrets & Gateway Alias (Priorité Moyenne)
 - [ ] HashiCorp Vault

@@ -2000,6 +2000,282 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    - [ ] Tester chaque job manuellement
    - [ ] Documenter les procédures de réponse aux alertes
 
+9. **Monitoring des Jobs de Sécurité** 🔲
+
+   **Architecture Observabilité Jobs**:
+   ```
+   ┌─────────────────────────────────────────────────────────────────────────────────────┐
+   │                      SECURITY JOBS OBSERVABILITY                                     │
+   │                                                                                      │
+   │   ┌──────────────────┐                                                              │
+   │   │  Security Jobs   │                                                              │
+   │   │  (CronJobs K8s)  │                                                              │
+   │   └────────┬─────────┘                                                              │
+   │            │                                                                         │
+   │            ├──────────────────┬──────────────────┬──────────────────┐               │
+   │            ▼                  ▼                  ▼                  ▼               │
+   │   ┌────────────────┐  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐   │
+   │   │  Prometheus    │  │     Kafka      │  │   OpenSearch   │  │    Grafana     │   │
+   │   │  (Metrics)     │  │   (Events)     │  │  (Historique)  │  │  (Dashboards)  │   │
+   │   │                │  │                │  │                │  │                │   │
+   │   │ job_success    │  │ security-job-  │  │ security-jobs- │  │ Security Jobs  │   │
+   │   │ job_duration   │  │ results        │  │ YYYY.MM        │  │ Dashboard      │   │
+   │   │ job_last_run   │  │                │  │                │  │                │   │
+   │   └────────────────┘  └────────────────┘  └────────────────┘  └────────────────┘   │
+   │            │                  │                  │                  │               │
+   │            └──────────────────┴──────────────────┴──────────────────┘               │
+   │                                      │                                               │
+   │                                      ▼                                               │
+   │                        ┌──────────────────────────┐                                 │
+   │                        │      AlertManager        │                                 │
+   │                        │  → Slack / PagerDuty     │                                 │
+   │                        └──────────────────────────┘                                 │
+   └─────────────────────────────────────────────────────────────────────────────────────┘
+   ```
+
+   **Métriques Prometheus exposées par chaque job**:
+   ```python
+   # src/jobs/base_job.py
+   from prometheus_client import Counter, Histogram, Gauge, push_to_gateway
+
+   class BaseSecurityJob:
+       # Métriques communes à tous les jobs
+       job_runs_total = Counter(
+           'security_job_runs_total',
+           'Total number of job executions',
+           ['job_name', 'status']  # status: success, failure
+       )
+
+       job_duration_seconds = Histogram(
+           'security_job_duration_seconds',
+           'Job execution duration',
+           ['job_name'],
+           buckets=[1, 5, 10, 30, 60, 120, 300, 600]
+       )
+
+       job_last_run_timestamp = Gauge(
+           'security_job_last_run_timestamp',
+           'Timestamp of last job execution',
+           ['job_name']
+       )
+
+       job_findings_total = Gauge(
+           'security_job_findings_total',
+           'Number of findings from last run',
+           ['job_name', 'severity']  # severity: critical, warning, info
+       )
+
+       async def run_with_metrics(self):
+           start_time = time.time()
+           try:
+               result = await self.run()
+               self.job_runs_total.labels(job_name=self.name, status='success').inc()
+               return result
+           except Exception as e:
+               self.job_runs_total.labels(job_name=self.name, status='failure').inc()
+               raise
+           finally:
+               duration = time.time() - start_time
+               self.job_duration_seconds.labels(job_name=self.name).observe(duration)
+               self.job_last_run_timestamp.labels(job_name=self.name).set_to_current_time()
+               # Push to Prometheus Pushgateway
+               push_to_gateway('prometheus-pushgateway:9091', job=self.name, registry=REGISTRY)
+   ```
+
+   **Events Kafka** - Topic `security-job-results`:
+   ```python
+   # Publié à la fin de chaque job
+   {
+       "job_name": "certificate-checker",
+       "run_id": "run-abc123",
+       "started_at": "2024-12-21T06:00:00Z",
+       "completed_at": "2024-12-21T06:00:45Z",
+       "duration_seconds": 45,
+       "status": "success",  # success | failure | partial
+       "summary": {
+           "total_checked": 15,
+           "critical": 1,
+           "warning": 3,
+           "info": 2,
+           "ok": 9
+       },
+       "findings": [
+           {
+               "type": "certificate_expiry",
+               "severity": "critical",
+               "resource": "ingress-nginx/tls-secret",
+               "message": "Certificate expires in 5 days",
+               "expires_at": "2024-12-26T00:00:00Z"
+           }
+       ],
+       "alerts_sent": ["slack", "pagerduty"]
+   }
+   ```
+
+   **Index OpenSearch** - `security-jobs-YYYY.MM`:
+   ```json
+   {
+     "index_patterns": ["security-jobs-*"],
+     "template": {
+       "mappings": {
+         "properties": {
+           "job_name": { "type": "keyword" },
+           "run_id": { "type": "keyword" },
+           "status": { "type": "keyword" },
+           "duration_seconds": { "type": "float" },
+           "findings_count": { "type": "integer" },
+           "findings": {
+             "type": "nested",
+             "properties": {
+               "severity": { "type": "keyword" },
+               "resource": { "type": "keyword" },
+               "message": { "type": "text" }
+             }
+           },
+           "@timestamp": { "type": "date" }
+         }
+       }
+     }
+   }
+   ```
+
+   **Alertes Prometheus (AlertManager)**:
+   ```yaml
+   # prometheus-rules.yaml
+   groups:
+     - name: security-jobs
+       rules:
+         # Alerte si un job n'a pas tourné depuis 2x son intervalle
+         - alert: SecurityJobNotRunning
+           expr: |
+             time() - security_job_last_run_timestamp > 2 * 86400
+           for: 5m
+           labels:
+             severity: warning
+           annotations:
+             summary: "Security job {{ $labels.job_name }} not running"
+             description: "Job has not run for more than 2 days"
+
+         # Alerte si un job échoue
+         - alert: SecurityJobFailed
+           expr: |
+             increase(security_job_runs_total{status="failure"}[1h]) > 0
+           for: 0m
+           labels:
+             severity: critical
+           annotations:
+             summary: "Security job {{ $labels.job_name }} failed"
+             description: "Job execution failed in the last hour"
+
+         # Alerte si findings critiques détectés
+         - alert: SecurityCriticalFindings
+           expr: |
+             security_job_findings_total{severity="critical"} > 0
+           for: 0m
+           labels:
+             severity: critical
+           annotations:
+             summary: "Critical security findings in {{ $labels.job_name }}"
+             description: "{{ $value }} critical findings detected"
+
+         # Alerte si job prend trop de temps
+         - alert: SecurityJobSlow
+           expr: |
+             security_job_duration_seconds > 600
+           for: 0m
+           labels:
+             severity: warning
+           annotations:
+             summary: "Security job {{ $labels.job_name }} slow"
+             description: "Job took {{ $value }}s to complete"
+   ```
+
+   **Dashboard Grafana** - Security Jobs Overview:
+   ```
+   ┌─────────────────────────────────────────────────────────────────────────────┐
+   │                    SECURITY JOBS DASHBOARD                                   │
+   ├─────────────────────────────────────────────────────────────────────────────┤
+   │                                                                              │
+   │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+   │  │ Cert Checker │  │ Secret Rot.  │  │ Usage Report │  │ GitLab Scan  │    │
+   │  │   ✅ OK      │  │   ✅ OK      │  │   ✅ OK      │  │   ⚠️ WARN    │    │
+   │  │ Last: 6:00   │  │ Last: Sun    │  │ Last: 1:00   │  │ Last: 3:00   │    │
+   │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
+   │                                                                              │
+   │  ┌─────────────────────────────────────────────────────────────────────┐    │
+   │  │  Job Execution Timeline (last 7 days)                               │    │
+   │  │  ═══════════════════════════════════════════════════════════════   │    │
+   │  │  Cert:    ●  ●  ●  ●  ●  ●  ●                                      │    │
+   │  │  Secret:        ●              ●                                    │    │
+   │  │  Usage:   ●  ●  ●  ●  ●  ●  ●                                      │    │
+   │  │  GitLab:  ●  ●  ●  ●  ●  ●  ●                                      │    │
+   │  │          Mon Tue Wed Thu Fri Sat Sun                                │    │
+   │  └─────────────────────────────────────────────────────────────────────┘    │
+   │                                                                              │
+   │  ┌────────────────────────────┐  ┌────────────────────────────────────┐    │
+   │  │  Findings by Severity      │  │  Job Duration (P95)                │    │
+   │  │                            │  │                                    │    │
+   │  │  🔴 Critical: 1            │  │  Cert Checker:  45s               │    │
+   │  │  🟠 Warning:  5            │  │  Secret Rot:    120s              │    │
+   │  │  🟡 Info:     12           │  │  Usage Report:  90s               │    │
+   │  │                            │  │  GitLab Scan:   180s              │    │
+   │  └────────────────────────────┘  └────────────────────────────────────┘    │
+   │                                                                              │
+   │  ┌─────────────────────────────────────────────────────────────────────┐    │
+   │  │  Recent Alerts                                                      │    │
+   │  │  ──────────────────────────────────────────────────────────────────│    │
+   │  │  🔴 2024-12-21 06:01 - Certificate expires in 5 days (nginx-tls)   │    │
+   │  │  🟠 2024-12-21 03:15 - 2 high CVEs in trivy scan                   │    │
+   │  │  🟡 2024-12-20 06:00 - Certificate expires in 45 days (api-tls)    │    │
+   │  └─────────────────────────────────────────────────────────────────────┘    │
+   │                                                                              │
+   └─────────────────────────────────────────────────────────────────────────────┘
+   ```
+
+   **Helm Values pour Monitoring**:
+   ```yaml
+   # values.yaml
+   securityJobs:
+     monitoring:
+       enabled: true
+       prometheus:
+         pushgateway: prometheus-pushgateway:9091
+         scrapeInterval: 30s
+       kafka:
+         topic: security-job-results
+         enabled: true
+       opensearch:
+         enabled: true
+         indexPrefix: security-jobs
+         retentionDays: 90
+       grafana:
+         dashboardEnabled: true
+         dashboardConfigMap: security-jobs-dashboard
+       alerting:
+         enabled: true
+         rules:
+           jobNotRunning:
+             threshold: 2  # x scheduled interval
+             severity: warning
+           jobFailed:
+             severity: critical
+           criticalFindings:
+             severity: critical
+           slowJob:
+             thresholdSeconds: 600
+             severity: warning
+   ```
+
+   **Checklist Monitoring**:
+   - [ ] Déployer Prometheus Pushgateway
+   - [ ] Implémenter `BaseSecurityJob` avec métriques
+   - [ ] Créer topic Kafka `security-job-results`
+   - [ ] Configurer index template OpenSearch
+   - [ ] Créer règles AlertManager
+   - [ ] Importer dashboard Grafana
+   - [ ] Tester alertes (job failure, critical findings)
+   - [ ] Configurer rétention OpenSearch (90 jours)
+
 ---
 
 ### Architecture Cible Complète

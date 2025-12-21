@@ -157,6 +157,8 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [ ] NotificationService (Email, Slack, PagerDuty)
 - [ ] CronJobs Kubernetes (Helm chart)
 - [ ] Intégration GitLab CI/CD (security-scan stage)
+- [ ] Monitoring Jobs (Prometheus, Kafka, OpenSearch, Grafana Dashboard)
+- [ ] Alertes (job failed, job not running, critical findings)
 
 ---
 

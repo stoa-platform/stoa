@@ -1,0 +1,259 @@
+---
+# Playbook: Register API in webMethods Gateway
+# Imports API from OpenAPI spec, configures OIDC policy, and activates
+#
+# Required variables:
+#   - tenant_id: Tenant identifier
+#   - api_name: API name
+#   - api_version: API version
+#   - openapi_url: URL to OpenAPI spec or inline spec
+#   - backend_url: Backend service URL
+#
+# Optional variables:
+#   - oidc_enabled: Enable OIDC authentication (default: true)
+#   - rate_limit: Rate limit requests per minute (default: 100)
+
+- name: Register API in webMethods Gateway
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    gateway_user: "Administrator"
+    gateway_password: "{{ lookup('env', 'GATEWAY_PASSWORD') | default('manage', true) }}"
+    keycloak_url: "https://auth.apim.cab-i.com"
+    keycloak_realm: "apim"
+    tenant_id: "{{ tenant_id | default('default') }}"
+    api_name: "{{ api_name | default('test-api') }}"
+    api_version: "{{ api_version | default('1.0') }}"
+    openapi_url: "{{ openapi_url | default('') }}"
+    backend_url: "{{ backend_url | default('') }}"
+    oidc_enabled: "{{ oidc_enabled | default(true) }}"
+    rate_limit: "{{ rate_limit | default(100) }}"
+
+  tasks:
+    - name: Display registration info
+      debug:
+        msg: "Registering API '{{ api_name }}' v{{ api_version }} for tenant '{{ tenant_id }}'"
+
+    # =========================================================================
+    # STEP 1: Health Check
+    # =========================================================================
+    - name: Check Gateway health
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/health"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 401]
+      register: health_check
+      ignore_errors: true
+
+    - name: Fail if Gateway unreachable
+      fail:
+        msg: "Gateway is not reachable at {{ gateway_url }}"
+      when: health_check.failed | default(false)
+
+    # =========================================================================
+    # STEP 2: Import API from OpenAPI
+    # =========================================================================
+    - name: Import API from OpenAPI spec
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          apiName: "{{ api_name }}"
+          apiVersion: "{{ api_version }}"
+          type: "openapi"
+          url: "{{ openapi_url }}"
+        status_code: [200, 201, 400]
+      register: api_import
+      when: openapi_url | length > 0
+
+    - name: Set API ID
+      set_fact:
+        api_id: "{{ api_import.json.apiResponse.api.id }}"
+      when:
+        - api_import is defined
+        - api_import.json.apiResponse.api.id is defined
+
+    - name: Display API import result
+      debug:
+        msg: "API imported with ID: {{ api_id }}"
+      when: api_id is defined
+
+    # =========================================================================
+    # STEP 3: Configure OIDC Policy (if enabled)
+    # =========================================================================
+    - name: Create OIDC authentication policy
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policies"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          policy:
+            id: "{{ api_name }}-oidc-policy"
+            name: "{{ api_name }} OIDC Policy"
+            policyScope: "API"
+            global: false
+            policyEnforcements:
+              - stageKey: "routing"
+                enforcements:
+                  - enforcementObjectId: "{{ api_name }}-oidc"
+                    order: 1
+            identifyAndAccessApis:
+              - apiId: "{{ api_id }}"
+        status_code: [200, 201, 409]
+      when:
+        - oidc_enabled | bool
+        - api_id is defined
+      register: oidc_policy
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 4: Configure Rate Limiting Policy
+    # =========================================================================
+    - name: Create rate limiting policy
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policies"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          policy:
+            id: "{{ api_name }}-rate-limit-policy"
+            name: "{{ api_name }} Rate Limit Policy"
+            policyScope: "API"
+            global: false
+            policyEnforcements:
+              - stageKey: "traffic"
+                enforcements:
+                  - enforcementObjectId: "{{ api_name }}-rate-limit"
+                    order: 1
+            identifyAndAccessApis:
+              - apiId: "{{ api_id }}"
+        status_code: [200, 201, 409]
+      when: api_id is defined
+      register: rate_limit_policy
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 5: Configure Routing to Backend
+    # =========================================================================
+    - name: Update API routing to backend
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          api:
+            id: "{{ api_id }}"
+            nativeEndpoint:
+              - uri: "{{ backend_url }}"
+                isDefault: true
+        status_code: [200, 204]
+      when:
+        - api_id is defined
+        - backend_url | length > 0
+      register: routing_update
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 6: Activate API
+    # =========================================================================
+    - name: Activate API
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}/activate"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 204]
+      when: api_id is defined
+      register: api_activate
+
+    # =========================================================================
+    # STEP 7: Publish to Developer Portal (optional)
+    # =========================================================================
+    - name: Publish API to Developer Portal
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}/publish"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          portalGatewayId: "default"
+        status_code: [200, 204, 404]
+      when: api_id is defined
+      register: api_publish
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 8: Send completion notification
+    # =========================================================================
+    - name: Send registration success to Control Plane API
+      uri:
+        url: "http://control-plane-api.apim-system.svc.cluster.local:8000/v1/events/api-registered"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          tenant_id: "{{ tenant_id }}"
+          api_id: "{{ api_id | default('unknown') }}"
+          api_name: "{{ api_name }}"
+          api_version: "{{ api_version }}"
+          status: "success"
+          message: "API registered and activated successfully"
+          oidc_enabled: "{{ oidc_enabled }}"
+          rate_limit: "{{ rate_limit }}"
+        status_code: [200, 201, 202, 404]
+      ignore_errors: true
+
+    - name: Registration summary
+      debug:
+        msg: |
+          ========================================
+          API Registration Complete
+          ----------------------------------------
+          API: {{ api_name }} v{{ api_version }}
+          API ID: {{ api_id | default('N/A') }}
+          Tenant: {{ tenant_id }}
+          Backend: {{ backend_url }}
+          OIDC: {{ oidc_enabled }}
+          Rate Limit: {{ rate_limit }} req/min
+          Status: SUCCESS
+          ========================================

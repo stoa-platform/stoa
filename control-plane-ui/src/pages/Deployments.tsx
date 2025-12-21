@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
+import { config } from '../config';
 import type { Deployment, Tenant, API } from '../types';
 
 export function Deployments() {
@@ -239,7 +240,7 @@ export function Deployments() {
                     <div className="flex gap-2">
                       {deployment.awx_job_id && (
                         <a
-                          href={`https://awx.apim.cab-i.com/#/jobs/playbook/${deployment.awx_job_id}`}
+                          href={config.services.awx.getJobUrl(deployment.awx_job_id)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800"

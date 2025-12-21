@@ -1749,10 +1749,11 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 
 ### Estimation Temps de Développement
 
-| Phase | Durée Estimée |
-|-------|---------------|
-| Phase 1 (Kafka + AWX) | À planifier |
-| Phase 2 (GitOps) | À planifier |
-| Phase 3 (Vault) | À planifier |
-| Phase 4 (Monitoring) | À planifier |
-| Phase 5 (Multi-env) | À planifier |
+| Phase | Description | Durée Estimée |
+|-------|-------------|---------------|
+| Phase 1 | Kafka/Redpanda + AWX Automation | À planifier |
+| Phase 2 | GitOps + Variables d'Environnement + IAM | À planifier |
+| Phase 3 | Vault + Gateway Alias | À planifier |
+| Phase 4 | OpenSearch + Monitoring | À planifier |
+| Phase 5 | Multi-environnements (dev/staging/prod) | À planifier |
+| Phase 6 | Demo Tenant + SSO Unifié + Documentation | À planifier |

@@ -1,33 +1,66 @@
-"""Configuration settings"""
+"""Configuration settings for Control-Plane API
+
+All settings can be overridden via environment variables.
+For Kubernetes deployments, set these in ConfigMaps/Secrets.
+"""
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from typing import List
+import os
+
+# Base domain - used to construct default URLs
+_BASE_DOMAIN = os.getenv("BASE_DOMAIN", "apim.cab-i.com")
 
 class Settings(BaseSettings):
+    # Application
     VERSION: str = "2.0.0"
     DEBUG: bool = False
+    ENVIRONMENT: str = "production"  # dev, staging, production
 
-    # Keycloak
-    KEYCLOAK_URL: str = "https://keycloak.dev.apim.cab-i.com"
-    KEYCLOAK_REALM: str = "apim-platform"
+    # Base domain for URL construction
+    BASE_DOMAIN: str = _BASE_DOMAIN
+
+    # Keycloak Authentication
+    KEYCLOAK_URL: str = f"https://auth.{_BASE_DOMAIN}"
+    KEYCLOAK_REALM: str = "apim"
     KEYCLOAK_CLIENT_ID: str = "control-plane-api"
     KEYCLOAK_CLIENT_SECRET: str = ""
+    KEYCLOAK_VERIFY_SSL: bool = True
 
-    # GitLab
+    # GitLab Integration
     GITLAB_URL: str = "https://gitlab.com"
     GITLAB_TOKEN: str = ""
     GITLAB_PROJECT_ID: str = ""
-    GITLAB_WEBHOOK_SECRET: str = ""  # Secret token for webhook verification
+    GITLAB_WEBHOOK_SECRET: str = ""
+    GITLAB_DEFAULT_BRANCH: str = "main"
 
-    # Kafka (Redpanda)
-    KAFKA_BOOTSTRAP_SERVERS: str = "redpanda:9092"
+    # Kafka/Redpanda Event Streaming
+    KAFKA_BOOTSTRAP_SERVERS: str = "redpanda.apim-system.svc.cluster.local:9092"
+    KAFKA_SECURITY_PROTOCOL: str = "PLAINTEXT"  # PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL
+    KAFKA_SASL_MECHANISM: str = ""  # PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
+    KAFKA_SASL_USERNAME: str = ""
+    KAFKA_SASL_PASSWORD: str = ""
 
-    # AWX
-    AWX_URL: str = "https://awx.dev.apim.cab-i.com"
+    # AWX Automation
+    AWX_URL: str = f"https://awx.{_BASE_DOMAIN}"
     AWX_TOKEN: str = ""
+    AWX_VERIFY_SSL: bool = True
 
-    # CORS - accepts comma-separated string or list
-    CORS_ORIGINS: str = "https://devops.apim.cab-i.com,http://localhost:3000"
+    # API Gateway
+    GATEWAY_URL: str = f"https://gateway.{_BASE_DOMAIN}"
+    GATEWAY_ADMIN_USER: str = "Administrator"
+    GATEWAY_ADMIN_PASSWORD: str = ""
+
+    # CORS - comma-separated list of allowed origins
+    CORS_ORIGINS: str = f"https://devops.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
+
+    # Rate Limiting
+    RATE_LIMIT_REQUESTS: int = 100
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "json"  # json, text
 
     @property
     def cors_origins_list(self) -> List[str]:

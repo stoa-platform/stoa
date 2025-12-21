@@ -120,7 +120,7 @@ app = FastAPI(
         {"name": "Git", "description": "GitLab integration (commits, MRs, files)"},
         {"name": "Events", "description": "Real-time event streaming (SSE)"},
         {"name": "Webhooks", "description": "GitLab webhook handlers for GitOps"},
-        {"name": "traces", "description": "Pipeline monitoring and tracing"},
+        {"name": "Traces", "description": "Pipeline monitoring and tracing"},
     ],
     contact={
         "name": "CAB Ingenierie",

@@ -5,7 +5,7 @@ from datetime import datetime
 
 from ..models.traces import trace_store, PipelineTrace, TraceStatus
 
-router = APIRouter(prefix="/v1/traces", tags=["traces"])
+router = APIRouter(prefix="/v1/traces", tags=["Traces"])
 
 
 @router.get("")

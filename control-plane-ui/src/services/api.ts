@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { config } from '../config';
 import type {
   Tenant, TenantCreate,
   API, APICreate,
@@ -8,7 +9,7 @@ import type {
   TraceSummary, PipelineTrace, TraceTimeline, TraceStats
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const API_BASE_URL = config.api.baseUrl;
 
 class ApiService {
   private client: AxiosInstance;

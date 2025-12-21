@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     GITLAB_URL: str = "https://gitlab.com"
     GITLAB_TOKEN: str = ""
     GITLAB_PROJECT_ID: str = ""
+    GITLAB_WEBHOOK_SECRET: str = ""  # Secret token for webhook verification
 
     # Kafka (Redpanda)
     KAFKA_BOOTSTRAP_SERVERS: str = "redpanda:9092"

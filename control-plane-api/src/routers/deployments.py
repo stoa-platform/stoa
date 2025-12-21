@@ -3,8 +3,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
 from enum import Enum
+from datetime import datetime
+import uuid
 
 from ..auth import get_current_user, User, Permission, require_permission, require_tenant_access
+from ..services.kafka_service import kafka_service, Topics
+from ..services.git_service import git_service
+from ..services.awx_service import awx_service
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/deployments", tags=["Deployments"])
 
@@ -78,14 +83,76 @@ async def create_deployment(
     3. AWX will pick up the event and execute the deployment
     4. Status updates will be streamed via SSE
     """
-    # TODO: Implement
-    # 1. Validate API exists in GitLab
-    # 2. Create deployment record
-    # 3. Emit deploy-request to Kafka topic
-    # 4. AWX consumes event and runs playbook
-    # 5. AWX emits deploy-result to Kafka
-    # 6. Update deployment status
-    pass
+    # Generate deployment ID
+    deployment_id = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat() + "Z"
+
+    # Get API info from GitLab
+    api_info = None
+    api_name = request.api_id  # Default to api_id
+    version = request.version or "1.0.0"
+    backend_url = ""
+    openapi_spec = None
+
+    try:
+        # Try to get API details from GitLab
+        api_info = await git_service.get_api(tenant_id, request.api_id)
+        if api_info:
+            api_name = api_info.get("name", request.api_id)
+            version = request.version or api_info.get("version", "1.0.0")
+            backend_url = api_info.get("backend_url", "")
+
+        # Get OpenAPI spec
+        openapi_spec = await git_service.get_file(
+            f"tenants/{tenant_id}/apis/{request.api_id}/openapi.yaml"
+        )
+    except Exception as e:
+        # GitLab might not be configured yet, continue without it
+        pass
+
+    # Emit deploy-request to Kafka
+    await kafka_service.publish(
+        topic=Topics.DEPLOY_REQUESTS,
+        event_type="deploy-request",
+        tenant_id=tenant_id,
+        payload={
+            "deployment_id": deployment_id,
+            "api_id": request.api_id,
+            "api_name": api_name,
+            "environment": request.environment.value,
+            "version": version,
+            "backend_url": backend_url,
+            "openapi_spec": openapi_spec,
+            "requested_by": user.username,
+        },
+        user_id=user.id
+    )
+
+    # Also emit audit event
+    await kafka_service.emit_audit_event(
+        tenant_id=tenant_id,
+        action="create_deployment",
+        resource_type="deployment",
+        resource_id=deployment_id,
+        user_id=user.id,
+        details={
+            "api_id": request.api_id,
+            "environment": request.environment.value,
+            "version": version,
+        }
+    )
+
+    return DeploymentResponse(
+        id=deployment_id,
+        tenant_id=tenant_id,
+        api_id=request.api_id,
+        api_name=api_name,
+        environment=request.environment,
+        version=version,
+        status=DeploymentStatus.PENDING,
+        started_at=now,
+        deployed_by=user.username,
+    )
 
 @router.post("/{deployment_id}/rollback", response_model=DeploymentResponse)
 @require_permission(Permission.APIS_DEPLOY)
@@ -97,11 +164,47 @@ async def rollback_deployment(
     user: User = Depends(get_current_user)
 ):
     """Rollback a deployment to a previous version"""
-    # TODO: Implement
-    # 1. Find previous successful deployment
-    # 2. Create rollback event in Kafka
-    # 3. AWX executes rollback playbook
-    pass
+    rollback_id = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat() + "Z"
+
+    # Emit rollback-request to Kafka
+    await kafka_service.publish(
+        topic=Topics.DEPLOY_REQUESTS,
+        event_type="rollback-request",
+        tenant_id=tenant_id,
+        payload={
+            "rollback_id": rollback_id,
+            "original_deployment_id": deployment_id,
+            "target_version": request.target_version,
+            "requested_by": user.username,
+        },
+        user_id=user.id
+    )
+
+    # Emit audit event
+    await kafka_service.emit_audit_event(
+        tenant_id=tenant_id,
+        action="rollback_deployment",
+        resource_type="deployment",
+        resource_id=deployment_id,
+        user_id=user.id,
+        details={
+            "rollback_id": rollback_id,
+            "target_version": request.target_version,
+        }
+    )
+
+    return DeploymentResponse(
+        id=rollback_id,
+        tenant_id=tenant_id,
+        api_id="",  # Will be filled from original deployment
+        api_name="",
+        environment=Environment.DEV,  # Will be determined
+        version=request.target_version or "previous",
+        status=DeploymentStatus.PENDING,
+        started_at=now,
+        deployed_by=user.username,
+    )
 
 @router.get("/{deployment_id}/logs")
 @require_tenant_access

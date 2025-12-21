@@ -470,9 +470,9 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 
 ### Next Steps - Roadmap
 
-#### Phase 1 : Event-Driven Architecture ✅ DÉPLOYÉ
+#### Phase 1 : Event-Driven Architecture ✅ COMPLÉTÉ
 
-> **Infrastructure**: Nodes scalés à t3.large (2 CPU / 8GB RAM) pour supporter Redpanda.
+> **Infrastructure**: Nodes scalés à 3x t3.large (2 CPU / 8GB RAM chacun) pour supporter Redpanda + AWX.
 
 1. **Redpanda Déployé** ✅
    - Kafka-compatible, 1 broker sur EKS
@@ -501,26 +501,33 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    │ Control-Plane│ → │   Kafka    │ → │   AWX/Ansible│ → │   Gateway   │
    │   (CRUD)    │    │  (Events)   │    │  (Deploy)   │    │  (Runtime)  │
    └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-         ✅                 ✅                  🔲                 ✅
+         ✅                 ✅                  ✅                 ✅
    ```
 
-4. **AWX (Ansible Tower)** ✅ DÉPLOYÉ
+4. **AWX (Ansible Tower)** ✅ DÉPLOYÉ + CONFIGURÉ
    - AWX 24.6.1 via AWX Operator 2.19.1
    - URL: https://awx.apim.cab-i.com
    - Login: admin / demo
    - Base de données: RDS PostgreSQL (partagée avec Keycloak)
 
-   **Jobs à configurer**:
-   - `deploy-api` - Déploie une API sur la Gateway
-   - `sync-gateway` - Synchronise config Gateway
-   - `promote-portal` - Publie API sur Developer Portal
-   - `rollback` - Rollback en cas d'échec
+   **Job Templates Configurés** ✅:
+   - `Deploy API` (id: 8) - Déploie une API sur la Gateway
+   - `Sync Gateway` (id: 9) - Synchronise config Gateway
+   - `Promote Portal` (id: 10) - Publie API sur Developer Portal
+   - `Rollback API` (id: 11) - Rollback en cas d'échec
 
-   **Intégration Kafka (à configurer)**:
-   - Consumer Kafka → Trigger AWX Job Templates via Webhook
-   - Topics surveillés: `deploy-requests`, `api-created`, `api-updated`
+   **Intégration Kafka** ✅:
+   - Deployment Worker dans Control-Plane API
+   - Consumer sur topic `deploy-requests`
+   - Monitoring des jobs AWX avec publish sur `deploy-results`
 
-#### Phase 2 : GitOps (Priorité Haute)
+5. **GitLab Webhook** ✅ CONFIGURÉ
+   - Endpoint: `POST /webhooks/gitlab`
+   - Events supportés: Push, Merge Request, Tag Push
+   - Auto-deploy sur push vers `main` branch
+   - Configuration: voir [docs/GITOPS-SETUP.md](docs/GITOPS-SETUP.md)
+
+#### Phase 2 : GitOps + Variables d'Environnement (Priorité Haute)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -575,14 +582,216 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    - Synchronisation des changements externes
    - Trigger ArgoCD sync
 
-#### Phase 3 : Sécurité & Secrets (Priorité Moyenne)
-1. **Déployer HashiCorp Vault**
+5. **Gestion des Variables d'Environnement** 🔲
+
+   **Problématique**: Une API doit pointer vers des backends différents par environnement, sans secrets dans Git.
+
+   ```
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │  payment-api doit pointer vers :                                     │
+   │    DEV     → https://payment-dev.internal.cab-i.com                  │
+   │    STAGING → https://payment-staging.internal.cab-i.com              │
+   │    PROD    → https://payment.internal.cab-i.com                      │
+   │                                                                       │
+   │  ✅ Solution : Templates avec placeholders + Vault pour secrets      │
+   └─────────────────────────────────────────────────────────────────────┘
+   ```
+
+   **Structure GitOps étendue**:
+   ```
+   apim-gitops/
+   ├── tenants/
+   │   └── tenant-finance/
+   │       └── apis/
+   │           └── payment-api/
+   │               ├── api.yaml              # Template avec ${PLACEHOLDERS}
+   │               ├── openapi.yaml
+   │               └── environments/         # Config par environnement
+   │                   ├── _defaults.yaml    # Valeurs par défaut
+   │                   ├── dev.yaml          # Overrides DEV
+   │                   ├── staging.yaml      # Overrides STAGING
+   │                   └── prod.yaml         # Overrides PROD
+   │
+   ├── environments/                         # Configuration globale par env
+   │   ├── dev/
+   │   │   ├── config.yaml
+   │   │   └── secrets-refs.yaml             # Références Vault
+   │   ├── staging/
+   │   └── prod/
+   │
+   └── policies/
+   ```
+
+   **Exemple Template API (api.yaml)**:
+   ```yaml
+   apiVersion: apim.cab-i.com/v1
+   kind: API
+   metadata:
+     name: payment-api
+     tenant: tenant-finance
+   spec:
+     backend:
+       url: "${BACKEND_URL}"                    # Résolu au déploiement
+       timeout: "${BACKEND_TIMEOUT:30s}"        # Valeur par défaut: 30s
+       authentication:
+         type: "${BACKEND_AUTH_TYPE:oauth2}"
+         credentials:
+           clientIdRef: "${BACKEND_CLIENT_ID_REF}"      # Référence Vault
+           clientSecretRef: "${BACKEND_CLIENT_SECRET_REF}"
+   ```
+
+   **Exemple Configuration Environnement (dev.yaml)**:
+   ```yaml
+   apiVersion: apim.cab-i.com/v1
+   kind: APIEnvironmentConfig
+   metadata:
+     name: payment-api-dev
+     environment: dev
+   variables:
+     BACKEND_URL: "https://payment-dev.internal.cab-i.com"
+     BACKEND_TOKEN_URL: "https://auth-dev.internal.cab-i.com/oauth/token"
+     BACKEND_CLIENT_ID_REF: "vault:secret/data/dev/payment-api#client_id"
+     BACKEND_CLIENT_SECRET_REF: "vault:secret/data/dev/payment-api#client_secret"
+     LOG_LEVEL: "DEBUG"
+     RATE_LIMIT_RPS: "1000"
+   ```
+
+6. **Variable Resolver dans Control-Plane API** 🔲
+   - Service Python pour résoudre les `${PLACEHOLDERS}`
+   - Fusion: _defaults.yaml + {env}.yaml + global config
+   - Résolution des références Vault au moment du déploiement
+
+#### Phase 3 : Secrets & Gateway Alias (Priorité Moyenne)
+
+**Approche Hybride : Git + Gateway Alias**
+
+Les **Alias webMethods Gateway** permettent de stocker endpoints et credentials séparément des APIs. L'approche hybride combine Git comme source de vérité avec les Alias pour la gestion runtime.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    APPROCHE HYBRIDE : GIT + ALIAS                            │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                         GIT (Source de Vérité)                       │    │
+│  │                                                                      │    │
+│  │  1. Définition API (api.yaml)                                        │    │
+│  │     → backend_alias: "${BACKEND_ALIAS}"                              │    │
+│  │                                                                      │    │
+│  │  2. Config Environnement (environments/dev.yaml)                     │    │
+│  │     → BACKEND_ALIAS: payment-backend-dev                             │    │
+│  │                                                                      │    │
+│  │  3. Définition Alias (aliases/dev/payment-backend.yaml)              │    │
+│  │     → URL endpoint + Références Vault                                │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    AWX Jobs                                          │    │
+│  │                                                                      │    │
+│  │  sync-alias     → Crée/Update Alias sur Gateway (credentials Vault)  │    │
+│  │  deploy-api     → Déploie API (référence alias existant)             │    │
+│  │  rotate-creds   → Refresh credentials sans redeploy API              │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    GATEWAY (Runtime)                                 │    │
+│  │                                                                      │    │
+│  │  Alias: payment-backend-dev                                          │    │
+│  │    ├── url: https://payment-dev.internal.cab-i.com                   │    │
+│  │    ├── auth: oauth2                                                  │    │
+│  │    └── credentials: *** (depuis Vault)                               │    │
+│  │                                                                      │    │
+│  │  API: payment-api → backend_alias: payment-backend-dev               │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Déployer HashiCorp Vault** 🔲
    - Secrets dynamiques pour clients OAuth2
    - API Keys rotation
+   - AppRole par environnement
+   - Structure: `secret/data/{env}/{api}#key`
 
-2. **Intégrer Vault dans Control-Plane API**
-   - Stockage clientSecret/apiKey
-   - Références: vault:secret/apps/{app}#key
+2. **Structure GitOps avec Alias** 🔲
+   ```
+   apim-gitops/
+   ├── tenants/
+   │   └── tenant-finance/
+   │       └── apis/
+   │           └── payment-api/
+   │               ├── api.yaml              # backend_alias: "${BACKEND_ALIAS}"
+   │               └── environments/
+   │                   ├── dev.yaml          # BACKEND_ALIAS: payment-backend-dev
+   │                   ├── staging.yaml      # BACKEND_ALIAS: payment-backend-staging
+   │                   └── prod.yaml         # BACKEND_ALIAS: payment-backend-prod
+   │
+   ├── aliases/                              # Définition des Alias Gateway
+   │   ├── dev/
+   │   │   ├── payment-backend.yaml
+   │   │   └── invoice-backend.yaml
+   │   ├── staging/
+   │   │   └── payment-backend.yaml
+   │   └── prod/
+   │       └── payment-backend.yaml
+   ```
+
+3. **Définition Alias Gateway (aliases/dev/payment-backend.yaml)** 🔲
+   ```yaml
+   apiVersion: apim.cab-i.com/v1
+   kind: GatewayAlias
+   metadata:
+     name: payment-backend-dev
+     environment: dev
+   spec:
+     type: endpoint
+     endpoint:
+       url: https://payment-dev.internal.cab-i.com
+       connectionTimeout: 30000
+       readTimeout: 60000
+     authentication:
+       type: oauth2
+       oauth2:
+         tokenUrl: https://auth-dev.internal.cab-i.com/oauth/token
+         clientIdRef: vault:secret/data/dev/payment-backend#client_id
+         clientSecretRef: vault:secret/data/dev/payment-backend#client_secret
+         scopes: ["read", "write"]
+   ```
+
+4. **Jobs AWX pour Gestion Alias** 🔲
+
+   | Job | Trigger | Action |
+   |-----|---------|--------|
+   | `sync-alias` | Changement `aliases/**/*.yaml` | Crée/Update alias sur Gateway avec credentials Vault |
+   | `deploy-api` | Changement `apis/**/api.yaml` | Deploy API (utilise alias existant) |
+   | `rotate-credentials` | Planifié (cron) ou Manuel | Refresh credentials Vault → Gateway Alias |
+   | `full-deploy` | Nouveau tenant/API | sync-alias + deploy-api |
+
+5. **Intégrer Vault dans Control-Plane API** 🔲
+   - VaultService pour récupérer secrets
+   - Résolution des références `vault:path#key`
+   - Cache avec TTL pour performances
+
+6. **Avantages de l'Approche Hybride**
+
+   | Aspect | Bénéfice |
+   |--------|----------|
+   | **Git = Source de Vérité** | Tout versionné, auditable, rollback Git possible |
+   | **Alias = Abstraction** | API découplée du backend, promotion simplifiée |
+   | **Rotation Credentials** | Update alias sans toucher à l'API déployée |
+   | **Pas de Drift** | Git définit les alias, AWX synchronise sur Gateway |
+   | **Promotion Zero-Change** | Même API.yaml, juste l'alias change par env |
+
+7. **Workflow de Promotion DEV → STAGING**
+   ```
+   ┌─────────────────────────────────────────────────────────────────────────────┐
+   │  1. API identique (api.yaml ne change pas)                                   │
+   │  2. Seul environments/staging.yaml diffère: BACKEND_ALIAS: payment-backend-staging │
+   │  3. L'alias payment-backend-staging existe déjà (provisionné par sync-alias) │
+   │  4. AWX deploy-api résout ${BACKEND_ALIAS} → payment-backend-staging         │
+   │  ✅ Promotion sans modification de code, credentials sécurisés              │
+   └─────────────────────────────────────────────────────────────────────────────┘
+   ```
 
 #### Phase 4 : Observabilité (Priorité Moyenne)
 
@@ -663,152 +872,6 @@ Stack complète d'observabilité pour APIM Platform:
 2. **OpenSearch Analytics**
    - Global Policy par tenant
    - Index pattern: {env}-{tenant}-analytics
-
-### Gestion des Variables d'Environnement
-
-#### Problématique
-
-Une API doit pointer vers des backends différents selon l'environnement, sans stocker de secrets dans Git et sans modifier l'API à chaque promotion.
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  payment-api doit pointer vers :                                     │
-│    DEV     → https://payment-dev.internal.cab-i.com                  │
-│    STAGING → https://payment-staging.internal.cab-i.com              │
-│    PROD    → https://payment.internal.cab-i.com                      │
-│                                                                       │
-│  ✅ Solution : Templates avec placeholders + Vault pour secrets      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-#### Architecture de Résolution
-
-```
-┌───────────────────────────────────────────────────────────────────────────┐
-│                      SOURCES DE CONFIGURATION                              │
-│                                                                            │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐           │
-│  │      GIT        │  │     VAULT       │  │   CONFIGMAP     │           │
-│  │   (Templates)   │  │   (Secrets)     │  │ (Env-specific)  │           │
-│  │                 │  │                 │  │                 │           │
-│  │ api.yaml avec   │  │ Credentials     │  │ URLs, Timeouts  │           │
-│  │ ${BACKEND_URL}  │  │ API Keys        │  │ Feature flags   │           │
-│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘           │
-│           │                    │                    │                     │
-│           └────────────────────┼────────────────────┘                     │
-│                                ▼                                          │
-│                 ┌──────────────────────────────┐                          │
-│                 │    CONTROL-PLANE API         │                          │
-│                 │   (Variable Resolution)      │                          │
-│                 └──────────────┬───────────────┘                          │
-│                                ▼                                          │
-│                 ┌──────────────────────────────┐                          │
-│                 │     AWX / Ansible Job        │                          │
-│                 │  (Inject at deploy time)     │                          │
-│                 └──────────────┬───────────────┘                          │
-│                                ▼                                          │
-│                 ┌──────────────────────────────┐                          │
-│                 │     webMethods Gateway       │                          │
-│                 │   (Runtime + Alias System)   │                          │
-│                 └──────────────────────────────┘                          │
-└───────────────────────────────────────────────────────────────────────────┘
-```
-
-#### Structure GitOps Étendue
-
-```
-apim-gitops/
-├── tenants/
-│   └── tenant-finance/
-│       └── apis/
-│           └── payment-api/
-│               ├── api.yaml              # Template avec ${PLACEHOLDERS}
-│               ├── openapi.yaml          # Spec OpenAPI
-│               ├── policies.yaml         # Policies
-│               └── environments/         # Config par environnement
-│                   ├── _defaults.yaml    # Valeurs par défaut
-│                   ├── dev.yaml          # Overrides DEV
-│                   ├── staging.yaml      # Overrides STAGING
-│                   └── prod.yaml         # Overrides PROD
-│
-├── environments/                         # Configuration globale par env
-│   ├── dev/
-│   │   ├── config.yaml                   # Config globale DEV
-│   │   └── secrets-refs.yaml             # Références Vault
-│   ├── staging/
-│   │   ├── config.yaml
-│   │   └── secrets-refs.yaml
-│   └── prod/
-│       ├── config.yaml
-│       └── secrets-refs.yaml
-│
-└── policies/
-    └── ...
-```
-
-#### Exemple de Template API (api.yaml)
-
-```yaml
-apiVersion: apim.cab-i.com/v1
-kind: API
-metadata:
-  name: payment-api
-  tenant: tenant-finance
-spec:
-  backend:
-    url: "${BACKEND_URL}"                    # Résolu au déploiement
-    timeout: "${BACKEND_TIMEOUT:30s}"        # Valeur par défaut: 30s
-    authentication:
-      type: "${BACKEND_AUTH_TYPE:oauth2}"
-      credentials:
-        clientIdRef: "${BACKEND_CLIENT_ID_REF}"      # Référence Vault
-        clientSecretRef: "${BACKEND_CLIENT_SECRET_REF}"
-        tokenUrl: "${BACKEND_TOKEN_URL}"
-```
-
-#### Exemple de Configuration Environnement (dev.yaml)
-
-```yaml
-apiVersion: apim.cab-i.com/v1
-kind: APIEnvironmentConfig
-metadata:
-  name: payment-api-dev
-  environment: dev
-variables:
-  BACKEND_URL: "https://payment-dev.internal.cab-i.com"
-  BACKEND_TOKEN_URL: "https://auth-dev.internal.cab-i.com/oauth/token"
-  # Références Vault (pas les valeurs!)
-  BACKEND_CLIENT_ID_REF: "vault:secret/data/dev/payment-api#client_id"
-  BACKEND_CLIENT_SECRET_REF: "vault:secret/data/dev/payment-api#client_secret"
-  # Overrides DEV
-  LOG_LEVEL: "DEBUG"
-  RATE_LIMIT_RPS: "1000"
-```
-
-#### Structure Vault
-
-```
-vault/
-└── secret/data/
-    ├── dev/
-    │   ├── payment-api/
-    │   │   ├── client_id
-    │   │   └── client_secret
-    │   └── _global/
-    ├── staging/
-    │   └── ...
-    └── prod/
-        └── ...
-```
-
-#### Bonnes Pratiques
-
-| Ce qui va dans Git | Ce qui va dans Vault |
-|-------------------|---------------------|
-| URLs backends | Credentials backend |
-| Timeouts, Rate limits | API Keys |
-| Feature flags, Log levels | Client secrets OAuth |
-| Références Vault (`vault:path#key`) | Certificats, Tokens |
 
 ---
 

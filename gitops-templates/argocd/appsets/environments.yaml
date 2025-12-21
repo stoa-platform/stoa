@@ -1,28 +1,37 @@
 # ApplicationSet for Environment-specific deployments
-# Manages deployments per environment (dev, staging, prod)
+# ⚠️ DEPRECATED: Use chart/templates/appset-environments.yaml instead
+#
+# Deploy using Helm:
+#   helm install argocd-appsets ./chart -n argocd
+#
+# Variables centralized in chart/values.yaml
+#
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: environment-deployments
-  namespace: argocd
+  namespace: ${ARGOCD_NAMESPACE:argocd}
 spec:
   generators:
-    # Matrix generator - combines tenants x environments
     - matrix:
         generators:
-          # List of environments
           - list:
               elements:
                 - environment: dev
-                  cluster: https://kubernetes.default.svc
+                  cluster: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
                   namespace_suffix: dev
+                  auto_sync: true
                 - environment: staging
-                  cluster: https://kubernetes.default.svc
+                  cluster: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
                   namespace_suffix: staging
-          # Git generator for tenants
+                  auto_sync: true
+                - environment: prod
+                  cluster: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+                  namespace_suffix: prod
+                  auto_sync: false
           - git:
-              repoURL: https://gitlab.com/potomitan/apim-gitops.git
-              revision: HEAD
+              repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/apim-gitops.git}
+              revision: ${GITLAB_BRANCH:main}
               directories:
                 - path: tenants/*
 
@@ -32,23 +41,23 @@ spec:
       labels:
         tenant: '{{path.basename}}'
         environment: '{{environment}}'
+        app.kubernetes.io/managed-by: argocd
     spec:
       project: '{{path.basename}}'
       source:
-        repoURL: https://gitlab.com/potomitan/apim-gitops.git
-        targetRevision: HEAD
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/apim-gitops.git}
+        targetRevision: ${GITLAB_BRANCH:main}
         path: 'tenants/{{path.basename}}'
-        # Helm with values from environment config
         helm:
           valueFiles:
             - ../../environments/{{environment}}/config.yaml
             - environments/{{environment}}.yaml
       destination:
         server: '{{cluster}}'
-        namespace: 'apim-{{path.basename}}-{{namespace_suffix}}'
+        namespace: '${K8S_NAMESPACE_PREFIX:apim}-{{path.basename}}-{{namespace_suffix}}'
       syncPolicy:
         automated:
-          prune: true
-          selfHeal: true
+          prune: '{{auto_sync}}'
+          selfHeal: '{{auto_sync}}'
         syncOptions:
           - CreateNamespace=true

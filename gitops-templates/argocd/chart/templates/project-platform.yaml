@@ -1,22 +1,12 @@
 # ArgoCD AppProject for APIM Platform
-# Defines access control and allowed resources
-#
-# Variables:
-#   - ${GITLAB_REPO_URL}: GitLab repository URL
-#   - ${K8S_CLUSTER_URL}: Kubernetes API server URL
-#   - ${K8S_NAMESPACE_PREFIX}: Namespace prefix (default: apim)
-#
-# NOTE: This file is a template. Use chart/templates/project-platform.yaml
-#       for Helm-based deployment with variable substitution.
-#
+# Defines access control and allowed resources for the platform team
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: apim-platform
-  namespace: ${ARGOCD_NAMESPACE:argocd}
+  namespace: {{ .Values.argocd.namespace | default "argocd" }}
   labels:
-    app.kubernetes.io/part-of: apim-platform
-    app.kubernetes.io/managed-by: argocd
+    {{- include "argocd-appsets.labels" . | nindent 4 }}
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -24,14 +14,14 @@ spec:
 
   # Source repositories
   sourceRepos:
-    - '${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/apim-gitops.git}'
+    - {{ include "argocd-appsets.gitlabRepoUrl" . | quote }}
 
   # Destination clusters and namespaces
   destinations:
     - namespace: apim-system
-      server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
-    - namespace: '${K8S_NAMESPACE_PREFIX:apim}-*'
-      server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+      server: {{ .Values.kubernetes.clusterUrl | default "https://kubernetes.default.svc" }}
+    - namespace: '{{ include "argocd-appsets.namespace" . }}-*'
+      server: {{ .Values.kubernetes.clusterUrl | default "https://kubernetes.default.svc" }}
 
   # Allowed cluster-scoped resources
   clusterResourceWhitelist:
@@ -86,10 +76,10 @@ spec:
       groups:
         - viewer
 
-  # Sync windows - production deployments only during business hours
+  # Sync windows - production deployments restricted on Sundays
   syncWindows:
     - kind: deny
-      schedule: '0 0 * * 0'  # Deny on Sundays
+      schedule: '0 0 * * 0'
       duration: 24h
       applications:
         - '*-prod'

@@ -113,6 +113,10 @@ class DeploymentWorker:
                 await self._handle_promote_request(tenant_id, payload, event_id)
             elif event_type == "sync-request":
                 await self._handle_sync_request(tenant_id, payload, event_id)
+            elif event_type == "tenant-provisioning":
+                await self._handle_tenant_provisioning(tenant_id, payload, event_id)
+            elif event_type == "api-registration":
+                await self._handle_api_registration(tenant_id, payload, event_id)
             else:
                 logger.warning(f"Unknown event type: {event_type}")
 
@@ -255,6 +259,94 @@ class DeploymentWorker:
             api_id="",
             api_name="",
             action="sync",
+            event_id=event_id
+        ))
+
+    async def _handle_tenant_provisioning(self, tenant_id: str, payload: dict, event_id: str):
+        """
+        Handle tenant provisioning request.
+
+        Creates Keycloak groups, users, and K8s namespaces via AWX playbook.
+        """
+        tenant_name = payload.get("tenant_name", tenant_id)
+        users = payload.get("users", [])
+        environments = payload.get("environments", ["dev", "staging"])
+
+        logger.info(f"Provisioning tenant {tenant_id} with {len(users)} users")
+
+        # If users not provided in payload, try to fetch from GitLab
+        if not users:
+            try:
+                users_yaml = await git_service.get_file(
+                    f"tenants/{tenant_id}/iam/users.yaml"
+                )
+                if users_yaml:
+                    import yaml
+                    users_data = yaml.safe_load(users_yaml)
+                    users = users_data.get("users", [])
+                    logger.info(f"Loaded {len(users)} users from GitLab")
+            except Exception as e:
+                logger.warning(f"Could not fetch users from GitLab: {e}")
+
+        # Launch AWX provisioning job
+        job = await awx_service.provision_tenant(
+            tenant_id=tenant_id,
+            tenant_name=tenant_name,
+            users=users,
+            environments=environments
+        )
+
+        job_id = job.get("id")
+        logger.info(f"Launched AWX job {job_id} for tenant provisioning")
+
+        asyncio.create_task(self._monitor_job(
+            job_id=job_id,
+            tenant_id=tenant_id,
+            api_id="",
+            api_name="",
+            action="provision-tenant",
+            event_id=event_id
+        ))
+
+    async def _handle_api_registration(self, tenant_id: str, payload: dict, event_id: str):
+        """
+        Handle API registration in Gateway request.
+
+        Imports API from OpenAPI spec, configures OIDC and policies via AWX playbook.
+        """
+        api_name = payload.get("api_name")
+        api_version = payload.get("api_version", "1.0")
+        openapi_url = payload.get("openapi_url", "")
+        backend_url = payload.get("backend_url", "")
+        oidc_enabled = payload.get("oidc_enabled", True)
+        rate_limit = payload.get("rate_limit", 100)
+
+        logger.info(f"Registering API {api_name} v{api_version} in Gateway")
+
+        # If OpenAPI URL not provided, construct from internal service
+        if not openapi_url and backend_url:
+            openapi_url = f"{backend_url}/openapi.json"
+
+        # Launch AWX registration job
+        job = await awx_service.register_api_gateway(
+            tenant_id=tenant_id,
+            api_name=api_name,
+            api_version=api_version,
+            openapi_url=openapi_url,
+            backend_url=backend_url,
+            oidc_enabled=oidc_enabled,
+            rate_limit=rate_limit
+        )
+
+        job_id = job.get("id")
+        logger.info(f"Launched AWX job {job_id} for API registration")
+
+        asyncio.create_task(self._monitor_job(
+            job_id=job_id,
+            tenant_id=tenant_id,
+            api_id="",
+            api_name=api_name,
+            action="register-api",
             event_id=event_id
         ))
 

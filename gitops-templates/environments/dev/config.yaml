@@ -1,14 +1,24 @@
 # Development Environment Configuration
+# Inherits from: _defaults.yaml
+#
+# Available variables (from _defaults.yaml):
+#   - ${infrastructure.BASE_DOMAIN}: Base domain for the platform
+#   - ${services.*}: Service URLs (gateway, portal, etc.)
+#   - ${variables.*}: Default variable values
+#
 environment: dev
 description: Development environment for testing and integration
 
+# Environment-specific overrides
 variables:
-  # Domain configuration
-  BASE_DOMAIN: "dev.apim.cab-i.com"
-  GATEWAY_URL: "https://gateway.dev.apim.cab-i.com"
-  PORTAL_URL: "https://portal.dev.apim.cab-i.com"
+  # Domain configuration - override base domain for dev
+  ENV_DOMAIN: "dev.${BASE_DOMAIN:apim.cab-i.com}"
+  GATEWAY_URL: "https://gateway.dev.${BASE_DOMAIN:apim.cab-i.com}"
+  PORTAL_URL: "https://portal.dev.${BASE_DOMAIN:apim.cab-i.com}"
+  KEYCLOAK_URL: "https://auth.${BASE_DOMAIN:apim.cab-i.com}"
+  CONTROL_PLANE_API_URL: "https://api.${BASE_DOMAIN:apim.cab-i.com}"
 
-  # Backend configuration
+  # Backend configuration (relaxed for dev)
   BACKEND_TIMEOUT: "60"
   BACKEND_RETRY_COUNT: "5"
 
@@ -19,11 +29,12 @@ variables:
 
   # Logging (verbose for dev)
   LOG_LEVEL: "DEBUG"
+  LOG_FORMAT: "text"
 
   # Security (relaxed for dev)
   CORS_ALLOWED_ORIGINS: "*"
 
-  # Monitoring
+  # Monitoring (full sampling for dev)
   METRICS_ENABLED: "true"
   TRACING_ENABLED: "true"
   TRACING_SAMPLE_RATE: "1.0"
@@ -33,7 +44,14 @@ settings:
   auto_deploy: true
   require_approval: false
   allow_untested_apis: true
+  auto_sync: true
 
 # Vault path prefix for this environment
 vault:
+  enabled: ${VAULT_ENABLED:false}
   path_prefix: "secret/data/dev"
+
+# Kubernetes configuration
+kubernetes:
+  cluster_url: "${K8S_CLUSTER_URL:https://kubernetes.default.svc}"
+  namespace_suffix: "dev"

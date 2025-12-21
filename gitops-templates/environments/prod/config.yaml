@@ -1,14 +1,24 @@
 # Production Environment Configuration
+# Inherits from: _defaults.yaml
+#
+# Available variables (from _defaults.yaml):
+#   - ${infrastructure.BASE_DOMAIN}: Base domain for the platform
+#   - ${services.*}: Service URLs (gateway, portal, etc.)
+#   - ${variables.*}: Default variable values
+#
 environment: prod
 description: Production environment for live APIs
 
+# Environment-specific overrides
 variables:
-  # Domain configuration
-  BASE_DOMAIN: "apim.cab-i.com"
-  GATEWAY_URL: "https://gateway.apim.cab-i.com"
-  PORTAL_URL: "https://portal.apim.cab-i.com"
+  # Domain configuration (production uses base domain directly)
+  ENV_DOMAIN: "${BASE_DOMAIN:apim.cab-i.com}"
+  GATEWAY_URL: "https://gateway.${BASE_DOMAIN:apim.cab-i.com}"
+  PORTAL_URL: "https://portal.${BASE_DOMAIN:apim.cab-i.com}"
+  KEYCLOAK_URL: "https://auth.${BASE_DOMAIN:apim.cab-i.com}"
+  CONTROL_PLANE_API_URL: "https://api.${BASE_DOMAIN:apim.cab-i.com}"
 
-  # Backend configuration
+  # Backend configuration (strict)
   BACKEND_TIMEOUT: "30"
   BACKEND_RETRY_COUNT: "3"
   BACKEND_RETRY_DELAY: "500"
@@ -18,15 +28,15 @@ variables:
   RATE_LIMIT_WINDOW: "60"
   RATE_LIMIT_BURST: "20"
 
-  # Logging
+  # Logging (minimal)
   LOG_LEVEL: "WARNING"
   LOG_FORMAT: "json"
 
   # Security (strict)
-  CORS_ALLOWED_ORIGINS: "https://*.apim.cab-i.com"
+  CORS_ALLOWED_ORIGINS: "https://*.${BASE_DOMAIN:apim.cab-i.com}"
   CORS_MAX_AGE: "86400"
 
-  # Monitoring
+  # Monitoring (low sampling to reduce overhead)
   METRICS_ENABLED: "true"
   TRACING_ENABLED: "true"
   TRACING_SAMPLE_RATE: "0.1"
@@ -41,16 +51,23 @@ settings:
   allow_untested_apis: false
   canary_deployment: true
   canary_percentage: 10
+  auto_sync: false  # Manual sync only for production
 
 # Vault path prefix for this environment
 vault:
+  enabled: ${VAULT_ENABLED:false}
   path_prefix: "secret/data/prod"
+
+# Kubernetes configuration
+kubernetes:
+  cluster_url: "${K8S_CLUSTER_URL:https://kubernetes.default.svc}"
+  namespace_suffix: "prod"
 
 # Alerting configuration
 alerting:
   enabled: true
   channels:
     - type: slack
-      webhook: vault:secret/data/prod/alerts#slack_webhook
+      webhook: "vault:${VAULT_PATH_PREFIX:secret/data}/prod/alerts#slack_webhook"
     - type: pagerduty
-      integration_key: vault:secret/data/prod/alerts#pagerduty_key
+      integration_key: "vault:${VAULT_PATH_PREFIX:secret/data}/prod/alerts#pagerduty_key"

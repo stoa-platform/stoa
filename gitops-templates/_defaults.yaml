@@ -1,6 +1,43 @@
 # Global Default Variables
 # These are overridden by environment-specific and tenant-specific configs
+# Used by ArgoCD ApplicationSets and Variable Resolver
 
+# =============================================================================
+# INFRASTRUCTURE - Core platform configuration
+# =============================================================================
+infrastructure:
+  # GitLab GitOps repository
+  GITLAB_URL: "https://gitlab.com"
+  GITLAB_PROJECT_PATH: "PotoMitan1/apim-gitops"
+  GITLAB_REPO_URL: "https://gitlab.com/PotoMitan1/apim-gitops.git"
+  GITLAB_DEFAULT_BRANCH: "main"
+
+  # Kubernetes
+  K8S_CLUSTER_URL: "https://kubernetes.default.svc"
+  K8S_NAMESPACE_PREFIX: "apim"
+
+  # Base domain
+  BASE_DOMAIN: "apim.cab-i.com"
+
+  # ArgoCD
+  ARGOCD_NAMESPACE: "argocd"
+  ARGOCD_URL: "https://argocd.${BASE_DOMAIN}"
+
+# =============================================================================
+# SERVICES - Platform services URLs
+# =============================================================================
+services:
+  GATEWAY_URL: "https://gateway.${BASE_DOMAIN}"
+  PORTAL_URL: "https://portal.${BASE_DOMAIN}"
+  CONTROL_PLANE_API_URL: "https://api.${BASE_DOMAIN}"
+  CONTROL_PLANE_UI_URL: "https://devops.${BASE_DOMAIN}"
+  KEYCLOAK_URL: "https://auth.${BASE_DOMAIN}"
+  AWX_URL: "https://awx.${BASE_DOMAIN}"
+  REDPANDA_URL: "redpanda.apim-system.svc.cluster.local:9092"
+
+# =============================================================================
+# VARIABLES - Default values for API/Application configuration
+# =============================================================================
 variables:
   # Backend defaults
   BACKEND_TIMEOUT: "30"
@@ -23,13 +60,16 @@ variables:
   # Security defaults
   CORS_ENABLED: "true"
   CORS_MAX_AGE: "3600"
+  CORS_ALLOWED_ORIGINS: ""
 
   # Monitoring defaults
   METRICS_ENABLED: "true"
   TRACING_ENABLED: "true"
   TRACING_SAMPLE_RATE: "0.1"
 
-# Default policies applied to all APIs
+# =============================================================================
+# POLICIES - Default policies applied to all APIs
+# =============================================================================
 default_policies:
   - name: rate-limiting
     enabled: true
@@ -38,8 +78,28 @@ default_policies:
   - name: request-validation
     enabled: true
 
-# Default environments available
+# =============================================================================
+# ENVIRONMENTS - Available environments
+# =============================================================================
 environments:
-  - dev
-  - staging
-  - prod
+  - name: dev
+    cluster: "${K8S_CLUSTER_URL}"
+    namespace_suffix: "dev"
+    auto_sync: true
+  - name: staging
+    cluster: "${K8S_CLUSTER_URL}"
+    namespace_suffix: "staging"
+    auto_sync: true
+  - name: prod
+    cluster: "${K8S_CLUSTER_URL}"
+    namespace_suffix: "prod"
+    auto_sync: false
+
+# =============================================================================
+# VAULT - Secret management
+# =============================================================================
+vault:
+  enabled: false
+  address: "https://vault.${BASE_DOMAIN}"
+  path_prefix: "secret/data"
+  auth_method: "kubernetes"

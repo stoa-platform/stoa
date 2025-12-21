@@ -1,37 +1,46 @@
 # ApplicationSet for Tenant APIs
-# Automatically creates ArgoCD Applications for each tenant's APIs
+# ⚠️ DEPRECATED: Use chart/templates/appset-tenant-apis.yaml instead
+#
+# This file is kept for reference. Deploy using Helm:
+#   helm install argocd-appsets ./chart -n argocd
+#
+# Variables are now centralized in chart/values.yaml:
+#   - gitlab.repoUrl
+#   - gitlab.branch
+#   - kubernetes.clusterUrl
+#   - kubernetes.namespacePrefix
+#
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: tenant-apis
-  namespace: argocd
+  namespace: ${ARGOCD_NAMESPACE:argocd}
 spec:
   generators:
-    # Git directory generator - discovers tenants from GitOps repo
     - git:
-        repoURL: https://gitlab.com/potomitan/apim-gitops.git
-        revision: HEAD
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/apim-gitops.git}
+        revision: ${GITLAB_BRANCH:main}
         directories:
           - path: tenants/*/apis/*
 
   template:
     metadata:
-      name: '{{path[1]}}-{{path[3]}}'  # tenant-apiname
+      name: '{{path[1]}}-{{path[3]}}'
       labels:
         tenant: '{{path[1]}}'
         type: api
+        app.kubernetes.io/managed-by: argocd
     spec:
-      project: '{{path[1]}}'  # Project per tenant
+      project: '{{path[1]}}'
       source:
-        repoURL: https://gitlab.com/potomitan/apim-gitops.git
-        targetRevision: HEAD
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/apim-gitops.git}
+        targetRevision: ${GITLAB_BRANCH:main}
         path: '{{path}}'
-        # Plugin to resolve variables before apply
         plugin:
           name: variable-resolver
       destination:
-        server: https://kubernetes.default.svc
-        namespace: 'apim-{{path[1]}}'  # Namespace per tenant
+        server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+        namespace: '${K8S_NAMESPACE_PREFIX:apim}-{{path[1]}}'
       syncPolicy:
         automated:
           prune: true

@@ -8,6 +8,31 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Ajouté (Phase 2.5) - Validation E2E
+
+- **Tenant APIM Platform** - Tenant administrateur avec accès cross-tenant
+  - Fichier: `tenants/apim/` dans GitLab apim-gitops
+  - User: APIMAdmin (role: cpi-admin, password temporaire: manage)
+  - API: Control-Plane (proxy vers FastAPI via Gateway OIDC)
+
+- **Playbooks Ansible** - Automation tenant lifecycle
+  - `provision-tenant.yaml` - Crée groupes Keycloak, users, namespaces K8s
+  - `register-api-gateway.yaml` - Import OpenAPI, OIDC, rate limiting, activation
+  - `tasks/create-keycloak-user.yaml` - Création user avec roles
+
+- **AWX Job Templates** - Nouveaux templates
+  - `Provision Tenant` (ID: 12) - Provisioning tenant complet
+  - `Register API Gateway` (ID: 13) - Enregistrement API dans Gateway
+
+- **Control-Plane API** - Nouveaux handlers
+  - Event `tenant-provisioning` → AWX Provision Tenant
+  - Event `api-registration` → AWX Register API Gateway
+  - awx_service: `provision_tenant()`, `register_api_gateway()`
+
+- **Architecture clarifiée**
+  - GitHub (apim-aws): Code source, développement, CI/CD
+  - GitLab (apim-gitops): Runtime data, tenants, playbooks AWX
+
 ### Ajouté (Phase 2) - COMPLÉTÉ
 - **GitOps Templates** (`gitops-templates/`) - Modèles pour initialiser GitLab
   - `_defaults.yaml` - Variables globales par défaut
@@ -129,6 +154,15 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [x] ApplicationSets multi-tenant
 - [x] Installation ArgoCD sur EKS
 - [x] Repository GitLab `apim-gitops` configuré
+
+### Phase 2.5: Validation E2E - EN COURS 🔄
+- [x] Playbook provision-tenant.yaml (Keycloak + K8s namespaces)
+- [x] Playbook register-api-gateway.yaml (Gateway OIDC)
+- [x] AWX Job Templates (Provision Tenant, Register API Gateway)
+- [x] Tenant apim dans GitLab avec APIMAdmin
+- [x] Control-Plane API handlers (tenant-provisioning, api-registration)
+- [ ] Test E2E: Login APIMAdmin → voir tous les tenants
+- [ ] API Control-Plane enregistrée dans Gateway
 
 ### Phase 3: Secrets & Gateway Alias (Priorité Moyenne)
 - [ ] HashiCorp Vault

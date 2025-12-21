@@ -1,0 +1,71 @@
+# =============================================================================
+# ArgoCD ApplicationSets Values
+# Centralized configuration for all ArgoCD resources
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# ArgoCD Configuration
+# -----------------------------------------------------------------------------
+argocd:
+  namespace: argocd
+
+# -----------------------------------------------------------------------------
+# GitLab GitOps Repository
+# -----------------------------------------------------------------------------
+gitlab:
+  url: https://gitlab.com
+  projectPath: PotoMitan1/apim-gitops
+  repoUrl: https://gitlab.com/PotoMitan1/apim-gitops.git
+  branch: main
+  # Secret name containing GitLab credentials (created separately)
+  secretName: apim-gitops-repo
+
+# -----------------------------------------------------------------------------
+# Kubernetes Configuration
+# -----------------------------------------------------------------------------
+kubernetes:
+  clusterUrl: https://kubernetes.default.svc
+  namespacePrefix: apim
+
+# -----------------------------------------------------------------------------
+# Base Domain
+# -----------------------------------------------------------------------------
+domain:
+  base: apim.cab-i.com
+
+# -----------------------------------------------------------------------------
+# Environments
+# -----------------------------------------------------------------------------
+environments:
+  - name: dev
+    cluster: https://kubernetes.default.svc
+    namespace_suffix: dev
+    auto_sync: true
+
+  - name: staging
+    cluster: https://kubernetes.default.svc
+    namespace_suffix: staging
+    auto_sync: true
+
+  - name: prod
+    cluster: https://kubernetes.default.svc
+    namespace_suffix: prod
+    auto_sync: false  # Production requires manual sync
+
+# -----------------------------------------------------------------------------
+# Sync Policy
+# -----------------------------------------------------------------------------
+syncPolicy:
+  retry:
+    limit: 3
+    backoff:
+      duration: 5s
+      factor: 2
+      maxDuration: 3m
+
+# -----------------------------------------------------------------------------
+# Labels
+# -----------------------------------------------------------------------------
+labels:
+  app.kubernetes.io/part-of: apim-platform
+  app.kubernetes.io/managed-by: argocd

@@ -104,7 +104,7 @@ apim-aws/
 │   ├── src/
 │   │   ├── auth/            # RBAC & Keycloak
 │   │   ├── routers/         # API endpoints
-│   │   └── services/        # Business logic
+│   │   └── services/        # Business logic (GitLab, Kafka, etc.)
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── control-plane-ui/        # React frontend
@@ -115,9 +115,22 @@ apim-aws/
 │   │   └── services/
 │   ├── Dockerfile
 │   └── package.json
+├── gitops-templates/        # Templates GitOps (Phase 2)
+│   ├── _defaults.yaml       # Variables globales centralisées
+│   ├── environments/        # Config par environnement (dev/staging/prod)
+│   ├── templates/           # Templates API, Tenant, Application
+│   └── argocd/
+│       ├── chart/           # Helm chart pour ApplicationSets
+│       ├── appsets/         # ApplicationSets (deprecated, use chart/)
+│       └── projects/        # AppProjects templates
 ├── charts/                  # Helm charts
 │   ├── control-plane-api/
-│   └── control-plane-ui/
+│   ├── control-plane-ui/
+│   └── argocd/              # ArgoCD chart
+├── scripts/                 # Scripts d'installation
+│   ├── install-argocd.sh
+│   ├── init-gitlab-gitops.sh
+│   └── setup-argocd-gitlab.sh
 ├── terraform/               # Infrastructure as Code
 │   ├── modules/
 │   │   ├── vpc/
@@ -129,6 +142,34 @@ apim-aws/
 ├── keycloak/                # Keycloak config
 │   └── realm-export.json
 └── CLAUDE.md                # Claude Code instructions
+```
+
+### GitOps Architecture
+
+```
+┌─────────────────────────────┐     ┌─────────────────────────────┐
+│  GitHub: apim-aws           │     │  GitLab: apim-gitops        │
+│  (Infrastructure + Code)    │     │  (Source of Truth)          │
+│  ├── gitops-templates/      │────▶│  ├── _defaults.yaml         │
+│  ├── control-plane-api/     │     │  ├── environments/          │
+│  ├── terraform/             │     │  └── tenants/               │
+│  └── charts/                │     │      ├── acme/              │
+└─────────────────────────────┘     │      └── client-xyz/        │
+                                    └──────────────┬──────────────┘
+                                                   │
+                                    ┌──────────────▼──────────────┐
+                                    │      ArgoCD                  │
+                                    │  (GitOps Sync)               │
+                                    │  ├── ApplicationSets         │
+                                    │  └── AppProjects per tenant  │
+                                    └──────────────┬──────────────┘
+                                                   │
+                                    ┌──────────────▼──────────────┐
+                                    │      Kubernetes (EKS)        │
+                                    │  ├── apim-system             │
+                                    │  ├── apim-{tenant}-dev       │
+                                    │  └── apim-{tenant}-prod      │
+                                    └─────────────────────────────┘
 ```
 
 ## Deploiement
@@ -212,8 +253,10 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 | Keycloak Admin | https://auth.apim.cab-i.com/admin/ | Console admin Keycloak |
 | API Gateway UI | https://gateway.apim.cab-i.com/apigatewayui/ | Console Gateway (admin: Administrator/manage) |
 | Developer Portal | https://portal.apim.cab-i.com/portal/ | Portail développeur |
-| **AWX (Ansible)** | https://awx.apim.cab-i.com | Automation (admin: admin/demo) |
+| **ArgoCD** | https://argocd.apim.cab-i.com | GitOps CD (admin/demo) |
+| **AWX (Ansible)** | https://awx.apim.cab-i.com | Automation (admin/demo) |
 | Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n apim-system` | Administration Kafka (interne) |
+| **GitLab GitOps** | https://gitlab.com/PotoMitan1/apim-gitops | Source of Truth (tenants)
 
 ### Environnement STAGING (à venir)
 

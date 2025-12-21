@@ -171,19 +171,80 @@ class AWXService:
         logger.info(f"Launched rollback job {job['id']} for API {api_id}")
         return job
 
-    async def provision_tenant(self, tenant_id: str, tenant_data: dict) -> dict:
-        """Launch tenant provisioning job"""
-        template = await self.get_job_template_by_name("provision-tenant")
+    async def provision_tenant(
+        self,
+        tenant_id: str,
+        tenant_name: str,
+        users: list[dict],
+        environments: list[str] = None
+    ) -> dict:
+        """
+        Launch tenant provisioning job.
+
+        Creates Keycloak groups, users, and K8s namespaces for a new tenant.
+
+        Args:
+            tenant_id: Unique tenant identifier
+            tenant_name: Display name of the tenant
+            users: List of users to create with roles
+            environments: List of environments (default: ['dev', 'staging'])
+        """
+        template = await self.get_job_template_by_name("Provision Tenant")
         if not template:
-            raise ValueError("Job template 'provision-tenant' not found")
+            raise ValueError("Job template 'Provision Tenant' not found")
 
         extra_vars = {
             "tenant_id": tenant_id,
-            **tenant_data
+            "tenant_name": tenant_name,
+            "users": users,
+            "environments": environments or ["dev", "staging"]
         }
 
         job = await self.launch_job(template["id"], extra_vars)
         logger.info(f"Launched provisioning job {job['id']} for tenant {tenant_id}")
+        return job
+
+    async def register_api_gateway(
+        self,
+        tenant_id: str,
+        api_name: str,
+        api_version: str,
+        openapi_url: str,
+        backend_url: str,
+        oidc_enabled: bool = True,
+        rate_limit: int = 100
+    ) -> dict:
+        """
+        Register API in webMethods Gateway.
+
+        Imports API from OpenAPI spec, configures OIDC and rate limiting policies,
+        and activates the API.
+
+        Args:
+            tenant_id: Tenant identifier
+            api_name: API name
+            api_version: API version
+            openapi_url: URL to OpenAPI specification
+            backend_url: Backend service URL
+            oidc_enabled: Enable OIDC authentication
+            rate_limit: Rate limit requests per minute
+        """
+        template = await self.get_job_template_by_name("Register API Gateway")
+        if not template:
+            raise ValueError("Job template 'Register API Gateway' not found")
+
+        extra_vars = {
+            "tenant_id": tenant_id,
+            "api_name": api_name,
+            "api_version": api_version,
+            "openapi_url": openapi_url,
+            "backend_url": backend_url,
+            "oidc_enabled": oidc_enabled,
+            "rate_limit": rate_limit
+        }
+
+        job = await self.launch_job(template["id"], extra_vars)
+        logger.info(f"Launched API registration job {job['id']} for {api_name}")
         return job
 
     # Inventory operations

@@ -470,7 +470,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 
 ### Next Steps - Roadmap
 
-#### Phase 1 : Event-Driven Architecture ✅ COMPLÉTÉ
+#### Phase 1 : Event-Driven Architecture ✅ COMPLÉTÉ (21 Déc 2024)
 
 > **Infrastructure**: Nodes scalés à 3x t3.large (2 CPU / 8GB RAM chacun) pour supporter Redpanda + AWX.
 
@@ -526,6 +526,43 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    - Events supportés: Push, Merge Request, Tag Push
    - Auto-deploy sur push vers `main` branch
    - Configuration: voir [docs/GITOPS-SETUP.md](docs/GITOPS-SETUP.md)
+
+6. **Control-Plane UI** ✅ FONCTIONNEL
+   - Interface React avec authentification Keycloak (PKCE)
+   - Pages: Dashboard, Tenants, APIs, Applications, Deployments, Monitoring
+   - URL: https://devops.apim.cab-i.com
+
+7. **Configuration Variabilisée** ✅ (21 Déc 2024)
+   - **UI** ([config.ts](control-plane-ui/src/config.ts)): Toutes les URLs et configs via `VITE_*` env vars
+   - **API** ([config.py](control-plane-api/src/config.py)): Settings centralisés avec pydantic-settings
+   - **Dockerfiles**: Build args pour personnalisation par environnement
+
+   **Variables UI disponibles**:
+   | Variable | Description | Défaut |
+   |----------|-------------|--------|
+   | `VITE_BASE_DOMAIN` | Domaine de base | `apim.cab-i.com` |
+   | `VITE_API_URL` | URL API backend | `https://api.{domain}` |
+   | `VITE_KEYCLOAK_URL` | URL Keycloak | `https://auth.{domain}` |
+   | `VITE_KEYCLOAK_REALM` | Realm Keycloak | `apim` |
+   | `VITE_GATEWAY_URL` | URL Gateway | `https://gateway.{domain}` |
+   | `VITE_AWX_URL` | URL AWX | `https://awx.{domain}` |
+   | `VITE_ENABLE_*` | Feature flags | `true` |
+
+   **Variables API disponibles**:
+   | Variable | Description | Défaut |
+   |----------|-------------|--------|
+   | `BASE_DOMAIN` | Domaine de base | `apim.cab-i.com` |
+   | `KEYCLOAK_URL` | URL Keycloak | `https://auth.{domain}` |
+   | `KEYCLOAK_REALM` | Realm | `apim` |
+   | `KAFKA_BOOTSTRAP_SERVERS` | Brokers Kafka | `redpanda:9092` |
+   | `AWX_URL` | URL AWX | `https://awx.{domain}` |
+   | `CORS_ORIGINS` | Origins CORS autorisées | `https://devops.{domain}` |
+   | `LOG_LEVEL` | Niveau de log | `INFO` |
+
+8. **Authentification PKCE** ✅ (21 Déc 2024)
+   - Keycloak 25+ requiert PKCE pour clients publics
+   - Configuration `oidc-client-ts` avec `response_type: 'code'` et `pkce_method: 'S256'`
+   - Login fonctionnel via https://devops.apim.cab-i.com
 
 #### Phase 2 : GitOps + Variables d'Environnement (Priorité Haute)
 

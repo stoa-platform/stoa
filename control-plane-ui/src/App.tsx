@@ -6,7 +6,7 @@ import { Tenants } from './pages/Tenants';
 import { APIs } from './pages/APIs';
 import { Applications } from './pages/Applications';
 import { Deployments } from './pages/Deployments';
-import { quickLinks } from './config';
+import { config, quickLinks } from './config';
 
 function Dashboard() {
   const { user } = useAuth();

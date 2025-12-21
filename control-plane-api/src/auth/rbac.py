@@ -4,6 +4,15 @@ from fastapi import HTTPException, Depends
 from typing import List
 from .dependencies import get_current_user
 
+
+class Role:
+    """Role constants matching Keycloak realm roles"""
+    CPI_ADMIN = "cpi-admin"
+    TENANT_ADMIN = "tenant-admin"
+    DEVOPS = "devops"
+    VIEWER = "viewer"
+
+
 class Permission:
     TENANTS_CREATE = "tenants:create"
     TENANTS_READ = "tenants:read"

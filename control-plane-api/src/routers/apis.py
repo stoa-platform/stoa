@@ -153,6 +153,10 @@ async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_cu
             deployed_staging=False,
         )
 
+    except ValueError as e:
+        # API already exists or validation error
+        logger.warning(f"API creation conflict for {api.name}: {e}")
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to create API {api.name}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create API: {str(e)}")

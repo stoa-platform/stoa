@@ -1,0 +1,118 @@
+{{- if .Values.gateway.healthcheck.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gateway-healthcheck
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: gateway-healthcheck
+    component: monitoring
+spec:
+  schedule: "{{ .Values.gateway.healthcheck.schedule | default "*/5 * * * *" }}"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 300
+      template:
+        spec:
+          serviceAccountName: gateway-healthcheck
+          restartPolicy: Never
+          containers:
+            - name: healthcheck
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -e
+
+                  GATEWAY_URL="{{ .Values.gateway.healthcheck.url | default "http://apigateway:5555" }}"
+                  MAX_RETRIES={{ .Values.gateway.healthcheck.maxRetries | default 3 }}
+                  RETRY_DELAY={{ .Values.gateway.healthcheck.retryDelay | default 10 }}
+
+                  echo "Checking Gateway health at $GATEWAY_URL..."
+
+                  # Health check with retries
+                  for i in $(seq 1 $MAX_RETRIES); do
+                    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+                      -u "${GATEWAY_USER}:${GATEWAY_PASSWORD}" \
+                      --connect-timeout 10 \
+                      --max-time 30 \
+                      "$GATEWAY_URL/rest/apigateway/health" || echo "000")
+
+                    echo "Attempt $i: HTTP $HTTP_CODE"
+
+                    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
+                      echo "Gateway is healthy (HTTP $HTTP_CODE)"
+                      exit 0
+                    fi
+
+                    if [ $i -lt $MAX_RETRIES ]; then
+                      echo "Retrying in ${RETRY_DELAY}s..."
+                      sleep $RETRY_DELAY
+                    fi
+                  done
+
+                  # Gateway unhealthy - restart it
+                  echo "Gateway unhealthy after $MAX_RETRIES attempts. Restarting..."
+                  kubectl rollout restart deployment/apigateway -n {{ .Release.Namespace }}
+
+                  # Wait for rollout
+                  kubectl rollout status deployment/apigateway -n {{ .Release.Namespace }} --timeout=300s
+
+                  echo "Gateway restarted successfully"
+              env:
+                - name: GATEWAY_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.gateway.healthcheck.secretName | default "gateway-admin-secret" }}
+                      key: username
+                - name: GATEWAY_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.gateway.healthcheck.secretName | default "gateway-admin-secret" }}
+                      key: password
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gateway-healthcheck
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gateway-healthcheck
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/status"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gateway-healthcheck
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: gateway-healthcheck
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: gateway-healthcheck
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

@@ -86,7 +86,7 @@ async def get_auth_token(
 # ============================================================================
 
 @router.get("/apis", response_model=List[GatewayAPIResponse])
-@require_permission(Permission.APIS_VIEW)
+@require_permission(Permission.APIS_READ)
 async def list_gateway_apis(
     user: User = Depends(get_current_user),
     token: str = Depends(get_auth_token)
@@ -114,7 +114,7 @@ async def list_gateway_apis(
 
 
 @router.get("/apis/{api_id}")
-@require_permission(Permission.APIS_VIEW)
+@require_permission(Permission.APIS_READ)
 async def get_gateway_api(
     api_id: str,
     user: User = Depends(get_current_user),
@@ -137,7 +137,7 @@ async def get_gateway_api(
 
 
 @router.put("/apis/{api_id}/activate")
-@require_permission(Permission.DEPLOYMENTS_PROMOTE)
+@require_permission(Permission.APIS_PROMOTE)
 async def activate_gateway_api(
     api_id: str,
     user: User = Depends(get_current_user),
@@ -157,7 +157,7 @@ async def activate_gateway_api(
 
 
 @router.put("/apis/{api_id}/deactivate")
-@require_permission(Permission.DEPLOYMENTS_PROMOTE)
+@require_permission(Permission.APIS_PROMOTE)
 async def deactivate_gateway_api(
     api_id: str,
     user: User = Depends(get_current_user),
@@ -201,7 +201,7 @@ async def delete_gateway_api(
 # ============================================================================
 
 @router.get("/applications", response_model=List[GatewayApplicationResponse])
-@require_permission(Permission.APPS_VIEW)
+@require_permission(Permission.APIS_READ)
 async def list_gateway_applications(
     user: User = Depends(get_current_user),
     token: str = Depends(get_auth_token)
@@ -231,7 +231,7 @@ async def list_gateway_applications(
 # ============================================================================
 
 @router.get("/scopes", response_model=List[GatewayScopeResponse])
-@require_permission(Permission.APIS_VIEW)
+@require_permission(Permission.APIS_READ)
 async def list_gateway_scopes(
     user: User = Depends(get_current_user),
     token: str = Depends(get_auth_token)

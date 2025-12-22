@@ -222,11 +222,11 @@
 
     - name: Check if Control-Plane-API exists
       set_fact:
-        cpi_api_exists: "{{ existing_apis.json.apiResponse | default([]) | selectattr('apiName', 'equalto', 'Control-Plane-API') | list | length > 0 }}"
+        cpi_api_exists: "{{ existing_apis.json.apiResponse | default([]) | map(attribute='api') | selectattr('apiName', 'equalto', 'Control-Plane-API') | list | length > 0 }}"
 
     - name: Get existing Control-Plane-API ID
       set_fact:
-        cpi_api_id: "{{ (existing_apis.json.apiResponse | selectattr('apiName', 'equalto', 'Control-Plane-API') | list | first).id }}"
+        cpi_api_id: "{{ (existing_apis.json.apiResponse | map(attribute='api') | selectattr('apiName', 'equalto', 'Control-Plane-API') | list | first).id }}"
       when: cpi_api_exists
 
     - name: Import Control-Plane API
@@ -259,12 +259,27 @@
     # =========================================================================
     - name: Check if Gateway-Admin-API exists
       set_fact:
-        gwa_api_exists: "{{ existing_apis.json.apiResponse | default([]) | selectattr('apiName', 'equalto', 'Gateway-Admin-API') | list | length > 0 }}"
+        gwa_api_exists: "{{ existing_apis.json.apiResponse | default([]) | map(attribute='api') | selectattr('apiName', 'equalto', 'Gateway-Admin-API') | list | length > 0 }}"
 
     - name: Get existing Gateway-Admin-API ID
       set_fact:
-        gwa_api_id: "{{ (existing_apis.json.apiResponse | selectattr('apiName', 'equalto', 'Gateway-Admin-API') | list | first).id }}"
+        gwa_api_id: "{{ (existing_apis.json.apiResponse | map(attribute='api') | selectattr('apiName', 'equalto', 'Gateway-Admin-API') | list | first).id }}"
       when: gwa_api_exists
+
+    - name: Download Gateway-Admin API OpenAPI spec
+      uri:
+        url: "https://gitlab.com/api/v4/projects/77260481/repository/files/apis%2Fgateway-admin-api%2Fopenapi.json/raw?ref=main"
+        method: GET
+        return_content: true
+        validate_certs: true
+      register: gwa_openapi_content
+      when: not gwa_api_exists
+
+    - name: Save Gateway-Admin API OpenAPI spec
+      copy:
+        content: "{{ gwa_openapi_content.content }}"
+        dest: "/tmp/gateway-admin-api-openapi.json"
+      when: not gwa_api_exists
 
     - name: Import Gateway-Admin API
       shell: |
@@ -274,7 +289,7 @@
           -F "type=openapi" \
           -F "apiName=Gateway-Admin-API" \
           -F "apiVersion=1.0" \
-          -F "file=@/Users/torpedo/apim-aws/apis/gateway-admin-api/openapi.json" \
+          -F "file=@/tmp/gateway-admin-api-openapi.json" \
           "{{ gateway_url }}/rest/apigateway/apis"
       register: gwa_import_result
       when: not gwa_api_exists
@@ -294,6 +309,7 @@
     # =========================================================================
     # STEP 5: Create OAuth Strategy
     # =========================================================================
+    # NOTE: Strategy body must NOT be wrapped in "strategy" object
     - name: Create OAuth2 Strategy for platform
       uri:
         url: "{{ gateway_url }}/rest/apigateway/strategies"
@@ -307,17 +323,12 @@
           Accept: "application/json"
         body_format: json
         body:
-          strategy:
-            name: "apim-platform-oauth2"
-            description: "OAuth2/OIDC strategy for APIM platform APIs"
-            type: "oauth2"
-            authServerAlias: "{{ auth_server_name }}"
-            audience: "account"
-            oauth2:
-              supportedGrantTypes:
-                - "authorization_code"
-                - "client_credentials"
-              requirePKCE: false
+          name: "apim-platform-oauth2"
+          description: "OAuth2/OIDC strategy for APIM platform APIs"
+          type: "OAUTH2"
+          authServerAlias: "{{ auth_server_name }}"
+          clientId: "control-plane-ui"
+          audience: "account"
         status_code: [200, 201, 409]
       register: oauth_strategy_result
       ignore_errors: true
@@ -337,8 +348,8 @@
 
     - name: Find platform OAuth strategy ID
       set_fact:
-        oauth_strategy_id: "{{ (existing_strategies.json.strategy | default([]) | selectattr('name', 'equalto', 'apim-platform-oauth2') | list | first).id }}"
-      when: existing_strategies.json.strategy | default([]) | selectattr('name', 'equalto', 'apim-platform-oauth2') | list | length > 0
+        oauth_strategy_id: "{{ (existing_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'apim-platform-oauth2') | list | first).id }}"
+      when: existing_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'apim-platform-oauth2') | list | length > 0
       ignore_errors: true
 
     - name: Display OAuth strategy status
@@ -348,10 +359,67 @@
     # =========================================================================
     # STEP 6: Create Platform Application (control-plane-ui)
     # =========================================================================
-    - name: Create platform application
+    - name: Get existing applications
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_apps
+
+    - name: Check if control-plane-ui app exists
+      set_fact:
+        cpi_app_exists: "{{ existing_apps.json.applications | default([]) | selectattr('name', 'equalto', 'control-plane-ui') | list | length > 0 }}"
+
+    - name: Get existing control-plane-ui app ID
+      set_fact:
+        cpi_app_id: "{{ (existing_apps.json.applications | selectattr('name', 'equalto', 'control-plane-ui') | list | first).id }}"
+      when: cpi_app_exists
+
+    - name: Create platform application (if not exists)
       uri:
         url: "{{ gateway_url }}/rest/apigateway/applications"
         method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "control-plane-ui"
+          description: "APIM Control Plane UI Application"
+          contactEmails:
+            - "admin@cab-i.com"
+          identifiers:
+            - key: "openIdClaims"
+              name: "azp"
+              value:
+                - "control-plane-ui"
+        status_code: [200, 201]
+      register: platform_app_create
+      when: not cpi_app_exists
+
+    - name: Get created app ID
+      set_fact:
+        cpi_app_id: "{{ platform_app_create.json.id }}"
+      when:
+        - not cpi_app_exists
+        - platform_app_create is defined
+        - platform_app_create.json is defined
+
+    # Associate OAuth strategy to application (via PUT)
+    - name: Associate OAuth strategy to control-plane-ui
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications/{{ cpi_app_id }}"
+        method: PUT
         user: "{{ gateway_user }}"
         password: "{{ gateway_password }}"
         force_basic_auth: true
@@ -369,19 +437,39 @@
             - "{{ oauth_strategy_id }}"
           identifiers:
             - key: "openIdClaims"
-              name: "OpenID Claims"
+              name: "azp"
               value:
                 - "control-plane-ui"
-          consumingAPIs:
+        status_code: [200, 201]
+      when:
+        - cpi_app_id is defined
+        - oauth_strategy_id is defined
+
+    - name: Associate APIs to application (POST /applications/{id}/apis)
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications/{{ cpi_app_id }}/apis"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          apiIDs:
             - "{{ cpi_api_id }}"
             - "{{ gwa_api_id }}"
-        status_code: [200, 201, 409]
-      register: platform_app_result
+        status_code: [200, 201, 204]
       when:
-        - oauth_strategy_id is defined
+        - cpi_app_id is defined
         - cpi_api_id is defined
         - gwa_api_id is defined
-      ignore_errors: true
+
+    - name: Display app status
+      debug:
+        msg: "Application control-plane-ui (ID: {{ cpi_app_id | default('N/A') }}) - APIs associated: Control-Plane-API, Gateway-Admin-API"
 
     # =========================================================================
     # STEP 7: Create OAuth Scopes

@@ -8,6 +8,34 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Corrigé (2024-12-22) - Pipeline E2E Kafka → AWX
+
+- **AWX Token** - Configuration et persistence
+  - Token API créé et sauvegardé dans AWS Secrets Manager (`apim/awx-token`)
+  - Variable `AWX_TOKEN` configurée sur deployment control-plane-api
+
+- **Noms Job Templates AWX** - Alignement code/AWX
+  - `awx_service.py`: `deploy-api` → `Deploy API`, `rollback-api` → `Rollback API`
+  - `deployment_worker.py`: `promote-portal` → `Promote Portal`, `sync-gateway` → `Sync Gateway`
+
+- **Playbooks manquants GitLab** - Push vers apim-gitops
+  - `deploy-api.yaml` - Déploiement API dans Gateway
+  - `rollback.yaml` - Rollback/désactivation API
+  - `sync-gateway.yaml` - Synchronisation Gateway
+  - `promote-portal.yaml` - Publication Developer Portal
+
+- **Kafka Snappy Compression** - Support codec snappy
+  - Ajout `python-snappy==0.7.3` dans requirements.txt
+  - Ajout `libsnappy-dev` dans Dockerfile
+
+- **GitLab Atomic Commits** - Fix race condition
+  - `git_service.py`: Utilisation `commits.create()` API pour commits atomiques
+  - Évite erreur `reference does not point to expected object`
+
+- **AWX Project Sync** - Job templates mis à jour
+  - Tous templates (Deploy API, Rollback API, Sync Gateway, Promote Portal)
+    pointent vers projet 7 "APIM Playbooks" avec playbooks corrects
+
 ### Ajouté (Phase 2.5) - Validation E2E - COMPLÉTÉ ✅
 
 - **Gateway OIDC Configuration** - Sécurisation APIs via Keycloak

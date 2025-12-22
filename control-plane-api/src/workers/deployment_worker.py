@@ -209,9 +209,9 @@ class DeploymentWorker:
         logger.info(f"Promoting API {api_name} to Developer Portal")
 
         # Get promote-portal template
-        template = await awx_service.get_job_template_by_name("promote-portal")
+        template = await awx_service.get_job_template_by_name("Promote Portal")
         if not template:
-            raise ValueError("Job template 'promote-portal' not found")
+            raise ValueError("Job template 'Promote Portal' not found")
 
         job = await awx_service.launch_job(
             template_id=template["id"],
@@ -239,9 +239,9 @@ class DeploymentWorker:
         logger.info(f"Syncing Gateway for tenant {tenant_id}")
 
         # Get sync-gateway template
-        template = await awx_service.get_job_template_by_name("sync-gateway")
+        template = await awx_service.get_job_template_by_name("Sync Gateway")
         if not template:
-            raise ValueError("Job template 'sync-gateway' not found")
+            raise ValueError("Job template 'Sync Gateway' not found")
 
         job = await awx_service.launch_job(
             template_id=template["id"],

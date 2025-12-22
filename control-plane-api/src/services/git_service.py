@@ -1,12 +1,43 @@
 """GitLab service for GitOps operations"""
 import logging
 from typing import Optional
+import yaml
 import gitlab
 from gitlab.v4.objects import Project
 
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_api_data(raw_data: dict) -> dict:
+    """
+    Normalize API data from GitLab YAML to standard format.
+    Supports both simple format and Kubernetes-style format (apiVersion/kind/spec).
+    """
+    # If it's Kubernetes-style format
+    if "apiVersion" in raw_data and "kind" in raw_data:
+        metadata = raw_data.get("metadata", {})
+        spec = raw_data.get("spec", {})
+        backend = spec.get("backend", {})
+        deployments = spec.get("deployments", {})
+
+        return {
+            "id": metadata.get("name", ""),
+            "name": metadata.get("name", ""),
+            "display_name": spec.get("displayName", metadata.get("name", "")),
+            "version": metadata.get("version", "1.0.0"),
+            "description": spec.get("description", ""),
+            "backend_url": backend.get("url", ""),
+            "status": spec.get("status", "draft"),
+            "deployments": {
+                "dev": deployments.get("dev", False),
+                "staging": deployments.get("staging", False),
+            }
+        }
+
+    # Simple format - return as-is
+    return raw_data
 
 class GitLabService:
     """Service for GitLab operations - GitOps source of truth"""
@@ -74,21 +105,32 @@ settings:
     - dev
     - staging
 """
-            self._project.files.create({
-                "file_path": f"{self._get_tenant_path(tenant_id)}/tenant.yaml",
-                "branch": "main",
-                "content": tenant_yaml,
-                "commit_message": f"Create tenant {tenant_id}",
-            })
-
-            # Create .gitkeep files for subdirectories
-            for subdir in ["apis", "applications"]:
-                self._project.files.create({
-                    "file_path": f"{self._get_tenant_path(tenant_id)}/{subdir}/.gitkeep",
-                    "branch": "main",
+            # Use commits API for atomic operation (single commit with all files)
+            # This prevents race conditions when creating multiple files
+            tenant_path = self._get_tenant_path(tenant_id)
+            actions = [
+                {
+                    "action": "create",
+                    "file_path": f"{tenant_path}/tenant.yaml",
+                    "content": tenant_yaml,
+                },
+                {
+                    "action": "create",
+                    "file_path": f"{tenant_path}/apis/.gitkeep",
                     "content": "",
-                    "commit_message": f"Create {subdir} directory for tenant {tenant_id}",
-                })
+                },
+                {
+                    "action": "create",
+                    "file_path": f"{tenant_path}/applications/.gitkeep",
+                    "content": "",
+                }
+            ]
+
+            self._project.commits.create({
+                "branch": "main",
+                "commit_message": f"Create tenant {tenant_id}",
+                "actions": actions,
+            })
 
             logger.info(f"Created tenant structure for {tenant_id}")
             return True
@@ -107,10 +149,37 @@ settings:
                 f"{self._get_tenant_path(tenant_id)}/tenant.yaml",
                 ref="main"
             )
-            import yaml
             return yaml.safe_load(file.decode())
         except gitlab.exceptions.GitlabGetError:
             return None
+
+    async def _ensure_tenant_exists(self, tenant_id: str) -> bool:
+        """Check if tenant exists, create structure if not"""
+        try:
+            self._project.files.get(
+                f"{self._get_tenant_path(tenant_id)}/tenant.yaml",
+                ref="main"
+            )
+            return True
+        except gitlab.exceptions.GitlabGetError:
+            # Tenant doesn't exist, create minimal structure
+            logger.info(f"Tenant {tenant_id} doesn't exist, creating structure...")
+            await self.create_tenant_structure(tenant_id, {
+                "name": tenant_id,
+                "display_name": tenant_id,
+            })
+            return True
+
+    async def _api_exists(self, tenant_id: str, api_name: str) -> bool:
+        """Check if API already exists"""
+        try:
+            self._project.files.get(
+                f"{self._get_api_path(tenant_id, api_name)}/api.yaml",
+                ref="main"
+            )
+            return True
+        except gitlab.exceptions.GitlabGetError:
+            return False
 
     # API operations
     async def create_api(self, tenant_id: str, api_data: dict) -> str:
@@ -129,47 +198,69 @@ settings:
         api_name = api_data["name"]
         api_path = self._get_api_path(tenant_id, api_name)
 
-        try:
-            # Create api.yaml
-            api_yaml = f"""# API Configuration
-id: {api_data.get('id', api_name)}
-name: {api_name}
-display_name: {api_data.get('display_name', api_name)}
-version: {api_data.get('version', '1.0.0')}
-description: {api_data.get('description', '')}
-backend_url: {api_data.get('backend_url', '')}
-status: draft
-deployments:
-  dev: false
-  staging: false
-"""
-            self._project.files.create({
-                "file_path": f"{api_path}/api.yaml",
-                "branch": "main",
-                "content": api_yaml,
-                "commit_message": f"Create API {api_name} for tenant {tenant_id}",
-            })
+        # Ensure tenant exists
+        await self._ensure_tenant_exists(tenant_id)
 
-            # Create OpenAPI spec if provided
+        # Check if API already exists
+        if await self._api_exists(tenant_id, api_name):
+            raise ValueError(f"API '{api_name}' already exists for tenant '{tenant_id}'")
+
+        try:
+            # Create api.yaml with proper YAML escaping for description
+            api_content = {
+                "id": api_data.get("id", api_name),
+                "name": api_name,
+                "display_name": api_data.get("display_name", api_name),
+                "version": api_data.get("version", "1.0.0"),
+                "description": api_data.get("description", ""),
+                "backend_url": api_data.get("backend_url", ""),
+                "status": "draft",
+                "deployments": {
+                    "dev": False,
+                    "staging": False,
+                }
+            }
+
+            api_yaml = yaml.dump(api_content, default_flow_style=False, allow_unicode=True)
+
+            # Use commits API to create all files in a single atomic commit
+            # This prevents race conditions when creating multiple files
+            actions = [
+                {
+                    "action": "create",
+                    "file_path": f"{api_path}/api.yaml",
+                    "content": api_yaml,
+                },
+                {
+                    "action": "create",
+                    "file_path": f"{api_path}/policies/.gitkeep",
+                    "content": "",
+                }
+            ]
+
+            # Add OpenAPI spec if provided
             if api_data.get("openapi_spec"):
-                self._project.files.create({
+                actions.append({
+                    "action": "create",
                     "file_path": f"{api_path}/openapi.yaml",
-                    "branch": "main",
                     "content": api_data["openapi_spec"],
-                    "commit_message": f"Add OpenAPI spec for {api_name}",
                 })
 
-            # Create policies directory
-            self._project.files.create({
-                "file_path": f"{api_path}/policies/.gitkeep",
+            # Single atomic commit with all files
+            self._project.commits.create({
                 "branch": "main",
-                "content": "",
-                "commit_message": f"Create policies directory for {api_name}",
+                "commit_message": f"Create API {api_name} for tenant {tenant_id}",
+                "actions": actions,
             })
 
             logger.info(f"Created API {api_name} for tenant {tenant_id}")
             return api_data.get("id", api_name)
 
+        except gitlab.exceptions.GitlabCreateError as e:
+            if "already exists" in str(e).lower():
+                raise ValueError(f"API '{api_name}' already exists for tenant '{tenant_id}'")
+            logger.error(f"Failed to create API: {e}")
+            raise
         except Exception as e:
             logger.error(f"Failed to create API: {e}")
             raise
@@ -184,9 +275,12 @@ deployments:
                 f"{self._get_api_path(tenant_id, api_name)}/api.yaml",
                 ref="main"
             )
-            import yaml
-            return yaml.safe_load(file.decode())
+            raw_data = yaml.safe_load(file.decode())
+            return _normalize_api_data(raw_data)
         except gitlab.exceptions.GitlabGetError:
+            return None
+        except yaml.YAMLError as e:
+            logger.error(f"Failed to parse API YAML for {api_name}: {e}")
             return None
 
     async def list_apis(self, tenant_id: str) -> list[dict]:
@@ -218,8 +312,6 @@ deployments:
             raise RuntimeError("GitLab not connected")
 
         try:
-            import yaml
-
             file = self._project.files.get(
                 f"{self._get_api_path(tenant_id, api_name)}/api.yaml",
                 ref="main"
@@ -227,7 +319,7 @@ deployments:
             current = yaml.safe_load(file.decode())
             current.update(api_data)
 
-            file.content = yaml.dump(current, default_flow_style=False)
+            file.content = yaml.dump(current, default_flow_style=False, allow_unicode=True)
             file.save(branch="main", commit_message=f"Update API {api_name}")
 
             logger.info(f"Updated API {api_name} for tenant {tenant_id}")

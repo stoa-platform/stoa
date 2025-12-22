@@ -619,6 +619,8 @@ curl -s -X POST \
 
 Create a strategy linking the application to the authorization server:
 
+**IMPORTANT:** The request body must NOT be wrapped in a `strategy` object. Send the strategy properties directly.
+
 ```bash
 curl -s -X POST \
   -u Administrator:manage \
@@ -626,8 +628,8 @@ curl -s -X POST \
   -H "Accept: application/json" \
   "http://localhost:5555/rest/apigateway/strategies" \
   -d '{
-    "name": "OIDC-Keycloak-ControlPlane",
-    "description": "OpenID Connect authentication with Keycloak",
+    "name": "apim-platform-oauth2",
+    "description": "OAuth2/OIDC strategy for APIM platform APIs",
     "type": "OAUTH2",
     "authServerAlias": "KeycloakOIDC",
     "clientId": "control-plane-ui",
@@ -635,7 +637,25 @@ curl -s -X POST \
   }'
 ```
 
-**Note:** The `audience` must match the `aud` claim in the Keycloak JWT token. By default, Keycloak sets this to `account`.
+**Response:**
+```json
+{
+  "strategy": {
+    "id": "29dce722-11d4-4238-8ae2-aec1c2f85369",
+    "type": "OAUTH2",
+    "authServerAlias": "KeycloakOIDC",
+    "name": "apim-platform-oauth2",
+    "description": "OAuth2/OIDC strategy for APIM platform APIs",
+    "clientId": "control-plane-ui",
+    "audience": "account"
+  }
+}
+```
+
+**Notes:**
+- The `audience` must match the `aud` claim in the Keycloak JWT token. By default, Keycloak sets this to `account`.
+- The `type` must be uppercase: `OAUTH2` (not `oauth2`)
+- Common error: `{"errorDetails":"Unrecognized Type: [null]"}` means the body was wrapped incorrectly
 
 ### Step 3: Create Application
 
@@ -689,17 +709,35 @@ curl -s -X PUT \
 
 **Important:** The identifier `openIdClaims` with `name: azp` matches the `azp` (authorized party) claim in Keycloak JWT tokens.
 
-### Step 5: Associate API to Application
+### Step 5: Associate APIs to Application
+
+**IMPORTANT:** The `consumingAPIs` field cannot be modified via PUT on the application. Use the dedicated `/apis` endpoint instead:
 
 ```bash
 APP_ID="<application-id>"
-API_ID="<api-id>"
 
-curl -s -X PUT \
+# Associate multiple APIs to application (POST adds, doesn't replace)
+curl -s -X POST \
   -u Administrator:manage \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
   "http://localhost:5555/rest/apigateway/applications/$APP_ID/apis" \
-  -d '["'"$API_ID"'"]'
+  -d '{
+    "apiIDs": [
+      "7ba67c90-814d-4d2f-a5da-36e9cda77afe",
+      "8f9c7b6c-1bc6-4438-88be-a10e2352bae2"
+    ]
+  }'
+```
+
+**Verify association:**
+```bash
+curl -s -u Administrator:manage \
+  -H "Accept: application/json" \
+  "http://localhost:5555/rest/apigateway/applications/$APP_ID/apis" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print('Associated APIs:', d.get('apiIDs', []))"
 ```
 
 ### Step 6: Create OAuth Scope Mappings

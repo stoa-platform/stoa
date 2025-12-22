@@ -128,9 +128,9 @@ class AWXService:
 
         This calls the deploy-api job template with the necessary variables.
         """
-        template = await self.get_job_template_by_name("deploy-api")
+        template = await self.get_job_template_by_name("Deploy API")
         if not template:
-            raise ValueError("Job template 'deploy-api' not found")
+            raise ValueError("Job template 'Deploy API' not found")
 
         extra_vars = {
             "tenant_id": tenant_id,
@@ -156,9 +156,9 @@ class AWXService:
         target_version: str
     ) -> dict:
         """Launch API rollback job"""
-        template = await self.get_job_template_by_name("rollback-api")
+        template = await self.get_job_template_by_name("Rollback API")
         if not template:
-            raise ValueError("Job template 'rollback-api' not found")
+            raise ValueError("Job template 'Rollback API' not found")
 
         extra_vars = {
             "tenant_id": tenant_id,

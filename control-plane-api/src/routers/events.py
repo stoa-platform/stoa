@@ -1,13 +1,30 @@
 """Events router - SSE endpoint for real-time Kafka events"""
 from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
+from pydantic import BaseModel
 import asyncio
 import json
+import logging
 
 from ..auth import get_current_user, User, require_tenant_access
+from ..services.kafka_service import kafka_service, Topics
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/events", tags=["Events"])
+
+
+class DeploymentResult(BaseModel):
+    """Deployment result from AWX playbook"""
+    api_name: str
+    api_version: Optional[str] = "1.0"
+    api_id: Optional[str] = None
+    tenant_id: str
+    status: str  # success, failed, rollback
+    action: Optional[str] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
 
 # Event types that can be streamed
 EVENT_TYPES = [
@@ -145,3 +162,46 @@ async def get_event_history(
     """Get historical events from database/Kafka"""
     # TODO: Implement with event store
     return {"events": []}
+
+
+@router.post("/deployment-result")
+async def receive_deployment_result(result: DeploymentResult):
+    """
+    Receive deployment result notification from AWX playbooks.
+
+    This endpoint is called by Ansible playbooks after completing
+    deployment, rollback, or other gateway operations.
+
+    The result is published to Kafka for:
+    - Real-time UI updates via SSE
+    - Audit logging
+    - Metrics collection
+    """
+    logger.info(f"Received deployment result: {result.api_name} - {result.status}")
+
+    try:
+        # Publish to Kafka for downstream consumers
+        if kafka_service._producer:
+            await kafka_service.publish(
+                topic=Topics.DEPLOY_RESULTS,
+                event_type=f"deployment-{result.status}",
+                tenant_id=result.tenant_id,
+                payload={
+                    "api_name": result.api_name,
+                    "api_version": result.api_version,
+                    "api_id": result.api_id,
+                    "status": result.status,
+                    "action": result.action,
+                    "message": result.message,
+                    "error": result.error,
+                }
+            )
+            logger.info(f"Published deployment result to Kafka: {result.api_name}")
+    except Exception as e:
+        logger.warning(f"Failed to publish to Kafka (non-blocking): {e}")
+
+    return {
+        "status": "received",
+        "api_name": result.api_name,
+        "deployment_status": result.status
+    }

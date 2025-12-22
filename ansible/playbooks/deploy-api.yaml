@@ -1,33 +1,55 @@
 ---
 # Playbook: Deploy API to webMethods Gateway
 # Triggered by Kafka event from Control-Plane API
+#
+# Required extra_vars:
+#   - api_name: Name of the API
+#   - openapi_spec: URL to OpenAPI specification
+#
+# Optional extra_vars:
+#   - api_version: API version (default: 1.0)
+#   - tenant_id: Tenant identifier (default: default)
+#   - gateway_url: Gateway URL (default: internal K8s service)
+#   - gateway_user: Gateway admin username (default: Administrator)
+#   - gateway_password: Gateway admin password (required if not using credential)
 
 - name: Deploy API to Gateway
   hosts: localhost
   connection: local
   gather_facts: false
 
-  vars_files:
-    - ../vars/secrets.yaml
-
   vars:
-    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
-    api_name: "{{ api_name | default('test-api') }}"
-    api_version: "{{ api_version | default('1.0') }}"
-    tenant_id: "{{ tenant_id | default('default') }}"
-    openapi_spec: "{{ openapi_spec | default('') }}"
+    # Gateway connection defaults - can be overridden via extra_vars
+    _gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    _gateway_user: "Administrator"
+    _gateway_password: "manage"
+
+    # API configuration defaults
+    _api_name: "test-api"
+    _api_version: "1.0"
+    _tenant_id: "default"
+    _openapi_spec: ""
+
+    # Final values (use extra_vars or defaults)
+    gw_url: "{{ gateway_url | default(_gateway_url) }}"
+    gw_user: "{{ gateway_user | default(_gateway_user) }}"
+    gw_password: "{{ gateway_password | default(_gateway_password) }}"
+    api: "{{ api_name | default(_api_name) }}"
+    version: "{{ api_version | default(_api_version) }}"
+    tenant: "{{ tenant_id | default(_tenant_id) }}"
+    spec_url: "{{ openapi_spec | default(_openapi_spec) }}"
 
   tasks:
     - name: Display deployment info
       debug:
-        msg: "Deploying API '{{ api_name }}' v{{ api_version }} for tenant '{{ tenant_id }}'"
+        msg: "Deploying API '{{ api }}' v{{ version }} for tenant '{{ tenant }}'"
 
     - name: Check Gateway health
       uri:
-        url: "{{ gateway_url }}/rest/apigateway/health"
+        url: "{{ gw_url }}/rest/apigateway/health"
         method: GET
-        user: "{{ gateway_user }}"
-        password: "{{ gateway_password }}"
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
         force_basic_auth: true
         validate_certs: false
         status_code: [200, 401]
@@ -36,45 +58,45 @@
 
     - name: Fail if Gateway unreachable
       fail:
-        msg: "Gateway is not reachable at {{ gateway_url }}"
+        msg: "Gateway is not reachable at {{ gw_url }}"
       when: health_check.failed | default(false)
 
     - name: Import API from OpenAPI spec
       uri:
-        url: "{{ gateway_url }}/rest/apigateway/apis"
+        url: "{{ gw_url }}/rest/apigateway/apis"
         method: POST
-        user: "{{ gateway_user }}"
-        password: "{{ gateway_password }}"
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
         force_basic_auth: true
         validate_certs: false
         headers:
           Content-Type: "application/json"
         body_format: json
         body:
-          apiName: "{{ api_name }}"
-          apiVersion: "{{ api_version }}"
+          apiName: "{{ api }}"
+          apiVersion: "{{ version }}"
           type: "openapi"
-          url: "{{ openapi_spec }}"
+          url: "{{ spec_url }}"
         status_code: [200, 201, 400]
       register: api_import
-      when: openapi_spec | length > 0
+      when: spec_url | length > 0
 
     - name: Display API import result
       debug:
         var: api_import
-      when: openapi_spec | length > 0
+      when: spec_url | length > 0
 
     - name: Activate API
       uri:
-        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_import.json.apiResponse.api.id }}/activate"
+        url: "{{ gw_url }}/rest/apigateway/apis/{{ api_import.json.apiResponse.api.id }}/activate"
         method: PUT
-        user: "{{ gateway_user }}"
-        password: "{{ gateway_password }}"
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
         force_basic_auth: true
         validate_certs: false
         status_code: [200, 204]
       when:
-        - openapi_spec | length > 0
+        - spec_url | length > 0
         - api_import.json.apiResponse.api.id is defined
       register: api_activate
 
@@ -86,9 +108,9 @@
           Content-Type: "application/json"
         body_format: json
         body:
-          api_name: "{{ api_name }}"
-          api_version: "{{ api_version }}"
-          tenant_id: "{{ tenant_id }}"
+          api_name: "{{ api }}"
+          api_version: "{{ version }}"
+          tenant_id: "{{ tenant }}"
           status: "success"
           message: "API deployed successfully"
         status_code: [200, 201, 202]
@@ -100,7 +122,7 @@
           ========================================
           API Deployment Complete
           ----------------------------------------
-          API: {{ api_name }} v{{ api_version }}
-          Tenant: {{ tenant_id }}
+          API: {{ api }} v{{ version }}
+          Tenant: {{ tenant }}
           Status: SUCCESS
           ========================================

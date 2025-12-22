@@ -158,7 +158,8 @@ class DeploymentWorker:
             api_name=api_name,
             environment=environment,
             version=version,
-            backend_url=backend_url or ""
+            backend_url=backend_url or "",
+            openapi_spec=openapi_spec or ""
         )
 
         job_id = job.get("id")

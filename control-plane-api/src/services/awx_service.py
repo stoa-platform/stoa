@@ -121,7 +121,8 @@ class AWXService:
         api_name: str,
         environment: str,
         version: str,
-        backend_url: str
+        backend_url: str,
+        openapi_spec: str = ""
     ) -> dict:
         """
         Launch API deployment job.
@@ -139,6 +140,7 @@ class AWXService:
             "environment": environment,
             "version": version,
             "backend_url": backend_url,
+            "openapi_spec": openapi_spec,
         }
 
         # Limit to specific environment host

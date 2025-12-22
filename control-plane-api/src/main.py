@@ -9,8 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .config import settings
-from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces
+from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway
 from .services import kafka_service, git_service, awx_service, keycloak_service
+from .services.gateway_service import gateway_service
 from .workers.deployment_worker import deployment_worker
 
 # Flag to control worker startup (can be disabled for dev/testing)
@@ -47,6 +48,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: Failed to connect Keycloak: {e}")
 
+    try:
+        await gateway_service.connect()
+        print(f"Gateway connected (OIDC proxy: {settings.GATEWAY_USE_OIDC_PROXY})")
+    except Exception as e:
+        print(f"Warning: Failed to connect Gateway: {e}")
+
     # Start deployment worker in background
     if ENABLE_WORKER:
         try:
@@ -73,6 +80,7 @@ async def lifespan(app: FastAPI):
     await git_service.git_service.disconnect()
     await awx_service.awx_service.disconnect()
     await keycloak_service.keycloak_service.disconnect()
+    await gateway_service.disconnect()
 
 API_DESCRIPTION = """
 ## APIM Control-Plane API
@@ -121,6 +129,7 @@ app = FastAPI(
         {"name": "Events", "description": "Real-time event streaming (SSE)"},
         {"name": "Webhooks", "description": "GitLab webhook handlers for GitOps"},
         {"name": "Traces", "description": "Pipeline monitoring and tracing"},
+        {"name": "Gateway", "description": "webMethods Gateway administration via OIDC proxy"},
     ],
     contact={
         "name": "CAB Ingenierie",
@@ -149,6 +158,7 @@ app.include_router(git.router)
 app.include_router(events.router)
 app.include_router(webhooks.router)
 app.include_router(traces.router)
+app.include_router(gateway.router)
 
 @app.get("/health")
 async def health():

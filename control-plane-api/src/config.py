@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     GATEWAY_ADMIN_USER: str = "Administrator"
     GATEWAY_ADMIN_PASSWORD: str = ""
 
+    # Gateway Admin Proxy API (OIDC secured)
+    # Uses the Gateway-Admin-API proxy instead of direct Basic Auth
+    GATEWAY_ADMIN_PROXY_URL: str = f"https://apis.{_BASE_DOMAIN}/gateway/Gateway-Admin-API/1.0"
+    GATEWAY_USE_OIDC_PROXY: bool = True  # Set to False to use Basic Auth directly
+
     # CORS - comma-separated list of allowed origins
     CORS_ORIGINS: str = f"https://devops.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
 

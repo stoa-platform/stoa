@@ -2,6 +2,10 @@
 # Playbook: Deploy API to webMethods Gateway
 # Triggered by Kafka event from Control-Plane API
 #
+# Authentication modes:
+#   1. OIDC (recommended): Uses Gateway-Admin-API proxy with Keycloak JWT
+#   2. Basic Auth (fallback): Direct Gateway access with admin credentials
+#
 # Required extra_vars:
 #   - api_name: Name of the API
 #   - openapi_spec: URL to OpenAPI specification
@@ -9,9 +13,14 @@
 # Optional extra_vars:
 #   - api_version: API version (default: 1.0)
 #   - tenant_id: Tenant identifier (default: default)
-#   - gateway_url: Gateway URL (default: internal K8s service)
-#   - gateway_user: Gateway admin username (default: Administrator)
-#   - gateway_password: Gateway admin password (required if not using credential)
+#   - use_oidc: Use OIDC authentication (default: true)
+#   - keycloak_url: Keycloak URL for token (default: internal K8s service)
+#   - client_id: Keycloak client ID (default: awx-automation)
+#   - client_secret: Keycloak client secret (required for OIDC)
+#   - gateway_proxy_url: Gateway Admin API proxy URL (default: internal K8s service)
+#   - gateway_url: Direct Gateway URL for Basic Auth fallback
+#   - gateway_user: Gateway admin username for Basic Auth
+#   - gateway_password: Gateway admin password for Basic Auth
 
 - name: Deploy API to Gateway
   hosts: localhost
@@ -19,7 +28,17 @@
   gather_facts: false
 
   vars:
-    # Gateway connection defaults - can be overridden via extra_vars
+    # Authentication mode
+    _use_oidc: true
+    use_oidc_mode: "{{ use_oidc | default(_use_oidc) | bool }}"
+
+    # OIDC configuration defaults (use external HTTPS URLs for proper SSL)
+    _keycloak_url: "https://auth.apim.cab-i.com"
+    _client_id: "awx-automation"
+    _client_secret: ""
+    _gateway_proxy_url: "https://api.apim.cab-i.com/v1/gateway"
+
+    # Basic Auth fallback defaults
     _gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
     _gateway_user: "Administrator"
     _gateway_password: "manage"
@@ -31,6 +50,10 @@
     _openapi_spec: ""
 
     # Final values (use extra_vars or defaults)
+    kc_url: "{{ keycloak_url | default(_keycloak_url) }}"
+    kc_client_id: "{{ client_id | default(_client_id) }}"
+    kc_client_secret: "{{ client_secret | default(_client_secret) }}"
+    gw_proxy_url: "{{ gateway_proxy_url | default(_gateway_proxy_url) }}"
     gw_url: "{{ gateway_url | default(_gateway_url) }}"
     gw_user: "{{ gateway_user | default(_gateway_user) }}"
     gw_password: "{{ gateway_password | default(_gateway_password) }}"
@@ -42,9 +65,91 @@
   tasks:
     - name: Display deployment info
       debug:
-        msg: "Deploying API '{{ api }}' v{{ version }} for tenant '{{ tenant }}'"
+        msg: |
+          Deploying API '{{ api }}' v{{ version }} for tenant '{{ tenant }}'
+          Authentication mode: {{ 'OIDC (proxy)' if use_oidc_mode else 'Basic Auth (direct)' }}
 
-    - name: Check Gateway health
+    # ========================================
+    # OIDC Authentication Mode
+    # ========================================
+    - name: Get OIDC access token from Keycloak
+      uri:
+        url: "{{ kc_url }}/realms/apim/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: client_credentials
+          client_id: "{{ kc_client_id }}"
+          client_secret: "{{ kc_client_secret }}"
+        status_code: [200]
+        validate_certs: false
+      register: token_response
+      when:
+        - use_oidc_mode
+        - kc_client_secret | length > 0
+
+    - name: Set access token
+      set_fact:
+        access_token: "{{ token_response.json.access_token }}"
+      when:
+        - use_oidc_mode
+        - token_response is defined
+        - token_response.json is defined
+
+    - name: Check Gateway health via OIDC proxy
+      uri:
+        url: "{{ gw_proxy_url }}/health"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: health_check_oidc
+      ignore_errors: true
+      when:
+        - use_oidc_mode
+        - access_token is defined
+
+    - name: Import API via OIDC proxy
+      uri:
+        url: "{{ gw_proxy_url }}/apis"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          apiName: "{{ api }}"
+          apiVersion: "{{ version }}"
+          type: "openapi"
+          url: "{{ spec_url }}"
+        status_code: [200, 201, 400]
+        validate_certs: false
+      register: api_import_oidc
+      when:
+        - use_oidc_mode
+        - access_token is defined
+        - spec_url | length > 0
+
+    - name: Activate API via OIDC proxy
+      uri:
+        url: "{{ gw_proxy_url }}/apis/{{ api_import_oidc.json.apiResponse.api.id }}/activate"
+        method: PUT
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+        status_code: [200, 204]
+        validate_certs: false
+      when:
+        - use_oidc_mode
+        - access_token is defined
+        - api_import_oidc is defined
+        - api_import_oidc.json.apiResponse.api.id is defined
+      register: api_activate_oidc
+
+    # ========================================
+    # Basic Auth Fallback Mode
+    # ========================================
+    - name: Check Gateway health via Basic Auth
       uri:
         url: "{{ gw_url }}/rest/apigateway/health"
         method: GET
@@ -53,15 +158,18 @@
         force_basic_auth: true
         validate_certs: false
         status_code: [200, 401]
-      register: health_check
+      register: health_check_basic
       ignore_errors: true
+      when: not use_oidc_mode or (access_token is not defined)
 
     - name: Fail if Gateway unreachable
       fail:
-        msg: "Gateway is not reachable at {{ gw_url }}"
-      when: health_check.failed | default(false)
+        msg: "Gateway is not reachable"
+      when:
+        - not use_oidc_mode or (access_token is not defined)
+        - health_check_basic.failed | default(false)
 
-    - name: Import API from OpenAPI spec
+    - name: Import API via Basic Auth
       uri:
         url: "{{ gw_url }}/rest/apigateway/apis"
         method: POST
@@ -78,17 +186,14 @@
           type: "openapi"
           url: "{{ spec_url }}"
         status_code: [200, 201, 400]
-      register: api_import
-      when: spec_url | length > 0
+      register: api_import_basic
+      when:
+        - not use_oidc_mode or (access_token is not defined)
+        - spec_url | length > 0
 
-    - name: Display API import result
-      debug:
-        var: api_import
-      when: spec_url | length > 0
-
-    - name: Activate API
+    - name: Activate API via Basic Auth
       uri:
-        url: "{{ gw_url }}/rest/apigateway/apis/{{ api_import.json.apiResponse.api.id }}/activate"
+        url: "{{ gw_url }}/rest/apigateway/apis/{{ api_import_basic.json.apiResponse.api.id }}/activate"
         method: PUT
         user: "{{ gw_user }}"
         password: "{{ gw_password }}"
@@ -96,11 +201,24 @@
         validate_certs: false
         status_code: [200, 204]
       when:
-        - spec_url | length > 0
-        - api_import.json.apiResponse.api.id is defined
-      register: api_activate
+        - not use_oidc_mode or (access_token is not defined)
+        - api_import_basic is defined
+        - api_import_basic.json.apiResponse.api.id is defined
+      register: api_activate_basic
 
-    - name: Send success notification to Kafka
+    # ========================================
+    # Common tasks
+    # ========================================
+    - name: Set API import result
+      set_fact:
+        api_import: "{{ api_import_oidc if (api_import_oidc is defined and api_import_oidc.json is defined) else api_import_basic }}"
+
+    - name: Display API import result
+      debug:
+        var: api_import
+      when: api_import is defined
+
+    - name: Send success notification to Control-Plane API
       uri:
         url: "http://control-plane-api.apim-system.svc.cluster.local:8000/v1/events/deployment-result"
         method: POST
@@ -110,10 +228,13 @@
         body:
           api_name: "{{ api }}"
           api_version: "{{ version }}"
+          api_id: "{{ api_import.json.apiResponse.api.id | default('') }}"
           tenant_id: "{{ tenant }}"
           status: "success"
-          message: "API deployed successfully"
+          action: "deploy"
+          message: "API deployed successfully via {{ 'OIDC proxy' if (use_oidc_mode and access_token is defined) else 'Basic Auth' }}"
         status_code: [200, 201, 202]
+        validate_certs: false
       ignore_errors: true
 
     - name: Deployment summary
@@ -124,5 +245,7 @@
           ----------------------------------------
           API: {{ api }} v{{ version }}
           Tenant: {{ tenant }}
+          API ID: {{ api_import.json.apiResponse.api.id | default('N/A') }}
+          Auth Mode: {{ 'OIDC (proxy)' if (use_oidc_mode and access_token is defined) else 'Basic Auth (direct)' }}
           Status: SUCCESS
           ========================================

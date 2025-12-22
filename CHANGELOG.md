@@ -44,6 +44,13 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - `events.py`: Endpoint `POST /v1/events/deployment-result` pour callbacks AWX
   - Test validé: PetstoreAPI v3.0.0 déployé et activé via pipeline
 
+- **Playbooks OIDC** - Migration vers authentification OIDC via proxy Gateway-Admin-API
+  - Tous playbooks supportent 2 modes: OIDC (recommandé) et Basic Auth (fallback)
+  - URLs HTTPS externes: `https://auth.apim.cab-i.com`, `https://api.apim.cab-i.com/v1/gateway`
+  - Client service account `awx-automation` pour AWX
+  - Playbooks mis à jour: `deploy-api.yaml`, `rollback.yaml`, `sync-gateway.yaml`, `promote-portal.yaml`
+  - `bootstrap-platform.yaml`: Création automatique du client Keycloak `awx-automation`
+
 ### Ajouté (Phase 2.5) - Validation E2E - COMPLÉTÉ ✅
 
 - **Gateway OIDC Configuration** - Sécurisation APIs via Keycloak

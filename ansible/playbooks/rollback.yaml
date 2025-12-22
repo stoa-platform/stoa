@@ -1,59 +1,157 @@
 ---
 # Playbook: Rollback API deployment
 # Reverts to previous version or deactivates API
+#
+# Authentication modes:
+#   1. OIDC (recommended): Uses Gateway-Admin-API proxy with Keycloak JWT
+#   2. Basic Auth (fallback): Direct Gateway access with admin credentials
 
 - name: Rollback API Deployment
   hosts: localhost
   connection: local
   gather_facts: false
 
-  vars_files:
-    - ../vars/secrets.yaml
-
   vars:
-    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
-    api_id: "{{ api_id | default('') }}"
-    api_name: "{{ api_name | default('') }}"
-    tenant_id: "{{ tenant_id | default('default') }}"
-    rollback_version: "{{ rollback_version | default('') }}"
-    action: "{{ action | default('deactivate') }}"  # deactivate, delete, restore
+    # Authentication mode
+    _use_oidc: true
+    use_oidc_mode: "{{ use_oidc | default(_use_oidc) | bool }}"
+
+    # OIDC configuration defaults (use external HTTPS URLs for proper SSL)
+    _keycloak_url: "https://auth.apim.cab-i.com"
+    _client_id: "awx-automation"
+    _client_secret: ""
+    _gateway_proxy_url: "https://api.apim.cab-i.com/v1/gateway"
+
+    # Basic Auth fallback defaults
+    _gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    _gateway_user: "Administrator"
+    _gateway_password: "manage"
+
+    # API configuration defaults
+    _api_id: ""
+    _api_name: ""
+    _tenant_id: "default"
+    _action: "deactivate"
+
+    # Final values
+    kc_url: "{{ keycloak_url | default(_keycloak_url) }}"
+    kc_client_id: "{{ client_id | default(_client_id) }}"
+    kc_client_secret: "{{ client_secret | default(_client_secret) }}"
+    gw_proxy_url: "{{ gateway_proxy_url | default(_gateway_proxy_url) }}"
+    gw_url: "{{ gateway_url | default(_gateway_url) }}"
+    gw_user: "{{ gateway_user | default(_gateway_user) }}"
+    gw_password: "{{ gateway_password | default(_gateway_password) }}"
+    api_id_val: "{{ api_id | default(_api_id) }}"
+    api_name_val: "{{ api_name | default(_api_name) }}"
+    tenant: "{{ tenant_id | default(_tenant_id) }}"
+    rollback_action: "{{ action | default(_action) }}"
 
   tasks:
     - name: Display rollback info
       debug:
-        msg: "Rolling back API '{{ api_name }}' ({{ api_id }}) - Action: {{ action }}"
+        msg: |
+          Rolling back API '{{ api_name_val }}' ({{ api_id_val }})
+          Action: {{ rollback_action }}
+          Authentication mode: {{ 'OIDC (proxy)' if use_oidc_mode else 'Basic Auth (direct)' }}
 
-    - name: Deactivate API
+    # ========================================
+    # OIDC Authentication Mode
+    # ========================================
+    - name: Get OIDC access token from Keycloak
       uri:
-        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}/deactivate"
+        url: "{{ kc_url }}/realms/apim/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: client_credentials
+          client_id: "{{ kc_client_id }}"
+          client_secret: "{{ kc_client_secret }}"
+        status_code: [200]
+        validate_certs: false
+      register: token_response
+      when:
+        - use_oidc_mode
+        - kc_client_secret | length > 0
+
+    - name: Set access token
+      set_fact:
+        access_token: "{{ token_response.json.access_token }}"
+      when:
+        - use_oidc_mode
+        - token_response is defined
+        - token_response.json is defined
+
+    - name: Deactivate API via OIDC proxy
+      uri:
+        url: "{{ gw_proxy_url }}/apis/{{ api_id_val }}/deactivate"
         method: PUT
-        user: "{{ gateway_user }}"
-        password: "{{ gateway_password }}"
-        force_basic_auth: true
-        validate_certs: false
+        headers:
+          Authorization: "Bearer {{ access_token }}"
         status_code: [200, 204]
-      register: deactivate_result
+        validate_certs: false
+      register: deactivate_result_oidc
       when:
-        - api_id | length > 0
-        - action == 'deactivate'
+        - use_oidc_mode
+        - access_token is defined
+        - api_id_val | length > 0
+        - rollback_action == 'deactivate'
       ignore_errors: true
 
-    - name: Delete API
+    - name: Delete API via OIDC proxy
       uri:
-        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}"
+        url: "{{ gw_proxy_url }}/apis/{{ api_id_val }}"
         method: DELETE
-        user: "{{ gateway_user }}"
-        password: "{{ gateway_password }}"
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+        status_code: [200, 204]
+        validate_certs: false
+      register: delete_result_oidc
+      when:
+        - use_oidc_mode
+        - access_token is defined
+        - api_id_val | length > 0
+        - rollback_action == 'delete'
+      ignore_errors: true
+
+    # ========================================
+    # Basic Auth Fallback Mode
+    # ========================================
+    - name: Deactivate API via Basic Auth
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/apis/{{ api_id_val }}/deactivate"
+        method: PUT
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
         force_basic_auth: true
         validate_certs: false
         status_code: [200, 204]
-      register: delete_result
+      register: deactivate_result_basic
       when:
-        - api_id | length > 0
-        - action == 'delete'
+        - not use_oidc_mode or (access_token is not defined)
+        - api_id_val | length > 0
+        - rollback_action == 'deactivate'
       ignore_errors: true
 
-    - name: Send rollback notification to Kafka
+    - name: Delete API via Basic Auth
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/apis/{{ api_id_val }}"
+        method: DELETE
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 204]
+      register: delete_result_basic
+      when:
+        - not use_oidc_mode or (access_token is not defined)
+        - api_id_val | length > 0
+        - rollback_action == 'delete'
+      ignore_errors: true
+
+    # ========================================
+    # Common tasks
+    # ========================================
+    - name: Send rollback notification to Control-Plane API
       uri:
         url: "http://control-plane-api.apim-system.svc.cluster.local:8000/v1/events/deployment-result"
         method: POST
@@ -61,13 +159,14 @@
           Content-Type: "application/json"
         body_format: json
         body:
-          api_name: "{{ api_name }}"
-          api_id: "{{ api_id }}"
-          tenant_id: "{{ tenant_id }}"
+          api_name: "{{ api_name_val }}"
+          api_id: "{{ api_id_val }}"
+          tenant_id: "{{ tenant }}"
           status: "rollback"
-          action: "{{ action }}"
-          message: "API rolled back successfully"
+          action: "{{ rollback_action }}"
+          message: "API rolled back successfully via {{ 'OIDC proxy' if (use_oidc_mode and access_token is defined) else 'Basic Auth' }}"
         status_code: [200, 201, 202]
+        validate_certs: false
       ignore_errors: true
 
     - name: Rollback summary
@@ -76,9 +175,10 @@
           ========================================
           Rollback Complete
           ----------------------------------------
-          API: {{ api_name }}
-          API ID: {{ api_id }}
-          Tenant: {{ tenant_id }}
-          Action: {{ action }}
+          API: {{ api_name_val }}
+          API ID: {{ api_id_val }}
+          Tenant: {{ tenant }}
+          Action: {{ rollback_action }}
+          Auth Mode: {{ 'OIDC (proxy)' if (use_oidc_mode and access_token is defined) else 'Basic Auth (direct)' }}
           Status: SUCCESS
           ========================================

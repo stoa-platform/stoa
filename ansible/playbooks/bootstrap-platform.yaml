@@ -515,7 +515,176 @@
       ignore_errors: true
 
     # =========================================================================
-    # STEP 8: Activate APIs
+    # STEP 8: Create AWX Automation Client in Keycloak
+    # =========================================================================
+    # This client is used by AWX playbooks to authenticate via OIDC
+    # when calling the Gateway-Admin-API proxy
+
+    - name: Get Keycloak admin token
+      uri:
+        url: "{{ keycloak_url }}/realms/master/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          client_id: admin-cli
+          username: "{{ keycloak_admin_user | default('admin') }}"
+          password: "{{ keycloak_admin_password }}"
+        status_code: [200]
+        validate_certs: false
+      register: keycloak_admin_token
+      ignore_errors: true
+
+    - name: Check if awx-automation client exists
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId=awx-automation"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: existing_awx_client
+      when: keycloak_admin_token is defined and keycloak_admin_token.json is defined
+
+    - name: Set awx client exists fact
+      set_fact:
+        awx_client_exists: "{{ existing_awx_client.json | length > 0 }}"
+      when: existing_awx_client is defined and existing_awx_client.json is defined
+
+    - name: Generate client secret for awx-automation
+      set_fact:
+        awx_client_secret: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+      when: not (awx_client_exists | default(false))
+
+    - name: Create awx-automation client in Keycloak
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          clientId: "awx-automation"
+          name: "AWX Automation Service"
+          description: "Service account for AWX/Ansible playbooks to access Gateway Admin API via OIDC"
+          enabled: true
+          clientAuthenticatorType: "client-secret"
+          secret: "{{ awx_client_secret }}"
+          serviceAccountsEnabled: true
+          standardFlowEnabled: false
+          implicitFlowEnabled: false
+          directAccessGrantsEnabled: false
+          publicClient: false
+          protocol: "openid-connect"
+          attributes:
+            access.token.lifespan: "3600"
+        status_code: [201, 409]
+        validate_certs: false
+      register: awx_client_create
+      when:
+        - keycloak_admin_token is defined
+        - keycloak_admin_token.json is defined
+        - not (awx_client_exists | default(false))
+      ignore_errors: true
+
+    - name: Get awx-automation client ID
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId=awx-automation"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: awx_client_info
+      when: keycloak_admin_token is defined and keycloak_admin_token.json is defined
+
+    - name: Extract awx-automation client UUID
+      set_fact:
+        awx_client_uuid: "{{ awx_client_info.json[0].id }}"
+      when: awx_client_info is defined and awx_client_info.json | length > 0
+
+    - name: Get client secret (if client already existed)
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients/{{ awx_client_uuid }}/client-secret"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: awx_client_secret_info
+      when:
+        - awx_client_uuid is defined
+        - awx_client_exists | default(false)
+
+    - name: Set client secret from existing client
+      set_fact:
+        awx_client_secret: "{{ awx_client_secret_info.json.value }}"
+      when: awx_client_secret_info is defined and awx_client_secret_info.json is defined
+
+    - name: Assign realm-admin role to awx-automation service account
+      block:
+        - name: Get service account user
+          uri:
+            url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients/{{ awx_client_uuid }}/service-account-user"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+            validate_certs: false
+            status_code: [200]
+          register: service_account_user
+
+        - name: Get realm-management client
+          uri:
+            url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId=realm-management"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+            validate_certs: false
+          register: realm_mgmt_client
+
+        - name: Get realm-admin role
+          uri:
+            url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients/{{ realm_mgmt_client.json[0].id }}/roles/realm-admin"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+            validate_certs: false
+          register: realm_admin_role
+          ignore_errors: true
+
+        - name: Assign realm-admin role to service account
+          uri:
+            url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/users/{{ service_account_user.json.id }}/role-mappings/clients/{{ realm_mgmt_client.json[0].id }}"
+            method: POST
+            headers:
+              Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+              Content-Type: "application/json"
+            body_format: json
+            body:
+              - "{{ realm_admin_role.json }}"
+            validate_certs: false
+            status_code: [204, 409]
+          when: realm_admin_role is defined and realm_admin_role.json is defined
+          ignore_errors: true
+      when: awx_client_uuid is defined
+
+    - name: Display AWX client info
+      debug:
+        msg: |
+          AWX Automation Client:
+            Client ID: awx-automation
+            Client Secret: {{ awx_client_secret | default('N/A') }}
+            UUID: {{ awx_client_uuid | default('N/A') }}
+
+          IMPORTANT: Save this secret in AWX credentials!
+          Configure AWX job templates with:
+            - client_id: awx-automation
+            - client_secret: {{ awx_client_secret | default('(see Keycloak)') }}
+      when: awx_client_secret is defined
+
+    # =========================================================================
+    # STEP 9: Activate APIs
     # =========================================================================
     - name: Activate Control-Plane API
       uri:
@@ -540,7 +709,7 @@
       when: gwa_api_id is defined
 
     # =========================================================================
-    # STEP 9: Summary
+    # STEP 10: Summary
     # =========================================================================
     - name: Bootstrap summary
       debug:
@@ -558,7 +727,10 @@
 
           OAuth Strategy: {{ oauth_strategy_id | default('N/A') }}
 
-          Application: control-plane-ui
+          Applications:
+            - control-plane-ui (UI Application)
+            - awx-automation (Service Account)
+              Client Secret: {{ awx_client_secret | default('(configure in AWX)') }}
 
           Scopes Created:
             - {{ auth_server_name }}:{{ platform_tenant_id }}:control-plane:2.0:admin
@@ -568,5 +740,6 @@
           NEXT STEPS:
           1. Test login via https://devops.apim.cab-i.com
           2. Verify APIs in Gateway UI
-          3. All subsequent API registrations will use OIDC
+          3. Configure AWX with awx-automation client secret
+          4. All subsequent API registrations will use OIDC
           ========================================

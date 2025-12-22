@@ -12,7 +12,7 @@ Benefits:
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
 from ..auth import get_current_user, User, Permission, require_permission
@@ -50,6 +50,27 @@ class GatewayScopeResponse(BaseModel):
     scopeName: str
     scopeDescription: Optional[str] = None
     audience: Optional[str] = None
+
+
+class ImportAPIRequest(BaseModel):
+    """Request model for importing an API from OpenAPI spec.
+
+    Uses Gateway-native field names for compatibility with existing playbooks.
+    """
+    apiName: str
+    apiVersion: str
+    url: Optional[str] = None  # URL to fetch OpenAPI spec from
+    apiDefinition: Optional[Dict[str, Any]] = None  # Inline OpenAPI spec as JSON object
+    type: str = "openapi"  # API type: openapi, swagger, raml, wsdl
+
+
+class ImportAPIResponse(BaseModel):
+    """Response model for imported API."""
+    success: bool
+    api_id: Optional[str] = None
+    api_name: str
+    api_version: str
+    message: str = ""
 
 
 class OIDCConfigRequest(BaseModel):
@@ -110,6 +131,58 @@ async def list_gateway_apis(
         ]
     except Exception as e:
         logger.error(f"Failed to list Gateway APIs: {e}")
+        raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
+
+
+@router.post("/apis", response_model=ImportAPIResponse)
+@require_permission(Permission.APIS_CREATE)
+async def import_gateway_api(
+    request: ImportAPIRequest,
+    user: User = Depends(get_current_user),
+    token: str = Depends(get_auth_token)
+):
+    """Import an API from OpenAPI specification into the Gateway.
+
+    Requires: cpi-admin or devops role with create permission
+
+    Args:
+        apiName: Name for the API
+        apiVersion: Version of the API
+        url: URL to fetch OpenAPI spec from
+        apiDefinition: OpenAPI spec content as string (alternative to url)
+        type: API type (openapi, swagger, raml, wsdl)
+    """
+    try:
+        if not request.url and not request.apiDefinition:
+            raise HTTPException(
+                status_code=400,
+                detail="Either url or apiDefinition must be provided"
+            )
+
+        result = await gateway_service.import_api(
+            api_name=request.apiName,
+            api_version=request.apiVersion,
+            openapi_url=request.url,
+            openapi_spec=request.apiDefinition,
+            api_type=request.type,
+            auth_token=token,
+        )
+
+        api_id = result.get("apiResponse", {}).get("api", {}).get("id", "")
+        logger.info(f"User {user.username} imported API {request.apiName} v{request.apiVersion} (ID: {api_id})")
+
+        return ImportAPIResponse(
+            success=True,
+            api_id=api_id,
+            api_name=request.apiName,
+            api_version=request.apiVersion,
+            message=f"API {request.apiName} v{request.apiVersion} imported successfully",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to import API {request.apiName}: {e}")
         raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
 
 

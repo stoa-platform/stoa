@@ -307,6 +307,261 @@
         msg: "Gateway-Admin-API ID: {{ gwa_api_id | default('FAILED') }}"
 
     # =========================================================================
+    # STEP 4b: Configure Gateway-Admin-API Routing with Outbound Basic Auth
+    # =========================================================================
+    # Gateway-Admin-API proxies to the internal Gateway Admin API
+    # It requires Basic Auth credentials in outbound requests
+
+    - name: Check if GatewayAdminInternal alias exists
+      set_fact:
+        gwa_internal_alias_exists: "{{ existing_aliases.json.alias | default([]) | selectattr('name', 'equalto', 'GatewayAdminInternal') | list | length > 0 }}"
+
+    - name: Get existing GatewayAdminInternal alias ID
+      set_fact:
+        gwa_internal_alias_id: "{{ (existing_aliases.json.alias | selectattr('name', 'equalto', 'GatewayAdminInternal') | list | first).id }}"
+      when: gwa_internal_alias_exists
+
+    - name: Create GatewayAdminInternal endpoint alias
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/alias"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "GatewayAdminInternal"
+          description: "Internal Gateway Admin API endpoint"
+          type: "endpoint"
+          endPointURI: "http://localhost:5555/rest/apigateway"
+          connectionTimeout: 30
+          readTimeout: 60
+          suspendDurationOnFailure: 0
+          optimizationTechnique: "None"
+          passSecurityHeaders: false
+        status_code: [200, 201]
+      register: gwa_internal_alias_create
+      when: not gwa_internal_alias_exists
+
+    - name: Set GatewayAdminInternal alias ID
+      set_fact:
+        gwa_internal_alias_id: "{{ gwa_internal_alias_create.json.alias.id }}"
+      when: not gwa_internal_alias_exists and gwa_internal_alias_create is defined
+
+    - name: Check if GatewayAdminInternalAuth alias exists
+      set_fact:
+        gwa_auth_alias_exists: "{{ existing_aliases.json.alias | default([]) | selectattr('name', 'equalto', 'GatewayAdminInternalAuth') | list | length > 0 }}"
+
+    - name: Get existing GatewayAdminInternalAuth alias ID
+      set_fact:
+        gwa_auth_alias_id: "{{ (existing_aliases.json.alias | selectattr('name', 'equalto', 'GatewayAdminInternalAuth') | list | first).id }}"
+      when: gwa_auth_alias_exists
+
+    - name: Create GatewayAdminInternalAuth (httpTransportSecurityAlias)
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/alias"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "GatewayAdminInternalAuth"
+          description: "HTTP Basic Auth for Gateway Admin API internal calls"
+          type: "httpTransportSecurityAlias"
+          authType: "HTTP_BASIC"
+          authMode: "NEW"
+          httpAuthCredentials:
+            userName: "{{ gateway_user }}"
+            # Password must be base64 encoded
+            password: "{{ gateway_password | b64encode }}"
+        status_code: [200, 201]
+      register: gwa_auth_alias_create
+      when: not gwa_auth_alias_exists
+
+    - name: Set GatewayAdminInternalAuth alias ID
+      set_fact:
+        gwa_auth_alias_id: "{{ gwa_auth_alias_create.json.alias.id }}"
+      when: not gwa_auth_alias_exists and gwa_auth_alias_create is defined
+
+    - name: Display Gateway-Admin aliases status
+      debug:
+        msg: |
+          Gateway-Admin-API Routing Aliases:
+            - GatewayAdminInternal (endpoint): {{ gwa_internal_alias_id | default('N/A') }}
+            - GatewayAdminInternalAuth (auth): {{ gwa_auth_alias_id | default('N/A') }}
+
+    # Create routing policy action for Gateway-Admin-API
+    - name: Create Straight Through Routing policy action
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policyActions"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policyAction:
+            names:
+              - value: "Straight Through Routing"
+                locale: "en"
+            templateKey: "straightThroughRouting"
+            parameters:
+              - templateKey: "endpointUri"
+                values:
+                  - "${GatewayAdminInternal}/${sys:resource_path}"
+              - templateKey: "method"
+                values:
+                  - "CUSTOM"
+            active: true
+        status_code: [200, 201]
+      register: gwa_routing_action
+      when: gwa_api_id is defined
+
+    - name: Set routing policy action ID
+      set_fact:
+        gwa_routing_action_id: "{{ gwa_routing_action.json.policyAction.id }}"
+      when: gwa_routing_action is defined and gwa_routing_action.json is defined
+
+    # Create outbound auth policy action
+    - name: Create Outbound Auth Transport policy action
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policyActions"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policyAction:
+            names:
+              - value: "Outbound Auth - Transport"
+                locale: "en"
+            templateKey: "outboundTransportAuthentication"
+            parameters:
+              - templateKey: "transportSecurity"
+                parameters:
+                  - templateKey: "authType"
+                    values:
+                      - "ALIAS"
+                  - templateKey: "authMode"
+                    values:
+                      - "NEW"
+                  - templateKey: "alias"
+                    values:
+                      - "${GatewayAdminInternalAuth}"
+            active: true
+        status_code: [200, 201]
+      register: gwa_outbound_auth_action
+      when: gwa_api_id is defined
+
+    - name: Set outbound auth policy action ID
+      set_fact:
+        gwa_outbound_auth_action_id: "{{ gwa_outbound_auth_action.json.policyAction.id }}"
+      when: gwa_outbound_auth_action is defined and gwa_outbound_auth_action.json is defined
+
+    - name: Display Gateway-Admin policy actions
+      debug:
+        msg: |
+          Gateway-Admin-API Policy Actions:
+            - Routing: {{ gwa_routing_action_id | default('N/A') }}
+            - Outbound Auth: {{ gwa_outbound_auth_action_id | default('N/A') }}
+
+    # Get Gateway-Admin-API policy to update it
+    - name: Get Gateway-Admin-API details
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ gwa_api_id }}"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: gwa_api_details
+      when: gwa_api_id is defined
+
+    - name: Extract Gateway-Admin-API policy ID
+      set_fact:
+        gwa_policy_id: "{{ gwa_api_details.json.apiResponse.api.policies[0] }}"
+      when: gwa_api_details is defined and gwa_api_details.json.apiResponse.api.policies | length > 0
+
+    - name: Get Gateway-Admin-API policy details
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policies/{{ gwa_policy_id }}"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: gwa_policy_details
+      when: gwa_policy_id is defined
+
+    # Update Gateway-Admin-API policy to include routing and outbound auth
+    - name: Update Gateway-Admin-API policy with routing and outbound auth
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policies/{{ gwa_policy_id }}"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policy:
+            id: "{{ gwa_policy_id }}"
+            names: "{{ gwa_policy_details.json.policy.names }}"
+            descriptions: "{{ gwa_policy_details.json.policy.descriptions }}"
+            scope: "{{ gwa_policy_details.json.policy.scope }}"
+            policyEnforcements:
+              - enforcements:
+                  - enforcementObjectId: "{{ gwa_routing_action_id }}"
+                    order: "0"
+                  - enforcementObjectId: "{{ gwa_outbound_auth_action_id }}"
+                    order: "1"
+                stageKey: "routing"
+              - enforcements: "{{ (gwa_policy_details.json.policy.policyEnforcements | selectattr('stageKey', 'equalto', 'IAM') | list | first).enforcements | default([]) }}"
+                stageKey: "IAM"
+              - enforcements: "{{ (gwa_policy_details.json.policy.policyEnforcements | selectattr('stageKey', 'equalto', 'transport') | list | first).enforcements | default([]) }}"
+                stageKey: "transport"
+            policyScope: "SERVICE"
+            systemPolicy: false
+            global: false
+            active: true
+        status_code: [200]
+      when:
+        - gwa_policy_id is defined
+        - gwa_routing_action_id is defined
+        - gwa_outbound_auth_action_id is defined
+
+    - name: Display Gateway-Admin-API routing configuration complete
+      debug:
+        msg: "Gateway-Admin-API configured with outbound Basic Auth to internal Gateway Admin API"
+
+    # =========================================================================
     # STEP 5: Create OAuth Strategy
     # =========================================================================
     # NOTE: Strategy body must NOT be wrapped in "strategy" object
@@ -400,7 +655,7 @@
             - "admin@cab-i.com"
           identifiers:
             - key: "openIdClaims"
-              name: "azp"
+              name: "client_id"
               value:
                 - "control-plane-ui"
         status_code: [200, 201]
@@ -437,7 +692,7 @@
             - "{{ oauth_strategy_id }}"
           identifiers:
             - key: "openIdClaims"
-              name: "azp"
+              name: "client_id"
               value:
                 - "control-plane-ui"
         status_code: [200, 201]
@@ -724,6 +979,7 @@
           APIs Registered:
             - Control-Plane-API: {{ cpi_api_id | default('FAILED') }}
             - Gateway-Admin-API: {{ gwa_api_id | default('FAILED') }}
+              Routing: ${GatewayAdminInternal} with Basic Auth outbound
 
           OAuth Strategy: {{ oauth_strategy_id | default('N/A') }}
 

@@ -187,6 +187,48 @@ class GatewayAdminService:
         logger.info(f"Deleted API {api_id}")
         return True
 
+    async def import_api(
+        self,
+        api_name: str,
+        api_version: str,
+        openapi_url: Optional[str] = None,
+        openapi_spec: Optional[Dict[str, Any]] = None,
+        api_type: str = "openapi",
+        auth_token: Optional[str] = None
+    ) -> dict:
+        """Import an API from OpenAPI specification.
+
+        Args:
+            api_name: Name for the API
+            api_version: Version of the API
+            openapi_url: URL to fetch OpenAPI spec from (mutually exclusive with openapi_spec)
+            openapi_spec: OpenAPI spec as dict object (mutually exclusive with openapi_url)
+            api_type: API type (openapi, swagger, raml, wsdl)
+            auth_token: JWT token for OIDC proxy mode
+
+        Returns:
+            Created API object with id, apiName, apiVersion, etc.
+        """
+        if not openapi_url and not openapi_spec:
+            raise ValueError("Either openapi_url or openapi_spec must be provided")
+
+        payload = {
+            "apiName": api_name,
+            "apiVersion": api_version,
+            "type": api_type,
+        }
+
+        if openapi_url:
+            payload["url"] = openapi_url
+        elif openapi_spec:
+            # Gateway expects apiDefinition as a JSON object (not string)
+            payload["apiDefinition"] = openapi_spec
+
+        result = await self._request("POST", "/apis", auth_token=auth_token, json=payload)
+        api_id = result.get("apiResponse", {}).get("api", {}).get("id", "")
+        logger.info(f"Imported API {api_name} v{api_version} with ID {api_id}")
+        return result
+
     # =========================================================================
     # Application Operations
     # =========================================================================

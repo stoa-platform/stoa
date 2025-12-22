@@ -110,7 +110,21 @@
         - use_oidc_mode
         - access_token is defined
 
-    - name: Import API via OIDC proxy
+    # Fetch OpenAPI spec first (Gateway URL import often fails due to network restrictions)
+    - name: Fetch OpenAPI specification
+      uri:
+        url: "{{ spec_url }}"
+        method: GET
+        return_content: yes
+        validate_certs: false
+        status_code: [200]
+      register: openapi_spec_content
+      when:
+        - use_oidc_mode
+        - access_token is defined
+        - spec_url | length > 0
+
+    - name: Import API via OIDC proxy (with inline spec)
       uri:
         url: "{{ gw_proxy_url }}/apis"
         method: POST
@@ -122,14 +136,15 @@
           apiName: "{{ api }}"
           apiVersion: "{{ version }}"
           type: "openapi"
-          url: "{{ spec_url }}"
+          apiDefinition: "{{ openapi_spec_content.json }}"
         status_code: [200, 201, 400]
         validate_certs: false
       register: api_import_oidc
       when:
         - use_oidc_mode
         - access_token is defined
-        - spec_url | length > 0
+        - openapi_spec_content is defined
+        - openapi_spec_content.json is defined
 
     - name: Activate API via OIDC proxy
       uri:
@@ -169,7 +184,20 @@
         - not use_oidc_mode or (access_token is not defined)
         - health_check_basic.failed | default(false)
 
-    - name: Import API via Basic Auth
+    # Fetch OpenAPI spec first for Basic Auth mode
+    - name: Fetch OpenAPI specification (Basic Auth mode)
+      uri:
+        url: "{{ spec_url }}"
+        method: GET
+        return_content: yes
+        validate_certs: false
+        status_code: [200]
+      register: openapi_spec_content_basic
+      when:
+        - not use_oidc_mode or (access_token is not defined)
+        - spec_url | length > 0
+
+    - name: Import API via Basic Auth (with inline spec)
       uri:
         url: "{{ gw_url }}/rest/apigateway/apis"
         method: POST
@@ -184,12 +212,13 @@
           apiName: "{{ api }}"
           apiVersion: "{{ version }}"
           type: "openapi"
-          url: "{{ spec_url }}"
+          apiDefinition: "{{ openapi_spec_content_basic.json }}"
         status_code: [200, 201, 400]
       register: api_import_basic
       when:
         - not use_oidc_mode or (access_token is not defined)
-        - spec_url | length > 0
+        - openapi_spec_content_basic is defined
+        - openapi_spec_content_basic.json is defined
 
     - name: Activate API via Basic Auth
       uri:

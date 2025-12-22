@@ -7,11 +7,12 @@
   connection: local
   gather_facts: false
 
+  vars_files:
+    - ../vars/secrets.yaml
+
   vars:
     gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
     portal_url: "http://devportal.apim-system.svc.cluster.local:8083"
-    gateway_user: "Administrator"
-    gateway_password: "{{ lookup('env', 'GATEWAY_PASSWORD') | default('manage', true) }}"
     api_id: "{{ api_id | default('') }}"
     api_name: "{{ api_name | default('') }}"
     tenant_id: "{{ tenant_id | default('default') }}"

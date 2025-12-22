@@ -22,10 +22,11 @@
   connection: local
   gather_facts: false
 
+  vars_files:
+    - ../vars/secrets.yaml
+
   vars:
     gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
-    gateway_user: "Administrator"
-    gateway_password: "{{ lookup('env', 'GATEWAY_PASSWORD') | default('manage', true) }}"
     keycloak_url: "https://auth.apim.cab-i.com"
     keycloak_realm: "apim"
     tenant_id: "{{ tenant_id | default('default') }}"

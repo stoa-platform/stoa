@@ -12,19 +12,22 @@
 #
 # Optional variables:
 #   - gateway_url: Gateway admin URL (default: http://apigateway.apim-system.svc.cluster.local:5555)
-#   - gateway_user: Gateway admin user (default: Administrator)
-#   - gateway_password: Gateway admin password (from env or default: manage)
 #   - auth_server_name: Name for the auth server alias (default: KeycloakOIDC)
+#
+# Secrets loaded from ../vars/secrets.yaml (environment variables required):
+#   - GATEWAY_ADMIN_USER: Gateway admin username
+#   - GATEWAY_PASSWORD: Gateway admin password (mandatory)
 
 - name: Configure OIDC Authentication in webMethods Gateway
   hosts: localhost
   connection: local
   gather_facts: false
 
+  vars_files:
+    - ../vars/secrets.yaml
+
   vars:
     gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
-    gateway_user: "Administrator"
-    gateway_password: "{{ lookup('env', 'GATEWAY_PASSWORD') | default('manage', true) }}"
     keycloak_url: "https://auth.apim.cab-i.com"
     keycloak_realm: "apim"
     client_id: "{{ client_id | default('control-plane-ui') }}"

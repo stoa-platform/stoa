@@ -15,10 +15,11 @@
   connection: local
   gather_facts: false
 
+  vars_files:
+    - ../vars/secrets.yaml
+
   vars:
     keycloak_url: "http://keycloak.apim-system.svc.cluster.local:8080"
-    keycloak_admin_user: "{{ lookup('env', 'KEYCLOAK_ADMIN_USER') | default('admin', true) }}"
-    keycloak_admin_password: "{{ lookup('env', 'KEYCLOAK_ADMIN_PASSWORD') | default('admin', true) }}"
     keycloak_realm: "apim"
     tenant_id: "{{ tenant_id | default('default') }}"
     tenant_name: "{{ tenant_name | default(tenant_id) }}"

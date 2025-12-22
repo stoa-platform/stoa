@@ -93,9 +93,7 @@ variable "opensearch_ebs_volume_size" {
   default     = 20
 }
 
-variable "opensearch_master_password" {
-  description = "OpenSearch master user password"
-  type        = string
-  sensitive   = true
-  default     = "ApimOpenSearch2024!"
-}
+# NOTE: Sensitive passwords are now managed via AWS Secrets Manager
+# See terraform/modules/secrets for the secrets module
+# The opensearch_master_password is auto-generated and stored in AWS Secrets Manager
+# To retrieve: aws secretsmanager get-secret-value --secret-id apim/dev/opensearch-master

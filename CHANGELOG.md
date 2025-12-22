@@ -40,12 +40,19 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - API: Control-Plane configurée pour Gateway OIDC
 
 - **Playbooks Ansible** - Automation complète
+  - `bootstrap-platform.yaml` - **Initialisation plateforme** (KeycloakOIDC + APIs bootstrap)
   - `provision-tenant.yaml` - Crée groupes Keycloak, users, namespaces K8s
   - `register-api-gateway.yaml` - Import OpenAPI, OIDC, rate limiting, activation
   - `configure-gateway-oidc.yaml` - Configuration OIDC complète
   - `configure-gateway-oidc-tasks.yaml` - Tâches réutilisables avec scope naming
   - `tasks/create-keycloak-user.yaml` - Création user avec roles
   - Playbooks existants sécurisés: `deploy-api`, `sync-gateway`, `promote-portal`, `rollback`
+
+- **Gateway-Admin API** - Spec OpenAPI pour proxy admin
+  - `apis/gateway-admin-api/openapi.json` - Spec OpenAPI 3.0.3
+  - Endpoints: `/apis`, `/applications`, `/scopes`, `/alias`, `/configure-oidc`, `/health`
+  - Sécurisé via JWT Keycloak (BearerAuth)
+  - Backend: proxy vers `apigateway:5555/rest/apigateway`
 
 - **AWX Job Templates** - Nouveaux templates
   - `Provision Tenant` (ID: 12) - Provisioning tenant complet

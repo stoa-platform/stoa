@@ -1,0 +1,484 @@
+---
+# Playbook: Bootstrap APIM Platform
+# Initializes the platform with:
+#   1. Keycloak OIDC External Authorization Server in Gateway
+#   2. Control-Plane API registration and OIDC configuration
+#   3. Gateway-Admin API registration and OIDC configuration
+#   4. Platform admin application (control-plane-ui)
+#
+# This playbook should be run ONCE during initial platform setup.
+# It creates the foundational security configuration that enables
+# all subsequent API registrations to use OIDC instead of Basic Auth.
+#
+# Prerequisites:
+#   - Gateway deployed and accessible
+#   - Keycloak deployed with 'apim' realm
+#   - control-plane-api and control-plane-ui clients configured in Keycloak
+#
+# Usage:
+#   ansible-playbook bootstrap-platform.yaml
+#
+# Environment variables required (via secrets.yaml):
+#   - GATEWAY_ADMIN_USER: Gateway admin username
+#   - GATEWAY_PASSWORD: Gateway admin password
+
+- name: Bootstrap APIM Platform
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../vars/secrets.yaml
+
+  vars:
+    # Gateway Configuration
+    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+
+    # Keycloak Configuration
+    keycloak_url: "https://auth.apim.cab-i.com"
+    keycloak_realm: "apim"
+
+    # Control-Plane API Configuration
+    control_plane_api_url: "http://control-plane-api.apim-system.svc.cluster.local:8000"
+    control_plane_api_openapi: "{{ control_plane_api_url }}/openapi.json"
+
+    # Auth Server Configuration
+    auth_server_name: "KeycloakOIDC"
+
+    # Platform tenant (cross-tenant admin access)
+    platform_tenant_id: "apim"
+
+  tasks:
+    - name: Display bootstrap info
+      debug:
+        msg: |
+          ========================================
+          APIM Platform Bootstrap
+          ========================================
+          Gateway: {{ gateway_url }}
+          Keycloak: {{ keycloak_url }}/realms/{{ keycloak_realm }}
+          Auth Server: {{ auth_server_name }}
+          ========================================
+
+    # =========================================================================
+    # STEP 1: Health Checks
+    # =========================================================================
+    - name: Check Gateway health
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/health"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 401]
+      register: gateway_health
+      ignore_errors: true
+
+    - name: Fail if Gateway unreachable
+      fail:
+        msg: "Gateway is not reachable at {{ gateway_url }}"
+      when: gateway_health.failed | default(true)
+
+    - name: Check Keycloak health
+      uri:
+        url: "{{ keycloak_url }}/realms/{{ keycloak_realm }}/.well-known/openid-configuration"
+        method: GET
+        validate_certs: false
+        status_code: [200]
+      register: keycloak_health
+      ignore_errors: true
+
+    - name: Fail if Keycloak unreachable
+      fail:
+        msg: "Keycloak is not reachable at {{ keycloak_url }}"
+      when: keycloak_health.failed | default(true)
+
+    - name: Extract Keycloak OIDC endpoints
+      set_fact:
+        oidc_config: "{{ keycloak_health.json }}"
+        issuer: "{{ keycloak_health.json.issuer }}"
+        authorization_endpoint: "{{ keycloak_health.json.authorization_endpoint }}"
+        token_endpoint: "{{ keycloak_health.json.token_endpoint }}"
+        jwks_uri: "{{ keycloak_health.json.jwks_uri }}"
+        userinfo_endpoint: "{{ keycloak_health.json.userinfo_endpoint }}"
+        introspection_endpoint: "{{ keycloak_health.json.introspection_endpoint | default(keycloak_health.json.token_endpoint | regex_replace('/token$', '/token/introspect')) }}"
+
+    - name: Display discovered OIDC endpoints
+      debug:
+        msg: |
+          Keycloak OIDC Endpoints:
+          - Issuer: {{ issuer }}
+          - Authorization: {{ authorization_endpoint }}
+          - Token: {{ token_endpoint }}
+          - JWKS: {{ jwks_uri }}
+          - Introspection: {{ introspection_endpoint }}
+
+    # =========================================================================
+    # STEP 2: Create External Authorization Server (KeycloakOIDC)
+    # =========================================================================
+    - name: Check if auth server already exists
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/alias"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_aliases
+
+    - name: Check if KeycloakOIDC already exists
+      set_fact:
+        auth_server_exists: "{{ existing_aliases.json.alias | default([]) | selectattr('name', 'equalto', auth_server_name) | list | length > 0 }}"
+
+    - name: Get existing auth server ID
+      set_fact:
+        existing_auth_server_id: "{{ (existing_aliases.json.alias | selectattr('name', 'equalto', auth_server_name) | list | first).id }}"
+      when: auth_server_exists
+
+    - name: Create External Authorization Server (KeycloakOIDC)
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/alias"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          alias:
+            name: "{{ auth_server_name }}"
+            description: "Keycloak OIDC Provider for APIM Platform"
+            type: "authServerAlias"
+            authServerType: "EXTERNAL"
+            tokenGeneratorConfig:
+              accessTokenExpInterval: 3600
+              authCodeExpInterval: 600
+              enforcePKCE: false
+            localIntrospectionConfig:
+              issuer: "{{ issuer }}"
+              jwksuri: "{{ jwks_uri }}"
+            metadata:
+              authorizeURL: "{{ authorization_endpoint }}"
+              accessTokenURL: "{{ token_endpoint }}"
+              refreshTokenURL: "{{ token_endpoint }}"
+            supportedGrantTypes:
+              - "authorization_code"
+              - "client_credentials"
+              - "refresh_token"
+            scopes: []
+        status_code: [200, 201, 409]
+      register: auth_server_create
+      when: not auth_server_exists
+
+    - name: Get auth server ID from creation
+      set_fact:
+        auth_server_id: "{{ auth_server_create.json.alias.id | default(existing_auth_server_id) }}"
+      when: auth_server_create is defined and auth_server_create.json is defined
+
+    - name: Use existing auth server ID
+      set_fact:
+        auth_server_id: "{{ existing_auth_server_id }}"
+      when: auth_server_exists
+
+    - name: Display auth server status
+      debug:
+        msg: "Auth Server '{{ auth_server_name }}' - ID: {{ auth_server_id | default('created/existing') }}"
+
+    # =========================================================================
+    # STEP 3: Import Control-Plane API
+    # =========================================================================
+    - name: Download Control-Plane API OpenAPI spec
+      uri:
+        url: "{{ control_plane_api_openapi }}"
+        method: GET
+        return_content: true
+        validate_certs: false
+      register: cpi_openapi_content
+
+    - name: Convert OpenAPI 3.1.0 to 3.0.3 for Gateway compatibility
+      copy:
+        content: "{{ cpi_openapi_content.content | regex_replace('\"openapi\":\\s*\"3\\.1\\.0\"', '\"openapi\": \"3.0.3\"') | regex_replace('\"servers\":\\s*\\[\\s*\\{\\s*\"url\":\\s*\"/\"\\s*\\}\\s*\\]', '\"servers\": [{\"url\": \"' + control_plane_api_url + '\"}]') }}"
+        dest: "/tmp/control-plane-api-openapi.json"
+
+    - name: Check if Control-Plane API already exists
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_apis
+
+    - name: Check if Control-Plane-API exists
+      set_fact:
+        cpi_api_exists: "{{ existing_apis.json.apiResponse | default([]) | selectattr('apiName', 'equalto', 'Control-Plane-API') | list | length > 0 }}"
+
+    - name: Get existing Control-Plane-API ID
+      set_fact:
+        cpi_api_id: "{{ (existing_apis.json.apiResponse | selectattr('apiName', 'equalto', 'Control-Plane-API') | list | first).id }}"
+      when: cpi_api_exists
+
+    - name: Import Control-Plane API
+      shell: |
+        curl -s -X POST \
+          -u "{{ gateway_user }}:{{ gateway_password }}" \
+          -H "Accept: application/json" \
+          -F "type=openapi" \
+          -F "apiName=Control-Plane-API" \
+          -F "apiVersion=2.0" \
+          -F "file=@/tmp/control-plane-api-openapi.json" \
+          "{{ gateway_url }}/rest/apigateway/apis"
+      register: cpi_import_result
+      when: not cpi_api_exists
+
+    - name: Parse Control-Plane API import result
+      set_fact:
+        cpi_api_id: "{{ (cpi_import_result.stdout | from_json).apiResponse.api.id }}"
+      when:
+        - not cpi_api_exists
+        - cpi_import_result is defined
+        - cpi_import_result.stdout is defined
+
+    - name: Display Control-Plane API status
+      debug:
+        msg: "Control-Plane-API ID: {{ cpi_api_id | default('FAILED') }}"
+
+    # =========================================================================
+    # STEP 4: Import Gateway-Admin API
+    # =========================================================================
+    - name: Check if Gateway-Admin-API exists
+      set_fact:
+        gwa_api_exists: "{{ existing_apis.json.apiResponse | default([]) | selectattr('apiName', 'equalto', 'Gateway-Admin-API') | list | length > 0 }}"
+
+    - name: Get existing Gateway-Admin-API ID
+      set_fact:
+        gwa_api_id: "{{ (existing_apis.json.apiResponse | selectattr('apiName', 'equalto', 'Gateway-Admin-API') | list | first).id }}"
+      when: gwa_api_exists
+
+    - name: Import Gateway-Admin API
+      shell: |
+        curl -s -X POST \
+          -u "{{ gateway_user }}:{{ gateway_password }}" \
+          -H "Accept: application/json" \
+          -F "type=openapi" \
+          -F "apiName=Gateway-Admin-API" \
+          -F "apiVersion=1.0" \
+          -F "file=@/Users/torpedo/apim-aws/apis/gateway-admin-api/openapi.json" \
+          "{{ gateway_url }}/rest/apigateway/apis"
+      register: gwa_import_result
+      when: not gwa_api_exists
+
+    - name: Parse Gateway-Admin API import result
+      set_fact:
+        gwa_api_id: "{{ (gwa_import_result.stdout | from_json).apiResponse.api.id }}"
+      when:
+        - not gwa_api_exists
+        - gwa_import_result is defined
+        - gwa_import_result.stdout is defined
+
+    - name: Display Gateway-Admin API status
+      debug:
+        msg: "Gateway-Admin-API ID: {{ gwa_api_id | default('FAILED') }}"
+
+    # =========================================================================
+    # STEP 5: Create OAuth Strategy
+    # =========================================================================
+    - name: Create OAuth2 Strategy for platform
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/strategies"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          strategy:
+            name: "apim-platform-oauth2"
+            description: "OAuth2/OIDC strategy for APIM platform APIs"
+            type: "oauth2"
+            authServerAlias: "{{ auth_server_name }}"
+            audience: "account"
+            oauth2:
+              supportedGrantTypes:
+                - "authorization_code"
+                - "client_credentials"
+              requirePKCE: false
+        status_code: [200, 201, 409]
+      register: oauth_strategy_result
+      ignore_errors: true
+
+    - name: Get existing OAuth strategy
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/strategies"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_strategies
+
+    - name: Find platform OAuth strategy ID
+      set_fact:
+        oauth_strategy_id: "{{ (existing_strategies.json.strategy | default([]) | selectattr('name', 'equalto', 'apim-platform-oauth2') | list | first).id }}"
+      when: existing_strategies.json.strategy | default([]) | selectattr('name', 'equalto', 'apim-platform-oauth2') | list | length > 0
+      ignore_errors: true
+
+    - name: Display OAuth strategy status
+      debug:
+        msg: "OAuth Strategy ID: {{ oauth_strategy_id | default('created/existing') }}"
+
+    # =========================================================================
+    # STEP 6: Create Platform Application (control-plane-ui)
+    # =========================================================================
+    - name: Create platform application
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "control-plane-ui"
+          description: "APIM Control Plane UI Application"
+          contactEmails:
+            - "admin@cab-i.com"
+          authStrategyIds:
+            - "{{ oauth_strategy_id }}"
+          identifiers:
+            - key: "openIdClaims"
+              name: "OpenID Claims"
+              value:
+                - "control-plane-ui"
+          consumingAPIs:
+            - "{{ cpi_api_id }}"
+            - "{{ gwa_api_id }}"
+        status_code: [200, 201, 409]
+      register: platform_app_result
+      when:
+        - oauth_strategy_id is defined
+        - cpi_api_id is defined
+        - gwa_api_id is defined
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 7: Create OAuth Scopes
+    # =========================================================================
+    - name: Create Control-Plane API scope
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/scopes"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          scope:
+            name: "{{ auth_server_name }}:{{ platform_tenant_id }}:control-plane:2.0:admin"
+            description: "Full admin access to Control-Plane API"
+            authServerAlias: "{{ auth_server_name }}"
+        status_code: [200, 201, 409]
+      ignore_errors: true
+
+    - name: Create Gateway-Admin API scope
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/scopes"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          scope:
+            name: "{{ auth_server_name }}:{{ platform_tenant_id }}:gateway-admin:1.0:admin"
+            description: "Full admin access to Gateway Admin API"
+            authServerAlias: "{{ auth_server_name }}"
+        status_code: [200, 201, 409]
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 8: Activate APIs
+    # =========================================================================
+    - name: Activate Control-Plane API
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ cpi_api_id }}/activate"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 204]
+      when: cpi_api_id is defined
+
+    - name: Activate Gateway-Admin API
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ gwa_api_id }}/activate"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 204]
+      when: gwa_api_id is defined
+
+    # =========================================================================
+    # STEP 9: Summary
+    # =========================================================================
+    - name: Bootstrap summary
+      debug:
+        msg: |
+          ========================================
+          APIM Platform Bootstrap Complete
+          ========================================
+
+          Auth Server: {{ auth_server_name }}
+            ID: {{ auth_server_id | default('N/A') }}
+
+          APIs Registered:
+            - Control-Plane-API: {{ cpi_api_id | default('FAILED') }}
+            - Gateway-Admin-API: {{ gwa_api_id | default('FAILED') }}
+
+          OAuth Strategy: {{ oauth_strategy_id | default('N/A') }}
+
+          Application: control-plane-ui
+
+          Scopes Created:
+            - {{ auth_server_name }}:{{ platform_tenant_id }}:control-plane:2.0:admin
+            - {{ auth_server_name }}:{{ platform_tenant_id }}:gateway-admin:1.0:admin
+
+          ========================================
+          NEXT STEPS:
+          1. Test login via https://devops.apim.cab-i.com
+          2. Verify APIs in Gateway UI
+          3. All subsequent API registrations will use OIDC
+          ========================================

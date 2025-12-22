@@ -8,6 +8,32 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Corrigé (2024-12-23) - OpenAPI 3.1.0 → 3.0.0 Conversion
+
+- **OpenAPI Version Compatibility** - webMethods Gateway 10.15 ne supporte pas OpenAPI 3.1.0
+  - `deploy-api.yaml`: Détection automatique de la version OpenAPI
+  - Conversion 3.1.x → 3.0.0 avant import dans Gateway
+  - Support swagger 2.0 et OpenAPI 3.0.x natifs
+  - Détection type API (`swagger` vs `openapi`) dans le playbook
+
+- **Gateway Proxy Response Format** - Gestion des deux formats de réponse
+  - Proxy Control-Plane API retourne `{"api_id": "..."}`
+  - Gateway direct retourne `{"apiResponse": {"api": {"id": "..."}}}`
+  - Variable `imported_api_id` extraite pour compatibilité
+  - Variable `final_api_id` pour affichage unifié
+
+- **POST /v1/gateway/apis** - Nouvel endpoint pour import API via proxy
+  - `control-plane-api/src/routers/gateway.py`: Route POST /apis
+  - `control-plane-api/src/services/gateway_service.py`: Méthode `import_api()`
+  - Support `apiDefinition` comme objet JSON (pas string)
+  - Support paramètre `type` (openapi, swagger, raml, wsdl)
+
+- **AWX Job Template Deploy API** - Flux E2E validé
+  - Import API avec spec OpenAPI 3.1.0 (convertie en 3.0.0)
+  - Activation automatique de l'API après import
+  - Notification vers Control-Plane API
+  - Test validé: Control-Plane-API-E2E v2.2 (ID: 4b4045ba-23f3-4a45-ad38-680419d79880)
+
 ### Corrigé (2024-12-22) - Pipeline E2E Kafka → AWX
 
 - **AWX Token** - Configuration et persistence
@@ -274,6 +300,20 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [ ] Intégration GitLab CI/CD (security-scan stage)
 - [ ] Monitoring Jobs (Prometheus, Kafka, OpenSearch, Grafana Dashboard)
 - [ ] Alertes (job failed, job not running, critical findings)
+
+### Phase 8: Developer Portal Custom (Priorité Basse)
+- [ ] Frontend React + TypeScript + Vite + TailwindCSS
+- [ ] Keycloak SSO (client `developer-portal`)
+- [ ] Catalogue APIs avec recherche/filtres
+- [ ] Détail API + Swagger-UI
+- [ ] Gestion Applications (CRUD, credentials, rotation API Key)
+- [ ] Gestion Souscriptions
+- [ ] Try-It Console (Monaco Editor, proxy backend)
+- [ ] Code Samples (curl, Python, JavaScript)
+- [ ] Endpoints `/portal/*` dans Control-Plane API
+- [ ] Events Kafka (application-created, subscription-created)
+- [ ] Déploiement Kubernetes
+- [ ] Plan détaillé: [docs/DEVELOPER-PORTAL-PLAN.md](docs/DEVELOPER-PORTAL-PLAN.md)
 
 ---
 

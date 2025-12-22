@@ -908,6 +908,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    | Endpoint | Description |
    |----------|-------------|
    | `GET /v1/gateway/apis` | Liste les APIs Gateway |
+   | `POST /v1/gateway/apis` | Importe une API (OpenAPI spec) |
    | `GET /v1/gateway/applications` | Liste les applications |
    | `PUT /v1/gateway/apis/{id}/activate` | Active une API |
    | `POST /v1/gateway/configure-oidc` | Configure OIDC pour une API |
@@ -952,11 +953,20 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    - `provision-tenant.yaml` - Crée groupes Keycloak, users, namespaces K8s
    - `register-api-gateway.yaml` - Import OpenAPI, OIDC, rate limiting, activation
    - `configure-gateway-oidc.yaml` - Configuration OIDC complète
+   - `deploy-api.yaml` - Import API avec conversion OpenAPI 3.1→3.0 + activation
    - Tous playbooks sécurisés avec `vars_files` (zéro hardcoding)
 
 6. **AWX Job Templates** ✅
    - `Provision Tenant` (ID: 12) - Provisioning tenant complet
    - `Register API Gateway` (ID: 13) - Enregistrement API dans Gateway
+   - `Deploy API` (ID: 8) - Import API via OIDC proxy avec conversion OpenAPI
+
+7. **OpenAPI 3.1.0 Compatibility** ✅ (23 Déc 2024)
+   - webMethods Gateway 10.15 ne supporte pas OpenAPI 3.1.0
+   - Conversion automatique 3.1.x → 3.0.0 dans `deploy-api.yaml`
+   - Support swagger 2.0 et OpenAPI 3.0.x natifs
+   - POST /v1/gateway/apis - Endpoint proxy pour import API
+   - Test validé: Control-Plane-API-E2E v2.2 déployée et activée
 
 #### Phase 3 : Secrets & Gateway Alias (Priorité Moyenne)
 
@@ -2402,6 +2412,148 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    - [ ] Tester alertes (job failure, critical findings)
    - [ ] Configurer rétention OpenSearch (90 jours)
 
+#### Phase 8 : Developer Portal Custom (React)
+
+**Objectif**: Remplacer le Developer Portal webMethods par un portal custom React intégré à l'architecture APIM GitOps avec SSO Keycloak unifié.
+
+> **Plan détaillé**: Voir [docs/DEVELOPER-PORTAL-PLAN.md](docs/DEVELOPER-PORTAL-PLAN.md)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         DEVELOPER PORTAL CUSTOM                                      │
+│                                                                                      │
+│   ┌──────────────────────────────────────────────────────────────────────────────┐  │
+│   │                           FRONTEND (React)                                    │  │
+│   │                                                                               │  │
+│   │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │  │
+│   │   │  Catalogue  │  │    API      │  │   Mes       │  │   Try-It    │         │  │
+│   │   │    APIs     │  │   Detail    │  │   Apps      │  │   Console   │         │  │
+│   │   │             │  │  + Swagger  │  │  + Subs     │  │             │         │  │
+│   │   └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘         │  │
+│   │                                                                               │  │
+│   └───────────────────────────────────┬───────────────────────────────────────────┘  │
+│                                       │                                              │
+│                                       │ REST API                                     │
+│                                       ▼                                              │
+│   ┌──────────────────────────────────────────────────────────────────────────────┐  │
+│   │                      CONTROL-PLANE API (FastAPI)                              │  │
+│   │                                                                               │  │
+│   │   /portal/apis          → Liste APIs publiées                                │  │
+│   │   /portal/apis/{id}     → Détail + OpenAPI spec                              │  │
+│   │   /portal/applications  → CRUD Applications                                   │  │
+│   │   /portal/subscriptions → Gestion souscriptions                              │  │
+│   │   /portal/try-it        → Proxy requêtes vers Gateway                        │  │
+│   │                                                                               │  │
+│   └───────────────────────────────────┬───────────────────────────────────────────┘  │
+│                                       │                                              │
+│               ┌───────────────────────┼───────────────────────┐                     │
+│               │                       │                       │                     │
+│               ▼                       ▼                       ▼                     │
+│   ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐             │
+│   │    Keycloak      │    │     GitLab       │    │    Gateway       │             │
+│   │    (SSO)         │    │    (GitOps)      │    │   (Runtime)      │             │
+│   │                  │    │                  │    │                  │             │
+│   │ Client:          │    │ Applications     │    │ API Key          │             │
+│   │ developer-portal │    │ Subscriptions    │    │ Validation       │             │
+│   └──────────────────┘    └──────────────────┘    └──────────────────┘             │
+│                                                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Stack Technique**:
+| Composant | Technologie |
+|-----------|-------------|
+| Frontend | React 18 + TypeScript + Vite |
+| Styling | TailwindCSS |
+| Auth | Keycloak OIDC (même realm que UI DevOps) |
+| API Docs | Swagger-UI React |
+| Code Editor | Monaco Editor |
+| Backend | Control-Plane API (FastAPI) - nouveaux endpoints `/portal/*` |
+
+**Fonctionnalités Clés**:
+
+1. **Catalogue APIs** 🔲
+   - Liste des APIs publiées avec recherche
+   - Filtres par catégorie, tenant
+   - Cards avec nom, version, description
+
+2. **Détail API** 🔲
+   - Informations générales
+   - Documentation OpenAPI (Swagger-UI)
+   - Bouton "Souscrire"
+   - Code samples (curl, Python, JavaScript)
+
+3. **Gestion Applications** 🔲
+   - Créer une application (génère client_id, client_secret, api_key)
+   - Voir mes applications
+   - Rotation API Key
+   - Supprimer application
+
+4. **Souscriptions** 🔲
+   - Souscrire une application à une API
+   - Voir mes souscriptions
+   - Désouscrire
+
+5. **Try-It Console** 🔲
+   - Sélection méthode HTTP, path, headers
+   - Body editor JSON (Monaco)
+   - Envoi requête via proxy backend
+   - Affichage réponse (status, headers, body, timing)
+
+**Endpoints Backend à Ajouter** (Control-Plane API):
+```
+# Catalogue
+GET    /portal/apis                    # Liste APIs publiées
+GET    /portal/apis/{api_id}           # Détail API
+GET    /portal/apis/{api_id}/spec      # Spec OpenAPI
+
+# Applications
+GET    /portal/my/applications         # Mes applications
+POST   /portal/applications            # Créer application
+DELETE /portal/applications/{app_id}   # Supprimer
+POST   /portal/applications/{app_id}/rotate-key  # Rotation
+
+# Souscriptions
+GET    /portal/my/subscriptions        # Mes souscriptions
+POST   /portal/subscriptions           # Souscrire
+DELETE /portal/subscriptions/{sub_id}  # Désouscrire
+
+# Try-It
+POST   /portal/try-it                  # Proxy vers Gateway
+```
+
+**Keycloak - Nouveau Client**:
+```yaml
+client_id: developer-portal
+client_type: public
+valid_redirect_uris:
+  - https://portal.apim.cab-i.com/*
+  - http://localhost:3001/*
+roles:
+  - developer  # Accès portal
+```
+
+**Intégration Kafka**:
+- `application-created` → Audit + sync GitLab
+- `subscription-created` → Audit + provisionning Gateway
+- `api-key-rotated` → Audit + invalidation cache
+
+**Checklist Phase 8**:
+- [ ] Setup projet Vite + React + TypeScript + TailwindCSS
+- [ ] Configuration Keycloak OIDC (client developer-portal)
+- [ ] Layout responsive (Header, Sidebar, Footer)
+- [ ] Page Catalogue APIs avec recherche/filtres
+- [ ] Page Détail API avec Swagger-UI
+- [ ] Page Mes Applications (CRUD)
+- [ ] Affichage credentials sécurisé (visible une fois)
+- [ ] Page Souscriptions
+- [ ] Try-It Console avec Monaco Editor
+- [ ] Code Samples (curl, Python, JS)
+- [ ] Endpoints `/portal/*` dans Control-Plane API
+- [ ] Events Kafka pour audit
+- [ ] Déploiement Kubernetes (Helm)
+- [ ] URL: https://portal.apim.cab-i.com
+
 ---
 
 ### Architecture Cible Complète
@@ -2461,3 +2613,4 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 | Phase 5 | Multi-environnements (dev/staging/prod) | À planifier |
 | Phase 6 | Demo Tenant + SSO Unifié + Documentation | À planifier |
 | Phase 7 | Sécurité Opérationnelle (Batch Jobs) | À planifier |
+| Phase 8 | Developer Portal Custom (React) | À planifier |

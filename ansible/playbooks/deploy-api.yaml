@@ -124,6 +124,30 @@
         - access_token is defined
         - spec_url | length > 0
 
+    # Convert OpenAPI 3.1.x to 3.0.0 (Gateway may not support 3.1.0)
+    - name: Detect OpenAPI version and type
+      set_fact:
+        openapi_version: "{{ openapi_spec_content.json.openapi | default(openapi_spec_content.json.swagger | default('2.0')) }}"
+        api_spec_type: "{{ 'swagger' if openapi_spec_content.json.swagger is defined else 'openapi' }}"
+      when:
+        - openapi_spec_content is defined
+        - openapi_spec_content.json is defined
+
+    - name: Convert OpenAPI 3.1.x to 3.0.0 if needed
+      set_fact:
+        converted_spec: "{{ openapi_spec_content.json | combine({'openapi': '3.0.0'}) }}"
+      when:
+        - openapi_version is defined
+        - openapi_version is version('3.1.0', '>=')
+
+    - name: Use original spec if no conversion needed
+      set_fact:
+        converted_spec: "{{ openapi_spec_content.json }}"
+      when:
+        - openapi_spec_content is defined
+        - openapi_spec_content.json is defined
+        - converted_spec is not defined
+
     - name: Import API via OIDC proxy (with inline spec)
       uri:
         url: "{{ gw_proxy_url }}/apis"
@@ -135,16 +159,15 @@
         body:
           apiName: "{{ api }}"
           apiVersion: "{{ version }}"
-          type: "openapi"
-          apiDefinition: "{{ openapi_spec_content.json }}"
+          type: "{{ api_spec_type | default('openapi') }}"
+          apiDefinition: "{{ converted_spec }}"
         status_code: [200, 201, 400]
         validate_certs: false
       register: api_import_oidc
       when:
         - use_oidc_mode
         - access_token is defined
-        - openapi_spec_content is defined
-        - openapi_spec_content.json is defined
+        - converted_spec is defined
 
     - name: Activate API via OIDC proxy
       uri:

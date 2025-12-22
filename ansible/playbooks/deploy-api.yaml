@@ -169,9 +169,18 @@
         - access_token is defined
         - converted_spec is defined
 
+    # Extract API ID from response (proxy returns api_id, direct Gateway returns apiResponse.api.id)
+    - name: Extract API ID from OIDC import response
+      set_fact:
+        imported_api_id: "{{ api_import_oidc.json.api_id | default(api_import_oidc.json.apiResponse.api.id | default('')) }}"
+      when:
+        - use_oidc_mode
+        - api_import_oidc is defined
+        - api_import_oidc.json is defined
+
     - name: Activate API via OIDC proxy
       uri:
-        url: "{{ gw_proxy_url }}/apis/{{ api_import_oidc.json.apiResponse.api.id }}/activate"
+        url: "{{ gw_proxy_url }}/apis/{{ imported_api_id }}/activate"
         method: PUT
         headers:
           Authorization: "Bearer {{ access_token }}"
@@ -180,8 +189,8 @@
       when:
         - use_oidc_mode
         - access_token is defined
-        - api_import_oidc is defined
-        - api_import_oidc.json.apiResponse.api.id is defined
+        - imported_api_id is defined
+        - imported_api_id | length > 0
       register: api_activate_oidc
 
     # ========================================
@@ -265,9 +274,18 @@
       set_fact:
         api_import: "{{ api_import_oidc if (api_import_oidc is defined and api_import_oidc.json is defined) else api_import_basic }}"
 
+    # Extract final API ID (handles both proxy and direct responses)
+    - name: Set final API ID
+      set_fact:
+        final_api_id: "{{ imported_api_id | default(api_import.json.api_id | default(api_import.json.apiResponse.api.id | default(''))) }}"
+      when: api_import is defined
+
     - name: Display API import result
       debug:
-        var: api_import
+        msg: |
+          Import Result:
+          - API ID: {{ final_api_id | default('N/A') }}
+          - Response: {{ api_import.json | default({}) }}
       when: api_import is defined
 
     - name: Send success notification to Control-Plane API
@@ -280,7 +298,7 @@
         body:
           api_name: "{{ api }}"
           api_version: "{{ version }}"
-          api_id: "{{ api_import.json.apiResponse.api.id | default('') }}"
+          api_id: "{{ final_api_id | default('') }}"
           tenant_id: "{{ tenant }}"
           status: "success"
           action: "deploy"
@@ -297,7 +315,7 @@
           ----------------------------------------
           API: {{ api }} v{{ version }}
           Tenant: {{ tenant }}
-          API ID: {{ api_import.json.apiResponse.api.id | default('N/A') }}
+          API ID: {{ final_api_id | default('N/A') }}
           Auth Mode: {{ 'OIDC (proxy)' if (use_oidc_mode and access_token is defined) else 'Basic Auth (direct)' }}
           Status: SUCCESS
           ========================================

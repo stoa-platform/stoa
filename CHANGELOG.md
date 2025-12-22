@@ -10,24 +10,54 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ### Ajouté (Phase 2.5) - Validation E2E - COMPLÉTÉ ✅
 
+- **Gateway OIDC Configuration** - Sécurisation APIs via Keycloak
+  - External Authorization Server `KeycloakOIDC` configuré dans Gateway
+  - OAuth2 Strategies par application avec JWT validation
+  - Scope mappings standardisés: `{AuthServer}:{Tenant}:{Api}:{Version}:{Scope}`
+  - APIs sécurisées:
+    - Control-Plane-API (ID: `7ba67c90-814d-4d2f-a5da-36e9cda77afe`)
+    - Gateway-Admin-API (ID: `8f9c7b6c-1bc6-4438-88be-a10e2352bae2`) - Proxy admin
+
+- **Gateway Admin Service** - Proxy OIDC pour administration Gateway
+  - `control-plane-api/src/services/gateway_service.py` - Service dual-mode auth
+  - `control-plane-api/src/routers/gateway.py` - Router `/v1/gateway/*`
+  - Token forwarding: JWT utilisateur transmis à Gateway (audit trail)
+  - Fallback Basic Auth pour compatibilité legacy
+  - Config: `GATEWAY_USE_OIDC_PROXY=True` (défaut)
+
+- **Sécurisation des Secrets** - AWS Secrets Manager + K8s
+  - `ansible/vars/secrets.yaml` - Configuration centralisée (zéro hardcoding)
+  - `terraform/modules/secrets/main.tf` - Module AWS Secrets Manager
+  - Stratégie documentée:
+    - **AWS Secrets Manager**: Secrets bootstrap (gateway-admin, keycloak-admin, rds-master, etc.)
+    - **K8s Secrets / Vault**: Secrets runtime (OAuth clients, tokens tenants)
+  - Chemins AWS SM: `apim/{env}/gateway-admin`, `apim/{env}/keycloak-admin`, etc.
+  - Tous playbooks Ansible mis à jour avec `vars_files: ../vars/secrets.yaml`
+
 - **Tenant APIM Platform** - Tenant administrateur avec accès cross-tenant
   - Fichier: `tenants/apim/` dans GitLab apim-gitops
-  - User: `apimadmin@cab-i.com` / `manage` (role: cpi-admin)
+  - User: `apimadmin@cab-i.com` (role: cpi-admin)
   - API: Control-Plane configurée pour Gateway OIDC
 
-- **Playbooks Ansible** - Automation tenant lifecycle
+- **Playbooks Ansible** - Automation complète
   - `provision-tenant.yaml` - Crée groupes Keycloak, users, namespaces K8s
   - `register-api-gateway.yaml` - Import OpenAPI, OIDC, rate limiting, activation
+  - `configure-gateway-oidc.yaml` - Configuration OIDC complète
+  - `configure-gateway-oidc-tasks.yaml` - Tâches réutilisables avec scope naming
   - `tasks/create-keycloak-user.yaml` - Création user avec roles
+  - Playbooks existants sécurisés: `deploy-api`, `sync-gateway`, `promote-portal`, `rollback`
 
 - **AWX Job Templates** - Nouveaux templates
   - `Provision Tenant` (ID: 12) - Provisioning tenant complet
   - `Register API Gateway` (ID: 13) - Enregistrement API dans Gateway
 
-- **Control-Plane API** - Nouveaux handlers
+- **Control-Plane API** - Nouveaux handlers et services
+  - Router `/v1/gateway/*` - Administration Gateway via OIDC proxy
+  - Endpoints: `GET /apis`, `PUT /apis/{id}/activate`, `POST /configure-oidc`, etc.
   - Event `tenant-provisioning` → AWX Provision Tenant
   - Event `api-registration` → AWX Register API Gateway
-  - awx_service: `provision_tenant()`, `register_api_gateway()`
+  - `gateway_service`: `list_apis()`, `activate_api()`, `configure_api_oidc()`, etc.
+  - `awx_service`: `provision_tenant()`, `register_api_gateway()`
 
 - **Architecture clarifiée**
   - GitHub (apim-aws): Code source, développement, CI/CD

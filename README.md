@@ -103,8 +103,8 @@ apim-aws/
 ├── control-plane-api/       # FastAPI backend
 │   ├── src/
 │   │   ├── auth/            # RBAC & Keycloak
-│   │   ├── routers/         # API endpoints
-│   │   └── services/        # Business logic (GitLab, Kafka, etc.)
+│   │   ├── routers/         # API endpoints (+ gateway.py pour admin proxy)
+│   │   └── services/        # Business logic (GitLab, Kafka, Gateway, etc.)
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── control-plane-ui/        # React frontend
@@ -115,6 +115,17 @@ apim-aws/
 │   │   └── services/
 │   ├── Dockerfile
 │   └── package.json
+├── ansible/                 # Ansible playbooks (Phase 2.5)
+│   ├── playbooks/
+│   │   ├── provision-tenant.yaml      # Keycloak + K8s namespaces
+│   │   ├── register-api-gateway.yaml  # Import API, OIDC, activation
+│   │   ├── configure-gateway-oidc.yaml
+│   │   ├── deploy-api.yaml
+│   │   ├── sync-gateway.yaml
+│   │   ├── promote-portal.yaml
+│   │   └── rollback.yaml
+│   └── vars/
+│       └── secrets.yaml     # Centralized secrets config (no hardcoding)
 ├── gitops-templates/        # Templates GitOps (Phase 2)
 │   ├── _defaults.yaml       # Variables globales centralisées
 │   ├── environments/        # Config par environnement (dev/staging/prod)
@@ -136,7 +147,8 @@ apim-aws/
 │   │   ├── vpc/
 │   │   ├── eks/
 │   │   ├── rds/
-│   │   └── ecr/
+│   │   ├── ecr/
+│   │   └── secrets/         # AWS Secrets Manager (Phase 2.5)
 │   └── environments/
 │       └── dev/
 ├── keycloak/                # Keycloak config
@@ -874,6 +886,77 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    - Groupes AD: `GRP_APIM_{TENANT}_{ROLE}` (ex: `GRP_APIM_FINANCE_CPI`)
    - Git = Override pour externes et service accounts
    - Mapping automatique département → tenant
+
+#### Phase 2.5 : Validation E2E - COMPLÉTÉ ✅ (22 Déc 2024)
+
+> **Objectif**: Valider le flow complet GitOps → Keycloak → Gateway avec tenant admin APIM.
+
+1. **Gateway OIDC Configuration** ✅
+   - External Authorization Server `KeycloakOIDC` configuré dans Gateway
+   - OAuth2 Strategies par application avec JWT validation
+   - Scope mappings standardisés: `{AuthServer}:{Tenant}:{Api}:{Version}:{Scope}`
+   - APIs sécurisées: Control-Plane-API, Gateway-Admin-API
+
+2. **Gateway Admin Service** ✅
+   - Proxy OIDC vers Gateway administration (port 5555)
+   - Token forwarding: JWT utilisateur transmis à Gateway pour audit trail
+   - Fallback Basic Auth pour compatibilité legacy
+   - Router `/v1/gateway/*` dans Control-Plane API
+   - Config: `GATEWAY_USE_OIDC_PROXY=True` (défaut)
+
+   **Endpoints disponibles**:
+   | Endpoint | Description |
+   |----------|-------------|
+   | `GET /v1/gateway/apis` | Liste les APIs Gateway |
+   | `GET /v1/gateway/applications` | Liste les applications |
+   | `PUT /v1/gateway/apis/{id}/activate` | Active une API |
+   | `POST /v1/gateway/configure-oidc` | Configure OIDC pour une API |
+
+3. **Sécurisation des Secrets** ✅ (AWS Secrets Manager + K8s)
+
+   **Stratégie de secrets**:
+   ```
+   ┌─────────────────────────────────────────────────────────────────────────┐
+   │                    SECRETS MANAGEMENT STRATEGY                           │
+   │                                                                          │
+   │  AWS SECRETS MANAGER (Bootstrap)      K8s SECRETS / VAULT (Runtime)     │
+   │  ─────────────────────────────────    ──────────────────────────────    │
+   │  • gateway-admin                      • OAuth client secrets             │
+   │  • keycloak-admin                     • Tenant API keys                  │
+   │  • rds-master                         • Application tokens               │
+   │  • opensearch-master                  • Service account credentials      │
+   │  • gitlab-token                       • Rotated credentials              │
+   │  • awx-token                                                             │
+   │                                                                          │
+   │  Path: apim/{env}/{secret-name}       Path: secret/data/{env}/{tenant}   │
+   │  Managed by: Terraform                Managed by: Vault / K8s External   │
+   └─────────────────────────────────────────────────────────────────────────┘
+   ```
+
+   **Module Terraform** (`terraform/modules/secrets/`):
+   - Auto-génération de passwords sécurisés
+   - Outputs pour External Secrets Operator
+   - Recovery window: 0 (dev), 30 jours (prod)
+
+   **Configuration Ansible** (`ansible/vars/secrets.yaml`):
+   - Variables centralisées pour tous les playbooks
+   - Validation obligatoire des secrets critiques
+   - Support lookup env / Vault
+
+4. **Tenant APIM Platform** ✅
+   - Tenant administrateur avec accès cross-tenant
+   - User: `apimadmin@cab-i.com` (role: cpi-admin)
+   - Structure dans GitLab apim-gitops
+
+5. **Playbooks Ansible** ✅
+   - `provision-tenant.yaml` - Crée groupes Keycloak, users, namespaces K8s
+   - `register-api-gateway.yaml` - Import OpenAPI, OIDC, rate limiting, activation
+   - `configure-gateway-oidc.yaml` - Configuration OIDC complète
+   - Tous playbooks sécurisés avec `vars_files` (zéro hardcoding)
+
+6. **AWX Job Templates** ✅
+   - `Provision Tenant` (ID: 12) - Provisioning tenant complet
+   - `Register API Gateway` (ID: 13) - Enregistrement API dans Gateway
 
 #### Phase 3 : Secrets & Gateway Alias (Priorité Moyenne)
 

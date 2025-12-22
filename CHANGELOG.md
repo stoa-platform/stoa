@@ -36,6 +36,14 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - Tous templates (Deploy API, Rollback API, Sync Gateway, Promote Portal)
     pointent vers projet 7 "APIM Playbooks" avec playbooks corrects
 
+- **Pipeline Deploy API** - Flux Kafka → AWX → Gateway fonctionnel
+  - `deploy-api.yaml`: Fix variables récursives Ansible (`_gateway_url` vs `gw_url`)
+  - `deploy-api.yaml`: Ajout credentials par défaut (évite `vars_files` manquants dans AWX)
+  - `awx_service.py`: Ajout paramètre `openapi_spec` dans `deploy_api()`
+  - `deployment_worker.py`: Transmission `openapi_spec` vers AWX extra_vars
+  - `events.py`: Endpoint `POST /v1/events/deployment-result` pour callbacks AWX
+  - Test validé: PetstoreAPI v3.0.0 déployé et activé via pipeline
+
 ### Ajouté (Phase 2.5) - Validation E2E - COMPLÉTÉ ✅
 
 - **Gateway OIDC Configuration** - Sécurisation APIs via Keycloak

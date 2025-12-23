@@ -8,6 +8,44 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Ajouté (2025-12-23) - Phase 3: Secrets & Gateway Alias - EN COURS ✅
+
+- **HashiCorp Vault** - Déployé sur EKS pour gestion centralisée des secrets
+  - Helm chart `hashicorp/vault` v0.31.0 (Vault 1.20.4)
+  - Namespace: `vault`
+  - Storage: 5GB PVC (gp2)
+  - UI accessible: https://vault.apim.cab-i.com
+  - Clés unseal sauvegardées dans AWS Secrets Manager (`apim/vault/keys`)
+
+- **Vault Secrets Engine** - KV v2 pour secrets APIM
+  - Path: `secret/apim/{env}/{type}`
+  - Structure:
+    - `secret/apim/dev/gateway-admin` - Credentials Gateway admin
+    - `secret/apim/dev/keycloak-admin` - Credentials Keycloak admin
+    - `secret/apim/dev/awx-automation` - Client credentials AWX
+    - `secret/apim/dev/aliases/*` - Backend aliases avec credentials
+
+- **Vault Kubernetes Auth** - Authentification native K8s
+  - Roles: `apim-apps` (lecture), `awx-admin` (lecture/écriture)
+  - Service accounts: `control-plane-api`, `awx-web`, `awx-task`
+  - Policies: `apim-read`, `apim-admin`
+
+- **Playbook sync-alias.yaml** - Synchronisation aliases Vault → Gateway
+  - Lecture des aliases depuis Vault
+  - Création/mise à jour dans webMethods Gateway
+  - Support authentification: Basic Auth, API Key, OAuth2
+  - Mode dry-run pour preview
+
+- **Playbook rotate-credentials.yaml** - Rotation automatique des credentials
+  - Types supportés: password, api_key, oauth_client
+  - Mise à jour Vault + Gateway Alias en une opération
+  - Rotation client secret Keycloak pour OAuth
+  - Callback de notification vers Control-Plane API
+
+- **AWX Job Templates** - Nouveaux templates Phase 3
+  - `Sync Gateway Aliases` (ID: 15) - sync-alias.yaml
+  - `Rotate Credentials` (ID: 16) - rotate-credentials.yaml
+
 ### Corrigé (2024-12-23) - OpenAPI 3.1.0 → 3.0.0 Conversion
 
 - **OpenAPI Version Compatibility** - webMethods Gateway 10.15 ne supporte pas OpenAPI 3.1.0
@@ -270,10 +308,15 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [x] User apimadmin@cab-i.com créé avec rôle cpi-admin
 - [x] Architecture GitHub/GitLab documentée
 
-### Phase 3: Secrets & Gateway Alias (Priorité Moyenne)
-- [ ] HashiCorp Vault
-- [ ] Gateway Alias pour endpoints/credentials
-- [ ] Jobs AWX sync-alias, rotate-credentials
+### Phase 3: Secrets & Gateway Alias (Priorité Moyenne) - EN COURS ✅
+- [x] HashiCorp Vault déployé sur EKS
+- [x] Vault KV v2 avec structure secrets APIM
+- [x] Kubernetes auth configuré (roles, policies)
+- [x] Playbook sync-alias.yaml pour Gateway Alias
+- [x] Playbook rotate-credentials.yaml pour rotation secrets
+- [x] Jobs AWX: Sync Gateway Aliases, Rotate Credentials
+- [ ] Intégration External Secrets Operator (optionnel)
+- [ ] Auto-unseal avec AWS KMS (optionnel)
 
 ### Phase 4: Observabilité (Priorité Moyenne)
 - [ ] Amazon OpenSearch
@@ -315,6 +358,19 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [ ] Déploiement Kubernetes
 - [ ] Plan détaillé: [docs/DEVELOPER-PORTAL-PLAN.md](docs/DEVELOPER-PORTAL-PLAN.md)
 
+### Phase 9: Ticketing - Demandes de Production (Priorité Basse)
+- [ ] Modèle PromotionRequest (YAML dans Git)
+- [ ] Workflow: PENDING → APPROVED → DEPLOYING → DEPLOYED
+- [ ] RBAC: DevOps crée, CPI approuve
+- [ ] Règle anti-self-approval
+- [ ] Endpoints CRUD `/v1/requests/prod`
+- [ ] Trigger AWX automatique sur approbation
+- [ ] Webhook callback AWX → update status
+- [ ] UI: Liste demandes, formulaire, détail, timeline
+- [ ] Events Kafka (request-created, approved, rejected, deployed, failed)
+- [ ] Notifications Email + Slack
+- [ ] Plan détaillé: [docs/TICKETING-SYSTEM-PLAN.md](docs/TICKETING-SYSTEM-PLAN.md)
+
 ---
 
 ## URLs
@@ -328,3 +384,4 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 | API Gateway | https://gateway.apim.cab-i.com | Administrator/manage |
 | Developer Portal | https://portal.apim.cab-i.com | - |
 | ArgoCD | https://argocd.apim.cab-i.com | GitOps CD |
+| Vault | https://vault.apim.cab-i.com | Secrets Management |

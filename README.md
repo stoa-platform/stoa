@@ -2554,6 +2554,165 @@ roles:
 - [ ] Déploiement Kubernetes (Helm)
 - [ ] URL: https://portal.apim.cab-i.com
 
+#### Phase 9 : Système de Ticketing (Demandes de Production)
+
+**Objectif**: Implémenter un workflow de validation manuelle pour les promotions vers PROD avec traçabilité complète et règle anti-self-approval.
+
+> **Plan détaillé**: Voir [docs/TICKETING-SYSTEM-PLAN.md](docs/TICKETING-SYSTEM-PLAN.md)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         TICKETING WORKFLOW                                           │
+│                                                                                      │
+│   ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐                      │
+│   │  PENDING │───▶│ APPROVED │───▶│DEPLOYING │───▶│ DEPLOYED │                      │
+│   └──────────┘    └──────────┘    └──────────┘    └──────────┘                      │
+│        │                               │                                             │
+│        │                               │                                             │
+│        ▼                               ▼                                             │
+│   ┌──────────┐                   ┌──────────┐                                       │
+│   │ REJECTED │                   │  FAILED  │                                       │
+│   └──────────┘                   └──────────┘                                       │
+│                                                                                      │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐   │
+│   │                              FLUX                                            │   │
+│   │                                                                              │   │
+│   │  DevOps ──▶ Crée demande ──▶ Git (requests/prod/) ──▶ Event Kafka           │   │
+│   │                                        │                                     │   │
+│   │                                        ▼                                     │   │
+│   │  CPI Admin ◀── Notification ◀── UI Console ──▶ Approve/Reject               │   │
+│   │                                        │                                     │   │
+│   │                                        ▼                                     │   │
+│   │  AWX ◀────────── Trigger ◀────── Si approved ──▶ Deploy PROD                │   │
+│   │                                        │                                     │   │
+│   │                                        ▼                                     │   │
+│   │  Callback AWX ──▶ Update Git ──▶ Notification ──▶ Demandeur + Approbateur   │   │
+│   │                                                                              │   │
+│   └─────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Fonctionnalités Clés**:
+
+| Fonctionnalité | Description |
+|----------------|-------------|
+| Créer une demande | DevOps soumet une demande de promotion STAGING → PROD |
+| Validation RBAC | Seuls les CPI/Admins peuvent approuver |
+| Anti-self-approval | Le demandeur ne peut pas approuver sa propre demande |
+| Workflow automatisé | Approbation → AWX Job → Déploiement PROD |
+| Notifications | Email + Slack à chaque étape |
+| Historique complet | Audit trail dans Git |
+
+**Structure GitOps**:
+```
+apim-gitops/
+└── requests/
+    └── prod/
+        └── 2024/
+            └── 12/
+                ├── PR-2024-0001.yaml
+                ├── PR-2024-0002.yaml
+                └── PR-2024-0003.yaml
+```
+
+**Format Ticket YAML**:
+```yaml
+apiVersion: apim.cab-i.com/v1
+kind: PromotionRequest
+metadata:
+  id: PR-2024-0003
+  createdAt: "2024-12-23T10:30:00Z"
+  createdBy: pierre.durand@cab-i.com
+  tenant: tenant-finance
+
+spec:
+  target:
+    type: api
+    name: payment-api
+    version: "2.1.0"
+    sourceEnvironment: staging
+    targetEnvironment: prod
+
+  request:
+    justification: "New PCI-DSS compliant payment flow"
+    impactAssessment: low
+    rollbackPlan: "Revert to v2.0.0"
+
+  preChecks:
+    stagingTestsPassed: true
+    securityScanPassed: true
+    testEvidenceUrl: "https://gitlab.../pipeline/12345"
+
+status:
+  state: pending  # pending | approved | rejected | deploying | deployed | failed
+  history:
+    - action: created
+      at: "2024-12-23T10:30:00Z"
+      by: pierre.durand@cab-i.com
+```
+
+**RBAC**:
+
+| Rôle | Créer demande | Approuver | Rejeter | Voir |
+|------|---------------|-----------|---------|------|
+| DevOps | ✅ Son tenant | ❌ | ❌ | Ses demandes |
+| CPI (Tenant Admin) | ✅ Son tenant | ✅ Son tenant* | ✅ Son tenant | Son tenant |
+| CPI Admin | ✅ Tous | ✅ Tous* | ✅ Tous | Tous |
+
+*\* Sauf ses propres demandes (anti-self-approval)*
+
+**Endpoints API**:
+```
+# Liste et recherche
+GET    /v1/requests/prod?state=pending&tenant=...
+
+# Mes demandes
+GET    /v1/requests/prod/my
+
+# Demandes en attente pour moi (approbateur)
+GET    /v1/requests/prod/pending
+
+# Créer une demande
+POST   /v1/requests/prod
+
+# Détail
+GET    /v1/requests/prod/{id}
+
+# Approuver (déclenche AWX automatiquement)
+POST   /v1/requests/prod/{id}/approve
+
+# Rejeter (reason obligatoire)
+POST   /v1/requests/prod/{id}/reject
+
+# Stats dashboard
+GET    /v1/requests/prod/stats
+```
+
+**Intégration Kafka**:
+- `request-created` → Notification approbateurs
+- `request-approved` → Trigger AWX + notification demandeur
+- `request-rejected` → Notification demandeur
+- `deployment-started` → Notification demandeur + approbateur
+- `deployment-succeeded` → Notification tous
+- `deployment-failed` → Notification tous + ops
+
+**Checklist Phase 9**:
+- [ ] Modèle Pydantic `PromotionRequest`
+- [ ] Service Git pour CRUD requests
+- [ ] Endpoints CRUD `/v1/requests/prod`
+- [ ] Endpoint approve avec anti-self-approval
+- [ ] Endpoint reject avec reason obligatoire
+- [ ] Trigger AWX sur approbation
+- [ ] Webhook callback AWX → update status
+- [ ] UI - Page liste demandes avec filtres
+- [ ] UI - Formulaire nouvelle demande
+- [ ] UI - Page détail avec timeline
+- [ ] UI - Boutons Approve/Reject
+- [ ] Events Kafka pour notifications
+- [ ] Templates email (created, approved, rejected, deployed, failed)
+- [ ] Notifications Slack
+
 ---
 
 ### Architecture Cible Complète
@@ -2614,3 +2773,4 @@ roles:
 | Phase 6 | Demo Tenant + SSO Unifié + Documentation | À planifier |
 | Phase 7 | Sécurité Opérationnelle (Batch Jobs) | À planifier |
 | Phase 8 | Developer Portal Custom (React) | À planifier |
+| Phase 9 | Ticketing (Demandes de Production) | À planifier |

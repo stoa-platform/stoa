@@ -1,0 +1,201 @@
+---
+# Platform Configuration for APIM
+# This file centralizes all platform variables used by Ansible playbooks
+#
+# Environment variables can override these defaults using the naming convention:
+#   keycloak_url, gateway_url, etc.
+
+# =============================================================================
+# ENVIRONMENT
+# =============================================================================
+environment: dev
+base_domain: apim.cab-i.com
+platform_tenant_id: apim
+
+# =============================================================================
+# KEYCLOAK CONFIGURATION
+# =============================================================================
+keycloak:
+  url: "https://auth.{{ base_domain }}"
+  realm: apim
+  admin_user: admin
+  # admin_password: Set via environment or secrets
+
+  # OAuth2 Clients
+  clients:
+    control_plane_ui:
+      client_id: control-plane-ui
+      public: true
+      # Used by the DevOps UI
+
+    control_plane_api:
+      client_id: control-plane-api
+      # Used by the FastAPI backend
+      # audience for JWT validation
+
+    awx_automation:
+      client_id: awx-automation
+      service_account: true
+      # Used by AWX playbooks for OIDC authentication
+      # Audience mapper: control-plane-api
+
+  # Roles
+  roles:
+    - cpi-admin      # Platform administrator
+    - tenant-admin   # Tenant administrator
+    - devops         # DevOps engineer
+    - viewer         # Read-only access
+
+# =============================================================================
+# GATEWAY CONFIGURATION
+# =============================================================================
+gateway:
+  # Internal URL (K8s service)
+  internal_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+  # External URL
+  external_url: "https://gateway.{{ base_domain }}"
+  # APIs endpoint
+  apis_url: "https://apis.{{ base_domain }}"
+
+  admin:
+    user: Administrator
+    # password: Set via environment or secrets
+
+  # External Authorization Server for OIDC
+  auth_server:
+    name: KeycloakOIDC
+    type: EXTERNAL
+    issuer: "https://auth.{{ base_domain }}/realms/{{ keycloak.realm }}"
+    jwks_uri: "https://auth.{{ base_domain }}/realms/{{ keycloak.realm }}/protocol/openid-connect/certs"
+    token_endpoint: "https://auth.{{ base_domain }}/realms/{{ keycloak.realm }}/protocol/openid-connect/token"
+    authorize_endpoint: "https://auth.{{ base_domain }}/realms/{{ keycloak.realm }}/protocol/openid-connect/auth"
+
+  # OIDC Strategy for JWT validation
+  # IMPORTANT: Use OPENID_CONNECT_RSA type (not OAUTH2_LOCAL_RSA)
+  oauth_strategy:
+    name: OidcStrat
+    type: OPENID_CONNECT_RSA
+    auth_server_alias: KeycloakOIDC
+    # JWT validation settings
+    client_id: awx-automation   # Client ID value (not claim name)
+    audience: control-plane-api # Expected audience in JWT
+
+  # Platform APIs
+  apis:
+    control_plane:
+      name: Control-Plane-API
+      version: "2.0"
+      # ID set after import
+
+    gateway_admin:
+      name: Gateway-Admin-API
+      version: "1.0"
+      # ID set after import
+
+# =============================================================================
+# CONTROL PLANE API CONFIGURATION
+# =============================================================================
+control_plane_api:
+  url: "https://api.{{ base_domain }}"
+  # Gateway Admin Proxy endpoint
+  gateway_proxy_url: "https://api.{{ base_domain }}/v1/gateway"
+
+# =============================================================================
+# AWX CONFIGURATION
+# =============================================================================
+awx:
+  url: "https://awx.{{ base_domain }}"
+  # token: Set via environment or AWS Secrets Manager
+
+  # Project for playbooks
+  project:
+    name: APIM Playbooks
+    scm_url: "https://gitlab.com/PotoMitan1/apim-gitops.git"
+    scm_branch: main
+
+  # Job Templates
+  job_templates:
+    deploy_api: "Deploy API"
+    rollback_api: "Rollback API"
+    sync_gateway: "Sync Gateway"
+    promote_portal: "Promote Portal"
+    provision_tenant: "Provision Tenant"
+    register_api_gateway: "Register API Gateway"
+    bootstrap_platform: "Bootstrap Platform"
+
+# =============================================================================
+# GITLAB CONFIGURATION
+# =============================================================================
+gitlab:
+  url: "https://gitlab.com"
+  project_path: PotoMitan1/apim-gitops
+  # token: Set via environment or AWS Secrets Manager
+  default_branch: main
+
+# =============================================================================
+# AWS SECRETS MANAGER PATHS
+# =============================================================================
+aws_secrets:
+  prefix: "apim/{{ environment }}"
+  paths:
+    awx_automation: "{{ prefix }}/awx-automation"
+    awx_token: "apim/awx-token"
+    gateway_admin: "{{ prefix }}/gateway-admin"
+    keycloak_admin: "{{ prefix }}/keycloak-admin"
+    gitlab_token: "{{ prefix }}/gitlab-token"
+
+# =============================================================================
+# APPLICATION REGISTRATION
+# =============================================================================
+# Configuration for registering applications in Gateway
+# These applications can consume APIs via OIDC authentication
+
+applications:
+  control_plane_ui:
+    name: control-plane-ui
+    description: "APIM Control Plane UI Application"
+    contact_email: admin@cab-i.com
+    identifier:
+      key: openIdClaims
+      name: client_id          # Use client_id claim
+      value: control-plane-ui
+    # APIs this application can consume
+    consuming_apis:
+      - control_plane
+      - gateway_admin
+
+  awx_automation:
+    name: awx-automation
+    description: "AWX Ansible Automation Service Account for OIDC proxy access"
+    contact_email: admin@cab-i.com
+    identifier:
+      key: openIdClaims
+      name: client_id          # Use client_id claim (not azp)
+      value: awx-automation
+    # APIs this application can consume
+    consuming_apis:
+      - control_plane
+      - gateway_admin
+
+  control_plane_gateway_admin:
+    name: control-plane-gateway-admin
+    description: "Control-Plane API backend for Gateway Admin access"
+    contact_email: admin@cab-i.com
+    identifier:
+      key: openIdClaims
+      name: client_id          # Use client_id claim
+      value: control-plane-api
+    consuming_apis:
+      - gateway_admin
+
+# =============================================================================
+# SCOPE NAMING CONVENTION
+# =============================================================================
+# Format: {AuthServer}:{Tenant}:{Api}:{Version}:{Scope}
+# Example: KeycloakOIDC:apim:control-plane:2.0:admin
+scope_naming:
+  pattern: "{{ auth_server }}:{{ tenant }}:{{ api }}:{{ version }}:{{ scope }}"
+  default_scopes:
+    - admin
+    - read
+    - write

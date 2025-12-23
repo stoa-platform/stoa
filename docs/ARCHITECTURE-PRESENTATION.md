@@ -611,7 +611,7 @@
 
 ## Phase 8 - Developer Portal Custom
 
-**Objectif**: Remplacer le Developer Portal webMethods par un portal custom React, unifié avec le SSO Keycloak.
+**Objectif**: Développer un Developer Portal custom React, unifié avec le SSO Keycloak.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐

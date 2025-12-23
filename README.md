@@ -62,7 +62,6 @@ Plateforme de gestion d'APIs multi-tenant avec Control-Plane UI, GitOps et Event
 | Kafka | Event streaming | Redpanda |
 | AWX | Automation/Orchestration | AWX/Ansible |
 | webMethods Gateway | API Gateway runtime | webMethods |
-| Developer Portal | Portal consommateurs | webMethods Portal |
 
 ## Roles RBAC
 
@@ -264,7 +263,6 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 | Keycloak (Auth) | https://auth.apim.cab-i.com | Identity Provider (OIDC) |
 | Keycloak Admin | https://auth.apim.cab-i.com/admin/ | Console admin Keycloak |
 | API Gateway UI | https://gateway.apim.cab-i.com/apigatewayui/ | Console Gateway (admin: Administrator/manage) |
-| Developer Portal | https://portal.apim.cab-i.com/portal/ | Portail développeur |
 | **ArgoCD** | https://argocd.apim.cab-i.com | GitOps CD (admin/demo) |
 | **AWX (Ansible)** | https://awx.apim.cab-i.com | Automation (admin/demo) |
 | Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n apim-system` | Administration Kafka (interne) |
@@ -278,7 +276,6 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 | Control Plane API | https://api.staging.apim.cab-i.com |
 | Keycloak | https://auth.staging.apim.cab-i.com |
 | API Gateway | https://gateway.staging.apim.cab-i.com |
-| Developer Portal | https://portal.staging.apim.cab-i.com |
 
 ## Utilisateurs par défaut (Instance DEMO)
 
@@ -434,7 +431,6 @@ Keycloak est configuré comme IdP central pour l'authentification OIDC:
 |-----------|-------------|----------------|----------|-----------|-----------|
 | Elasticsearch 8 | 250m | 1Gi | 1 | 250m | 1Gi |
 | API Gateway | 250m | 1Gi | 1 | 250m | 1Gi |
-| Developer Portal | 100m | 512Mi | 1 | 100m | 512Mi |
 | Redpanda (Kafka) | 1000m | 2Gi | 1 | 1000m | 2Gi |
 | Keycloak | 200m | 512Mi | 1 | 200m | 512Mi |
 | Control-Plane API | 100m | 256Mi | 2 | 200m | 512Mi |
@@ -481,7 +477,6 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 ## Références webMethods
 
 - [webMethods API Gateway](https://github.com/ibm-wm-transition/webmethods-api-gateway) - Documentation officielle
-- [webMethods Developer Portal](https://github.com/ibm-wm-transition/webmethods-developer-portal) - Documentation Developer Portal
 - [webMethods API Gateway DevOps](https://github.com/SoftwareAG/webmethods-api-gateway-devops) - Scripts CI/CD et déploiement
 - [Docker Compose Samples](https://github.com/ibm-wm-transition/webmethods-api-gateway/tree/master/samples/docker/deploymentscripts) - Exemples Docker
 
@@ -504,7 +499,6 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 | Control-Plane UI | ✅ Déployé | React frontend |
 | Elasticsearch 8.11 | ✅ Déployé | Sur EKS, cluster SAG_EventDataStore (ES 8+ requis pour Gateway 10.15) |
 | webMethods Gateway | ✅ Déployé | Image lean trial 10.15 |
-| webMethods Portal | ✅ Déployé | Developer Portal |
 | NetworkPolicies | ✅ Déployé | Bloque accès Internet (metering.softwareag.cloud) |
 | EBS CSI Driver | ✅ Déployé | Pour volumes persistants |
 | **Redpanda (Kafka)** | ✅ Déployé | Event streaming, 1 broker, Redpanda Console |
@@ -568,7 +562,6 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    **Job Templates Configurés** ✅:
    - `Deploy API` (id: 8) - Déploie une API sur la Gateway
    - `Sync Gateway` (id: 9) - Synchronise config Gateway
-   - `Promote Portal` (id: 10) - Publie API sur Developer Portal
    - `Rollback API` (id: 11) - Rollback en cas d'échec
 
    **Intégration Kafka** ✅:
@@ -1290,13 +1283,13 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    - Global Policy par tenant
    - Index pattern: {env}-{tenant}-analytics
 
-#### Phase 6 : Tenant Démo & SSO Unifié (Beta Testing)
+#### Phase 6 : Tenant Démo & Documentation (Beta Testing)
 
-**Objectif**: Créer un tenant de démonstration avec des utilisateurs beta testeurs, et unifier l'authentification SSO sur toutes les interfaces (UI DevOps + Developer Portal).
+**Objectif**: Créer un tenant de démonstration avec des utilisateurs beta testeurs et générer la documentation utilisateur (MkDocs).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                           SSO UNIFIÉ - KEYCLOAK                                      │
+│                           BETA TESTING - TENANT DÉMO                                 │
 │                                                                                      │
 │                        ┌──────────────────────────┐                                 │
 │                        │       KEYCLOAK           │                                 │
@@ -1304,23 +1297,21 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 │                        │                          │                                 │
 │                        │  Clients:                │                                 │
 │                        │  ├── control-plane-ui    │                                 │
-│                        │  ├── control-plane-api   │                                 │
-│                        │  └── developer-portal    │  ⬅️ NOUVEAU                    │
+│                        │  └── control-plane-api   │                                 │
 │                        └────────────┬─────────────┘                                 │
 │                                     │                                                │
-│              ┌──────────────────────┼──────────────────────┐                        │
-│              │                      │                      │                        │
-│              ▼                      ▼                      ▼                        │
-│   ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐               │
-│   │   UI DevOps     │    │ Control-Plane   │    │   Developer     │               │
-│   │   (React)       │    │     API         │    │    Portal       │               │
-│   │                 │    │   (FastAPI)     │    │  (webMethods)   │               │
-│   │ devops.apim...  │    │  api.apim...    │    │ portal.apim...  │               │
-│   └─────────────────┘    └─────────────────┘    └─────────────────┘               │
-│          │                       │                      │                          │
-│          └───────────────────────┼──────────────────────┘                          │
-│                                  │                                                  │
-│                    ┌─────────────┴─────────────┐                                   │
+│                        ┌────────────┴────────────┐                                  │
+│                        │                         │                                  │
+│                        ▼                         ▼                                  │
+│             ┌─────────────────┐       ┌─────────────────┐                          │
+│             │   UI DevOps     │       │ Control-Plane   │                          │
+│             │   (React)       │       │     API         │                          │
+│             │                 │       │   (FastAPI)     │                          │
+│             │ devops.apim...  │       │  api.apim...    │                          │
+│             └─────────────────┘       └─────────────────┘                          │
+│                        │                                                            │
+│                        │                                                            │
+│                    ┌───┴───────────────────────┐                                   │
 │                    │     TENANT: tenant-demo   │                                   │
 │                    │                           │                                   │
 │                    │  Users:                   │                                   │
@@ -1333,6 +1324,8 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 │                    └───────────────────────────┘                                   │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Note**: Le Developer Portal sera développé en Phase 8 comme portal custom React.
 
 1. **Créer le Tenant Démo dans GitOps** 🔲
 
@@ -1377,8 +1370,8 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 
    | User | Email | Rôle | Accès |
    |------|-------|------|-------|
-   | Demo CPI | demo-cpi@cab-i.com | `tenant-admin` | UI DevOps + Portal (full CRUD) |
-   | Demo DevOps | demo-devops@cab-i.com | `devops` | UI DevOps + Portal (deploy only) |
+   | Demo CPI | demo-cpi@cab-i.com | `tenant-admin` | UI DevOps (full CRUD) |
+   | Demo DevOps | demo-devops@cab-i.com | `devops` | UI DevOps (deploy only) |
 
    **Configuration Keycloak**:
    ```yaml
@@ -1417,62 +1410,7 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
          tenant_id: ["tenant-demo"]
    ```
 
-3. **Configurer SSO Developer Portal (webMethods)** 🔲
-
-   Le Developer Portal webMethods doit être configuré pour utiliser Keycloak comme IdP.
-
-   **Keycloak - Nouveau Client pour Portal**:
-   ```yaml
-   # Client: developer-portal
-   clientId: developer-portal
-   name: "Developer Portal"
-   protocol: openid-connect
-   publicClient: false
-   redirectUris:
-     - "https://portal.dev.apim.cab-i.com/*"
-     - "https://portal.staging.apim.cab-i.com/*"
-   webOrigins:
-     - "https://portal.dev.apim.cab-i.com"
-     - "https://portal.staging.apim.cab-i.com"
-   standardFlowEnabled: true
-   directAccessGrantsEnabled: false
-
-   # Mappers pour claims JWT
-   protocolMappers:
-     - name: tenant_id
-       protocol: openid-connect
-       protocolMapper: oidc-usermodel-attribute-mapper
-       config:
-         user.attribute: tenant_id
-         claim.name: tenant_id
-         jsonType.label: String
-
-     - name: roles
-       protocol: openid-connect
-       protocolMapper: oidc-usermodel-realm-role-mapper
-       config:
-         claim.name: roles
-         multivalued: "true"
-   ```
-
-   **webMethods Portal - Configuration OIDC**:
-   ```
-   Portal Administration > Security > Identity Providers
-
-   Provider Type: OpenID Connect
-   Provider Name: Keycloak
-   Discovery URL: https://keycloak.dev.apim.cab-i.com/realms/apim-platform/.well-known/openid-configuration
-   Client ID: developer-portal
-   Client Secret: *** (depuis Vault)
-   Scope: openid profile email
-
-   User Mapping:
-   - Username: preferred_username
-   - Email: email
-   - Groups: tenant_id
-   ```
-
-4. **APIs Démo Pré-déployées** 🔲
+3. **APIs Démo Pré-déployées** 🔲
 
    Créer des APIs de démonstration dans le tenant-demo pour que les beta testeurs puissent les explorer.
 
@@ -1516,7 +1454,7 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
            period: minute
    ```
 
-5. **Workflow Beta Testeur** 🔲
+4. **Workflow Beta Testeur** 🔲
 
    ```
    ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -1538,63 +1476,42 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    │     │  • Voir les traces du pipeline (GitLab → Kafka → AWX → Gateway)           │ │
    │     └─────────────────────────────────────────────────────────────────────────────┘ │
    │                                                                                      │
-   │  3. DEVELOPER PORTAL - CONSOMMATION APIs                                            │
-   │     ┌─────────────────────────────────────────────────────────────────────────────┐ │
-   │     │  Accès: https://portal.dev.apim.cab-i.com                                  │ │
-   │     │  → SSO Keycloak (même session, pas de re-login)                            │ │
-   │     │  • Voir les APIs publiées du tenant-demo                                   │ │
-   │     │  • Créer une Application                                                    │ │
-   │     │  • Souscrire à une API                                                      │ │
-   │     │  • Obtenir les credentials (API Key)                                        │ │
-   │     │  • Tester l'API via le Portal                                               │ │
-   │     └─────────────────────────────────────────────────────────────────────────────┘ │
-   │                                                                                      │
    └─────────────────────────────────────────────────────────────────────────────────────┘
    ```
 
-6. **Permissions par Rôle sur les Interfaces** 🔲
+   > **Note**: Le Developer Portal sera ajouté en Phase 8.
 
-   | Interface | CPI (demo-cpi) | DevOps (demo-devops) |
-   |-----------|----------------|----------------------|
-   | **UI DevOps** | | |
+5. **Permissions par Rôle (UI DevOps)** 🔲
+
+   | Action | CPI (demo-cpi) | DevOps (demo-devops) |
+   |--------|----------------|----------------------|
    | Voir APIs tenant | ✅ | ✅ |
    | Créer/Modifier API | ✅ | ✅ |
    | Supprimer API | ✅ | ❌ |
    | Déployer API | ✅ | ✅ |
    | Gérer membres tenant | ✅ | ❌ |
    | Voir traces pipeline | ✅ | ✅ |
-   | **Developer Portal** | | |
-   | Voir APIs publiées | ✅ | ✅ |
-   | Créer Application | ✅ | ✅ |
-   | Souscrire API | ✅ | ✅ |
-   | Gérer souscriptions | ✅ | ❌ (ses propres apps) |
-   | Approuver souscriptions | ✅ | ❌ |
 
-7. **Checklist Déploiement Phase 6** 🔲
+6. **Checklist Déploiement Phase 6** 🔲
 
    - [ ] Créer tenant-demo dans `iam/tenants.yaml` + commit GitLab
    - [ ] Sync IAM → Keycloak (créer groupe + users)
-   - [ ] Configurer client `developer-portal` dans Keycloak
-   - [ ] Configurer OIDC dans webMethods Portal
    - [ ] Créer APIs démo (petstore, weather) dans GitOps
    - [ ] Déployer APIs démo sur Gateway DEV
-   - [ ] Publier APIs démo sur Portal
    - [ ] Tester parcours complet avec demo-cpi
    - [ ] Tester parcours complet avec demo-devops
    - [ ] Documenter accès beta testeurs
 
-8. **Credentials Beta Testeurs**
+7. **Credentials Beta Testeurs**
 
    | User | URL | Login | Password |
    |------|-----|-------|----------|
    | Demo CPI | https://devops.apim.cab-i.com | demo-cpi@cab-i.com | DemoCPI2024! |
-   | Demo CPI | https://portal.dev.apim.cab-i.com | (SSO) | (SSO) |
    | Demo DevOps | https://devops.apim.cab-i.com | demo-devops@cab-i.com | DemoDevOps2024! |
-   | Demo DevOps | https://portal.dev.apim.cab-i.com | (SSO) | (SSO) |
 
    > **Note**: Les credentials seront stockés dans Vault après validation beta.
 
-9. **Documentation Utilisateur** 🔲
+8. **Documentation Utilisateur (MkDocs)** 🔲
 
    Générer une documentation complète pour les beta testeurs et futurs utilisateurs de la plateforme.
 
@@ -1628,12 +1545,13 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 
    ## Accès à la Plateforme APIM
 
-   La plateforme APIM CAB-I dispose de deux interfaces principales:
+   La plateforme APIM CAB-I dispose d'une interface principale:
 
    | Interface | URL | Description |
    |-----------|-----|-------------|
    | UI DevOps | https://devops.apim.cab-i.com | Gestion des APIs, déploiements, monitoring |
-   | Developer Portal | https://portal.dev.apim.cab-i.com | Catalogue APIs, souscriptions, documentation |
+
+   > **Note**: Le Developer Portal custom sera disponible en Phase 8.
 
    ## Connexion (SSO Keycloak)
 
@@ -1660,8 +1578,7 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    2. **Créez une API** via le formulaire ou import OpenAPI
    3. **Déployez** sur l'environnement DEV
    4. **Vérifiez** le déploiement dans la page Monitoring
-   5. **Publiez** sur le Developer Portal
-   6. **Testez** l'API depuis le Portal
+   5. **Testez** l'API via la Gateway
    ```
 
    **02-ui-devops-guide.md**:
@@ -1725,59 +1642,9 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    L'utilisateur recevra un accès automatiquement après synchronisation Keycloak.
    ```
 
-   **03-developer-portal-guide.md**:
-   ```markdown
-   # Guide Developer Portal
+   > **Note**: Le guide Developer Portal sera ajouté après Phase 8.
 
-   ## Catalogue d'APIs
-
-   Le Developer Portal affiche toutes les APIs publiées auxquelles vous avez accès.
-
-   ### Rechercher une API
-   - Utilisez la barre de recherche
-   - Filtrez par catégorie ou tenant
-   - Consultez la documentation OpenAPI intégrée
-
-   ## Applications
-
-   Une **Application** représente votre client qui va consommer des APIs.
-
-   ### Créer une Application
-   1. Allez dans **Mes Applications**
-   2. Cliquez sur **+ Nouvelle Application**
-   3. Donnez un nom et une description
-   4. Votre Application est créée avec des credentials (API Key)
-
-   ### Souscrire à une API
-   1. Trouvez l'API dans le catalogue
-   2. Cliquez sur **Souscrire**
-   3. Sélectionnez votre Application
-   4. Choisissez le plan (Basic, Premium, etc.)
-   5. Attendez l'approbation (si nécessaire)
-
-   ## Tester une API
-
-   Le Portal intègre un client de test:
-   1. Ouvrez la documentation de l'API
-   2. Sélectionnez un endpoint
-   3. Remplissez les paramètres
-   4. Cliquez sur **Try it out**
-   5. Visualisez la réponse
-
-   ## Vos Credentials
-
-   ### API Key
-   - Visible dans **Mes Applications > [App] > Credentials**
-   - À inclure dans le header `X-API-Key`
-
-   ### Exemple cURL
-   ```bash
-   curl -X GET "https://gateway.dev.apim.cab-i.com/petstore/v2/pet/1" \
-        -H "X-API-Key: YOUR_API_KEY"
-   ```
-   ```
-
-   **04-api-lifecycle.md**:
+   **03-api-lifecycle.md**:
    ```markdown
    # Cycle de Vie d'une API
 
@@ -1838,14 +1705,12 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
      - Guide Utilisateur:
        - Premiers Pas: user-guide/01-getting-started.md
        - UI DevOps: user-guide/02-ui-devops-guide.md
-       - Developer Portal: user-guide/03-developer-portal-guide.md
-       - Cycle de Vie API: user-guide/04-api-lifecycle.md
-       - Rôles & Permissions: user-guide/05-rbac-roles.md
-       - Dépannage: user-guide/06-troubleshooting.md
+       - Cycle de Vie API: user-guide/03-api-lifecycle.md
+       - Rôles & Permissions: user-guide/04-rbac-roles.md
+       - Dépannage: user-guide/05-troubleshooting.md
      - Tutoriels:
        - Créer sa première API: tutorials/create-first-api.md
        - Déployer une API: tutorials/deploy-api.md
-       - Consommer une API: tutorials/consume-api.md
        - Gérer son équipe: tutorials/manage-team.md
      - API Reference: api-reference/
 
@@ -1862,10 +1727,9 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    **Checklist Documentation**:
    - [ ] Écrire 01-getting-started.md
    - [ ] Écrire 02-ui-devops-guide.md avec screenshots
-   - [ ] Écrire 03-developer-portal-guide.md avec screenshots
-   - [ ] Écrire 04-api-lifecycle.md
-   - [ ] Écrire 05-rbac-roles.md
-   - [ ] Écrire 06-troubleshooting.md (FAQ)
+   - [ ] Écrire 03-api-lifecycle.md
+   - [ ] Écrire 04-rbac-roles.md
+   - [ ] Écrire 05-troubleshooting.md (FAQ)
    - [ ] Créer tutoriels pas-à-pas
    - [ ] Capturer screenshots des interfaces
    - [ ] Configurer MkDocs + thème Material
@@ -2414,7 +2278,7 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 
 #### Phase 8 : Developer Portal Custom (React)
 
-**Objectif**: Remplacer le Developer Portal webMethods par un portal custom React intégré à l'architecture APIM GitOps avec SSO Keycloak unifié.
+**Objectif**: Développer un Developer Portal custom React intégré à l'architecture APIM GitOps avec SSO Keycloak unifié.
 
 > **Plan détaillé**: Voir [docs/DEVELOPER-PORTAL-PLAN.md](docs/DEVELOPER-PORTAL-PLAN.md)
 
@@ -2748,14 +2612,13 @@ GET    /v1/requests/prod/stats
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    RUNTIME LAYER                                     │
-│   ┌────────────────────┐         ┌────────────────────┐             │
-│   │ webMethods Gateway │ ◄─────► │ Developer Portal   │             │
-│   │ (DEV)              │         │                    │             │
-│   └────────────────────┘         └────────────────────┘             │
-│              │                              │                        │
-│              ▼                              ▼                        │
 │   ┌────────────────────────────────────────────────────────┐        │
-│   │              Elasticsearch 7.17 (EKS)                   │        │
+│   │              webMethods Gateway (DEV)                   │        │
+│   └────────────────────────────────────────────────────────┘        │
+│              │                                                       │
+│              ▼                                                       │
+│   ┌────────────────────────────────────────────────────────┐        │
+│   │              Elasticsearch 8 (EKS)                      │        │
 │   │              cluster: SAG_EventDataStore                │        │
 │   └────────────────────────────────────────────────────────┘        │
 └─────────────────────────────────────────────────────────────────────┘

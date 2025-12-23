@@ -294,28 +294,7 @@
       register: api_activate
 
     # =========================================================================
-    # STEP 7: Publish to Developer Portal (optional)
-    # =========================================================================
-    - name: Publish API to Developer Portal
-      uri:
-        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}/publish"
-        method: PUT
-        user: "{{ gateway_user }}"
-        password: "{{ gateway_password }}"
-        force_basic_auth: true
-        validate_certs: false
-        headers:
-          Content-Type: "application/json"
-        body_format: json
-        body:
-          portalGatewayId: "default"
-        status_code: [200, 204, 404]
-      when: api_id is defined
-      register: api_publish
-      ignore_errors: true
-
-    # =========================================================================
-    # STEP 8: Send completion notification
+    # STEP 7: Send completion notification
     # =========================================================================
     - name: Send registration success to Control Plane API
       uri:

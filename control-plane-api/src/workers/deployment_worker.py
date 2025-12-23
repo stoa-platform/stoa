@@ -109,8 +109,7 @@ class DeploymentWorker:
                 await self._handle_deploy_request(tenant_id, payload, event_id)
             elif event_type == "rollback-request":
                 await self._handle_rollback_request(tenant_id, payload, event_id)
-            elif event_type == "promote-request":
-                await self._handle_promote_request(tenant_id, payload, event_id)
+            # Note: promote-request will be handled by custom Developer Portal (Phase 8)
             elif event_type == "sync-request":
                 await self._handle_sync_request(tenant_id, payload, event_id)
             elif event_type == "tenant-provisioning":
@@ -202,38 +201,7 @@ class DeploymentWorker:
             event_id=event_id
         ))
 
-    async def _handle_promote_request(self, tenant_id: str, payload: dict, event_id: str):
-        """Handle API promotion to portal request"""
-        api_id = payload.get("api_id")
-        api_name = payload.get("api_name")
-
-        logger.info(f"Promoting API {api_name} to Developer Portal")
-
-        # Get promote-portal template
-        template = await awx_service.get_job_template_by_name("Promote Portal")
-        if not template:
-            raise ValueError("Job template 'Promote Portal' not found")
-
-        job = await awx_service.launch_job(
-            template_id=template["id"],
-            extra_vars={
-                "tenant_id": tenant_id,
-                "api_id": api_id,
-                "api_name": api_name,
-            }
-        )
-
-        job_id = job.get("id")
-        logger.info(f"Launched AWX job {job_id} for portal promotion")
-
-        asyncio.create_task(self._monitor_job(
-            job_id=job_id,
-            tenant_id=tenant_id,
-            api_id=api_id,
-            api_name=api_name,
-            action="promote",
-            event_id=event_id
-        ))
+    # Note: _handle_promote_request removed - Developer Portal custom will be implemented in Phase 8
 
     async def _handle_sync_request(self, tenant_id: str, payload: dict, event_id: str):
         """Handle Gateway sync request"""

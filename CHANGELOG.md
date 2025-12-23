@@ -8,6 +8,15 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Supprimé (2024-12-23) - Retrait webMethods Developer Portal
+
+- **webMethods Developer Portal** - Supprimé de l'architecture
+  - Licence trial IBM demandée uniquement pour Gateway (sans Portal)
+  - Developer Portal custom React prévu en Phase 8
+  - Playbook `promote-portal.yaml` supprimé
+  - Références au portal retirées de la documentation
+  - Handler `_handle_promote_request` supprimé du deployment_worker
+
 ### Ajouté (2025-12-23) - Phase 3: Secrets & Gateway Alias - EN COURS ✅
 
 - **HashiCorp Vault** - Déployé sur EKS pour gestion centralisée des secrets
@@ -86,7 +95,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - `deploy-api.yaml` - Déploiement API dans Gateway
   - `rollback.yaml` - Rollback/désactivation API
   - `sync-gateway.yaml` - Synchronisation Gateway
-  - `promote-portal.yaml` - Publication Developer Portal
+  - `promote-portal.yaml` - Publication API sur Gateway
 
 - **Kafka Snappy Compression** - Support codec snappy
   - Ajout `python-snappy==0.7.3` dans requirements.txt
@@ -278,7 +287,6 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 - **webMethods**
   - API Gateway (lean trial 10.15)
-  - Developer Portal
   - Elasticsearch 8.11 (pour Gateway)
 
 - **Keycloak** - Identity Provider
@@ -330,7 +338,6 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ### Phase 6: Beta Testing (Priorité Basse)
 - [ ] Tenant démo
-- [ ] SSO Developer Portal
 - [ ] Documentation utilisateur (MkDocs)
 
 ### Phase 7: Sécurité Opérationnelle (Priorité Basse)
@@ -382,6 +389,5 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 | Keycloak | https://auth.apim.cab-i.com | Realm: apim |
 | AWX | https://awx.apim.cab-i.com | admin/demo |
 | API Gateway | https://gateway.apim.cab-i.com | Administrator/manage |
-| Developer Portal | https://portal.apim.cab-i.com | - |
 | ArgoCD | https://argocd.apim.cab-i.com | GitOps CD |
 | Vault | https://vault.apim.cab-i.com | Secrets Management |

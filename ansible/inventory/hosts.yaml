@@ -11,9 +11,6 @@ all:
     gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
     gateway_user: "Administrator"
 
-    # Portal configuration
-    portal_url: "http://devportal.apim-system.svc.cluster.local:8083"
-
     # Control Plane API
     control_plane_url: "http://control-plane-api.apim-system.svc.cluster.local:8000"
 

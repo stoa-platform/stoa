@@ -2577,6 +2577,680 @@ GET    /v1/requests/prod/stats
 - [ ] Templates email (created, approved, rejected, deployed, failed)
 - [ ] Notifications Slack
 
+#### Phase 10 : Resource Lifecycle Management (Non-Production Auto-Teardown)
+
+**Objectif**: Implémenter une stratégie de tagging obligatoire et d'auto-suppression des ressources non-production pour optimiser les coûts et éviter l'accumulation de ressources orphelines.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                      RESOURCE LIFECYCLE MANAGEMENT                                    │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                         MANDATORY TAGS                                       │    │
+│   │                                                                              │    │
+│   │   environment    : dev | staging | sandbox | demo                           │    │
+│   │   owner          : email du responsable                                     │    │
+│   │   project        : nom du projet / tenant                                   │    │
+│   │   cost-center    : code centre de coût                                      │    │
+│   │   ttl            : durée de vie (7d, 14d, 30d max)                          │    │
+│   │   created_at     : date de création (auto)                                  │    │
+│   │   auto-teardown  : true | false                                             │    │
+│   │   data-class     : public | internal | confidential | restricted            │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                            WORKFLOW                                          │    │
+│   │                                                                              │    │
+│   │   Deploy Request                                                            │    │
+│   │        │                                                                     │    │
+│   │        ▼                                                                     │    │
+│   │   ┌──────────┐    Missing tags?    ┌──────────┐                            │    │
+│   │   │ Validate │───────────────────▶ │ REJECTED │                            │    │
+│   │   │   Tags   │                     └──────────┘                            │    │
+│   │   └────┬─────┘                                                              │    │
+│   │        │ OK                                                                  │    │
+│   │        ▼                                                                     │    │
+│   │   ┌──────────┐    TTL > 30d?       ┌──────────┐                            │    │
+│   │   │  Check   │───────────────────▶ │ REJECTED │                            │    │
+│   │   │   TTL    │                     └──────────┘                            │    │
+│   │   └────┬─────┘                                                              │    │
+│   │        │ OK                                                                  │    │
+│   │        ▼                                                                     │    │
+│   │   ┌──────────┐    data-class =     ┌───────────────┐                       │    │
+│   │   │  Check   │    restricted?      │ REQUIRE MANUAL│                       │    │
+│   │   │Data Class│───────────────────▶ │   APPROVAL    │                       │    │
+│   │   └────┬─────┘                     └───────────────┘                       │    │
+│   │        │ OK                                                                  │    │
+│   │        ▼                                                                     │    │
+│   │   ┌──────────┐                                                              │    │
+│   │   │  DEPLOY  │                                                              │    │
+│   │   └──────────┘                                                              │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                         AUTO-TEARDOWN SCHEDULER                              │    │
+│   │                                                                              │    │
+│   │   EventBridge (cron: 0 2 * * *)                                             │    │
+│   │        │                                                                     │    │
+│   │        ▼                                                                     │    │
+│   │   ┌──────────────┐                                                          │    │
+│   │   │    Lambda    │                                                          │    │
+│   │   │ cleanup-job  │                                                          │    │
+│   │   └──────┬───────┘                                                          │    │
+│   │          │                                                                   │    │
+│   │    ┌─────┴─────────────────────────────────────────┐                        │    │
+│   │    │                                               │                        │    │
+│   │    ▼                                               ▼                        │    │
+│   │  AWS Resources                              K8s Resources                   │    │
+│   │  - EC2 instances                            - Namespaces                    │    │
+│   │  - RDS databases                            - Deployments                   │    │
+│   │  - S3 buckets                               - Services                      │    │
+│   │  - EKS nodegroups                           - ConfigMaps                    │    │
+│   │                                                                              │    │
+│   │   1. Query resources where auto-teardown=true                               │    │
+│   │   2. Check if created_at + ttl < now()                                      │    │
+│   │   3. Notify owner (48h warning, then 24h, then delete)                      │    │
+│   │   4. Delete expired resources                                               │    │
+│   │   5. Audit log to Kafka + S3                                                │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Tags Obligatoires**:
+
+| Tag | Description | Valeurs Possibles | Obligatoire |
+|-----|-------------|-------------------|-------------|
+| `environment` | Environnement cible | `dev`, `staging`, `sandbox`, `demo` | ✅ |
+| `owner` | Email du responsable | Email valide | ✅ |
+| `project` | Nom du projet/tenant | String | ✅ |
+| `cost-center` | Code centre de coût | Code numérique | ✅ |
+| `ttl` | Durée de vie | `7d`, `14d`, `30d` (max) | ✅ Non-prod |
+| `created_at` | Date création | ISO 8601 (auto-généré) | ✅ Auto |
+| `auto-teardown` | Suppression auto | `true`, `false` | ✅ Non-prod |
+| `data-class` | Classification données | `public`, `internal`, `confidential`, `restricted` | ✅ |
+
+**Guardrails (Règles de Protection)**:
+
+1. **Tag Validation** - Rejeter tout déploiement sans tags obligatoires
+2. **TTL Maximum** - 30 jours max pour environnements non-prod
+3. **Data Classification** - Ressources `restricted` exclues de l'auto-teardown
+4. **Owner Notification** - 48h avant expiration → 24h → suppression
+5. **Audit Trail** - Toute suppression loggée dans Kafka + S3
+
+**Terraform - Module common_tags**:
+```hcl
+# terraform/modules/common_tags/variables.tf
+variable "environment" {
+  type        = string
+  description = "Environment name (dev, staging, sandbox, demo)"
+  validation {
+    condition     = contains(["dev", "staging", "sandbox", "demo", "prod"], var.environment)
+    error_message = "Environment must be one of: dev, staging, sandbox, demo, prod."
+  }
+}
+
+variable "owner" {
+  type        = string
+  description = "Owner email address"
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.owner))
+    error_message = "Owner must be a valid email address."
+  }
+}
+
+variable "project" {
+  type        = string
+  description = "Project or tenant name"
+}
+
+variable "cost_center" {
+  type        = string
+  description = "Cost center code"
+}
+
+variable "ttl" {
+  type        = string
+  description = "Time to live (7d, 14d, 30d)"
+  default     = "14d"
+  validation {
+    condition     = can(regex("^(7|14|30)d$", var.ttl))
+    error_message = "TTL must be 7d, 14d, or 30d."
+  }
+}
+
+variable "auto_teardown" {
+  type        = bool
+  description = "Enable automatic teardown after TTL"
+  default     = true
+}
+
+variable "data_class" {
+  type        = string
+  description = "Data classification"
+  default     = "internal"
+  validation {
+    condition     = contains(["public", "internal", "confidential", "restricted"], var.data_class)
+    error_message = "Data class must be one of: public, internal, confidential, restricted."
+  }
+}
+
+# terraform/modules/common_tags/outputs.tf
+output "tags" {
+  value = {
+    environment    = var.environment
+    owner          = var.owner
+    project        = var.project
+    cost-center    = var.cost_center
+    ttl            = var.environment != "prod" ? var.ttl : "permanent"
+    created_at     = timestamp()
+    auto-teardown  = var.environment != "prod" ? tostring(var.auto_teardown) : "false"
+    data-class     = var.data_class
+    managed-by     = "terraform"
+  }
+}
+```
+
+**Utilisation Terraform**:
+```hcl
+# terraform/environments/dev/main.tf
+module "tags" {
+  source = "../../modules/common_tags"
+
+  environment   = "dev"
+  owner         = "devteam@cab-i.com"
+  project       = "apim-platform"
+  cost_center   = "CC-12345"
+  ttl           = "14d"
+  auto_teardown = true
+  data_class    = "internal"
+}
+
+resource "aws_instance" "example" {
+  ami           = "ami-xxxxx"
+  instance_type = "t3.medium"
+
+  tags = module.tags.tags
+}
+```
+
+**Lambda Cleanup Job**:
+```python
+# lambda/resource_cleanup/handler.py
+import boto3
+from datetime import datetime, timedelta
+import json
+
+def handler(event, context):
+    """
+    Scheduled job to cleanup expired non-prod resources.
+    Runs daily at 2 AM UTC via EventBridge.
+    """
+    ec2 = boto3.client('ec2')
+    rds = boto3.client('rds')
+
+    # Find resources with auto-teardown=true and expired TTL
+    filters = [
+        {'Name': 'tag:auto-teardown', 'Values': ['true']},
+        {'Name': 'tag:environment', 'Values': ['dev', 'staging', 'sandbox', 'demo']}
+    ]
+
+    instances = ec2.describe_instances(Filters=filters)
+
+    for reservation in instances['Reservations']:
+        for instance in reservation['Instances']:
+            tags = {t['Key']: t['Value'] for t in instance.get('Tags', [])}
+
+            # Skip restricted data
+            if tags.get('data-class') == 'restricted':
+                continue
+
+            created_at = datetime.fromisoformat(tags.get('created_at', ''))
+            ttl_days = int(tags.get('ttl', '14d').replace('d', ''))
+            expiry = created_at + timedelta(days=ttl_days)
+
+            if datetime.utcnow() > expiry:
+                # Notify owner before deletion
+                notify_owner(tags.get('owner'), instance['InstanceId'], 'terminated')
+                ec2.terminate_instances(InstanceIds=[instance['InstanceId']])
+
+                # Audit log
+                log_deletion(instance['InstanceId'], tags)
+
+    return {'statusCode': 200, 'deleted': deleted_count}
+```
+
+**Alternative: n8n Workflow (Low-Code)**:
+- Pour environnements multi-cloud (AWS + Azure + GCP)
+- Workflow visuel avec nœuds configurables
+- Intégration Slack/Teams pour notifications
+- Dashboard de reporting des ressources expirées
+
+**Kubernetes - OPA Gatekeeper Policy**:
+```yaml
+# k8s/policies/require-resource-tags.yaml
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredtags
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredTags
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            requiredTags:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredtags
+
+        violation[{"msg": msg}] {
+          provided := {label | input.review.object.metadata.labels[label]}
+          required := {label | label := input.parameters.requiredTags[_]}
+          missing := required - provided
+          count(missing) > 0
+          msg := sprintf("Missing required tags: %v", [missing])
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredTags
+metadata:
+  name: require-resource-lifecycle-tags
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Namespace", "Pod"]
+      - apiGroups: ["apps"]
+        kinds: ["Deployment", "StatefulSet"]
+    excludedNamespaces:
+      - kube-system
+      - gatekeeper-system
+      - apim-system  # Core platform excluded
+  parameters:
+    requiredTags:
+      - environment
+      - owner
+      - project
+      - ttl
+```
+
+**CI/CD Tag Governance** (GitHub Actions):
+```yaml
+# .github/workflows/tag-governance.yaml
+name: Tag Governance Check
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+      - 'k8s/**'
+
+jobs:
+  check-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Terraform Tags
+        run: |
+          # Ensure all resources use common_tags module
+          missing=$(grep -rL "module.tags.tags" terraform/environments/*/main.tf || true)
+          if [ -n "$missing" ]; then
+            echo "::error::Resources without common_tags: $missing"
+            exit 1
+          fi
+
+      - name: Validate TTL Values
+        run: |
+          # Ensure TTL doesn't exceed 30d for non-prod
+          invalid=$(grep -r 'ttl.*=.*"[4-9][0-9]d\|[1-9][0-9][0-9]d"' terraform/ || true)
+          if [ -n "$invalid" ]; then
+            echo "::error::TTL exceeds maximum 30 days: $invalid"
+            exit 1
+          fi
+```
+
+**Intégration Kafka**:
+- `resource-created` → Log création avec tags
+- `resource-expiring` → Notification 48h/24h avant expiration
+- `resource-deleted` → Audit trail suppression
+- `tag-violation` → Alerte déploiement sans tags
+
+**Checklist Phase 10**:
+- [ ] Module Terraform `common_tags` avec validations
+- [ ] Lambda `resource-cleanup` avec EventBridge schedule
+- [ ] Notifications owner (48h → 24h → delete)
+- [ ] OPA Gatekeeper policies pour Kubernetes
+- [ ] GitHub Actions workflow `tag-governance.yaml`
+- [ ] Dashboard Grafana "Resource Lifecycle"
+- [ ] Events Kafka (resource-created, expiring, deleted)
+- [ ] Exclusion ressources `data-class=restricted`
+- [ ] Exclusion environnement `prod` (auto-teardown=false)
+- [ ] Documentation tagging policy
+- [ ] Alternative n8n workflow pour multi-cloud (optionnel)
+
+#### Phase 11 : Resource Lifecycle Advanced (Gouvernance Avancée)
+
+**Objectif**: Compléter la Phase 10 avec des fonctionnalités avancées de gouvernance : quotas, whitelist, destruction ordonnée, métriques de coûts et self-service TTL extension.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                      RESOURCE LIFECYCLE ADVANCED                                      │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                         QUOTAS PAR PROJET                                    │    │
+│   │                                                                              │    │
+│   │   Limites configurables par project/tenant:                                 │    │
+│   │                                                                              │    │
+│   │   ┌─────────────────────────────────────────────────────────────────────┐   │    │
+│   │   │  Resource Type        │  Default Quota  │  Custom (per tenant)     │   │    │
+│   │   ├───────────────────────┼─────────────────┼──────────────────────────┤   │    │
+│   │   │  EC2 Instances        │  10             │  Configurable            │   │    │
+│   │   │  RDS Databases        │  3              │  Configurable            │   │    │
+│   │   │  S3 Buckets           │  5              │  Configurable            │   │    │
+│   │   │  Lambda Functions     │  20             │  Configurable            │   │    │
+│   │   │  K8s Namespaces       │  5              │  Configurable            │   │    │
+│   │   │  EBS Volumes (GB)     │  500            │  Configurable            │   │    │
+│   │   │  EKS Node Groups      │  2              │  Configurable            │   │    │
+│   │   └───────────────────────┴─────────────────┴──────────────────────────┘   │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                         WHITELIST (NEVER DELETE)                             │    │
+│   │                                                                              │    │
+│   │   Ressources critiques exclues de l'auto-teardown:                          │    │
+│   │                                                                              │    │
+│   │   whitelist.yaml:                                                           │    │
+│   │   ├── arn:aws:ec2:*:*:instance/i-core-*      # Instances core              │    │
+│   │   ├── arn:aws:rds:*:*:db:apim-*              # BDD plateforme              │    │
+│   │   ├── arn:aws:s3:::apim-artifacts-*          # Buckets artifacts           │    │
+│   │   ├── namespace:apim-system                   # K8s core namespace         │    │
+│   │   └── tag:critical=true                       # Tag générique              │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                    DESTRUCTION ORDONNÉE (Dependencies)                       │    │
+│   │                                                                              │    │
+│   │   Ordre de suppression pour éviter les erreurs:                             │    │
+│   │                                                                              │    │
+│   │   1. Detach IAM Policies/Roles                                              │    │
+│   │   2. Stop Auto Scaling Groups                                               │    │
+│   │   3. Terminate EC2 Instances                                                │    │
+│   │   4. Delete Load Balancers                                                  │    │
+│   │   5. Empty & Delete S3 Buckets                                              │    │
+│   │   6. Delete RDS Snapshots (optionnel)                                       │    │
+│   │   7. Delete RDS Instances                                                   │    │
+│   │   8. Delete EBS Volumes orphelins                                           │    │
+│   │   9. Delete Security Groups (après dépendances)                             │    │
+│   │   10. Delete K8s Namespaces (cascade delete)                                │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                         SELF-SERVICE TTL EXTENSION                           │    │
+│   │                                                                              │    │
+│   │   Email de pré-alerte contient:                                             │    │
+│   │                                                                              │    │
+│   │   ┌───────────────────────────────────────────────────────────────────┐     │    │
+│   │   │  ⚠️ Votre ressource "dev-api-server" expire dans 24h              │     │    │
+│   │   │                                                                    │     │    │
+│   │   │  [🔄 Snooze +7 jours]  [🔄 Snooze +14 jours]  [❌ Supprimer]      │     │    │
+│   │   │                                                                    │     │    │
+│   │   │  Lien: https://api.apim.cab-i.com/v1/resources/{id}/extend?days=7 │     │    │
+│   │   └───────────────────────────────────────────────────────────────────┘     │    │
+│   │                                                                              │    │
+│   │   API Endpoint: PATCH /v1/resources/{id}/ttl                                │    │
+│   │   Body: { "extend_days": 7, "reason": "Tests en cours" }                    │    │
+│   │   Limite: max 2 extensions (30j + 30j = 60j total max)                      │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                         MÉTRIQUES & REPORTING                                │    │
+│   │                                                                              │    │
+│   │   Dashboard "Cost Savings":                                                 │    │
+│   │                                                                              │    │
+│   │   ┌─────────────────────────────────────────────────────────────────────┐   │    │
+│   │   │  Ce mois-ci:                                                         │   │    │
+│   │   │  ├── 47 ressources supprimées automatiquement                       │   │    │
+│   │   │  ├── 💰 Coût évité estimé: $2,340                                   │   │    │
+│   │   │  ├── 12 ressources snooze (+7j)                                     │   │    │
+│   │   │  └── 3 violations tags bloquées                                     │   │    │
+│   │   │                                                                      │   │    │
+│   │   │  Par project:                                                        │   │    │
+│   │   │  ├── tenant-finance: $890 économisés (18 ressources)                │   │    │
+│   │   │  ├── poc-ml-team: $720 économisés (15 ressources)                   │   │    │
+│   │   │  └── sandbox-dev: $730 économisés (14 ressources)                   │   │    │
+│   │   └─────────────────────────────────────────────────────────────────────┘   │    │
+│   │                                                                              │    │
+│   │   Calcul coût évité:                                                        │    │
+│   │   - EC2: instance_type → prix horaire AWS × heures restantes TTL           │    │
+│   │   - RDS: db_instance_class × heures × multi-AZ factor                      │    │
+│   │   - S3: storage_gb × $0.023/GB + requests estimées                         │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Quotas par Projet** (Terraform):
+```hcl
+# terraform/modules/project_quotas/variables.tf
+variable "project_quotas" {
+  type = map(object({
+    ec2_instances    = number
+    rds_databases    = number
+    s3_buckets       = number
+    lambda_functions = number
+    k8s_namespaces   = number
+    ebs_volumes_gb   = number
+  }))
+  default = {
+    default = {
+      ec2_instances    = 10
+      rds_databases    = 3
+      s3_buckets       = 5
+      lambda_functions = 20
+      k8s_namespaces   = 5
+      ebs_volumes_gb   = 500
+    }
+  }
+}
+
+# Service Quotas AWS + validation avant déploiement
+resource "aws_servicequotas_service_quota" "ec2_instances" {
+  quota_code   = "L-1216C47A"
+  service_code = "ec2"
+  value        = var.project_quotas["default"].ec2_instances
+}
+```
+
+**Whitelist Configuration**:
+```yaml
+# config/whitelist.yaml
+never_delete:
+  # Par ARN pattern
+  aws_resources:
+    - "arn:aws:ec2:*:*:instance/i-apim-*"
+    - "arn:aws:rds:*:*:db:apim-prod-*"
+    - "arn:aws:s3:::apim-artifacts"
+    - "arn:aws:s3:::apim-backups"
+    - "arn:aws:lambda:*:*:function:apim-core-*"
+
+  # Par tag
+  tags:
+    - key: critical
+      value: "true"
+    - key: environment
+      value: "prod"
+
+  # K8s namespaces
+  kubernetes:
+    namespaces:
+      - kube-system
+      - gatekeeper-system
+      - apim-system
+      - monitoring
+      - vault
+```
+
+**API Self-Service TTL Extension**:
+```python
+# control-plane-api/src/routers/resources.py
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+router = APIRouter(prefix="/v1/resources", tags=["Resources"])
+
+class TTLExtendRequest(BaseModel):
+    extend_days: int  # 7 ou 14
+    reason: str
+
+@router.patch("/{resource_id}/ttl")
+async def extend_ttl(resource_id: str, request: TTLExtendRequest, user: User = Depends(get_current_user)):
+    """
+    Extend TTL of a resource (max 2 extensions, 60 days total).
+    """
+    resource = await get_resource(resource_id)
+
+    # Vérifier ownership
+    if resource.tags.get("owner") != user.email:
+        raise HTTPException(403, "Only resource owner can extend TTL")
+
+    # Vérifier limite extensions
+    if resource.extension_count >= 2:
+        raise HTTPException(400, "Maximum 2 extensions allowed (60 days total)")
+
+    # Vérifier jours demandés
+    if request.extend_days not in [7, 14]:
+        raise HTTPException(400, "Extension must be 7 or 14 days")
+
+    # Mettre à jour le tag TTL
+    new_ttl = f"{int(resource.tags['ttl'].replace('d', '')) + request.extend_days}d"
+    await update_resource_tag(resource_id, "ttl", new_ttl)
+    await increment_extension_count(resource_id)
+
+    # Audit
+    await emit_kafka_event("resource-ttl-extended", {
+        "resource_id": resource_id,
+        "old_ttl": resource.tags["ttl"],
+        "new_ttl": new_ttl,
+        "extended_by": user.email,
+        "reason": request.reason
+    })
+
+    return {"message": f"TTL extended to {new_ttl}", "extensions_remaining": 2 - resource.extension_count - 1}
+```
+
+**Lambda Destruction Ordonnée**:
+```python
+# lambda/resource_cleanup/ordered_destroy.py
+DESTRUCTION_ORDER = [
+    ("iam", "detach_policies"),
+    ("autoscaling", "stop_groups"),
+    ("ec2", "terminate_instances"),
+    ("elb", "delete_load_balancers"),
+    ("s3", "empty_and_delete_buckets"),
+    ("rds", "delete_snapshots"),
+    ("rds", "delete_instances"),
+    ("ec2", "delete_volumes"),
+    ("ec2", "delete_security_groups"),
+    ("eks", "delete_namespaces"),
+]
+
+async def ordered_destroy(resources: list):
+    """Destroy resources in dependency order."""
+    for service, action in DESTRUCTION_ORDER:
+        service_resources = [r for r in resources if r.service == service]
+        if service_resources:
+            handler = get_handler(service, action)
+            for resource in service_resources:
+                try:
+                    await handler(resource)
+                    await log_deletion(resource, "success")
+                except Exception as e:
+                    await log_deletion(resource, "failed", str(e))
+                    # Continue with next resource
+```
+
+**Métriques Coût Évité** (Grafana/Prometheus):
+```python
+# lambda/resource_cleanup/cost_calculator.py
+AWS_PRICING = {
+    "t3.micro": 0.0104,
+    "t3.small": 0.0208,
+    "t3.medium": 0.0416,
+    "t3.large": 0.0832,
+    "db.t3.micro": 0.017,
+    "db.t3.small": 0.034,
+    "db.t3.medium": 0.068,
+}
+
+def calculate_cost_avoided(resource, remaining_hours: int) -> float:
+    """Calculate estimated cost avoided by early deletion."""
+    if resource.type == "ec2":
+        hourly_rate = AWS_PRICING.get(resource.instance_type, 0.05)
+    elif resource.type == "rds":
+        hourly_rate = AWS_PRICING.get(resource.db_instance_class, 0.05)
+        if resource.multi_az:
+            hourly_rate *= 2
+    elif resource.type == "s3":
+        # Estimate based on storage size
+        return resource.size_gb * 0.023
+    else:
+        hourly_rate = 0.01  # Default estimate
+
+    return hourly_rate * remaining_hours
+```
+
+**n8n Workflow Complet avec Board Notion**:
+```json
+{
+  "name": "Resource Cleanup Advanced",
+  "nodes": [
+    {"type": "Schedule Trigger", "cron": "0 * * * *"},
+    {"type": "AWS", "action": "Describe resources with auto-teardown=true"},
+    {"type": "Function", "code": "Check whitelist + calculate expiry"},
+    {"type": "IF", "condition": "expiring_in_48h"},
+    {"type": "Slack", "message": "Pre-alert notification"},
+    {"type": "Notion", "action": "Add to 'Resources to Delete' database"},
+    {"type": "Wait", "duration": "24h"},
+    {"type": "IF", "condition": "not_snoozed"},
+    {"type": "Function", "code": "Ordered destruction"},
+    {"type": "HTTP", "url": "/v1/events/resource-deleted"},
+    {"type": "Notion", "action": "Mark as deleted"},
+    {"type": "Slack", "message": "Deletion report + cost saved"}
+  ]
+}
+```
+
+**Checklist Phase 11**:
+- [ ] Système de quotas par projet (Terraform + Service Quotas AWS)
+- [ ] Whitelist configuration (YAML + validation)
+- [ ] Destruction ordonnée (dépendances AWS)
+- [ ] API self-service TTL extension (`PATCH /v1/resources/{id}/ttl`)
+- [ ] Boutons Snooze dans emails (7j, 14j)
+- [ ] Limite 2 extensions max (60j total)
+- [ ] Calcul coût évité (pricing AWS)
+- [ ] Dashboard Grafana "Cost Savings"
+- [ ] Métriques Prometheus (resources_deleted, cost_avoided_usd)
+- [ ] n8n workflow complet avec Notion board
+- [ ] Cron horaire (au lieu de quotidien) pour pré-alertes
+- [ ] Event Kafka `resource-ttl-extended`
+
 ---
 
 ### Architecture Cible Complète
@@ -2637,3 +3311,4 @@ GET    /v1/requests/prod/stats
 | Phase 7 | Sécurité Opérationnelle (Batch Jobs) | À planifier |
 | Phase 8 | Developer Portal Custom (React) | À planifier |
 | Phase 9 | Ticketing (Demandes de Production) | À planifier |
+| Phase 10 | Resource Lifecycle (Tagging + Auto-Teardown) | À planifier |

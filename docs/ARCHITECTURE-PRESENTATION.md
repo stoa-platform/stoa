@@ -606,6 +606,7 @@
 | **Phase 7** | Security Batch Jobs | 📋 Planifié |
 | **Phase 8** | Developer Portal Custom (React) | 📋 Planifié |
 | **Phase 9** | Ticketing (Demandes de Production) | 📋 Planifié |
+| **Phase 10** | Resource Lifecycle (Tagging + Auto-Teardown) | 📋 Planifié |
 
 ---
 
@@ -795,6 +796,86 @@ Voir [TICKETING-SYSTEM-PLAN.md](TICKETING-SYSTEM-PLAN.md) pour :
 - Modèles Pydantic
 - Composants React (RequestCard, Timeline, etc.)
 - Templates email
+
+---
+
+## Phase 10 - Resource Lifecycle Management
+
+**Objectif**: Tagging obligatoire et auto-suppression des ressources non-production pour optimiser les coûts.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                      RESOURCE LIFECYCLE MANAGEMENT                                    │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐   │
+│   │                         MANDATORY TAGS                                       │   │
+│   │                                                                              │   │
+│   │   environment    : dev | staging | sandbox | demo                           │   │
+│   │   owner          : email du responsable                                     │   │
+│   │   project        : nom du projet / tenant                                   │   │
+│   │   cost-center    : code centre de coût                                      │   │
+│   │   ttl            : durée de vie (7d, 14d, 30d max)                          │   │
+│   │   created_at     : date de création (auto)                                  │   │
+│   │   auto-teardown  : true | false                                             │   │
+│   │   data-class     : public | internal | confidential | restricted            │   │
+│   │                                                                              │   │
+│   └─────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐   │
+│   │                         AUTO-TEARDOWN SCHEDULER                              │   │
+│   │                                                                              │   │
+│   │   EventBridge (cron: 0 2 * * *)                                             │   │
+│   │        │                                                                     │   │
+│   │        ▼                                                                     │   │
+│   │   ┌──────────────┐                                                          │   │
+│   │   │    Lambda    │                                                          │   │
+│   │   │ cleanup-job  │                                                          │   │
+│   │   └──────┬───────┘                                                          │   │
+│   │          │                                                                   │   │
+│   │    ┌─────┴─────────────────────────────────────────┐                        │   │
+│   │    │                                               │                        │   │
+│   │    ▼                                               ▼                        │   │
+│   │  AWS Resources                              K8s Resources                   │   │
+│   │  - EC2, RDS, S3                             - Namespaces, Pods              │   │
+│   │                                                                              │   │
+│   │   1. Query resources where auto-teardown=true                               │   │
+│   │   2. Check if created_at + ttl < now()                                      │   │
+│   │   3. Notify owner (48h → 24h → delete)                                      │   │
+│   │   4. Delete expired resources                                               │   │
+│   │   5. Audit log to Kafka + S3                                                │   │
+│   │                                                                              │   │
+│   └─────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                       │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Guardrails
+
+| Règle | Description |
+|-------|-------------|
+| **Tag Validation** | Rejeter déploiement sans tags obligatoires |
+| **TTL Maximum** | 30 jours max pour non-prod |
+| **Data Protection** | `data-class=restricted` exclu de l'auto-teardown |
+| **Owner Notification** | 48h → 24h → suppression |
+| **Prod Exclusion** | `environment=prod` jamais supprimé automatiquement |
+
+### Intégration Kafka
+
+**Topics utilisés** :
+- `resource-created` → Log création avec tags
+- `resource-expiring` → Notification 48h/24h avant expiration
+- `resource-deleted` → Audit trail suppression
+- `tag-violation` → Alerte déploiement sans tags
+
+### Implémentation
+
+| Composant | Technologie | Rôle |
+|-----------|-------------|------|
+| Module Terraform | `common_tags` | Tags standardisés avec validations |
+| Lambda | `resource-cleanup` | Suppression ressources expirées |
+| EventBridge | Cron 2h UTC | Déclencheur quotidien |
+| OPA Gatekeeper | K8s admission | Rejet pods sans tags |
+| GitHub Actions | CI check | Validation tags avant merge |
 
 ---
 

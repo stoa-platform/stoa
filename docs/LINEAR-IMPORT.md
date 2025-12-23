@@ -11,6 +11,8 @@
 - `phase:7` - Security Jobs
 - `phase:8` - Developer Portal
 - `phase:9` - Ticketing System
+- `phase:10` - Resource Lifecycle
+- `phase:11` - Resource Lifecycle Advanced
 
 #### Par Type
 - `type:feature` - Nouvelle fonctionnalité
@@ -30,6 +32,10 @@
 - `component:gitlab` - GitLab
 - `component:ui` - Control Plane UI
 - `component:api` - Control Plane API
+- `component:terraform` - Infrastructure as Code
+- `component:lambda` - AWS Lambda
+- `component:n8n` - n8n Workflows
+- `component:gatekeeper` - OPA Gatekeeper
 
 #### Par Priorité
 - `priority:p0` - Critique (bloquant)
@@ -46,6 +52,7 @@
 | **M1: Production-Ready** | Plateforme prête pour production | 4, 5, 9 |
 | **M2: Self-Service** | Portail développeur autonome | 6, 8 |
 | **M3: Full Automation** | Automatisation complète | 7 |
+| **M4: Cost Optimization** | Optimisation coûts et ressources | 10 |
 
 ---
 
@@ -83,6 +90,8 @@
 | Phase 6 | Multi-Environment | P1 | 2 semaines |
 | Phase 7 | Security Batch Jobs | P1 | 1.5 semaines |
 | Phase 8 | Developer Portal | P2 | 3 semaines |
+| Phase 10 | Resource Lifecycle | P1 | 2 semaines |
+| Phase 11 | Resource Lifecycle Advanced | P2 | 1.5 semaines |
 
 ---
 
@@ -622,6 +631,502 @@ Acceptance Criteria:
 
 ---
 
+### Phase 10 - Resource Lifecycle Management (P1)
+
+#### APIM-1001: Module Terraform common_tags
+```
+Title: [Terraform] Module common_tags avec validations
+Priority: High
+Labels: phase:10, type:infra, component:terraform, priority:p1
+Milestone: M4: Cost Optimization
+Estimate: 2 days
+
+Description:
+Créer un module Terraform réutilisable pour standardiser le tagging de toutes les ressources AWS.
+
+Tags obligatoires:
+- environment (dev, staging, sandbox, demo, prod)
+- owner (email valide)
+- project (nom projet/tenant)
+- cost-center (code centre de coût)
+- ttl (7d, 14d, 30d max pour non-prod)
+- created_at (auto-généré ISO 8601)
+- auto-teardown (true/false)
+- data-class (public, internal, confidential, restricted)
+
+Acceptance Criteria:
+- [ ] Module `terraform/modules/common_tags` créé
+- [ ] Validation regex email pour owner
+- [ ] Validation TTL max 30 jours
+- [ ] Validation data-class enum
+- [ ] Output `tags` avec tous les tags calculés
+- [ ] Variable `managed-by: terraform` automatique
+- [ ] Production exclue de l'auto-teardown automatiquement
+- [ ] Documentation usage avec exemples
+- [ ] Tests Terratest
+```
+
+#### APIM-1002: Lambda Resource Cleanup
+```
+Title: [Lambda] Job cleanup ressources expirées
+Priority: High
+Labels: phase:10, type:infra, component:lambda, priority:p1
+Milestone: M4: Cost Optimization
+Estimate: 3 days
+
+Description:
+Développer une Lambda Python pour supprimer automatiquement les ressources non-prod expirées.
+
+Ressources supportées:
+- EC2 instances
+- RDS databases
+- S3 buckets (avec vidage)
+- EKS nodegroups
+- EBS volumes orphelins
+
+Acceptance Criteria:
+- [ ] Lambda Python 3.11 avec boto3
+- [ ] Query ressources avec tag `auto-teardown=true`
+- [ ] Calcul expiration: created_at + ttl < now()
+- [ ] Exclusion `data-class=restricted`
+- [ ] Exclusion `environment=prod`
+- [ ] Dry-run mode pour preview
+- [ ] Logging structuré JSON
+- [ ] Métriques CloudWatch (resources_deleted, errors)
+- [ ] IAM role avec permissions minimales
+- [ ] Tests unitaires pytest
+```
+
+#### APIM-1003: EventBridge Schedule
+```
+Title: [AWS] EventBridge schedule pour cleanup quotidien
+Priority: High
+Labels: phase:10, type:infra, priority:p1
+Milestone: M4: Cost Optimization
+Estimate: 1 day
+
+Description:
+Configurer EventBridge pour déclencher la Lambda de cleanup quotidiennement.
+
+Acceptance Criteria:
+- [ ] Rule EventBridge cron `0 2 * * ? *` (2h UTC)
+- [ ] Target: Lambda resource-cleanup
+- [ ] Retry policy configurée (2 retries)
+- [ ] Dead letter queue SQS
+- [ ] CloudWatch alarm si échec
+- [ ] Terraform module pour déploiement
+```
+
+#### APIM-1004: Notifications Owner Expiration
+```
+Title: [Lambda] Notifications owner avant suppression
+Priority: High
+Labels: phase:10, type:feature, component:lambda, priority:p1
+Milestone: M4: Cost Optimization
+Estimate: 2 days
+
+Description:
+Implémenter le système de notifications progressives avant suppression.
+
+Workflow notifications:
+1. J-2 (48h avant): Email warning "Votre ressource expire dans 48h"
+2. J-1 (24h avant): Email urgent "Suppression imminente dans 24h"
+3. J-0: Suppression + email confirmation
+
+Acceptance Criteria:
+- [ ] Lambda notification séparée
+- [ ] Templates email HTML (48h, 24h, deleted)
+- [ ] SES configuré pour envoi emails
+- [ ] Lien "Extend TTL" dans l'email (optionnel)
+- [ ] Historique notifications en DynamoDB
+- [ ] Intégration Slack webhook (optionnel)
+- [ ] Tests avec emails mock
+```
+
+#### APIM-1005: OPA Gatekeeper Policies
+```
+Title: [K8s] OPA Gatekeeper policies pour tags obligatoires
+Priority: High
+Labels: phase:10, type:security, component:gatekeeper, priority:p1
+Milestone: M4: Cost Optimization
+Estimate: 2 days
+
+Description:
+Implémenter des policies Gatekeeper pour rejeter les deployments K8s sans tags obligatoires.
+
+Acceptance Criteria:
+- [ ] ConstraintTemplate `K8sRequiredTags`
+- [ ] Constraint pour Namespaces
+- [ ] Constraint pour Deployments/StatefulSets
+- [ ] Constraint pour Pods
+- [ ] Exclusions: kube-system, gatekeeper-system, apim-system
+- [ ] Message d'erreur explicite avec tags manquants
+- [ ] Mode audit avant enforcement
+- [ ] Documentation pour équipes dev
+```
+
+#### APIM-1006: GitHub Actions Tag Governance
+```
+Title: [CI] GitHub Actions workflow tag-governance
+Priority: Medium
+Labels: phase:10, type:infra, priority:p2
+Milestone: M4: Cost Optimization
+Estimate: 1 day
+
+Description:
+Créer un workflow GitHub Actions pour valider les tags avant merge.
+
+Acceptance Criteria:
+- [ ] Workflow `.github/workflows/tag-governance.yaml`
+- [ ] Trigger sur PR modifiant `terraform/**` ou `k8s/**`
+- [ ] Check: tous resources utilisent module.tags.tags
+- [ ] Check: TTL <= 30d pour non-prod
+- [ ] Check: data-class valide
+- [ ] Annotations PR avec erreurs détaillées
+- [ ] Status check bloquant pour merge
+```
+
+#### APIM-1007: Kafka Events Resource Lifecycle
+```
+Title: [Kafka] Topics et events resource lifecycle
+Priority: Medium
+Labels: phase:10, type:integration, component:kafka, priority:p2
+Milestone: M4: Cost Optimization
+Estimate: 1 day
+
+Description:
+Créer les topics Kafka pour l'audit du cycle de vie des ressources.
+
+Topics:
+- `resource-created`: Log création avec tags complets
+- `resource-expiring`: Notification 48h/24h avant expiration
+- `resource-deleted`: Audit trail suppression
+- `tag-violation`: Alerte déploiement sans tags
+
+Acceptance Criteria:
+- [ ] Topics créés dans Redpanda
+- [ ] Schema Avro pour chaque event type
+- [ ] Producer dans Lambda cleanup
+- [ ] Consumer OpenSearch pour indexation
+- [ ] Retention 90 jours
+- [ ] Documentation schema events
+```
+
+#### APIM-1008: Dashboard Grafana Resource Lifecycle
+```
+Title: [Grafana] Dashboard Resource Lifecycle
+Priority: Medium
+Labels: phase:10, type:ui, priority:p2
+Milestone: M4: Cost Optimization
+Estimate: 2 days
+
+Description:
+Créer un dashboard Grafana pour visualiser le cycle de vie des ressources.
+
+Acceptance Criteria:
+- [ ] Panel: Ressources par environnement (pie chart)
+- [ ] Panel: Ressources expirant cette semaine (table)
+- [ ] Panel: Ressources supprimées (timeline)
+- [ ] Panel: Coûts évités estimés
+- [ ] Panel: Top owners par ressources
+- [ ] Panel: Violations tags (gauge)
+- [ ] Alertes Grafana si cleanup échoue
+- [ ] Export JSON du dashboard
+```
+
+#### APIM-1009: n8n Workflow Multi-Cloud (Optionnel)
+```
+Title: [n8n] Workflow cleanup multi-cloud
+Priority: Low
+Labels: phase:10, type:integration, component:n8n, priority:p3
+Milestone: M4: Cost Optimization
+Estimate: 3 days
+
+Description:
+Alternative à Lambda pour environnements multi-cloud (AWS + Azure + GCP).
+
+Acceptance Criteria:
+- [ ] n8n déployé sur EKS (Helm chart)
+- [ ] Workflow "Resource Cleanup" avec nodes:
+  - Schedule Trigger (cron 2h UTC)
+  - AWS Node (EC2, RDS, S3)
+  - Azure Node (VMs, SQL, Storage) - optionnel
+  - GCP Node (Compute, Cloud SQL) - optionnel
+  - Slack Node (notifications)
+  - HTTP Node (Kafka events)
+- [ ] Credentials stockés dans Vault
+- [ ] UI accessible pour monitoring
+- [ ] Export workflow JSON
+```
+
+#### APIM-1010: Documentation Tagging Policy
+```
+Title: [Docs] Documentation politique de tagging
+Priority: Medium
+Labels: phase:10, type:docs, priority:p2
+Milestone: M4: Cost Optimization
+Estimate: 1 day
+
+Description:
+Rédiger la documentation complète de la politique de tagging.
+
+Acceptance Criteria:
+- [ ] Guide `docs/TAGGING-POLICY.md` créé
+- [ ] Section: Tags obligatoires (description, valeurs)
+- [ ] Section: Guardrails et exceptions
+- [ ] Section: Workflow auto-teardown
+- [ ] Section: Comment étendre un TTL
+- [ ] Section: FAQ
+- [ ] Diagrammes Mermaid inclus
+- [ ] Lien depuis README principal
+```
+
+---
+
+### Phase 11 - Resource Lifecycle Advanced (P2)
+
+#### APIM-1101: Quotas par Projet
+```
+Title: [Terraform] Système de quotas par projet/tenant
+Priority: Medium
+Labels: phase:11, type:infra, component:terraform, priority:p2
+Milestone: M4: Cost Optimization
+Estimate: 2 days
+
+Description:
+Implémenter un système de quotas configurables par projet pour limiter la création de ressources.
+
+Quotas par défaut:
+- EC2 Instances: 10
+- RDS Databases: 3
+- S3 Buckets: 5
+- Lambda Functions: 20
+- K8s Namespaces: 5
+- EBS Volumes: 500 GB
+
+Acceptance Criteria:
+- [ ] Module Terraform `project_quotas`
+- [ ] Configuration quotas par tenant dans YAML
+- [ ] Intégration AWS Service Quotas
+- [ ] Validation pré-déploiement (Terraform plan)
+- [ ] OPA policy K8s pour quotas namespaces
+- [ ] Alertes si quota atteint à 80%
+- [ ] Dashboard quotas par projet
+```
+
+#### APIM-1102: Whitelist Never Delete
+```
+Title: [Config] Whitelist ressources à ne jamais supprimer
+Priority: High
+Labels: phase:11, type:security, priority:p1
+Milestone: M4: Cost Optimization
+Estimate: 1 day
+
+Description:
+Configurer une whitelist de ressources critiques exclues de l'auto-teardown.
+
+Acceptance Criteria:
+- [ ] Fichier `config/whitelist.yaml`
+- [ ] Support ARN patterns (wildcards)
+- [ ] Support tag `critical=true`
+- [ ] Support namespaces K8s
+- [ ] Validation au démarrage Lambda
+- [ ] Logging ressources skippées
+- [ ] UI pour voir/éditer whitelist
+```
+
+#### APIM-1103: Destruction Ordonnée
+```
+Title: [Lambda] Destruction ordonnée avec dépendances
+Priority: High
+Labels: phase:11, type:infra, component:lambda, priority:p1
+Milestone: M4: Cost Optimization
+Estimate: 2 days
+
+Description:
+Implémenter la destruction ordonnée des ressources pour respecter les dépendances AWS.
+
+Ordre de destruction:
+1. Detach IAM Policies/Roles
+2. Stop Auto Scaling Groups
+3. Terminate EC2 Instances
+4. Delete Load Balancers
+5. Empty & Delete S3 Buckets
+6. Delete RDS Snapshots
+7. Delete RDS Instances
+8. Delete EBS Volumes orphelins
+9. Delete Security Groups
+10. Delete K8s Namespaces
+
+Acceptance Criteria:
+- [ ] DESTRUCTION_ORDER configurable
+- [ ] Handler par type de ressource
+- [ ] Gestion erreurs (continue on error)
+- [ ] Retry avec backoff
+- [ ] Logging détaillé par étape
+- [ ] Métriques par type de ressource
+- [ ] Dry-run mode
+```
+
+#### APIM-1104: API Self-Service TTL Extension
+```
+Title: [API] Endpoint self-service extension TTL
+Priority: Medium
+Labels: phase:11, type:api, component:api, priority:p2
+Milestone: M4: Cost Optimization
+Estimate: 2 days
+
+Description:
+Permettre aux owners d'étendre le TTL de leurs ressources via API.
+
+Endpoint: PATCH /v1/resources/{id}/ttl
+Body: { "extend_days": 7, "reason": "Tests en cours" }
+
+Acceptance Criteria:
+- [ ] Endpoint PATCH /v1/resources/{id}/ttl
+- [ ] Vérification ownership (owner == user.email)
+- [ ] Limite 2 extensions max (60j total)
+- [ ] Extensions autorisées: 7j ou 14j
+- [ ] Event Kafka `resource-ttl-extended`
+- [ ] Audit trail complet
+- [ ] Tests unitaires + intégration
+```
+
+#### APIM-1105: Boutons Snooze dans Emails
+```
+Title: [Lambda] Boutons Snooze dans emails pré-alerte
+Priority: Medium
+Labels: phase:11, type:feature, component:lambda, priority:p2
+Milestone: M4: Cost Optimization
+Estimate: 1 day
+
+Description:
+Ajouter des boutons d'action dans les emails de pré-alerte.
+
+Boutons:
+- [Snooze +7 jours]
+- [Snooze +14 jours]
+- [Supprimer maintenant]
+
+Acceptance Criteria:
+- [ ] Template email HTML avec boutons
+- [ ] Liens sécurisés (token JWT one-time)
+- [ ] Expiration liens 48h
+- [ ] Endpoint `/v1/resources/{id}/snooze?token=xxx&days=7`
+- [ ] Confirmation visuelle après clic
+- [ ] Logging des actions
+```
+
+#### APIM-1106: Calcul Coût Évité
+```
+Title: [Lambda] Calculateur coût évité par suppression
+Priority: Medium
+Labels: phase:11, type:feature, component:lambda, priority:p2
+Milestone: M4: Cost Optimization
+Estimate: 2 days
+
+Description:
+Calculer et reporter le coût évité par la suppression automatique.
+
+Pricing à intégrer:
+- EC2: instance_type → prix horaire AWS
+- RDS: db_instance_class × multi-AZ factor
+- S3: storage_gb × $0.023/GB
+- EBS: volume_size × $0.10/GB/month
+
+Acceptance Criteria:
+- [ ] Mapping instance_type → hourly_rate
+- [ ] Calcul: rate × remaining_hours
+- [ ] Métriques Prometheus `cost_avoided_usd`
+- [ ] Agrégation par project, environment
+- [ ] Event Kafka `resource-deleted` avec cost_avoided
+- [ ] Refresh pricing mensuel (optionnel)
+```
+
+#### APIM-1107: Dashboard Cost Savings
+```
+Title: [Grafana] Dashboard Cost Savings
+Priority: Medium
+Labels: phase:11, type:ui, priority:p2
+Milestone: M4: Cost Optimization
+Estimate: 2 days
+
+Description:
+Dashboard Grafana pour visualiser les économies réalisées.
+
+Panels:
+- Coût évité ce mois (gauge)
+- Coût évité par projet (bar chart)
+- Ressources supprimées (timeline)
+- Top 5 projets économies
+- Ressources snooze vs deleted (pie)
+- Violations tags (counter)
+
+Acceptance Criteria:
+- [ ] Dashboard JSON exportable
+- [ ] Datasource Prometheus
+- [ ] Variables: project, environment, time_range
+- [ ] Alertes si coût évité < seuil
+- [ ] Export PDF mensuel automatique
+```
+
+#### APIM-1108: n8n Workflow avec Notion
+```
+Title: [n8n] Workflow complet avec Notion board
+Priority: Low
+Labels: phase:11, type:integration, component:n8n, priority:p3
+Milestone: M4: Cost Optimization
+Estimate: 2 days
+
+Description:
+Workflow n8n complet avec intégration Notion pour tracking.
+
+Nodes:
+- Schedule Trigger (cron horaire)
+- AWS: Describe resources
+- Function: Check whitelist + expiry
+- IF: expiring_in_48h
+- Slack: Pre-alert
+- Notion: Add to "Resources to Delete" database
+- Wait: 24h
+- IF: not_snoozed
+- Function: Ordered destruction
+- HTTP: /v1/events/resource-deleted
+- Notion: Mark as deleted
+- Slack: Deletion report
+
+Acceptance Criteria:
+- [ ] Workflow n8n exporté (.json)
+- [ ] Database Notion "Resources to Delete"
+- [ ] Propriétés: resource_id, type, owner, expires_at, status
+- [ ] Vue Kanban par status
+- [ ] Bouton "Snooze" dans Notion
+- [ ] Documentation setup n8n
+```
+
+#### APIM-1109: Cron Horaire Pre-Alertes
+```
+Title: [Lambda] Cron horaire pour pré-alertes précises
+Priority: Low
+Labels: phase:11, type:infra, priority:p3
+Milestone: M4: Cost Optimization
+Estimate: 1 day
+
+Description:
+Passer de cron quotidien à horaire pour des notifications plus précises.
+
+Schedule: 0 * * * ? * (toutes les heures)
+
+Acceptance Criteria:
+- [ ] EventBridge rule hourly
+- [ ] Lambda optimisée (cache résultats)
+- [ ] Déduplication notifications (max 1/24h par ressource)
+- [ ] DynamoDB pour tracking notifications envoyées
+- [ ] Métriques: notifications_sent_hourly
+```
+
+---
+
 ## Import CSV (Optionnel)
 
 Si Linear supporte l'import CSV, voici le format:
@@ -649,6 +1154,23 @@ APIM-505 (UI Secrets) ──depends on──► APIM-503 (API Secrets)
 APIM-904 (Ticket AWX) ──depends on──► APIM-402 (Playbooks)
 APIM-904 (Ticket AWX) ──depends on──► APIM-903 (Workflow)
 APIM-905 (UI Tickets) ──depends on──► APIM-902 (API CRUD)
+
+APIM-1002 (Lambda) ──depends on──► APIM-1001 (Tags Module)
+APIM-1003 (EventBridge) ──depends on──► APIM-1002 (Lambda)
+APIM-1004 (Notifications) ──depends on──► APIM-1002 (Lambda)
+APIM-1007 (Kafka Events) ──depends on──► APIM-1002 (Lambda)
+APIM-1008 (Grafana) ──depends on──► APIM-1007 (Kafka Events)
+APIM-1009 (n8n) ──depends on──► APIM-1001 (Tags Module) [Alternative]
+
+# Phase 11 dépendances
+APIM-1102 (Whitelist) ──depends on──► APIM-1002 (Lambda Cleanup)
+APIM-1103 (Ordered Destroy) ──depends on──► APIM-1002 (Lambda Cleanup)
+APIM-1104 (TTL Extension) ──depends on──► APIM-1004 (Notifications)
+APIM-1105 (Boutons Snooze) ──depends on──► APIM-1104 (TTL Extension)
+APIM-1106 (Cost Calculator) ──depends on──► APIM-1002 (Lambda Cleanup)
+APIM-1107 (Cost Dashboard) ──depends on──► APIM-1106 (Cost Calculator)
+APIM-1108 (n8n Notion) ──depends on──► APIM-1009 (n8n Basic)
+APIM-1109 (Cron Hourly) ──depends on──► APIM-1003 (EventBridge)
 ```
 
 ---
@@ -671,6 +1193,21 @@ APIM-905 (UI Tickets) ──depends on──► APIM-902 (API CRUD)
 
 ### Sprint 5-7 (Semaines 7-9): Developer Portal
 1. APIM-801 → APIM-802 → APIM-803 → APIM-804 → APIM-805
+
+### Sprint 8-9 (Semaines 10-11): Resource Lifecycle (Phase 10)
+1. APIM-1001 → APIM-1002 → APIM-1003 (séquentiel)
+2. APIM-1004, APIM-1005, APIM-1006 (parallélisables après APIM-1002)
+3. APIM-1007 → APIM-1008 (séquentiel)
+4. APIM-1009 (optionnel, si multi-cloud requis)
+5. APIM-1010 (documentation, en continu)
+
+### Sprint 10 (Semaines 12-13): Resource Lifecycle Advanced (Phase 11)
+1. APIM-1101 (Quotas) - indépendant
+2. APIM-1102 → APIM-1103 (Whitelist → Ordered Destroy)
+3. APIM-1104 → APIM-1105 (TTL Extension → Snooze Buttons)
+4. APIM-1106 → APIM-1107 (Cost Calculator → Dashboard)
+5. APIM-1108 (n8n Notion) - après Phase 10 APIM-1009
+6. APIM-1109 (Cron Hourly) - optionnel
 
 ---
 

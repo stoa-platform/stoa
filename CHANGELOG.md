@@ -378,6 +378,33 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [ ] Notifications Email + Slack
 - [ ] Plan détaillé: [docs/TICKETING-SYSTEM-PLAN.md](docs/TICKETING-SYSTEM-PLAN.md)
 
+### Phase 10: Resource Lifecycle Management (Priorité Moyenne)
+- [ ] Module Terraform `common_tags` avec validations
+- [ ] Tags obligatoires: environment, owner, project, cost-center, ttl, created_at, auto-teardown, data-class
+- [ ] Lambda `resource-cleanup` avec EventBridge schedule (cron 2h UTC)
+- [ ] Notifications owner (48h → 24h → delete)
+- [ ] OPA Gatekeeper policies pour Kubernetes admission control
+- [ ] GitHub Actions workflow `tag-governance.yaml`
+- [ ] Dashboard Grafana "Resource Lifecycle"
+- [ ] Events Kafka (resource-created, resource-expiring, resource-deleted, tag-violation)
+- [ ] Guardrails: TTL max 30d, exclusion prod, exclusion data-class=restricted
+- [ ] Documentation tagging policy
+- [ ] Alternative n8n workflow pour multi-cloud (optionnel)
+
+### Phase 11: Resource Lifecycle Advanced (Priorité Basse)
+- [ ] Système de quotas par projet (Terraform + AWS Service Quotas)
+- [ ] Whitelist configuration (ARN patterns, tags critical=true)
+- [ ] Destruction ordonnée (dépendances AWS: IAM → ASG → EC2 → ELB → S3 → RDS)
+- [ ] API self-service TTL extension (`PATCH /v1/resources/{id}/ttl`)
+- [ ] Boutons Snooze dans emails (7j, 14j)
+- [ ] Limite 2 extensions max (60j total)
+- [ ] Calcul coût évité (pricing AWS par instance_type)
+- [ ] Dashboard Grafana "Cost Savings" (coût évité par projet)
+- [ ] Métriques Prometheus (resources_deleted, cost_avoided_usd)
+- [ ] n8n workflow complet avec Notion board "Resources to Delete"
+- [ ] Cron horaire (au lieu de quotidien) pour pré-alertes
+- [ ] Event Kafka `resource-ttl-extended`
+
 ---
 
 ## URLs

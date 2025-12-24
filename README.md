@@ -1274,6 +1274,651 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 | Control-Plane Monitoring | https://devops.apim.cab-i.com/monitoring |
 | Prometheus (interne) | prometheus.apim-system.svc.cluster.local:9090 |
 
+#### Phase 4.5 : Jenkins Orchestration Layer (Priorité Haute - Enterprise)
+
+**Objectif**: Intégrer Jenkins comme couche d'orchestration auditable entre Kafka et AWX pour une vision entreprise avec traçabilité complète, approval gates et reporting.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                      JENKINS ORCHESTRATION LAYER                                      │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                         ARCHITECTURE ENTREPRISE                              │    │
+│   │                                                                              │    │
+│   │   ┌──────────────┐                                                          │    │
+│   │   │     GUI      │  ← UI Métier (produit API, tenant, accès)               │    │
+│   │   └──────┬───────┘                                                          │    │
+│   │          │ REST                                                              │    │
+│   │   ┌──────▼────────┐                                                         │    │
+│   │   │ Backend Python│  ← règles, validations, RBAC                           │    │
+│   │   └──────┬────────┘                                                         │    │
+│   │          │ EVENT (intent)                                                    │    │
+│   │   ┌──────▼────────┐                                                         │    │
+│   │   │     Kafka     │  ← source d'événements                                  │    │
+│   │   └──────┬────────┘                                                         │    │
+│   │          │ subscribe                                                         │    │
+│   │   ┌──────▼────────┐                                                         │    │
+│   │   │    Jenkins    │  ← ORCHESTRATEUR AUDITABLE                              │    │
+│   │   │               │     • Pipeline as Code (Jenkinsfile)                    │    │
+│   │   │               │     • Approval Gates                                     │    │
+│   │   │               │     • Audit Trail complet                               │    │
+│   │   │               │     • Parallel execution                                │    │
+│   │   │               │     • Retry & rollback                                  │    │
+│   │   └──────┬────────┘                                                         │    │
+│   │          │ trigger                                                           │    │
+│   │   ┌──────▼────────┐                                                         │    │
+│   │   │      AWX      │  ← EXECUTION infra / gateway                            │    │
+│   │   └───────────────┘                                                         │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Avantages Jenkins comme Orchestrateur**:
+
+| Aspect | Sans Jenkins (Kafka→AWX direct) | Avec Jenkins |
+|--------|--------------------------------|--------------|
+| **Auditabilité** | Logs dispersés | Console centralisée, Blue Ocean UI |
+| **Approval Gates** | ❌ Pas de gates | ✅ `input` steps, RBAC approvers |
+| **Retry/Rollback** | ❌ Manuel | ✅ Stage retry, automatic rollback |
+| **Parallélisme** | ❌ Séquentiel | ✅ `parallel` stages |
+| **Notification** | ❌ Custom | ✅ Native Slack/Email/Teams |
+| **Compliance** | ❌ Logs Kafka | ✅ Build artifacts, audit trail |
+| **Pipeline as Code** | ❌ Config AWX | ✅ Jenkinsfile versionné Git |
+
+**Architecture Détaillée**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                        JENKINS + KAFKA + AWX FLOW                                     │
+│                                                                                       │
+│  ┌──────────┐       ┌──────────┐       ┌──────────┐       ┌──────────┐              │
+│  │ Control  │       │  Kafka   │       │ Jenkins  │       │   AWX    │              │
+│  │  Plane   │       │          │       │          │       │          │              │
+│  └────┬─────┘       └────┬─────┘       └────┬─────┘       └────┬─────┘              │
+│       │                  │                  │                  │                     │
+│       │  POST /deploy    │                  │                  │                     │
+│       │─────────────────▶│                  │                  │                     │
+│       │                  │ api.lifecycle.   │                  │                     │
+│       │                  │ events           │                  │                     │
+│       │                  │─────────────────▶│                  │                     │
+│       │                  │                  │ Trigger Pipeline │                     │
+│       │                  │                  │─────────────────▶│                     │
+│       │                  │                  │                  │                     │
+│       │                  │                  │ ┌──────────────┐ │                     │
+│       │                  │                  │ │ Jenkinsfile  │ │                     │
+│       │                  │                  │ │              │ │                     │
+│       │                  │                  │ │ 1. Validate  │ │                     │
+│       │                  │                  │ │ 2. Approval? │ │                     │
+│       │                  │                  │ │ 3. AWX Job   │─┼──▶ Launch Job      │
+│       │                  │                  │ │ 4. Verify    │ │                     │
+│       │                  │                  │ │ 5. Notify    │ │                     │
+│       │                  │                  │ └──────────────┘ │                     │
+│       │                  │                  │                  │                     │
+│       │                  │                  │◀─────────────────│ Callback            │
+│       │◀─────────────────│◀─────────────────│ Status Update    │                     │
+│       │   Kafka event    │   Build Status   │                  │                     │
+│                                                                                       │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Déploiement Jenkins sur EKS**:
+
+```yaml
+# jenkins/values.yaml (Helm)
+controller:
+  image: jenkins/jenkins
+  tag: lts-jdk17
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  # Plugins essentiels
+  installPlugins:
+    - kubernetes:latest
+    - workflow-aggregator:latest
+    - blueocean:latest
+    - kafka-logs:latest
+    - pipeline-stage-view:latest
+    - slack:latest
+    - ansible:latest
+    - credentials-binding:latest
+    - git:latest
+    - job-dsl:latest
+    - configuration-as-code:latest
+
+  # JCasC - Configuration as Code
+  JCasC:
+    configScripts:
+      security: |
+        jenkins:
+          securityRealm:
+            oic:
+              clientId: "jenkins"
+              clientSecret: "${KEYCLOAK_CLIENT_SECRET}"
+              authorizationServerUrl: "https://auth.apim.cab-i.com/realms/apim"
+          authorizationStrategy:
+            roleBased:
+              roles:
+                global:
+                  - name: "admin"
+                    permissions:
+                      - "Overall/Administer"
+                    entries:
+                      - group: "cpi-admin"
+                  - name: "deployer"
+                    permissions:
+                      - "Job/Build"
+                      - "Job/Read"
+                    entries:
+                      - group: "devops"
+                      - group: "tenant-admin"
+
+agent:
+  # Agents Kubernetes dynamiques
+  podTemplates:
+    - name: "apim-agent"
+      label: "apim-agent"
+      containers:
+        - name: "python"
+          image: "python:3.11"
+          command: "sleep infinity"
+        - name: "awx-cli"
+          image: "quay.io/ansible/awx-cli:latest"
+          command: "sleep infinity"
+
+persistence:
+  enabled: true
+  size: 20Gi
+  storageClass: gp3
+
+ingress:
+  enabled: true
+  hostName: jenkins.apim.cab-i.com
+  tls:
+    - secretName: jenkins-tls
+      hosts:
+        - jenkins.apim.cab-i.com
+```
+
+**Kafka Consumer → Jenkins Trigger**:
+
+```python
+# jenkins-trigger-service/main.py
+from kafka import KafkaConsumer
+import requests
+import json
+
+JENKINS_URL = "https://jenkins.apim.cab-i.com"
+JENKINS_TOKEN = os.getenv("JENKINS_API_TOKEN")
+
+consumer = KafkaConsumer(
+    'api.lifecycle.events',
+    bootstrap_servers=['redpanda.apim-system.svc.cluster.local:9092'],
+    group_id='jenkins-trigger',
+    value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+)
+
+# Mapping event_type → Jenkins job
+JOB_MAPPING = {
+    "deploy-request": "APIM/deploy-api",
+    "promote-request": "APIM/promote-api",
+    "rollback-request": "APIM/rollback-api",
+    "delete-request": "APIM/delete-api",
+    "sync-request": "APIM/sync-gateway"
+}
+
+for message in consumer:
+    event = message.value
+    event_type = event.get("event_type")
+
+    if event_type in JOB_MAPPING:
+        job_name = JOB_MAPPING[event_type]
+
+        # Trigger Jenkins Pipeline
+        response = requests.post(
+            f"{JENKINS_URL}/job/{job_name}/buildWithParameters",
+            auth=("apim-service", JENKINS_TOKEN),
+            data={
+                "TENANT_ID": event.get("tenant_id"),
+                "API_NAME": event.get("api_name"),
+                "API_VERSION": event.get("api_version"),
+                "ENVIRONMENT": event.get("environment"),
+                "TRACE_ID": event.get("trace_id"),
+                "KAFKA_OFFSET": message.offset
+            }
+        )
+
+        print(f"Triggered {job_name}: {response.status_code}")
+```
+
+**Jenkinsfile - Deploy API Pipeline**:
+
+```groovy
+// jenkins/pipelines/deploy-api/Jenkinsfile
+pipeline {
+    agent { label 'apim-agent' }
+
+    parameters {
+        string(name: 'TENANT_ID', description: 'Tenant ID')
+        string(name: 'API_NAME', description: 'API Name')
+        string(name: 'API_VERSION', description: 'API Version')
+        string(name: 'ENVIRONMENT', description: 'Target Environment')
+        string(name: 'TRACE_ID', description: 'Trace ID for correlation')
+    }
+
+    environment {
+        AWX_HOST = 'https://awx.apim.cab-i.com'
+        AWX_TOKEN = credentials('awx-api-token')
+        KAFKA_BOOTSTRAP = 'redpanda.apim-system.svc.cluster.local:9092'
+        SLACK_CHANNEL = '#apim-deployments'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+        timestamps()
+        disableConcurrentBuilds(abortPrevious: true)
+    }
+
+    stages {
+        stage('Validate') {
+            steps {
+                script {
+                    echo "Validating deployment request..."
+
+                    // Vérifier que l'API existe dans GitLab
+                    def apiSpec = sh(
+                        script: """
+                            curl -s "https://api.apim.cab-i.com/v1/tenants/${TENANT_ID}/apis/${API_NAME}" \
+                                -H "Authorization: Bearer ${API_TOKEN}"
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    if (!apiSpec) {
+                        error "API ${API_NAME} not found for tenant ${TENANT_ID}"
+                    }
+
+                    // Publier event Kafka: validation-passed
+                    kafkaPublish(
+                        topic: 'pipeline.events',
+                        message: [
+                            trace_id: params.TRACE_ID,
+                            stage: 'validate',
+                            status: 'success',
+                            timestamp: new Date().toISOString()
+                        ]
+                    )
+                }
+            }
+        }
+
+        stage('Approval Gate') {
+            when {
+                expression { params.ENVIRONMENT == 'prod' }
+            }
+            steps {
+                script {
+                    slackSend(
+                        channel: SLACK_CHANNEL,
+                        color: 'warning',
+                        message: """
+                            :warning: *Approval Required*
+                            API: ${params.API_NAME} v${params.API_VERSION}
+                            Tenant: ${params.TENANT_ID}
+                            Environment: ${params.ENVIRONMENT}
+                            <${BUILD_URL}|Approve/Reject>
+                        """
+                    )
+
+                    timeout(time: 4, unit: 'HOURS') {
+                        input(
+                            message: "Deploy ${params.API_NAME} to ${params.ENVIRONMENT}?",
+                            ok: 'Deploy',
+                            submitter: 'cpi-admin,tenant-admin',
+                            submitterParameter: 'APPROVED_BY'
+                        )
+                    }
+
+                    echo "Approved by: ${env.APPROVED_BY}"
+                }
+            }
+        }
+
+        stage('Deploy via AWX') {
+            steps {
+                script {
+                    echo "Triggering AWX job..."
+
+                    def awxJobId = sh(
+                        script: """
+                            awx job_templates launch 'deploy-api-gateway' \
+                                --extra-vars '{
+                                    "tenant_id": "${params.TENANT_ID}",
+                                    "api_name": "${params.API_NAME}",
+                                    "api_version": "${params.API_VERSION}",
+                                    "environment": "${params.ENVIRONMENT}",
+                                    "trace_id": "${params.TRACE_ID}"
+                                }' \
+                                --monitor \
+                                --format json | jq -r '.id'
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    env.AWX_JOB_ID = awxJobId
+                    echo "AWX Job ID: ${awxJobId}"
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    // Attendre que l'API soit accessible
+                    retry(5) {
+                        sleep(time: 10, unit: 'SECONDS')
+
+                        def healthCheck = sh(
+                            script: """
+                                curl -s -o /dev/null -w '%{http_code}' \
+                                    "https://gateway.${params.ENVIRONMENT}.apim.cab-i.com/${params.TENANT_ID}/${params.API_NAME}/health"
+                            """,
+                            returnStdout: true
+                        ).trim()
+
+                        if (healthCheck != '200') {
+                            error "Health check failed: ${healthCheck}"
+                        }
+                    }
+
+                    echo "Deployment verified successfully"
+                }
+            }
+        }
+
+        stage('Smoke Tests') {
+            steps {
+                script {
+                    echo "Running smoke tests..."
+
+                    sh """
+                        python3 -m pytest tests/smoke/ \
+                            --api-url="https://gateway.${params.ENVIRONMENT}.apim.cab-i.com/${params.TENANT_ID}/${params.API_NAME}" \
+                            --junitxml=smoke-results.xml
+                    """
+                }
+            }
+            post {
+                always {
+                    junit 'smoke-results.xml'
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                kafkaPublish(
+                    topic: 'deployment.events',
+                    message: [
+                        trace_id: params.TRACE_ID,
+                        status: 'success',
+                        awx_job_id: env.AWX_JOB_ID,
+                        jenkins_build: env.BUILD_NUMBER,
+                        duration_ms: currentBuild.duration,
+                        timestamp: new Date().toISOString()
+                    ]
+                )
+
+                slackSend(
+                    channel: SLACK_CHANNEL,
+                    color: 'good',
+                    message: """
+                        :white_check_mark: *Deployment Successful*
+                        API: ${params.API_NAME} v${params.API_VERSION}
+                        Tenant: ${params.TENANT_ID}
+                        Environment: ${params.ENVIRONMENT}
+                        Duration: ${currentBuild.durationString}
+                        <${BUILD_URL}|View Build>
+                    """
+                )
+            }
+        }
+
+        failure {
+            script {
+                kafkaPublish(
+                    topic: 'deployment.events',
+                    message: [
+                        trace_id: params.TRACE_ID,
+                        status: 'failed',
+                        error: currentBuild.description,
+                        jenkins_build: env.BUILD_NUMBER,
+                        timestamp: new Date().toISOString()
+                    ]
+                )
+
+                slackSend(
+                    channel: SLACK_CHANNEL,
+                    color: 'danger',
+                    message: """
+                        :x: *Deployment Failed*
+                        API: ${params.API_NAME} v${params.API_VERSION}
+                        Tenant: ${params.TENANT_ID}
+                        Stage: ${currentBuild.currentResult}
+                        <${BUILD_URL}console|View Logs>
+                    """
+                )
+            }
+        }
+
+        aborted {
+            script {
+                slackSend(
+                    channel: SLACK_CHANNEL,
+                    color: 'warning',
+                    message: ":no_entry: *Deployment Aborted*: ${params.API_NAME}"
+                )
+            }
+        }
+    }
+}
+```
+
+**Jenkinsfile - Rollback Pipeline**:
+
+```groovy
+// jenkins/pipelines/rollback-api/Jenkinsfile
+pipeline {
+    agent { label 'apim-agent' }
+
+    parameters {
+        string(name: 'TENANT_ID', description: 'Tenant ID')
+        string(name: 'API_NAME', description: 'API Name')
+        string(name: 'TARGET_VERSION', description: 'Version to rollback to')
+        string(name: 'ENVIRONMENT', description: 'Environment')
+        booleanParam(name: 'EMERGENCY', defaultValue: false, description: 'Skip approval for emergency')
+    }
+
+    stages {
+        stage('Identify Previous Version') {
+            steps {
+                script {
+                    if (!params.TARGET_VERSION) {
+                        // Récupérer la version précédente depuis GitLab
+                        env.ROLLBACK_VERSION = sh(
+                            script: """
+                                git log --oneline -2 apis/${params.TENANT_ID}/${params.API_NAME}/openapi.yaml \
+                                    | tail -1 | awk '{print \$1}'
+                            """,
+                            returnStdout: true
+                        ).trim()
+                    } else {
+                        env.ROLLBACK_VERSION = params.TARGET_VERSION
+                    }
+                    echo "Rolling back to version: ${env.ROLLBACK_VERSION}"
+                }
+            }
+        }
+
+        stage('Emergency Approval') {
+            when {
+                expression { !params.EMERGENCY }
+            }
+            steps {
+                timeout(time: 15, unit: 'MINUTES') {
+                    input(
+                        message: "Confirm rollback of ${params.API_NAME} to ${env.ROLLBACK_VERSION}?",
+                        ok: 'Rollback Now'
+                    )
+                }
+            }
+        }
+
+        stage('Execute Rollback') {
+            steps {
+                script {
+                    sh """
+                        awx job_templates launch 'rollback-api-gateway' \
+                            --extra-vars '{
+                                "tenant_id": "${params.TENANT_ID}",
+                                "api_name": "${params.API_NAME}",
+                                "target_version": "${env.ROLLBACK_VERSION}",
+                                "environment": "${params.ENVIRONMENT}"
+                            }' \
+                            --monitor
+                    """
+                }
+            }
+        }
+
+        stage('Verify Rollback') {
+            steps {
+                script {
+                    // Health check après rollback
+                    retry(3) {
+                        sleep 5
+                        sh """
+                            curl -f "https://gateway.${params.ENVIRONMENT}.apim.cab-i.com/${params.TENANT_ID}/${params.API_NAME}/health"
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Créer un incident ticket si rollback
+                sh """
+                    curl -X POST "https://api.apim.cab-i.com/v1/incidents" \
+                        -H "Content-Type: application/json" \
+                        -d '{
+                            "type": "rollback",
+                            "api": "${params.API_NAME}",
+                            "tenant": "${params.TENANT_ID}",
+                            "from_version": "current",
+                            "to_version": "${env.ROLLBACK_VERSION}",
+                            "emergency": ${params.EMERGENCY},
+                            "jenkins_build": "${BUILD_URL}"
+                        }'
+                """
+            }
+        }
+    }
+}
+```
+
+**Jenkins Shared Library** (pour réutilisation):
+
+```groovy
+// vars/kafkaPublish.groovy
+def call(Map config) {
+    def message = groovy.json.JsonOutput.toJson(config.message)
+
+    sh """
+        echo '${message}' | kafka-console-producer.sh \
+            --broker-list ${env.KAFKA_BOOTSTRAP} \
+            --topic ${config.topic}
+    """
+}
+
+// vars/awxLaunch.groovy
+def call(String jobTemplate, Map extraVars) {
+    def varsJson = groovy.json.JsonOutput.toJson(extraVars)
+
+    return sh(
+        script: """
+            awx job_templates launch '${jobTemplate}' \
+                --extra-vars '${varsJson}' \
+                --monitor \
+                --format json
+        """,
+        returnStdout: true
+    )
+}
+
+// vars/notifyDeployment.groovy
+def call(String status, Map details) {
+    def color = status == 'success' ? 'good' : 'danger'
+    def emoji = status == 'success' ? ':white_check_mark:' : ':x:'
+
+    slackSend(
+        channel: '#apim-deployments',
+        color: color,
+        message: """
+            ${emoji} *Deployment ${status.capitalize()}*
+            API: ${details.api_name}
+            Tenant: ${details.tenant_id}
+            Environment: ${details.environment}
+            <${BUILD_URL}|View Build>
+        """
+    )
+}
+```
+
+**Dashboard Jenkins - Métriques**:
+
+| Métrique | Description | Objectif |
+|----------|-------------|----------|
+| **Deployment Success Rate** | % pipelines réussis | > 95% |
+| **Mean Time to Deploy (MTTD)** | Durée moyenne pipeline | < 10 min |
+| **Approval Wait Time** | Temps d'attente approbation | < 4h |
+| **Rollback Frequency** | Nb rollbacks/semaine | < 2 |
+| **Pipeline Queue Time** | Temps en attente | < 5 min |
+
+**Checklist Phase 4.5**:
+- [ ] Jenkins déployé sur EKS (Helm jenkins/jenkins)
+- [ ] Configuration JCasC (Jenkins Configuration as Code)
+- [ ] Intégration Keycloak SSO (OIDC)
+- [ ] Service Kafka Consumer → Jenkins Trigger
+- [ ] Jenkinsfile `deploy-api` avec approval gates
+- [ ] Jenkinsfile `rollback-api` avec emergency bypass
+- [ ] Jenkinsfile `promote-api` pour promotion entre envs
+- [ ] Jenkinsfile `delete-api` avec confirmation
+- [ ] Shared Library (kafkaPublish, awxLaunch, notifyDeployment)
+- [ ] Blue Ocean UI accessible
+- [ ] Slack notifications configurées
+- [ ] Dashboard métriques Jenkins
+- [ ] Credentials AWX/Kafka/Keycloak dans Jenkins Credentials Store
+- [ ] Backup Jenkins config (PVC + S3)
+
+**URLs Jenkins**:
+| Service | URL |
+|---------|-----|
+| Jenkins UI | https://jenkins.apim.cab-i.com |
+| Blue Ocean | https://jenkins.apim.cab-i.com/blue |
+| API | https://jenkins.apim.cab-i.com/api/json |
+
 #### Phase 5 : Multi-Environment (Priorité Basse)
 1. **Environnement STAGING**
    - Promotion DEV → STAGING

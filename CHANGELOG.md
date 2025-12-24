@@ -378,6 +378,22 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [ ] Notifications Email + Slack
 - [ ] Plan détaillé: [docs/TICKETING-SYSTEM-PLAN.md](docs/TICKETING-SYSTEM-PLAN.md)
 
+### Phase 4.5: Jenkins Orchestration Layer (Priorité Haute - Enterprise)
+- [ ] Jenkins déployé sur EKS (Helm jenkins/jenkins)
+- [ ] Configuration JCasC (Jenkins Configuration as Code)
+- [ ] Intégration Keycloak SSO (OIDC)
+- [ ] Service Kafka Consumer → Jenkins Trigger
+- [ ] Jenkinsfile `deploy-api` avec approval gates
+- [ ] Jenkinsfile `rollback-api` avec emergency bypass
+- [ ] Jenkinsfile `promote-api` pour promotion entre envs
+- [ ] Jenkinsfile `delete-api` avec confirmation
+- [ ] Shared Library (kafkaPublish, awxLaunch, notifyDeployment)
+- [ ] Blue Ocean UI accessible
+- [ ] Slack notifications configurées
+- [ ] Dashboard métriques Jenkins
+- [ ] Credentials AWX/Kafka/Keycloak dans Jenkins Credentials Store
+- [ ] Backup Jenkins config (PVC + S3)
+
 ### Phase 10: Resource Lifecycle Management (Priorité Moyenne)
 - [ ] Module Terraform `common_tags` avec validations
 - [ ] Tags obligatoires: environment, owner, project, cost-center, ttl, created_at, auto-teardown, data-class

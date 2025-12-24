@@ -6,6 +6,7 @@
 
 #### Par Phase
 - `phase:4` - AWX Integration
+- `phase:4.5` - Jenkins Orchestration
 - `phase:5` - Vault Integration
 - `phase:6` - Multi-Environment
 - `phase:7` - Security Jobs
@@ -32,6 +33,7 @@
 - `component:gitlab` - GitLab
 - `component:ui` - Control Plane UI
 - `component:api` - Control Plane API
+- `component:jenkins` - Jenkins Orchestration
 - `component:terraform` - Infrastructure as Code
 - `component:lambda` - AWS Lambda
 - `component:n8n` - n8n Workflows
@@ -85,6 +87,7 @@
 | Phase | Nom | Priorité | Estimation |
 |-------|-----|----------|------------|
 | Phase 4 | AWX Integration | P0 | 2 semaines |
+| Phase 4.5 | Jenkins Orchestration | P0 | 1.5 semaines |
 | Phase 5 | Vault Integration | P0 | 2 semaines |
 | Phase 9 | Ticketing System | P0 | 1 semaine |
 | Phase 6 | Multi-Environment | P1 | 2 semaines |
@@ -196,6 +199,285 @@ Acceptance Criteria:
 - [ ] Logs de déploiement consultables
 - [ ] Bouton retry pour déploiements échoués
 - [ ] Filtres par API, environnement, statut
+```
+
+---
+
+### Phase 4.5 - Jenkins Orchestration Layer (P0)
+
+#### APIM-451: Déploiement Jenkins sur EKS avec JCasC
+```
+Title: [Jenkins] Déploiement Jenkins sur EKS avec JCasC
+Priority: P0 - Urgent
+Labels: phase:4.5, type:infra, component:jenkins, priority:p0
+Milestone: M1: Production-Ready
+Estimate: 2 days
+
+Description:
+Déployer Jenkins sur EKS avec Jenkins Configuration as Code (JCasC) pour une configuration déclarative et reproductible.
+
+Acceptance Criteria:
+- [ ] Helm chart Jenkins déployé sur EKS
+- [ ] JCasC configuré pour paramétrage automatique
+- [ ] Persistent Volume pour JENKINS_HOME
+- [ ] Agents Kubernetes dynamiques configurés
+- [ ] Ingress configuré (jenkins.dev.apim.cab-i.com)
+- [ ] Resource limits/requests définis
+- [ ] Health checks (liveness/readiness)
+- [ ] Backup automatique configuré
+```
+
+#### APIM-452: Intégration Keycloak OIDC pour Jenkins SSO
+```
+Title: [Jenkins] Intégration Keycloak OIDC pour SSO
+Priority: P0 - Urgent
+Labels: phase:4.5, type:security, component:jenkins, component:keycloak, priority:p0
+Milestone: M1: Production-Ready
+Estimate: 1 day
+
+Description:
+Configurer l'authentification Jenkins via Keycloak OIDC pour SSO unifié.
+
+Acceptance Criteria:
+- [ ] Plugin oic-auth installé
+- [ ] Client Keycloak `apim-jenkins` créé
+- [ ] Mapping rôles Keycloak → Jenkins:
+  - cpi-admin → Jenkins Admin
+  - tenant-admin → Jenkins User + approve
+  - devops → Jenkins User
+  - viewer → Jenkins Read-only
+- [ ] Logout redirect vers Keycloak
+- [ ] Groups claim configuré
+- [ ] Tests SSO fonctionnels
+```
+
+#### APIM-453: Service Kafka Consumer → Jenkins Trigger
+```
+Title: [Jenkins] Service Kafka Consumer → Jenkins Job Trigger
+Priority: P0 - Urgent
+Labels: phase:4.5, type:integration, component:kafka, component:jenkins, priority:p0
+Milestone: M1: Production-Ready
+Estimate: 3 days
+
+Description:
+Développer le service Python qui consomme les events Kafka et déclenche les jobs Jenkins.
+
+Event → Job Mapping:
+- deploy-request → APIM/deploy-api
+- promote-request → APIM/promote-api
+- rollback-request → APIM/rollback-api
+- delete-request → APIM/delete-api
+- sync-request → APIM/sync-gateway
+
+Acceptance Criteria:
+- [ ] Consumer Python avec kafka-python
+- [ ] Mapping event_type → Jenkins job
+- [ ] API Jenkins Remote Build Trigger
+- [ ] Token d'authentification sécurisé (Vault)
+- [ ] Retry logic avec exponential backoff
+- [ ] Dead letter queue pour events en échec
+- [ ] Métriques Prometheus exposées
+- [ ] Health check endpoint
+- [ ] Tests unitaires pytest
+```
+
+#### APIM-454: Jenkinsfile Deploy API avec Approval Gates
+```
+Title: [Jenkins] Pipeline Deploy API avec Approval Gates production
+Priority: P0 - Urgent
+Labels: phase:4.5, type:feature, component:jenkins, priority:p0
+Milestone: M1: Production-Ready
+Estimate: 2 days
+
+Description:
+Créer le Jenkinsfile pour le déploiement d'API avec gates d'approbation pour la production.
+
+Stages:
+1. Validate (OpenAPI lint, security scan)
+2. Approval Gate (prod uniquement, timeout 4h)
+3. Deploy via AWX
+4. Verify Deployment
+5. Smoke Tests
+6. Notify
+
+Acceptance Criteria:
+- [ ] Jenkinsfile `pipelines/deploy-api.groovy`
+- [ ] Stage Validate avec OpenAPI linting
+- [ ] Stage Approval Gate (input step)
+- [ ] Submitters: cpi-admin, tenant-admin du tenant concerné
+- [ ] Timeout 4 heures pour approbation
+- [ ] Stage Deploy via AWX API
+- [ ] Stage Verify avec health checks
+- [ ] Stage Smoke tests
+- [ ] Notifications Slack success/failure
+- [ ] Audit trail complet
+```
+
+#### APIM-455: Jenkinsfile Rollback API
+```
+Title: [Jenkins] Pipeline Rollback API avec sécurité
+Priority: High
+Labels: phase:4.5, type:feature, component:jenkins, priority:p1
+Milestone: M1: Production-Ready
+Estimate: 1 day
+
+Description:
+Créer le Jenkinsfile pour le rollback d'API avec validation version cible.
+
+Stages:
+1. Get Previous Version
+2. Validate Rollback Target
+3. Rollback via AWX
+4. Verify Rollback
+5. Notify
+
+Acceptance Criteria:
+- [ ] Jenkinsfile `pipelines/rollback-api.groovy`
+- [ ] Récupération version précédente depuis GitLab
+- [ ] Validation version cible existe
+- [ ] Rollback via AWX playbook
+- [ ] Health check post-rollback
+- [ ] Notification avec version source → cible
+- [ ] Tests intégration
+```
+
+#### APIM-456: Jenkins Shared Library APIM
+```
+Title: [Jenkins] Shared Library fonctions réutilisables
+Priority: High
+Labels: phase:4.5, type:feature, component:jenkins, priority:p1
+Milestone: M1: Production-Ready
+Estimate: 2 days
+
+Description:
+Créer une Jenkins Shared Library avec les fonctions communes pour tous les pipelines APIM.
+
+Fonctions:
+- notifySlack(status, message)
+- triggerAWX(jobTemplate, extraVars)
+- waitAWXJob(jobId)
+- validateOpenAPI(specPath)
+- getGitLabFile(repo, path, ref)
+- publishKafkaEvent(topic, event)
+
+Acceptance Criteria:
+- [ ] Repository GitLab `jenkins-shared-library`
+- [ ] Structure vars/, src/, resources/
+- [ ] Fonction notifySlack()
+- [ ] Fonction triggerAWX() avec polling
+- [ ] Fonction waitAWXJob() avec timeout
+- [ ] Fonction validateOpenAPI()
+- [ ] Fonction getGitLabFile()
+- [ ] Fonction publishKafkaEvent()
+- [ ] Tests unitaires Groovy
+- [ ] Documentation usage
+```
+
+#### APIM-457: Intégration AWX depuis Jenkins
+```
+Title: [Jenkins] Intégration AWX Job Trigger depuis pipelines
+Priority: P0 - Urgent
+Labels: phase:4.5, type:integration, component:jenkins, component:awx, priority:p0
+Milestone: M1: Production-Ready
+Estimate: 2 days
+
+Description:
+Configurer l'intégration Jenkins → AWX pour déclencher les playbooks depuis les pipelines.
+
+Acceptance Criteria:
+- [ ] Credentials AWX dans Jenkins (via Vault)
+- [ ] AWX API wrapper dans shared library
+- [ ] Polling status job avec timeout
+- [ ] Récupération logs AWX dans Jenkins console
+- [ ] Gestion erreurs et retry
+- [ ] Variables extra_vars passées au job
+- [ ] Tests intégration Jenkins → AWX
+```
+
+#### APIM-458: Métriques et Dashboard Jenkins
+```
+Title: [Jenkins] Métriques Prometheus et Dashboard Grafana
+Priority: Medium
+Labels: phase:4.5, type:ui, component:jenkins, priority:p2
+Milestone: M1: Production-Ready
+Estimate: 1 day
+
+Description:
+Exposer les métriques Jenkins et créer un dashboard Grafana.
+
+Métriques:
+- jenkins_builds_total
+- jenkins_build_duration_seconds
+- jenkins_approval_wait_time_seconds
+- jenkins_awx_trigger_total
+- jenkins_queue_size
+
+Acceptance Criteria:
+- [ ] Plugin Prometheus Jenkins installé
+- [ ] Métriques custom exposées
+- [ ] ServiceMonitor Kubernetes
+- [ ] Dashboard Grafana Jenkins
+- [ ] Alertes build failure > 3
+- [ ] Alertes queue > 10
+```
+
+#### APIM-459: Pipeline Sync Gateway Config
+```
+Title: [Jenkins] Pipeline Sync Gateway Configuration
+Priority: Medium
+Labels: phase:4.5, type:feature, component:jenkins, component:gateway, priority:p2
+Milestone: M1: Production-Ready
+Estimate: 1 day
+
+Description:
+Pipeline pour synchroniser la configuration du Gateway Kong depuis GitLab.
+
+Stages:
+1. Checkout config
+2. Validate deck files
+3. Diff preview
+4. Apply via deck sync
+5. Verify
+
+Acceptance Criteria:
+- [ ] Jenkinsfile `pipelines/sync-gateway.groovy`
+- [ ] Checkout repo gateway-config
+- [ ] Kong deck validate
+- [ ] Kong deck diff (preview)
+- [ ] Kong deck sync
+- [ ] Health check post-sync
+- [ ] Notification résultat
+```
+
+#### APIM-460: Blue Ocean UI et Job Organization
+```
+Title: [Jenkins] Blue Ocean UI et organisation jobs APIM
+Priority: Low
+Labels: phase:4.5, type:ui, component:jenkins, priority:p3
+Milestone: M1: Production-Ready
+Estimate: 1 day
+
+Description:
+Configurer Blue Ocean et organiser les jobs Jenkins pour une UX optimale.
+
+Organisation:
+- APIM/
+  - deploy-api
+  - rollback-api
+  - promote-api
+  - delete-api
+  - sync-gateway
+- Maintenance/
+  - backup-jenkins
+  - cleanup-old-builds
+
+Acceptance Criteria:
+- [ ] Plugin Blue Ocean installé
+- [ ] Folder APIM créé
+- [ ] Folder Maintenance créé
+- [ ] Multibranch Pipeline pour chaque job
+- [ ] Build history limit configuré (30 builds)
+- [ ] Favoris par défaut pour jobs critiques
 ```
 
 ---
@@ -1143,9 +1425,21 @@ Title,Description,Priority,Labels,Milestone,Estimate
 ## Dépendances entre Issues
 
 ```
+# Phase 4 → Phase 4.5
 APIM-403 (Kafka Consumer) ──depends on──► APIM-402 (Playbooks)
 APIM-404 (Callback) ──depends on──► APIM-403 (Consumer)
 APIM-405 (UI AWX) ──depends on──► APIM-404 (Callback)
+
+# Phase 4.5 Jenkins
+APIM-452 (Keycloak SSO) ──depends on──► APIM-451 (Jenkins Deploy)
+APIM-453 (Kafka Consumer Jenkins) ──depends on──► APIM-451 (Jenkins Deploy)
+APIM-454 (Deploy Pipeline) ──depends on──► APIM-456 (Shared Library)
+APIM-454 (Deploy Pipeline) ──depends on──► APIM-457 (AWX Integration)
+APIM-455 (Rollback Pipeline) ──depends on──► APIM-456 (Shared Library)
+APIM-457 (AWX Integration) ──depends on──► APIM-402 (Playbooks AWX)
+APIM-458 (Métriques Jenkins) ──depends on──► APIM-451 (Jenkins Deploy)
+APIM-459 (Sync Gateway) ──depends on──► APIM-456 (Shared Library)
+APIM-460 (Blue Ocean) ──depends on──► APIM-454 (Deploy Pipeline)
 
 APIM-504 (AWX Vault) ──depends on──► APIM-501 (Vault Config)
 APIM-504 (AWX Vault) ──depends on──► APIM-402 (Playbooks)
@@ -1177,11 +1471,18 @@ APIM-1109 (Cron Hourly) ──depends on──► APIM-1003 (EventBridge)
 
 ## Ordre d'Exécution Recommandé
 
-### Sprint 1 (Semaines 1-2): Foundation
+### Sprint 1 (Semaines 1-2): AWX Foundation
 1. APIM-401 → APIM-402 → APIM-403 → APIM-404 → APIM-405
 2. APIM-501 → APIM-502 (en parallèle)
 
-### Sprint 2 (Semaines 3-4): Secrets + Ticketing
+### Sprint 1.5 (Semaine 2-3): Jenkins Orchestration
+1. APIM-451 → APIM-452 (Deploy + SSO)
+2. APIM-456 → APIM-457 (Shared Library + AWX Integration)
+3. APIM-453 (Kafka Consumer Jenkins)
+4. APIM-454 → APIM-455 (Pipelines Deploy + Rollback)
+5. APIM-458, APIM-459, APIM-460 (parallélisables)
+
+### Sprint 2 (Semaines 4-5): Secrets + Ticketing
 1. APIM-503 → APIM-504 → APIM-505
 2. APIM-901 → APIM-902 → APIM-903 → APIM-904 → APIM-905
 

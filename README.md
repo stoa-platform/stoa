@@ -3222,6 +3222,102 @@ GET    /v1/requests/prod/stats
 - [ ] Templates email (created, approved, rejected, deployed, failed)
 - [ ] Notifications Slack
 
+#### Phase 9.5 : Production Readiness
+
+**Objectif**: Préparer la plateforme APIM pour le passage en production avec toutes les garanties de fiabilité, sécurité et opérabilité.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                      PRODUCTION READINESS CHECKLIST                                   │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                         BACKUP & RECOVERY                                    │    │
+│   │                                                                              │    │
+│   │   AWX Database                    Vault Storage                             │    │
+│   │        │                               │                                     │    │
+│   │        ▼                               ▼                                     │    │
+│   │   ┌──────────┐                   ┌──────────┐                              │    │
+│   │   │ CronJob  │                   │ CronJob  │                              │    │
+│   │   │  Backup  │                   │ Snapshot │                              │    │
+│   │   └────┬─────┘                   └────┬─────┘                              │    │
+│   │        │                               │                                     │    │
+│   │        └───────────────┬───────────────┘                                    │    │
+│   │                        │                                                     │    │
+│   │                        ▼                                                     │    │
+│   │                  ┌──────────┐                                               │    │
+│   │                  │  S3 +    │                                               │    │
+│   │                  │  KMS     │                                               │    │
+│   │                  └──────────┘                                               │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+│   ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│   │                         TESTING & VALIDATION                                 │    │
+│   │                                                                              │    │
+│   │   Load Testing              Security Audit           Chaos Testing          │    │
+│   │   (K6/Gatling)              (OWASP ZAP)             (Litmus/Chaos Mesh)    │    │
+│   │        │                         │                        │                 │    │
+│   │        └─────────────────────────┼────────────────────────┘                 │    │
+│   │                                  │                                          │    │
+│   │                                  ▼                                          │    │
+│   │                        ┌──────────────────┐                                 │    │
+│   │                        │ Production Ready │                                 │    │
+│   │                        │    Validation    │                                 │    │
+│   │                        └──────────────────┘                                 │    │
+│   │                                                                              │    │
+│   └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                       │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**SLO Cibles**:
+
+| Métrique | Objectif | Mesure |
+|----------|----------|--------|
+| Availability | 99.9% | < 8.76h downtime/an |
+| API Latency p95 | < 500ms | Prometheus |
+| Deployment Success Rate | > 99% | Jenkins metrics |
+| MTTR (P1 incidents) | < 1h | Runbook SLA |
+| Error Rate | < 0.1% | Grafana dashboard |
+
+**Composants Production Readiness**:
+
+| Composant | Description | Priorité |
+|-----------|-------------|----------|
+| Backup AWX | CronJob backup PostgreSQL → S3 | P0 |
+| Backup Vault | Snapshot storage + unseal keys | P0 |
+| Load Testing | K6/Gatling pipeline avec seuils | P0 |
+| Runbooks | Procédures opérationnelles | P0 |
+| Security Audit | Scan OWASP ZAP + remédiation | P0 |
+| Chaos Testing | Litmus/Chaos Mesh validation | P1 |
+| SLO Dashboard | Grafana + alerting | P0 |
+
+**Runbooks à Documenter**:
+- Incident: API Gateway down
+- Incident: AWX job failure
+- Incident: Vault sealed
+- Incident: Kafka lag élevé
+- Procédure: Rollback d'urgence
+- Procédure: Scaling horizontal
+- Procédure: Rotation des secrets
+- Procédure: DR failover
+
+**Checklist Phase 9.5**:
+- [ ] Script backup AWX database (PostgreSQL) → S3
+- [ ] Script backup Vault snapshot → S3 + KMS
+- [ ] CronJob Kubernetes pour backups quotidiens
+- [ ] Procédures de restore documentées et testées
+- [ ] Pipeline Load Testing (K6 ou Gatling)
+- [ ] Seuils de performance définis (p95, p99)
+- [ ] Runbooks opérationnels (docs/runbooks/)
+- [ ] Scan OWASP ZAP sur API et UI
+- [ ] Remédiation vulnérabilités critiques
+- [ ] Chaos Testing (pod kill, network latency)
+- [ ] Validation auto-healing Kubernetes
+- [ ] SLO/SLA documentés
+- [ ] Dashboard SLO dans Grafana
+- [ ] Alertes configurées sur SLO breach
+
 #### Phase 10 : Resource Lifecycle Management (Non-Production Auto-Teardown)
 
 **Objectif**: Implémenter une stratégie de tagging obligatoire et d'auto-suppression des ressources non-production pour optimiser les coûts et éviter l'accumulation de ressources orphelines.
@@ -3956,4 +4052,5 @@ def calculate_cost_avoided(resource, remaining_hours: int) -> float:
 | Phase 7 | Sécurité Opérationnelle (Batch Jobs) | À planifier |
 | Phase 8 | Developer Portal Custom (React) | À planifier |
 | Phase 9 | Ticketing (Demandes de Production) | À planifier |
+| Phase 9.5 | Production Readiness | À planifier |
 | Phase 10 | Resource Lifecycle (Tagging + Auto-Teardown) | À planifier |

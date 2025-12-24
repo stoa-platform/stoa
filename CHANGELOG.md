@@ -394,6 +394,36 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [ ] Credentials AWX/Kafka/Keycloak dans Jenkins Credentials Store
 - [ ] Backup Jenkins config (PVC + S3)
 
+### Phase 9.5: Production Readiness (Priorité Haute - Critique)
+- [ ] Script backup AWX database (PostgreSQL) → S3
+- [ ] Script backup Vault snapshot → S3 + KMS
+- [ ] CronJob Kubernetes pour backups quotidiens (AWX + Vault)
+- [ ] Procédures de restore documentées et testées
+- [ ] Pipeline Load Testing (K6 ou Gatling)
+- [ ] Seuils de performance définis (p95 < 500ms, p99 < 1s)
+- [ ] Runbooks opérationnels (docs/runbooks/)
+  - Incident: API Gateway down
+  - Incident: AWX job failure
+  - Incident: Vault sealed
+  - Incident: Kafka lag élevé
+  - Procédure: Rollback d'urgence
+  - Procédure: Scaling horizontal
+  - Procédure: Rotation des secrets
+- [ ] Scan OWASP ZAP sur Control Plane API et UI
+- [ ] Remédiation vulnérabilités critiques
+- [ ] Chaos Testing (Litmus/Chaos Mesh)
+  - Pod kill (API, AWX, Vault)
+  - Network latency injection
+  - CPU/Memory stress
+- [ ] Validation auto-healing Kubernetes
+- [ ] SLO/SLA documentés
+  - Availability: 99.9%
+  - API Latency p95: < 500ms
+  - Deployment Success Rate: > 99%
+  - MTTR: < 1h pour P1
+- [ ] Dashboard SLO dans Grafana
+- [ ] Alertes configurées sur SLO breach
+
 ### Phase 10: Resource Lifecycle Management (Priorité Moyenne)
 - [ ] Module Terraform `common_tags` avec validations
 - [ ] Tags obligatoires: environment, owner, project, cost-center, ttl, created_at, auto-teardown, data-class

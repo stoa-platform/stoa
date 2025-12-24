@@ -8,26 +8,26 @@
 
 ## 🔗 Extension Linear VSCode
 
-Pour une intégration bidirectionnelle avec Linear directement depuis VSCode :
+Pour une intégration avec Linear directement depuis VSCode :
 
 ### Installation
 ```bash
-# Via VSCode Extensions Marketplace
-code --install-extension linear.linear-connect
+# Extension recommandée : Linear by Strigo
+code --install-extension strigo.linear
 ```
 
-Ou rechercher "Linear" dans VSCode Extensions (Ctrl+Shift+X).
+Ou rechercher "Linear" dans VSCode Extensions (Ctrl+Shift+X) → installer **Linear by Strigo**.
 
 ### Configuration
-1. Ouvrir la palette de commandes (Ctrl+Shift+P)
-2. Rechercher "Linear: Sign In"
-3. Autoriser l'accès via OAuth
+1. Aller sur [Linear API Settings](https://linear.app/hlfh-workspace/settings/api)
+2. Créer une **Personal API Key**
+3. Dans VSCode : `Cmd+Shift+P` → "Linear: Set API Key"
+4. Coller la clé
 
-### Fonctionnalités
-- Créer des issues directement depuis le code
-- Voir et mettre à jour les issues assignées
-- Créer des branches liées aux issues
-- Synchronisation automatique avec Linear
+### Commandes disponibles
+- `Linear: Create Issue` - Créer une issue depuis VSCode
+- `Linear: Open Issue` - Ouvrir une issue dans Linear
+- `Linear: Search Issues` - Rechercher des issues
 
 ### Lien projet
 - **Workspace:** hlfh-workspace

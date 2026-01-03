@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `AWXDown` | `up{job="awx"} == 0` | [AWX Dashboard](https://grafana.dev.stoa.cab-i.com/d/awx) |
-| `AWXWebUnhealthy` | `awx_web_status != 200` | [AWX Dashboard](https://grafana.dev.stoa.cab-i.com/d/awx) |
-| `AWXTaskQueueHigh` | `awx_pending_jobs > 50` | [AWX Dashboard](https://grafana.dev.stoa.cab-i.com/d/awx) |
+| `AWXDown` | `up{job="awx"} == 0` | [AWX Dashboard](https://grafana.stoa.cab-i.com/d/awx) |
+| `AWXWebUnhealthy` | `awx_web_status != 200` | [AWX Dashboard](https://grafana.stoa.cab-i.com/d/awx) |
+| `AWXTaskQueueHigh` | `awx_pending_jobs > 50` | [AWX Dashboard](https://grafana.stoa.cab-i.com/d/awx) |
 
 ### Observed Behavior
 
@@ -216,7 +216,7 @@ curl -s -H "Authorization: Bearer $AWX_TOKEN" \
   -d '{"check": true}'
 
 # Check from Control-Plane API
-curl -s https://api.dev.stoa.cab-i.com/health | jq .awx
+curl -s https://api.stoa.cab-i.com/health | jq .awx
 ```
 
 ---

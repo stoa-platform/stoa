@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `GatewayDown` | `up{job="apigateway"} == 0` | [Gateway Dashboard](https://grafana.dev.stoa.cab-i.com/d/gateway) |
-| `GatewayEndpointDown` | `probe_success{job="blackbox", target=~".*gateway.*"} == 0` | [Blackbox Dashboard](https://grafana.dev.stoa.cab-i.com/d/blackbox) |
-| `GatewayPodNotReady` | `kube_pod_status_ready{pod=~"apigateway.*"} == 0` | [K8s Dashboard](https://grafana.dev.stoa.cab-i.com/d/k8s) |
+| `GatewayDown` | `up{job="apigateway"} == 0` | [Gateway Dashboard](https://grafana.stoa.cab-i.com/d/gateway) |
+| `GatewayEndpointDown` | `probe_success{job="blackbox", target=~".*gateway.*"} == 0` | [Blackbox Dashboard](https://grafana.stoa.cab-i.com/d/blackbox) |
+| `GatewayPodNotReady` | `kube_pod_status_ready{pod=~"apigateway.*"} == 0` | [K8s Dashboard](https://grafana.stoa.cab-i.com/d/k8s) |
 
 ### Observed Behavior
 
@@ -277,9 +277,9 @@ groups:
 
 ### Grafana Dashboards
 
-- [Gateway Overview](https://grafana.dev.stoa.cab-i.com/d/gateway)
-- [Gateway Latency](https://grafana.dev.stoa.cab-i.com/d/gateway-latency)
-- [Gateway Errors](https://grafana.dev.stoa.cab-i.com/d/gateway-errors)
+- [Gateway Overview](https://grafana.stoa.cab-i.com/d/gateway)
+- [Gateway Latency](https://grafana.stoa.cab-i.com/d/gateway-latency)
+- [Gateway Errors](https://grafana.stoa.cab-i.com/d/gateway-errors)
 
 ---
 

@@ -13,7 +13,7 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `AlertName` | condition | [Dashboard Link](https://grafana.dev.stoa.cab-i.com/d/xxx) |
+| `AlertName` | condition | [Dashboard Link](https://grafana.stoa.cab-i.com/d/xxx) |
 
 ### Observed Behavior
 
@@ -106,7 +106,7 @@ kubectl top pods -n <namespace>
 
 ```bash
 # Service verification
-curl -s https://<service>.dev.stoa.cab-i.com/health | jq .
+curl -s https://<service>.stoa.cab-i.com/health | jq .
 
 # Metrics verification
 kubectl exec -n monitoring prometheus-0 -- \
@@ -174,8 +174,8 @@ kubectl exec -n monitoring prometheus-0 -- \
 
 ### Grafana Dashboards
 
-- [Main dashboard](https://grafana.dev.stoa.cab-i.com/d/xxx)
-- [Detailed dashboard](https://grafana.dev.stoa.cab-i.com/d/yyy)
+- [Main dashboard](https://grafana.stoa.cab-i.com/d/xxx)
+- [Detailed dashboard](https://grafana.stoa.cab-i.com/d/yyy)
 
 ### Previous Incidents
 

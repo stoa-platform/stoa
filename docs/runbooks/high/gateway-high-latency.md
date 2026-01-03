@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `GatewayHighLatencyP95` | `histogram_quantile(0.95, gateway_request_duration) > 2s` | [Gateway Latency](https://grafana.dev.stoa.cab-i.com/d/gateway-latency) |
-| `GatewayHighLatencyP99` | `histogram_quantile(0.99, gateway_request_duration) > 5s` | [Gateway Latency](https://grafana.dev.stoa.cab-i.com/d/gateway-latency) |
-| `GatewaySlowBackend` | `backend_response_time > 3s` | [Backend Dashboard](https://grafana.dev.stoa.cab-i.com/d/backends) |
+| `GatewayHighLatencyP95` | `histogram_quantile(0.95, gateway_request_duration) > 2s` | [Gateway Latency](https://grafana.stoa.cab-i.com/d/gateway-latency) |
+| `GatewayHighLatencyP99` | `histogram_quantile(0.99, gateway_request_duration) > 5s` | [Gateway Latency](https://grafana.stoa.cab-i.com/d/gateway-latency) |
+| `GatewaySlowBackend` | `backend_response_time > 3s` | [Backend Dashboard](https://grafana.stoa.cab-i.com/d/backends) |
 
 ### Observed Behavior
 
@@ -291,7 +291,7 @@ groups:
 ## 7. References
 
 - [Gateway Performance Tuning](docs/performance-tuning.md)
-- [Grafana Gateway Latency](https://grafana.dev.stoa.cab-i.com/d/gateway-latency)
+- [Grafana Gateway Latency](https://grafana.stoa.cab-i.com/d/gateway-latency)
 
 ---
 

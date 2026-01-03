@@ -69,8 +69,15 @@ terraform init && terraform plan && terraform apply
 helm upgrade --install stoa-platform ./charts/stoa-platform -n stoa-system --create-namespace
 ```
 
-## Key URLs
-- Console: https://console.dev.stoa.cab-i.com
-- API: https://api.dev.stoa.cab-i.com
-- Gateway: https://gateway.dev.stoa.cab-i.com
-- Keycloak: https://keycloak.dev.stoa.cab-i.com
+## Key URLs (Production)
+- DevOps UI: https://devops.stoa.cab-i.com
+- API: https://api.stoa.cab-i.com
+- Gateway: https://gateway.stoa.cab-i.com
+- Keycloak: https://auth.stoa.cab-i.com
+- AWX: https://awx.stoa.cab-i.com
+- ArgoCD: https://argocd.stoa.cab-i.com
+- Vault: https://vault.stoa.cab-i.com
+
+## Configuration
+The platform uses `BASE_DOMAIN` as single source of truth for all URLs.
+See `deploy/config/{dev,staging,prod}.env` for environment-specific configuration.

@@ -77,7 +77,7 @@ kubectl top pods -A | sort -k3 -h -r | head -20
 | DevOps UI | https://devops.stoa.cab-i.com |
 | Control Plane API | https://api.stoa.cab-i.com |
 | Keycloak | https://auth.stoa.cab-i.com |
-| Grafana | https://grafana.dev.stoa.cab-i.com |
+| Grafana | https://grafana.stoa.cab-i.com |
 | AWX | https://awx.stoa.cab-i.com |
 | ArgoCD | https://argocd.stoa.cab-i.com |
 | Vault | https://vault.stoa.cab-i.com |

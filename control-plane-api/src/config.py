@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     # GitLab Integration (stoa-gitops repository)
     GITLAB_URL: str = "https://gitlab.com"
     GITLAB_TOKEN: str = ""
-    GITLAB_PROJECT_ID: str = "77260481"  # PotoMitan1/stoa-gitops
-    GITLAB_PROJECT_PATH: str = "PotoMitan1/stoa-gitops"
+    GITLAB_PROJECT_ID: str = "77260481"  # cab6961310/stoa-gitops
+    GITLAB_PROJECT_PATH: str = "cab6961310/stoa-gitops"
     GITLAB_WEBHOOK_SECRET: str = ""
     GITLAB_DEFAULT_BRANCH: str = "main"
 

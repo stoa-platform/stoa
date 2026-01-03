@@ -14,8 +14,8 @@ argocd:
 # -----------------------------------------------------------------------------
 gitlab:
   url: https://gitlab.com
-  projectPath: PotoMitan1/stoa-gitops
-  repoUrl: https://gitlab.com/PotoMitan1/stoa-gitops.git
+  projectPath: cab6961310/stoa-gitops
+  repoUrl: https://gitlab.com/cab6961310/stoa-gitops.git
   branch: main
   # Secret name containing GitLab credentials (created separately)
   secretName: stoa-gitops-repo

@@ -220,7 +220,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - Copie les templates et configurations
 
 - **GitLab stoa-gitops** - Repository configuré
-  - URL: https://gitlab.com/PotoMitan1/stoa-gitops
+  - URL: https://gitlab.com/cab6961310/stoa-gitops
   - Structure: `_defaults.yaml`, `environments/`, `tenants/`
   - Connecté à ArgoCD pour GitOps
 

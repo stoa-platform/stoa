@@ -25,7 +25,7 @@ spec:
 
   # Source repositories - tenant can only access GitOps repo
   sourceRepos:
-    - '${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}'
+    - '${GITLAB_REPO_URL:https://gitlab.com/cab6961310/stoa-gitops.git}'
 
   # Destination - tenant can only deploy to their namespaces
   destinations:

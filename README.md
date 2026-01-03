@@ -266,7 +266,7 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 | **ArgoCD** | https://argocd.stoa.cab-i.com | GitOps CD (admin/demo) |
 | **AWX (Ansible)** | https://awx.stoa.cab-i.com | Automation (admin/demo) |
 | Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n stoa-system` | Administration Kafka (interne) |
-| **GitLab GitOps** | https://gitlab.com/PotoMitan1/stoa-gitops | Source of Truth (tenants)
+| **GitLab GitOps** | https://gitlab.com/cab6961310/stoa-gitops | Source of Truth (tenants)
 
 ### Environnement STAGING (à venir)
 

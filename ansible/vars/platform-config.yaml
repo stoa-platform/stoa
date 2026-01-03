@@ -110,7 +110,7 @@ awx:
   # Project for playbooks
   project:
     name: APIM Playbooks
-    scm_url: "https://gitlab.com/PotoMitan1/stoa-gitops.git"
+    scm_url: "https://gitlab.com/cab6961310/stoa-gitops.git"
     scm_branch: main
 
   # Job Templates
@@ -128,7 +128,7 @@ awx:
 # =============================================================================
 gitlab:
   url: "https://gitlab.com"
-  project_path: PotoMitan1/stoa-gitops
+  project_path: cab6961310/stoa-gitops
   # token: Set via environment or AWS Secrets Manager
   default_branch: main
 

@@ -8,8 +8,8 @@
 infrastructure:
   # GitLab GitOps repository
   GITLAB_URL: "https://gitlab.com"
-  GITLAB_PROJECT_PATH: "PotoMitan1/stoa-gitops"
-  GITLAB_REPO_URL: "https://gitlab.com/PotoMitan1/stoa-gitops.git"
+  GITLAB_PROJECT_PATH: "cab6961310/stoa-gitops"
+  GITLAB_REPO_URL: "https://gitlab.com/cab6961310/stoa-gitops.git"
   GITLAB_DEFAULT_BRANCH: "main"
 
   # Kubernetes

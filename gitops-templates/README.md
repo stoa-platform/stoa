@@ -68,8 +68,8 @@ Fichier central contenant toutes les variables globales:
 ```yaml
 infrastructure:
   GITLAB_URL: "https://gitlab.com"
-  GITLAB_PROJECT_PATH: "PotoMitan1/stoa-gitops"
-  GITLAB_REPO_URL: "https://gitlab.com/PotoMitan1/stoa-gitops.git"
+  GITLAB_PROJECT_PATH: "cab6961310/stoa-gitops"
+  GITLAB_REPO_URL: "https://gitlab.com/cab6961310/stoa-gitops.git"
   K8S_CLUSTER_URL: "https://kubernetes.default.svc"
   K8S_NAMESPACE_PREFIX: "stoa"
   BASE_DOMAIN: "stoa.cab-i.com"

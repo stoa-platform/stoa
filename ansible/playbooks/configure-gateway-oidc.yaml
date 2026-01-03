@@ -28,7 +28,7 @@
 
   vars:
     gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
-    keycloak_url: "https://auth.stoa.cab-i.com"
+    keycloak_url: "https://auth.{{ base_domain | default('stoa.cab-i.com') }}"
     keycloak_realm: "stoa"
     client_id: "{{ client_id | default('control-plane-ui') }}"
     audience: "{{ audience | default('account') }}"

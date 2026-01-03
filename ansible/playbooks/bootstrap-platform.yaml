@@ -35,7 +35,7 @@
     gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
 
     # Keycloak Configuration
-    keycloak_url: "https://auth.stoa.cab-i.com"
+    keycloak_url: "https://auth.{{ base_domain | default('stoa.cab-i.com') }}"
     keycloak_realm: "stoa"
 
     # Control-Plane API Configuration
@@ -994,7 +994,7 @@
 
           ========================================
           NEXT STEPS:
-          1. Test login via https://devops.stoa.cab-i.com
+          1. Test login via https://devops.{{ base_domain | default('stoa.cab-i.com') }}
           2. Verify APIs in Gateway UI
           3. Configure AWX with awx-automation client secret
           4. All subsequent API registrations will use OIDC

@@ -8,6 +8,58 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Ajouté (2026-01-03) - CAB-120 MCP Gateway Auth + MCP Base
+
+- **STOA MCP Gateway - Phase 2** - Auth + MCP Base
+  - `stoa-mcp-gateway/src/middleware/auth.py` - Middleware OIDC Keycloak complet
+    - Validation JWT avec cache JWKS (TTL 5 min)
+    - Modèle `TokenClaims` avec helpers `has_role()`, `has_scope()`
+    - Dependencies FastAPI: `get_current_user`, `get_optional_user`
+    - Factories: `require_role()`, `require_scope()` pour contrôle d'accès
+    - Support Bearer token + API Key (M2M)
+
+  - `stoa-mcp-gateway/src/handlers/mcp.py` - Handlers MCP Protocol
+    - `GET /mcp/v1/` - Server info et capabilities
+    - `GET /mcp/v1/tools` - Liste des tools avec pagination
+    - `GET /mcp/v1/tools/{name}` - Détails d'un tool
+    - `POST /mcp/v1/tools/{name}/invoke` - Invocation (auth requise)
+    - `GET /mcp/v1/resources` - Liste des resources
+    - `GET /mcp/v1/prompts` - Liste des prompts
+
+  - `stoa-mcp-gateway/src/models/mcp.py` - Modèles Pydantic MCP spec
+    - `Tool`, `ToolInvocation`, `ToolResult` avec extensions STOA
+    - `Resource`, `ResourceReference`, `ResourceContentRead`
+    - `Prompt`, `PromptArgument`, `PromptMessage`
+    - Responses: `ListToolsResponse`, `InvokeToolResponse`, etc.
+
+  - `stoa-mcp-gateway/src/services/tool_registry.py` - Registre des tools
+    - Enregistrement dynamique de tools
+    - Tools built-in: `stoa_platform_info`, `stoa_list_apis`, `stoa_get_api_details`
+    - Invocation avec passage de token utilisateur
+    - Support backends HTTP (GET/POST/PUT/DELETE)
+
+  - `stoa-mcp-gateway/src/middleware/metrics.py` - Métriques Prometheus
+    - HTTP: requests total, duration, in-progress
+    - MCP: tool invocations, duration par tool
+    - Auth: attempts, token validation duration
+    - Backend: requests par backend/method/status
+
+  - `stoa-mcp-gateway/docker-compose.yml` - Stack développement local
+    - MCP Gateway avec hot-reload (Dockerfile.dev)
+    - Keycloak avec realm `stoa` pré-configuré
+    - Prometheus (port 9090)
+    - Grafana (port 3000, admin/admin)
+
+  - `stoa-mcp-gateway/dev/keycloak/stoa-realm.json` - Realm Keycloak
+    - Rôles: `cpi-admin`, `tenant-admin`, `devops`, `viewer`
+    - Clients: `stoa-mcp-gateway`, `stoa-test-client`
+    - Users de test: admin, tenant-admin, devops, viewer
+
+  - **Tests**: 25 tests, 71% coverage
+    - `tests/test_auth.py` - TokenClaims, OIDCAuthenticator
+    - `tests/test_mcp.py` - Endpoints MCP
+    - `tests/test_health.py` - Health checks
+
 ### Modifié (2025-01-03) - Rebranding APIM → STOA
 
 - **Renommage complet du projet** - APIM Platform devient STOA Platform

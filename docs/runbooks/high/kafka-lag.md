@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `KafkaConsumerLagHigh` | `kafka_consumer_group_lag > 10000` | [Kafka Dashboard](https://grafana.dev.apim.cab-i.com/d/kafka) |
-| `KafkaConsumerLagGrowing` | `rate(kafka_consumer_group_lag[5m]) > 100` | [Kafka Dashboard](https://grafana.dev.apim.cab-i.com/d/kafka) |
-| `DeploymentWorkerLagging` | `kafka_consumer_group_lag{group="deployment-worker"} > 1000` | [Deployments](https://grafana.dev.apim.cab-i.com/d/deployments) |
+| `KafkaConsumerLagHigh` | `kafka_consumer_group_lag > 10000` | [Kafka Dashboard](https://grafana.dev.stoa.cab-i.com/d/kafka) |
+| `KafkaConsumerLagGrowing` | `rate(kafka_consumer_group_lag[5m]) > 100` | [Kafka Dashboard](https://grafana.dev.stoa.cab-i.com/d/kafka) |
+| `DeploymentWorkerLagging` | `kafka_consumer_group_lag{group="deployment-worker"} > 1000` | [Deployments](https://grafana.dev.stoa.cab-i.com/d/deployments) |
 
 ### Observed Behavior
 
@@ -51,8 +51,8 @@ kubectl exec -n kafka redpanda-0 -- \
   rpk cluster health
 
 # 3. Check consumer pods
-kubectl get pods -n apim-system -l app=control-plane-api
-kubectl logs -n apim-system deploy/control-plane-api --tail=50 | grep -i kafka
+kubectl get pods -n stoa-system -l app=control-plane-api
+kubectl logs -n stoa-system deploy/control-plane-api --tail=50 | grep -i kafka
 
 # 4. Check topics
 kubectl exec -n kafka redpanda-0 -- \
@@ -89,10 +89,10 @@ kubectl exec -n kafka redpanda-0 -- \
 
 ```bash
 # 1. Check if consumer is stuck
-kubectl logs -n apim-system deploy/control-plane-api --tail=100 | grep -i "kafka\|consumer\|error"
+kubectl logs -n stoa-system deploy/control-plane-api --tail=100 | grep -i "kafka\|consumer\|error"
 
 # 2. Restart consumer if stuck
-kubectl rollout restart deployment -n apim-system control-plane-api
+kubectl rollout restart deployment -n stoa-system control-plane-api
 
 # 3. Follow catch-up progress
 watch -n 5 "kubectl exec -n kafka redpanda-0 -- rpk group describe deployment-worker"
@@ -104,23 +104,23 @@ watch -n 5 "kubectl exec -n kafka redpanda-0 -- rpk group describe deployment-wo
 
 ```bash
 # Check pod status
-kubectl get pods -n apim-system -l app=control-plane-api
+kubectl get pods -n stoa-system -l app=control-plane-api
 
 # If CrashLoopBackOff, check logs
-kubectl logs -n apim-system deploy/control-plane-api --previous
+kubectl logs -n stoa-system deploy/control-plane-api --previous
 
 # Restart
-kubectl rollout restart deployment -n apim-system control-plane-api
+kubectl rollout restart deployment -n stoa-system control-plane-api
 
 # Scale to catch up on lag
-kubectl scale deployment -n apim-system control-plane-api --replicas=2
+kubectl scale deployment -n stoa-system control-plane-api --replicas=2
 ```
 
 #### Case 2: Slow processing (AWX timeouts)
 
 ```bash
 # Check running AWX jobs
-kubectl exec -n apim-system deploy/control-plane-api -- \
+kubectl exec -n stoa-system deploy/control-plane-api -- \
   curl -s localhost:8000/v1/deployments?status=running | jq .
 
 # Check AWX
@@ -139,7 +139,7 @@ kubectl exec -n kafka redpanda-0 -- \
   rpk topic describe deploy-requests --print-datadir
 
 # Scale consumers
-kubectl scale deployment -n apim-system control-plane-api --replicas=3
+kubectl scale deployment -n stoa-system control-plane-api --replicas=3
 
 # Increase partitions for parallelism (WARNING: irreversible)
 kubectl exec -n kafka redpanda-0 -- \
@@ -150,7 +150,7 @@ kubectl exec -n kafka redpanda-0 -- \
 
 ```bash
 # Check rebalancing logs
-kubectl logs -n apim-system deploy/control-plane-api | grep -i rebalance
+kubectl logs -n stoa-system deploy/control-plane-api | grep -i rebalance
 
 # Increase session.timeout.ms and heartbeat.interval.ms
 # In Python consumer config:
@@ -158,7 +158,7 @@ kubectl logs -n apim-system deploy/control-plane-api | grep -i rebalance
 # heartbeat_interval_ms=10000
 
 # Restart after config modification
-kubectl rollout restart deployment -n apim-system control-plane-api
+kubectl rollout restart deployment -n stoa-system control-plane-api
 ```
 
 #### Case 5: Skip stuck messages (last resort)
@@ -199,7 +199,7 @@ kubectl exec -n kafka redpanda-0 -- \
   rpk topic consume deploy-results --num 5 --format json
 
 # Check recent deployments
-curl -s https://api.dev.apim.cab-i.com/v1/deployments?limit=5 | jq .
+curl -s https://api.dev.stoa.cab-i.com/v1/deployments?limit=5 | jq .
 ```
 
 ---

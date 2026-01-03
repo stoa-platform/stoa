@@ -23,21 +23,21 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - Helm chart `hashicorp/vault` v0.31.0 (Vault 1.20.4)
   - Namespace: `vault`
   - Storage: 5GB PVC (gp2)
-  - UI accessible: https://vault.apim.cab-i.com
-  - Clés unseal sauvegardées dans AWS Secrets Manager (`apim/vault/keys`)
+  - UI accessible: https://vault.stoa.cab-i.com
+  - Clés unseal sauvegardées dans AWS Secrets Manager (`stoa/vault/keys`)
 
 - **Vault Secrets Engine** - KV v2 pour secrets APIM
-  - Path: `secret/apim/{env}/{type}`
+  - Path: `secret/stoa/{env}/{type}`
   - Structure:
-    - `secret/apim/dev/gateway-admin` - Credentials Gateway admin
-    - `secret/apim/dev/keycloak-admin` - Credentials Keycloak admin
-    - `secret/apim/dev/awx-automation` - Client credentials AWX
-    - `secret/apim/dev/aliases/*` - Backend aliases avec credentials
+    - `secret/stoa/dev/gateway-admin` - Credentials Gateway admin
+    - `secret/stoa/dev/keycloak-admin` - Credentials Keycloak admin
+    - `secret/stoa/dev/awx-automation` - Client credentials AWX
+    - `secret/stoa/dev/aliases/*` - Backend aliases avec credentials
 
 - **Vault Kubernetes Auth** - Authentification native K8s
-  - Roles: `apim-apps` (lecture), `awx-admin` (lecture/écriture)
+  - Roles: `stoa-apps` (lecture), `awx-admin` (lecture/écriture)
   - Service accounts: `control-plane-api`, `awx-web`, `awx-task`
-  - Policies: `apim-read`, `apim-admin`
+  - Policies: `stoa-read`, `stoa-admin`
 
 - **Playbook sync-alias.yaml** - Synchronisation aliases Vault → Gateway
   - Lecture des aliases depuis Vault
@@ -84,14 +84,14 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 ### Corrigé (2024-12-22) - Pipeline E2E Kafka → AWX
 
 - **AWX Token** - Configuration et persistence
-  - Token API créé et sauvegardé dans AWS Secrets Manager (`apim/awx-token`)
+  - Token API créé et sauvegardé dans AWS Secrets Manager (`stoa/awx-token`)
   - Variable `AWX_TOKEN` configurée sur deployment control-plane-api
 
 - **Noms Job Templates AWX** - Alignement code/AWX
   - `awx_service.py`: `deploy-api` → `Deploy API`, `rollback-api` → `Rollback API`
   - `deployment_worker.py`: `promote-portal` → `Promote Portal`, `sync-gateway` → `Sync Gateway`
 
-- **Playbooks manquants GitLab** - Push vers apim-gitops
+- **Playbooks manquants GitLab** - Push vers stoa-gitops
   - `deploy-api.yaml` - Déploiement API dans Gateway
   - `rollback.yaml` - Rollback/désactivation API
   - `sync-gateway.yaml` - Synchronisation Gateway
@@ -119,7 +119,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 - **Playbooks OIDC** - Migration vers authentification OIDC via proxy Gateway-Admin-API
   - Tous playbooks supportent 2 modes: OIDC (recommandé) et Basic Auth (fallback)
-  - URLs HTTPS externes: `https://auth.apim.cab-i.com`, `https://api.apim.cab-i.com/v1/gateway`
+  - URLs HTTPS externes: `https://auth.stoa.cab-i.com`, `https://api.stoa.cab-i.com/v1/gateway`
   - Client service account `awx-automation` pour AWX
   - Playbooks mis à jour: `deploy-api.yaml`, `rollback.yaml`, `sync-gateway.yaml`, `promote-portal.yaml`
   - `bootstrap-platform.yaml`: Création automatique du client Keycloak `awx-automation`
@@ -147,12 +147,12 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - Stratégie documentée:
     - **AWS Secrets Manager**: Secrets bootstrap (gateway-admin, keycloak-admin, rds-master, etc.)
     - **K8s Secrets / Vault**: Secrets runtime (OAuth clients, tokens tenants)
-  - Chemins AWS SM: `apim/{env}/gateway-admin`, `apim/{env}/keycloak-admin`, etc.
+  - Chemins AWS SM: `stoa/{env}/gateway-admin`, `stoa/{env}/keycloak-admin`, etc.
   - Tous playbooks Ansible mis à jour avec `vars_files: ../vars/secrets.yaml`
 
-- **Tenant APIM Platform** - Tenant administrateur avec accès cross-tenant
-  - Fichier: `tenants/apim/` dans GitLab apim-gitops
-  - User: `apimadmin@cab-i.com` (role: cpi-admin)
+- **Tenant STOA Platform** - Tenant administrateur avec accès cross-tenant
+  - Fichier: `tenants/stoa/` dans GitLab stoa-gitops
+  - User: `stoaadmin@cab-i.com` (role: cpi-admin)
   - API: Control-Plane configurée pour Gateway OIDC
 
 - **Playbooks Ansible** - Automation complète
@@ -183,8 +183,8 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - `awx_service`: `provision_tenant()`, `register_api_gateway()`
 
 - **Architecture clarifiée**
-  - GitHub (apim-aws): Code source, développement, CI/CD
-  - GitLab (apim-gitops): Runtime data, tenants, playbooks AWX
+  - GitHub (stoa): Code source, développement, CI/CD
+  - GitLab (stoa-gitops): Runtime data, tenants, playbooks AWX
 
 ### Ajouté (Phase 2) - COMPLÉTÉ
 - **GitOps Templates** (`gitops-templates/`) - Modèles pour initialiser GitLab
@@ -213,14 +213,14 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - ApplicationSets pour multi-tenant auto-discovery
   - AppProjects avec RBAC par tenant
   - Scripts d'installation: `scripts/install-argocd.sh`
-  - URL: https://argocd.apim.cab-i.com
+  - URL: https://argocd.stoa.cab-i.com
 
 - **Script Init GitLab** - `scripts/init-gitlab-gitops.sh`
-  - Initialise le repo GitLab apim-gitops
+  - Initialise le repo GitLab stoa-gitops
   - Copie les templates et configurations
 
-- **GitLab apim-gitops** - Repository configuré
-  - URL: https://gitlab.com/PotoMitan1/apim-gitops
+- **GitLab stoa-gitops** - Repository configuré
+  - URL: https://gitlab.com/PotoMitan1/stoa-gitops
   - Structure: `_defaults.yaml`, `environments/`, `tenants/`
   - Connecté à ArgoCD pour GitOps
 
@@ -238,20 +238,20 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 - **AWX (Ansible Tower)** - Automation
   - AWX 24.6.1 via AWX Operator 2.19.1
-  - URL: https://awx.apim.cab-i.com
+  - URL: https://awx.stoa.cab-i.com
   - Job Templates: Deploy API, Sync Gateway, Promote Portal, Rollback API
 
 - **Control-Plane UI** - Interface React
   - Authentification Keycloak avec PKCE (Keycloak 25+)
   - Pages: Dashboard, Tenants, APIs, Applications, Deployments, Monitoring
-  - URL: https://devops.apim.cab-i.com
+  - URL: https://devops.stoa.cab-i.com
 
 - **Control-Plane API** - Backend FastAPI
   - Kafka Producer intégré (events sur CRUD)
   - Deployment Worker (consumer `deploy-requests`)
   - Webhook GitLab (Push, MR, Tag Push)
   - Pipeline Traces (in-memory store)
-  - URL: https://api.apim.cab-i.com
+  - URL: https://api.stoa.cab-i.com
 
 - **Configuration Variabilisée**
   - UI: Variables `VITE_*` pour build-time config
@@ -260,11 +260,11 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 #### Modifié
 - Infrastructure: 3x t3.large (2 CPU / 8GB RAM) pour supporter Redpanda + AWX
-- Keycloak: Realm `apim`, clients `control-plane-ui` et `control-plane-api`
+- Keycloak: Realm `stoa`, clients `control-plane-ui` et `control-plane-api`
 
 #### Corrigé
 - Authentification PKCE - `response_type: 'code'` + `pkce_method: 'S256'`
-- URLs Keycloak - `auth.apim.cab-i.com` au lieu de `keycloak.dev.apim.cab-i.com`
+- URLs Keycloak - `auth.stoa.cab-i.com` au lieu de `keycloak.dev.stoa.cab-i.com`
 - OpenAPI Tags - Harmonisation casse (`Traces` au lieu de `traces`)
 
 ---
@@ -276,7 +276,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 #### Ajouté
 - **AWS Infrastructure** (Terraform)
   - VPC avec subnets publics/privés
-  - EKS Cluster `apim-dev-cluster`
+  - EKS Cluster `stoa-dev-cluster`
   - RDS PostgreSQL (db.t3.micro)
   - ECR Repositories
 
@@ -290,8 +290,8 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - Elasticsearch 8.11 (pour Gateway)
 
 - **Keycloak** - Identity Provider
-  - URL: https://auth.apim.cab-i.com
-  - Realm: `apim`
+  - URL: https://auth.stoa.cab-i.com
+  - Realm: `stoa`
 
 ---
 
@@ -305,15 +305,15 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [x] ArgoCD Helm chart avec SSO Keycloak
 - [x] ApplicationSets multi-tenant
 - [x] Installation ArgoCD sur EKS
-- [x] Repository GitLab `apim-gitops` configuré
+- [x] Repository GitLab `stoa-gitops` configuré
 
 ### Phase 2.5: Validation E2E - COMPLÉTÉ ✅
 - [x] Playbook provision-tenant.yaml (Keycloak + K8s namespaces)
 - [x] Playbook register-api-gateway.yaml (Gateway OIDC)
 - [x] AWX Job Templates (Provision Tenant, Register API Gateway)
-- [x] Tenant apim dans GitLab avec APIMAdmin
+- [x] Tenant stoa dans GitLab avec STOAAdmin
 - [x] Control-Plane API handlers (tenant-provisioning, api-registration)
-- [x] User apimadmin@cab-i.com créé avec rôle cpi-admin
+- [x] User stoaadmin@cab-i.com créé avec rôle cpi-admin
 - [x] Architecture GitHub/GitLab documentée
 
 ### Phase 3: Secrets & Gateway Alias (Priorité Moyenne) - EN COURS ✅
@@ -457,10 +457,10 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 | Service | URL | Notes |
 |---------|-----|-------|
-| Control Plane UI | https://devops.apim.cab-i.com | React + Keycloak |
-| Control Plane API | https://api.apim.cab-i.com | FastAPI |
-| Keycloak | https://auth.apim.cab-i.com | Realm: apim |
-| AWX | https://awx.apim.cab-i.com | admin/demo |
-| API Gateway | https://gateway.apim.cab-i.com | Administrator/manage |
-| ArgoCD | https://argocd.apim.cab-i.com | GitOps CD |
-| Vault | https://vault.apim.cab-i.com | Secrets Management |
+| Control Plane UI | https://devops.stoa.cab-i.com | React + Keycloak |
+| Control Plane API | https://api.stoa.cab-i.com | FastAPI |
+| Keycloak | https://auth.stoa.cab-i.com | Realm: stoa |
+| AWX | https://awx.stoa.cab-i.com | admin/demo |
+| API Gateway | https://gateway.stoa.cab-i.com | Administrator/manage |
+| ArgoCD | https://argocd.stoa.cab-i.com | GitOps CD |
+| Vault | https://vault.stoa.cab-i.com | Secrets Management |

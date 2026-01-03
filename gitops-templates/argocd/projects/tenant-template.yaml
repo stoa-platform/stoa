@@ -6,7 +6,7 @@
 #   - ${TENANT_DISPLAY_NAME}: Human-readable tenant name
 #   - ${GITLAB_REPO_URL}: GitLab repository URL (default: from _defaults.yaml)
 #   - ${K8S_CLUSTER_URL}: Kubernetes API server URL
-#   - ${K8S_NAMESPACE_PREFIX}: Namespace prefix (default: apim)
+#   - ${K8S_NAMESPACE_PREFIX}: Namespace prefix (default: stoa)
 #   - ${ARGOCD_NAMESPACE}: ArgoCD namespace (default: argocd)
 #
 apiVersion: argoproj.io/v1alpha1
@@ -16,7 +16,7 @@ metadata:
   namespace: ${ARGOCD_NAMESPACE:argocd}
   labels:
     tenant: '${TENANT_ID}'
-    app.kubernetes.io/part-of: apim-platform
+    app.kubernetes.io/part-of: stoa-platform
     app.kubernetes.io/managed-by: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -25,17 +25,17 @@ spec:
 
   # Source repositories - tenant can only access GitOps repo
   sourceRepos:
-    - '${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/apim-gitops.git}'
+    - '${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}'
 
   # Destination - tenant can only deploy to their namespaces
   destinations:
-    - namespace: '${K8S_NAMESPACE_PREFIX:apim}-${TENANT_ID}'
+    - namespace: '${K8S_NAMESPACE_PREFIX:stoa}-${TENANT_ID}'
       server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
-    - namespace: '${K8S_NAMESPACE_PREFIX:apim}-${TENANT_ID}-dev'
+    - namespace: '${K8S_NAMESPACE_PREFIX:stoa}-${TENANT_ID}-dev'
       server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
-    - namespace: '${K8S_NAMESPACE_PREFIX:apim}-${TENANT_ID}-staging'
+    - namespace: '${K8S_NAMESPACE_PREFIX:stoa}-${TENANT_ID}-staging'
       server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
-    - namespace: '${K8S_NAMESPACE_PREFIX:apim}-${TENANT_ID}-prod'
+    - namespace: '${K8S_NAMESPACE_PREFIX:stoa}-${TENANT_ID}-prod'
       server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
 
   # Limited cluster-scoped resources

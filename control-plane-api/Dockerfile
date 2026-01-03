@@ -19,15 +19,15 @@ COPY src/ ./src/
 # Override at runtime via docker run -e or Kubernetes ConfigMap/Secrets
 
 # Core Configuration
-ENV BASE_DOMAIN=apim.cab-i.com \
+ENV BASE_DOMAIN=stoa.cab-i.com \
     ENVIRONMENT=production \
     DEBUG=false \
     LOG_LEVEL=INFO \
     LOG_FORMAT=json
 
 # Keycloak Authentication
-ENV KEYCLOAK_URL=https://auth.apim.cab-i.com \
-    KEYCLOAK_REALM=apim \
+ENV KEYCLOAK_URL=https://auth.stoa.cab-i.com \
+    KEYCLOAK_REALM=stoa \
     KEYCLOAK_CLIENT_ID=control-plane-api \
     KEYCLOAK_CLIENT_SECRET="" \
     KEYCLOAK_VERIFY_SSL=true
@@ -40,24 +40,24 @@ ENV GITLAB_URL=https://gitlab.com \
     GITLAB_DEFAULT_BRANCH=main
 
 # Kafka/Redpanda
-ENV KAFKA_BOOTSTRAP_SERVERS=redpanda.apim-system.svc.cluster.local:9092 \
+ENV KAFKA_BOOTSTRAP_SERVERS=redpanda.stoa-system.svc.cluster.local:9092 \
     KAFKA_SECURITY_PROTOCOL=PLAINTEXT \
     KAFKA_SASL_MECHANISM="" \
     KAFKA_SASL_USERNAME="" \
     KAFKA_SASL_PASSWORD=""
 
 # AWX Automation
-ENV AWX_URL=https://awx.apim.cab-i.com \
+ENV AWX_URL=https://awx.stoa.cab-i.com \
     AWX_TOKEN="" \
     AWX_VERIFY_SSL=true
 
 # API Gateway
-ENV GATEWAY_URL=https://gateway.apim.cab-i.com \
+ENV GATEWAY_URL=https://gateway.stoa.cab-i.com \
     GATEWAY_ADMIN_USER=Administrator \
     GATEWAY_ADMIN_PASSWORD=""
 
 # CORS
-ENV CORS_ORIGINS=https://devops.apim.cab-i.com,http://localhost:3000,http://localhost:5173
+ENV CORS_ORIGINS=https://devops.stoa.cab-i.com,http://localhost:3000,http://localhost:5173
 
 # Rate Limiting
 ENV RATE_LIMIT_REQUESTS=100 \

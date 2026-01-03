@@ -1,8 +1,8 @@
-# APIM Platform v2 - Architecture Finale
+# STOA Platform v2 - Architecture Finale
 
 ## Présentation Exécutive
 
-**APIM Platform v2** est une plateforme de gestion d'APIs multi-tenant conçue pour l'entreprise, intégrant les meilleures pratiques DevOps, GitOps et Event-Driven Architecture.
+**STOA Platform v2** est une plateforme de gestion d'APIs multi-tenant conçue pour l'entreprise, intégrant les meilleures pratiques DevOps, GitOps et Event-Driven Architecture.
 
 ---
 
@@ -632,7 +632,7 @@
 │                                       ▼                                              │
 │   ┌─────────────────────────────────────────────────────────────────────────────┐   │
 │   │                         DEVELOPER PORTAL (React)                             │   │
-│   │                         https://portal.apim.cab-i.com                        │   │
+│   │                         https://portal.stoa.cab-i.com                        │   │
 │   │                                                                              │   │
 │   │   ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐               │   │
 │   │   │ Catalogue  │ │  API Doc   │ │   Apps &   │ │  Try-It    │               │   │
@@ -993,4 +993,4 @@ webMethods Gateway 10.15 ne supporte pas OpenAPI 3.1.0. Le playbook `deploy-api.
 ---
 
 *Document mis à jour le 23 Décembre 2024*
-*APIM Platform v2 - CAB Ingénierie*
+*STOA Platform v2 - CAB Ingénierie*

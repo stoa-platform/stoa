@@ -5,7 +5,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: gateway-healthcheck
-  namespace: apim-system
+  namespace: stoa-system
   labels:
     app: gateway-healthcheck
     component: monitoring
@@ -31,7 +31,7 @@ spec:
                 - |
                   set -e
 
-                  GATEWAY_URL="http://apigateway.apim-system.svc.cluster.local:5555"
+                  GATEWAY_URL="http://apigateway.stoa-system.svc.cluster.local:5555"
                   MAX_RETRIES=3
                   RETRY_DELAY=10
 
@@ -61,11 +61,11 @@ spec:
 
                   # Gateway unhealthy - restart it
                   echo "WARNING: Gateway unhealthy after $MAX_RETRIES attempts. Restarting deployment..."
-                  kubectl rollout restart deployment/apigateway -n apim-system
+                  kubectl rollout restart deployment/apigateway -n stoa-system
 
                   # Wait for rollout to complete
                   echo "Waiting for rollout to complete..."
-                  kubectl rollout status deployment/apigateway -n apim-system --timeout=300s
+                  kubectl rollout status deployment/apigateway -n stoa-system --timeout=300s
 
                   echo "Gateway restarted successfully at $(date)"
               env:
@@ -89,13 +89,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: gateway-healthcheck
-  namespace: apim-system
+  namespace: stoa-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: gateway-healthcheck
-  namespace: apim-system
+  namespace: stoa-system
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
@@ -108,11 +108,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: gateway-healthcheck
-  namespace: apim-system
+  namespace: stoa-system
 subjects:
   - kind: ServiceAccount
     name: gateway-healthcheck
-    namespace: apim-system
+    namespace: stoa-system
 roleRef:
   kind: Role
   name: gateway-healthcheck

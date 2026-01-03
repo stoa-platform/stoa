@@ -1,6 +1,6 @@
 apiVersion: v2
 name: argocd-appsets
-description: ArgoCD ApplicationSets for APIM Platform GitOps
+description: ArgoCD ApplicationSets for STOA Platform GitOps
 type: application
 version: 1.0.0
 appVersion: "2.0.0"
@@ -9,8 +9,8 @@ keywords:
   - argocd
   - gitops
   - applicationset
-  - apim
+  - stoa
 
 maintainers:
-  - name: APIM Platform Team
+  - name: STOA Platform Team
     email: admin@cab-i.com

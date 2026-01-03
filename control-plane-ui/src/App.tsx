@@ -15,7 +15,7 @@ function Dashboard() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-2">Welcome to APIM Control Plane</p>
+        <p className="text-gray-500 mt-2">Welcome to STOA Control Plane</p>
       </div>
 
       {/* Welcome Card */}
@@ -227,7 +227,7 @@ function Login() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">APIM Control Plane</h1>
+          <h1 className="text-2xl font-bold text-gray-900">STOA Control Plane</h1>
           <p className="text-gray-500 mt-1">Multi-tenant API Management</p>
         </div>
         <button

@@ -36,7 +36,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: apigateway-runtime
-  namespace: apim-system
+  namespace: stoa-system
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
@@ -46,10 +46,10 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - apis.apim.cab-i.com
+    - apis.stoa.cab-i.com
     secretName: apigateway-runtime-tls
   rules:
-  - host: apis.apim.cab-i.com
+  - host: apis.stoa.cab-i.com
     http:
       paths:
       - path: /
@@ -67,8 +67,8 @@ Create CNAME records pointing to the Load Balancer:
 
 | DNS | Target | Purpose |
 |-----|--------|---------|
-| `gateway.apim.cab-i.com` | `<elb-hostname>` | Admin UI (port 9072) |
-| `apis.apim.cab-i.com` | `<elb-hostname>` | API Runtime (port 5543) |
+| `gateway.stoa.cab-i.com` | `<elb-hostname>` | Admin UI (port 9072) |
+| `apis.stoa.cab-i.com` | `<elb-hostname>` | API Runtime (port 5543) |
 
 ## Sources & Documentation
 
@@ -556,11 +556,11 @@ curl -s -u Administrator:manage \
 ### Architecture Overview
 
 ```
-Client → apis.apim.cab-i.com (HTTPS) → Ingress → Gateway:5543 → Backend
+Client → apis.stoa.cab-i.com (HTTPS) → Ingress → Gateway:5543 → Backend
                                                       ↓
                                               OIDC Validation
                                                       ↓
-                                              Keycloak (auth.apim.cab-i.com)
+                                              Keycloak (auth.stoa.cab-i.com)
 ```
 
 ### Step 1: Create External Authorization Server (Keycloak)
@@ -575,17 +575,17 @@ curl -s -X POST \
   "http://localhost:5555/rest/apigateway/alias" \
   -d '{
     "name": "KeycloakOIDC",
-    "description": "Keycloak OIDC Provider for APIM Platform",
+    "description": "Keycloak OIDC Provider for STOA Platform",
     "type": "authServerAlias",
     "authServerType": "EXTERNAL",
     "localIntrospectionConfig": {
-      "issuer": "https://auth.apim.cab-i.com/realms/apim",
-      "jwksuri": "https://auth.apim.cab-i.com/realms/apim/protocol/openid-connect/certs"
+      "issuer": "https://auth.stoa.cab-i.com/realms/stoa",
+      "jwksuri": "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/certs"
     },
     "metadata": {
-      "authorizeURL": "https://auth.apim.cab-i.com/realms/apim/protocol/openid-connect/auth",
-      "accessTokenURL": "https://auth.apim.cab-i.com/realms/apim/protocol/openid-connect/token",
-      "refreshTokenURL": "https://auth.apim.cab-i.com/realms/apim/protocol/openid-connect/token"
+      "authorizeURL": "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/auth",
+      "accessTokenURL": "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token",
+      "refreshTokenURL": "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token"
     },
     "scopes": [
       {"name": "openid", "description": "OpenID Connect scope"},
@@ -628,8 +628,8 @@ curl -s -X POST \
   -H "Accept: application/json" \
   "http://localhost:5555/rest/apigateway/strategies" \
   -d '{
-    "name": "apim-platform-oauth2",
-    "description": "OAuth2/OIDC strategy for APIM platform APIs",
+    "name": "stoa-platform-oauth2",
+    "description": "OAuth2/OIDC strategy for STOA platform APIs",
     "type": "OAUTH2",
     "authServerAlias": "KeycloakOIDC",
     "clientId": "control-plane-ui",
@@ -644,8 +644,8 @@ curl -s -X POST \
     "id": "29dce722-11d4-4238-8ae2-aec1c2f85369",
     "type": "OAUTH2",
     "authServerAlias": "KeycloakOIDC",
-    "name": "apim-platform-oauth2",
-    "description": "OAuth2/OIDC strategy for APIM platform APIs",
+    "name": "stoa-platform-oauth2",
+    "description": "OAuth2/OIDC strategy for STOA platform APIs",
     "clientId": "control-plane-ui",
     "audience": "account"
   }
@@ -671,7 +671,7 @@ curl -s -X POST \
     "name": "control-plane-ui",
     "description": "DevOps UI Application for Control Plane",
     "contactEmails": ["admin@cab-i.com"],
-    "siteURLs": ["https://devops.apim.cab-i.com"]
+    "siteURLs": ["https://devops.stoa.cab-i.com"]
   }'
 ```
 
@@ -907,8 +907,8 @@ For the OIDC integration to work correctly, ensure these Keycloak settings:
 1. **Client `control-plane-ui`:**
    - Direct Access Grants Enabled: `true` (for password grant testing)
    - Standard Flow Enabled: `true`
-   - Valid Redirect URIs: `https://devops.apim.cab-i.com/*`
-   - Web Origins: `https://devops.apim.cab-i.com`
+   - Valid Redirect URIs: `https://devops.stoa.cab-i.com/*`
+   - Web Origins: `https://devops.stoa.cab-i.com`
 
 2. **Token Audience:**
    - By default, Keycloak sets `aud: account`
@@ -925,15 +925,15 @@ For the OIDC integration to work correctly, ensure these Keycloak settings:
 ```bash
 # Get token from Keycloak
 TOKEN=$(curl -s -X POST \
-  "https://auth.apim.cab-i.com/realms/apim/protocol/openid-connect/token" \
+  "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token" \
   -d "client_id=control-plane-ui" \
-  -d "username=admin@apim.local" \
+  -d "username=admin@stoa.local" \
   -d "password=demo" \
   -d "grant_type=password" | jq -r '.access_token')
 
 # Call API via Gateway
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "https://apis.apim.cab-i.com/gateway/Control-Plane-API/2.0/health"
+  "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/health"
 ```
 
 ### Debugging OIDC Issues
@@ -958,7 +958,7 @@ The Gateway Admin REST API (`/rest/apigateway/*`) should NOT be exposed external
 
 Example Architecture:
 ```
-External:  https://apis.apim.cab-i.com/admin/gateway/apis
+External:  https://apis.stoa.cab-i.com/admin/gateway/apis
            ↓ OIDC (JWT validation)
 Gateway:   /gateway/GatewayAdmin/1.0/apis
            ↓ Alias routing
@@ -983,7 +983,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: apigateway
-  namespace: apim-system
+  namespace: stoa-system
 spec:
   ports:
   - name: runtime
@@ -1002,6 +1002,6 @@ spec:
 To add the HTTPS port to an existing service:
 
 ```bash
-kubectl patch svc apigateway -n apim-system --type='json' \
+kubectl patch svc apigateway -n stoa-system --type='json' \
   -p='[{"op": "add", "path": "/spec/ports/-", "value": {"name": "runtime-https", "port": 5543, "protocol": "TCP", "targetPort": 5543}}]'
 ```

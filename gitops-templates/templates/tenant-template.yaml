@@ -2,7 +2,7 @@
 # Multi-tenant organization configuration
 # Variables are resolved using ${VAR} or ${VAR:default} syntax
 
-apiVersion: apim.cab-i.com/v1
+apiVersion: stoa.cab-i.com/v1
 kind: Tenant
 metadata:
   name: ${TENANT_ID}

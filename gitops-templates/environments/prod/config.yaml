@@ -12,11 +12,11 @@ description: Production environment for live APIs
 # Environment-specific overrides
 variables:
   # Domain configuration (production uses base domain directly)
-  ENV_DOMAIN: "${BASE_DOMAIN:apim.cab-i.com}"
-  GATEWAY_URL: "https://gateway.${BASE_DOMAIN:apim.cab-i.com}"
-  PORTAL_URL: "https://portal.${BASE_DOMAIN:apim.cab-i.com}"
-  KEYCLOAK_URL: "https://auth.${BASE_DOMAIN:apim.cab-i.com}"
-  CONTROL_PLANE_API_URL: "https://api.${BASE_DOMAIN:apim.cab-i.com}"
+  ENV_DOMAIN: "${BASE_DOMAIN:stoa.cab-i.com}"
+  GATEWAY_URL: "https://gateway.${BASE_DOMAIN:stoa.cab-i.com}"
+  PORTAL_URL: "https://portal.${BASE_DOMAIN:stoa.cab-i.com}"
+  KEYCLOAK_URL: "https://auth.${BASE_DOMAIN:stoa.cab-i.com}"
+  CONTROL_PLANE_API_URL: "https://api.${BASE_DOMAIN:stoa.cab-i.com}"
 
   # Backend configuration (strict)
   BACKEND_TIMEOUT: "30"
@@ -33,7 +33,7 @@ variables:
   LOG_FORMAT: "json"
 
   # Security (strict)
-  CORS_ALLOWED_ORIGINS: "https://*.${BASE_DOMAIN:apim.cab-i.com}"
+  CORS_ALLOWED_ORIGINS: "https://*.${BASE_DOMAIN:stoa.cab-i.com}"
   CORS_MAX_AGE: "86400"
 
   # Monitoring (low sampling to reduce overhead)

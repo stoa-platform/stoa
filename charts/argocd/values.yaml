@@ -1,8 +1,8 @@
-# ArgoCD Values for APIM Platform
+# ArgoCD Values for STOA Platform
 # This configures ArgoCD for GitOps-based deployment
 
 global:
-  domain: argocd.apim.cab-i.com
+  domain: argocd.stoa.cab-i.com
 
 # Server configuration
 server:
@@ -14,11 +14,11 @@ server:
       nginx.ingress.kubernetes.io/ssl-passthrough: "true"
       nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     hosts:
-      - argocd.apim.cab-i.com
+      - argocd.stoa.cab-i.com
     tls:
       - secretName: argocd-tls
         hosts:
-          - argocd.apim.cab-i.com
+          - argocd.stoa.cab-i.com
 
   # RBAC configuration
   rbacConfig:
@@ -37,24 +37,24 @@ dex:
 configs:
   # Repositories configuration
   repositories:
-    apim-gitops:
-      url: https://gitlab.com/potomitan/apim-gitops.git
-      name: apim-gitops
+    stoa-gitops:
+      url: https://gitlab.com/potomitan/stoa-gitops.git
+      name: stoa-gitops
       type: git
 
   # SSO with Keycloak
   cm:
-    url: https://argocd.apim.cab-i.com
+    url: https://argocd.stoa.cab-i.com
     dex.config: |
       connectors:
         - type: oidc
           id: keycloak
           name: Keycloak
           config:
-            issuer: https://auth.apim.cab-i.com/realms/apim
+            issuer: https://auth.stoa.cab-i.com/realms/stoa
             clientID: argocd
             clientSecret: $dex.keycloak.clientSecret
-            redirectURI: https://argocd.apim.cab-i.com/api/dex/callback
+            redirectURI: https://argocd.stoa.cab-i.com/api/dex/callback
             scopes:
               - openid
               - profile
@@ -130,7 +130,7 @@ applicationSet:
 # Notifications for deployment events
 notifications:
   enabled: true
-  argocdUrl: https://argocd.apim.cab-i.com
+  argocdUrl: https://argocd.stoa.cab-i.com
 
   # Kafka notification template
   templates:

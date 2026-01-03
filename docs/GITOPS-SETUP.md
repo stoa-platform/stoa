@@ -2,7 +2,7 @@
 
 ## Overview
 
-The APIM Platform uses GitLab as the source of truth for API definitions and configurations.
+The STOA Platform uses GitLab as the source of truth for API definitions and configurations.
 This guide explains how to configure GitLab SaaS (gitlab.com) for GitOps deployments.
 
 ## Architecture
@@ -23,7 +23,7 @@ This guide explains how to configure GitLab SaaS (gitlab.com) for GitOps deploym
 ## GitLab Repository Structure
 
 ```
-apim-gitops/
+stoa-gitops/
 ├── tenants/
 │   ├── tenant-a/
 │   │   ├── tenant.yaml           # Tenant configuration
@@ -47,7 +47,7 @@ apim-gitops/
 ### 1. Create GitLab Project
 
 1. Go to [gitlab.com](https://gitlab.com) and create a new project
-2. Name it `apim-gitops` (or your preferred name)
+2. Name it `stoa-gitops` (or your preferred name)
 3. Make it **private** (recommended for API definitions)
 
 ### 2. Generate Access Token
@@ -68,7 +68,7 @@ apim-gitops/
 
 1. Go to **Settings → Webhooks**
 2. Add a new webhook:
-   - **URL**: `https://api.dev.apim.cab-i.com/webhooks/gitlab`
+   - **URL**: `https://api.dev.stoa.cab-i.com/webhooks/gitlab`
    - **Secret Token**: Generate a secure random token (e.g., `openssl rand -hex 32`)
    - **Trigger events**:
      - ✅ Push events
@@ -101,7 +101,7 @@ env:
 Create the Kubernetes secret:
 
 ```bash
-kubectl create secret generic gitlab-secrets -n apim-system \
+kubectl create secret generic gitlab-secrets -n stoa-system \
   --from-literal=token=glpat-xxxxx \
   --from-literal=webhook-secret=your-webhook-secret
 ```
@@ -151,17 +151,17 @@ kubectl create secret generic gitlab-secrets -n apim-system \
 
 Check deployment status in Kafka:
 ```bash
-kubectl exec -it redpanda-0 -n apim-system -- \
+kubectl exec -it redpanda-0 -n stoa-system -- \
   rpk topic consume deploy-results --brokers localhost:9092
 ```
 
 Check AWX job status:
 ```bash
 # Get AWX admin password
-kubectl get secret awx-admin-password -n apim-system -o jsonpath='{.data.password}' | base64 -d
+kubectl get secret awx-admin-password -n stoa-system -o jsonpath='{.data.password}' | base64 -d
 
 # Access AWX UI
-kubectl port-forward svc/awx-web -n apim-system 8052:80
+kubectl port-forward svc/awx-web -n stoa-system 8052:80
 # Open http://localhost:8052
 ```
 
@@ -177,13 +177,13 @@ kubectl port-forward svc/awx-web -n apim-system 8052:80
 
 1. Check Kafka topic has the event:
    ```bash
-   kubectl exec -it redpanda-0 -n apim-system -- \
+   kubectl exec -it redpanda-0 -n stoa-system -- \
      rpk topic consume deploy-requests --brokers localhost:9092 --offset start
    ```
 
 2. Check Control-Plane API logs:
    ```bash
-   kubectl logs -l app=control-plane-api -n apim-system -f
+   kubectl logs -l app=control-plane-api -n stoa-system -f
    ```
 
 3. Check AWX job logs in the AWX UI

@@ -7,7 +7,7 @@
  * Environment Variables:
  * ----------------------
  * Core:
- * - VITE_BASE_DOMAIN: Base domain for all services (default: apim.cab-i.com)
+ * - VITE_BASE_DOMAIN: Base domain for all services (default: stoa.cab-i.com)
  * - VITE_ENVIRONMENT: Environment name (dev, staging, production)
  * - VITE_APP_TITLE: Application title
  *
@@ -33,7 +33,7 @@
  */
 
 // Base domain - used to construct default URLs for all services
-const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'apim.cab-i.com';
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'stoa.cab-i.com';
 
 // Environment detection
 const ENVIRONMENT = import.meta.env.VITE_ENVIRONMENT || 'production';
@@ -42,7 +42,7 @@ const IS_DEV = ENVIRONMENT === 'dev' || ENVIRONMENT === 'development';
 export const config = {
   // Application metadata
   app: {
-    title: import.meta.env.VITE_APP_TITLE || 'APIM Control Plane',
+    title: import.meta.env.VITE_APP_TITLE || 'STOA Control Plane',
     version: import.meta.env.VITE_APP_VERSION || '2.0.0',
     environment: ENVIRONMENT,
     isDev: IS_DEV,
@@ -59,7 +59,7 @@ export const config = {
   // Keycloak Configuration
   keycloak: {
     url: import.meta.env.VITE_KEYCLOAK_URL || `https://auth.${BASE_DOMAIN}`,
-    realm: import.meta.env.VITE_KEYCLOAK_REALM || 'apim',
+    realm: import.meta.env.VITE_KEYCLOAK_REALM || 'stoa',
     clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'control-plane-ui',
     get authority() {
       return `${this.url}/realms/${this.realm}`;

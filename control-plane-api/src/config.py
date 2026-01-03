@@ -9,7 +9,7 @@ from typing import List
 import os
 
 # Base domain - used to construct default URLs
-_BASE_DOMAIN = os.getenv("BASE_DOMAIN", "apim.cab-i.com")
+_BASE_DOMAIN = os.getenv("BASE_DOMAIN", "stoa.cab-i.com")
 
 class Settings(BaseSettings):
     # Application
@@ -22,21 +22,21 @@ class Settings(BaseSettings):
 
     # Keycloak Authentication
     KEYCLOAK_URL: str = f"https://auth.{_BASE_DOMAIN}"
-    KEYCLOAK_REALM: str = "apim"
+    KEYCLOAK_REALM: str = "stoa"
     KEYCLOAK_CLIENT_ID: str = "control-plane-api"
     KEYCLOAK_CLIENT_SECRET: str = ""
     KEYCLOAK_VERIFY_SSL: bool = True
 
-    # GitLab Integration (apim-gitops repository)
+    # GitLab Integration (stoa-gitops repository)
     GITLAB_URL: str = "https://gitlab.com"
     GITLAB_TOKEN: str = ""
-    GITLAB_PROJECT_ID: str = "77260481"  # PotoMitan1/apim-gitops
-    GITLAB_PROJECT_PATH: str = "PotoMitan1/apim-gitops"
+    GITLAB_PROJECT_ID: str = "77260481"  # PotoMitan1/stoa-gitops
+    GITLAB_PROJECT_PATH: str = "PotoMitan1/stoa-gitops"
     GITLAB_WEBHOOK_SECRET: str = ""
     GITLAB_DEFAULT_BRANCH: str = "main"
 
     # Kafka/Redpanda Event Streaming
-    KAFKA_BOOTSTRAP_SERVERS: str = "redpanda.apim-system.svc.cluster.local:9092"
+    KAFKA_BOOTSTRAP_SERVERS: str = "redpanda.stoa-system.svc.cluster.local:9092"
     KAFKA_SECURITY_PROTOCOL: str = "PLAINTEXT"  # PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL
     KAFKA_SASL_MECHANISM: str = ""  # PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
     KAFKA_SASL_USERNAME: str = ""

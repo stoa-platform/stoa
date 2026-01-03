@@ -13,8 +13,8 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `VaultSealed` | `vault_core_unsealed == 0` | [Vault Dashboard](https://grafana.dev.apim.cab-i.com/d/vault) |
-| `VaultDown` | `up{job="vault"} == 0` | [Vault Dashboard](https://grafana.dev.apim.cab-i.com/d/vault) |
+| `VaultSealed` | `vault_core_unsealed == 0` | [Vault Dashboard](https://grafana.dev.stoa.cab-i.com/d/vault) |
+| `VaultDown` | `up{job="vault"} == 0` | [Vault Dashboard](https://grafana.dev.stoa.cab-i.com/d/vault) |
 
 ### Observed Behavior
 
@@ -129,7 +129,7 @@ kubectl exec -n vault vault-0 -- vault operator init \
 
 # IMPORTANT: Save vault-init.json to AWS Secrets Manager immediately!
 aws secretsmanager create-secret \
-  --name apim/vault-init-keys \
+  --name stoa/vault-init-keys \
   --secret-string file://vault-init.json
 
 # 3. Delete the local file
@@ -180,10 +180,10 @@ kubectl exec -n vault vault-0 -- vault kv get secret/dev/gateway-admin
 kubectl get externalsecrets -A
 
 # Check that K8s secrets are synchronized
-kubectl get secrets -n apim-system gateway-admin-secret -o yaml
+kubectl get secrets -n stoa-system gateway-admin-secret -o yaml
 
 # Test Control-Plane API endpoint
-curl -s https://api.dev.apim.cab-i.com/health | jq .
+curl -s https://api.dev.stoa.cab-i.com/health | jq .
 ```
 
 ---
@@ -247,8 +247,8 @@ groups:
 
 ### Grafana Dashboards
 
-- [Vault Overview](https://grafana.dev.apim.cab-i.com/d/vault)
-- [Vault Audit Logs](https://grafana.dev.apim.cab-i.com/d/vault-audit)
+- [Vault Overview](https://grafana.dev.stoa.cab-i.com/d/vault)
+- [Vault Audit Logs](https://grafana.dev.stoa.cab-i.com/d/vault-audit)
 
 ### Previous Incidents
 

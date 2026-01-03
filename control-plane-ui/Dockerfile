@@ -16,24 +16,24 @@ COPY . .
 # Example: docker build --build-arg VITE_BASE_DOMAIN=staging.example.com .
 
 # Core Configuration
-ARG VITE_BASE_DOMAIN=apim.cab-i.com
+ARG VITE_BASE_DOMAIN=stoa.cab-i.com
 ARG VITE_ENVIRONMENT=production
-ARG VITE_APP_TITLE="APIM Control Plane"
+ARG VITE_APP_TITLE="STOA Control Plane"
 ARG VITE_APP_VERSION=2.0.0
 
 # API Configuration
-ARG VITE_API_URL=https://api.apim.cab-i.com
+ARG VITE_API_URL=https://api.stoa.cab-i.com
 ARG VITE_API_TIMEOUT=30000
 
 # Keycloak Authentication
-ARG VITE_KEYCLOAK_URL=https://auth.apim.cab-i.com
-ARG VITE_KEYCLOAK_REALM=apim
+ARG VITE_KEYCLOAK_URL=https://auth.stoa.cab-i.com
+ARG VITE_KEYCLOAK_REALM=stoa
 ARG VITE_KEYCLOAK_CLIENT_ID=control-plane-ui
 
 # External Services
-ARG VITE_GATEWAY_URL=https://gateway.apim.cab-i.com
-ARG VITE_AWX_URL=https://awx.apim.cab-i.com
-ARG VITE_PORTAL_URL=https://portal.apim.cab-i.com
+ARG VITE_GATEWAY_URL=https://gateway.stoa.cab-i.com
+ARG VITE_AWX_URL=https://awx.stoa.cab-i.com
+ARG VITE_PORTAL_URL=https://portal.stoa.cab-i.com
 ARG VITE_GITLAB_URL=https://gitlab.com
 
 # Feature Flags

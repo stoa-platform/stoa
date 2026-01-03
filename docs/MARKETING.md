@@ -1,4 +1,4 @@
-# APIM Platform v2 - Plateforme de Gestion d'APIs Enterprise
+# STOA Platform v2 - Plateforme de Gestion d'APIs Enterprise
 
 > **Solution souveraine de gestion d'APIs pour les secteurs régulés**
 
@@ -19,7 +19,7 @@ Les banques, assurances et institutions financières françaises font face à de
 
 ---
 
-## Notre Solution : APIM Platform v2
+## Notre Solution : STOA Platform v2
 
 ### Vision
 
@@ -336,7 +336,7 @@ Toute action ──► Kafka Event ──► OpenSearch ──► Rétention 7 a
 
 ## Comparatif Concurrentiel
 
-| Critère | APIM Platform v2 | Solutions SaaS US | Solutions Legacy |
+| Critère | STOA Platform v2 | Solutions SaaS US | Solutions Legacy |
 |---------|------------------|-------------------|------------------|
 | **Souveraineté** | ✅ 100% France/UE | ❌ USA (Cloud Act) | ⚠️ Variable |
 | **Open Source** | ✅ Auditable | ❌ Propriétaire | ❌ Propriétaire |

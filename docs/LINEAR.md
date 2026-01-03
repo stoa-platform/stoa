@@ -1,8 +1,8 @@
-# Linear Import - APIM Platform v2
+# Linear Import - STOA Platform v2
 
 > **Généré le:** 2025-12-24
 > **Source:** Linear (hlfh-workspace)
-> **Projet:** APIM Platform v2
+> **Projet:** STOA Platform v2
 
 ---
 
@@ -31,7 +31,7 @@ Ou rechercher "Linear" dans VSCode Extensions (Ctrl+Shift+X) → installer **Lin
 
 ### Lien projet
 - **Workspace:** hlfh-workspace
-- **Projet:** [APIM Platform v2](https://linear.app/hlfh-workspace/project/apim-platform-v2)
+- **Projet:** [STOA Platform v2](https://linear.app/hlfh-workspace/project/stoa-platform-v2)
 
 ---
 
@@ -300,7 +300,7 @@ Jobs de sécurité automatisés pour le hardening de la plateforme.
 
 | ID | Titre | Priorité |
 |----|-------|----------|
-| [CAB-25](https://linear.app/hlfh-workspace/issue/CAB-25) | APIM-701: Image Docker apim-security-jobs | P1 |
+| [CAB-25](https://linear.app/hlfh-workspace/issue/CAB-25) | APIM-701: Image Docker stoa-security-jobs | P1 |
 
 ---
 
@@ -758,7 +758,7 @@ CAB-91 (Cron Hourly) ──depends on──► CAB-30 (EventBridge)
 ## 📁 Structure GitOps recommandée
 
 ```
-apim-platform/
+stoa-platform/
 ├── .github/
 │   └── workflows/
 │       └── tag-governance.yaml

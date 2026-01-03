@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `GatewayHighLatencyP95` | `histogram_quantile(0.95, gateway_request_duration) > 2s` | [Gateway Latency](https://grafana.dev.apim.cab-i.com/d/gateway-latency) |
-| `GatewayHighLatencyP99` | `histogram_quantile(0.99, gateway_request_duration) > 5s` | [Gateway Latency](https://grafana.dev.apim.cab-i.com/d/gateway-latency) |
-| `GatewaySlowBackend` | `backend_response_time > 3s` | [Backend Dashboard](https://grafana.dev.apim.cab-i.com/d/backends) |
+| `GatewayHighLatencyP95` | `histogram_quantile(0.95, gateway_request_duration) > 2s` | [Gateway Latency](https://grafana.dev.stoa.cab-i.com/d/gateway-latency) |
+| `GatewayHighLatencyP99` | `histogram_quantile(0.99, gateway_request_duration) > 5s` | [Gateway Latency](https://grafana.dev.stoa.cab-i.com/d/gateway-latency) |
+| `GatewaySlowBackend` | `backend_response_time > 3s` | [Backend Dashboard](https://grafana.dev.stoa.cab-i.com/d/backends) |
 
 ### Observed Behavior
 
@@ -40,25 +40,25 @@
 
 ```bash
 # 1. Check latency metrics
-kubectl exec -n apim deploy/apigateway -- \
+kubectl exec -n stoa deploy/apigateway -- \
   curl -s localhost:5555/metrics | grep -E "request_duration|latency"
 
 # 2. Check Gateway CPU/Memory load
-kubectl top pods -n apim -l app=apigateway
+kubectl top pods -n stoa -l app=apigateway
 
 # 3. Check number of requests in progress
-kubectl exec -n apim deploy/apigateway -- \
+kubectl exec -n stoa deploy/apigateway -- \
   curl -s localhost:5555/rest/apigateway/analytics/transactionalEvents/count
 
 # 4. Check for slow backends
-kubectl logs -n apim deploy/apigateway --tail=100 | grep -i "timeout\|slow\|latency"
+kubectl logs -n stoa deploy/apigateway --tail=100 | grep -i "timeout\|slow\|latency"
 
 # 5. Check Elasticsearch (can cause latency if slow)
-kubectl exec -n apim deploy/apigateway -c elasticsearch -- \
+kubectl exec -n stoa deploy/apigateway -c elasticsearch -- \
   curl -s localhost:9200/_cluster/health | jq .
 
 # 6. Check thread pools
-kubectl exec -n apim deploy/apigateway -- \
+kubectl exec -n stoa deploy/apigateway -- \
   curl -s localhost:5555/rest/apigateway/diagnostics/threadpool
 ```
 
@@ -90,13 +90,13 @@ kubectl exec -n apim deploy/apigateway -- \
 
 ```bash
 # 1. Scale horizontally to absorb load
-kubectl scale deployment -n apim apigateway --replicas=3
+kubectl scale deployment -n stoa apigateway --replicas=3
 
 # 2. Check if HPA is active
-kubectl get hpa -n apim
+kubectl get hpa -n stoa
 
 # 3. If no HPA, create a temporary one
-kubectl autoscale deployment apigateway -n apim \
+kubectl autoscale deployment apigateway -n stoa \
   --min=2 --max=5 --cpu-percent=70
 ```
 
@@ -106,13 +106,13 @@ kubectl autoscale deployment apigateway -n apim \
 
 ```bash
 # Identify slow backends via logs
-kubectl logs -n apim deploy/apigateway --tail=500 | \
+kubectl logs -n stoa deploy/apigateway --tail=500 | \
   grep -E "backendResponseTime|backend.*ms" | \
   sort -t'=' -k2 -n -r | head -20
 
 # Check backend health directly
 kubectl run curl-test --rm -it --restart=Never \
-  --image=curlimages/curl -n apim-system -- \
+  --image=curlimages/curl -n stoa-system -- \
   curl -w "@-" -o /dev/null -s "https://<BACKEND_URL>/health" <<'EOF'
     time_namelookup:  %{time_namelookup}s\n
     time_connect:     %{time_connect}s\n
@@ -128,11 +128,11 @@ EOF
 
 ```bash
 # Check requests/sec
-kubectl exec -n apim deploy/apigateway -- \
+kubectl exec -n stoa deploy/apigateway -- \
   curl -s localhost:5555/metrics | grep "requests_total"
 
 # Increase replicas
-kubectl scale deployment -n apim apigateway --replicas=4
+kubectl scale deployment -n stoa apigateway --replicas=4
 
 # Configure permanent HPA
 cat <<EOF | kubectl apply -f -
@@ -140,7 +140,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: apigateway-hpa
-  namespace: apim
+  namespace: stoa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -168,10 +168,10 @@ EOF
 
 ```bash
 # Check GC logs
-kubectl logs -n apim deploy/apigateway | grep -i "gc\|pause"
+kubectl logs -n stoa deploy/apigateway | grep -i "gc\|pause"
 
 # Increase JVM heap
-kubectl patch deployment -n apim apigateway --type=json -p='[
+kubectl patch deployment -n stoa apigateway --type=json -p='[
   {"op": "replace", "path": "/spec/template/spec/containers/0/env", "value": [
     {"name": "JAVA_MIN_MEM", "value": "2048m"},
     {"name": "JAVA_MAX_MEM", "value": "4096m"}
@@ -186,15 +186,15 @@ kubectl patch deployment -n apim apigateway --type=json -p='[
 
 ```bash
 # Check ES cluster health
-kubectl exec -n apim deploy/apigateway -c elasticsearch -- \
+kubectl exec -n stoa deploy/apigateway -c elasticsearch -- \
   curl -s localhost:9200/_cluster/health?pretty
 
 # Check large indices
-kubectl exec -n apim deploy/apigateway -c elasticsearch -- \
+kubectl exec -n stoa deploy/apigateway -c elasticsearch -- \
   curl -s localhost:9200/_cat/indices?v
 
 # Delete old indices
-kubectl exec -n apim deploy/apigateway -c elasticsearch -- \
+kubectl exec -n stoa deploy/apigateway -c elasticsearch -- \
   curl -X DELETE "localhost:9200/gateway_*_$(date -d '-14 days' +%Y.%m.%d)"
 
 # Reduce log retention if necessary
@@ -204,7 +204,7 @@ kubectl exec -n apim deploy/apigateway -c elasticsearch -- \
 
 ```bash
 # Check thread pools
-kubectl exec -n apim deploy/apigateway -- \
+kubectl exec -n stoa deploy/apigateway -- \
   curl -s localhost:5555/rest/apigateway/diagnostics/threadpool | jq .
 
 # Increase thread pool in config
@@ -229,7 +229,7 @@ kubectl exec -n apim deploy/apigateway -- \
 # Latency test
 for i in {1..10}; do
   curl -w "Total: %{time_total}s\n" -o /dev/null -s \
-    https://gateway.apim.cab-i.com/rest/apigateway/health
+    https://gateway.stoa.cab-i.com/rest/apigateway/health
 done
 
 # Check percentiles
@@ -291,7 +291,7 @@ groups:
 ## 7. References
 
 - [Gateway Performance Tuning](docs/performance-tuning.md)
-- [Grafana Gateway Latency](https://grafana.dev.apim.cab-i.com/d/gateway-latency)
+- [Grafana Gateway Latency](https://grafana.dev.stoa.cab-i.com/d/gateway-latency)
 
 ---
 

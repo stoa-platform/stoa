@@ -26,9 +26,9 @@
     - ../vars/secrets.yaml
 
   vars:
-    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
-    keycloak_url: "https://auth.apim.cab-i.com"
-    keycloak_realm: "apim"
+    gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
+    keycloak_url: "https://auth.stoa.cab-i.com"
+    keycloak_realm: "stoa"
     tenant_id: "{{ tenant_id | default('default') }}"
     api_name: "{{ api_name | default('test-api') }}"
     api_version: "{{ api_version | default('1.0') }}"
@@ -298,7 +298,7 @@
     # =========================================================================
     - name: Send registration success to Control Plane API
       uri:
-        url: "http://control-plane-api.apim-system.svc.cluster.local:8000/v1/events/api-registered"
+        url: "http://control-plane-api.stoa-system.svc.cluster.local:8000/v1/events/api-registered"
         method: POST
         headers:
           Content-Type: "application/json"

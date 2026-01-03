@@ -28,8 +28,8 @@
     _vault_auth_path: "kubernetes"
 
     # Gateway configuration
-    _gateway_proxy_url: "https://api.apim.cab-i.com/v1/gateway"
-    _keycloak_url: "https://auth.apim.cab-i.com"
+    _gateway_proxy_url: "https://api.stoa.cab-i.com/v1/gateway"
+    _keycloak_url: "https://auth.stoa.cab-i.com"
     _client_id: "awx-automation"
     _client_secret: ""
 
@@ -93,7 +93,7 @@
     # ========================================
     - name: Get OIDC access token from Keycloak
       uri:
-        url: "{{ kc_url }}/realms/apim/protocol/openid-connect/token"
+        url: "{{ kc_url }}/realms/stoa/protocol/openid-connect/token"
         method: POST
         body_format: form-urlencoded
         body:
@@ -115,7 +115,7 @@
     # ========================================
     - name: List aliases in Vault for environment
       uri:
-        url: "{{ vault_url }}/v1/secret/metadata/apim/{{ env }}/aliases"
+        url: "{{ vault_url }}/v1/secret/metadata/stoa/{{ env }}/aliases"
         method: LIST
         headers:
           X-Vault-Token: "{{ vault_token }}"
@@ -126,7 +126,7 @@
 
     - name: Get alias details from Vault
       uri:
-        url: "{{ vault_url }}/v1/secret/data/apim/{{ env }}/aliases/{{ item }}"
+        url: "{{ vault_url }}/v1/secret/data/stoa/{{ env }}/aliases/{{ item }}"
         method: GET
         headers:
           X-Vault-Token: "{{ vault_token }}"

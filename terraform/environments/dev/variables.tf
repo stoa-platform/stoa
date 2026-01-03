@@ -96,4 +96,4 @@ variable "opensearch_ebs_volume_size" {
 # NOTE: Sensitive passwords are now managed via AWS Secrets Manager
 # See terraform/modules/secrets for the secrets module
 # The opensearch_master_password is auto-generated and stored in AWS Secrets Manager
-# To retrieve: aws secretsmanager get-secret-value --secret-id apim/dev/opensearch-master
+# To retrieve: aws secretsmanager get-secret-value --secret-id stoa/dev/opensearch-master

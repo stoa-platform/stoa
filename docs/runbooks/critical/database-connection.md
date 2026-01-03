@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `PostgresDown` | `pg_up == 0` | [RDS Dashboard](https://grafana.dev.apim.cab-i.com/d/rds) |
-| `PostgresConnectionsHigh` | `pg_stat_activity_count > 80% max` | [RDS Dashboard](https://grafana.dev.apim.cab-i.com/d/rds) |
-| `KeycloakDBError` | Keycloak logs "connection refused" | [Keycloak Dashboard](https://grafana.dev.apim.cab-i.com/d/keycloak) |
+| `PostgresDown` | `pg_up == 0` | [RDS Dashboard](https://grafana.dev.stoa.cab-i.com/d/rds) |
+| `PostgresConnectionsHigh` | `pg_stat_activity_count > 80% max` | [RDS Dashboard](https://grafana.dev.stoa.cab-i.com/d/rds) |
+| `KeycloakDBError` | Keycloak logs "connection refused" | [Keycloak Dashboard](https://grafana.dev.stoa.cab-i.com/d/keycloak) |
 
 ### Observed Behavior
 
@@ -41,13 +41,13 @@
 ```bash
 # 1. Check RDS status via AWS CLI
 aws rds describe-db-instances \
-  --db-instance-identifier apim-dev-keycloak \
+  --db-instance-identifier stoa-dev-keycloak \
   --query 'DBInstances[0].[DBInstanceStatus,Endpoint.Address]' \
   --output table
 
 # 2. Test connectivity from a pod
 kubectl run pg-test --rm -it --restart=Never \
-  --image=postgres:15 -n apim-system -- \
+  --image=postgres:15 -n stoa-system -- \
   pg_isready -h <RDS_ENDPOINT> -p 5432
 
 # 3. Check Keycloak logs
@@ -55,7 +55,7 @@ kubectl logs -n keycloak deploy/keycloak --tail=50 | grep -i "database\|connecti
 
 # 4. Check dependent pods
 kubectl get pods -n keycloak
-kubectl get pods -n apim-system | grep -E "control-plane|awx"
+kubectl get pods -n stoa-system | grep -E "control-plane|awx"
 
 # 5. Check connection secrets
 kubectl get secret -n keycloak keycloak-db-secret -o jsonpath='{.data.password}' | base64 -d
@@ -89,13 +89,13 @@ kubectl get secret -n keycloak keycloak-db-secret -o jsonpath='{.data.password}'
 ```bash
 # 1. Check if it's a max connections issue
 kubectl run pg-admin --rm -it --restart=Never \
-  --image=postgres:15 -n apim-system -- \
+  --image=postgres:15 -n stoa-system -- \
   psql "host=<RDS_ENDPOINT> dbname=keycloak user=keycloak password=<PASSWORD>" \
   -c "SELECT count(*), state FROM pg_stat_activity GROUP BY state;"
 
 # 2. If too many connections, kill idle connections
 kubectl run pg-admin --rm -it --restart=Never \
-  --image=postgres:15 -n apim-system -- \
+  --image=postgres:15 -n stoa-system -- \
   psql "host=<RDS_ENDPOINT> dbname=keycloak user=keycloak password=<PASSWORD>" \
   -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'idle' AND query_start < NOW() - INTERVAL '10 minutes';"
 
@@ -110,17 +110,17 @@ kubectl rollout restart deployment -n keycloak keycloak
 ```bash
 # View active connections by application
 kubectl run pg-admin --rm -it --restart=Never \
-  --image=postgres:15 -n apim-system -- \
+  --image=postgres:15 -n stoa-system -- \
   psql "host=<RDS_ENDPOINT> dbname=keycloak user=keycloak password=<PASSWORD>" \
   -c "SELECT application_name, count(*) FROM pg_stat_activity GROUP BY application_name ORDER BY count DESC;"
 
 # Increase max_connections on RDS (requires reboot)
 aws rds modify-db-parameter-group \
-  --db-parameter-group-name apim-postgres15 \
+  --db-parameter-group-name stoa-postgres15 \
   --parameters "ParameterName=max_connections,ParameterValue=200,ApplyMethod=pending-reboot"
 
 # Reboot RDS instance (WARNING: downtime)
-aws rds reboot-db-instance --db-instance-identifier apim-dev-keycloak
+aws rds reboot-db-instance --db-instance-identifier stoa-dev-keycloak
 
 # Alternative: Reduce connection pool on application side
 # In Keycloak, modify datasource to reduce pool-size
@@ -131,7 +131,7 @@ aws rds reboot-db-instance --db-instance-identifier apim-dev-keycloak
 ```bash
 # List Security Groups for RDS instance
 aws rds describe-db-instances \
-  --db-instance-identifier apim-dev-keycloak \
+  --db-instance-identifier stoa-dev-keycloak \
   --query 'DBInstances[0].VpcSecurityGroups[*].VpcSecurityGroupId' \
   --output text
 
@@ -153,7 +153,7 @@ aws ec2 authorize-security-group-ingress \
 ```bash
 # Retrieve current password from Secrets Manager
 aws secretsmanager get-secret-value \
-  --secret-id apim-dev-rds-password \
+  --secret-id stoa-dev-rds-password \
   --query SecretString --output text
 
 # Update Kubernetes secret
@@ -173,7 +173,7 @@ kubectl rollout restart deployment -n keycloak keycloak
 aws cloudwatch get-metric-statistics \
   --namespace AWS/RDS \
   --metric-name FreeStorageSpace \
-  --dimensions Name=DBInstanceIdentifier,Value=apim-dev-keycloak \
+  --dimensions Name=DBInstanceIdentifier,Value=stoa-dev-keycloak \
   --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ) \
   --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
   --period 300 \
@@ -181,7 +181,7 @@ aws cloudwatch get-metric-statistics \
 
 # Increase storage (no downtime)
 aws rds modify-db-instance \
-  --db-instance-identifier apim-dev-keycloak \
+  --db-instance-identifier stoa-dev-keycloak \
   --allocated-storage 50 \
   --apply-immediately
 ```
@@ -203,15 +203,15 @@ aws rds modify-db-instance \
 ```bash
 # Test DB connection
 kubectl run pg-test --rm -it --restart=Never \
-  --image=postgres:15 -n apim-system -- \
+  --image=postgres:15 -n stoa-system -- \
   pg_isready -h <RDS_ENDPOINT> -p 5432
 
 # Test Keycloak
-curl -s https://auth.dev.apim.cab-i.com/realms/apim/.well-known/openid-configuration | jq .issuer
+curl -s https://auth.dev.stoa.cab-i.com/realms/stoa/.well-known/openid-configuration | jq .issuer
 
 # Check connection metrics
 kubectl run pg-admin --rm -it --restart=Never \
-  --image=postgres:15 -n apim-system -- \
+  --image=postgres:15 -n stoa-system -- \
   psql "host=<RDS_ENDPOINT> dbname=keycloak user=keycloak password=<PASSWORD>" \
   -c "SELECT count(*) as active_connections FROM pg_stat_activity;"
 ```
@@ -266,7 +266,7 @@ kubectl run pg-admin --rm -it --restart=Never \
 
 ### Dashboards
 
-- [RDS Dashboard](https://grafana.dev.apim.cab-i.com/d/rds)
+- [RDS Dashboard](https://grafana.dev.stoa.cab-i.com/d/rds)
 - [AWS RDS Console](https://eu-west-1.console.aws.amazon.com/rds/home?region=eu-west-1#databases:)
 
 ---

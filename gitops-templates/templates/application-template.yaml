@@ -2,7 +2,7 @@
 # Consumer applications that subscribe to APIs
 # Variables are resolved using ${VAR} or ${VAR:default} syntax
 
-apiVersion: apim.cab-i.com/v1
+apiVersion: stoa.cab-i.com/v1
 kind: Application
 metadata:
   name: ${APP_NAME}
@@ -54,7 +54,7 @@ spec:
     enabled: ${WEBHOOKS_ENABLED:false}
     endpoints: []
     # Example:
-    # - url: https://myapp.example.com/webhooks/apim
+    # - url: https://myapp.example.com/webhooks/stoa
     #   events:
     #     - api.deployed
     #     - subscription.approved

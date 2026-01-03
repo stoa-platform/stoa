@@ -65,7 +65,7 @@
     body_format: json
     body:
       name: "{{ auth_server_name | default('KeycloakOIDC') }}"
-      description: "Keycloak OIDC Provider for APIM Platform"
+      description: "Keycloak OIDC Provider for STOA Platform"
       type: "authServerAlias"
       authServerType: "EXTERNAL"
       localIntrospectionConfig:

@@ -30,7 +30,7 @@ spec:
                   namespace_suffix: prod
                   auto_sync: false
           - git:
-              repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/apim-gitops.git}
+              repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}
               revision: ${GITLAB_BRANCH:main}
               directories:
                 - path: tenants/*
@@ -45,7 +45,7 @@ spec:
     spec:
       project: '{{path.basename}}'
       source:
-        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/apim-gitops.git}
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}
         targetRevision: ${GITLAB_BRANCH:main}
         path: 'tenants/{{path.basename}}'
         helm:
@@ -54,7 +54,7 @@ spec:
             - environments/{{environment}}.yaml
       destination:
         server: '{{cluster}}'
-        namespace: '${K8S_NAMESPACE_PREFIX:apim}-{{path.basename}}-{{namespace_suffix}}'
+        namespace: '${K8S_NAMESPACE_PREFIX:stoa}-{{path.basename}}-{{namespace_suffix}}'
       syncPolicy:
         automated:
           prune: '{{auto_sync}}'

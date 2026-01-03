@@ -1,12 +1,12 @@
 # GitOps Templates
 
-Ce dossier contient les **templates et modèles** pour initialiser le repository GitLab `apim-gitops`.
+Ce dossier contient les **templates et modèles** pour initialiser le repository GitLab `stoa-gitops`.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│              GitHub: apim-aws (Development Repository)          │
+│              GitHub: stoa (Development Repository)          │
 │                   Infrastructure + Code Source                   │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  control-plane-api/ ← Code source FastAPI               │   │
@@ -24,14 +24,14 @@ Ce dossier contient les **templates et modèles** pour initialiser le repository
                               │ Initialisation (une seule fois)
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│         GitLab: apim-gitops (Source of Truth - Runtime)         │
+│         GitLab: stoa-gitops (Source of Truth - Runtime)         │
 │                                                                 │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  ansible/playbooks/  ← Playbooks exécutés par AWX       │   │
 │  │  _defaults.yaml      ← Variables globales               │   │
 │  │  environments/       ← Config par environnement         │   │
 │  │  tenants/            ← Données des tenants              │   │
-│  │  ├── apim/           ← Tenant admin (platform)          │   │
+│  │  ├── stoa/           ← Tenant admin (platform)          │   │
 │  │  │   ├── tenant.yaml                                    │   │
 │  │  │   ├── apis/control-plane/                            │   │
 │  │  │   └── iam/users.yaml (APIMAdmin)                     │   │
@@ -53,8 +53,8 @@ Ce dossier contient les **templates et modèles** pour initialiser le repository
 
 | Composant | Source | Rôle |
 |-----------|--------|------|
-| **GitHub (apim-aws)** | Code source | Développement, CI/CD, images Docker |
-| **GitLab (apim-gitops)** | Données runtime | Tenants, APIs, users, playbooks AWX |
+| **GitHub (stoa)** | Code source | Développement, CI/CD, images Docker |
+| **GitLab (stoa-gitops)** | Données runtime | Tenants, APIs, users, playbooks AWX |
 | **ArgoCD** | GitLab | Sync K8s depuis GitLab |
 | **AWX** | GitLab | Exécute playbooks depuis GitLab |
 | **Control Plane API** | GitLab | Lit/écrit tenants dans GitLab |
@@ -68,11 +68,11 @@ Fichier central contenant toutes les variables globales:
 ```yaml
 infrastructure:
   GITLAB_URL: "https://gitlab.com"
-  GITLAB_PROJECT_PATH: "PotoMitan1/apim-gitops"
-  GITLAB_REPO_URL: "https://gitlab.com/PotoMitan1/apim-gitops.git"
+  GITLAB_PROJECT_PATH: "PotoMitan1/stoa-gitops"
+  GITLAB_REPO_URL: "https://gitlab.com/PotoMitan1/stoa-gitops.git"
   K8S_CLUSTER_URL: "https://kubernetes.default.svc"
-  K8S_NAMESPACE_PREFIX: "apim"
-  BASE_DOMAIN: "apim.cab-i.com"
+  K8S_NAMESPACE_PREFIX: "stoa"
+  BASE_DOMAIN: "stoa.cab-i.com"
 
 services:
   GATEWAY_URL: "https://gateway.${BASE_DOMAIN}"
@@ -105,7 +105,7 @@ helm install argocd-appsets ./argocd/chart -n argocd
 
 # Avec valeurs personnalisées
 helm install argocd-appsets ./argocd/chart -n argocd \
-  --set gitlab.repoUrl=https://gitlab.com/myorg/apim-gitops.git \
+  --set gitlab.repoUrl=https://gitlab.com/myorg/stoa-gitops.git \
   --set domain.base=mycompany.com
 ```
 
@@ -147,7 +147,7 @@ timeout: ${BACKEND_TIMEOUT:30}
 secret: vault:secret/data/path#key
 
 # Variable imbriquée
-url: "https://gateway.${BASE_DOMAIN:apim.cab-i.com}"
+url: "https://gateway.${BASE_DOMAIN:stoa.cab-i.com}"
 ```
 
 ### Ordre de résolution

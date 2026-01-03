@@ -1,7 +1,7 @@
 # CLAUDE.md - Instructions for Claude Code
 
 ## Project Overview
-APIM Platform v2 - Multi-tenant API Management with:
+STOA Platform v2 - Multi-tenant API Management with:
 - UI RBAC Control-Plane (React + Keycloak)
 - GitOps (GitLab as Source of Truth)
 - Event-Driven Architecture (Kafka/Redpanda)
@@ -27,7 +27,7 @@ APIM Platform v2 - Multi-tenant API Management with:
 ### Components
 - **control-plane-ui/**: React TypeScript UI with RBAC
 - **control-plane-api/**: FastAPI backend with Keycloak auth
-- **charts/apim-platform/**: Helm chart for K8s deployment
+- **charts/stoa-platform/**: Helm chart for K8s deployment
 - **terraform/**: AWS infrastructure (EKS, RDS, etc.)
 
 ### Key Technologies
@@ -56,7 +56,7 @@ cd control-plane-ui && npm install && npm start
 cd control-plane-api && pip install -r requirements.txt && uvicorn src.main:app --reload
 
 # Helm lint
-helm lint charts/apim-platform
+helm lint charts/stoa-platform
 ```
 
 ### Deployment
@@ -66,11 +66,11 @@ cd terraform/environments/dev
 terraform init && terraform plan && terraform apply
 
 # Helm
-helm upgrade --install apim-platform ./charts/apim-platform -n apim-system --create-namespace
+helm upgrade --install stoa-platform ./charts/stoa-platform -n stoa-system --create-namespace
 ```
 
 ## Key URLs
-- Console: https://console.dev.apim.cab-i.com
-- API: https://api.dev.apim.cab-i.com
-- Gateway: https://gateway.dev.apim.cab-i.com
-- Keycloak: https://keycloak.dev.apim.cab-i.com
+- Console: https://console.dev.stoa.cab-i.com
+- API: https://api.dev.stoa.cab-i.com
+- Gateway: https://gateway.dev.stoa.cab-i.com
+- Keycloak: https://keycloak.dev.stoa.cab-i.com

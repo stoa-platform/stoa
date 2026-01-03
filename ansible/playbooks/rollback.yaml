@@ -17,13 +17,13 @@
     use_oidc_mode: "{{ use_oidc | default(_use_oidc) | bool }}"
 
     # OIDC configuration defaults (use external HTTPS URLs for proper SSL)
-    _keycloak_url: "https://auth.apim.cab-i.com"
+    _keycloak_url: "https://auth.stoa.cab-i.com"
     _client_id: "awx-automation"
     _client_secret: ""
-    _gateway_proxy_url: "https://api.apim.cab-i.com/v1/gateway"
+    _gateway_proxy_url: "https://api.stoa.cab-i.com/v1/gateway"
 
     # Basic Auth fallback defaults
-    _gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    _gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
     _gateway_user: "Administrator"
     _gateway_password: "manage"
 
@@ -59,7 +59,7 @@
     # ========================================
     - name: Get OIDC access token from Keycloak
       uri:
-        url: "{{ kc_url }}/realms/apim/protocol/openid-connect/token"
+        url: "{{ kc_url }}/realms/stoa/protocol/openid-connect/token"
         method: POST
         body_format: form-urlencoded
         body:
@@ -153,7 +153,7 @@
     # ========================================
     - name: Send rollback notification to Control-Plane API
       uri:
-        url: "http://control-plane-api.apim-system.svc.cluster.local:8000/v1/events/deployment-result"
+        url: "http://control-plane-api.stoa-system.svc.cluster.local:8000/v1/events/deployment-result"
         method: POST
         headers:
           Content-Type: "application/json"

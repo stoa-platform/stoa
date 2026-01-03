@@ -1,5 +1,5 @@
 ---
-# Ansible Inventory for APIM Platform
+# Ansible Inventory for STOA Platform
 all:
   hosts:
     localhost:
@@ -8,11 +8,11 @@ all:
 
   vars:
     # Gateway configuration
-    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
     gateway_user: "Administrator"
 
     # Control Plane API
-    control_plane_url: "http://control-plane-api.apim-system.svc.cluster.local:8000"
+    control_plane_url: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
 
     # Kafka configuration
-    kafka_bootstrap: "redpanda.apim-system.svc.cluster.local:9092"
+    kafka_bootstrap: "redpanda.stoa-system.svc.cluster.local:9092"

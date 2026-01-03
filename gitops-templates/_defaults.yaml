@@ -8,16 +8,16 @@
 infrastructure:
   # GitLab GitOps repository
   GITLAB_URL: "https://gitlab.com"
-  GITLAB_PROJECT_PATH: "PotoMitan1/apim-gitops"
-  GITLAB_REPO_URL: "https://gitlab.com/PotoMitan1/apim-gitops.git"
+  GITLAB_PROJECT_PATH: "PotoMitan1/stoa-gitops"
+  GITLAB_REPO_URL: "https://gitlab.com/PotoMitan1/stoa-gitops.git"
   GITLAB_DEFAULT_BRANCH: "main"
 
   # Kubernetes
   K8S_CLUSTER_URL: "https://kubernetes.default.svc"
-  K8S_NAMESPACE_PREFIX: "apim"
+  K8S_NAMESPACE_PREFIX: "stoa"
 
   # Base domain
-  BASE_DOMAIN: "apim.cab-i.com"
+  BASE_DOMAIN: "stoa.cab-i.com"
 
   # ArgoCD
   ARGOCD_NAMESPACE: "argocd"
@@ -33,7 +33,7 @@ services:
   CONTROL_PLANE_UI_URL: "https://devops.${BASE_DOMAIN}"
   KEYCLOAK_URL: "https://auth.${BASE_DOMAIN}"
   AWX_URL: "https://awx.${BASE_DOMAIN}"
-  REDPANDA_URL: "redpanda.apim-system.svc.cluster.local:9092"
+  REDPANDA_URL: "redpanda.stoa-system.svc.cluster.local:9092"
 
 # =============================================================================
 # VARIABLES - Default values for API/Application configuration

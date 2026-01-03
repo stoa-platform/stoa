@@ -3,15 +3,15 @@
 # Configures External Authorization Server, Strategy, Application, and API association
 #
 # Required variables:
-#   - keycloak_url: Keycloak base URL (e.g., https://auth.apim.cab-i.com)
-#   - keycloak_realm: Keycloak realm name (e.g., apim)
+#   - keycloak_url: Keycloak base URL (e.g., https://auth.stoa.cab-i.com)
+#   - keycloak_realm: Keycloak realm name (e.g., stoa)
 #   - client_id: Keycloak client ID for the application
 #   - audience: Expected audience in JWT tokens (default: account)
 #   - app_name: Application name in Gateway
 #   - api_id: API ID to associate with the application
 #
 # Optional variables:
-#   - gateway_url: Gateway admin URL (default: http://apigateway.apim-system.svc.cluster.local:5555)
+#   - gateway_url: Gateway admin URL (default: http://apigateway.stoa-system.svc.cluster.local:5555)
 #   - auth_server_name: Name for the auth server alias (default: KeycloakOIDC)
 #
 # Secrets loaded from ../vars/secrets.yaml (environment variables required):
@@ -27,9 +27,9 @@
     - ../vars/secrets.yaml
 
   vars:
-    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
-    keycloak_url: "https://auth.apim.cab-i.com"
-    keycloak_realm: "apim"
+    gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
+    keycloak_url: "https://auth.stoa.cab-i.com"
+    keycloak_realm: "stoa"
     client_id: "{{ client_id | default('control-plane-ui') }}"
     audience: "{{ audience | default('account') }}"
     app_name: "{{ app_name | default('control-plane-ui') }}"
@@ -84,7 +84,7 @@
         body_format: json
         body:
           name: "{{ auth_server_name }}"
-          description: "Keycloak OIDC Provider for APIM Platform"
+          description: "Keycloak OIDC Provider for STOA Platform"
           type: "authServerAlias"
           authServerType: "EXTERNAL"
           localIntrospectionConfig:

@@ -22,7 +22,7 @@
 
   vars:
     # Gateway configuration
-    _gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    _gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
     _gateway_user: "Administrator"
     _gateway_password: "manage"
 

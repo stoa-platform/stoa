@@ -1,5 +1,5 @@
 ---
-# Platform Configuration for APIM
+# Platform Configuration for STOA
 # This file centralizes all platform variables used by Ansible playbooks
 #
 # Environment variables can override these defaults using the naming convention:
@@ -9,15 +9,15 @@
 # ENVIRONMENT
 # =============================================================================
 environment: dev
-base_domain: apim.cab-i.com
-platform_tenant_id: apim
+base_domain: stoa.cab-i.com
+platform_tenant_id: stoa
 
 # =============================================================================
 # KEYCLOAK CONFIGURATION
 # =============================================================================
 keycloak:
   url: "https://auth.{{ base_domain }}"
-  realm: apim
+  realm: stoa
   admin_user: admin
   # admin_password: Set via environment or secrets
 
@@ -51,7 +51,7 @@ keycloak:
 # =============================================================================
 gateway:
   # Internal URL (K8s service)
-  internal_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+  internal_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
   # External URL
   external_url: "https://gateway.{{ base_domain }}"
   # APIs endpoint
@@ -110,7 +110,7 @@ awx:
   # Project for playbooks
   project:
     name: APIM Playbooks
-    scm_url: "https://gitlab.com/PotoMitan1/apim-gitops.git"
+    scm_url: "https://gitlab.com/PotoMitan1/stoa-gitops.git"
     scm_branch: main
 
   # Job Templates
@@ -128,7 +128,7 @@ awx:
 # =============================================================================
 gitlab:
   url: "https://gitlab.com"
-  project_path: PotoMitan1/apim-gitops
+  project_path: PotoMitan1/stoa-gitops
   # token: Set via environment or AWS Secrets Manager
   default_branch: main
 
@@ -136,10 +136,10 @@ gitlab:
 # AWS SECRETS MANAGER PATHS
 # =============================================================================
 aws_secrets:
-  prefix: "apim/{{ environment }}"
+  prefix: "stoa/{{ environment }}"
   paths:
     awx_automation: "{{ prefix }}/awx-automation"
-    awx_token: "apim/awx-token"
+    awx_token: "stoa/awx-token"
     gateway_admin: "{{ prefix }}/gateway-admin"
     keycloak_admin: "{{ prefix }}/keycloak-admin"
     gitlab_token: "{{ prefix }}/gitlab-token"
@@ -192,7 +192,7 @@ applications:
 # SCOPE NAMING CONVENTION
 # =============================================================================
 # Format: {AuthServer}:{Tenant}:{Api}:{Version}:{Scope}
-# Example: KeycloakOIDC:apim:control-plane:2.0:admin
+# Example: KeycloakOIDC:stoa:control-plane:2.0:admin
 scope_naming:
   pattern: "{{ auth_server }}:{{ tenant }}:{{ api }}:{{ version }}:{{ scope }}"
   default_scopes:

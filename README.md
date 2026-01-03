@@ -1,4 +1,4 @@
-# APIM Platform - UI RBAC + GitOps + Kafka
+# STOA Platform - UI RBAC + GitOps + Kafka
 
 Plateforme de gestion d'APIs multi-tenant avec Control-Plane UI, GitOps et Event-Driven Architecture.
 
@@ -47,9 +47,9 @@ Plateforme de gestion d'APIs multi-tenant avec Control-Plane UI, GitOps et Event
 
 | Client | Chemin | Auth |
 |--------|--------|------|
-| UI React | `gateway.apim.cab-i.com/control-plane/v1/*` | Keycloak OIDC (user) |
-| Tiers/M2M | `gateway.apim.cab-i.com/control-plane/v1/*` | OAuth2 Client Credentials |
-| APIs métier | `gateway.apim.cab-i.com/apis/{tenant}/*` | API Key / OAuth2 |
+| UI React | `gateway.stoa.cab-i.com/control-plane/v1/*` | Keycloak OIDC (user) |
+| Tiers/M2M | `gateway.stoa.cab-i.com/control-plane/v1/*` | OAuth2 Client Credentials |
+| APIs métier | `gateway.stoa.cab-i.com/apis/{tenant}/*` | API Key / OAuth2 |
 
 ## Composants
 
@@ -75,7 +75,7 @@ Plateforme de gestion d'APIs multi-tenant avec Control-Plane UI, GitOps et Event
 ## Structure GitOps
 
 ```
-apim-gitops/
+stoa-gitops/
 ├── tenants/
 │   ├── tenant-finance/
 │   │   ├── tenant.yaml
@@ -98,7 +98,7 @@ apim-gitops/
 ## Structure du Projet
 
 ```
-apim-aws/
+stoa/
 ├── control-plane-api/       # FastAPI backend
 │   ├── src/
 │   │   ├── auth/            # RBAC & Keycloak
@@ -159,7 +159,7 @@ apim-aws/
 
 ```
 ┌─────────────────────────────┐     ┌─────────────────────────────┐
-│  GitHub: apim-aws           │     │  GitLab: apim-gitops        │
+│  GitHub: stoa           │     │  GitLab: stoa-gitops        │
 │  (Infrastructure + Code)    │     │  (Source of Truth)          │
 │  ├── gitops-templates/      │────▶│  ├── _defaults.yaml         │
 │  ├── control-plane-api/     │     │  ├── environments/          │
@@ -177,9 +177,9 @@ apim-aws/
                                                    │
                                     ┌──────────────▼──────────────┐
                                     │      Kubernetes (EKS)        │
-                                    │  ├── apim-system             │
-                                    │  ├── apim-{tenant}-dev       │
-                                    │  └── apim-{tenant}-prod      │
+                                    │  ├── stoa-system             │
+                                    │  ├── stoa-{tenant}-dev       │
+                                    │  └── stoa-{tenant}-prod      │
                                     └─────────────────────────────┘
 ```
 
@@ -189,9 +189,9 @@ apim-aws/
 
 ```bash
 # Creer le backend S3/DynamoDB (une seule fois)
-aws s3 mb s3://apim-terraform-state-dev --region eu-west-1
+aws s3 mb s3://stoa-terraform-state-dev --region eu-west-1
 aws dynamodb create-table \
-  --table-name apim-terraform-locks \
+  --table-name stoa-terraform-locks \
   --attribute-definitions AttributeName=LockID,AttributeType=S \
   --key-schema AttributeName=LockID,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST
@@ -206,30 +206,30 @@ terraform apply
 ### 2. Configuration kubectl
 
 ```bash
-aws eks update-kubeconfig --name apim-dev-cluster --region eu-west-1
+aws eks update-kubeconfig --name stoa-dev-cluster --region eu-west-1
 ```
 
 ### 3. Deploiement Helm
 
 ```bash
 # Namespace
-kubectl create namespace apim
+kubectl create namespace stoa
 
 # Secrets ECR
 kubectl create secret docker-registry ecr-secret \
   --docker-server=848853684735.dkr.ecr.eu-west-1.amazonaws.com \
   --docker-username=AWS \
   --docker-password=$(aws ecr get-login-password) \
-  -n apim
+  -n stoa
 
 # Control Plane API
 helm upgrade --install control-plane-api ./charts/control-plane-api \
-  --namespace apim \
+  --namespace stoa \
   --set secrets.KEYCLOAK_CLIENT_SECRET=xxx
 
 # Control Plane UI
 helm upgrade --install control-plane-ui ./charts/control-plane-ui \
-  --namespace apim
+  --namespace stoa
 ```
 
 ### 4. Build et Push des images
@@ -258,24 +258,24 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Control Plane UI | https://devops.apim.cab-i.com | Interface de gestion des APIs |
-| Control Plane API | https://api.apim.cab-i.com | Backend REST API |
-| Keycloak (Auth) | https://auth.apim.cab-i.com | Identity Provider (OIDC) |
-| Keycloak Admin | https://auth.apim.cab-i.com/admin/ | Console admin Keycloak |
-| API Gateway UI | https://gateway.apim.cab-i.com/apigatewayui/ | Console Gateway (admin: Administrator/manage) |
-| **ArgoCD** | https://argocd.apim.cab-i.com | GitOps CD (admin/demo) |
-| **AWX (Ansible)** | https://awx.apim.cab-i.com | Automation (admin/demo) |
-| Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n apim-system` | Administration Kafka (interne) |
-| **GitLab GitOps** | https://gitlab.com/PotoMitan1/apim-gitops | Source of Truth (tenants)
+| Control Plane UI | https://devops.stoa.cab-i.com | Interface de gestion des APIs |
+| Control Plane API | https://api.stoa.cab-i.com | Backend REST API |
+| Keycloak (Auth) | https://auth.stoa.cab-i.com | Identity Provider (OIDC) |
+| Keycloak Admin | https://auth.stoa.cab-i.com/admin/ | Console admin Keycloak |
+| API Gateway UI | https://gateway.stoa.cab-i.com/apigatewayui/ | Console Gateway (admin: Administrator/manage) |
+| **ArgoCD** | https://argocd.stoa.cab-i.com | GitOps CD (admin/demo) |
+| **AWX (Ansible)** | https://awx.stoa.cab-i.com | Automation (admin/demo) |
+| Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n stoa-system` | Administration Kafka (interne) |
+| **GitLab GitOps** | https://gitlab.com/PotoMitan1/stoa-gitops | Source of Truth (tenants)
 
 ### Environnement STAGING (à venir)
 
 | Service | URL |
 |---------|-----|
-| Control Plane UI | https://devops.staging.apim.cab-i.com |
-| Control Plane API | https://api.staging.apim.cab-i.com |
-| Keycloak | https://auth.staging.apim.cab-i.com |
-| API Gateway | https://gateway.staging.apim.cab-i.com |
+| Control Plane UI | https://devops.staging.stoa.cab-i.com |
+| Control Plane API | https://api.staging.stoa.cab-i.com |
+| Keycloak | https://auth.staging.stoa.cab-i.com |
+| API Gateway | https://gateway.staging.stoa.cab-i.com |
 
 ## Utilisateurs par défaut (Instance DEMO)
 
@@ -289,7 +289,7 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 
 | Utilisateur | Mot de passe | Rôle | Description |
 |-------------|--------------|------|-------------|
-| `admin@apim.local` | `demo` | CPI Admin | Accès complet à la plateforme |
+| `admin@stoa.local` | `demo` | CPI Admin | Accès complet à la plateforme |
 
 > **Note**: Ces credentials sont pour l'instance de démonstration. En production, utiliser des mots de passe forts stockés dans AWS Secrets Manager.
 
@@ -356,8 +356,8 @@ Amazon OpenSearch 2.x est compatible ES 7.x, donc **non compatible**.
 | Service | URL Interne | Notes |
 |---------|-------------|-------|
 | Elasticsearch | `elasticsearch-master:9200` | Pas d'auth (xpack.security.enabled: false) |
-| Redpanda (Kafka) | `redpanda.apim-system.svc.cluster.local:9092` | Pas d'auth |
-| Keycloak | `https://auth.apim.cab-i.com` | Realm: `apim`, Client: `control-plane-api` |
+| Redpanda (Kafka) | `redpanda.stoa-system.svc.cluster.local:9092` | Pas d'auth |
+| Keycloak | `https://auth.stoa.cab-i.com` | Realm: `stoa`, Client: `control-plane-api` |
 
 ### Configuration Control Plane UI - Tenant Mapping
 
@@ -370,7 +370,7 @@ L'UI Control Plane récupère les informations du tenant depuis le jeton JWT Key
 
 **Fichier de configuration Git** (mapping CPI/DevOps/Tenant):
 ```yaml
-# apim-gitops/config/tenant-mapping.yaml
+# stoa-gitops/config/tenant-mapping.yaml
 tenants:
   tenant-finance:
     name: "Finance Corp"
@@ -392,9 +392,9 @@ tenants:
 Keycloak est configuré comme IdP central pour l'authentification OIDC:
 
 **Realm Configuration**:
-- **Realm**: `apim`
-- **URL**: `https://auth.apim.cab-i.com/realms/apim`
-- **Discovery**: `https://auth.apim.cab-i.com/realms/apim/.well-known/openid-configuration`
+- **Realm**: `stoa`
+- **URL**: `https://auth.stoa.cab-i.com/realms/stoa`
+- **Discovery**: `https://auth.stoa.cab-i.com/realms/stoa/.well-known/openid-configuration`
 
 **Clients Configurés**:
 | Client ID | Type | Usage |
@@ -415,7 +415,7 @@ Keycloak est configuré comme IdP central pour l'authentification OIDC:
 ```json
 {
   "sub": "user-uuid",
-  "preferred_username": "admin@apim.local",
+  "preferred_username": "admin@stoa.local",
   "realm_access": { "roles": ["cpi-admin"] },
   "tenant_id": "tenant-finance",
   "tenant_role": "admin"
@@ -488,13 +488,13 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 
 | Composant | Status | Notes |
 |-----------|--------|-------|
-| EKS Cluster | ✅ Déployé | apim-dev-cluster |
+| EKS Cluster | ✅ Déployé | stoa-dev-cluster |
 | VPC / Subnets | ✅ Déployé | 10.0.0.0/16 |
 | RDS PostgreSQL | ✅ Déployé | db.t3.micro |
-| ECR Repositories | ✅ Déployé | control-plane-api, control-plane-ui, apim/* |
+| ECR Repositories | ✅ Déployé | control-plane-api, control-plane-ui, stoa/* |
 | Nginx Ingress | ✅ Déployé | avec cert-manager |
 | Cert-Manager | ✅ Déployé | Let's Encrypt prod |
-| Keycloak | ✅ Déployé | https://auth.apim.cab-i.com |
+| Keycloak | ✅ Déployé | https://auth.stoa.cab-i.com |
 | Control-Plane API | ✅ Déployé | FastAPI backend |
 | Control-Plane UI | ✅ Déployé | React frontend |
 | Elasticsearch 8.11 | ✅ Déployé | Sur EKS, cluster SAG_EventDataStore (ES 8+ requis pour Gateway 10.15) |
@@ -504,7 +504,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 | **Redpanda (Kafka)** | ✅ Déployé | Event streaming, 1 broker, Redpanda Console |
 | **Kafka Topics** | ✅ Déployé | api-created/updated/deleted, deploy-requests/results, audit-log, notifications |
 | **Kafka Producer** | ✅ Déployé | Intégré dans Control-Plane API (émission events sur CRUD) |
-| **AWX (Ansible Tower)** | ✅ Déployé | AWX 24.6.1 via Operator, https://awx.apim.cab-i.com |
+| **AWX (Ansible Tower)** | ✅ Déployé | AWX 24.6.1 via Operator, https://awx.stoa.cab-i.com |
 
 ### Composants À Déployer 🔲
 
@@ -527,7 +527,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    - Kafka-compatible, 1 broker sur EKS
    - Redpanda Console pour administration
    - Storage: 10GB persistant (EBS gp2)
-   - Endpoint interne: `redpanda.apim-system.svc.cluster.local:9092`
+   - Endpoint interne: `redpanda.stoa-system.svc.cluster.local:9092`
 
 2. **Topics Kafka Créés** ✅
    - `api-created` - Événements création API
@@ -542,7 +542,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    - Control-Plane API émet des événements Kafka sur chaque opération CRUD
    - Topics utilisés: `api-created`, `api-updated`, `api-deleted`, `notifications`
    - Événements d'audit automatiques sur `audit-log`
-   - Connection: `redpanda.apim-system.svc.cluster.local:9092`
+   - Connection: `redpanda.stoa-system.svc.cluster.local:9092`
 
    **Dashboard End-to-End Pipeline**:
    ```
@@ -555,7 +555,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 
 4. **AWX (Ansible Tower)** ✅ DÉPLOYÉ + CONFIGURÉ
    - AWX 24.6.1 via AWX Operator 2.19.1
-   - URL: https://awx.apim.cab-i.com
+   - URL: https://awx.stoa.cab-i.com
    - Login: admin / demo
    - Base de données: RDS PostgreSQL (partagée avec Keycloak)
 
@@ -578,7 +578,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 6. **Control-Plane UI** ✅ FONCTIONNEL
    - Interface React avec authentification Keycloak (PKCE)
    - Pages: Dashboard, Tenants, APIs, Applications, Deployments, Monitoring
-   - URL: https://devops.apim.cab-i.com
+   - URL: https://devops.stoa.cab-i.com
 
 7. **Configuration Variabilisée** ✅ (21 Déc 2024)
    - **UI** ([config.ts](control-plane-ui/src/config.ts)): Toutes les URLs et configs via `VITE_*` env vars
@@ -588,10 +588,10 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    **Variables UI disponibles**:
    | Variable | Description | Défaut |
    |----------|-------------|--------|
-   | `VITE_BASE_DOMAIN` | Domaine de base | `apim.cab-i.com` |
+   | `VITE_BASE_DOMAIN` | Domaine de base | `stoa.cab-i.com` |
    | `VITE_API_URL` | URL API backend | `https://api.{domain}` |
    | `VITE_KEYCLOAK_URL` | URL Keycloak | `https://auth.{domain}` |
-   | `VITE_KEYCLOAK_REALM` | Realm Keycloak | `apim` |
+   | `VITE_KEYCLOAK_REALM` | Realm Keycloak | `stoa` |
    | `VITE_GATEWAY_URL` | URL Gateway | `https://gateway.{domain}` |
    | `VITE_AWX_URL` | URL AWX | `https://awx.{domain}` |
    | `VITE_ENABLE_*` | Feature flags | `true` |
@@ -599,9 +599,9 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    **Variables API disponibles**:
    | Variable | Description | Défaut |
    |----------|-------------|--------|
-   | `BASE_DOMAIN` | Domaine de base | `apim.cab-i.com` |
+   | `BASE_DOMAIN` | Domaine de base | `stoa.cab-i.com` |
    | `KEYCLOAK_URL` | URL Keycloak | `https://auth.{domain}` |
-   | `KEYCLOAK_REALM` | Realm | `apim` |
+   | `KEYCLOAK_REALM` | Realm | `stoa` |
    | `KAFKA_BOOTSTRAP_SERVERS` | Brokers Kafka | `redpanda:9092` |
    | `AWX_URL` | URL AWX | `https://awx.{domain}` |
    | `CORS_ORIGINS` | Origins CORS autorisées | `https://devops.{domain}` |
@@ -610,7 +610,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 8. **Authentification PKCE** ✅ (21 Déc 2024)
    - Keycloak 25+ requiert PKCE pour clients publics
    - Configuration `oidc-client-ts` avec `response_type: 'code'` et `pkce_method: 'S256'`
-   - Login fonctionnel via https://devops.apim.cab-i.com
+   - Login fonctionnel via https://devops.stoa.cab-i.com
 
 #### Phase 2 : GitOps + Variables d'Environnement (Priorité Haute)
 
@@ -631,7 +631,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 ```
 
 1. **Configurer GitLab**
-   - Repository `apim-gitops`
+   - Repository `stoa-gitops`
    - Structure: `tenants/{tenant}/apis/{api}/`
    - Branches: `main` (prod), `staging`, `dev`
 
@@ -645,10 +645,10 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    apiVersion: argoproj.io/v1alpha1
    kind: Application
    metadata:
-     name: apim-tenant-finance
+     name: stoa-tenant-finance
    spec:
      source:
-       repoURL: https://gitlab.com/apim/apim-gitops
+       repoURL: https://gitlab.com/stoa/stoa-gitops
        path: tenants/tenant-finance
      destination:
        server: https://kubernetes.default.svc
@@ -684,7 +684,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 
    **Structure GitOps étendue**:
    ```
-   apim-gitops/
+   stoa-gitops/
    ├── tenants/
    │   └── tenant-finance/
    │       └── apis/
@@ -709,7 +709,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 
    **Exemple Template API (api.yaml)**:
    ```yaml
-   apiVersion: apim.cab-i.com/v1
+   apiVersion: stoa.cab-i.com/v1
    kind: API
    metadata:
      name: payment-api
@@ -727,7 +727,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 
    **Exemple Configuration Environnement (dev.yaml)**:
    ```yaml
-   apiVersion: apim.cab-i.com/v1
+   apiVersion: stoa.cab-i.com/v1
    kind: APIEnvironmentConfig
    metadata:
      name: payment-api-dev
@@ -784,7 +784,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 
    **Structure GitOps IAM**:
    ```
-   apim-gitops/
+   stoa-gitops/
    ├── iam/                              # Identity & Access Management
    │   ├── tenants.yaml                  # Définition tenants + membres
    │   ├── global-admins.yaml            # CPI Admins globaux
@@ -796,7 +796,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 
    **Exemple tenants.yaml**:
    ```yaml
-   apiVersion: apim.cab-i.com/v1
+   apiVersion: stoa.cab-i.com/v1
    kind: TenantRegistry
    metadata:
      name: tenant-registry
@@ -820,7 +820,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
            - email: "jean.dupont@cab-i.com"
              name: "Jean Dupont"
              addedAt: "2024-01-15T10:00:00Z"
-             addedBy: "admin@apim.local"
+             addedBy: "admin@stoa.local"
          devops:                            # Deploy & Promote
            - email: "pierre.durand@cab-i.com"
              name: "Pierre Durand"
@@ -830,18 +830,18 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
            - email: "audit@cab-i.com"
              name: "Audit Team"
              addedAt: "2024-01-15T10:00:00Z"
-             addedBy: "admin@apim.local"
+             addedBy: "admin@stoa.local"
    ```
 
    **Exemple global-admins.yaml**:
    ```yaml
-   apiVersion: apim.cab-i.com/v1
+   apiVersion: stoa.cab-i.com/v1
    kind: GlobalAdminRegistry
    metadata:
      name: global-admins
 
    admins:
-     - email: "admin@apim.local"
+     - email: "admin@stoa.local"
        name: "Platform Admin"
        role: "cpi-admin"
        permissions: ["tenants:*", "apis:*", "users:*"]
@@ -922,7 +922,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    │  • gitlab-token                       • Rotated credentials              │
    │  • awx-token                                                             │
    │                                                                          │
-   │  Path: apim/{env}/{secret-name}       Path: secret/data/{env}/{tenant}   │
+   │  Path: stoa/{env}/{secret-name}       Path: secret/data/{env}/{tenant}   │
    │  Managed by: Terraform                Managed by: Vault / K8s External   │
    └─────────────────────────────────────────────────────────────────────────┘
    ```
@@ -937,10 +937,10 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    - Validation obligatoire des secrets critiques
    - Support lookup env / Vault
 
-4. **Tenant APIM Platform** ✅
+4. **Tenant STOA Platform** ✅
    - Tenant administrateur avec accès cross-tenant
-   - User: `apimadmin@cab-i.com` (role: cpi-admin)
-   - Structure dans GitLab apim-gitops
+   - User: `stoaadmin@cab-i.com` (role: cpi-admin)
+   - Structure dans GitLab stoa-gitops
 
 5. **Playbooks Ansible** ✅
    - `provision-tenant.yaml` - Crée groupes Keycloak, users, namespaces K8s
@@ -1015,7 +1015,7 @@ Les **Alias webMethods Gateway** permettent de stocker endpoints et credentials 
 
 2. **Structure GitOps avec Alias** 🔲
    ```
-   apim-gitops/
+   stoa-gitops/
    ├── tenants/
    │   └── tenant-finance/
    │       └── apis/
@@ -1038,7 +1038,7 @@ Les **Alias webMethods Gateway** permettent de stocker endpoints et credentials 
 
 3. **Définition Alias Gateway (aliases/dev/payment-backend.yaml)** 🔲
    ```yaml
-   apiVersion: apim.cab-i.com/v1
+   apiVersion: stoa.cab-i.com/v1
    kind: GatewayAlias
    metadata:
      name: payment-backend-dev
@@ -1095,7 +1095,7 @@ Les **Alias webMethods Gateway** permettent de stocker endpoints et credentials 
 
 #### Phase 4 : Observabilité avec OpenSearch (Priorité Moyenne)
 
-Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearch** pour le stockage centralisé des traces et métriques.
+Stack complète d'observabilité pour STOA Platform utilisant **Amazon OpenSearch** pour le stockage centralisé des traces et métriques.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1114,10 +1114,10 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 │  │               Amazon OpenSearch (t3.small.search)                     │    │
 │  │                                                                       │    │
 │  │  Indices:                                                             │    │
-│  │  ├── apim-traces-*       (Pipeline traces GitLab→Kafka→AWX→Gateway)  │    │
-│  │  ├── apim-logs-*         (Application logs)                          │    │
-│  │  ├── apim-metrics-*      (Time-series metrics)                       │    │
-│  │  └── apim-analytics-*    (API usage analytics par tenant)            │    │
+│  │  ├── stoa-traces-*       (Pipeline traces GitLab→Kafka→AWX→Gateway)  │    │
+│  │  ├── stoa-logs-*         (Application logs)                          │    │
+│  │  ├── stoa-metrics-*      (Time-series metrics)                       │    │
+│  │  └── stoa-analytics-*    (API usage analytics par tenant)            │    │
 │  │                                                                       │    │
 │  │  Features:                                                            │    │
 │  │  ├── Full-text search sur commit messages, erreurs                   │    │
@@ -1153,7 +1153,7 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
                      ▼                                                ▼
               ┌────────────────────────────────────────────────────────────┐
               │                      OpenSearch                             │
-              │  Index: apim-traces-2024.12                                 │
+              │  Index: stoa-traces-2024.12                                 │
               │  {                                                          │
               │    "trace_id": "trc-abc123",                                │
               │    "trigger_type": "gitlab-push",                           │
@@ -1177,10 +1177,10 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    - Instance: t3.small.search (1 node partagé DEV+STAGING)
    - Storage: 20GB EBS gp3
    - Indices:
-     - `apim-traces-YYYY.MM` - Pipeline traces (rétention 30 jours)
-     - `apim-logs-YYYY.MM.DD` - Application logs (rétention 7 jours)
-     - `apim-metrics-*` - Métriques (rétention 14 jours)
-     - `apim-analytics-{tenant}` - Analytics API Gateway par tenant
+     - `stoa-traces-YYYY.MM` - Pipeline traces (rétention 30 jours)
+     - `stoa-logs-YYYY.MM.DD` - Application logs (rétention 7 jours)
+     - `stoa-metrics-*` - Métriques (rétention 14 jours)
+     - `stoa-analytics-{tenant}` - Analytics API Gateway par tenant
 
 2. **Intégration Control-Plane API → OpenSearch**
    - OpenSearchService dans `services/opensearch_service.py`
@@ -1202,7 +1202,7 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    - Alerting: AlertManager → OpenSearch → Slack
 
 5. **OpenSearch Dashboards** (Visualization)
-   - URL: https://opensearch.apim.cab-i.com/_dashboards
+   - URL: https://opensearch.stoa.cab-i.com/_dashboards
    - Dashboards prédéfinis:
      - **Pipeline Overview**: Success rate, avg duration, errors/hour
      - **Deployment History**: Timeline par tenant/API
@@ -1230,7 +1230,7 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 8. **Index Templates & ILM**
    ```json
    {
-     "index_patterns": ["apim-traces-*"],
+     "index_patterns": ["stoa-traces-*"],
      "template": {
        "settings": {
          "number_of_shards": 1,
@@ -1252,7 +1252,7 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
    ```
 
 9. **Alerting Rules**
-   - Pipeline failed > 3 fois/heure → Slack #apim-alerts
+   - Pipeline failed > 3 fois/heure → Slack #stoa-alerts
    - Duration P95 > 30s → Warning
    - AWX job timeout → Critical
    - Kafka consumer lag > 100 → Warning
@@ -1270,9 +1270,9 @@ Stack complète d'observabilité pour APIM Platform utilisant **Amazon OpenSearc
 **URLs Observabilité**:
 | Service | URL |
 |---------|-----|
-| OpenSearch Dashboards | https://opensearch.apim.cab-i.com/_dashboards |
-| Control-Plane Monitoring | https://devops.apim.cab-i.com/monitoring |
-| Prometheus (interne) | prometheus.apim-system.svc.cluster.local:9090 |
+| OpenSearch Dashboards | https://opensearch.stoa.cab-i.com/_dashboards |
+| Control-Plane Monitoring | https://devops.stoa.cab-i.com/monitoring |
+| Prometheus (interne) | prometheus.stoa-system.svc.cluster.local:9090 |
 
 #### Phase 4.5 : Jenkins Orchestration Layer (Priorité Haute - Enterprise)
 
@@ -1401,7 +1401,7 @@ controller:
             oic:
               clientId: "jenkins"
               clientSecret: "${KEYCLOAK_CLIENT_SECRET}"
-              authorizationServerUrl: "https://auth.apim.cab-i.com/realms/apim"
+              authorizationServerUrl: "https://auth.stoa.cab-i.com/realms/stoa"
           authorizationStrategy:
             roleBased:
               roles:
@@ -1422,8 +1422,8 @@ controller:
 agent:
   # Agents Kubernetes dynamiques
   podTemplates:
-    - name: "apim-agent"
-      label: "apim-agent"
+    - name: "stoa-agent"
+      label: "stoa-agent"
       containers:
         - name: "python"
           image: "python:3.11"
@@ -1439,11 +1439,11 @@ persistence:
 
 ingress:
   enabled: true
-  hostName: jenkins.apim.cab-i.com
+  hostName: jenkins.stoa.cab-i.com
   tls:
     - secretName: jenkins-tls
       hosts:
-        - jenkins.apim.cab-i.com
+        - jenkins.stoa.cab-i.com
 ```
 
 **Kafka Consumer → Jenkins Trigger**:
@@ -1454,12 +1454,12 @@ from kafka import KafkaConsumer
 import requests
 import json
 
-JENKINS_URL = "https://jenkins.apim.cab-i.com"
+JENKINS_URL = "https://jenkins.stoa.cab-i.com"
 JENKINS_TOKEN = os.getenv("JENKINS_API_TOKEN")
 
 consumer = KafkaConsumer(
     'api.lifecycle.events',
-    bootstrap_servers=['redpanda.apim-system.svc.cluster.local:9092'],
+    bootstrap_servers=['redpanda.stoa-system.svc.cluster.local:9092'],
     group_id='jenkins-trigger',
     value_deserializer=lambda m: json.loads(m.decode('utf-8'))
 )
@@ -1483,7 +1483,7 @@ for message in consumer:
         # Trigger Jenkins Pipeline
         response = requests.post(
             f"{JENKINS_URL}/job/{job_name}/buildWithParameters",
-            auth=("apim-service", JENKINS_TOKEN),
+            auth=("stoa-service", JENKINS_TOKEN),
             data={
                 "TENANT_ID": event.get("tenant_id"),
                 "API_NAME": event.get("api_name"),
@@ -1502,7 +1502,7 @@ for message in consumer:
 ```groovy
 // jenkins/pipelines/deploy-api/Jenkinsfile
 pipeline {
-    agent { label 'apim-agent' }
+    agent { label 'stoa-agent' }
 
     parameters {
         string(name: 'TENANT_ID', description: 'Tenant ID')
@@ -1513,10 +1513,10 @@ pipeline {
     }
 
     environment {
-        AWX_HOST = 'https://awx.apim.cab-i.com'
+        AWX_HOST = 'https://awx.stoa.cab-i.com'
         AWX_TOKEN = credentials('awx-api-token')
-        KAFKA_BOOTSTRAP = 'redpanda.apim-system.svc.cluster.local:9092'
-        SLACK_CHANNEL = '#apim-deployments'
+        KAFKA_BOOTSTRAP = 'redpanda.stoa-system.svc.cluster.local:9092'
+        SLACK_CHANNEL = '#stoa-deployments'
     }
 
     options {
@@ -1535,7 +1535,7 @@ pipeline {
                     // Vérifier que l'API existe dans GitLab
                     def apiSpec = sh(
                         script: """
-                            curl -s "https://api.apim.cab-i.com/v1/tenants/${TENANT_ID}/apis/${API_NAME}" \
+                            curl -s "https://api.stoa.cab-i.com/v1/tenants/${TENANT_ID}/apis/${API_NAME}" \
                                 -H "Authorization: Bearer ${API_TOKEN}"
                         """,
                         returnStdout: true
@@ -1628,7 +1628,7 @@ pipeline {
                         def healthCheck = sh(
                             script: """
                                 curl -s -o /dev/null -w '%{http_code}' \
-                                    "https://gateway.${params.ENVIRONMENT}.apim.cab-i.com/${params.TENANT_ID}/${params.API_NAME}/health"
+                                    "https://gateway.${params.ENVIRONMENT}.stoa.cab-i.com/${params.TENANT_ID}/${params.API_NAME}/health"
                             """,
                             returnStdout: true
                         ).trim()
@@ -1650,7 +1650,7 @@ pipeline {
 
                     sh """
                         python3 -m pytest tests/smoke/ \
-                            --api-url="https://gateway.${params.ENVIRONMENT}.apim.cab-i.com/${params.TENANT_ID}/${params.API_NAME}" \
+                            --api-url="https://gateway.${params.ENVIRONMENT}.stoa.cab-i.com/${params.TENANT_ID}/${params.API_NAME}" \
                             --junitxml=smoke-results.xml
                     """
                 }
@@ -1738,7 +1738,7 @@ pipeline {
 ```groovy
 // jenkins/pipelines/rollback-api/Jenkinsfile
 pipeline {
-    agent { label 'apim-agent' }
+    agent { label 'stoa-agent' }
 
     parameters {
         string(name: 'TENANT_ID', description: 'Tenant ID')
@@ -1807,7 +1807,7 @@ pipeline {
                     retry(3) {
                         sleep 5
                         sh """
-                            curl -f "https://gateway.${params.ENVIRONMENT}.apim.cab-i.com/${params.TENANT_ID}/${params.API_NAME}/health"
+                            curl -f "https://gateway.${params.ENVIRONMENT}.stoa.cab-i.com/${params.TENANT_ID}/${params.API_NAME}/health"
                         """
                     }
                 }
@@ -1820,7 +1820,7 @@ pipeline {
             script {
                 // Créer un incident ticket si rollback
                 sh """
-                    curl -X POST "https://api.apim.cab-i.com/v1/incidents" \
+                    curl -X POST "https://api.stoa.cab-i.com/v1/incidents" \
                         -H "Content-Type: application/json" \
                         -d '{
                             "type": "rollback",
@@ -1873,7 +1873,7 @@ def call(String status, Map details) {
     def emoji = status == 'success' ? ':white_check_mark:' : ':x:'
 
     slackSend(
-        channel: '#apim-deployments',
+        channel: '#stoa-deployments',
         color: color,
         message: """
             ${emoji} *Deployment ${status.capitalize()}*
@@ -1915,9 +1915,9 @@ def call(String status, Map details) {
 **URLs Jenkins**:
 | Service | URL |
 |---------|-----|
-| Jenkins UI | https://jenkins.apim.cab-i.com |
-| Blue Ocean | https://jenkins.apim.cab-i.com/blue |
-| API | https://jenkins.apim.cab-i.com/api/json |
+| Jenkins UI | https://jenkins.stoa.cab-i.com |
+| Blue Ocean | https://jenkins.stoa.cab-i.com/blue |
+| API | https://jenkins.stoa.cab-i.com/api/json |
 
 #### Phase 5 : Multi-Environment (Priorité Basse)
 1. **Environnement STAGING**
@@ -1938,7 +1938,7 @@ def call(String status, Map details) {
 │                                                                                      │
 │                        ┌──────────────────────────┐                                 │
 │                        │       KEYCLOAK           │                                 │
-│                        │   Realm: apim-platform   │                                 │
+│                        │   Realm: stoa-platform   │                                 │
 │                        │                          │                                 │
 │                        │  Clients:                │                                 │
 │                        │  ├── control-plane-ui    │                                 │
@@ -1952,7 +1952,7 @@ def call(String status, Map details) {
 │             │   UI DevOps     │       │ Control-Plane   │                          │
 │             │   (React)       │       │     API         │                          │
 │             │                 │       │   (FastAPI)     │                          │
-│             │ devops.apim...  │       │  api.apim...    │                          │
+│             │ devops.stoa...  │       │  api.stoa...    │                          │
 │             └─────────────────┘       └─────────────────┘                          │
 │                        │                                                            │
 │                        │                                                            │
@@ -2000,13 +2000,13 @@ def call(String status, Map details) {
            - email: "demo-cpi@cab-i.com"
              name: "Demo CPI Admin"
              addedAt: "2024-12-21T00:00:00Z"
-             addedBy: "admin@apim.local"
+             addedBy: "admin@stoa.local"
 
          devops:
            - email: "demo-devops@cab-i.com"
              name: "Demo DevOps"
              addedAt: "2024-12-21T00:00:00Z"
-             addedBy: "admin@apim.local"
+             addedBy: "admin@stoa.local"
 
          viewers: []
    ```
@@ -2060,7 +2060,7 @@ def call(String status, Map details) {
    Créer des APIs de démonstration dans le tenant-demo pour que les beta testeurs puissent les explorer.
 
    ```
-   apim-gitops/
+   stoa-gitops/
    └── tenants/
        └── tenant-demo/
            └── apis/
@@ -2079,7 +2079,7 @@ def call(String status, Map details) {
 
    **Exemple petstore-api/api.yaml**:
    ```yaml
-   apiVersion: apim.cab-i.com/v1
+   apiVersion: stoa.cab-i.com/v1
    kind: API
    metadata:
      name: petstore-api
@@ -2107,7 +2107,7 @@ def call(String status, Map details) {
    │                                                                                      │
    │  1. CONNEXION                                                                        │
    │     ┌─────────────────────────────────────────────────────────────────────────────┐ │
-   │     │  Accès: https://devops.apim.cab-i.com                                       │ │
+   │     │  Accès: https://devops.stoa.cab-i.com                                       │ │
    │     │  → Redirect vers Keycloak                                                   │ │
    │     │  → Login: demo-cpi@cab-i.com / DemoCPI2024!                                 │ │
    │     │  → Redirect vers UI DevOps (JWT avec tenant_id=tenant-demo)                │ │
@@ -2151,8 +2151,8 @@ def call(String status, Map details) {
 
    | User | URL | Login | Password |
    |------|-----|-------|----------|
-   | Demo CPI | https://devops.apim.cab-i.com | demo-cpi@cab-i.com | DemoCPI2024! |
-   | Demo DevOps | https://devops.apim.cab-i.com | demo-devops@cab-i.com | DemoDevOps2024! |
+   | Demo CPI | https://devops.stoa.cab-i.com | demo-cpi@cab-i.com | DemoCPI2024! |
+   | Demo DevOps | https://devops.stoa.cab-i.com | demo-devops@cab-i.com | DemoDevOps2024! |
 
    > **Note**: Les credentials seront stockés dans Vault après validation beta.
 
@@ -2194,7 +2194,7 @@ def call(String status, Map details) {
 
    | Interface | URL | Description |
    |-----------|-----|-------------|
-   | UI DevOps | https://devops.apim.cab-i.com | Gestion des APIs, déploiements, monitoring |
+   | UI DevOps | https://devops.stoa.cab-i.com | Gestion des APIs, déploiements, monitoring |
 
    > **Note**: Le Developer Portal custom sera disponible en Phase 8.
 
@@ -2335,8 +2335,8 @@ def call(String status, Map details) {
    **Génération Automatique (MkDocs)**:
    ```yaml
    # mkdocs.yml
-   site_name: APIM Platform - Documentation
-   site_url: https://docs.apim.cab-i.com
+   site_name: STOA Platform - Documentation
+   site_url: https://docs.stoa.cab-i.com
    theme:
      name: material
      palette:
@@ -2365,7 +2365,7 @@ def call(String status, Map details) {
    ```
 
    **Déploiement Documentation**:
-   - URL: https://docs.apim.cab-i.com
+   - URL: https://docs.stoa.cab-i.com
    - CI/CD: GitLab Pages ou S3 + CloudFront
    - Build: `mkdocs build`
 
@@ -2445,7 +2445,7 @@ def call(String status, Map details) {
            spec:
              containers:
                - name: checker
-                 image: apim-security-jobs:latest
+                 image: stoa-security-jobs:latest
                  command: ["python", "-m", "src.jobs.certificate_checker"]
    ```
 
@@ -2570,7 +2570,7 @@ def call(String status, Map details) {
          warning: ["platform-admins@cab-i.com"]
      slack:
        webhook: vault:secret/data/notifications#slack_webhook
-       channel: "#apim-alerts"
+       channel: "#stoa-alerts"
      pagerduty:
        routing_key: vault:secret/data/notifications#pagerduty_key
    ```
@@ -2587,7 +2587,7 @@ def call(String status, Map details) {
            ├── usage_reporting.py          # Job 3
            └── security_scanner.py         # Job 4
 
-   charts/apim-platform/
+   charts/stoa-platform/
    └── templates/
        └── security-jobs/
            ├── certificate-checker.yaml
@@ -2602,7 +2602,7 @@ def call(String status, Map details) {
    # values.yaml
    securityJobs:
      enabled: true
-     image: apim-security-jobs:latest
+     image: stoa-security-jobs:latest
 
      certificateChecker:
        schedule: "0 6 * * *"
@@ -2632,7 +2632,7 @@ def call(String status, Map details) {
 
 8. **Checklist Déploiement Phase 7** 🔲
 
-   - [ ] Créer image Docker `apim-security-jobs` avec Python + outils
+   - [ ] Créer image Docker `stoa-security-jobs` avec Python + outils
    - [ ] Implémenter `certificate_checker.py`
    - [ ] Implémenter `secret_rotation.py` avec intégration Vault
    - [ ] Implémenter `usage_reporting.py` avec génération PDF
@@ -3036,7 +3036,7 @@ POST   /portal/try-it                  # Proxy vers Gateway
 client_id: developer-portal
 client_type: public
 valid_redirect_uris:
-  - https://portal.apim.cab-i.com/*
+  - https://portal.stoa.cab-i.com/*
   - http://localhost:3001/*
 roles:
   - developer  # Accès portal
@@ -3061,7 +3061,7 @@ roles:
 - [ ] Endpoints `/portal/*` dans Control-Plane API
 - [ ] Events Kafka pour audit
 - [ ] Déploiement Kubernetes (Helm)
-- [ ] URL: https://portal.apim.cab-i.com
+- [ ] URL: https://portal.stoa.cab-i.com
 
 #### Phase 9 : Système de Ticketing (Demandes de Production)
 
@@ -3115,7 +3115,7 @@ roles:
 
 **Structure GitOps**:
 ```
-apim-gitops/
+stoa-gitops/
 └── requests/
     └── prod/
         └── 2024/
@@ -3127,7 +3127,7 @@ apim-gitops/
 
 **Format Ticket YAML**:
 ```yaml
-apiVersion: apim.cab-i.com/v1
+apiVersion: stoa.cab-i.com/v1
 kind: PromotionRequest
 metadata:
   id: PR-2024-0003
@@ -3503,7 +3503,7 @@ module "tags" {
 
   environment   = "dev"
   owner         = "devteam@cab-i.com"
-  project       = "apim-platform"
+  project       = "stoa-platform"
   cost_center   = "CC-12345"
   ttl           = "14d"
   auto_teardown = true
@@ -3617,7 +3617,7 @@ spec:
     excludedNamespaces:
       - kube-system
       - gatekeeper-system
-      - apim-system  # Core platform excluded
+      - stoa-system  # Core platform excluded
   parameters:
     requiredTags:
       - environment
@@ -3715,9 +3715,9 @@ jobs:
 │   │                                                                              │    │
 │   │   whitelist.yaml:                                                           │    │
 │   │   ├── arn:aws:ec2:*:*:instance/i-core-*      # Instances core              │    │
-│   │   ├── arn:aws:rds:*:*:db:apim-*              # BDD plateforme              │    │
-│   │   ├── arn:aws:s3:::apim-artifacts-*          # Buckets artifacts           │    │
-│   │   ├── namespace:apim-system                   # K8s core namespace         │    │
+│   │   ├── arn:aws:rds:*:*:db:stoa-*              # BDD plateforme              │    │
+│   │   ├── arn:aws:s3:::stoa-artifacts-*          # Buckets artifacts           │    │
+│   │   ├── namespace:stoa-system                   # K8s core namespace         │    │
 │   │   └── tag:critical=true                       # Tag générique              │    │
 │   │                                                                              │    │
 │   └─────────────────────────────────────────────────────────────────────────────┘    │
@@ -3750,7 +3750,7 @@ jobs:
 │   │   │                                                                    │     │    │
 │   │   │  [🔄 Snooze +7 jours]  [🔄 Snooze +14 jours]  [❌ Supprimer]      │     │    │
 │   │   │                                                                    │     │    │
-│   │   │  Lien: https://api.apim.cab-i.com/v1/resources/{id}/extend?days=7 │     │    │
+│   │   │  Lien: https://api.stoa.cab-i.com/v1/resources/{id}/extend?days=7 │     │    │
 │   │   └───────────────────────────────────────────────────────────────────┘     │    │
 │   │                                                                              │    │
 │   │   API Endpoint: PATCH /v1/resources/{id}/ttl                                │    │
@@ -3825,11 +3825,11 @@ resource "aws_servicequotas_service_quota" "ec2_instances" {
 never_delete:
   # Par ARN pattern
   aws_resources:
-    - "arn:aws:ec2:*:*:instance/i-apim-*"
-    - "arn:aws:rds:*:*:db:apim-prod-*"
-    - "arn:aws:s3:::apim-artifacts"
-    - "arn:aws:s3:::apim-backups"
-    - "arn:aws:lambda:*:*:function:apim-core-*"
+    - "arn:aws:ec2:*:*:instance/i-stoa-*"
+    - "arn:aws:rds:*:*:db:stoa-prod-*"
+    - "arn:aws:s3:::stoa-artifacts"
+    - "arn:aws:s3:::stoa-backups"
+    - "arn:aws:lambda:*:*:function:stoa-core-*"
 
   # Par tag
   tags:
@@ -3843,7 +3843,7 @@ never_delete:
     namespaces:
       - kube-system
       - gatekeeper-system
-      - apim-system
+      - stoa-system
       - monitoring
       - vault
 ```
@@ -4005,13 +4005,13 @@ def calculate_cost_avoided(resource, remaining_hours: int) -> float:
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    UI Control-Plane (React + Keycloak)               │
-│                    https://devops.apim.cab-i.com                     │
+│                    https://devops.stoa.cab-i.com                     │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Control-Plane API (FastAPI)                       │
-│                    https://api.apim.cab-i.com                        │
+│                    https://api.stoa.cab-i.com                        │
 │  ┌─────────────────────────────────────────────────────────────────┐│
 │  │ /v1/tenants     │ /v1/apis     │ /v1/deploy     │ /v1/events   ││
 │  └─────────────────────────────────────────────────────────────────┘│

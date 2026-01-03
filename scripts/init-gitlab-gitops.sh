@@ -1,9 +1,9 @@
 #!/bin/bash
-# Initialize GitLab apim-gitops repository with templates
+# Initialize GitLab stoa-gitops repository with templates
 # This script copies the base structure to a new GitLab repo
 set -e
 
-GITLAB_REPO_URL="${GITLAB_REPO_URL:-git@gitlab.com:potomitan/apim-gitops.git}"
+GITLAB_REPO_URL="${GITLAB_REPO_URL:-git@gitlab.com:potomitan/stoa-gitops.git}"
 TEMPLATES_DIR="$(dirname "$0")/../gitops-templates"
 TEMP_DIR=$(mktemp -d)
 
@@ -14,13 +14,13 @@ echo ""
 # Clone or create the repo
 if git ls-remote "${GITLAB_REPO_URL}" &>/dev/null; then
     echo "Cloning existing repository..."
-    git clone "${GITLAB_REPO_URL}" "${TEMP_DIR}/apim-gitops"
+    git clone "${GITLAB_REPO_URL}" "${TEMP_DIR}/stoa-gitops"
 else
     echo "Repository doesn't exist. Please create it first on GitLab."
     exit 1
 fi
 
-cd "${TEMP_DIR}/apim-gitops"
+cd "${TEMP_DIR}/stoa-gitops"
 
 # Copy base files
 echo "Copying base configuration..."
@@ -74,9 +74,9 @@ Source of Truth for APIM Platform tenant configurations.
 
 ## Managed by
 
-- **Control Plane UI**: https://devops.apim.cab-i.com
-- **Control Plane API**: https://api.apim.cab-i.com
-- **ArgoCD**: https://argocd.apim.cab-i.com
+- **Control Plane UI**: https://devops.stoa.cab-i.com
+- **Control Plane API**: https://api.stoa.cab-i.com
+- **ArgoCD**: https://argocd.stoa.cab-i.com
 
 ## Variable Resolution
 
@@ -135,7 +135,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
 else
     echo ""
     echo "Changes committed locally. Push manually with:"
-    echo "  cd ${TEMP_DIR}/apim-gitops && git push origin main"
+    echo "  cd ${TEMP_DIR}/stoa-gitops && git push origin main"
 fi
 
 echo ""

@@ -2,7 +2,7 @@
 Common labels
 */}}
 {{- define "argocd-appsets.labels" -}}
-app.kubernetes.io/part-of: {{ .Values.labels | default dict | dig "app.kubernetes.io/part-of" "apim-platform" }}
+app.kubernetes.io/part-of: {{ .Values.labels | default dict | dig "app.kubernetes.io/part-of" "stoa-platform" }}
 app.kubernetes.io/managed-by: {{ .Values.labels | default dict | dig "app.kubernetes.io/managed-by" "argocd" }}
 {{- end }}
 
@@ -17,5 +17,5 @@ GitLab Repo URL
 Namespace with prefix
 */}}
 {{- define "argocd-appsets.namespace" -}}
-{{ .Values.kubernetes.namespacePrefix | default "apim" }}
+{{ .Values.kubernetes.namespacePrefix | default "stoa" }}
 {{- end }}

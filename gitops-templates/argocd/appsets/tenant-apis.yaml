@@ -18,7 +18,7 @@ metadata:
 spec:
   generators:
     - git:
-        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/apim-gitops.git}
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}
         revision: ${GITLAB_BRANCH:main}
         directories:
           - path: tenants/*/apis/*
@@ -33,14 +33,14 @@ spec:
     spec:
       project: '{{path[1]}}'
       source:
-        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/apim-gitops.git}
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}
         targetRevision: ${GITLAB_BRANCH:main}
         path: '{{path}}'
         plugin:
           name: variable-resolver
       destination:
         server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
-        namespace: '${K8S_NAMESPACE_PREFIX:apim}-{{path[1]}}'
+        namespace: '${K8S_NAMESPACE_PREFIX:stoa}-{{path[1]}}'
       syncPolicy:
         automated:
           prune: true

@@ -364,17 +364,17 @@ export default {
 ### Realm / Client
 
 ```yaml
-Realm: apim-platform (existant)
+Realm: stoa-platform (existant)
 
 Client:
   client_id: developer-portal
   client_type: public
   valid_redirect_uris:
     - http://localhost:3001/*
-    - https://portal.apim.cab-i.com/*
+    - https://portal.stoa.cab-i.com/*
   web_origins:
     - http://localhost:3001
-    - https://portal.apim.cab-i.com
+    - https://portal.stoa.cab-i.com
   
 Rôle à créer:
   - developer (accès portal)
@@ -397,9 +397,9 @@ export { keycloak };
 ### .env
 
 ```env
-VITE_KEYCLOAK_URL=https://keycloak.dev.apim.cab-i.com
-VITE_KEYCLOAK_REALM=apim-platform
-VITE_API_URL=https://api.dev.apim.cab-i.com
+VITE_KEYCLOAK_URL=https://keycloak.dev.stoa.cab-i.com
+VITE_KEYCLOAK_REALM=stoa-platform
+VITE_API_URL=https://api.dev.stoa.cab-i.com
 ```
 
 ---
@@ -587,7 +587,7 @@ npm run dev
 - Le backend (Control Plane API) doit exposer les endpoints `/portal/*`
 - Les credentials (client_secret, api_key) ne sont visibles qu'une fois à la création
 - Le Try-It passe par un proxy backend pour ajouter l'API Key automatiquement
-- Keycloak : utiliser le realm existant `apim-platform` avec un nouveau client `developer-portal`
+- Keycloak : utiliser le realm existant `stoa-platform` avec un nouveau client `developer-portal`
 
 ---
 

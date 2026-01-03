@@ -14,24 +14,24 @@ argocd:
 # -----------------------------------------------------------------------------
 gitlab:
   url: https://gitlab.com
-  projectPath: PotoMitan1/apim-gitops
-  repoUrl: https://gitlab.com/PotoMitan1/apim-gitops.git
+  projectPath: PotoMitan1/stoa-gitops
+  repoUrl: https://gitlab.com/PotoMitan1/stoa-gitops.git
   branch: main
   # Secret name containing GitLab credentials (created separately)
-  secretName: apim-gitops-repo
+  secretName: stoa-gitops-repo
 
 # -----------------------------------------------------------------------------
 # Kubernetes Configuration
 # -----------------------------------------------------------------------------
 kubernetes:
   clusterUrl: https://kubernetes.default.svc
-  namespacePrefix: apim
+  namespacePrefix: stoa
 
 # -----------------------------------------------------------------------------
 # Base Domain
 # -----------------------------------------------------------------------------
 domain:
-  base: apim.cab-i.com
+  base: stoa.cab-i.com
 
 # -----------------------------------------------------------------------------
 # Environments
@@ -67,5 +67,5 @@ syncPolicy:
 # Labels
 # -----------------------------------------------------------------------------
 labels:
-  app.kubernetes.io/part-of: apim-platform
+  app.kubernetes.io/part-of: stoa-platform
   app.kubernetes.io/managed-by: argocd

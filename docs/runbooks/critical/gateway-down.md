@@ -13,14 +13,14 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `GatewayDown` | `up{job="apigateway"} == 0` | [Gateway Dashboard](https://grafana.dev.apim.cab-i.com/d/gateway) |
-| `GatewayEndpointDown` | `probe_success{job="blackbox", target=~".*gateway.*"} == 0` | [Blackbox Dashboard](https://grafana.dev.apim.cab-i.com/d/blackbox) |
-| `GatewayPodNotReady` | `kube_pod_status_ready{pod=~"apigateway.*"} == 0` | [K8s Dashboard](https://grafana.dev.apim.cab-i.com/d/k8s) |
+| `GatewayDown` | `up{job="apigateway"} == 0` | [Gateway Dashboard](https://grafana.dev.stoa.cab-i.com/d/gateway) |
+| `GatewayEndpointDown` | `probe_success{job="blackbox", target=~".*gateway.*"} == 0` | [Blackbox Dashboard](https://grafana.dev.stoa.cab-i.com/d/blackbox) |
+| `GatewayPodNotReady` | `kube_pod_status_ready{pod=~"apigateway.*"} == 0` | [K8s Dashboard](https://grafana.dev.stoa.cab-i.com/d/k8s) |
 
 ### Observed Behavior
 
 - All APIs return 502/503/504
-- Timeout on `https://gateway.apim.cab-i.com`
+- Timeout on `https://gateway.stoa.cab-i.com`
 - Health check `/rest/apigateway/health` fails
 - Developer Portal displays "Gateway unavailable"
 
@@ -40,25 +40,25 @@
 
 ```bash
 # 1. Check Gateway pods
-kubectl get pods -n apim -l app=apigateway
+kubectl get pods -n stoa -l app=apigateway
 
 # 2. Check pod logs
-kubectl logs -n apim -l app=apigateway --tail=100
+kubectl logs -n stoa -l app=apigateway --tail=100
 
 # 3. Check deployment
-kubectl describe deployment -n apim apigateway
+kubectl describe deployment -n stoa apigateway
 
 # 4. Check service and endpoints
-kubectl get svc -n apim apigateway
-kubectl get endpoints -n apim apigateway
+kubectl get svc -n stoa apigateway
+kubectl get endpoints -n stoa apigateway
 
 # 5. Check Ingress/Gateway API
-kubectl get ingress -n apim
-kubectl get gateway -n apim
-kubectl get httproute -n apim
+kubectl get ingress -n stoa
+kubectl get gateway -n stoa
+kubectl get httproute -n stoa
 
 # 6. Test internal health check
-kubectl exec -n apim deploy/apigateway -- \
+kubectl exec -n stoa deploy/apigateway -- \
   curl -s localhost:5555/rest/apigateway/health
 ```
 
@@ -76,12 +76,12 @@ kubectl exec -n apim deploy/apigateway -- \
 
 | Cause | Probability | Verification |
 |-------|-------------|--------------|
-| Elasticsearch sidecar crash | High | `kubectl logs -n apim deploy/apigateway -c elasticsearch` |
-| OOM Kill | High | `kubectl describe pod -n apim -l app=apigateway \| grep -i oom` |
+| Elasticsearch sidecar crash | High | `kubectl logs -n stoa deploy/apigateway -c elasticsearch` |
+| OOM Kill | High | `kubectl describe pod -n stoa -l app=apigateway \| grep -i oom` |
 | Expired license | Medium | Gateway logs "license" |
 | Full PVC (logs/data) | Medium | `kubectl exec ... -- df -h` |
 | Image pull error | Low | `kubectl describe pod` |
-| Missing secrets | Low | `kubectl get secrets -n apim` |
+| Missing secrets | Low | `kubectl get secrets -n stoa` |
 
 ---
 
@@ -91,16 +91,16 @@ kubectl exec -n apim deploy/apigateway -- \
 
 ```bash
 # 1. If pod is in CrashLoopBackOff, check previous crash logs
-kubectl logs -n apim -l app=apigateway --previous
+kubectl logs -n stoa -l app=apigateway --previous
 
 # 2. Force restart deployment
-kubectl rollout restart deployment -n apim apigateway
+kubectl rollout restart deployment -n stoa apigateway
 
 # 3. Follow rollout
-kubectl rollout status deployment -n apim apigateway --timeout=5m
+kubectl rollout status deployment -n stoa apigateway --timeout=5m
 
 # 4. If stuck, increase replicas to have at least one healthy pod
-kubectl scale deployment -n apim apigateway --replicas=2
+kubectl scale deployment -n stoa apigateway --replicas=2
 ```
 
 ### Resolution by Cause
@@ -109,14 +109,14 @@ kubectl scale deployment -n apim apigateway --replicas=2
 
 ```bash
 # Check Elasticsearch logs
-kubectl logs -n apim deploy/apigateway -c elasticsearch --tail=50
+kubectl logs -n stoa deploy/apigateway -c elasticsearch --tail=50
 
 # If disk full, clean old indices
-kubectl exec -n apim deploy/apigateway -c elasticsearch -- \
+kubectl exec -n stoa deploy/apigateway -c elasticsearch -- \
   curl -X DELETE "localhost:9200/gateway_*_$(date -d '-7 days' +%Y.%m.%d)"
 
 # If heap insufficient, increase resources
-kubectl patch deployment -n apim apigateway --type=json -p='[
+kubectl patch deployment -n stoa apigateway --type=json -p='[
   {"op": "replace", "path": "/spec/template/spec/containers/1/resources/limits/memory", "value": "2Gi"}
 ]'
 ```
@@ -125,58 +125,58 @@ kubectl patch deployment -n apim apigateway --type=json -p='[
 
 ```bash
 # Check OOM events
-kubectl get events -n apim --field-selector reason=OOMKilled
+kubectl get events -n stoa --field-selector reason=OOMKilled
 
 # Increase memory limits
-kubectl patch deployment -n apim apigateway --type=json -p='[
+kubectl patch deployment -n stoa apigateway --type=json -p='[
   {"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": "4Gi"},
   {"op": "replace", "path": "/spec/template/spec/containers/0/resources/requests/memory", "value": "2Gi"}
 ]'
 
 # Restart
-kubectl rollout restart deployment -n apim apigateway
+kubectl rollout restart deployment -n stoa apigateway
 ```
 
 #### Case 3: Expired license
 
 ```bash
 # Check logs
-kubectl logs -n apim deploy/apigateway | grep -i license
+kubectl logs -n stoa deploy/apigateway | grep -i license
 
 # Update license (ConfigMap or Secret)
-kubectl create secret generic gateway-license -n apim \
+kubectl create secret generic gateway-license -n stoa \
   --from-file=licenseKey.xml=/path/to/new/license.xml \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # Restart to apply
-kubectl rollout restart deployment -n apim apigateway
+kubectl rollout restart deployment -n stoa apigateway
 ```
 
 #### Case 4: Full PVC
 
 ```bash
 # Check disk space
-kubectl exec -n apim deploy/apigateway -- df -h
+kubectl exec -n stoa deploy/apigateway -- df -h
 
 # Clean old logs
-kubectl exec -n apim deploy/apigateway -- \
+kubectl exec -n stoa deploy/apigateway -- \
   find /opt/softwareag/IntegrationServer/logs -name "*.log" -mtime +7 -delete
 
 # If needed, resize PVC (if StorageClass supports it)
-kubectl patch pvc gateway-data -n apim -p '{"spec":{"resources":{"requests":{"storage":"50Gi"}}}}'
+kubectl patch pvc gateway-data -n stoa -p '{"spec":{"resources":{"requests":{"storage":"50Gi"}}}}'
 ```
 
 ### Rollback if necessary
 
 ```bash
 # View deployment history
-kubectl rollout history deployment -n apim apigateway
+kubectl rollout history deployment -n stoa apigateway
 
 # Rollback to previous version
-kubectl rollout undo deployment -n apim apigateway
+kubectl rollout undo deployment -n stoa apigateway
 
 # Or rollback to a specific revision
-kubectl rollout undo deployment -n apim apigateway --to-revision=<N>
+kubectl rollout undo deployment -n stoa apigateway --to-revision=<N>
 ```
 
 ---
@@ -196,13 +196,13 @@ kubectl rollout undo deployment -n apim apigateway --to-revision=<N>
 
 ```bash
 # Health check
-curl -s https://gateway.apim.cab-i.com/rest/apigateway/health | jq .
+curl -s https://gateway.stoa.cab-i.com/rest/apigateway/health | jq .
 
 # Test a public API
-curl -s https://gateway.apim.cab-i.com/gateway/ControlPlane/v1/health
+curl -s https://gateway.stoa.cab-i.com/gateway/ControlPlane/v1/health
 
 # Check metrics
-kubectl exec -n apim deploy/apigateway -- \
+kubectl exec -n stoa deploy/apigateway -- \
   curl -s localhost:5555/metrics | head -20
 
 # Check that there are no more alerts
@@ -277,9 +277,9 @@ groups:
 
 ### Grafana Dashboards
 
-- [Gateway Overview](https://grafana.dev.apim.cab-i.com/d/gateway)
-- [Gateway Latency](https://grafana.dev.apim.cab-i.com/d/gateway-latency)
-- [Gateway Errors](https://grafana.dev.apim.cab-i.com/d/gateway-errors)
+- [Gateway Overview](https://grafana.dev.stoa.cab-i.com/d/gateway)
+- [Gateway Latency](https://grafana.dev.stoa.cab-i.com/d/gateway-latency)
+- [Gateway Errors](https://grafana.dev.stoa.cab-i.com/d/gateway-errors)
 
 ---
 

@@ -3,7 +3,7 @@
 set -e
 
 NAMESPACE="argocd"
-GITLAB_REPO="https://gitlab.com/potomitan/apim-gitops.git"
+GITLAB_REPO="https://gitlab.com/potomitan/stoa-gitops.git"
 
 echo "=== Configuring ArgoCD GitLab Integration ==="
 
@@ -33,7 +33,7 @@ cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Secret
 metadata:
-  name: apim-gitops-repo
+  name: stoa-gitops-repo
   namespace: ${NAMESPACE}
   labels:
     argocd.argoproj.io/secret-type: repository
@@ -48,11 +48,11 @@ echo "Repository configured: ${GITLAB_REPO}"
 
 # Apply AppProjects
 echo "Applying AppProjects..."
-kubectl apply -f /Users/torpedo/apim-aws/gitops/argocd/projects/apim-platform.yaml
+kubectl apply -f /Users/torpedo/stoa/gitops/argocd/projects/stoa-platform.yaml
 
 # Apply ApplicationSets
 echo "Applying ApplicationSets..."
-kubectl apply -f /Users/torpedo/apim-aws/gitops/argocd/appsets/
+kubectl apply -f /Users/torpedo/stoa/gitops/argocd/appsets/
 
 echo ""
 echo "=== GitLab Integration Complete ==="

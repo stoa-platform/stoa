@@ -1,16 +1,16 @@
-# ArgoCD AppProject for APIM Platform
+# ArgoCD AppProject for STOA Platform
 # Defines access control and allowed resources for the platform team
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
-  name: apim-platform
+  name: stoa-platform
   namespace: {{ .Values.argocd.namespace | default "argocd" }}
   labels:
     {{- include "argocd-appsets.labels" . | nindent 4 }}
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  description: APIM Platform GitOps Project
+  description: STOA Platform GitOps Project
 
   # Source repositories
   sourceRepos:
@@ -18,7 +18,7 @@ spec:
 
   # Destination clusters and namespaces
   destinations:
-    - namespace: apim-system
+    - namespace: stoa-system
       server: {{ .Values.kubernetes.clusterUrl | default "https://kubernetes.default.svc" }}
     - namespace: '{{ include "argocd-appsets.namespace" . }}-*'
       server: {{ .Values.kubernetes.clusterUrl | default "https://kubernetes.default.svc" }}
@@ -52,19 +52,19 @@ spec:
   # Role definitions
   roles:
     - name: admin
-      description: Full access to APIM Platform project
+      description: Full access to STOA Platform project
       policies:
-        - p, proj:apim-platform:admin, applications, *, apim-platform/*, allow
-        - p, proj:apim-platform:admin, repositories, *, apim-platform/*, allow
+        - p, proj:stoa-platform:admin, applications, *, stoa-platform/*, allow
+        - p, proj:stoa-platform:admin, repositories, *, stoa-platform/*, allow
       groups:
         - cpi-admin
 
     - name: deployer
       description: Can sync and manage applications
       policies:
-        - p, proj:apim-platform:deployer, applications, get, apim-platform/*, allow
-        - p, proj:apim-platform:deployer, applications, sync, apim-platform/*, allow
-        - p, proj:apim-platform:deployer, applications, action/*, apim-platform/*, allow
+        - p, proj:stoa-platform:deployer, applications, get, stoa-platform/*, allow
+        - p, proj:stoa-platform:deployer, applications, sync, stoa-platform/*, allow
+        - p, proj:stoa-platform:deployer, applications, action/*, stoa-platform/*, allow
       groups:
         - devops
         - tenant-admin
@@ -72,7 +72,7 @@ spec:
     - name: viewer
       description: Read-only access
       policies:
-        - p, proj:apim-platform:viewer, applications, get, apim-platform/*, allow
+        - p, proj:stoa-platform:viewer, applications, get, stoa-platform/*, allow
       groups:
         - viewer
 

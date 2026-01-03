@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `CertificateExpiringSoon` | `cert_expiry_days < 30` | [Certificates](https://grafana.dev.apim.cab-i.com/d/certs) |
-| `CertificateExpired` | `cert_expiry_days <= 0` | [Certificates](https://grafana.dev.apim.cab-i.com/d/certs) |
-| `TLSHandshakeFailing` | `tls_handshake_errors > 0` | [Ingress](https://grafana.dev.apim.cab-i.com/d/ingress) |
+| `CertificateExpiringSoon` | `cert_expiry_days < 30` | [Certificates](https://grafana.dev.stoa.cab-i.com/d/certs) |
+| `CertificateExpired` | `cert_expiry_days <= 0` | [Certificates](https://grafana.dev.stoa.cab-i.com/d/certs) |
+| `TLSHandshakeFailing` | `tls_handshake_errors > 0` | [Ingress](https://grafana.dev.stoa.cab-i.com/d/ingress) |
 
 ### Observed Behavior
 
@@ -40,8 +40,8 @@
 
 ```bash
 # 1. Check public endpoint certificates
-echo | openssl s_client -servername gateway.apim.cab-i.com \
-  -connect gateway.apim.cab-i.com:443 2>/dev/null | \
+echo | openssl s_client -servername gateway.stoa.cab-i.com \
+  -connect gateway.stoa.cab-i.com:443 2>/dev/null | \
   openssl x509 -noout -dates
 
 # 2. List all certificates in the cluster
@@ -74,10 +74,10 @@ kubectl get issuers -A
 
 | Service | Secret | Namespace | Issuer |
 |---------|--------|-----------|--------|
-| Gateway | `gateway-tls` | apim | letsencrypt-prod |
+| Gateway | `gateway-tls` | stoa | letsencrypt-prod |
 | Keycloak | `keycloak-tls` | keycloak | letsencrypt-prod |
-| DevOps UI | `devops-tls` | apim-system | letsencrypt-prod |
-| API | `api-tls` | apim-system | letsencrypt-prod |
+| DevOps UI | `devops-tls` | stoa-system | letsencrypt-prod |
+| API | `api-tls` | stoa-system | letsencrypt-prod |
 | Vault | `vault-tls` | vault | letsencrypt-prod |
 | AWX | `awx-tls` | awx | letsencrypt-prod |
 
@@ -92,13 +92,13 @@ kubectl get issuers -A
 kubectl get certificate -A -o wide
 
 # Force renewal by deleting the secret
-kubectl delete secret gateway-tls -n apim
+kubectl delete secret gateway-tls -n stoa
 
 # The Certificate resource will recreate the secret
-kubectl get certificate gateway-cert -n apim -w
+kubectl get certificate gateway-cert -n stoa -w
 
 # Check the new certificate
-kubectl get secret gateway-tls -n apim -o jsonpath='{.data.tls\.crt}' | \
+kubectl get secret gateway-tls -n stoa -o jsonpath='{.data.tls\.crt}' | \
   base64 -d | openssl x509 -noout -dates
 ```
 
@@ -133,7 +133,7 @@ kubectl describe challenge <challenge-name> -n <namespace>
 kubectl get ingress -A | grep acme
 
 # Manually test challenge
-curl -v http://gateway.apim.cab-i.com/.well-known/acme-challenge/test
+curl -v http://gateway.stoa.cab-i.com/.well-known/acme-challenge/test
 ```
 
 ### Case 4: DNS challenge failing (wildcard)
@@ -146,7 +146,7 @@ kubectl get secret route53-credentials -n cert-manager
 kubectl logs -n cert-manager deploy/cert-manager | grep dns
 
 # Test DNS resolution
-dig _acme-challenge.apim.cab-i.com TXT
+dig _acme-challenge.stoa.cab-i.com TXT
 
 # Check Route53 permissions
 aws route53 list-hosted-zones
@@ -161,17 +161,17 @@ aws route53 list-hosted-zones
 openssl req -new -newkey rsa:2048 -nodes \
   -keyout gateway.key \
   -out gateway.csr \
-  -subj "/CN=gateway.apim.cab-i.com"
+  -subj "/CN=gateway.stoa.cab-i.com"
 
 # After obtaining signed certificate
 kubectl create secret tls gateway-tls \
   --cert=gateway.crt \
   --key=gateway.key \
-  -n apim \
+  -n stoa \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # Restart pods to pick up new cert
-kubectl rollout restart deployment -n apim apigateway
+kubectl rollout restart deployment -n stoa apigateway
 ```
 
 ---
@@ -190,15 +190,15 @@ kubectl rollout restart deployment -n apim apigateway
 
 ```bash
 # Check new certificate expiration
-echo | openssl s_client -servername gateway.apim.cab-i.com \
-  -connect gateway.apim.cab-i.com:443 2>/dev/null | \
+echo | openssl s_client -servername gateway.stoa.cab-i.com \
+  -connect gateway.stoa.cab-i.com:443 2>/dev/null | \
   openssl x509 -noout -dates -subject
 
 # Check all endpoints
 for host in gateway api auth devops portal vault awx; do
-  echo "=== ${host}.apim.cab-i.com ==="
-  echo | openssl s_client -servername ${host}.apim.cab-i.com \
-    -connect ${host}.apim.cab-i.com:443 2>/dev/null | \
+  echo "=== ${host}.stoa.cab-i.com ==="
+  echo | openssl s_client -servername ${host}.stoa.cab-i.com \
+    -connect ${host}.stoa.cab-i.com:443 2>/dev/null | \
     openssl x509 -noout -enddate
 done
 
@@ -227,13 +227,13 @@ kubectl get certificates -A -o wide
 # check-certificates.sh
 
 DOMAINS=(
-  "gateway.apim.cab-i.com"
-  "api.apim.cab-i.com"
-  "auth.apim.cab-i.com"
-  "devops.apim.cab-i.com"
-  "portal.apim.cab-i.com"
-  "vault.apim.cab-i.com"
-  "awx.apim.cab-i.com"
+  "gateway.stoa.cab-i.com"
+  "api.stoa.cab-i.com"
+  "auth.stoa.cab-i.com"
+  "devops.stoa.cab-i.com"
+  "portal.stoa.cab-i.com"
+  "vault.stoa.cab-i.com"
+  "awx.stoa.cab-i.com"
 )
 
 WARNING_DAYS=30

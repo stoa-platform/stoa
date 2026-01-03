@@ -58,8 +58,8 @@ kubectl top pods -A | sort -k3 -h -r | head -20
 
 | Namespace | Services |
 |-----------|----------|
-| `apim` | API Gateway, Developer Portal |
-| `apim-system` | Control-Plane API/UI |
+| `stoa` | API Gateway, Developer Portal |
+| `stoa-system` | Control-Plane API/UI |
 | `keycloak` | Keycloak IdP |
 | `vault` | HashiCorp Vault |
 | `kafka` / `redpanda` | Redpanda (Kafka) |
@@ -73,14 +73,14 @@ kubectl top pods -A | sort -k3 -h -r | head -20
 
 | Service | URL |
 |---------|-----|
-| Gateway | https://gateway.apim.cab-i.com |
-| DevOps UI | https://devops.apim.cab-i.com |
-| Control Plane API | https://api.apim.cab-i.com |
-| Keycloak | https://auth.apim.cab-i.com |
-| Grafana | https://grafana.dev.apim.cab-i.com |
-| AWX | https://awx.apim.cab-i.com |
-| ArgoCD | https://argocd.apim.cab-i.com |
-| Vault | https://vault.apim.cab-i.com |
+| Gateway | https://gateway.stoa.cab-i.com |
+| DevOps UI | https://devops.stoa.cab-i.com |
+| Control Plane API | https://api.stoa.cab-i.com |
+| Keycloak | https://auth.stoa.cab-i.com |
+| Grafana | https://grafana.dev.stoa.cab-i.com |
+| AWX | https://awx.stoa.cab-i.com |
+| ArgoCD | https://argocd.stoa.cab-i.com |
+| Vault | https://vault.stoa.cab-i.com |
 
 ---
 

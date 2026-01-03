@@ -1,5 +1,5 @@
 """
-APIM Control-Plane API
+STOA Control-Plane API
 FastAPI backend with RBAC, GitOps, and Kafka integration
 """
 import asyncio
@@ -20,7 +20,7 @@ ENABLE_WORKER = os.getenv("ENABLE_DEPLOYMENT_WORKER", "true").lower() == "true"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print(f"Starting APIM Control-Plane API v{settings.VERSION}")
+    print(f"Starting STOA Control-Plane API v{settings.VERSION}")
 
     # Initialize services
     worker_task = None
@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
     await gateway_service.disconnect()
 
 API_DESCRIPTION = """
-## APIM Control-Plane API
+## STOA Control-Plane API
 
 Multi-tenant API Management Control Plane with GitOps integration.
 
@@ -111,12 +111,12 @@ Multi-tenant API Management Control Plane with GitOps integration.
 
 ### Authentication
 
-All endpoints require a valid JWT token from Keycloak (realm: `apim`).
+All endpoints require a valid JWT token from Keycloak (realm: `stoa`).
 Include the token in the `Authorization: Bearer <token>` header.
 """
 
 app = FastAPI(
-    title="APIM Control-Plane API",
+    title="STOA Control-Plane API",
     description=API_DESCRIPTION,
     version=settings.VERSION,
     lifespan=lifespan,
@@ -167,7 +167,7 @@ async def health():
 @app.get("/")
 async def root():
     return {
-        "name": "APIM Control-Plane API",
+        "name": "STOA Control-Plane API",
         "version": settings.VERSION,
         "docs": "/docs",
     }

@@ -42,7 +42,7 @@ export function Layout({ children }: LayoutProps) {
       {/* Sidebar */}
       <div className="fixed inset-y-0 left-0 z-50 w-64 bg-gray-900">
         <div className="flex h-16 items-center justify-center border-b border-gray-800">
-          <h1 className="text-xl font-bold text-white">APIM Control Plane</h1>
+          <h1 className="text-xl font-bold text-white">STOA Control Plane</h1>
         </div>
 
         <nav className="mt-6 px-3">

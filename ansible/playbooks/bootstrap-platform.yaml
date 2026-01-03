@@ -12,7 +12,7 @@
 #
 # Prerequisites:
 #   - Gateway deployed and accessible
-#   - Keycloak deployed with 'apim' realm
+#   - Keycloak deployed with 'stoa' realm
 #   - control-plane-api and control-plane-ui clients configured in Keycloak
 #
 # Usage:
@@ -32,21 +32,21 @@
 
   vars:
     # Gateway Configuration
-    gateway_url: "http://apigateway.apim-system.svc.cluster.local:5555"
+    gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
 
     # Keycloak Configuration
-    keycloak_url: "https://auth.apim.cab-i.com"
-    keycloak_realm: "apim"
+    keycloak_url: "https://auth.stoa.cab-i.com"
+    keycloak_realm: "stoa"
 
     # Control-Plane API Configuration
-    control_plane_api_url: "http://control-plane-api.apim-system.svc.cluster.local:8000"
+    control_plane_api_url: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
     control_plane_api_openapi: "{{ control_plane_api_url }}/openapi.json"
 
     # Auth Server Configuration
     auth_server_name: "KeycloakOIDC"
 
     # Platform tenant (cross-tenant admin access)
-    platform_tenant_id: "apim"
+    platform_tenant_id: "stoa"
 
   tasks:
     - name: Display bootstrap info
@@ -154,7 +154,7 @@
         body:
           alias:
             name: "{{ auth_server_name }}"
-            description: "Keycloak OIDC Provider for APIM Platform"
+            description: "Keycloak OIDC Provider for STOA Platform"
             type: "authServerAlias"
             authServerType: "EXTERNAL"
             tokenGeneratorConfig:
@@ -578,8 +578,8 @@
           Accept: "application/json"
         body_format: json
         body:
-          name: "apim-platform-oauth2"
-          description: "OAuth2/OIDC strategy for APIM platform APIs"
+          name: "stoa-platform-oauth2"
+          description: "OAuth2/OIDC strategy for STOA platform APIs"
           type: "OAUTH2"
           authServerAlias: "{{ auth_server_name }}"
           clientId: "control-plane-ui"
@@ -603,8 +603,8 @@
 
     - name: Find platform OAuth strategy ID
       set_fact:
-        oauth_strategy_id: "{{ (existing_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'apim-platform-oauth2') | list | first).id }}"
-      when: existing_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'apim-platform-oauth2') | list | length > 0
+        oauth_strategy_id: "{{ (existing_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'stoa-platform-oauth2') | list | first).id }}"
+      when: existing_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'stoa-platform-oauth2') | list | length > 0
       ignore_errors: true
 
     - name: Display OAuth strategy status
@@ -994,7 +994,7 @@
 
           ========================================
           NEXT STEPS:
-          1. Test login via https://devops.apim.cab-i.com
+          1. Test login via https://devops.stoa.cab-i.com
           2. Verify APIs in Gateway UI
           3. Configure AWX with awx-automation client secret
           4. All subsequent API registrations will use OIDC

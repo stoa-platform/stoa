@@ -12,11 +12,11 @@ description: Staging environment for pre-production validation
 # Environment-specific overrides
 variables:
   # Domain configuration
-  ENV_DOMAIN: "staging.${BASE_DOMAIN:apim.cab-i.com}"
-  GATEWAY_URL: "https://gateway.staging.${BASE_DOMAIN:apim.cab-i.com}"
-  PORTAL_URL: "https://portal.staging.${BASE_DOMAIN:apim.cab-i.com}"
-  KEYCLOAK_URL: "https://auth.${BASE_DOMAIN:apim.cab-i.com}"
-  CONTROL_PLANE_API_URL: "https://api.${BASE_DOMAIN:apim.cab-i.com}"
+  ENV_DOMAIN: "staging.${BASE_DOMAIN:stoa.cab-i.com}"
+  GATEWAY_URL: "https://gateway.staging.${BASE_DOMAIN:stoa.cab-i.com}"
+  PORTAL_URL: "https://portal.staging.${BASE_DOMAIN:stoa.cab-i.com}"
+  KEYCLOAK_URL: "https://auth.${BASE_DOMAIN:stoa.cab-i.com}"
+  CONTROL_PLANE_API_URL: "https://api.${BASE_DOMAIN:stoa.cab-i.com}"
 
   # Backend configuration (moderate)
   BACKEND_TIMEOUT: "30"
@@ -32,7 +32,7 @@ variables:
   LOG_FORMAT: "json"
 
   # Security (moderate)
-  CORS_ALLOWED_ORIGINS: "https://*.staging.${BASE_DOMAIN:apim.cab-i.com}"
+  CORS_ALLOWED_ORIGINS: "https://*.staging.${BASE_DOMAIN:stoa.cab-i.com}"
 
   # Monitoring (moderate sampling)
   METRICS_ENABLED: "true"

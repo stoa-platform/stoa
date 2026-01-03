@@ -14,9 +14,13 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from starlette.responses import Response
 
 from .config import get_settings
+from .handlers import mcp_router
+from .middleware import MetricsMiddleware
+from .services import get_tool_registry, shutdown_tool_registry
 
 # Configure structured logging
 structlog.configure(
@@ -35,18 +39,6 @@ structlog.configure(
 )
 
 logger = structlog.get_logger(__name__)
-
-# Prometheus metrics
-REQUEST_COUNT = Counter(
-    "mcp_gateway_requests_total",
-    "Total number of requests",
-    ["method", "endpoint", "status"],
-)
-REQUEST_LATENCY = Histogram(
-    "mcp_gateway_request_latency_seconds",
-    "Request latency in seconds",
-    ["method", "endpoint"],
-)
 
 # Application state
 app_state: dict[str, Any] = {
@@ -67,6 +59,10 @@ async def lifespan(app: FastAPI):
 
     # Startup
     app_state["started_at"] = datetime.now(timezone.utc)
+
+    # Initialize tool registry
+    await get_tool_registry()
+
     app_state["ready"] = True
 
     logger.info(
@@ -80,6 +76,9 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down STOA MCP Gateway")
     app_state["ready"] = False
+
+    # Cleanup tool registry
+    await shutdown_tool_registry()
 
 
 def create_app() -> FastAPI:
@@ -96,10 +95,14 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Metrics middleware (must be added first to capture all requests)
+    if settings.enable_metrics:
+        app.add_middleware(MetricsMiddleware)
+
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # TODO: Configure per environment
+        allow_origins=settings.cors_origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -107,6 +110,9 @@ def create_app() -> FastAPI:
 
     # Register routes
     register_routes(app)
+
+    # Register MCP router
+    app.include_router(mcp_router)
 
     return app
 
@@ -165,9 +171,12 @@ def register_routes(app: FastAPI) -> None:
         return {"status": "alive"}
 
     @app.get("/metrics", tags=["Observability"])
-    async def metrics() -> bytes:
+    async def metrics() -> Response:
         """Prometheus metrics endpoint."""
-        return generate_latest()
+        return Response(
+            content=generate_latest(),
+            media_type=CONTENT_TYPE_LATEST,
+        )
 
     @app.get("/", tags=["Info"])
     async def root() -> dict[str, Any]:
@@ -186,28 +195,6 @@ def register_routes(app: FastAPI) -> None:
             },
         }
 
-    # MCP Protocol endpoints placeholder
-    @app.get("/mcp/v1/tools", tags=["MCP"])
-    async def list_tools() -> dict[str, Any]:
-        """List available MCP tools.
-
-        This endpoint will expose registered APIs as MCP tools.
-        """
-        return {
-            "tools": [],
-            "message": "MCP Tool Registry - Coming soon",
-        }
-
-    @app.get("/mcp/v1/resources", tags=["MCP"])
-    async def list_resources() -> dict[str, Any]:
-        """List available MCP resources.
-
-        This endpoint will expose data sources as MCP resources.
-        """
-        return {
-            "resources": [],
-            "message": "MCP Resource Registry - Coming soon",
-        }
 
 
 # Create the application instance

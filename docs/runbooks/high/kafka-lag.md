@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `KafkaConsumerLagHigh` | `kafka_consumer_group_lag > 10000` | [Kafka Dashboard](https://grafana.dev.stoa.cab-i.com/d/kafka) |
-| `KafkaConsumerLagGrowing` | `rate(kafka_consumer_group_lag[5m]) > 100` | [Kafka Dashboard](https://grafana.dev.stoa.cab-i.com/d/kafka) |
-| `DeploymentWorkerLagging` | `kafka_consumer_group_lag{group="deployment-worker"} > 1000` | [Deployments](https://grafana.dev.stoa.cab-i.com/d/deployments) |
+| `KafkaConsumerLagHigh` | `kafka_consumer_group_lag > 10000` | [Kafka Dashboard](https://grafana.stoa.cab-i.com/d/kafka) |
+| `KafkaConsumerLagGrowing` | `rate(kafka_consumer_group_lag[5m]) > 100` | [Kafka Dashboard](https://grafana.stoa.cab-i.com/d/kafka) |
+| `DeploymentWorkerLagging` | `kafka_consumer_group_lag{group="deployment-worker"} > 1000` | [Deployments](https://grafana.stoa.cab-i.com/d/deployments) |
 
 ### Observed Behavior
 
@@ -199,7 +199,7 @@ kubectl exec -n kafka redpanda-0 -- \
   rpk topic consume deploy-results --num 5 --format json
 
 # Check recent deployments
-curl -s https://api.dev.stoa.cab-i.com/v1/deployments?limit=5 | jq .
+curl -s https://api.stoa.cab-i.com/v1/deployments?limit=5 | jq .
 ```
 
 ---

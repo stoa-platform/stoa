@@ -34,7 +34,7 @@
 
 ```bash
 # 1. Check deployment history via API
-curl -s https://api.dev.stoa.cab-i.com/v1/deployments?api_id=<API_ID>&limit=5 | jq .
+curl -s https://api.stoa.cab-i.com/v1/deployments?api_id=<API_ID>&limit=5 | jq .
 
 # 2. Check in GitLab
 git log --oneline -10 -- apis/<API_NAME>/
@@ -76,7 +76,7 @@ curl -s -u $GATEWAY_USER:$GATEWAY_PASSWORD \
 curl -X POST \
   -H "Authorization: Bearer $JWT_TOKEN" \
   -H "Content-Type: application/json" \
-  https://api.dev.stoa.cab-i.com/v1/deployments/rollback \
+  https://api.stoa.cab-i.com/v1/deployments/rollback \
   -d '{
     "api_id": "<API_ID>",
     "target_version": "1.0.0",
@@ -86,7 +86,7 @@ curl -X POST \
 
 # Follow rollback status
 curl -s -H "Authorization: Bearer $JWT_TOKEN" \
-  https://api.dev.stoa.cab-i.com/v1/deployments/<DEPLOYMENT_ID> | jq .
+  https://api.stoa.cab-i.com/v1/deployments/<DEPLOYMENT_ID> | jq .
 ```
 
 ### Method 3: Via AWX Job Template

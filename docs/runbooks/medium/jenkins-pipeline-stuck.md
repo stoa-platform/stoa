@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `JenkinsBuildStuck` | `jenkins_build_duration > 1h` | [Jenkins Dashboard](https://grafana.dev.stoa.cab-i.com/d/jenkins) |
-| `JenkinsQueueLong` | `jenkins_queue_size > 10` | [Jenkins Dashboard](https://grafana.dev.stoa.cab-i.com/d/jenkins) |
-| `JenkinsAgentOffline` | `jenkins_agents_online == 0` | [Jenkins Dashboard](https://grafana.dev.stoa.cab-i.com/d/jenkins) |
+| `JenkinsBuildStuck` | `jenkins_build_duration > 1h` | [Jenkins Dashboard](https://grafana.stoa.cab-i.com/d/jenkins) |
+| `JenkinsQueueLong` | `jenkins_queue_size > 10` | [Jenkins Dashboard](https://grafana.stoa.cab-i.com/d/jenkins) |
+| `JenkinsAgentOffline` | `jenkins_agents_online == 0` | [Jenkins Dashboard](https://grafana.stoa.cab-i.com/d/jenkins) |
 
 ### Observed Behavior
 

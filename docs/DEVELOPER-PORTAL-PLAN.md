@@ -397,9 +397,9 @@ export { keycloak };
 ### .env
 
 ```env
-VITE_KEYCLOAK_URL=https://keycloak.dev.stoa.cab-i.com
+VITE_KEYCLOAK_URL=https://keycloak.stoa.cab-i.com
 VITE_KEYCLOAK_REALM=stoa-platform
-VITE_API_URL=https://api.dev.stoa.cab-i.com
+VITE_API_URL=https://api.stoa.cab-i.com
 ```
 
 ---

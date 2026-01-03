@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `CertificateExpiringSoon` | `cert_expiry_days < 30` | [Certificates](https://grafana.dev.stoa.cab-i.com/d/certs) |
-| `CertificateExpired` | `cert_expiry_days <= 0` | [Certificates](https://grafana.dev.stoa.cab-i.com/d/certs) |
-| `TLSHandshakeFailing` | `tls_handshake_errors > 0` | [Ingress](https://grafana.dev.stoa.cab-i.com/d/ingress) |
+| `CertificateExpiringSoon` | `cert_expiry_days < 30` | [Certificates](https://grafana.stoa.cab-i.com/d/certs) |
+| `CertificateExpired` | `cert_expiry_days <= 0` | [Certificates](https://grafana.stoa.cab-i.com/d/certs) |
+| `TLSHandshakeFailing` | `tls_handshake_errors > 0` | [Ingress](https://grafana.stoa.cab-i.com/d/ingress) |
 
 ### Observed Behavior
 

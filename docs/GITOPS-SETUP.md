@@ -68,7 +68,7 @@ stoa-gitops/
 
 1. Go to **Settings → Webhooks**
 2. Add a new webhook:
-   - **URL**: `https://api.dev.stoa.cab-i.com/webhooks/gitlab`
+   - **URL**: `https://api.stoa.cab-i.com/webhooks/gitlab`
    - **Secret Token**: Generate a secure random token (e.g., `openssl rand -hex 32`)
    - **Trigger events**:
      - ✅ Push events

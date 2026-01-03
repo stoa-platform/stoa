@@ -430,6 +430,14 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [ ] Intégration External Secrets Operator (optionnel - future)
 - [ ] Auto-unseal avec AWS KMS (optionnel - future)
 
+### Phase 2.6: Cilium Network Foundation (Priorité Moyenne)
+- [ ] Installer Cilium sur EKS (remplace AWS VPC CNI + kube-proxy)
+- [ ] Gateway API CRDs + GatewayClass Cilium
+- [ ] Migrer Nginx Ingress → Gateway API (*.stoa.cab-i.com)
+- [ ] CiliumNetworkPolicy - Default deny + tenant isolation
+- [ ] Hubble - Observabilité réseau
+- [ ] Documentation migration Cilium & runbooks
+
 ### Phase 4: Observabilité (Priorité Moyenne)
 - [ ] Amazon OpenSearch
 - [ ] FluentBit (log shipping)
@@ -554,6 +562,38 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [ ] n8n workflow complet avec Notion board "Resources to Delete"
 - [ ] Cron horaire (au lieu de quotidien) pour pré-alertes
 - [ ] Event Kafka `resource-ttl-extended`
+
+### Phase 12: STOA MCP Gateway (Priorité Haute) - EN COURS 🟡
+- [x] Gateway Core + Auth Keycloak (CAB-120)
+  - FastAPI + OIDC middleware avec JWKS caching
+  - Modèles Pydantic MCP Protocol spec
+  - Tool Registry avec built-in tools
+  - Prometheus metrics middleware
+  - Docker Compose dev stack (Keycloak, Prometheus, Grafana)
+- [ ] Gateway Tests & Tools Implementation (CAB-199)
+- [ ] Tool Registry CRDs Kubernetes (CAB-121)
+- [ ] OPA Policy Engine Integration (CAB-122)
+- [ ] Metering Pipeline Kafka + ksqlDB (CAB-123)
+- [ ] Portal Integration - Tool Catalog (CAB-124)
+
+### Phase 13: B2B Protocol Binders (Priorité Basse)
+- [ ] EDI X12/EDIFACT support
+- [ ] SWIFT messaging integration
+- [ ] AS2/AS4 protocol handlers
+- [ ] B2B message transformation
+- [ ] Partner onboarding automation
+
+### Phase 14: Community & Go-to-Market (Priorité Moyenne)
+- [ ] GTM-01: Stratégie Open Core documentée (CAB-201)
+- [ ] GTM-02: Licensing choice Apache 2.0 vs dual (CAB-202)
+- [ ] GTM-03: Repository structure mono vs multi-repo (CAB-203)
+- [ ] GTM-04: Documentation publique Docusaurus (CAB-204)
+- [ ] GTM-05: Landing page STOA (CAB-205)
+- [ ] GTM-06: Community channels Discord/GitHub (CAB-206)
+- [ ] GTM-07: Roadmap publique (CAB-207)
+- [ ] GTM-08: IBM Partnership positioning (CAB-208)
+- [ ] GTM-09: Pricing tiers definition (CAB-209)
+- [ ] GTM-10: Beta program structure (CAB-210)
 
 ---
 

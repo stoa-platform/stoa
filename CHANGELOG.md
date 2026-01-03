@@ -8,6 +8,34 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Modifié (2025-01-03) - Rebranding APIM → STOA
+
+- **Renommage complet du projet** - APIM Platform devient STOA Platform
+  - Repository GitHub: `apim-aws` → `stoa`
+  - Repository GitLab: `apim-gitops` → `stoa-gitops` (cab6961310/stoa-gitops)
+  - Domaine: `apim.cab-i.com` → `stoa.cab-i.com`
+  - Namespace Kubernetes: `apim-system` → `stoa-system`
+  - Keycloak realm: `apim` → `stoa`
+  - Helm chart: `apim-platform` → `stoa-platform`
+  - Vault paths: `secret/apim/*` → `secret/stoa/*`
+  - AWS resources: `apim-*` → `stoa-*`
+
+- **72 fichiers modifiés** pour le rebranding:
+  - Documentation (README, CHANGELOG, docs/*)
+  - Configuration (deploy/config/*.env)
+  - Python API (control-plane-api/)
+  - React UI (control-plane-ui/)
+  - Ansible playbooks et vars
+  - GitOps templates
+  - Helm charts et K8s manifests
+  - Scripts
+  - Terraform modules
+
+- **Repo GitLab stoa-gitops initialisé**
+  - Structure: environments/{dev,staging,prod}, tenants/, argocd/
+  - ArgoCD ApplicationSets configurés
+  - URL: https://gitlab.com/cab6961310/stoa-gitops
+
 ### Supprimé (2024-12-23) - Retrait webMethods Developer Portal
 
 - **webMethods Developer Portal** - Supprimé de l'architecture

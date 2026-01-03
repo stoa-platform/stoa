@@ -121,7 +121,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - Références au portal retirées de la documentation
   - Handler `_handle_promote_request` supprimé du deployment_worker
 
-### Ajouté (2025-12-23) - Phase 3: Secrets & Gateway Alias - EN COURS ✅
+### Ajouté (2025-12-23) - Phase 3: Secrets & Gateway Alias - COMPLÉTÉ ✅
 
 - **HashiCorp Vault** - Déployé sur EKS pour gestion centralisée des secrets
   - Helm chart `hashicorp/vault` v0.31.0 (Vault 1.20.4)
@@ -420,15 +420,15 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [x] User stoaadmin@cab-i.com créé avec rôle cpi-admin
 - [x] Architecture GitHub/GitLab documentée
 
-### Phase 3: Secrets & Gateway Alias (Priorité Moyenne) - EN COURS ✅
+### Phase 3: Secrets & Gateway Alias - COMPLÉTÉ ✅
 - [x] HashiCorp Vault déployé sur EKS
 - [x] Vault KV v2 avec structure secrets APIM
 - [x] Kubernetes auth configuré (roles, policies)
 - [x] Playbook sync-alias.yaml pour Gateway Alias
 - [x] Playbook rotate-credentials.yaml pour rotation secrets
 - [x] Jobs AWX: Sync Gateway Aliases, Rotate Credentials
-- [ ] Intégration External Secrets Operator (optionnel)
-- [ ] Auto-unseal avec AWS KMS (optionnel)
+- [ ] Intégration External Secrets Operator (optionnel - future)
+- [ ] Auto-unseal avec AWS KMS (optionnel - future)
 
 ### Phase 4: Observabilité (Priorité Moyenne)
 - [ ] Amazon OpenSearch

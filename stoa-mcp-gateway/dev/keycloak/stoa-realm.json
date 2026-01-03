@@ -1,0 +1,157 @@
+{
+  "realm": "stoa",
+  "enabled": true,
+  "displayName": "STOA Platform",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "cpi-admin",
+        "description": "Full platform administrator"
+      },
+      {
+        "name": "tenant-admin",
+        "description": "Tenant administrator"
+      },
+      {
+        "name": "devops",
+        "description": "DevOps engineer - can deploy and promote APIs"
+      },
+      {
+        "name": "viewer",
+        "description": "Read-only access"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "stoa-mcp-gateway",
+      "name": "STOA MCP Gateway",
+      "description": "MCP Gateway Service",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:8080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ]
+    },
+    {
+      "clientId": "stoa-test-client",
+      "name": "STOA Test Client",
+      "description": "Client for testing MCP Gateway",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@stoa.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "cpi-admin"
+      ]
+    },
+    {
+      "username": "tenant-admin",
+      "email": "tenant@stoa.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Tenant",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "tenant",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "tenant-admin"
+      ]
+    },
+    {
+      "username": "devops",
+      "email": "devops@stoa.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "DevOps",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "devops",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "devops"
+      ]
+    },
+    {
+      "username": "viewer",
+      "email": "viewer@stoa.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Viewer",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "viewer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "viewer"
+      ]
+    }
+  ]
+}

@@ -36,6 +36,30 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - ArgoCD ApplicationSets configurés
   - URL: https://gitlab.com/cab6961310/stoa-gitops
 
+- **Migration infrastructure AWS complète**
+  - DNS: `*.stoa.cab-i.com` configuré (Hostpapa CNAME)
+  - Certificats TLS Let's Encrypt générés pour tous les sous-domaines
+  - Ingresses Kubernetes mis à jour (api, devops, auth, gateway, awx)
+  - Keycloak: hostname corrigé dans les args du deployment
+  - AWX: CRD mis à jour avec nouveau hostname
+  - Control-Plane UI: rebuildée avec nouvelles URLs
+
+- **Suppression du hardcoding des URLs**
+  - Ansible playbooks: utilisation de `{{ base_domain | default('stoa.cab-i.com') }}`
+  - Scripts: utilisation de variables d'environnement avec fallback
+  - Configuration centralisée dans `ansible/vars/platform-config.yaml`
+
+- **Architecture de configuration centralisée**
+  - `BASE_DOMAIN` comme source unique de vérité pour le domaine
+  - Fichiers .env avec variables dérivées: `${BASE_DOMAIN}` → sous-domaines
+  - Permet déploiement chez un client en changeant une seule variable
+  - Structure:
+    - `deploy/config/{dev,staging,prod}.env` - Configuration par environnement
+    - `control-plane-api/src/config.py` - Config Python avec fallback BASE_DOMAIN
+    - `control-plane-ui/src/config.ts` - Config TypeScript avec Vite env vars
+    - `ansible/vars/platform-config.yaml` - Config Ansible centralisée
+    - `gitops-templates/_defaults.yaml` - Defaults GitOps avec interpolation
+
 ### Supprimé (2024-12-23) - Retrait webMethods Developer Portal
 
 - **webMethods Developer Portal** - Supprimé de l'architecture

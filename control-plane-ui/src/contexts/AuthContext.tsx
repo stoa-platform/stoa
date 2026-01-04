@@ -7,6 +7,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isReady: boolean; // Token is set and ready for API calls
   login: () => void;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
@@ -46,7 +47,23 @@ function extractUserFromToken(oidcUser: any): User | null {
   if (!oidcUser?.profile) return null;
 
   const profile = oidcUser.profile;
-  const roles = profile.roles || profile.realm_access?.roles || [];
+
+  // Roles are in the access_token, not in the id_token (profile)
+  // Decode the access_token to get realm_access.roles
+  let roles: string[] = [];
+  if (oidcUser.access_token) {
+    try {
+      const payload = JSON.parse(atob(oidcUser.access_token.split('.')[1]));
+      roles = payload.realm_access?.roles || [];
+    } catch (e) {
+      console.warn('Failed to decode access_token for roles', e);
+    }
+  }
+
+  // Fallback to profile if available
+  if (roles.length === 0) {
+    roles = profile.roles || profile.realm_access?.roles || [];
+  }
 
   // Calculate permissions from roles
   const permissions = new Set<string>();
@@ -68,6 +85,7 @@ function extractUserFromToken(oidcUser: any): User | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const oidc = useOidcAuth();
   const [user, setUser] = useState<User | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     if (oidc.user) {
@@ -75,10 +93,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Set the access token for API calls
       if (oidc.user.access_token) {
         apiService.setAuthToken(oidc.user.access_token);
+        setIsReady(true); // Token is now set
       }
     } else {
       setUser(null);
       apiService.clearAuthToken();
+      setIsReady(false);
     }
   }, [oidc.user]);
 
@@ -101,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     isAuthenticated: oidc.isAuthenticated,
     isLoading: oidc.isLoading,
+    isReady, // Token is set and ready for API calls
     login: () => oidc.signinRedirect(),
     logout: () => oidc.signoutRedirect(),
     hasPermission,

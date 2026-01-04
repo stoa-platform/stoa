@@ -5,7 +5,6 @@ import {
   Clock,
   DollarSign,
   AlertCircle,
-  RefreshCw,
   Calendar,
   BarChart3,
 } from 'lucide-react';

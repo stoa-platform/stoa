@@ -1,15 +1,20 @@
 import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import type { Tenant } from '../types';
 
 export function Tenants() {
+  const { isReady } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadTenants();
-  }, []);
+    // Only load tenants when token is ready
+    if (isReady) {
+      loadTenants();
+    }
+  }, [isReady]);
 
   async function loadTenants() {
     try {

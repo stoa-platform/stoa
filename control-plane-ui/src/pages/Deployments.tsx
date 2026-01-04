@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import { config } from '../config';
 import type { Deployment, Tenant, API } from '../types';
 
 export function Deployments() {
+  const { isReady } = useAuth();
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [apis, setApis] = useState<API[]>([]);
@@ -13,8 +15,10 @@ export function Deployments() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadTenants();
-  }, []);
+    if (isReady) {
+      loadTenants();
+    }
+  }, [isReady]);
 
   useEffect(() => {
     if (selectedTenant) {

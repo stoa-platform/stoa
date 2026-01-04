@@ -259,7 +259,8 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 | Service | URL | Description |
 |---------|-----|-------------|
 | Control Plane UI | https://console.stoa.cab-i.com | Interface de gestion des APIs |
-| Control Plane API | https://api.stoa.cab-i.com | Backend REST API |
+| Control Plane API (direct) | https://api.stoa.cab-i.com | Backend REST API (accès direct) |
+| **API Gateway Runtime** | https://apis.stoa.cab-i.com | APIs via Gateway (OIDC auth) |
 | Keycloak (Auth) | https://auth.stoa.cab-i.com | Identity Provider (OIDC) |
 | Keycloak Admin | https://auth.stoa.cab-i.com/admin/ | Console admin Keycloak |
 | API Gateway UI | https://gateway.stoa.cab-i.com/apigatewayui/ | Console Gateway (admin: Administrator/manage) |
@@ -267,6 +268,8 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 | **AWX (Ansible)** | https://awx.stoa.cab-i.com | Automation (admin/demo) |
 | Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n stoa-system` | Administration Kafka (interne) |
 | **GitLab GitOps** | https://gitlab.com/cab6961310/stoa-gitops | Source of Truth (tenants)
+
+> **Note**: L'UI utilise l'API via la Gateway (`apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`) pour bénéficier de l'authentification OIDC centralisée.
 
 ### Environnement STAGING (à venir)
 

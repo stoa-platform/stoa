@@ -1,4 +1,4 @@
-import { Wrench, Tag, ExternalLink, Clock, Zap } from 'lucide-react';
+import { Wrench, Tag, ExternalLink, Zap } from 'lucide-react';
 import type { MCPTool } from '../../types';
 
 interface ToolCardProps {

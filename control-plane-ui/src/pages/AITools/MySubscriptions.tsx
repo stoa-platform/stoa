@@ -2,14 +2,12 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Bell,
-  BellOff,
   Wrench,
   ExternalLink,
   AlertCircle,
   RefreshCw,
   Clock,
   Activity,
-  Settings,
   Trash2,
 } from 'lucide-react';
 import { mcpGatewayService } from '../../services/mcpGatewayApi';

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import type { Application, ApplicationCreate, Tenant, API } from '../types';
 
 export function Applications() {
+  const { isReady } = useAuth();
   const [applications, setApplications] = useState<Application[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [apis, setApis] = useState<API[]>([]);
@@ -13,8 +15,10 @@ export function Applications() {
   const [editingApp, setEditingApp] = useState<Application | null>(null);
 
   useEffect(() => {
-    loadTenants();
-  }, []);
+    if (isReady) {
+      loadTenants();
+    }
+  }, [isReady]);
 
   useEffect(() => {
     if (selectedTenant) {

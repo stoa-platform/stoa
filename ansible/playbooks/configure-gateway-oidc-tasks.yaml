@@ -18,6 +18,9 @@
 #   - keycloak_realm: Keycloak realm (inherited from parent)
 #   - auth_server_name: Name for the auth server alias (default: KeycloakOIDC)
 #   - oidc_audience: Expected audience in JWT (default: control-plane-api)
+#   - backend_auth_type: Backend authentication type (default: INCOMING_JWT)
+#                        Options: INCOMING_JWT, INCOMING_OAUTH_TOKEN, HTTP_BASIC, NONE
+#   - backend_auth_alias: Alias name for basic auth credentials (required if backend_auth_type is HTTP_BASIC)
 #
 # Scope Naming Pattern: {AuthServer}:{Tenant}:{ApiName}:{Version}:{ScopeName}
 # Example: KeycloakOIDC:tenant1:MyAPI:1.0:openid
@@ -451,6 +454,242 @@
     msg: "IAM Policy Action created with ID: {{ iam_policy_action_id_oidc | default('N/A') }}"
 
 # =========================================================================
+# STEP 9: Create Outbound Auth - Transport Policy Action
+# Passes authentication to the backend (JWT, OAuth token, or Basic Auth)
+# =========================================================================
+- name: Create Outbound Auth - Transport Policy Action (JWT passthrough)
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policyActions"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      policyAction:
+        names:
+          - value: "Outbound Auth - {{ oidc_app_name }}"
+            locale: "en"
+        templateKey: "outboundTransportAuthentication"
+        parameters:
+          - templateKey: "transportSecurity"
+            parameters:
+              - templateKey: "authType"
+                values:
+                  - "JWT"
+              - templateKey: "authMode"
+                values:
+                  - "INCOMING_JWT"
+        active: true
+    status_code: [200, 201]
+  register: outbound_auth_action_oidc
+  when:
+    - oidc_api_id is defined
+    - oidc_api_id | length > 0
+    - (backend_auth_type | default('INCOMING_JWT')) == 'INCOMING_JWT'
+
+- name: Create Outbound Auth - Transport Policy Action (OAuth token passthrough)
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policyActions"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      policyAction:
+        names:
+          - value: "Outbound Auth - {{ oidc_app_name }}"
+            locale: "en"
+        templateKey: "outboundTransportAuthentication"
+        parameters:
+          - templateKey: "transportSecurity"
+            parameters:
+              - templateKey: "authType"
+                values:
+                  - "OAUTH2"
+              - templateKey: "authMode"
+                values:
+                  - "INCOMING_OAUTH_TOKEN"
+        active: true
+    status_code: [200, 201]
+  register: outbound_auth_action_oauth
+  when:
+    - oidc_api_id is defined
+    - oidc_api_id | length > 0
+    - (backend_auth_type | default('INCOMING_JWT')) == 'INCOMING_OAUTH_TOKEN'
+
+- name: Create Outbound Auth - Transport Policy Action (Basic Auth via alias)
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policyActions"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      policyAction:
+        names:
+          - value: "Outbound Auth - {{ oidc_app_name }}"
+            locale: "en"
+        templateKey: "outboundTransportAuthentication"
+        parameters:
+          - templateKey: "transportSecurity"
+            parameters:
+              - templateKey: "authType"
+                values:
+                  - "ALIAS"
+              - templateKey: "authMode"
+                values:
+                  - "NEW"
+              - templateKey: "alias"
+                values:
+                  - "${{{ backend_auth_alias }}}"
+        active: true
+    status_code: [200, 201]
+  register: outbound_auth_action_basic
+  when:
+    - oidc_api_id is defined
+    - oidc_api_id | length > 0
+    - (backend_auth_type | default('INCOMING_JWT')) == 'HTTP_BASIC'
+    - backend_auth_alias is defined
+
+- name: Set Outbound Auth Policy Action ID (JWT)
+  set_fact:
+    outbound_auth_action_id_oidc: "{{ outbound_auth_action_oidc.json.policyAction.id }}"
+  when: outbound_auth_action_oidc is defined and outbound_auth_action_oidc.json is defined
+
+- name: Set Outbound Auth Policy Action ID (OAuth)
+  set_fact:
+    outbound_auth_action_id_oidc: "{{ outbound_auth_action_oauth.json.policyAction.id }}"
+  when: outbound_auth_action_oauth is defined and outbound_auth_action_oauth.json is defined
+
+- name: Set Outbound Auth Policy Action ID (Basic)
+  set_fact:
+    outbound_auth_action_id_oidc: "{{ outbound_auth_action_basic.json.policyAction.id }}"
+  when: outbound_auth_action_basic is defined and outbound_auth_action_basic.json is defined
+
+- name: Display Outbound Auth Policy Action result
+  debug:
+    msg: "Outbound Auth Policy Action created with ID: {{ outbound_auth_action_id_oidc | default('N/A - backend_auth_type is NONE or not configured') }}"
+
+# =========================================================================
+# STEP 10: Get API's Policy and Update with IAM and Outbound Auth stages
+# =========================================================================
+- name: Get API details to find policy ID
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/apis/{{ oidc_api_id }}"
+    method: GET
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Accept: "application/json"
+    status_code: [200]
+  register: api_details_oidc
+  when: oidc_api_id is defined and oidc_api_id | length > 0
+
+- name: Set API policy ID
+  set_fact:
+    api_policy_id_oidc: "{{ api_details_oidc.json.apiResponse.api.policies[0] }}"
+  when:
+    - api_details_oidc is defined
+    - api_details_oidc.json.apiResponse.api.policies is defined
+    - api_details_oidc.json.apiResponse.api.policies | length > 0
+
+- name: Get current policy configuration
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policies/{{ api_policy_id_oidc }}"
+    method: GET
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Accept: "application/json"
+    status_code: [200]
+  register: current_policy_oidc
+  when: api_policy_id_oidc is defined
+
+- name: Extract routing action ID from current policy
+  set_fact:
+    routing_action_id_oidc: "{{ (current_policy_oidc.json.policy.policyEnforcements | selectattr('stageKey', 'equalto', 'routing') | list | first).enforcements[0].enforcementObjectId }}"
+  when:
+    - current_policy_oidc is defined
+    - current_policy_oidc.json.policy.policyEnforcements is defined
+  ignore_errors: true
+
+- name: Extract transport action ID from current policy
+  set_fact:
+    transport_action_id_oidc: "{{ (current_policy_oidc.json.policy.policyEnforcements | selectattr('stageKey', 'equalto', 'transport') | list | first).enforcements[0].enforcementObjectId }}"
+  when:
+    - current_policy_oidc is defined
+    - current_policy_oidc.json.policy.policyEnforcements is defined
+  ignore_errors: true
+
+- name: Update API Policy with IAM and Outbound Auth stages
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policies/{{ api_policy_id_oidc }}"
+    method: PUT
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      policy:
+        id: "{{ api_policy_id_oidc }}"
+        names:
+          - value: "{{ current_policy_oidc.json.policy.names[0].value | default('API Policy') }}"
+            locale: "English"
+        descriptions:
+          - value: "Policy with OIDC authentication and JWT passthrough to backend"
+            locale: "English"
+        scope:
+          scopeConditions: []
+        policyEnforcements:
+          - enforcements:
+              - enforcementObjectId: "{{ iam_policy_action_id_oidc }}"
+                order: "0"
+            stageKey: "IAM"
+          - enforcements: "{{ [{'enforcementObjectId': routing_action_id_oidc, 'order': '0'}] + ([{'enforcementObjectId': outbound_auth_action_id_oidc, 'order': '1'}] if outbound_auth_action_id_oidc is defined else []) }}"
+            stageKey: "routing"
+          - enforcements:
+              - enforcementObjectId: "{{ transport_action_id_oidc }}"
+                order: "0"
+            stageKey: "transport"
+        policyScope: "SERVICE"
+        active: true
+    status_code: [200, 204]
+  when:
+    - api_policy_id_oidc is defined
+    - iam_policy_action_id_oidc is defined
+    - routing_action_id_oidc is defined
+    - transport_action_id_oidc is defined
+  register: policy_update_oidc
+
+- name: Display policy update result
+  debug:
+    msg: "API Policy {{ api_policy_id_oidc }} updated with IAM stage and Outbound Auth ({{ backend_auth_type | default('INCOMING_JWT') }})"
+  when: policy_update_oidc is defined
+
+# =========================================================================
 # SUMMARY
 # =========================================================================
 - name: OIDC Configuration summary
@@ -464,4 +703,7 @@
       Application: {{ oidc_app_name }} ({{ app_id_oidc | default('new') }})
       API Associated: {{ oidc_api_id | default('none') }}
       IAM Policy Action: {{ iam_policy_action_id_oidc | default('created') }}
+      Outbound Auth: {{ backend_auth_type | default('INCOMING_JWT') }}
+      Outbound Auth Action: {{ outbound_auth_action_id_oidc | default('N/A') }}
+      Policy Updated: {{ api_policy_id_oidc | default('N/A') }}
       ========================================

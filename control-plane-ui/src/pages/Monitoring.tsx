@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import type { TraceSummary, PipelineTrace, TraceStats, TraceStep, TraceStatus } from '../types';
 import {
   Activity,
@@ -304,6 +305,7 @@ function TraceRow({ trace, isExpanded, onToggle }: {
 
 // Main Monitoring Page
 export function Monitoring() {
+  const { isReady } = useAuth();
   const [traces, setTraces] = useState<TraceSummary[]>([]);
   const [stats, setStats] = useState<TraceStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -326,13 +328,15 @@ export function Monitoring() {
   }, []);
 
   useEffect(() => {
+    if (!isReady) return;
+
     loadData();
 
     if (autoRefresh) {
       const interval = setInterval(loadData, 5000);
       return () => clearInterval(interval);
     }
-  }, [loadData, autoRefresh]);
+  }, [loadData, autoRefresh, isReady]);
 
   if (loading) {
     return (

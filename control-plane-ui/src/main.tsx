@@ -11,7 +11,7 @@ const oidcConfig = {
   client_id: config.keycloak.clientId,
   redirect_uri: window.location.origin,
   post_logout_redirect_uri: window.location.origin,
-  scope: 'openid profile email',
+  scope: 'openid profile email roles',
   automaticSilentRenew: true,
   // PKCE configuration - required by Keycloak 25+
   // response_type: 'code' triggers Authorization Code flow with PKCE

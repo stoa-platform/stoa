@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { apiService } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import type { API, APICreate, Tenant } from '../types';
 import yaml from 'js-yaml';
 
 export function APIs() {
+  const { isReady } = useAuth();
   const [apis, setApis] = useState<API[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>('');
@@ -13,8 +15,10 @@ export function APIs() {
   const [editingApi, setEditingApi] = useState<API | null>(null);
 
   useEffect(() => {
-    loadTenants();
-  }, []);
+    if (isReady) {
+      loadTenants();
+    }
+  }, [isReady]);
 
   useEffect(() => {
     if (selectedTenant) {

@@ -927,9 +927,12 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 | Service | URL | Notes |
 |---------|-----|-------|
 | Control Plane UI | https://console.stoa.cab-i.com | React + Keycloak |
-| Control Plane API | https://api.stoa.cab-i.com | FastAPI |
+| Control Plane API (direct) | https://api.stoa.cab-i.com | FastAPI (accès direct) |
+| **API Gateway Runtime** | https://apis.stoa.cab-i.com | APIs via Gateway (OIDC auth) |
 | Keycloak | https://auth.stoa.cab-i.com | Realm: stoa |
 | AWX | https://awx.stoa.cab-i.com | admin/demo |
-| API Gateway | https://gateway.stoa.cab-i.com | Administrator/manage |
+| API Gateway Admin | https://gateway.stoa.cab-i.com | Administrator/manage |
 | ArgoCD | https://argocd.stoa.cab-i.com | GitOps CD |
 | Vault | https://vault.stoa.cab-i.com | Secrets Management |
+
+> **Architecture**: L'UI appelle l'API via la Gateway (`apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`) pour l'authentification OIDC centralisée.

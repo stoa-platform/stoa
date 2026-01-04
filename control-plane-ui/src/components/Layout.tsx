@@ -12,6 +12,7 @@ import {
   User,
   ChevronDown,
   Activity,
+  Wrench,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Tenants', href: '/tenants', icon: Building2, permission: 'tenants:read' },
   { name: 'APIs', href: '/apis', icon: Layers, permission: 'apis:read' },
+  { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read' },
   { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
   { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
   { name: 'Git', href: '/git', icon: GitBranch, permission: 'apis:read' },

@@ -8,6 +8,83 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Ajouté (2026-01-04) - CAB-124 Portal Integration - Tool Catalog
+
+- **Control Plane UI - Section AI Tools**
+  - `src/pages/AITools/ToolCatalog.tsx` - Catalogue des tools MCP:
+    - Grille de cards avec filtres (recherche, tag, tenant)
+    - Pagination et compteur de résultats
+    - Bouton Subscribe/Unsubscribe inline
+    - Navigation vers détail tool
+
+  - `src/pages/AITools/ToolDetail.tsx` - Page détail d'un tool:
+    - Header avec nom, méthode, version, tags
+    - Onglets: Overview, Schema, Quick Start, Usage
+    - Bouton Subscribe/Unsubscribe
+    - Affichage statistiques d'usage
+
+  - `src/pages/AITools/MySubscriptions.tsx` - Gestion des souscriptions:
+    - Tableau des tools souscrits
+    - Statut, usage count, date de souscription
+    - Actions: voir détail, unsubscribe
+
+  - `src/pages/AITools/UsageDashboard.tsx` - Dashboard métriques:
+    - Stats cards: Total Calls, Success Rate, Avg Latency, Cost
+    - Graphiques temporels (UsageChart)
+    - Tableau breakdown par tool
+    - Sélecteur de période (day, week, month)
+
+  - `src/components/tools/ToolCard.tsx` - Card tool pour le catalogue:
+    - Affichage: nom, description, méthode, tags, params count
+    - Indicateur API-backed, tenant info
+    - Bouton Subscribe
+
+  - `src/components/tools/ToolSchemaViewer.tsx` - Visualisation JSON Schema:
+    - Affichage hiérarchique des propriétés
+    - Types colorés, badges required
+    - Enum, default values
+    - Mode expandable pour objets/arrays
+
+  - `src/components/tools/QuickStartGuide.tsx` - Guide d'intégration:
+    - Onglets: Claude Desktop, Python SDK, cURL
+    - Code snippets avec bouton Copy
+    - Génération automatique des exemples d'arguments
+
+  - `src/components/tools/UsageChart.tsx` - Graphiques d'usage:
+    - Bar chart simple avec hover tooltips
+    - Indicateur de tendance
+    - UsageStatsCard pour métriques clés
+
+  - `src/services/mcpGatewayApi.ts` - Client API MCP Gateway:
+    - Méthodes: getTools, getTool, getToolTags
+    - Subscriptions: getMySubscriptions, subscribeTool, unsubscribeTool
+    - Usage: getMyUsage, getToolUsage, getUsageHistory
+    - Server info et health check
+
+  - `src/types/index.ts` - Types TypeScript ajoutés:
+    - MCPTool, ToolInputSchema, ToolPropertySchema
+    - ListToolsResponse, ToolUsageStats, ToolUsageSummary
+    - ToolSubscription, ToolSubscriptionCreate
+
+  - **Navigation et routes** (`src/App.tsx`, `src/components/Layout.tsx`):
+    - Menu "AI Tools" avec icône Wrench
+    - Routes: /ai-tools, /ai-tools/:toolName, /ai-tools/subscriptions, /ai-tools/usage
+    - QuickActionCard sur Dashboard
+
+  - **Configuration** (`src/config.ts`):
+    - `services.mcpGateway.url` (VITE_MCP_GATEWAY_URL)
+    - `features.enableAITools` (VITE_ENABLE_AI_TOOLS)
+
+  - **Tests** (vitest + @testing-library/react):
+    - `src/components/tools/ToolCard.test.tsx` - 12 tests
+    - `src/components/tools/ToolSchemaViewer.test.tsx` - 10 tests
+    - `src/services/mcpGatewayApi.test.ts` - 15 tests
+    - Setup: vitest.config.ts, test/setup.ts, test/mocks.ts
+
+  - **Dépendances dev ajoutées**:
+    - vitest, @testing-library/react, @testing-library/jest-dom
+    - @testing-library/user-event, jsdom
+
 ### Ajouté (2026-01-04) - CAB-121 Tool Registry CRDs Kubernetes
 
 - **STOA MCP Gateway - Kubernetes CRDs pour Tool Registry**
@@ -754,7 +831,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - [ ] Cron horaire (au lieu de quotidien) pour pré-alertes
 - [ ] Event Kafka `resource-ttl-extended`
 
-### Phase 12: STOA MCP Gateway (Priorité Haute) - EN COURS 🟡
+### Phase 12: STOA MCP Gateway (Priorité Haute) - COMPLÈTE ✅
 - [x] Gateway Core + Auth Keycloak (CAB-120)
   - FastAPI + OIDC middleware avec JWKS caching
   - Modèles Pydantic MCP Protocol spec
@@ -779,7 +856,11 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - Kubernetes watcher async avec callbacks
   - Helm templates: RBAC, Deployment
   - 24 tests, 100% coverage models
-- [ ] Portal Integration - Tool Catalog (CAB-124)
+- [x] Portal Integration - Tool Catalog (CAB-124)
+  - Section AI Tools dans Control Plane UI
+  - Pages: ToolCatalog, ToolDetail, MySubscriptions, UsageDashboard
+  - Composants: ToolCard, ToolSchemaViewer, QuickStartGuide, UsageChart
+  - Service mcpGatewayApi.ts, tests vitest
 
 ### Phase 13: B2B Protocol Binders (Priorité Basse)
 - [ ] EDI X12/EDIFACT support

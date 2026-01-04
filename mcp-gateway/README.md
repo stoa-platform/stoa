@@ -21,11 +21,19 @@ The STOA MCP Gateway exposes APIs as [Model Context Protocol (MCP)](https://mode
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                  │                                      │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                     Security Layer                               │   │
+│  │                     Security & Policy Layer                      │   │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │   │
-│  │  │ Keycloak │  │   OPA    │  │  Rate    │  │  Audit   │        │   │
-│  │  │   OIDC   │  │ Policies │  │ Limiting │  │  Logs    │        │   │
+│  │  │ Keycloak │  │   OPA    │  │  Rate    │  │ Metering │        │   │
+│  │  │   OIDC   │  │ Policies │  │ Limiting │  │  Kafka   │        │   │
 │  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘        │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                  │                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                     Kubernetes Integration                       │   │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐                       │   │
+│  │  │ Tool CRD │  │ToolSet   │  │   RBAC   │                       │   │
+│  │  │ Watcher  │  │  CRD     │  │ Control  │                       │   │
+│  │  └──────────┘  └──────────┘  └──────────┘                       │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                  │                                      │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
@@ -36,6 +44,29 @@ The STOA MCP Gateway exposes APIs as [Model Context Protocol (MCP)](https://mode
 │  └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Features
+
+### Core Capabilities
+- **MCP Protocol**: Full implementation of tools, resources, and prompts endpoints
+- **Tool Registry**: Dynamic registration of tools from APIs and CRDs
+- **OpenAPI Converter**: Automatic conversion of OpenAPI specs to MCP tools
+
+### Security & Policy (CAB-122)
+- **Keycloak OIDC**: JWT-based authentication with role extraction
+- **OPA Policy Engine**: Fine-grained authorization with embedded or sidecar mode
+- **Tenant Isolation**: Multi-tenant support with namespace-based isolation
+- **Rate Limiting**: Role-based rate limits (cpi-admin, tenant-admin, devops, viewer)
+
+### Metering & Billing (CAB-123)
+- **Kafka Producer**: Async metering events for usage tracking
+- **Cost Computation**: Latency-based and tool-type pricing model
+- **Consumer Tracking**: X-Consumer-ID header for client identification
+
+### Kubernetes Integration (CAB-121)
+- **Tool CRD**: Register tools via Kubernetes custom resources
+- **ToolSet CRD**: Generate multiple tools from OpenAPI specs
+- **Dynamic Sync**: Watch and sync tools from Kubernetes in real-time
 
 ## Quick Start
 
@@ -48,13 +79,16 @@ The STOA MCP Gateway exposes APIs as [Model Context Protocol (MCP)](https://mode
 
 ```bash
 # Clone the repository
-cd stoa-mcp-gateway
+cd mcp-gateway
 
 # Install dependencies
 pip install -e ".[dev]"
 
+# For Kubernetes integration
+pip install -e ".[k8s]"
+
 # Or with uv
-uv pip install -e ".[dev]"
+uv pip install -e ".[dev,k8s]"
 ```
 
 ### Run Development Server
@@ -71,6 +105,18 @@ python -m src.main
 uvicorn src.main:app --reload --port 8080
 ```
 
+### Run with Docker Compose
+
+```bash
+# Start all services (Gateway, Keycloak, OPA, Prometheus, Grafana)
+docker-compose up -d
+
+# View logs
+docker-compose logs -f mcp-gateway
+```
+
+## Endpoints
+
 ### Health Endpoints
 
 | Endpoint | Description |
@@ -80,17 +126,20 @@ uvicorn src.main:app --reload --port 8080
 | `GET /live` | Liveness check for Kubernetes |
 | `GET /metrics` | Prometheus metrics |
 
-### MCP Endpoints (Coming Soon)
+### MCP Endpoints
 
 | Endpoint | Description |
 |----------|-------------|
+| `GET /mcp/v1/` | Server info and capabilities |
 | `GET /mcp/v1/tools` | List available MCP tools |
-| `GET /mcp/v1/resources` | List available MCP resources |
-| `POST /mcp/v1/tools/{tool}/invoke` | Invoke an MCP tool |
+| `GET /mcp/v1/tools/{name}` | Get tool details |
+| `POST /mcp/v1/tools/{name}/invoke` | Invoke a tool (requires auth) |
+| `GET /mcp/v1/resources` | List available resources |
+| `GET /mcp/v1/prompts` | List available prompts |
 
 ## Configuration
 
-Environment variables:
+### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -98,33 +147,73 @@ Environment variables:
 | `ENVIRONMENT` | `dev` | Environment (dev/staging/prod) |
 | `DEBUG` | `false` | Enable debug mode |
 | `PORT` | `8080` | Server port |
-| `KEYCLOAK_URL` | Derived from BASE_DOMAIN | Keycloak URL |
+| `KEYCLOAK_URL` | Derived | Keycloak URL |
 | `KEYCLOAK_REALM` | `stoa` | Keycloak realm |
-| `LOG_LEVEL` | `INFO` | Logging level |
+| `OPA_ENABLED` | `true` | Enable OPA policy engine |
+| `OPA_EMBEDDED` | `true` | Use embedded Python evaluator |
+| `METERING_ENABLED` | `true` | Enable Kafka metering |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers |
+| `K8S_WATCHER_ENABLED` | `false` | Enable K8s CRD watcher |
 
 ## Project Structure
 
 ```
-stoa-mcp-gateway/
+mcp-gateway/
 ├── src/
-│   ├── __init__.py
 │   ├── main.py              # FastAPI application
 │   ├── config/              # Settings and configuration
-│   │   ├── __init__.py
-│   │   └── settings.py
 │   ├── handlers/            # MCP protocol handlers
-│   │   └── __init__.py
-│   ├── middleware/          # Auth, rate limiting, etc.
-│   │   └── __init__.py
-│   ├── models/              # Pydantic models
-│   │   └── __init__.py
-│   └── services/            # Business logic
-│       └── __init__.py
-├── tests/
-│   ├── __init__.py
-│   └── test_health.py
-├── pyproject.toml
-└── README.md
+│   ├── middleware/          # Auth, metrics
+│   ├── models/              # Pydantic models (MCP types)
+│   ├── services/            # Tool registry, OpenAPI converter
+│   ├── policy/              # OPA client and Rego policies
+│   ├── metering/            # Kafka producer for billing
+│   └── k8s/                 # Kubernetes CRD watcher
+├── tests/                   # 196 tests, 79% coverage
+├── dev/                     # Docker Compose dev resources
+├── docker-compose.yml       # Local development stack
+└── pyproject.toml
+```
+
+## Kubernetes CRDs
+
+### Tool CRD
+
+```yaml
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tool
+metadata:
+  name: payment-search
+  namespace: tenant-acme
+spec:
+  displayName: Search Payments
+  description: Search payment records by various criteria
+  endpoint: https://api.example.com/v1/payments/search
+  method: GET
+  tags: [payments, search]
+  inputSchema:
+    properties:
+      query:
+        type: string
+    required: [query]
+```
+
+### ToolSet CRD
+
+```yaml
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: ToolSet
+metadata:
+  name: petstore-api
+  namespace: tenant-acme
+spec:
+  displayName: Petstore API
+  openAPISpec:
+    url: https://petstore.swagger.io/v2/swagger.json
+  selector:
+    tags: [pet, store]
+  toolDefaults:
+    timeout: 30s
 ```
 
 ## Development
@@ -132,7 +221,14 @@ stoa-mcp-gateway/
 ### Run Tests
 
 ```bash
+# All tests
 pytest
+
+# With coverage
+pytest --cov=src --cov-report=term-missing
+
+# Specific module
+pytest tests/test_k8s.py -v
 ```
 
 ### Code Quality
@@ -149,7 +245,7 @@ mypy src
 
 - [STOA Platform](../README.md)
 - [MCP Specification](https://modelcontextprotocol.io/)
-- [Phase 12 - STOA Gateway + Copilot](../docs/ARCHITECTURE-PRESENTATION.md)
+- [CHANGELOG](../CHANGELOG.md)
 
 ## License
 

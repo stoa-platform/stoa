@@ -86,6 +86,11 @@ class Settings(BaseSettings):
     metering_buffer_size: int = 100
     metering_flush_interval: float = 5.0
 
+    # Kubernetes Integration
+    k8s_watcher_enabled: bool = False  # Disabled by default (enable in K8s)
+    k8s_watch_namespace: str | None = None  # None = all namespaces
+    kubeconfig_path: str | None = None  # None = in-cluster config
+
     @model_validator(mode="after")
     def derive_urls_from_base_domain(self) -> "Settings":
         """Derive service URLs from base_domain if not explicitly set."""

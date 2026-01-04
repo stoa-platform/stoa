@@ -8,6 +8,67 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Ajouté (2026-01-04) - CAB-121 Tool Registry CRDs Kubernetes
+
+- **STOA MCP Gateway - Kubernetes CRDs pour Tool Registry**
+  - `charts/stoa-platform/crds/tool-crd.yaml` - CRD Tool:
+    - Kind: `Tool`, API Group: `stoa.cab-i.com/v1alpha1`
+    - Spec: displayName, description, endpoint, method, inputSchema, tags
+    - Authentication: type (none/apiKey/bearer/oauth2), secretRef
+    - Status subresource: phase, invocationCount, errorCount, conditions
+    - Printer columns pour `kubectl get tools`
+
+  - `charts/stoa-platform/crds/toolset-crd.yaml` - CRD ToolSet:
+    - Kind: `ToolSet`, génère plusieurs tools depuis OpenAPI spec
+    - Sources: url, configMapRef, secretRef, inline
+    - Selector: filtrage par tags, operationIds, methods
+    - toolDefaults: valeurs par défaut pour tous les tools générés
+
+  - `src/k8s/models.py` - Modèles Pydantic pour les CRDs:
+    - `ToolCR`, `ToolCRSpec`, `ToolCRStatus`, `ToolCRAuthentication`
+    - `ToolSetCR`, `ToolSetCRSpec`, `OpenAPISource`, `ToolSelector`
+    - Validation complète des specs
+
+  - `src/k8s/watcher.py` - Kubernetes Watcher async:
+    - `ToolWatcher`: watch des CRDs Tool et ToolSet
+    - Callbacks: on_added, on_removed, on_modified
+    - Conversion CRD → Tool interne
+    - Support multi-namespace ou namespace unique
+    - Graceful degradation si kubernetes-asyncio non installé
+    - Watch restart automatique avec backoff
+
+  - `charts/stoa-platform/templates/mcp-gateway-rbac.yaml`:
+    - ServiceAccount, ClusterRole, RoleBinding
+    - Permissions: get, list, watch sur tools, toolsets
+    - Permissions: patch, update sur status subresource
+
+  - `charts/stoa-platform/templates/mcp-gateway-deployment.yaml`:
+    - Deployment Helm complet pour MCP Gateway
+    - Toutes les variables d'environnement configurables
+    - Liveness/readiness probes
+
+  - `charts/stoa-platform/values/mcp-gateway.yaml`:
+    - Configuration par défaut MCP Gateway
+    - Exemples CRDs commentés
+
+  - `tests/test_k8s.py` - 24 tests:
+    - Tests models: ToolCR, ToolCRSpec, ToolSetCR
+    - Tests watcher: callbacks, tool name generation, event handling
+    - Tests singleton pattern
+    - Tests intégration OpenAPI converter
+
+  - **Configuration ajoutée** (`src/config/settings.py`):
+    - `k8s_watcher_enabled`: bool (default: False)
+    - `k8s_watch_namespace`: str | None (default: None = all namespaces)
+    - `kubeconfig_path`: str | None (default: None = in-cluster config)
+
+  - **Dépendance optionnelle**: `kubernetes-asyncio>=29.0.0`, `pyyaml>=6.0`
+    - Installation: `pip install stoa-mcp-gateway[k8s]`
+
+  - **Métriques**: 196 tests, 79% coverage global
+    - k8s/models.py: 100% coverage
+    - k8s/watcher.py: 45% coverage (code async difficile à tester)
+
 ### Ajouté (2026-01-04) - CAB-123 Metering Pipeline (Kafka)
 
 - **STOA MCP Gateway - Metering Pipeline**
@@ -713,7 +774,11 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - MeteringEvent schema, MeteringProducer async
   - Intégration handlers MCP (fire-and-forget)
   - 23 tests, 100% coverage models
-- [ ] Tool Registry CRDs Kubernetes (CAB-121)
+- [x] Tool Registry CRDs Kubernetes (CAB-121)
+  - CRDs: Tool, ToolSet (OpenAPI → MCP tools)
+  - Kubernetes watcher async avec callbacks
+  - Helm templates: RBAC, Deployment
+  - 24 tests, 100% coverage models
 - [ ] Portal Integration - Tool Catalog (CAB-124)
 
 ### Phase 13: B2B Protocol Binders (Priorité Basse)

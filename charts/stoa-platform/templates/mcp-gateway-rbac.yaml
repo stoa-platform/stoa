@@ -1,0 +1,79 @@
+{{- if .Values.mcpGateway.enabled }}
+{{- if .Values.mcpGateway.k8s.enabled }}
+# =============================================================================
+# MCP Gateway - Kubernetes RBAC for CRD Access
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-mcp-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-gateway
+---
+# ClusterRole for watching Tool and ToolSet CRDs
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-mcp-gateway-tools
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-gateway
+rules:
+  # Tool CRDs
+  - apiGroups: ["stoa.cab-i.com"]
+    resources: ["tools", "toolsets"]
+    verbs: ["get", "list", "watch"]
+  # Update status subresource
+  - apiGroups: ["stoa.cab-i.com"]
+    resources: ["tools/status", "toolsets/status"]
+    verbs: ["get", "patch", "update"]
+  # ConfigMaps for OpenAPI specs
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  # Secrets for authentication (restricted)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames: []  # Will be restricted to specific secrets
+---
+{{- if .Values.mcpGateway.k8s.watchAllNamespaces }}
+# ClusterRoleBinding for all-namespace access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-mcp-gateway-tools
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "stoa-platform.fullname" . }}-mcp-gateway-tools
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "stoa-platform.fullname" . }}-mcp-gateway
+    namespace: {{ .Release.Namespace }}
+{{- else }}
+# RoleBinding for namespace-specific access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-mcp-gateway-tools
+  namespace: {{ .Values.mcpGateway.k8s.watchNamespace | default .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "stoa-platform.fullname" . }}-mcp-gateway-tools
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "stoa-platform.fullname" . }}-mcp-gateway
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- end }}

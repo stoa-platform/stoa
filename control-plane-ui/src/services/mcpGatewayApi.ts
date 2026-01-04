@@ -50,7 +50,7 @@ class MCPGatewayService {
     cursor?: string;
     limit?: number;
   }): Promise<ListToolsResponse> {
-    const { data } = await this.client.get('/mcp/tools', {
+    const { data } = await this.client.get('/mcp/v1/tools', {
       params: {
         tenant: params?.tenant,
         tag: params?.tag,
@@ -66,7 +66,7 @@ class MCPGatewayService {
    * Get a specific tool by name.
    */
   async getTool(toolName: string): Promise<MCPTool> {
-    const { data } = await this.client.get(`/mcp/tools/${toolName}`);
+    const { data } = await this.client.get(`/mcp/v1/tools/${toolName}`);
     return data;
   }
 
@@ -77,7 +77,7 @@ class MCPGatewayService {
     name: string;
     inputSchema: MCPTool['inputSchema'];
   }> {
-    const { data } = await this.client.get(`/mcp/tools/${toolName}/schema`);
+    const { data } = await this.client.get(`/mcp/v1/tools/${toolName}/schema`);
     return data;
   }
 
@@ -85,7 +85,7 @@ class MCPGatewayService {
    * Get all unique tags from tools.
    */
   async getToolTags(): Promise<string[]> {
-    const { data } = await this.client.get('/mcp/tools/tags');
+    const { data } = await this.client.get('/mcp/v1/tools/tags');
     return data.tags || [];
   }
 
@@ -97,7 +97,7 @@ class MCPGatewayService {
    * Get user's tool subscriptions.
    */
   async getMySubscriptions(): Promise<ToolSubscription[]> {
-    const { data } = await this.client.get('/mcp/subscriptions');
+    const { data } = await this.client.get('/mcp/v1/subscriptions');
     return data.subscriptions || [];
   }
 
@@ -105,7 +105,7 @@ class MCPGatewayService {
    * Subscribe to a tool.
    */
   async subscribeTool(subscription: ToolSubscriptionCreate): Promise<ToolSubscription> {
-    const { data } = await this.client.post('/mcp/subscriptions', subscription);
+    const { data } = await this.client.post('/mcp/v1/subscriptions', subscription);
     return data;
   }
 
@@ -113,7 +113,7 @@ class MCPGatewayService {
    * Unsubscribe from a tool.
    */
   async unsubscribeTool(subscriptionId: string): Promise<void> {
-    await this.client.delete(`/mcp/subscriptions/${subscriptionId}`);
+    await this.client.delete(`/mcp/v1/subscriptions/${subscriptionId}`);
   }
 
   /**
@@ -123,7 +123,7 @@ class MCPGatewayService {
     subscriptionId: string,
     update: Partial<ToolSubscriptionCreate>
   ): Promise<ToolSubscription> {
-    const { data } = await this.client.patch(`/mcp/subscriptions/${subscriptionId}`, update);
+    const { data } = await this.client.patch(`/mcp/v1/subscriptions/${subscriptionId}`, update);
     return data;
   }
 
@@ -139,7 +139,7 @@ class MCPGatewayService {
     startDate?: string;
     endDate?: string;
   }): Promise<ToolUsageSummary> {
-    const { data } = await this.client.get('/mcp/usage/me', { params });
+    const { data } = await this.client.get('/mcp/v1/usage/me', { params });
     return data;
   }
 
@@ -154,7 +154,7 @@ class MCPGatewayService {
       endDate?: string;
     }
   ): Promise<ToolUsageSummary> {
-    const { data } = await this.client.get(`/mcp/usage/tools/${toolName}`, { params });
+    const { data } = await this.client.get(`/mcp/v1/usage/tools/${toolName}`, { params });
     return data;
   }
 
@@ -174,7 +174,7 @@ class MCPGatewayService {
       costUnits: number;
     }>;
   }> {
-    const { data } = await this.client.get('/mcp/usage/history', { params });
+    const { data } = await this.client.get('/mcp/v1/usage/history', { params });
     return data;
   }
 
@@ -195,7 +195,7 @@ class MCPGatewayService {
       prompts: boolean;
     };
   }> {
-    const { data } = await this.client.get('/mcp/server-info');
+    const { data } = await this.client.get('/mcp/v1/');
     return data;
   }
 

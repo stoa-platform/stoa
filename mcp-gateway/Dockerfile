@@ -1,7 +1,7 @@
 # STOA MCP Gateway - Production Dockerfile
 # Multi-stage build for minimal image size
 
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -10,27 +10,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first for better caching
-COPY pyproject.toml ./
+# Copy project files
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
 
-# Install dependencies
-RUN pip install --no-cache-dir build && \
-    pip wheel --no-cache-dir --wheel-dir /app/wheels .
+# Install dependencies using pip
+RUN pip install --no-cache-dir hatchling && \
+    pip install --no-cache-dir .
 
 # Production image
-FROM python:3.11-slim as production
+FROM python:3.11-slim AS production
 
 WORKDIR /app
 
 # Create non-root user
 RUN groupadd -r stoa && useradd -r -g stoa stoa
 
-# Copy wheels from builder
-COPY --from=builder /app/wheels /app/wheels
-
-# Install dependencies from wheels
-RUN pip install --no-cache-dir /app/wheels/*.whl && \
-    rm -rf /app/wheels
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY src/ ./src/
@@ -52,4 +50,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:8080/health').raise_for_status()"
 
 # Run the application
-CMD ["python", "-m", "src.main"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -82,6 +82,27 @@ async def list_tools(
 
 
 @router.get(
+    "/tools/tags",
+    summary="Get all unique tags",
+    description="Returns a list of all unique tags used by tools.",
+)
+async def get_tool_tags(
+    user: TokenClaims | None = Depends(get_optional_user),
+) -> dict[str, list[str]]:
+    """Get all unique tags from registered tools."""
+    registry = await get_tool_registry()
+
+    # Collect all unique tags
+    all_tags: set[str] = set()
+    result = registry.list_tools(limit=1000)
+    for tool in result.tools:
+        if tool.tags:
+            all_tags.update(tool.tags)
+
+    return {"tags": sorted(all_tags)}
+
+
+@router.get(
     "/tools/{tool_name}",
     response_model=Tool,
     summary="Get tool details",

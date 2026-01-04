@@ -7,9 +7,9 @@ mcpGateway:
 
   # Image configuration
   image:
-    repository: ghcr.io/potomitan/stoa-mcp-gateway
-    tag: ""  # Defaults to Chart.AppVersion
-    pullPolicy: IfNotPresent
+    repository: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/mcp-gateway
+    tag: "latest"
+    pullPolicy: Always
 
   # Replicas
   replicas: 1
@@ -48,6 +48,14 @@ mcpGateway:
   service:
     type: ClusterIP
     port: 80
+
+  # Ingress configuration
+  ingress:
+    enabled: true
+    className: nginx
+    clusterIssuer: letsencrypt-prod
+    host: ""  # Defaults to mcp.${global.baseDomain}
+    annotations: {}
 
   # Resource limits
   resources:

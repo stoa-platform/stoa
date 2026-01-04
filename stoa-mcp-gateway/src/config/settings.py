@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
     allowed_audiences: str = ""  # Comma-separated list
 
+    # OPA Policy Engine
+    opa_enabled: bool = True
+    opa_url: str = "http://127.0.0.1:8181"  # OPA sidecar URL
+    opa_embedded: bool = True  # Use embedded evaluator (no sidecar needed)
+    opa_policy_path: str = "policies"  # Path to Rego policies
+
     @model_validator(mode="after")
     def derive_urls_from_base_domain(self) -> "Settings":
         """Derive service URLs from base_domain if not explicitly set."""

@@ -74,7 +74,7 @@ Source of Truth for APIM Platform tenant configurations.
 
 ## Managed by
 
-- **Control Plane UI**: https://devops.${BASE_DOMAIN:-stoa.cab-i.com}
+- **Control Plane UI**: https://console.${BASE_DOMAIN:-stoa.cab-i.com}
 - **Control Plane API**: https://api.${BASE_DOMAIN:-stoa.cab-i.com}
 - **ArgoCD**: https://argocd.${BASE_DOMAIN:-stoa.cab-i.com}
 

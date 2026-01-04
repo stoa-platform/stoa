@@ -57,7 +57,7 @@ ENV GATEWAY_URL=https://gateway.stoa.cab-i.com \
     GATEWAY_ADMIN_PASSWORD=""
 
 # CORS
-ENV CORS_ORIGINS=https://devops.stoa.cab-i.com,http://localhost:3000,http://localhost:5173
+ENV CORS_ORIGINS=https://console.stoa.cab-i.com,http://localhost:3000,http://localhost:5173
 
 # Rate Limiting
 ENV RATE_LIMIT_REQUESTS=100 \

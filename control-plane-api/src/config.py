@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     GATEWAY_USE_OIDC_PROXY: bool = True  # Set to False to use Basic Auth directly
 
     # CORS - comma-separated list of allowed origins
-    CORS_ORIGINS: str = f"https://devops.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
+    CORS_ORIGINS: str = f"https://console.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
 
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100

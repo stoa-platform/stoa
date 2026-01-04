@@ -230,7 +230,7 @@ DOMAINS=(
   "gateway.stoa.cab-i.com"
   "api.stoa.cab-i.com"
   "auth.stoa.cab-i.com"
-  "devops.stoa.cab-i.com"
+  "console.stoa.cab-i.com"
   "portal.stoa.cab-i.com"
   "vault.stoa.cab-i.com"
   "awx.stoa.cab-i.com"

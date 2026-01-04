@@ -8,6 +8,32 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Modifié (2026-01-04) - CAB-237 Rename devops → console subdomain
+
+- **Renommage sous-domaine Control Plane UI**
+  - `devops.stoa.cab-i.com` → `console.stoa.cab-i.com`
+  - Reflète l'unification UI: DevOps + Developers (AI Tools Portal)
+
+- **Fichiers de configuration mis à jour**:
+  - `deploy/config/dev.env` - CORS_ORIGINS, DOMAIN_UI
+  - `deploy/config/staging.env` - CORS_ORIGINS, DOMAIN_UI
+  - `deploy/config/prod.env` - CORS_ORIGINS, DOMAIN_UI
+  - `control-plane-api/src/config.py` - CORS_ORIGINS default
+  - `control-plane-api/Dockerfile` - ENV CORS_ORIGINS
+  - `gitops-templates/_defaults.yaml` - CONTROL_PLANE_UI_URL
+
+- **Scripts et playbooks**:
+  - `ansible/playbooks/bootstrap-platform.yaml` - URL dans message final
+  - `scripts/init-gitlab-gitops.sh` - URL dans affichage
+
+- **Documentation**:
+  - `CLAUDE.md` - Key URLs section
+  - `README.md` - Architecture diagram, URLs, exemples
+  - `docs/ibm/webmethods-gateway-api.md` - URLs exemple
+  - `docs/runbooks/README.md` - URLs services
+  - `docs/runbooks/high/certificate-expiration.md` - Check script domains
+  - `docs/runbooks/medium/api-rollback.md` - URLs vérification
+
 ### Ajouté (2026-01-04) - CAB-124 Portal Integration - Tool Catalog
 
 - **Control Plane UI - Section AI Tools**
@@ -616,7 +642,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 - **Control-Plane UI** - Interface React
   - Authentification Keycloak avec PKCE (Keycloak 25+)
   - Pages: Dashboard, Tenants, APIs, Applications, Deployments, Monitoring
-  - URL: https://devops.stoa.cab-i.com
+  - URL: https://console.stoa.cab-i.com
 
 - **Control-Plane API** - Backend FastAPI
   - Kafka Producer intégré (events sur CRUD)
@@ -887,7 +913,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 | Service | URL | Notes |
 |---------|-----|-------|
-| Control Plane UI | https://devops.stoa.cab-i.com | React + Keycloak |
+| Control Plane UI | https://console.stoa.cab-i.com | React + Keycloak |
 | Control Plane API | https://api.stoa.cab-i.com | FastAPI |
 | Keycloak | https://auth.stoa.cab-i.com | Realm: stoa |
 | AWX | https://awx.stoa.cab-i.com | admin/demo |

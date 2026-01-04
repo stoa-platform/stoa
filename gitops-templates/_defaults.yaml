@@ -30,7 +30,7 @@ services:
   GATEWAY_URL: "https://gateway.${BASE_DOMAIN}"
   PORTAL_URL: "https://portal.${BASE_DOMAIN}"
   CONTROL_PLANE_API_URL: "https://api.${BASE_DOMAIN}"
-  CONTROL_PLANE_UI_URL: "https://devops.${BASE_DOMAIN}"
+  CONTROL_PLANE_UI_URL: "https://console.${BASE_DOMAIN}"
   KEYCLOAK_URL: "https://auth.${BASE_DOMAIN}"
   AWX_URL: "https://awx.${BASE_DOMAIN}"
   REDPANDA_URL: "redpanda.stoa-system.svc.cluster.local:9092"

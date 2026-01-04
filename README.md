@@ -258,7 +258,7 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Control Plane UI | https://devops.stoa.cab-i.com | Interface de gestion des APIs |
+| Control Plane UI | https://console.stoa.cab-i.com | Interface de gestion des APIs |
 | Control Plane API | https://api.stoa.cab-i.com | Backend REST API |
 | Keycloak (Auth) | https://auth.stoa.cab-i.com | Identity Provider (OIDC) |
 | Keycloak Admin | https://auth.stoa.cab-i.com/admin/ | Console admin Keycloak |
@@ -578,7 +578,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 6. **Control-Plane UI** ✅ FONCTIONNEL
    - Interface React avec authentification Keycloak (PKCE)
    - Pages: Dashboard, Tenants, APIs, Applications, Deployments, Monitoring
-   - URL: https://devops.stoa.cab-i.com
+   - URL: https://console.stoa.cab-i.com
 
 7. **Configuration Variabilisée** ✅ (21 Déc 2024)
    - **UI** ([config.ts](control-plane-ui/src/config.ts)): Toutes les URLs et configs via `VITE_*` env vars
@@ -610,7 +610,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
 8. **Authentification PKCE** ✅ (21 Déc 2024)
    - Keycloak 25+ requiert PKCE pour clients publics
    - Configuration `oidc-client-ts` avec `response_type: 'code'` et `pkce_method: 'S256'`
-   - Login fonctionnel via https://devops.stoa.cab-i.com
+   - Login fonctionnel via https://console.stoa.cab-i.com
 
 #### Phase 2 : GitOps + Variables d'Environnement (Priorité Haute)
 
@@ -1271,7 +1271,7 @@ Stack complète d'observabilité pour STOA Platform utilisant **Amazon OpenSearc
 | Service | URL |
 |---------|-----|
 | OpenSearch Dashboards | https://opensearch.stoa.cab-i.com/_dashboards |
-| Control-Plane Monitoring | https://devops.stoa.cab-i.com/monitoring |
+| Control-Plane Monitoring | https://console.stoa.cab-i.com/monitoring |
 | Prometheus (interne) | prometheus.stoa-system.svc.cluster.local:9090 |
 
 #### Phase 4.5 : Jenkins Orchestration Layer (Priorité Haute - Enterprise)
@@ -1949,10 +1949,10 @@ def call(String status, Map details) {
 │                        │                         │                                  │
 │                        ▼                         ▼                                  │
 │             ┌─────────────────┐       ┌─────────────────┐                          │
-│             │   UI DevOps     │       │ Control-Plane   │                          │
+│             │   UI Console    │       │ Control-Plane   │                          │
 │             │   (React)       │       │     API         │                          │
 │             │                 │       │   (FastAPI)     │                          │
-│             │ devops.stoa...  │       │  api.stoa...    │                          │
+│             │ console.stoa... │       │  api.stoa...    │                          │
 │             └─────────────────┘       └─────────────────┘                          │
 │                        │                                                            │
 │                        │                                                            │
@@ -2107,7 +2107,7 @@ def call(String status, Map details) {
    │                                                                                      │
    │  1. CONNEXION                                                                        │
    │     ┌─────────────────────────────────────────────────────────────────────────────┐ │
-   │     │  Accès: https://devops.stoa.cab-i.com                                       │ │
+   │     │  Accès: https://console.stoa.cab-i.com                                       │ │
    │     │  → Redirect vers Keycloak                                                   │ │
    │     │  → Login: demo-cpi@cab-i.com / DemoCPI2024!                                 │ │
    │     │  → Redirect vers UI DevOps (JWT avec tenant_id=tenant-demo)                │ │
@@ -2151,8 +2151,8 @@ def call(String status, Map details) {
 
    | User | URL | Login | Password |
    |------|-----|-------|----------|
-   | Demo CPI | https://devops.stoa.cab-i.com | demo-cpi@cab-i.com | DemoCPI2024! |
-   | Demo DevOps | https://devops.stoa.cab-i.com | demo-devops@cab-i.com | DemoDevOps2024! |
+   | Demo CPI | https://console.stoa.cab-i.com | demo-cpi@cab-i.com | DemoCPI2024! |
+   | Demo DevOps | https://console.stoa.cab-i.com | demo-devops@cab-i.com | DemoDevOps2024! |
 
    > **Note**: Les credentials seront stockés dans Vault après validation beta.
 
@@ -2194,7 +2194,7 @@ def call(String status, Map details) {
 
    | Interface | URL | Description |
    |-----------|-----|-------------|
-   | UI DevOps | https://devops.stoa.cab-i.com | Gestion des APIs, déploiements, monitoring |
+   | UI DevOps | https://console.stoa.cab-i.com | Gestion des APIs, déploiements, monitoring |
 
    > **Note**: Le Developer Portal custom sera disponible en Phase 8.
 
@@ -4005,7 +4005,7 @@ def calculate_cost_avoided(resource, remaining_hours: int) -> float:
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    UI Control-Plane (React + Keycloak)               │
-│                    https://devops.stoa.cab-i.com                     │
+│                    https://console.stoa.cab-i.com                     │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
                            ▼

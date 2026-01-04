@@ -671,7 +671,7 @@ curl -s -X POST \
     "name": "control-plane-ui",
     "description": "DevOps UI Application for Control Plane",
     "contactEmails": ["admin@cab-i.com"],
-    "siteURLs": ["https://devops.stoa.cab-i.com"]
+    "siteURLs": ["https://console.stoa.cab-i.com"]
   }'
 ```
 
@@ -907,8 +907,8 @@ For the OIDC integration to work correctly, ensure these Keycloak settings:
 1. **Client `control-plane-ui`:**
    - Direct Access Grants Enabled: `true` (for password grant testing)
    - Standard Flow Enabled: `true`
-   - Valid Redirect URIs: `https://devops.stoa.cab-i.com/*`
-   - Web Origins: `https://devops.stoa.cab-i.com`
+   - Valid Redirect URIs: `https://console.stoa.cab-i.com/*`
+   - Web Origins: `https://console.stoa.cab-i.com`
 
 2. **Token Audience:**
    - By default, Keycloak sets `aud: account`

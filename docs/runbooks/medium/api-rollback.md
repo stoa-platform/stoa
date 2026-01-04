@@ -63,7 +63,7 @@ curl -s -u $GATEWAY_USER:$GATEWAY_PASSWORD \
 
 ### Method 1: Via Control-Plane UI (Recommended)
 
-1. Go to https://devops.stoa.cab-i.com
+1. Go to https://console.stoa.cab-i.com
 2. Navigate to APIs > [API Name] > Deployments
 3. Find the previous deployment (status: success)
 4. Click "Rollback to this version"

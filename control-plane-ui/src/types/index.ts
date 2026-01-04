@@ -213,3 +213,73 @@ export interface TraceStats {
   avg_duration_ms: number;
   success_rate: number;
 }
+
+// MCP Tool types
+export interface ToolInputSchema {
+  type: 'object';
+  properties: Record<string, ToolPropertySchema>;
+  required?: string[];
+}
+
+export interface ToolPropertySchema {
+  type: string;
+  description?: string;
+  default?: unknown;
+  enum?: string[];
+  items?: ToolPropertySchema;
+  properties?: Record<string, ToolPropertySchema>;
+}
+
+export interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: ToolInputSchema;
+  apiId?: string;
+  tenantId?: string;
+  endpoint?: string;
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  tags: string[];
+  version: string;
+}
+
+export interface ListToolsResponse {
+  tools: MCPTool[];
+  nextCursor?: string;
+  totalCount: number;
+}
+
+export interface ToolUsageStats {
+  toolName: string;
+  totalCalls: number;
+  successCount: number;
+  errorCount: number;
+  avgLatencyMs: number;
+  totalCostUnits: number;
+  lastInvokedAt?: string;
+}
+
+export interface ToolUsageSummary {
+  period: string;
+  startDate: string;
+  endDate: string;
+  totalCalls: number;
+  successRate: number;
+  totalCostUnits: number;
+  avgLatencyMs: number;
+  toolBreakdown: ToolUsageStats[];
+}
+
+export interface ToolSubscription {
+  id: string;
+  userId: string;
+  toolName: string;
+  subscribedAt: string;
+  status: 'active' | 'suspended' | 'pending';
+  usageLimit?: number;
+  usageCount: number;
+}
+
+export interface ToolSubscriptionCreate {
+  toolName: string;
+  usageLimit?: number;
+}

@@ -74,6 +74,9 @@ export const config = {
         return `${this.url}/apigatewayui/`;
       },
     },
+    mcpGateway: {
+      url: import.meta.env.VITE_MCP_GATEWAY_URL || `https://mcp.${BASE_DOMAIN}`,
+    },
     awx: {
       url: import.meta.env.VITE_AWX_URL || `https://awx.${BASE_DOMAIN}`,
       getJobUrl(jobId: string | number) {
@@ -100,6 +103,7 @@ export const config = {
     enableGitOps: import.meta.env.VITE_ENABLE_GITOPS !== 'false',
     enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true',
     enableApplications: import.meta.env.VITE_ENABLE_APPLICATIONS !== 'false',
+    enableAITools: import.meta.env.VITE_ENABLE_AI_TOOLS !== 'false',
   },
 
   // UI Configuration

@@ -6,6 +6,7 @@ import { Tenants } from './pages/Tenants';
 import { APIs } from './pages/APIs';
 import { Applications } from './pages/Applications';
 import { Deployments } from './pages/Deployments';
+import { ToolCatalog, ToolDetail, MySubscriptions, UsageDashboard } from './pages/AITools';
 import { config, quickLinks } from './config';
 
 function Dashboard() {
@@ -34,7 +35,7 @@ function Dashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <QuickActionCard
           title="APIs"
           description="Manage API definitions and deployments"
@@ -45,6 +46,18 @@ function Dashboard() {
             </svg>
           }
           color="blue"
+        />
+        <QuickActionCard
+          title="AI Tools"
+          description="Browse MCP tools catalog"
+          href="/ai-tools"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          }
+          color="orange"
         />
         <QuickActionCard
           title="Applications"
@@ -119,7 +132,7 @@ interface QuickActionCardProps {
   description: string;
   href: string;
   icon: React.ReactNode;
-  color: 'blue' | 'purple' | 'green';
+  color: 'blue' | 'purple' | 'green' | 'orange';
 }
 
 function QuickActionCard({ title, description, href, icon, color }: QuickActionCardProps) {
@@ -127,6 +140,7 @@ function QuickActionCard({ title, description, href, icon, color }: QuickActionC
     blue: 'bg-blue-50 text-blue-600 hover:bg-blue-100',
     purple: 'bg-purple-50 text-purple-600 hover:bg-purple-100',
     green: 'bg-green-50 text-green-600 hover:bg-green-100',
+    orange: 'bg-orange-50 text-orange-600 hover:bg-orange-100',
   };
 
   return (
@@ -206,6 +220,10 @@ function ProtectedRoutes() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/tenants" element={<Tenants />} />
         <Route path="/apis" element={<APIs />} />
+        <Route path="/ai-tools" element={<ToolCatalog />} />
+        <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
+        <Route path="/ai-tools/usage" element={<UsageDashboard />} />
+        <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
         <Route path="/applications" element={<Applications />} />
         <Route path="/deployments" element={<Deployments />} />
         <Route path="/git" element={<Git />} />

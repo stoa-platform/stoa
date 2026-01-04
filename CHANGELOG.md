@@ -34,6 +34,19 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - `docs/runbooks/high/certificate-expiration.md` - Check script domains
   - `docs/runbooks/medium/api-rollback.md` - URLs vérification
 
+- **Scripts de migration**:
+  - `scripts/update-keycloak-console-redirect.sh` - Met à jour redirectURIs Keycloak
+  - `scripts/verify-console-dns.sh` - Vérifie/crée DNS Route53
+
+- **Déploiement effectué**:
+  - Ingress `control-plane-ui` mis à jour vers `console.stoa.cab-i.com`
+  - Certificat TLS `stoa-console-tls` émis par Let's Encrypt
+  - Client Keycloak `control-plane-ui` redirectURIs mis à jour
+
+- **Accès Console UI**:
+  - URL: https://console.stoa.cab-i.com
+  - Users: `admin@cab-i.com`, `demo@apim.local` (password: `demo`)
+
 ### Ajouté (2026-01-04) - CAB-124 Portal Integration - Tool Catalog
 
 - **Control Plane UI - Section AI Tools**

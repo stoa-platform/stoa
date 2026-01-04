@@ -4,12 +4,14 @@ FastAPI router for MCP endpoints.
 Implements the Model Context Protocol specification.
 """
 
+import time
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 
 from ..config import get_settings
+from ..metering import MeteringEvent, MeteringStatus, get_metering_producer
 from ..middleware.auth import TokenClaims, get_current_user, get_optional_user
 from ..models import (
     Tool,
@@ -119,12 +121,17 @@ async def invoke_tool(
     tool_name: str,
     invocation: ToolInvocation,
     user: TokenClaims = Depends(get_current_user),
+    x_consumer_id: str | None = Header(None, alias="X-Consumer-ID"),
 ) -> InvokeToolResponse:
     """Invoke a tool.
 
     Requires authentication. The tool will be executed with the user's
     permissions and credentials.
     """
+    start_time = time.perf_counter()
+    metering_status = MeteringStatus.SUCCESS
+    error_detail: str | None = None
+
     registry = await get_tool_registry()
     tool = registry.get(tool_name)
 
@@ -157,6 +164,17 @@ async def invoke_tool(
             user=user.sub,
             reason=reason,
         )
+        # Emit metering event for unauthorized access
+        await _emit_metering_event(
+            user=user,
+            tool=tool,
+            tool_name=tool_name,
+            start_time=start_time,
+            status=MeteringStatus.UNAUTHORIZED,
+            request_id=invocation.request_id,
+            consumer=x_consumer_id,
+            error=reason,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Access denied: {reason}",
@@ -172,15 +190,90 @@ async def invoke_tool(
         request_id=invocation.request_id,
     )
 
-    # Get user's token for backend calls
-    # Note: In production, you might want to use a service token
-    # or token exchange instead of passing user's token
-    result = await registry.invoke(invocation, user_token=None)
+    try:
+        # Get user's token for backend calls
+        # Note: In production, you might want to use a service token
+        # or token exchange instead of passing user's token
+        result = await registry.invoke(invocation, user_token=None)
+        metering_status = MeteringStatus.SUCCESS
+    except Exception as e:
+        metering_status = MeteringStatus.ERROR
+        error_detail = str(e)
+        raise
+    finally:
+        # Emit metering event
+        await _emit_metering_event(
+            user=user,
+            tool=tool,
+            tool_name=tool_name,
+            start_time=start_time,
+            status=metering_status,
+            request_id=invocation.request_id,
+            consumer=x_consumer_id,
+            error=error_detail,
+        )
 
     return InvokeToolResponse(
         result=result,
         tool_name=tool_name,
     )
+
+
+async def _emit_metering_event(
+    user: TokenClaims,
+    tool: Tool,
+    tool_name: str,
+    start_time: float,
+    status: MeteringStatus,
+    request_id: str | None = None,
+    consumer: str | None = None,
+    error: str | None = None,
+) -> None:
+    """Emit a metering event for tool invocation.
+
+    Args:
+        user: Authenticated user claims
+        tool: Tool being invoked
+        tool_name: Name of the tool
+        start_time: Start time from time.perf_counter()
+        status: Outcome status
+        request_id: Optional correlation ID
+        consumer: Optional consumer application identifier
+        error: Optional error message
+    """
+    try:
+        latency_ms = int((time.perf_counter() - start_time) * 1000)
+        tenant = getattr(user, "tenant_id", None) or "default"
+
+        metadata = {}
+        if error:
+            metadata["error"] = error
+
+        event = MeteringEvent.from_tool_invocation(
+            tenant=tenant,
+            user_id=user.sub,
+            tool=tool_name,
+            latency_ms=latency_ms,
+            status=status,
+            project=tool.tenant_id,
+            consumer=consumer or "unknown",
+            request_id=request_id,
+            metadata=metadata,
+        )
+
+        producer = await get_metering_producer()
+        await producer.emit(event)
+
+        logger.debug(
+            "Metering event emitted",
+            event_id=str(event.event_id),
+            tool=tool_name,
+            latency_ms=latency_ms,
+            status=status.value,
+        )
+    except Exception as e:
+        # Don't fail the request if metering fails
+        logger.error("Failed to emit metering event", error=str(e))
 
 
 # =============================================================================

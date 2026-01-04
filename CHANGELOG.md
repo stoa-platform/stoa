@@ -8,6 +8,50 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Ajouté (2026-01-04) - CAB-123 Metering Pipeline (Kafka)
+
+- **STOA MCP Gateway - Metering Pipeline**
+  - `src/metering/models.py` - Schéma d'événements de metering:
+    - `MeteringEvent`: tenant, project, consumer, user_id, tool, latency_ms, status, cost_units
+    - `MeteringStatus`: success, error, timeout, rate_limited, unauthorized
+    - `MeteringEventBatch`: Lot d'événements pour traitement bulk
+    - Méthodes: `to_kafka_message()`, `from_tool_invocation()`, `_compute_cost()`
+    - Pricing model: base cost + latency cost + premium tools
+
+  - `src/metering/producer.py` - Producer Kafka async:
+    - `MeteringProducer`: Client aiokafka avec buffering
+    - Double mode: emit (buffered) vs emit_immediate (direct)
+    - Flush périodique (5s) et flush on buffer full (100 events)
+    - Graceful degradation si Kafka indisponible
+    - Compression gzip, idempotence, partition par tenant
+
+  - **Intégration dans handlers MCP** (`src/handlers/mcp.py`):
+    - Metering automatique sur chaque invocation de tool
+    - Capture: latency_ms, status, consumer (header X-Consumer-ID)
+    - Emission même pour les erreurs (403, timeout, etc.)
+    - Fire-and-forget (ne bloque pas la requête)
+
+  - `tests/test_metering.py` - 23 tests:
+    - Tests MeteringEvent: création, serialization, cost computation
+    - Tests MeteringProducer: buffering, flush, graceful failure
+    - Tests singleton pattern
+    - Tests intégration avec Kafka mocké
+
+  - **Configuration ajoutée** (`src/config/settings.py`):
+    - `metering_enabled`: bool (default: True)
+    - `kafka_bootstrap_servers`: str (default: localhost:9092)
+    - `metering_topic`: str (default: stoa.metering.events)
+    - `metering_buffer_size`: int (default: 100)
+    - `metering_flush_interval`: float (default: 5.0s)
+
+  - **Dépendance**: aiokafka>=0.10.0 ajouté à pyproject.toml
+
+  - **Métriques**: 172 tests, 85% coverage global
+    - metering/models.py: 100% coverage
+    - metering/producer.py: 69% coverage
+
+- **Renommage**: `stoa-mcp-gateway/` → `mcp-gateway/`
+
 ### Ajouté (2026-01-04) - CAB-122 OPA Policy Engine Integration
 
 - **STOA MCP Gateway - OPA Policy Engine**
@@ -665,8 +709,11 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - Mode embedded (Python) + sidecar (Rego)
   - Policies: authz, tenant isolation, rate limiting
   - 31 tests, 93% coverage opa_client.py
+- [x] Metering Pipeline Kafka (CAB-123)
+  - MeteringEvent schema, MeteringProducer async
+  - Intégration handlers MCP (fire-and-forget)
+  - 23 tests, 100% coverage models
 - [ ] Tool Registry CRDs Kubernetes (CAB-121)
-- [ ] Metering Pipeline Kafka + ksqlDB (CAB-123)
 - [ ] Portal Integration - Tool Catalog (CAB-124)
 
 ### Phase 13: B2B Protocol Binders (Priorité Basse)

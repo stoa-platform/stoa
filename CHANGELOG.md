@@ -8,6 +8,40 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Ajouté (2026-01-04) - CAB-122 OPA Policy Engine Integration
+
+- **STOA MCP Gateway - OPA Policy Engine**
+  - `src/policy/opa_client.py` - Client OPA avec double mode:
+    - Mode embedded (MVP): Évaluation Python des règles (pas de sidecar)
+    - Mode sidecar (production): Requêtes HTTP vers OPA
+    - Fail-open pour haute disponibilité
+
+  - `src/policy/policies/authz.rego` - Règles d'autorisation Rego:
+    - Classification des tools: read_only, write, admin
+    - Mapping rôles → scopes (cpi-admin, tenant-admin, devops, viewer)
+    - Isolation multi-tenant
+    - Gestion des tools dynamiques
+
+  - `src/policy/policies/tools.rego` - Règles spécifiques aux tools:
+    - Rate limiting par rôle
+    - Restrictions environnement production
+    - Confirmation pour actions destructives
+
+  - `tests/test_opa_policy.py` - 31 tests pour le policy engine:
+    - Tests EmbeddedEvaluator: scopes, authz, tenant isolation, dynamic tools
+    - Tests OPAClient: embedded, sidecar, fail-open
+    - Tests singleton pattern
+
+  - **Intégration dans handlers MCP**:
+    - Policy check avant invocation de tool
+    - Construction user_claims depuis TokenClaims
+    - Erreur 403 si policy denied
+
+  - **Docker Compose**: OPA sidecar ajouté (openpolicyagent/opa:0.60.0)
+
+  - **Métriques**: 149 tests, 86% coverage global
+    - opa_client.py: 93% coverage
+
 ### Ajouté (2026-01-04) - CAB-199 MCP Gateway Tests & Tools Implementation
 
 - **STOA MCP Gateway - Tests complets et outils additionnels**
@@ -627,8 +661,11 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - OpenAPI → MCP Tools converter (OpenAPI 3.x, Swagger 2.0)
   - 7 built-in tools (platform_info, list_apis, get_api_details, health_check, list_tools, get_tool_schema, search_apis)
   - Support HTTP PATCH method
+- [x] OPA Policy Engine Integration (CAB-122)
+  - Mode embedded (Python) + sidecar (Rego)
+  - Policies: authz, tenant isolation, rate limiting
+  - 31 tests, 93% coverage opa_client.py
 - [ ] Tool Registry CRDs Kubernetes (CAB-121)
-- [ ] OPA Policy Engine Integration (CAB-122)
 - [ ] Metering Pipeline Kafka + ksqlDB (CAB-123)
 - [ ] Portal Integration - Tool Catalog (CAB-124)
 

@@ -23,6 +23,7 @@ from ..models import (
     Resource,
     Prompt,
 )
+from ..policy import get_opa_client
 from ..services import get_tool_registry
 
 logger = structlog.get_logger(__name__)
@@ -133,7 +134,33 @@ async def invoke_tool(
             detail=f"Tool not found: {tool_name}",
         )
 
-    # TODO: Check user permissions for this tool
+    # Check user permissions via OPA policy
+    opa = await get_opa_client()
+    user_claims = {
+        "sub": user.sub,
+        "email": user.email,
+        "realm_access": {"roles": user.roles},
+        "tenant_id": getattr(user, "tenant_id", None),
+        "scope": getattr(user, "scope", ""),
+    }
+    tool_info = {
+        "name": tool_name,
+        "tenant_id": tool.tenant_id,
+        "arguments": invocation.arguments,
+    }
+
+    allowed, reason = await opa.check_authorization(user_claims, tool_info)
+    if not allowed:
+        logger.warning(
+            "Tool access denied by policy",
+            tool_name=tool_name,
+            user=user.sub,
+            reason=reason,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied: {reason}",
+        )
 
     # Override tool name from path
     invocation.name = tool_name

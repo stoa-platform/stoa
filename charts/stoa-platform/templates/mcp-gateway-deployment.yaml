@@ -1,0 +1,149 @@
+{{- if .Values.mcpGateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-mcp-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-gateway
+spec:
+  replicas: {{ .Values.mcpGateway.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "stoa-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mcp-gateway
+  template:
+    metadata:
+      labels:
+        {{- include "stoa-platform.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mcp-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      {{- if .Values.mcpGateway.k8s.enabled }}
+      serviceAccountName: {{ include "stoa-platform.fullname" . }}-mcp-gateway
+      {{- end }}
+      containers:
+        - name: mcp-gateway
+          image: "{{ .Values.mcpGateway.image.repository }}:{{ .Values.mcpGateway.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.mcpGateway.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # Application
+            - name: ENVIRONMENT
+              value: {{ .Values.global.environment | default "prod" | quote }}
+            - name: DEBUG
+              value: {{ .Values.mcpGateway.debug | default false | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.mcpGateway.logLevel | default "INFO" | quote }}
+            - name: LOG_FORMAT
+              value: "json"
+
+            # Domain
+            - name: BASE_DOMAIN
+              value: {{ .Values.global.baseDomain | quote }}
+
+            # Keycloak
+            - name: KEYCLOAK_URL
+              value: {{ .Values.keycloak.url | default (printf "https://auth.%s" .Values.global.baseDomain) | quote }}
+            - name: KEYCLOAK_REALM
+              value: {{ .Values.keycloak.realm | default "stoa" | quote }}
+            - name: KEYCLOAK_CLIENT_ID
+              value: {{ .Values.mcpGateway.keycloak.clientId | default "stoa-mcp-gateway" | quote }}
+            {{- if .Values.mcpGateway.keycloak.clientSecretRef }}
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mcpGateway.keycloak.clientSecretRef.name }}
+                  key: {{ .Values.mcpGateway.keycloak.clientSecretRef.key | default "client-secret" }}
+            {{- end }}
+
+            # OPA Policy Engine
+            - name: OPA_ENABLED
+              value: {{ .Values.mcpGateway.opa.enabled | default true | quote }}
+            - name: OPA_EMBEDDED
+              value: {{ .Values.mcpGateway.opa.embedded | default true | quote }}
+            {{- if not .Values.mcpGateway.opa.embedded }}
+            - name: OPA_URL
+              value: {{ .Values.mcpGateway.opa.url | default "http://localhost:8181" | quote }}
+            {{- end }}
+
+            # Metering
+            - name: METERING_ENABLED
+              value: {{ .Values.mcpGateway.metering.enabled | default true | quote }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.kafka.bootstrapServers | default "redpanda:9092" | quote }}
+            - name: METERING_TOPIC
+              value: {{ .Values.mcpGateway.metering.topic | default "stoa.metering.events" | quote }}
+
+            # Kubernetes Integration
+            - name: K8S_WATCHER_ENABLED
+              value: {{ .Values.mcpGateway.k8s.enabled | default false | quote }}
+            {{- if .Values.mcpGateway.k8s.watchNamespace }}
+            - name: K8S_WATCH_NAMESPACE
+              value: {{ .Values.mcpGateway.k8s.watchNamespace | quote }}
+            {{- end }}
+
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.mcpGateway.resources | nindent 12 }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+      {{- with .Values.mcpGateway.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.mcpGateway.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.mcpGateway.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-mcp-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-gateway
+spec:
+  type: {{ .Values.mcpGateway.service.type | default "ClusterIP" }}
+  ports:
+    - port: {{ .Values.mcpGateway.service.port | default 80 }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "stoa-platform.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-gateway
+{{- end }}

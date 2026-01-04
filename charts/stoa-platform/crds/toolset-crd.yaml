@@ -1,0 +1,268 @@
+# STOA Platform - ToolSet Custom Resource Definition
+# Groups multiple tools together for bulk management
+#
+# Example usage:
+#   apiVersion: stoa.cab-i.com/v1alpha1
+#   kind: ToolSet
+#   metadata:
+#     name: acme-payment-tools
+#     namespace: tenant-acme
+#   spec:
+#     displayName: ACME Payment API Tools
+#     openAPISpec:
+#       url: https://api.acme.com/v1/openapi.json
+#     selector:
+#       tags: [payments]
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: toolsets.stoa.cab-i.com
+  labels:
+    app.kubernetes.io/name: stoa-platform
+    app.kubernetes.io/component: mcp-gateway
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+spec:
+  group: stoa.cab-i.com
+  names:
+    kind: ToolSet
+    listKind: ToolSetList
+    plural: toolsets
+    singular: toolset
+    shortNames:
+      - ts
+    categories:
+      - stoa
+      - mcp
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Display Name
+          type: string
+          jsonPath: .spec.displayName
+        - name: Tools
+          type: integer
+          jsonPath: .status.toolCount
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - displayName
+              properties:
+                displayName:
+                  type: string
+                  description: Human-readable name for the toolset
+                  minLength: 1
+                  maxLength: 64
+                description:
+                  type: string
+                  description: Description of the toolset
+                  maxLength: 1024
+                openAPISpec:
+                  type: object
+                  description: OpenAPI specification source
+                  properties:
+                    url:
+                      type: string
+                      description: URL to fetch OpenAPI spec
+                      format: uri
+                    configMapRef:
+                      type: object
+                      description: ConfigMap containing OpenAPI spec
+                      properties:
+                        name:
+                          type: string
+                        key:
+                          type: string
+                          default: openapi.yaml
+                    secretRef:
+                      type: object
+                      description: Secret containing OpenAPI spec (for private APIs)
+                      properties:
+                        name:
+                          type: string
+                        key:
+                          type: string
+                          default: openapi.yaml
+                    inline:
+                      type: string
+                      description: Inline OpenAPI spec (JSON or YAML)
+                    refreshInterval:
+                      type: string
+                      description: How often to refresh the spec
+                      default: "1h"
+                      pattern: "^\\d+(s|m|h)$"
+                baseURL:
+                  type: string
+                  description: Override base URL for all generated tools
+                  format: uri
+                selector:
+                  type: object
+                  description: Filter which operations to include
+                  properties:
+                    tags:
+                      type: array
+                      description: Only include operations with these tags
+                      items:
+                        type: string
+                    excludeTags:
+                      type: array
+                      description: Exclude operations with these tags
+                      items:
+                        type: string
+                    methods:
+                      type: array
+                      description: Only include these HTTP methods
+                      items:
+                        type: string
+                        enum:
+                          - GET
+                          - POST
+                          - PUT
+                          - PATCH
+                          - DELETE
+                    pathPrefix:
+                      type: string
+                      description: Only include paths starting with this prefix
+                    operationIds:
+                      type: array
+                      description: Only include these specific operationIds
+                      items:
+                        type: string
+                toolDefaults:
+                  type: object
+                  description: Default values for generated tools
+                  properties:
+                    tags:
+                      type: array
+                      description: Additional tags to add to all tools
+                      items:
+                        type: string
+                    timeout:
+                      type: string
+                      default: "30s"
+                    rateLimit:
+                      type: object
+                      properties:
+                        requestsPerMinute:
+                          type: integer
+                          default: 60
+                        burst:
+                          type: integer
+                          default: 10
+                    authentication:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum:
+                            - none
+                            - bearer
+                            - basic
+                            - apiKey
+                            - oauth2
+                          default: bearer
+                        secretRef:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            key:
+                              type: string
+                              default: token
+                naming:
+                  type: object
+                  description: Tool naming configuration
+                  properties:
+                    prefix:
+                      type: string
+                      description: Prefix for all tool names
+                      pattern: "^[a-z][a-z0-9_]*$"
+                    suffix:
+                      type: string
+                      description: Suffix for all tool names
+                    useOperationId:
+                      type: boolean
+                      description: Use operationId as tool name if available
+                      default: true
+                enabled:
+                  type: boolean
+                  description: Whether the toolset is enabled
+                  default: true
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  description: Current phase of the toolset
+                  enum:
+                    - Pending
+                    - Syncing
+                    - Ready
+                    - Error
+                    - Disabled
+                toolCount:
+                  type: integer
+                  description: Number of tools generated
+                  default: 0
+                tools:
+                  type: array
+                  description: List of generated tool names
+                  items:
+                    type: string
+                lastSyncedAt:
+                  type: string
+                  format: date-time
+                  description: Last successful sync time
+                specHash:
+                  type: string
+                  description: Hash of the OpenAPI spec for change detection
+                lastError:
+                  type: string
+                  description: Last error message
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

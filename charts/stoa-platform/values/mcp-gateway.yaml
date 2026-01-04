@@ -1,0 +1,120 @@
+# =============================================================================
+# MCP Gateway Configuration
+# =============================================================================
+
+mcpGateway:
+  enabled: true
+
+  # Image configuration
+  image:
+    repository: ghcr.io/potomitan/stoa-mcp-gateway
+    tag: ""  # Defaults to Chart.AppVersion
+    pullPolicy: IfNotPresent
+
+  # Replicas
+  replicas: 1
+
+  # Logging
+  debug: false
+  logLevel: INFO
+
+  # Keycloak integration
+  keycloak:
+    clientId: stoa-mcp-gateway
+    clientSecretRef:
+      name: mcp-gateway-secrets
+      key: keycloak-client-secret
+
+  # OPA Policy Engine
+  opa:
+    enabled: true
+    embedded: true  # Use Python-based evaluator (no sidecar needed)
+    url: http://localhost:8181  # Only used if embedded=false
+
+  # Metering configuration
+  metering:
+    enabled: true
+    topic: stoa.metering.events
+    bufferSize: 100
+    flushInterval: 5
+
+  # Kubernetes CRD integration
+  k8s:
+    enabled: true
+    watchAllNamespaces: true  # Set to false for single-namespace mode
+    watchNamespace: ""  # Only used if watchAllNamespaces=false
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity
+  affinity: {}
+
+# =============================================================================
+# Example Tool CRD
+# =============================================================================
+# After deploying, you can create tools like this:
+#
+# apiVersion: stoa.cab-i.com/v1alpha1
+# kind: Tool
+# metadata:
+#   name: payment-search
+#   namespace: tenant-acme
+# spec:
+#   displayName: Search Payments
+#   description: Search payment records by various criteria
+#   endpoint: https://api.example.com/v1/payments/search
+#   method: GET
+#   tags:
+#     - payments
+#     - search
+#   inputSchema:
+#     properties:
+#       query:
+#         type: string
+#         description: Search query
+#       limit:
+#         type: integer
+#         default: 20
+#     required:
+#       - query
+
+# =============================================================================
+# Example ToolSet CRD
+# =============================================================================
+# Create multiple tools from an OpenAPI spec:
+#
+# apiVersion: stoa.cab-i.com/v1alpha1
+# kind: ToolSet
+# metadata:
+#   name: petstore-api
+#   namespace: tenant-acme
+# spec:
+#   displayName: Petstore API Tools
+#   openAPISpec:
+#     url: https://petstore.swagger.io/v2/swagger.json
+#   selector:
+#     tags:
+#       - pet
+#       - store
+#   toolDefaults:
+#     tags:
+#       - petstore
+#     timeout: 30s

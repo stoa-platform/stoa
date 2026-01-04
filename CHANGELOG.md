@@ -622,7 +622,11 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
   - Tool Registry avec built-in tools
   - Prometheus metrics middleware
   - Docker Compose dev stack (Keycloak, Prometheus, Grafana)
-- [ ] Gateway Tests & Tools Implementation (CAB-199)
+- [x] Gateway Tests & Tools Implementation (CAB-199)
+  - 118 tests, 85% coverage global
+  - OpenAPI → MCP Tools converter (OpenAPI 3.x, Swagger 2.0)
+  - 7 built-in tools (platform_info, list_apis, get_api_details, health_check, list_tools, get_tool_schema, search_apis)
+  - Support HTTP PATCH method
 - [ ] Tool Registry CRDs Kubernetes (CAB-121)
 - [ ] OPA Policy Engine Integration (CAB-122)
 - [ ] Metering Pipeline Kafka + ksqlDB (CAB-123)

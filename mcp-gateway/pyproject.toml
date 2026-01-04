@@ -36,6 +36,7 @@ dependencies = [
     "opentelemetry-api>=1.22.0",
     "opentelemetry-sdk>=1.22.0",
     "opentelemetry-instrumentation-fastapi>=0.43b0",
+    "aiokafka>=0.10.0",
 ]
 
 [project.optional-dependencies]

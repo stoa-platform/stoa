@@ -79,6 +79,13 @@ class Settings(BaseSettings):
     opa_embedded: bool = True  # Use embedded evaluator (no sidecar needed)
     opa_policy_path: str = "policies"  # Path to Rego policies
 
+    # Metering & Billing
+    metering_enabled: bool = True
+    kafka_bootstrap_servers: str = "localhost:9092"
+    metering_topic: str = "stoa.metering.events"
+    metering_buffer_size: int = 100
+    metering_flush_interval: float = 5.0
+
     @model_validator(mode="after")
     def derive_urls_from_base_domain(self) -> "Settings":
         """Derive service URLs from base_domain if not explicitly set."""

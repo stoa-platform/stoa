@@ -116,6 +116,89 @@ class ToolRegistry:
             )
         )
 
+        # Health check tool
+        self.register(
+            Tool(
+                name="stoa_health_check",
+                description="Check the health status of STOA platform services",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "service": {
+                            "type": "string",
+                            "description": "Specific service to check (api, gateway, auth, all)",
+                            "enum": ["api", "gateway", "auth", "all"],
+                            "default": "all",
+                        },
+                    },
+                    required=[],
+                ),
+                tags=["platform", "health"],
+            )
+        )
+
+        # List available tools
+        self.register(
+            Tool(
+                name="stoa_list_tools",
+                description="List all available MCP tools with their descriptions",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "tag": {
+                            "type": "string",
+                            "description": "Filter tools by tag",
+                        },
+                        "include_schema": {
+                            "type": "boolean",
+                            "description": "Include input schema in response",
+                            "default": False,
+                        },
+                    },
+                    required=[],
+                ),
+                tags=["platform", "discovery"],
+            )
+        )
+
+        # Get tool schema
+        self.register(
+            Tool(
+                name="stoa_get_tool_schema",
+                description="Get the input schema for a specific tool",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "tool_name": {
+                            "type": "string",
+                            "description": "Name of the tool to get schema for",
+                        },
+                    },
+                    required=["tool_name"],
+                ),
+                tags=["platform", "discovery"],
+            )
+        )
+
+        # Search APIs
+        self.register(
+            Tool(
+                name="stoa_search_apis",
+                description="Search for APIs by keyword in name or description",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "query": {
+                            "type": "string",
+                            "description": "Search query string",
+                        },
+                        "tenant_id": {
+                            "type": "string",
+                            "description": "Filter by tenant ID",
+                        },
+                    },
+                    required=["query"],
+                ),
+                tags=["platform", "search"],
+            )
+        )
+
         logger.info("Registered builtin tools", count=len(self._tools))
 
     def register(self, tool: Tool) -> None:
@@ -279,10 +362,144 @@ class ToolRegistry:
                 content=[TextContent(text=f"API details for {api_id} - coming soon")],
             )
 
+        elif tool.name == "stoa_health_check":
+            service = arguments.get("service", "all")
+            health_status = await self._check_health(service, settings)
+            return ToolResult(
+                content=[TextContent(text=str(health_status))],
+            )
+
+        elif tool.name == "stoa_list_tools":
+            tag = arguments.get("tag")
+            include_schema = arguments.get("include_schema", False)
+            tools_info = self._get_tools_info(tag, include_schema)
+            return ToolResult(
+                content=[TextContent(text=str(tools_info))],
+            )
+
+        elif tool.name == "stoa_get_tool_schema":
+            tool_name = arguments.get("tool_name")
+            if not tool_name:
+                return ToolResult(
+                    content=[TextContent(text="tool_name is required")],
+                    is_error=True,
+                )
+            schema_info = self._get_tool_schema(tool_name)
+            if schema_info is None:
+                return ToolResult(
+                    content=[TextContent(text=f"Tool not found: {tool_name}")],
+                    is_error=True,
+                )
+            return ToolResult(
+                content=[TextContent(text=str(schema_info))],
+            )
+
+        elif tool.name == "stoa_search_apis":
+            query = arguments.get("query")
+            if not query:
+                return ToolResult(
+                    content=[TextContent(text="query is required")],
+                    is_error=True,
+                )
+            # TODO: Implement full-text search via Control Plane API
+            search_results = {
+                "query": query,
+                "results": [],
+                "total": 0,
+                "message": "API search integration coming soon",
+            }
+            return ToolResult(
+                content=[TextContent(text=str(search_results))],
+            )
+
         return ToolResult(
             content=[TextContent(text=f"Unknown builtin tool: {tool.name}")],
             is_error=True,
         )
+
+    async def _check_health(
+        self,
+        service: str,
+        settings: Any,
+    ) -> dict[str, Any]:
+        """Check health of platform services."""
+        health: dict[str, Any] = {
+            "status": "healthy",
+            "services": {},
+        }
+
+        services_to_check = []
+        if service == "all":
+            services_to_check = ["api", "gateway", "auth"]
+        else:
+            services_to_check = [service]
+
+        for svc in services_to_check:
+            try:
+                if svc == "api":
+                    url = f"https://api.{settings.base_domain}/health"
+                elif svc == "gateway":
+                    url = f"https://gateway.{settings.base_domain}/health"
+                elif svc == "auth":
+                    url = f"https://auth.{settings.base_domain}/health"
+                else:
+                    continue
+
+                if self._http_client:
+                    response = await self._http_client.get(url, timeout=5.0)
+                    health["services"][svc] = {
+                        "status": "healthy" if response.status_code == 200 else "unhealthy",
+                        "status_code": response.status_code,
+                    }
+                else:
+                    health["services"][svc] = {"status": "unknown", "error": "HTTP client not initialized"}
+            except Exception as e:
+                health["services"][svc] = {"status": "unhealthy", "error": str(e)}
+                health["status"] = "degraded"
+
+        return health
+
+    def _get_tools_info(
+        self,
+        tag: str | None,
+        include_schema: bool,
+    ) -> dict[str, Any]:
+        """Get information about available tools."""
+        tools_list = []
+        for tool in self._tools.values():
+            if tag and tag not in tool.tags:
+                continue
+            tool_info: dict[str, Any] = {
+                "name": tool.name,
+                "description": tool.description,
+                "tags": tool.tags,
+            }
+            if include_schema:
+                tool_info["input_schema"] = {
+                    "properties": tool.input_schema.properties,
+                    "required": tool.input_schema.required,
+                }
+            tools_list.append(tool_info)
+
+        return {
+            "tools": tools_list,
+            "total": len(tools_list),
+        }
+
+    def _get_tool_schema(self, tool_name: str) -> dict[str, Any] | None:
+        """Get the schema for a specific tool."""
+        tool = self._tools.get(tool_name)
+        if not tool:
+            return None
+        return {
+            "name": tool.name,
+            "description": tool.description,
+            "input_schema": {
+                "type": "object",
+                "properties": tool.input_schema.properties,
+                "required": tool.input_schema.required,
+            },
+        }
 
     async def _invoke_api(
         self,
@@ -336,6 +553,12 @@ class ToolRegistry:
                 response = await self._http_client.delete(
                     tool.endpoint,
                     params=arguments,
+                    headers=headers,
+                )
+            elif method == "PATCH":
+                response = await self._http_client.patch(
+                    tool.endpoint,
+                    json=arguments,
                     headers=headers,
                 )
             else:

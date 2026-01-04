@@ -8,6 +8,58 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ## [Unreleased]
 
+### Ajouté (2026-01-04) - CAB-199 MCP Gateway Tests & Tools Implementation
+
+- **STOA MCP Gateway - Tests complets et outils additionnels**
+  - `tests/test_tool_registry.py` - 46 tests pour le registre de tools
+    - Tests basic: register, unregister, get, overwrite
+    - Tests list: filter by tenant, by tag, pagination
+    - Tests lifecycle: startup, shutdown, HTTP client
+    - Tests invocation: builtin tools, API-backed tools, error handling
+    - Tests HTTP methods: GET, POST, PUT, DELETE, PATCH
+    - Tests singleton pattern
+    - Tests nouveaux outils built-in
+
+  - `tests/test_openapi_converter.py` - 30 tests pour la conversion OpenAPI
+    - Tests basic: empty spec, single/multiple operations
+    - Tests conversion: operationId, name generation, description
+    - Tests parameters: query, path, enum, required
+    - Tests request body: properties extraction
+    - Tests base URL: OpenAPI 3.x, Swagger 2.0, override
+    - Tests metadata: api_id, tenant_id, version
+    - Tests edge cases: $ref, missing schema, non-dict paths
+
+  - `tests/test_mcp.py` - 25 tests pour les handlers MCP
+    - Tests server info, tools, resources, prompts endpoints
+    - Tests pagination et filtres
+    - Tests authentication avec dependency override
+    - Tests response format (camelCase aliases)
+
+  - `src/services/openapi_converter.py` - Convertisseur OpenAPI → MCP Tools
+    - Support OpenAPI 3.0.x, 3.1.x et Swagger 2.0
+    - Extraction des paramètres (path, query, header)
+    - Extraction du request body (JSON)
+    - Génération automatique du nom si pas d'operationId
+    - Sanitization des noms pour compatibilité MCP
+    - Métadonnées STOA (api_id, tenant_id, base_url)
+
+  - **Nouveaux outils built-in** ajoutés au registre:
+    - `stoa_health_check` - Vérification santé des services (api, gateway, auth)
+    - `stoa_list_tools` - Liste des outils disponibles avec filtrage par tag
+    - `stoa_get_tool_schema` - Récupération du schema d'un outil
+    - `stoa_search_apis` - Recherche d'APIs par mot-clé (placeholder)
+
+  - **Améliorations tool_registry.py**:
+    - Support méthode HTTP PATCH
+    - 7 outils built-in au total
+    - Méthodes helper: `_check_health()`, `_get_tools_info()`, `_get_tool_schema()`
+
+  - **Métriques**: 118 tests, 85% coverage global
+    - tool_registry.py: 96% coverage
+    - openapi_converter.py: 91% coverage
+    - mcp.py (handlers): 98% coverage
+    - models/mcp.py: 100% coverage
+
 ### Ajouté (2026-01-03) - CAB-120 MCP Gateway Auth + MCP Base
 
 - **STOA MCP Gateway - Phase 2** - Auth + MCP Base

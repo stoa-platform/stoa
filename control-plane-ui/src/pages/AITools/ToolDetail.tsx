@@ -6,17 +6,14 @@ import {
   Tag,
   ExternalLink,
   Clock,
-  Bell,
-  BellOff,
   Code,
   FileJson,
   PlayCircle,
   AlertCircle,
-  CheckCircle,
 } from 'lucide-react';
 import { mcpGatewayService } from '../../services/mcpGatewayApi';
 import { ToolSchemaViewer, SchemaJsonViewer, QuickStartGuide } from '../../components/tools';
-import type { MCPTool, ToolSubscription, ToolUsageSummary } from '../../types';
+import type { MCPTool, ToolUsageSummary } from '../../types';
 
 type TabType = 'overview' | 'schema' | 'quickstart' | 'usage';
 
@@ -26,12 +23,10 @@ export function ToolDetail() {
 
   // State
   const [tool, setTool] = useState<MCPTool | null>(null);
-  const [subscription, setSubscription] = useState<ToolSubscription | null>(null);
   const [usage, setUsage] = useState<ToolUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
-  const [subscribing, setSubscribing] = useState(false);
 
   // Load data
   useEffect(() => {
@@ -42,14 +37,12 @@ export function ToolDetail() {
         setLoading(true);
         setError(null);
 
-        const [toolData, subscriptions, usageData] = await Promise.all([
+        const [toolData, usageData] = await Promise.all([
           mcpGatewayService.getTool(toolName),
-          mcpGatewayService.getMySubscriptions().catch(() => []),
           mcpGatewayService.getToolUsage(toolName, { period: 'month' }).catch(() => null),
         ]);
 
         setTool(toolData);
-        setSubscription(subscriptions.find((s) => s.toolName === toolName) || null);
         setUsage(usageData);
       } catch (err) {
         console.error('Failed to load tool:', err);
@@ -61,26 +54,6 @@ export function ToolDetail() {
 
     loadTool();
   }, [toolName]);
-
-  // Handlers
-  const handleSubscribe = async () => {
-    if (!tool) return;
-
-    try {
-      setSubscribing(true);
-      if (subscription) {
-        await mcpGatewayService.unsubscribeTool(subscription.id);
-        setSubscription(null);
-      } else {
-        const newSub = await mcpGatewayService.subscribeTool({ toolName: tool.name });
-        setSubscription(newSub);
-      }
-    } catch (err) {
-      console.error('Failed to update subscription:', err);
-    } finally {
-      setSubscribing(false);
-    }
-  };
 
   const methodColors: Record<string, string> = {
     GET: 'bg-green-100 text-green-800 border-green-200',
@@ -183,45 +156,7 @@ export function ToolDetail() {
               </div>
             </div>
           </div>
-
-          {/* Subscribe Button */}
-          <button
-            onClick={handleSubscribe}
-            disabled={subscribing}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              subscription
-                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            } ${subscribing ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {subscription ? (
-              <>
-                <BellOff className="h-4 w-4" />
-                Unsubscribe
-              </>
-            ) : (
-              <>
-                <Bell className="h-4 w-4" />
-                Subscribe
-              </>
-            )}
-          </button>
         </div>
-
-        {/* Subscription Status */}
-        {subscription && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center gap-2 text-sm text-green-600">
-              <CheckCircle className="h-4 w-4" />
-              <span>Subscribed since {new Date(subscription.subscribedAt).toLocaleDateString()}</span>
-              {subscription.usageCount > 0 && (
-                <span className="text-gray-400 ml-2">
-                  {subscription.usageCount} calls made
-                </span>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Tabs */}

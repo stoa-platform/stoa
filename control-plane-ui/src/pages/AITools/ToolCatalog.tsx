@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Filter, Tag, RefreshCw, Wrench, AlertCircle } from 'lucide-react';
 import { mcpGatewayService } from '../../services/mcpGatewayApi';
 import { ToolCard } from '../../components/tools';
-import type { MCPTool, ToolSubscription } from '../../types';
+import type { MCPTool } from '../../types';
 
 export function ToolCatalog() {
   const navigate = useNavigate();
@@ -11,7 +11,6 @@ export function ToolCatalog() {
 
   // State
   const [tools, setTools] = useState<MCPTool[]>([]);
-  const [subscriptions, setSubscriptions] = useState<ToolSubscription[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +27,7 @@ export function ToolCatalog() {
       setLoading(true);
       setError(null);
 
-      const [toolsResponse, tagsResponse, subsResponse] = await Promise.all([
+      const [toolsResponse, tagsResponse] = await Promise.all([
         mcpGatewayService.getTools({
           search: searchQuery || undefined,
           tag: selectedTag || undefined,
@@ -36,13 +35,11 @@ export function ToolCatalog() {
           limit: 50,
         }),
         mcpGatewayService.getToolTags(),
-        mcpGatewayService.getMySubscriptions().catch(() => []),
       ]);
 
       setTools(toolsResponse.tools);
       setTotalCount(toolsResponse.totalCount);
       setTags(tagsResponse);
-      setSubscriptions(subsResponse);
     } catch (err) {
       console.error('Failed to load tools:', err);
       setError(err instanceof Error ? err.message : 'Failed to load tools');
@@ -80,25 +77,6 @@ export function ToolCatalog() {
     navigate(`/ai-tools/${encodeURIComponent(tool.name)}`);
   };
 
-  const handleSubscribe = async (tool: MCPTool) => {
-    try {
-      const existingSub = subscriptions.find((s) => s.toolName === tool.name);
-      if (existingSub) {
-        await mcpGatewayService.unsubscribeTool(existingSub.id);
-        setSubscriptions((prev) => prev.filter((s) => s.id !== existingSub.id));
-      } else {
-        const newSub = await mcpGatewayService.subscribeTool({ toolName: tool.name });
-        setSubscriptions((prev) => [...prev, newSub]);
-      }
-    } catch (err) {
-      console.error('Failed to update subscription:', err);
-    }
-  };
-
-  const isSubscribed = (toolName: string): boolean => {
-    return subscriptions.some((s) => s.toolName === toolName && s.status === 'active');
-  };
-
   const clearFilters = () => {
     setSearchParams(new URLSearchParams());
   };
@@ -112,7 +90,7 @@ export function ToolCatalog() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">AI Tool Catalog</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Browse and subscribe to MCP tools for AI-powered API interactions
+            Browse MCP tools available for AI-powered API interactions
           </p>
         </div>
         <button
@@ -219,9 +197,6 @@ export function ToolCatalog() {
             <span>
               Showing {tools.length} of {totalCount} tools
             </span>
-            <span>
-              {subscriptions.length} subscribed
-            </span>
           </div>
 
           {/* Tools Grid */}
@@ -232,8 +207,6 @@ export function ToolCatalog() {
                   key={tool.name}
                   tool={tool}
                   onClick={() => handleToolClick(tool)}
-                  onSubscribe={() => handleSubscribe(tool)}
-                  isSubscribed={isSubscribed(tool.name)}
                 />
               ))}
             </div>

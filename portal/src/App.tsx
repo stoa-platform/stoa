@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { HomePage } from './pages/Home';
 import { ToolsCatalog, ToolDetail } from './pages/tools';
 import { MySubscriptions } from './pages/subscriptions/MySubscriptions';
-import { APICatalog, APIDetail } from './pages/apis';
+import { APICatalog, APIDetail, APITestingSandbox } from './pages/apis';
 import { MyApplications, ApplicationDetail } from './pages/apps';
 import { ProfilePage } from './pages/profile/Profile';
 import { config } from './config';
@@ -87,6 +87,7 @@ function AppContent() {
           {/* API Consumer Routes */}
           <Route path="/apis" element={<APICatalog />} />
           <Route path="/apis/:id" element={<APIDetail />} />
+          <Route path="/apis/:id/test" element={<APITestingSandbox />} />
           {/* Consumer Applications */}
           <Route path="/apps" element={<MyApplications />} />
           <Route path="/apps/:id" element={<ApplicationDetail />} />

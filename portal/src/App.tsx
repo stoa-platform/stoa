@@ -2,9 +2,10 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { HomePage } from './pages/Home';
-import { ToolsCatalog } from './pages/tools/ToolsCatalog';
+import { ToolsCatalog, ToolDetail } from './pages/tools';
 import { MySubscriptions } from './pages/subscriptions/MySubscriptions';
-import { APICatalog } from './pages/apis/APICatalog';
+import { APICatalog, APIDetail } from './pages/apis';
+import { MyApplications, ApplicationDetail } from './pages/apps';
 import { ProfilePage } from './pages/profile/Profile';
 import { config } from './config';
 
@@ -79,9 +80,16 @@ function AppContent() {
       <Layout>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          {/* MCP Tools Routes */}
           <Route path="/tools" element={<ToolsCatalog />} />
+          <Route path="/tools/:id" element={<ToolDetail />} />
           <Route path="/subscriptions" element={<MySubscriptions />} />
+          {/* API Consumer Routes */}
           <Route path="/apis" element={<APICatalog />} />
+          <Route path="/apis/:id" element={<APIDetail />} />
+          {/* Consumer Applications */}
+          <Route path="/apps" element={<MyApplications />} />
+          <Route path="/apps/:id" element={<ApplicationDetail />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

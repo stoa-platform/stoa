@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Wrench, CreditCard, BookOpen, User, X } from 'lucide-react';
+import { Home, Wrench, CreditCard, BookOpen, User, X, AppWindow } from 'lucide-react';
 import { config } from '../../config';
 
 interface SidebarProps {
@@ -10,8 +10,9 @@ interface SidebarProps {
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
   { name: 'MCP Tools', href: '/tools', icon: Wrench, enabled: config.features.enableMCPTools },
-  { name: 'My Subscriptions', href: '/subscriptions', icon: CreditCard, enabled: config.features.enableSubscriptions },
   { name: 'API Catalog', href: '/apis', icon: BookOpen, enabled: config.features.enableAPICatalog },
+  { name: 'My Apps', href: '/apps', icon: AppWindow, enabled: config.features.enableAPICatalog },
+  { name: 'My Subscriptions', href: '/subscriptions', icon: CreditCard, enabled: config.features.enableSubscriptions },
   { name: 'Profile', href: '/profile', icon: User },
 ].filter(item => item.enabled !== false);
 

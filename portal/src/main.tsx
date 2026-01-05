@@ -1,10 +1,21 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider as OidcProvider } from 'react-oidc-context';
 import App from './App';
 import { config } from './config';
 import './index.css';
+
+// React Query client configuration
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const oidcConfig = {
   authority: config.keycloak.authority,
@@ -24,10 +35,12 @@ const oidcConfig = {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <OidcProvider {...oidcConfig}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </OidcProvider>
+    <QueryClientProvider client={queryClient}>
+      <OidcProvider {...oidcConfig}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </OidcProvider>
+    </QueryClientProvider>
   </React.StrictMode>
 );

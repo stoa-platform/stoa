@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth as useOidcAuth, hasAuthParams } from 'react-oidc-context';
 import type { User } from '../types';
+import { setAccessToken } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -48,8 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (oidc.user) {
       setUser(extractUserFromToken(oidc.user));
+      // Sync access token with API client
+      setAccessToken(oidc.user.access_token || null);
     } else {
       setUser(null);
+      setAccessToken(null);
     }
   }, [oidc.user]);
 

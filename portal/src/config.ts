@@ -57,12 +57,25 @@ export const config = {
     },
   },
 
+  // Portal Mode (production vs non-production)
+  portalMode: (import.meta.env.VITE_PORTAL_MODE as 'production' | 'non-production') || 'production',
+
   // Feature Flags
   features: {
     enableMCPTools: import.meta.env.VITE_ENABLE_MCP_TOOLS !== 'false',
     enableSubscriptions: import.meta.env.VITE_ENABLE_SUBSCRIPTIONS !== 'false',
-    enableAPICatalog: import.meta.env.VITE_ENABLE_API_CATALOG === 'true', // Future feature
+    enableAPICatalog: import.meta.env.VITE_ENABLE_API_CATALOG !== 'false', // Enabled by default
+    enableApplications: import.meta.env.VITE_ENABLE_APPLICATIONS !== 'false', // Consumer apps
+    enableAPITesting: import.meta.env.VITE_ENABLE_API_TESTING !== 'false', // Sandbox testing
     enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true',
+  },
+
+  // API Testing Configuration
+  testing: {
+    // Available environments for this portal instance
+    availableEnvironments: (import.meta.env.VITE_AVAILABLE_ENVIRONMENTS || 'prod').split(','),
+    // Require confirmation before testing (for production portal)
+    requireSandboxConfirmation: import.meta.env.VITE_REQUIRE_SANDBOX_CONFIRMATION === 'true',
   },
 
   // UI Configuration

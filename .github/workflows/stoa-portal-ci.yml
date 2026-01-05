@@ -215,10 +215,11 @@ jobs:
     name: Notify
     runs-on: ubuntu-latest
     needs: [build, docker, deploy]
-    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && secrets.SLACK_WEBHOOK_URL != ''
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     steps:
       - name: Send Slack notification
+        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
         uses: slackapi/slack-github-action@v1.24.0
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -255,3 +256,7 @@ jobs:
                 }
               ]
             }
+
+      - name: Skip notification
+        if: ${{ secrets.SLACK_WEBHOOK_URL == '' }}
+        run: echo "Slack notification skipped - SLACK_WEBHOOK_URL not configured"

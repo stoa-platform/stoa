@@ -71,15 +71,17 @@ ENV VITE_BASE_DOMAIN=$VITE_BASE_DOMAIN \
 
 RUN npm run build
 
-# Production stage
-FROM nginx:alpine
+# Production stage - Use nginx-unprivileged for Kubernetes compatibility
+FROM nginxinc/nginx-unprivileged:alpine
 
-# Copy custom nginx config
+# Copy custom nginx config (nginx-unprivileged uses 8080 by default)
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built app
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-EXPOSE 80
+# nginx-unprivileged listens on 8080
+EXPOSE 8080
 
+# nginx-unprivileged already runs as non-root user (nginx:101)
 CMD ["nginx", "-g", "daemon off;"]

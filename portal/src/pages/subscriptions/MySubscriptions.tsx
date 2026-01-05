@@ -1,7 +1,10 @@
 /**
  * My Subscriptions Page
  *
- * Lists user's API subscriptions with usage statistics.
+ * Lists user's MCP Tool subscriptions with usage statistics.
+ * Uses MCP Gateway endpoints (mcp.stoa.cab-i.com)
+ *
+ * Reference: Linear CAB-247
  */
 
 import { useState } from 'react';
@@ -12,44 +15,61 @@ import {
   AlertCircle,
   Loader2,
   RefreshCw,
-  BookOpen,
+  Wrench,
   Search,
   Filter,
+  Key,
+  Clock,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
-import { useSubscriptions, useCancelSubscription } from '../../hooks/useSubscriptions';
-import { SubscriptionCard } from '../../components/subscriptions/SubscriptionCard';
-import type { APISubscription } from '../../types';
+import { useSubscriptions, useRevokeSubscription } from '../../hooks/useSubscriptions';
+import type { MCPSubscription } from '../../types';
 
-type StatusFilter = 'all' | 'active' | 'pending' | 'suspended' | 'cancelled';
+type StatusFilter = 'all' | 'active' | 'expired' | 'revoked';
+
+const statusConfig: Record<MCPSubscription['status'], {
+  label: string;
+  color: string;
+  bgColor: string;
+  icon: typeof CheckCircle;
+}> = {
+  active: { label: 'Active', color: 'text-green-700', bgColor: 'bg-green-100', icon: CheckCircle },
+  expired: { label: 'Expired', color: 'text-amber-700', bgColor: 'bg-amber-100', icon: Clock },
+  revoked: { label: 'Revoked', color: 'text-red-700', bgColor: 'bg-red-100', icon: XCircle },
+};
 
 export function MySubscriptions() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const {
-    data: subscriptions,
+    data: subscriptionsData,
     isLoading,
     isError,
     error,
     refetch,
   } = useSubscriptions();
 
-  const cancelMutation = useCancelSubscription();
+  const revokeMutation = useRevokeSubscription();
 
-  const handleCancelSubscription = async (subscriptionId: string) => {
-    if (confirm('Are you sure you want to cancel this subscription?')) {
-      setCancellingId(subscriptionId);
+  const handleRevokeSubscription = async (subscriptionId: string) => {
+    if (confirm('Are you sure you want to revoke this subscription? Your API key will be invalidated immediately.')) {
+      setRevokingId(subscriptionId);
       try {
-        await cancelMutation.mutateAsync(subscriptionId);
+        await revokeMutation.mutateAsync(subscriptionId);
       } finally {
-        setCancellingId(null);
+        setRevokingId(null);
       }
     }
   };
 
+  // Get subscriptions array from response
+  const allSubscriptions = subscriptionsData?.subscriptions || [];
+
   // Filter subscriptions
-  const filteredSubscriptions = subscriptions?.items.filter((sub: APISubscription) => {
+  const filteredSubscriptions = allSubscriptions.filter((sub: MCPSubscription) => {
     // Status filter
     if (statusFilter !== 'all' && sub.status !== statusFilter) {
       return false;
@@ -57,19 +77,18 @@ export function MySubscriptions() {
     // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      const apiName = sub.api?.name?.toLowerCase() || '';
-      const appName = sub.application?.name?.toLowerCase() || '';
-      return apiName.includes(query) || appName.includes(query);
+      const toolId = sub.tool_id?.toLowerCase() || '';
+      return toolId.includes(query);
     }
     return true;
-  }) || [];
+  });
 
   // Calculate stats
-  const activeCount = subscriptions?.items.filter((s: APISubscription) => s.status === 'active').length || 0;
-  const totalCallsToday = subscriptions?.items.reduce((acc: number, s: APISubscription) => {
-    return acc + (s.usage?.callsToday || 0);
-  }, 0) || 0;
-  const pendingCount = subscriptions?.items.filter((s: APISubscription) => s.status === 'pending').length || 0;
+  const activeCount = allSubscriptions.filter((s: MCPSubscription) => s.status === 'active').length;
+  const totalUsage = allSubscriptions.reduce((acc: number, s: MCPSubscription) => {
+    return acc + (s.usage_count || 0);
+  }, 0);
+  const expiredCount = allSubscriptions.filter((s: MCPSubscription) => s.status === 'expired').length;
 
   return (
     <div className="space-y-6">
@@ -78,7 +97,7 @@ export function MySubscriptions() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Subscriptions</h1>
           <p className="text-gray-500 mt-1">
-            Manage your API subscriptions and monitor usage
+            Manage your MCP tool subscriptions and API keys
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -91,11 +110,11 @@ export function MySubscriptions() {
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
           <Link
-            to="/apis"
+            to="/tools"
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
           >
-            <BookOpen className="h-4 w-4" />
-            Browse APIs
+            <Wrench className="h-4 w-4" />
+            Browse Tools
           </Link>
         </div>
       </div>
@@ -105,7 +124,7 @@ export function MySubscriptions() {
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary-50 rounded-lg">
-              <CreditCard className="h-5 w-5 text-primary-600" />
+              <Key className="h-5 w-5 text-primary-600" />
             </div>
             <div>
               {isLoading ? (
@@ -129,8 +148,8 @@ export function MySubscriptions() {
                 <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
               ) : (
                 <>
-                  <p className="text-2xl font-bold text-gray-900">{totalCallsToday.toLocaleString()}</p>
-                  <p className="text-sm text-gray-500">API Calls Today</p>
+                  <p className="text-2xl font-bold text-gray-900">{totalUsage.toLocaleString()}</p>
+                  <p className="text-sm text-gray-500">Total API Calls</p>
                 </>
               )}
             </div>
@@ -146,8 +165,8 @@ export function MySubscriptions() {
                 <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
               ) : (
                 <>
-                  <p className="text-2xl font-bold text-gray-900">{pendingCount}</p>
-                  <p className="text-sm text-gray-500">Pending Approval</p>
+                  <p className="text-2xl font-bold text-gray-900">{expiredCount}</p>
+                  <p className="text-sm text-gray-500">Expired</p>
                 </>
               )}
             </div>
@@ -162,7 +181,7 @@ export function MySubscriptions() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by API or application name..."
+            placeholder="Search by tool name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -179,9 +198,8 @@ export function MySubscriptions() {
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
-            <option value="pending">Pending</option>
-            <option value="suspended">Suspended</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="expired">Expired</option>
+            <option value="revoked">Revoked</option>
           </select>
         </div>
       </div>
@@ -221,19 +239,19 @@ export function MySubscriptions() {
           <div className="inline-flex p-4 bg-gray-100 rounded-full mb-4">
             <CreditCard className="h-8 w-8 text-gray-400" />
           </div>
-          {subscriptions?.items.length === 0 ? (
+          {allSubscriptions.length === 0 ? (
             <>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">No Subscriptions Yet</h2>
               <p className="text-gray-500 max-w-md mx-auto mb-6">
-                Subscribe to APIs to start using them in your applications.
-                Browse the API catalog to find APIs that match your needs.
+                Subscribe to MCP tools to start using them with AI agents.
+                Browse the tools catalog to find tools that match your needs.
               </p>
               <Link
-                to="/apis"
+                to="/tools"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
               >
-                <BookOpen className="h-4 w-4" />
-                Browse API Catalog
+                <Wrench className="h-4 w-4" />
+                Browse Tools Catalog
               </Link>
             </>
           ) : (
@@ -266,14 +284,63 @@ export function MySubscriptions() {
             {statusFilter !== 'all' && ` (${statusFilter})`}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredSubscriptions.map((subscription: APISubscription) => (
-              <SubscriptionCard
-                key={subscription.id}
-                subscription={subscription}
-                onCancel={handleCancelSubscription}
-                isCancelling={cancellingId === subscription.id}
-              />
-            ))}
+            {filteredSubscriptions.map((subscription: MCPSubscription) => {
+              const status = statusConfig[subscription.status];
+              const StatusIcon = status.icon;
+
+              return (
+                <div
+                  key={subscription.id}
+                  className="bg-white rounded-lg border border-gray-200 p-5 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="p-2 bg-primary-50 rounded-lg">
+                      <Key className="h-5 w-5 text-primary-600" />
+                    </div>
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded ${status.bgColor} ${status.color}`}>
+                      <StatusIcon className="h-3 w-3" />
+                      {status.label}
+                    </span>
+                  </div>
+
+                  <h3 className="font-semibold text-gray-900 mb-1">
+                    {subscription.tool_id}
+                  </h3>
+
+                  <div className="text-sm text-gray-500 space-y-1">
+                    <p>Created: {new Date(subscription.created_at).toLocaleDateString()}</p>
+                    {subscription.expires_at && (
+                      <p>Expires: {new Date(subscription.expires_at).toLocaleDateString()}</p>
+                    )}
+                    {subscription.last_used_at && (
+                      <p>Last used: {new Date(subscription.last_used_at).toLocaleDateString()}</p>
+                    )}
+                    {subscription.usage_count !== undefined && (
+                      <p>Usage: {subscription.usage_count.toLocaleString()} calls</p>
+                    )}
+                  </div>
+
+                  {subscription.status === 'active' && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
+                      <button
+                        onClick={() => handleRevokeSubscription(subscription.id)}
+                        disabled={revokingId === subscription.id}
+                        className="text-sm text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
+                      >
+                        {revokingId === subscription.id ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Revoking...
+                          </span>
+                        ) : (
+                          'Revoke'
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

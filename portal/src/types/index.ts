@@ -11,18 +11,20 @@ export interface User {
   organization?: string;
 }
 
-// MCP Tool types
+// MCP Tool types (aligned with MCP Gateway response format)
 export interface MCPTool {
-  id: string;
-  name: string;
-  displayName: string;
+  name: string;              // Tool identifier (e.g., "tenant-acme__create-order")
+  displayName?: string;      // Human-friendly name
   description: string;
-  version: string;
+  tags?: string[];           // Categories/tags for filtering
+  tenant_id?: string;        // Owning tenant
+  inputSchema?: MCPInputSchema;  // JSON Schema for tool arguments
+  // Legacy fields for backward compatibility
+  id?: string;
+  version?: string;
   category?: string;
-  tags?: string[];
-  endpoint: string;
-  method: string;
-  inputSchema?: object;
+  endpoint?: string;
+  method?: string;
   outputSchema?: object;
   rateLimit?: {
     requests: number;
@@ -33,12 +35,93 @@ export interface MCPTool {
     pricePerCall?: number;
     currency?: string;
   };
-  status: 'active' | 'deprecated' | 'beta';
-  createdAt: string;
-  updatedAt: string;
+  status?: 'active' | 'deprecated' | 'beta';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-// Subscription types
+// MCP Input Schema (JSON Schema format)
+export interface MCPInputSchema {
+  type: 'object';
+  properties?: Record<string, MCPPropertySchema>;
+  required?: string[];
+  additionalProperties?: boolean;
+}
+
+export interface MCPPropertySchema {
+  type: string;
+  description?: string;
+  enum?: string[];
+  default?: unknown;
+  format?: string;
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  items?: MCPPropertySchema;
+}
+
+// MCP Tool invocation result
+export interface MCPToolInvocation {
+  toolName: string;
+  status: 'success' | 'error';
+  result?: unknown;
+  error?: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+  executionTimeMs: number;
+  timestamp: string;
+}
+
+// MCP Server Info
+export interface MCPServerInfo {
+  name: string;
+  version: string;
+  protocolVersion?: string;
+  capabilities?: {
+    tools?: boolean;
+    resources?: boolean;
+    prompts?: boolean;
+  };
+}
+
+// ============ MCP Subscription types (CAB-247) ============
+// MCP Subscriptions are on MCP Gateway, NOT Control-Plane API!
+
+export interface MCPSubscription {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  tool_id: string;
+  status: 'active' | 'expired' | 'revoked';
+  created_at: string;
+  expires_at: string | null;
+  last_used_at?: string;
+  usage_count?: number;
+}
+
+export interface MCPSubscriptionCreate {
+  tool_id: string;
+  plan?: 'free' | 'basic' | 'premium';
+  tenant_id?: string; // Optional, derived from JWT if not provided
+}
+
+export interface MCPSubscriptionConfig {
+  mcpServers: {
+    [key: string]: {
+      command: string;
+      args: string[];
+      env: {
+        STOA_API_KEY: string;
+      };
+    };
+  };
+}
+
+// Subscription types (legacy - for backward compatibility)
 export interface Subscription {
   id: string;
   userId: string;

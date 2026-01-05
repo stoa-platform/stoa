@@ -8,7 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-### Added (2026-01-05) - Developer Portal Enhancement
+### Added (2026-01-05) - Developer Portal Enhancement (CAB-246)
+
+> **Related Ticket**: CAB-246 - STOA Developer Portal Enhancement
 
 - **STOA Developer Portal** - API Consumer features (`portal/`)
   - **API Catalog** (`src/pages/apis/`):

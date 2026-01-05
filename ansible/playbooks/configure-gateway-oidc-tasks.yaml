@@ -260,10 +260,12 @@
 # =========================================================================
 # STEP 6: Associate API to Application
 # =========================================================================
+# NOTE: Using POST to /applications/{id}/apis with apiIDs array format
+# This is the correct approach per webMethods API Gateway REST API documentation
 - name: Associate API to Application
   uri:
     url: "{{ gateway_url }}/rest/apigateway/applications/{{ app_id_oidc }}/apis"
-    method: PUT
+    method: POST
     user: "{{ gateway_user }}"
     password: "{{ gateway_password }}"
     force_basic_auth: true
@@ -273,13 +275,15 @@
       Accept: "application/json"
     body_format: json
     body:
-      - "{{ oidc_api_id }}"
-    status_code: [200, 204]
+      apiIDs:
+        - "{{ oidc_api_id }}"
+    status_code: [200, 201, 204]
   when:
     - app_id_oidc is defined
     - oidc_api_id is defined
     - oidc_api_id | length > 0
   register: api_association_oidc
+  ignore_errors: true
 
 - name: Display API association result
   debug:
@@ -288,15 +292,22 @@
 
 # =========================================================================
 # STEP 7: Create OAuth Scope Mappings for API
-# Naming Pattern: {AuthServer}:{Tenant}:{ApiName}:{Version}:{ScopeName}
+# Naming Pattern: {AuthServerName}:{ScopeName}
+# This matches the exact format from webMethods Gateway UI (captured via HAR)
+#
+# NOTE: The audience field should be empty string "" to allow the Gateway
+# to validate tokens against any audience claim. If you need to restrict
+# to a specific audience, set oidc_audience variable.
 # =========================================================================
 - name: Set scope naming prefix
   set_fact:
-    scope_prefix: "{{ auth_server_name | default('KeycloakOIDC') }}:{{ oidc_tenant_id | default('default') }}:{{ oidc_api_name | default('API') }}:{{ oidc_api_version | default('1.0') }}"
+    # Simplified scope naming: {AuthServerName}:{ScopeName}
+    # Example: KeycloakOIDC:openid
+    scope_auth_server: "{{ auth_server_name | default('KeycloakOIDC') }}"
 
 - name: Display scope naming pattern
   debug:
-    msg: "Using scope naming pattern: {{ scope_prefix }}:{scopeName}"
+    msg: "Using scope naming pattern: {{ scope_auth_server }}:{scopeName}"
 
 - name: Create OAuth scope mapping - openid
   uri:
@@ -311,16 +322,17 @@
       Accept: "application/json"
     body_format: json
     body:
-      scopeName: "{{ scope_prefix }}:openid"
-      scopeDescription: "OpenID Connect scope for {{ oidc_api_name | default('API') }} v{{ oidc_api_version | default('1.0') }} - Tenant {{ oidc_tenant_id | default('default') }}"
-      audience: "{{ oidc_audience | default('control-plane-api') }}"
+      scopeName: "{{ scope_auth_server }}:openid"
+      scopeDescription: "OpenID Connect scope"
+      audience: "{{ oidc_audience | default('') }}"
       apiScopes:
         - "{{ oidc_api_id }}"
       requiredAuthScopes:
-        - authServerAlias: "{{ auth_server_name | default('KeycloakOIDC') }}"
+        - authServerAlias: "{{ scope_auth_server }}"
           scopeName: "openid"
     status_code: [200, 201, 409]
   when: oidc_api_id is defined and oidc_api_id | length > 0
+  register: scope_openid_result
   ignore_errors: true
 
 - name: Create OAuth scope mapping - profile
@@ -336,16 +348,17 @@
       Accept: "application/json"
     body_format: json
     body:
-      scopeName: "{{ scope_prefix }}:profile"
-      scopeDescription: "Profile scope for {{ oidc_api_name | default('API') }} v{{ oidc_api_version | default('1.0') }} - Tenant {{ oidc_tenant_id | default('default') }}"
-      audience: "{{ oidc_audience | default('control-plane-api') }}"
+      scopeName: "{{ scope_auth_server }}:profile"
+      scopeDescription: "User profile information"
+      audience: "{{ oidc_audience | default('') }}"
       apiScopes:
         - "{{ oidc_api_id }}"
       requiredAuthScopes:
-        - authServerAlias: "{{ auth_server_name | default('KeycloakOIDC') }}"
+        - authServerAlias: "{{ scope_auth_server }}"
           scopeName: "profile"
     status_code: [200, 201, 409]
   when: oidc_api_id is defined and oidc_api_id | length > 0
+  register: scope_profile_result
   ignore_errors: true
 
 - name: Create OAuth scope mapping - email
@@ -361,16 +374,17 @@
       Accept: "application/json"
     body_format: json
     body:
-      scopeName: "{{ scope_prefix }}:email"
-      scopeDescription: "Email scope for {{ oidc_api_name | default('API') }} v{{ oidc_api_version | default('1.0') }} - Tenant {{ oidc_tenant_id | default('default') }}"
-      audience: "{{ oidc_audience | default('control-plane-api') }}"
+      scopeName: "{{ scope_auth_server }}:email"
+      scopeDescription: "User email address"
+      audience: "{{ oidc_audience | default('') }}"
       apiScopes:
         - "{{ oidc_api_id }}"
       requiredAuthScopes:
-        - authServerAlias: "{{ auth_server_name | default('KeycloakOIDC') }}"
+        - authServerAlias: "{{ scope_auth_server }}"
           scopeName: "email"
     status_code: [200, 201, 409]
   when: oidc_api_id is defined and oidc_api_id | length > 0
+  register: scope_email_result
   ignore_errors: true
 
 - name: Create OAuth scope mapping - roles
@@ -386,21 +400,27 @@
       Accept: "application/json"
     body_format: json
     body:
-      scopeName: "{{ scope_prefix }}:roles"
-      scopeDescription: "Roles scope for {{ oidc_api_name | default('API') }} v{{ oidc_api_version | default('1.0') }} - Tenant {{ oidc_tenant_id | default('default') }}"
-      audience: "{{ oidc_audience | default('control-plane-api') }}"
+      scopeName: "{{ scope_auth_server }}:roles"
+      scopeDescription: "User roles"
+      audience: "{{ oidc_audience | default('') }}"
       apiScopes:
         - "{{ oidc_api_id }}"
       requiredAuthScopes:
-        - authServerAlias: "{{ auth_server_name | default('KeycloakOIDC') }}"
+        - authServerAlias: "{{ scope_auth_server }}"
           scopeName: "roles"
     status_code: [200, 201, 409]
   when: oidc_api_id is defined and oidc_api_id | length > 0
+  register: scope_roles_result
   ignore_errors: true
 
 - name: Display scope mappings result
   debug:
-    msg: "OAuth scope mappings created for API {{ oidc_api_id }} with pattern {{ scope_prefix }}:{scopeName}"
+    msg: |
+      OAuth scope mappings for API {{ oidc_api_id }}:
+      - {{ scope_auth_server }}:openid - {{ 'Created/Exists' if scope_openid_result is defined else 'Skipped' }}
+      - {{ scope_auth_server }}:profile - {{ 'Created/Exists' if scope_profile_result is defined else 'Skipped' }}
+      - {{ scope_auth_server }}:email - {{ 'Created/Exists' if scope_email_result is defined else 'Skipped' }}
+      - {{ scope_auth_server }}:roles - {{ 'Created/Exists' if scope_roles_result is defined else 'Skipped' }}
   when: oidc_api_id is defined and oidc_api_id | length > 0
 
 # =========================================================================

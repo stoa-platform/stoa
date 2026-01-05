@@ -93,7 +93,7 @@
           contactEmails:
             - "{{ contact_email_val }}"
           identifiers:
-            - name: "client_id"
+            - name: "azp"
               key: "openIdClaims"
               value:
                 - "{{ app_client_id }}"
@@ -154,7 +154,7 @@
           contactEmails:
             - "{{ contact_email_val }}"
           identifiers:
-            - name: "client_id"
+            - name: "azp"
               key: "openIdClaims"
               value:
                 - "{{ app_client_id }}"

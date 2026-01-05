@@ -742,10 +742,50 @@ print('Associated APIs:', d.get('apiIDs', []))"
 
 ### Step 6: Create OAuth Scope Mappings
 
-**CRITICAL:** Create scope mappings to link OAuth scopes from the authorization server to the API. Without these mappings, JWT token validation will fail with "Audience match failed".
+**CRITICAL:** Create scope mappings to link OAuth scopes from the authorization server to the API. Without these mappings, JWT token validation will fail with scope validation errors.
+
+#### Scope Naming Convention
+
+The scope name follows the pattern: `{AuthServerAlias}:{ScopeName}`
+
+- `AuthServerAlias`: Name of the authorization server alias (e.g., `KeycloakOIDC`)
+- `ScopeName`: Name of the OAuth scope (e.g., `openid`, `profile`, `email`)
+
+**Example:** `KeycloakOIDC:openid`
+
+#### Payload Structure (from HAR analysis)
+
+The exact payload structure expected by the Gateway (discovered via HAR file capture):
+
+```json
+{
+  "apiScopes": ["<api-id>"],
+  "requiredAuthScopes": [
+    {
+      "authServerAlias": "KeycloakOIDC",
+      "scopeName": "openid"
+    }
+  ],
+  "scopeName": "KeycloakOIDC:openid",
+  "scopeDescription": "OpenID Connect scope",
+  "audience": ""
+}
+```
+
+**Key Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `scopeName` | string | Format: `{AuthServerAlias}:{ScopeName}` |
+| `scopeDescription` | string | Human-readable description |
+| `audience` | string | **MUST be empty string `""`** - not a custom value |
+| `apiScopes` | array | Array of API IDs this scope applies to |
+| `requiredAuthScopes` | array | Array of objects linking to auth server scopes |
+
+#### Creating Scope Mappings
 
 ```bash
 API_ID="<api-id>"
+AUTH_SERVER="KeycloakOIDC"
 
 # Create scope mapping for openid
 curl -s -X POST \
@@ -754,13 +794,13 @@ curl -s -X POST \
   -H "Accept: application/json" \
   "http://localhost:5555/rest/apigateway/scopes" \
   -d '{
-    "scopeName": "KeycloakOIDC:openid",
+    "scopeName": "'"$AUTH_SERVER"':openid",
     "scopeDescription": "OpenID Connect scope",
-    "audience": "control-plane-api",
+    "audience": "",
     "apiScopes": ["'"$API_ID"'"],
     "requiredAuthScopes": [
       {
-        "authServerAlias": "KeycloakOIDC",
+        "authServerAlias": "'"$AUTH_SERVER"'",
         "scopeName": "openid"
       }
     ]
@@ -773,13 +813,13 @@ curl -s -X POST \
   -H "Accept: application/json" \
   "http://localhost:5555/rest/apigateway/scopes" \
   -d '{
-    "scopeName": "KeycloakOIDC:profile",
+    "scopeName": "'"$AUTH_SERVER"':profile",
     "scopeDescription": "User profile information",
-    "audience": "control-plane-api",
+    "audience": "",
     "apiScopes": ["'"$API_ID"'"],
     "requiredAuthScopes": [
       {
-        "authServerAlias": "KeycloakOIDC",
+        "authServerAlias": "'"$AUTH_SERVER"'",
         "scopeName": "profile"
       }
     ]
@@ -792,13 +832,13 @@ curl -s -X POST \
   -H "Accept: application/json" \
   "http://localhost:5555/rest/apigateway/scopes" \
   -d '{
-    "scopeName": "KeycloakOIDC:email",
+    "scopeName": "'"$AUTH_SERVER"':email",
     "scopeDescription": "User email address",
-    "audience": "control-plane-api",
+    "audience": "",
     "apiScopes": ["'"$API_ID"'"],
     "requiredAuthScopes": [
       {
-        "authServerAlias": "KeycloakOIDC",
+        "authServerAlias": "'"$AUTH_SERVER"'",
         "scopeName": "email"
       }
     ]
@@ -811,24 +851,64 @@ curl -s -X POST \
   -H "Accept: application/json" \
   "http://localhost:5555/rest/apigateway/scopes" \
   -d '{
-    "scopeName": "KeycloakOIDC:roles",
+    "scopeName": "'"$AUTH_SERVER"':roles",
     "scopeDescription": "User roles",
-    "audience": "control-plane-api",
+    "audience": "",
     "apiScopes": ["'"$API_ID"'"],
     "requiredAuthScopes": [
       {
-        "authServerAlias": "KeycloakOIDC",
+        "authServerAlias": "'"$AUTH_SERVER"'",
         "scopeName": "roles"
       }
     ]
   }'
 ```
 
-**Important Notes:**
-- `scopeName` format: `{AuthServerName}:{ScopeName}`
-- `audience` must match the `aud` claim in the JWT token (configure via Keycloak audience mapper)
-- `apiScopes` is an array of API IDs this scope applies to
-- `requiredAuthScopes` links to the authorization server scope definition
+#### Response Example
+
+Successful creation returns HTTP 200/201 with the created scope:
+
+```json
+{
+  "scope": {
+    "id": "7ffc2f4d-74c7-4336-b264-cd2d6770458e",
+    "scopeName": "KeycloakOIDC:openid",
+    "scopeDescription": "OpenID Connect scope",
+    "audience": "",
+    "apiScopes": ["7ba67c90-814d-4d2f-a5da-36e9cda77afe"],
+    "requiredAuthScopes": [
+      {
+        "authServerAlias": "KeycloakOIDC",
+        "scopeName": "openid"
+      }
+    ]
+  }
+}
+```
+
+#### List All Scopes
+
+```bash
+curl -s -u Administrator:manage \
+  -H "Accept: application/json" \
+  "http://localhost:5555/rest/apigateway/scopes"
+```
+
+#### Delete Scope
+
+```bash
+curl -s -X DELETE \
+  -u Administrator:manage \
+  "http://localhost:5555/rest/apigateway/scopes/{scopeId}"
+```
+
+#### Important Notes
+
+1. **`audience` MUST be empty string `""`** - Setting a custom value like `control-plane-api` will cause validation issues
+2. **Scope naming pattern**: Always use `{AuthServerAlias}:{ScopeName}` format
+3. **One scope per mapping**: Create separate scope mappings for each OAuth scope (openid, profile, email, roles)
+4. **API association**: The `apiScopes` array links the scope to specific APIs - a scope can apply to multiple APIs
+5. **HTTP 409**: Indicates scope already exists (can be safely ignored during idempotent provisioning)
 
 ### Step 7: Create Identify & Authorize Policy Action
 

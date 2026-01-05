@@ -93,7 +93,8 @@
       Authorization: "Bearer {{ access_token }}"
       Content-Type: "application/json"
     body_format: json
-    body: "{{ alias_payload }}"
+    body:
+      alias: "{{ alias_payload }}"
     status_code: [200, 201]
     validate_certs: false
   register: create_result

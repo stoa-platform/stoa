@@ -17,7 +17,6 @@ import {
   Loader2,
   CreditCard,
   Code,
-  Play,
   RefreshCw,
   CheckCircle,
 } from 'lucide-react';

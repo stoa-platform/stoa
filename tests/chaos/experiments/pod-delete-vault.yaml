@@ -1,0 +1,176 @@
+# =============================================================================
+# Chaos Experiment: Vault Pod Delete
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Tests Vault auto-unseal and recovery when pods are killed
+# Expected: Vault auto-unseals via AWS KMS, services resume secret access
+# =============================================================================
+
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: vault-pod-delete
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: vault
+    chaos-type: pod-delete
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: vault
+    applabel: "app.kubernetes.io/name=vault"
+    appkind: statefulset
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            # Delete configuration - be careful with Vault!
+            - name: TOTAL_CHAOS_DURATION
+              value: "30"
+            - name: PODS_AFFECTED_PERC
+              value: "33"       # Only 1 of 3 pods in HA setup
+            - name: CHAOS_INTERVAL
+              value: "30"       # Wait 30s between deletions
+            - name: FORCE
+              value: "false"    # Graceful termination
+
+            # Sequence - serial to avoid quorum loss
+            - name: SEQUENCE
+              value: "serial"
+
+            # Container runtime
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          # Check Vault remains accessible
+          - name: "vault-health-check"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://vault.vault.svc:8200/v1/sys/health"
+              method:
+                get:
+                  criteria: "oneOf"
+                  responseCode: "[200, 429, 472, 473]"  # Various healthy states
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 10
+              interval: 5
+              retry: 5
+              probePollingInterval: 3
+
+          # Verify auto-unseal completes
+          - name: "vault-unsealed-check"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://vault.vault.svc:8200/v1/sys/seal-status"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+            mode: "EOT"  # End of Test
+            runProperties:
+              probeTimeout: 60
+              interval: 10
+              retry: 6
+              probePollingInterval: 5
+
+          # Verify secrets are still accessible
+          - name: "vault-secrets-accessible"
+            type: "cmdProbe"
+            cmdProbe/inputs:
+              command: |
+                # Try to read a known secret path
+                VAULT_ADDR=http://vault.vault.svc:8200
+                vault status -format=json | jq -e '.sealed == false'
+              source:
+                image: "hashicorp/vault:1.15"
+              comparator:
+                type: "string"
+                criteria: "contains"
+                value: "true"
+            mode: "EOT"
+            runProperties:
+              probeTimeout: 30
+              interval: 10
+              retry: 3
+
+---
+# Vault network partition test (advanced)
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: vault-network-partition
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: vault
+    chaos-type: network-partition
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: vault
+    applabel: "app.kubernetes.io/name=vault"
+    appkind: statefulset
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-network-partition
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "30"
+            - name: PODS_AFFECTED_PERC
+              value: "33"       # Partition 1 pod
+            - name: NETWORK_INTERFACE
+              value: "eth0"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          - name: "vault-cluster-healthy"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://vault.vault.svc:8200/v1/sys/health"
+              method:
+                get:
+                  criteria: "oneOf"
+                  responseCode: "[200, 429, 472, 473]"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 10
+              interval: 5
+              retry: 5
+              probePollingInterval: 3
+
+          # Check raft peers remain connected
+          - name: "vault-raft-peers"
+            type: "cmdProbe"
+            cmdProbe/inputs:
+              command: |
+                VAULT_ADDR=http://vault.vault.svc:8200
+                vault operator raft list-peers -format=json | jq '.data.config.servers | length >= 2'
+              source:
+                image: "hashicorp/vault:1.15"
+              comparator:
+                type: "string"
+                criteria: "contains"
+                value: "true"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 15
+              interval: 10
+              retry: 3

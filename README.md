@@ -1,6 +1,6 @@
 # STOA Platform - UI RBAC + GitOps + Kafka
 
-Plateforme de gestion d'APIs multi-tenant avec Control-Plane UI, GitOps et Event-Driven Architecture.
+Multi-tenant API Management Platform with Control-Plane UI, GitOps and Event-Driven Architecture.
 
 ## Architecture
 
@@ -8,7 +8,7 @@ Plateforme de gestion d'APIs multi-tenant avec Control-Plane UI, GitOps et Event
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         CLIENTS                                      │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │
-│  │   UI React   │    │  Tiers/M2M   │    │  Partenaires │          │
+│  │   UI React   │    │  Third-party │    │   Partners   │          │
 │  │  (Keycloak)  │    │   (OAuth2)   │    │   (OAuth2)   │          │
 │  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘          │
 └─────────┼───────────────────┼───────────────────┼───────────────────┘
@@ -43,27 +43,27 @@ Plateforme de gestion d'APIs multi-tenant avec Control-Plane UI, GitOps et Event
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Flux d'accès
+### Access Flow
 
-| Client | Chemin | Auth |
-|--------|--------|------|
+| Client | Path | Auth |
+|--------|------|------|
 | UI React | `gateway.stoa.cab-i.com/control-plane/v1/*` | Keycloak OIDC (user) |
-| Tiers/M2M | `gateway.stoa.cab-i.com/control-plane/v1/*` | OAuth2 Client Credentials |
-| APIs métier | `gateway.stoa.cab-i.com/apis/{tenant}/*` | API Key / OAuth2 |
+| Third-party/M2M | `gateway.stoa.cab-i.com/control-plane/v1/*` | OAuth2 Client Credentials |
+| Business APIs | `gateway.stoa.cab-i.com/apis/{tenant}/*` | API Key / OAuth2 |
 
-## Composants
+## Components
 
-| Composant | Description | Technologie |
-|-----------|-------------|-------------|
-| UI Control-Plane | Interface RBAC pour gestion des APIs | React + TypeScript |
-| Control-Plane API | Backend REST avec RBAC | FastAPI (Python) |
+| Component | Description | Technology |
+|-----------|-------------|------------|
+| UI Control-Plane | RBAC Interface for API management | React + TypeScript |
+| Control-Plane API | REST Backend with RBAC | FastAPI (Python) |
 | Keycloak | Identity Provider (OIDC) | Keycloak |
-| GitLab | Source de verite GitOps | GitLab |
+| GitLab | GitOps Source of Truth | GitLab |
 | Kafka | Event streaming | Redpanda |
 | AWX | Automation/Orchestration | AWX/Ansible |
 | webMethods Gateway | API Gateway runtime | webMethods |
 
-## Roles RBAC
+## RBAC Roles
 
 | Role | Tenants | APIs | Apps | Deploy | Users |
 |------|---------|------|------|--------|-------|
@@ -95,7 +95,7 @@ stoa-gitops/
     └── staging/
 ```
 
-## Structure du Projet
+## Project Structure
 
 ```
 stoa/
@@ -137,7 +137,7 @@ stoa/
 │   ├── control-plane-api/
 │   ├── control-plane-ui/
 │   └── argocd/              # ArgoCD chart
-├── scripts/                 # Scripts d'installation
+├── scripts/                 # Installation scripts
 │   ├── install-argocd.sh
 │   ├── init-gitlab-gitops.sh
 │   └── setup-argocd-gitlab.sh
@@ -183,12 +183,12 @@ stoa/
                                     └─────────────────────────────┘
 ```
 
-## Deploiement
+## Deployment
 
-### 1. Infrastructure AWS
+### 1. AWS Infrastructure
 
 ```bash
-# Creer le backend S3/DynamoDB (une seule fois)
+# Create S3/DynamoDB backend (one-time setup)
 aws s3 mb s3://stoa-terraform-state-dev --region eu-west-1
 aws dynamodb create-table \
   --table-name stoa-terraform-locks \
@@ -196,7 +196,7 @@ aws dynamodb create-table \
   --key-schema AttributeName=LockID,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST
 
-# Deployer l'infrastructure
+# Deploy the infrastructure
 cd terraform/environments/dev
 terraform init
 terraform plan
@@ -209,7 +209,7 @@ terraform apply
 aws eks update-kubeconfig --name stoa-dev-cluster --region eu-west-1
 ```
 
-### 3. Deploiement Helm
+### 3. Helm Deployment
 
 ```bash
 # Namespace
@@ -232,19 +232,19 @@ helm upgrade --install control-plane-ui ./charts/control-plane-ui \
   --namespace stoa
 ```
 
-### 4. Build et Push des images
+### 4. Build and Push Images
 
 ```bash
 # Login ECR
 aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin 848853684735.dkr.ecr.eu-west-1.amazonaws.com
 
-# Build et push API
+# Build and push API
 cd control-plane-api
 docker build -t control-plane-api .
 docker tag control-plane-api:latest 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-api:latest
 docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-api:latest
 
-# Build et push UI
+# Build and push UI
 cd ../control-plane-ui
 npm install && npm run build
 docker build -t control-plane-ui .
@@ -254,24 +254,24 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 
 ## URLs
 
-### Environnement DEV
+### DEV Environment
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Control Plane UI | https://console.stoa.cab-i.com | Interface de gestion des APIs |
-| Control Plane API (direct) | https://api.stoa.cab-i.com | Backend REST API (accès direct) |
+| Control Plane UI | https://console.stoa.cab-i.com | API management interface |
+| Control Plane API (direct) | https://api.stoa.cab-i.com | REST API backend (direct access) |
 | **API Gateway Runtime** | https://apis.stoa.cab-i.com | APIs via Gateway (OIDC auth) |
 | Keycloak (Auth) | https://auth.stoa.cab-i.com | Identity Provider (OIDC) |
-| Keycloak Admin | https://auth.stoa.cab-i.com/admin/ | Console admin Keycloak |
-| API Gateway UI | https://gateway.stoa.cab-i.com/apigatewayui/ | Console Gateway (admin: Administrator/manage) |
+| Keycloak Admin | https://auth.stoa.cab-i.com/admin/ | Keycloak admin console |
+| API Gateway UI | https://gateway.stoa.cab-i.com/apigatewayui/ | Gateway console (admin: Administrator/manage) |
 | **ArgoCD** | https://argocd.stoa.cab-i.com | GitOps CD (admin/demo) |
 | **AWX (Ansible)** | https://awx.stoa.cab-i.com | Automation (admin/demo) |
-| Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n stoa-system` | Administration Kafka (interne) |
+| Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n stoa-system` | Kafka administration (internal) |
 | **GitLab GitOps** | https://gitlab.com/cab6961310/stoa-gitops | Source of Truth (tenants)
 
-> **Note**: L'UI utilise l'API via la Gateway (`apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`) pour bénéficier de l'authentification OIDC centralisée.
+> **Note**: The UI uses the API via Gateway (`apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`) to benefit from centralized OIDC authentication.
 
-### Environnement STAGING (à venir)
+### STAGING Environment (coming soon)
 
 | Service | URL |
 |---------|-----|
@@ -280,27 +280,27 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 | Keycloak | https://auth.staging.stoa.cab-i.com |
 | API Gateway | https://gateway.staging.stoa.cab-i.com |
 
-## Utilisateurs par défaut (Instance DEMO)
+## Default Users (DEMO Instance)
 
 ### Keycloak Admin Console
 
-| Utilisateur | Mot de passe | Rôle | Description |
-|-------------|--------------|------|-------------|
-| `admin` | `demo` | Super Admin | Accès complet à la console Keycloak |
+| Username | Password | Role | Description |
+|----------|----------|------|-------------|
+| `admin` | `demo` | Super Admin | Full access to Keycloak console |
 
 ### Control Plane UI
 
-| Utilisateur | Mot de passe | Rôle | Description |
-|-------------|--------------|------|-------------|
-| `admin@stoa.local` | `demo` | CPI Admin | Accès complet à la plateforme |
+| Username | Password | Role | Description |
+|----------|----------|------|-------------|
+| `admin@stoa.local` | `demo` | CPI Admin | Full platform access |
 
-> **Note**: Ces credentials sont pour l'instance de démonstration. En production, utiliser des mots de passe forts stockés dans AWS Secrets Manager.
+> **Note**: These credentials are for the demo instance. In production, use strong passwords stored in AWS Secrets Manager.
 
-## Coûts Estimés AWS
+## Estimated AWS Costs
 
-### Architecture avec OpenSearch partagé (DEV + STAGING)
+### Architecture with Shared OpenSearch (DEV + STAGING)
 
-| Service | Type | Coût mensuel |
+| Service | Type | Monthly Cost |
 |---------|------|-------------|
 | EKS Cluster | 1 cluster | ~$72 |
 | EC2 (Nodes) | 3x t3.large | ~$180 |
@@ -354,24 +354,24 @@ Amazon OpenSearch 2.x est compatible ES 7.x, donc **non compatible**.
 - Gateway et Portal connectés à ES 8 interne
 - **OpenSearch** disponible pour analytics multi-tenant via Global Policies
 
-### Services de connexion (URLs internes)
+### Connection Services (Internal URLs)
 
-| Service | URL Interne | Notes |
-|---------|-------------|-------|
-| Elasticsearch | `elasticsearch-master:9200` | Pas d'auth (xpack.security.enabled: false) |
-| Redpanda (Kafka) | `redpanda.stoa-system.svc.cluster.local:9092` | Pas d'auth |
+| Service | Internal URL | Notes |
+|---------|--------------|-------|
+| Elasticsearch | `elasticsearch-master:9200` | No auth (xpack.security.enabled: false) |
+| Redpanda (Kafka) | `redpanda.stoa-system.svc.cluster.local:9092` | No auth |
 | Keycloak | `https://auth.stoa.cab-i.com` | Realm: `stoa`, Client: `control-plane-api` |
 
-### Configuration Control Plane UI - Tenant Mapping
+### Control Plane UI Configuration - Tenant Mapping
 
-L'UI Control Plane récupère les informations du tenant depuis le jeton JWT Keycloak.
+The Control Plane UI retrieves tenant information from the Keycloak JWT token.
 
-**Informations disponibles en lecture seule**:
-- Nom du tenant
-- CPI Admin associé
-- DevOps assigné
+**Read-only information available**:
+- Tenant name
+- Associated CPI Admin
+- Assigned DevOps
 
-**Fichier de configuration Git** (mapping CPI/DevOps/Tenant):
+**Git configuration file** (CPI/DevOps/Tenant mapping):
 ```yaml
 # stoa-gitops/config/tenant-mapping.yaml
 tenants:
@@ -388,33 +388,33 @@ tenants:
       - "devops3@company.com"
 ```
 
-> **Note**: Le matching CPI/DevOps/Tenant se fait via fichier de configuration dans le repo GitOps. Une future version pourra intégrer cette config directement dans Keycloak (custom claims).
+> **Note**: CPI/DevOps/Tenant matching is done via configuration file in the GitOps repo. A future version may integrate this config directly into Keycloak (custom claims).
 
-### Keycloak comme Identity Provider (IdP)
+### Keycloak as Identity Provider (IdP)
 
-Keycloak est configuré comme IdP central pour l'authentification OIDC:
+Keycloak is configured as central IdP for OIDC authentication:
 
 **Realm Configuration**:
 - **Realm**: `stoa`
 - **URL**: `https://auth.stoa.cab-i.com/realms/stoa`
 - **Discovery**: `https://auth.stoa.cab-i.com/realms/stoa/.well-known/openid-configuration`
 
-**Clients Configurés**:
+**Configured Clients**:
 | Client ID | Type | Usage |
 |-----------|------|-------|
 | `control-plane-api` | Confidential | Backend API authentication |
 | `control-plane-ui` | Public | Frontend SPA (PKCE) |
-| `api-gateway` | Confidential | Gateway JWT validation (futur) |
+| `api-gateway` | Confidential | Gateway JWT validation (future) |
 
-**Roles par Realm**:
-| Rôle | Description |
+**Realm Roles**:
+| Role | Description |
 |------|-------------|
-| `cpi-admin` | Administrateur plateforme complet |
-| `tenant-admin` | Admin de son propre tenant |
-| `devops` | Déploiement et promotion APIs |
-| `viewer` | Lecture seule |
+| `cpi-admin` | Full platform administrator |
+| `tenant-admin` | Admin for own tenant |
+| `devops` | API deployment and promotion |
+| `viewer` | Read-only access |
 
-**Custom Claims JWT** (à implémenter):
+**Custom JWT Claims** (to implement):
 ```json
 {
   "sub": "user-uuid",
@@ -425,12 +425,12 @@ Keycloak est configuré comme IdP central pour l'authentification OIDC:
 }
 ```
 
-### Estimation Ressources - Architecture Finale
+### Resource Estimation - Final Architecture
 
-**Configuration actuelle (DEV)**: 3x t3.large (2 vCPU / 8GB RAM chacun)
+**Current configuration (DEV)**: 3x t3.large (2 vCPU / 8GB RAM each)
 
-**Ressources par composant**:
-| Composant | CPU Request | Memory Request | Replicas | Total CPU | Total RAM |
+**Resources per component**:
+| Component | CPU Request | Memory Request | Replicas | Total CPU | Total RAM |
 |-----------|-------------|----------------|----------|-----------|-----------|
 | Elasticsearch 8 | 250m | 1Gi | 1 | 250m | 1Gi |
 | API Gateway | 250m | 1Gi | 1 | 250m | 1Gi |
@@ -445,109 +445,109 @@ Keycloak est configuré comme IdP central pour l'authentification OIDC:
 | EBS CSI Driver | 50m | 128Mi | 2 | 100m | 256Mi |
 | **TOTAL** | | | | **~2.7 vCPU** | **~7.8Gi** |
 
-**Réserve système K8s**: ~600m CPU, ~1Gi RAM par node
+**K8s system reserve**: ~600m CPU, ~1Gi RAM per node
 
-**Capacité disponible** (3x t3.large = 6 vCPU / 24GB):
-- CPU: 6000m - 1800m (système 3 nodes) = 4200m disponible → ✅ 2700m utilisé (64%)
-- RAM: 24GB - 3GB (système) = 21GB disponible → ✅ 7.8GB utilisé (37%)
+**Available capacity** (3x t3.large = 6 vCPU / 24GB):
+- CPU: 6000m - 1800m (system 3 nodes) = 4200m available → ✅ 2700m used (64%)
+- RAM: 24GB - 3GB (system) = 21GB available → ✅ 7.8GB used (37%)
 
-**Options pour scaling futur**:
-| Option | Coût mensuel | Capacité | Recommandation |
+**Future scaling options**:
+| Option | Monthly Cost | Capacity | Recommendation |
 |--------|--------------|----------|----------------|
-| Actuel: 3x t3.large | ~$180 | 6 vCPU / 24GB | ✅ DEV (actuel avec AWX) |
+| Current: 3x t3.large | ~$180 | 6 vCPU / 24GB | ✅ DEV (current with AWX) |
 | 3x t3.xlarge | ~$360 | 12 vCPU / 48GB | ✅ STAGING + replicas |
 | 4x t3.large | ~$240 | 8 vCPU / 32GB | ✅ PROD HA |
 
-> **Configuration DEV actuelle**: 3x t3.large avec AWX inclus. Les pods restent en standalone (replicas=1).
+> **Current DEV configuration**: 3x t3.large with AWX included. Pods remain standalone (replicas=1).
 >
-> **Recommandation STAGING**: Passer à 3x t3.xlarge pour supporter replicas=2 sur les composants critiques.
+> **STAGING recommendation**: Upgrade to 3x t3.xlarge to support replicas=2 on critical components.
 >
-> **Note Gateway Cluster**: Pour scaler la Gateway au-delà de 1 replica, il faut configurer Ignite pour le clustering.
+> **Gateway Cluster Note**: To scale the Gateway beyond 1 replica, Ignite must be configured for clustering.
 
-### Sécurité Réseau
+### Network Security
 
-Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
-- Accès bloqué vers Internet (metering.softwareag.cloud, etc.)
-- Communication autorisée uniquement au sein du cluster (VPC CIDR)
+Gateway and Portal pods are isolated from external network via NetworkPolicies:
+- Blocked access to Internet (metering.softwareag.cloud, etc.)
+- Communication allowed only within the cluster (VPC CIDR)
 
-### Comparaison des options
+### Options Comparison
 
-| Configuration | Coût/mois | Avantages |
+| Configuration | Cost/month | Advantages |
 |--------------|-----------|-----------|
-| ES 7.2.0 sur EKS + OpenSearch analytics | ~$220 | Multi-tenant analytics, compatibilité assurée |
-| Production (ES 7 cluster + OpenSearch) | ~$280 | Haute disponibilité complète |
+| ES 7.2.0 on EKS + OpenSearch analytics | ~$220 | Multi-tenant analytics, guaranteed compatibility |
+| Production (ES 7 cluster + OpenSearch) | ~$280 | Full high availability |
 
-## Références webMethods
+## webMethods References
 
-- [webMethods API Gateway](https://github.com/ibm-wm-transition/webmethods-api-gateway) - Documentation officielle
-- [webMethods API Gateway DevOps](https://github.com/SoftwareAG/webmethods-api-gateway-devops) - Scripts CI/CD et déploiement
-- [Docker Compose Samples](https://github.com/ibm-wm-transition/webmethods-api-gateway/tree/master/samples/docker/deploymentscripts) - Exemples Docker
+- [webMethods API Gateway](https://github.com/ibm-wm-transition/webmethods-api-gateway) - Official documentation
+- [webMethods API Gateway DevOps](https://github.com/SoftwareAG/webmethods-api-gateway-devops) - CI/CD and deployment scripts
+- [Docker Compose Samples](https://github.com/ibm-wm-transition/webmethods-api-gateway/tree/master/samples/docker/deploymentscripts) - Docker examples
 
 ---
 
-## État Actuel vs Architecture Cible
+## Current State vs Target Architecture
 
-### Composants Déployés ✅
+### Deployed Components ✅
 
-| Composant | Status | Notes |
+| Component | Status | Notes |
 |-----------|--------|-------|
-| EKS Cluster | ✅ Déployé | stoa-dev-cluster |
-| VPC / Subnets | ✅ Déployé | 10.0.0.0/16 |
-| RDS PostgreSQL | ✅ Déployé | db.t3.micro |
-| ECR Repositories | ✅ Déployé | control-plane-api, control-plane-ui, stoa/* |
-| Nginx Ingress | ✅ Déployé | avec cert-manager |
-| Cert-Manager | ✅ Déployé | Let's Encrypt prod |
-| Keycloak | ✅ Déployé | https://auth.stoa.cab-i.com |
-| Control-Plane API | ✅ Déployé | FastAPI backend |
-| Control-Plane UI | ✅ Déployé | React frontend |
-| Elasticsearch 8.11 | ✅ Déployé | Sur EKS, cluster SAG_EventDataStore (ES 8+ requis pour Gateway 10.15) |
-| webMethods Gateway | ✅ Déployé | Image lean trial 10.15 |
-| NetworkPolicies | ✅ Déployé | Bloque accès Internet (metering.softwareag.cloud) |
-| EBS CSI Driver | ✅ Déployé | Pour volumes persistants |
-| **Redpanda (Kafka)** | ✅ Déployé | Event streaming, 1 broker, Redpanda Console |
-| **Kafka Topics** | ✅ Déployé | api-created/updated/deleted, deploy-requests/results, audit-log, notifications |
-| **Kafka Producer** | ✅ Déployé | Intégré dans Control-Plane API (émission events sur CRUD) |
-| **AWX (Ansible Tower)** | ✅ Déployé | AWX 24.6.1 via Operator, https://awx.stoa.cab-i.com |
+| EKS Cluster | ✅ Deployed | stoa-dev-cluster |
+| VPC / Subnets | ✅ Deployed | 10.0.0.0/16 |
+| RDS PostgreSQL | ✅ Deployed | db.t3.micro |
+| ECR Repositories | ✅ Deployed | control-plane-api, control-plane-ui, stoa/* |
+| Nginx Ingress | ✅ Deployed | with cert-manager |
+| Cert-Manager | ✅ Deployed | Let's Encrypt prod |
+| Keycloak | ✅ Deployed | https://auth.stoa.cab-i.com |
+| Control-Plane API | ✅ Deployed | FastAPI backend |
+| Control-Plane UI | ✅ Deployed | React frontend |
+| Elasticsearch 8.11 | ✅ Deployed | On EKS, cluster SAG_EventDataStore (ES 8+ required for Gateway 10.15) |
+| webMethods Gateway | ✅ Deployed | Lean trial image 10.15 |
+| NetworkPolicies | ✅ Deployed | Blocks Internet access (metering.softwareag.cloud) |
+| EBS CSI Driver | ✅ Deployed | For persistent volumes |
+| **Redpanda (Kafka)** | ✅ Deployed | Event streaming, 1 broker, Redpanda Console |
+| **Kafka Topics** | ✅ Deployed | api-created/updated/deleted, deploy-requests/results, audit-log, notifications |
+| **Kafka Producer** | ✅ Deployed | Integrated in Control-Plane API (event emission on CRUD) |
+| **AWX (Ansible Tower)** | ✅ Deployed | AWX 24.6.1 via Operator, https://awx.stoa.cab-i.com |
 
-### Composants À Déployer 🔲
+### Components To Deploy 🔲
 
-| Composant | Priorité | Description |
+| Component | Priority | Description |
 |-----------|----------|-------------|
-| AWX Job Templates | Haute | Jobs pour déploiement APIs (deploy-api, sync-gateway, etc.) |
-| GitLab (GitOps) | Haute | Source de vérité pour configs |
-| **ArgoCD** | Haute | GitOps operator, sync automatique K8s |
-| Vault | Moyenne | Gestion des secrets (clientSecret, apiKey) |
-| Grafana + Prometheus | Moyenne | Monitoring et alerting |
-| OpenSearch Analytics | Basse | Analytics multi-tenant (Global Policies) |
+| AWX Job Templates | High | Jobs for API deployment (deploy-api, sync-gateway, etc.) |
+| GitLab (GitOps) | High | Source of truth for configs |
+| **ArgoCD** | High | GitOps operator, automatic K8s sync |
+| Vault | Medium | Secrets management (clientSecret, apiKey) |
+| Grafana + Prometheus | Medium | Monitoring and alerting |
+| OpenSearch Analytics | Low | Multi-tenant analytics (Global Policies) |
 
 ### Next Steps - Roadmap
 
-#### Phase 1 : Event-Driven Architecture ✅ COMPLÉTÉ (21 Déc 2024)
+#### Phase 1: Event-Driven Architecture ✅ COMPLETED (Dec 21, 2024)
 
-> **Infrastructure**: Nodes scalés à 3x t3.large (2 CPU / 8GB RAM chacun) pour supporter Redpanda + AWX.
+> **Infrastructure**: Nodes scaled to 3x t3.large (2 CPU / 8GB RAM each) to support Redpanda + AWX.
 
-1. **Redpanda Déployé** ✅
-   - Kafka-compatible, 1 broker sur EKS
-   - Redpanda Console pour administration
-   - Storage: 10GB persistant (EBS gp2)
-   - Endpoint interne: `redpanda.stoa-system.svc.cluster.local:9092`
+1. **Redpanda Deployed** ✅
+   - Kafka-compatible, 1 broker on EKS
+   - Redpanda Console for administration
+   - Storage: 10GB persistent (EBS gp2)
+   - Internal endpoint: `redpanda.stoa-system.svc.cluster.local:9092`
 
-2. **Topics Kafka Créés** ✅
-   - `api-created` - Événements création API
-   - `api-updated` - Événements modification API
-   - `api-deleted` - Événements suppression API
-   - `deploy-requests` - Demandes de déploiement
-   - `deploy-results` - Résultats de déploiement
-   - `audit-log` - Logs d'audit
-   - `notifications` - Notifications temps réel
+2. **Kafka Topics Created** ✅
+   - `api-created` - API creation events
+   - `api-updated` - API modification events
+   - `api-deleted` - API deletion events
+   - `deploy-requests` - Deployment requests
+   - `deploy-results` - Deployment results
+   - `audit-log` - Audit logs
+   - `notifications` - Real-time notifications
 
-3. **Kafka Producer Intégré** ✅
-   - Control-Plane API émet des événements Kafka sur chaque opération CRUD
-   - Topics utilisés: `api-created`, `api-updated`, `api-deleted`, `notifications`
-   - Événements d'audit automatiques sur `audit-log`
+3. **Kafka Producer Integrated** ✅
+   - Control-Plane API emits Kafka events on each CRUD operation
+   - Topics used: `api-created`, `api-updated`, `api-deleted`, `notifications`
+   - Automatic audit events on `audit-log`
    - Connection: `redpanda.stoa-system.svc.cluster.local:9092`
 
-   **Dashboard End-to-End Pipeline**:
+   **End-to-End Pipeline Dashboard**:
    ```
    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
    │ Control-Plane│ → │   Kafka    │ → │   AWX/Ansible│ → │   Gateway   │
@@ -556,66 +556,66 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
          ✅                 ✅                  ✅                 ✅
    ```
 
-4. **AWX (Ansible Tower)** ✅ DÉPLOYÉ + CONFIGURÉ
+4. **AWX (Ansible Tower)** ✅ DEPLOYED + CONFIGURED
    - AWX 24.6.1 via AWX Operator 2.19.1
    - URL: https://awx.stoa.cab-i.com
    - Login: admin / demo
-   - Base de données: RDS PostgreSQL (partagée avec Keycloak)
+   - Database: RDS PostgreSQL (shared with Keycloak)
 
-   **Job Templates Configurés** ✅:
-   - `Deploy API` (id: 8) - Déploie une API sur la Gateway
-   - `Sync Gateway` (id: 9) - Synchronise config Gateway
-   - `Rollback API` (id: 11) - Rollback en cas d'échec
+   **Job Templates Configured** ✅:
+   - `Deploy API` (id: 8) - Deploys an API on the Gateway
+   - `Sync Gateway` (id: 9) - Synchronizes Gateway config
+   - `Rollback API` (id: 11) - Rollback on failure
 
-   **Intégration Kafka** ✅:
-   - Deployment Worker dans Control-Plane API
-   - Consumer sur topic `deploy-requests`
-   - Monitoring des jobs AWX avec publish sur `deploy-results`
+   **Kafka Integration** ✅:
+   - Deployment Worker in Control-Plane API
+   - Consumer on `deploy-requests` topic
+   - AWX job monitoring with publish to `deploy-results`
 
-5. **GitLab Webhook** ✅ CONFIGURÉ
+5. **GitLab Webhook** ✅ CONFIGURED
    - Endpoint: `POST /webhooks/gitlab`
-   - Events supportés: Push, Merge Request, Tag Push
-   - Auto-deploy sur push vers `main` branch
-   - Configuration: voir [docs/GITOPS-SETUP.md](docs/GITOPS-SETUP.md)
+   - Supported events: Push, Merge Request, Tag Push
+   - Auto-deploy on push to `main` branch
+   - Configuration: see [docs/GITOPS-SETUP.md](docs/GITOPS-SETUP.md)
 
-6. **Control-Plane UI** ✅ FONCTIONNEL
-   - Interface React avec authentification Keycloak (PKCE)
+6. **Control-Plane UI** ✅ FUNCTIONAL
+   - React interface with Keycloak authentication (PKCE)
    - Pages: Dashboard, Tenants, APIs, Applications, Deployments, Monitoring
    - URL: https://console.stoa.cab-i.com
 
-7. **Configuration Variabilisée** ✅ (21 Déc 2024)
-   - **UI** ([config.ts](control-plane-ui/src/config.ts)): Toutes les URLs et configs via `VITE_*` env vars
-   - **API** ([config.py](control-plane-api/src/config.py)): Settings centralisés avec pydantic-settings
-   - **Dockerfiles**: Build args pour personnalisation par environnement
+7. **Variabilized Configuration** ✅ (Dec 21, 2024)
+   - **UI** ([config.ts](control-plane-ui/src/config.ts)): All URLs and configs via `VITE_*` env vars
+   - **API** ([config.py](control-plane-api/src/config.py)): Centralized settings with pydantic-settings
+   - **Dockerfiles**: Build args for environment-specific customization
 
-   **Variables UI disponibles**:
-   | Variable | Description | Défaut |
-   |----------|-------------|--------|
-   | `VITE_BASE_DOMAIN` | Domaine de base | `stoa.cab-i.com` |
-   | `VITE_API_URL` | URL API backend | `https://api.{domain}` |
-   | `VITE_KEYCLOAK_URL` | URL Keycloak | `https://auth.{domain}` |
-   | `VITE_KEYCLOAK_REALM` | Realm Keycloak | `stoa` |
-   | `VITE_GATEWAY_URL` | URL Gateway | `https://gateway.{domain}` |
-   | `VITE_AWX_URL` | URL AWX | `https://awx.{domain}` |
+   **Available UI Variables**:
+   | Variable | Description | Default |
+   |----------|-------------|---------|
+   | `VITE_BASE_DOMAIN` | Base domain | `stoa.cab-i.com` |
+   | `VITE_API_URL` | Backend API URL | `https://api.{domain}` |
+   | `VITE_KEYCLOAK_URL` | Keycloak URL | `https://auth.{domain}` |
+   | `VITE_KEYCLOAK_REALM` | Keycloak Realm | `stoa` |
+   | `VITE_GATEWAY_URL` | Gateway URL | `https://gateway.{domain}` |
+   | `VITE_AWX_URL` | AWX URL | `https://awx.{domain}` |
    | `VITE_ENABLE_*` | Feature flags | `true` |
 
-   **Variables API disponibles**:
-   | Variable | Description | Défaut |
-   |----------|-------------|--------|
-   | `BASE_DOMAIN` | Domaine de base | `stoa.cab-i.com` |
-   | `KEYCLOAK_URL` | URL Keycloak | `https://auth.{domain}` |
+   **Available API Variables**:
+   | Variable | Description | Default |
+   |----------|-------------|---------|
+   | `BASE_DOMAIN` | Base domain | `stoa.cab-i.com` |
+   | `KEYCLOAK_URL` | Keycloak URL | `https://auth.{domain}` |
    | `KEYCLOAK_REALM` | Realm | `stoa` |
-   | `KAFKA_BOOTSTRAP_SERVERS` | Brokers Kafka | `redpanda:9092` |
-   | `AWX_URL` | URL AWX | `https://awx.{domain}` |
-   | `CORS_ORIGINS` | Origins CORS autorisées | `https://devops.{domain}` |
-   | `LOG_LEVEL` | Niveau de log | `INFO` |
+   | `KAFKA_BOOTSTRAP_SERVERS` | Kafka brokers | `redpanda:9092` |
+   | `AWX_URL` | AWX URL | `https://awx.{domain}` |
+   | `CORS_ORIGINS` | Allowed CORS origins | `https://devops.{domain}` |
+   | `LOG_LEVEL` | Log level | `INFO` |
 
-8. **Authentification PKCE** ✅ (21 Déc 2024)
-   - Keycloak 25+ requiert PKCE pour clients publics
-   - Configuration `oidc-client-ts` avec `response_type: 'code'` et `pkce_method: 'S256'`
-   - Login fonctionnel via https://console.stoa.cab-i.com
+8. **PKCE Authentication** ✅ (Dec 21, 2024)
+   - Keycloak 25+ requires PKCE for public clients
+   - `oidc-client-ts` configuration with `response_type: 'code'` and `pkce_method: 'S256'`
+   - Functional login via https://console.stoa.cab-i.com
 
-#### Phase 2 : GitOps + Variables d'Environnement (Priorité Haute)
+#### Phase 2: GitOps + Environment Variables (High Priority)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -638,11 +638,11 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    - Structure: `tenants/{tenant}/apis/{api}/`
    - Branches: `main` (prod), `staging`, `dev`
 
-2. **Déployer ArgoCD** 🔲
+2. **Deploy ArgoCD** 🔲
    - Helm chart: `argo/argo-cd`
-   - ApplicationSets pour multi-tenant
-   - Sync automatique sur push GitLab
-   - Health checks personnalisés pour Gateway
+   - ApplicationSets for multi-tenant
+   - Automatic sync on GitLab push
+   - Custom health checks for Gateway
    ```yaml
    # ArgoCD Application example
    apiVersion: argoproj.io/v1alpha1
@@ -661,18 +661,18 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
          selfHeal: true
    ```
 
-3. **Intégrer Git dans Control-Plane API**
-   - Commit automatique sur CRUD
-   - Sync bidirectionnel
+3. **Integrate Git in Control-Plane API**
+   - Automatic commit on CRUD
+   - Bidirectional sync
    - Git clone/pull via GitPython
 
 4. **Webhooks GitLab → Control-Plane**
-   - Synchronisation des changements externes
+   - External changes synchronization
    - Trigger ArgoCD sync
 
-5. **Gestion des Variables d'Environnement** 🔲
+5. **Environment Variables Management** 🔲
 
-   **Problématique**: Une API doit pointer vers des backends différents par environnement, sans secrets dans Git.
+   **Problem**: An API must point to different backends per environment, without secrets in Git.
 
    ```
    ┌─────────────────────────────────────────────────────────────────────┐
@@ -681,11 +681,11 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    │    STAGING → https://payment-staging.internal.cab-i.com              │
    │    PROD    → https://payment.internal.cab-i.com                      │
    │                                                                       │
-   │  ✅ Solution : Templates avec placeholders + Vault pour secrets      │
+   │  ✅ Solution: Templates with placeholders + Vault for secrets        │
    └─────────────────────────────────────────────────────────────────────┘
    ```
 
-   **Structure GitOps étendue**:
+   **Extended GitOps Structure**:
    ```
    stoa-gitops/
    ├── tenants/
@@ -710,7 +710,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    └── policies/
    ```
 
-   **Exemple Template API (api.yaml)**:
+   **API Template Example (api.yaml)**:
    ```yaml
    apiVersion: stoa.cab-i.com/v1
    kind: API
@@ -719,16 +719,16 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
      tenant: tenant-finance
    spec:
      backend:
-       url: "${BACKEND_URL}"                    # Résolu au déploiement
-       timeout: "${BACKEND_TIMEOUT:30s}"        # Valeur par défaut: 30s
+       url: "${BACKEND_URL}"                    # Resolved at deployment
+       timeout: "${BACKEND_TIMEOUT:30s}"        # Default value: 30s
        authentication:
          type: "${BACKEND_AUTH_TYPE:oauth2}"
          credentials:
-           clientIdRef: "${BACKEND_CLIENT_ID_REF}"      # Référence Vault
+           clientIdRef: "${BACKEND_CLIENT_ID_REF}"      # Vault reference
            clientSecretRef: "${BACKEND_CLIENT_SECRET_REF}"
    ```
 
-   **Exemple Configuration Environnement (dev.yaml)**:
+   **Environment Configuration Example (dev.yaml)**:
    ```yaml
    apiVersion: stoa.cab-i.com/v1
    kind: APIEnvironmentConfig
@@ -785,19 +785,19 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    └─────────────────────────────────────────────────────────────────────────────────────┘
    ```
 
-   **Structure GitOps IAM**:
+   **GitOps IAM Structure**:
    ```
    stoa-gitops/
    ├── iam/                              # Identity & Access Management
-   │   ├── tenants.yaml                  # Définition tenants + membres
-   │   ├── global-admins.yaml            # CPI Admins globaux
-   │   └── service-accounts.yaml         # Comptes CI/CD, monitoring
+   │   ├── tenants.yaml                  # Tenants + members definition
+   │   ├── global-admins.yaml            # Global CPI Admins
+   │   └── service-accounts.yaml         # CI/CD, monitoring accounts
    │
    └── tenants/
        └── ...
    ```
 
-   **Exemple tenants.yaml**:
+   **tenants.yaml Example**:
    ```yaml
    apiVersion: stoa.cab-i.com/v1
    kind: TenantRegistry
@@ -836,7 +836,7 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
              addedBy: "admin@stoa.local"
    ```
 
-   **Exemple global-admins.yaml**:
+   **global-admins.yaml Example**:
    ```yaml
    apiVersion: stoa.cab-i.com/v1
    kind: GlobalAdminRegistry
@@ -850,57 +850,57 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
        permissions: ["tenants:*", "apis:*", "users:*"]
    ```
 
-   **IAM Sync Service** (CronJob toutes les 5 min):
-   - Parse `iam/tenants.yaml` depuis Git
-   - Détecte les changements (diff)
-   - Synchronise vers Keycloak (users, groups, roles)
-   - Publie événement `iam-sync` sur Kafka
+   **IAM Sync Service** (CronJob every 5 min):
+   - Parse `iam/tenants.yaml` from Git
+   - Detect changes (diff)
+   - Synchronize to Keycloak (users, groups, roles)
+   - Publish `iam-sync` event to Kafka
 
-   **API Endpoints IAM**:
+   **IAM API Endpoints**:
    | Endpoint | Description |
    |----------|-------------|
-   | `GET /v1/iam/tenants/{id}/members` | Liste les membres d'un tenant |
-   | `POST /v1/iam/tenants/{id}/members` | Ajoute un membre (commit Git + sync) |
-   | `DELETE /v1/iam/tenants/{id}/members` | Retire un membre |
-   | `POST /v1/iam/sync` | Force une synchronisation Git → Keycloak |
+   | `GET /v1/iam/tenants/{id}/members` | List tenant members |
+   | `POST /v1/iam/tenants/{id}/members` | Add a member (Git commit + sync) |
+   | `DELETE /v1/iam/tenants/{id}/members` | Remove a member |
+   | `POST /v1/iam/sync` | Force Git → Keycloak synchronization |
 
-   **Workflow ajout membre**:
+   **Member Addition Workflow**:
    ```
-   1. CPI ajoute un membre via UI
+   1. CPI adds a member via UI
             ↓
-   2. API met à jour iam/tenants.yaml (Git commit)
+   2. API updates iam/tenants.yaml (Git commit)
             ↓
-   3. CronJob IAM Sync (5 min) ou sync immédiat
+   3. IAM Sync CronJob (5 min) or immediate sync
             ↓
    4. Keycloak: User + Group + Role
             ↓
-   5. User se connecte → JWT avec tenant_id + roles
+   5. User logs in → JWT with tenant_id + roles
    ```
 
-   **Phase 2 (Cible) - Référentiel Entreprise**:
-   - LDAP/AD Federation dans Keycloak
-   - Groupes AD: `GRP_APIM_{TENANT}_{ROLE}` (ex: `GRP_APIM_FINANCE_CPI`)
-   - Git = Override pour externes et service accounts
-   - Mapping automatique département → tenant
+   **Phase 2 (Target) - Enterprise Directory**:
+   - LDAP/AD Federation in Keycloak
+   - AD Groups: `GRP_APIM_{TENANT}_{ROLE}` (e.g., `GRP_APIM_FINANCE_CPI`)
+   - Git = Override for external users and service accounts
+   - Automatic department → tenant mapping
 
-#### Phase 2.5 : Validation E2E - COMPLÉTÉ ✅ (22 Déc 2024)
+#### Phase 2.5: E2E Validation - COMPLETED ✅ (Dec 22, 2024)
 
-> **Objectif**: Valider le flow complet GitOps → Keycloak → Gateway avec tenant admin APIM.
+> **Objective**: Validate the complete GitOps → Keycloak → Gateway flow with APIM tenant admin.
 
 1. **Gateway OIDC Configuration** ✅
-   - External Authorization Server `KeycloakOIDC` configuré dans Gateway
-   - OAuth2 Strategies par application avec JWT validation
-   - Scope mappings standardisés: `{AuthServer}:{Tenant}:{Api}:{Version}:{Scope}`
-   - APIs sécurisées: Control-Plane-API, Gateway-Admin-API
+   - External Authorization Server `KeycloakOIDC` configured in Gateway
+   - OAuth2 Strategies per application with JWT validation
+   - Standardized scope mappings: `{AuthServer}:{Tenant}:{Api}:{Version}:{Scope}`
+   - Secured APIs: Control-Plane-API, Gateway-Admin-API
 
 2. **Gateway Admin Service** ✅
-   - Proxy OIDC vers Gateway administration (port 5555)
-   - Token forwarding: JWT utilisateur transmis à Gateway pour audit trail
-   - Fallback Basic Auth pour compatibilité legacy
-   - Router `/v1/gateway/*` dans Control-Plane API
-   - Config: `GATEWAY_USE_OIDC_PROXY=True` (défaut)
+   - OIDC Proxy to Gateway administration (port 5555)
+   - Token forwarding: User JWT transmitted to Gateway for audit trail
+   - Basic Auth fallback for legacy compatibility
+   - Router `/v1/gateway/*` in Control-Plane API
+   - Config: `GATEWAY_USE_OIDC_PROXY=True` (default)
 
-   **Endpoints disponibles**:
+   **Available Endpoints**:
    | Endpoint | Description |
    |----------|-------------|
    | `GET /v1/gateway/apis` | Liste les APIs Gateway |
@@ -909,9 +909,9 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    | `PUT /v1/gateway/apis/{id}/activate` | Active une API |
    | `POST /v1/gateway/configure-oidc` | Configure OIDC pour une API |
 
-3. **Sécurisation des Secrets** ✅ (AWS Secrets Manager + K8s)
+3. **Secrets Security** ✅ (AWS Secrets Manager + K8s)
 
-   **Stratégie de secrets**:
+   **Secrets Strategy**:
    ```
    ┌─────────────────────────────────────────────────────────────────────────┐
    │                    SECRETS MANAGEMENT STRATEGY                           │
@@ -930,45 +930,45 @@ Les pods Gateway et Portal sont isolés du réseau externe via NetworkPolicies:
    └─────────────────────────────────────────────────────────────────────────┘
    ```
 
-   **Module Terraform** (`terraform/modules/secrets/`):
-   - Auto-génération de passwords sécurisés
-   - Outputs pour External Secrets Operator
-   - Recovery window: 0 (dev), 30 jours (prod)
+   **Terraform Module** (`terraform/modules/secrets/`):
+   - Automatic secure password generation
+   - Outputs for External Secrets Operator
+   - Recovery window: 0 (dev), 30 days (prod)
 
-   **Configuration Ansible** (`ansible/vars/secrets.yaml`):
-   - Variables centralisées pour tous les playbooks
-   - Validation obligatoire des secrets critiques
-   - Support lookup env / Vault
+   **Ansible Configuration** (`ansible/vars/secrets.yaml`):
+   - Centralized variables for all playbooks
+   - Mandatory validation of critical secrets
+   - Support for env / Vault lookup
 
-4. **Tenant STOA Platform** ✅
-   - Tenant administrateur avec accès cross-tenant
+4. **STOA Platform Tenant** ✅
+   - Admin tenant with cross-tenant access
    - User: `stoaadmin@cab-i.com` (role: cpi-admin)
-   - Structure dans GitLab stoa-gitops
+   - Structure in GitLab stoa-gitops
 
-5. **Playbooks Ansible** ✅
-   - `provision-tenant.yaml` - Crée groupes Keycloak, users, namespaces K8s
-   - `register-api-gateway.yaml` - Import OpenAPI, OIDC, rate limiting, activation
-   - `configure-gateway-oidc.yaml` - Configuration OIDC complète
-   - `deploy-api.yaml` - Import API avec conversion OpenAPI 3.1→3.0 + activation
-   - Tous playbooks sécurisés avec `vars_files` (zéro hardcoding)
+5. **Ansible Playbooks** ✅
+   - `provision-tenant.yaml` - Creates Keycloak groups, users, K8s namespaces
+   - `register-api-gateway.yaml` - OpenAPI import, OIDC, rate limiting, activation
+   - `configure-gateway-oidc.yaml` - Complete OIDC configuration
+   - `deploy-api.yaml` - API import with OpenAPI 3.1→3.0 conversion + activation
+   - All playbooks secured with `vars_files` (zero hardcoding)
 
 6. **AWX Job Templates** ✅
-   - `Provision Tenant` (ID: 12) - Provisioning tenant complet
-   - `Register API Gateway` (ID: 13) - Enregistrement API dans Gateway
-   - `Deploy API` (ID: 8) - Import API via OIDC proxy avec conversion OpenAPI
+   - `Provision Tenant` (ID: 12) - Complete tenant provisioning
+   - `Register API Gateway` (ID: 13) - API registration in Gateway
+   - `Deploy API` (ID: 8) - API import via OIDC proxy with OpenAPI conversion
 
-7. **OpenAPI 3.1.0 Compatibility** ✅ (23 Déc 2024)
-   - webMethods Gateway 10.15 ne supporte pas OpenAPI 3.1.0
-   - Conversion automatique 3.1.x → 3.0.0 dans `deploy-api.yaml`
-   - Support swagger 2.0 et OpenAPI 3.0.x natifs
-   - POST /v1/gateway/apis - Endpoint proxy pour import API
-   - Test validé: Control-Plane-API-E2E v2.2 déployée et activée
+7. **OpenAPI 3.1.0 Compatibility** ✅ (Dec 23, 2024)
+   - webMethods Gateway 10.15 does not support OpenAPI 3.1.0
+   - Automatic 3.1.x → 3.0.0 conversion in `deploy-api.yaml`
+   - Native swagger 2.0 and OpenAPI 3.0.x support
+   - POST /v1/gateway/apis - Proxy endpoint for API import
+   - Test validated: Control-Plane-API-E2E v2.2 deployed and activated
 
-#### Phase 3 : Secrets & Gateway Alias (Priorité Moyenne)
+#### Phase 3: Secrets & Gateway Alias (Medium Priority)
 
-**Approche Hybride : Git + Gateway Alias**
+**Hybrid Approach: Git + Gateway Alias**
 
-Les **Alias webMethods Gateway** permettent de stocker endpoints et credentials séparément des APIs. L'approche hybride combine Git comme source de vérité avec les Alias pour la gestion runtime.
+**webMethods Gateway Aliases** allow storing endpoints and credentials separately from APIs. The hybrid approach combines Git as source of truth with Aliases for runtime management.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1003,20 +1003,20 @@ Les **Alias webMethods Gateway** permettent de stocker endpoints et credentials 
 │  │  Alias: payment-backend-dev                                          │    │
 │  │    ├── url: https://payment-dev.internal.cab-i.com                   │    │
 │  │    ├── auth: oauth2                                                  │    │
-│  │    └── credentials: *** (depuis Vault)                               │    │
+│  │    └── credentials: *** (from Vault)                                 │    │
 │  │                                                                      │    │
 │  │  API: payment-api → backend_alias: payment-backend-dev               │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Déployer HashiCorp Vault** 🔲
-   - Secrets dynamiques pour clients OAuth2
+1. **Deploy HashiCorp Vault** 🔲
+   - Dynamic secrets for OAuth2 clients
    - API Keys rotation
-   - AppRole par environnement
+   - AppRole per environment
    - Structure: `secret/data/{env}/{api}#key`
 
-2. **Structure GitOps avec Alias** 🔲
+2. **GitOps Structure with Aliases** 🔲
    ```
    stoa-gitops/
    ├── tenants/
@@ -1029,7 +1029,7 @@ Les **Alias webMethods Gateway** permettent de stocker endpoints et credentials 
    │                   ├── staging.yaml      # BACKEND_ALIAS: payment-backend-staging
    │                   └── prod.yaml         # BACKEND_ALIAS: payment-backend-prod
    │
-   ├── aliases/                              # Définition des Alias Gateway
+   ├── aliases/                              # Gateway Alias definitions
    │   ├── dev/
    │   │   ├── payment-backend.yaml
    │   │   └── invoice-backend.yaml
@@ -1039,7 +1039,7 @@ Les **Alias webMethods Gateway** permettent de stocker endpoints et credentials 
    │       └── payment-backend.yaml
    ```
 
-3. **Définition Alias Gateway (aliases/dev/payment-backend.yaml)** 🔲
+3. **Gateway Alias Definition (aliases/dev/payment-backend.yaml)** 🔲
    ```yaml
    apiVersion: stoa.cab-i.com/v1
    kind: GatewayAlias
@@ -1061,44 +1061,44 @@ Les **Alias webMethods Gateway** permettent de stocker endpoints et credentials 
          scopes: ["read", "write"]
    ```
 
-4. **Jobs AWX pour Gestion Alias** 🔲
+4. **AWX Jobs for Alias Management** 🔲
 
    | Job | Trigger | Action |
    |-----|---------|--------|
-   | `sync-alias` | Changement `aliases/**/*.yaml` | Crée/Update alias sur Gateway avec credentials Vault |
-   | `deploy-api` | Changement `apis/**/api.yaml` | Deploy API (utilise alias existant) |
-   | `rotate-credentials` | Planifié (cron) ou Manuel | Refresh credentials Vault → Gateway Alias |
-   | `full-deploy` | Nouveau tenant/API | sync-alias + deploy-api |
+   | `sync-alias` | Change in `aliases/**/*.yaml` | Create/Update alias on Gateway with Vault credentials |
+   | `deploy-api` | Change in `apis/**/api.yaml` | Deploy API (uses existing alias) |
+   | `rotate-credentials` | Scheduled (cron) or Manual | Refresh Vault credentials → Gateway Alias |
+   | `full-deploy` | New tenant/API | sync-alias + deploy-api |
 
-5. **Intégrer Vault dans Control-Plane API** 🔲
-   - VaultService pour récupérer secrets
-   - Résolution des références `vault:path#key`
-   - Cache avec TTL pour performances
+5. **Integrate Vault in Control-Plane API** 🔲
+   - VaultService to retrieve secrets
+   - Resolution of `vault:path#key` references
+   - Cache with TTL for performance
 
-6. **Avantages de l'Approche Hybride**
+6. **Benefits of the Hybrid Approach**
 
-   | Aspect | Bénéfice |
-   |--------|----------|
-   | **Git = Source de Vérité** | Tout versionné, auditable, rollback Git possible |
-   | **Alias = Abstraction** | API découplée du backend, promotion simplifiée |
-   | **Rotation Credentials** | Update alias sans toucher à l'API déployée |
-   | **Pas de Drift** | Git définit les alias, AWX synchronise sur Gateway |
-   | **Promotion Zero-Change** | Même API.yaml, juste l'alias change par env |
+   | Aspect | Benefit |
+   |--------|---------|
+   | **Git = Source of Truth** | Everything versioned, auditable, Git rollback possible |
+   | **Alias = Abstraction** | API decoupled from backend, simplified promotion |
+   | **Credentials Rotation** | Update alias without touching the deployed API |
+   | **No Drift** | Git defines aliases, AWX synchronizes to Gateway |
+   | **Zero-Change Promotion** | Same API.yaml, only alias changes per env |
 
-7. **Workflow de Promotion DEV → STAGING**
+7. **DEV → STAGING Promotion Workflow**
    ```
    ┌─────────────────────────────────────────────────────────────────────────────┐
-   │  1. API identique (api.yaml ne change pas)                                   │
-   │  2. Seul environments/staging.yaml diffère: BACKEND_ALIAS: payment-backend-staging │
-   │  3. L'alias payment-backend-staging existe déjà (provisionné par sync-alias) │
-   │  4. AWX deploy-api résout ${BACKEND_ALIAS} → payment-backend-staging         │
-   │  ✅ Promotion sans modification de code, credentials sécurisés              │
+   │  1. API identical (api.yaml doesn't change)                                  │
+   │  2. Only environments/staging.yaml differs: BACKEND_ALIAS: payment-backend-staging │
+   │  3. payment-backend-staging alias already exists (provisioned by sync-alias) │
+   │  4. AWX deploy-api resolves ${BACKEND_ALIAS} → payment-backend-staging       │
+   │  ✅ Promotion without code modification, credentials secured                │
    └─────────────────────────────────────────────────────────────────────────────┘
    ```
 
-#### Phase 4 : Observabilité avec OpenSearch (Priorité Moyenne)
+#### Phase 4: Observability with OpenSearch (Medium Priority)
 
-Stack complète d'observabilité pour STOA Platform utilisant **Amazon OpenSearch** pour le stockage centralisé des traces et métriques.
+Complete observability stack for STOA Platform using **Amazon OpenSearch** for centralized storage of traces and metrics.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1123,10 +1123,10 @@ Stack complète d'observabilité pour STOA Platform utilisant **Amazon OpenSearc
 │  │  └── stoa-analytics-*    (API usage analytics par tenant)            │    │
 │  │                                                                       │    │
 │  │  Features:                                                            │    │
-│  │  ├── Full-text search sur commit messages, erreurs                   │    │
-│  │  ├── Agrégations temps réel (stats pipelines)                        │    │
-│  │  ├── Rétention automatique (30 jours traces, 7 jours logs)           │    │
-│  │  └── Alerting intégré (anomalie detection)                           │    │
+│  │  ├── Full-text search on commit messages, errors                     │    │
+│  │  ├── Real-time aggregations (pipeline stats)                         │    │
+│  │  ├── Automatic retention (30 days traces, 7 days logs)               │    │
+│  │  └── Built-in alerting (anomaly detection)                           │    │
 │  └──────────────────────────────────────────────────────────────────────┘    │
 │                              │                                                │
 │                              ▼                                                │
@@ -1135,10 +1135,10 @@ Stack complète d'observabilité pour STOA Platform utilisant **Amazon OpenSearc
 │  │                                                                       │    │
 │  │  ┌────────────────────────────┐  ┌────────────────────────────┐      │    │
 │  │  │   OpenSearch Dashboards    │  │    Control-Plane UI         │      │    │
-│  │  │   (Kibana-compatible)      │  │    Page Monitoring          │      │    │
-│  │  │   • Dashboards prédéfinis  │  │    • Timeline pipelines     │      │    │
-│  │  │   • Alerting rules         │  │    • Stats en temps réel    │      │    │
-│  │  │   • Anomaly detection      │  │    • Drill-down par trace   │      │    │
+│  │  │   (Kibana-compatible)      │  │    Monitoring Page          │      │    │
+│  │  │   • Pre-built dashboards   │  │    • Pipeline timeline      │      │    │
+│  │  │   • Alerting rules         │  │    • Real-time stats        │      │    │
+│  │  │   • Anomaly detection      │  │    • Drill-down by trace    │      │    │
 │  │  └────────────────────────────┘  └────────────────────────────┘      │    │
 │  └──────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -1176,20 +1176,20 @@ Stack complète d'observabilité pour STOA Platform utilisant **Amazon OpenSearc
               └────────────────────────────────────────────────────────────┘
 ```
 
-1. **Amazon OpenSearch Service** (~$35/mois)
-   - Instance: t3.small.search (1 node partagé DEV+STAGING)
+1. **Amazon OpenSearch Service** (~$35/month)
+   - Instance: t3.small.search (1 shared node DEV+STAGING)
    - Storage: 20GB EBS gp3
    - Indices:
-     - `stoa-traces-YYYY.MM` - Pipeline traces (rétention 30 jours)
-     - `stoa-logs-YYYY.MM.DD` - Application logs (rétention 7 jours)
-     - `stoa-metrics-*` - Métriques (rétention 14 jours)
-     - `stoa-analytics-{tenant}` - Analytics API Gateway par tenant
+     - `stoa-traces-YYYY.MM` - Pipeline traces (30 days retention)
+     - `stoa-logs-YYYY.MM.DD` - Application logs (7 days retention)
+     - `stoa-metrics-*` - Metrics (14 days retention)
+     - `stoa-analytics-{tenant}` - API Gateway analytics per tenant
 
-2. **Intégration Control-Plane API → OpenSearch**
-   - OpenSearchService dans `services/opensearch_service.py`
-   - Indexation des PipelineTrace à chaque étape
-   - Mise à jour du status en temps réel
-   - Recherche full-text sur commit messages, erreurs
+2. **Control-Plane API → OpenSearch Integration**
+   - OpenSearchService in `services/opensearch_service.py`
+   - PipelineTrace indexing at each step
+   - Real-time status update
+   - Full-text search on commit messages, errors
 
 3. **FluentBit** (Log Shipping)
    - DaemonSet sur EKS
@@ -1199,35 +1199,35 @@ Stack complète d'observabilité pour STOA Platform utilisant **Amazon OpenSearc
    - Helm: `fluent/fluent-bit`
 
 4. **Prometheus + Remote Write** (Metrics)
-   - Prometheus pour collecte locale
-   - Remote Write vers OpenSearch (via Prometheus Exporter)
-   - Métriques: latency, error_rate, requests/sec
+   - Prometheus for local collection
+   - Remote Write to OpenSearch (via Prometheus Exporter)
+   - Metrics: latency, error_rate, requests/sec
    - Alerting: AlertManager → OpenSearch → Slack
 
 5. **OpenSearch Dashboards** (Visualization)
    - URL: https://opensearch.stoa.cab-i.com/_dashboards
-   - Dashboards prédéfinis:
+   - Pre-built dashboards:
      - **Pipeline Overview**: Success rate, avg duration, errors/hour
-     - **Deployment History**: Timeline par tenant/API
-     - **Error Analysis**: Top errors, traces associées
-     - **Commit Activity**: Heatmap GitLab pushes
-   - Anomaly Detection: ML built-in pour spike detection
+     - **Deployment History**: Timeline per tenant/API
+     - **Error Analysis**: Top errors, associated traces
+     - **Commit Activity**: GitLab pushes heatmap
+   - Anomaly Detection: Built-in ML for spike detection
 
-6. **Control-Plane UI - Page Monitoring** (✅ Déjà implémentée)
-   - Lecture depuis OpenSearch au lieu de mémoire
-   - Timeline interactive par trace
-   - Filtres: tenant, status, date range
-   - Export CSV des traces
+6. **Control-Plane UI - Monitoring Page** (✅ Already implemented)
+   - Read from OpenSearch instead of memory
+   - Interactive timeline per trace
+   - Filters: tenant, status, date range
+   - CSV export of traces
 
-7. **API Traces Endpoints** (à mettre à jour)
+7. **API Traces Endpoints** (to be updated)
    ```python
-   # Actuellement: in-memory store (TraceStore)
-   # Cible: OpenSearch queries
+   # Currently: in-memory store (TraceStore)
+   # Target: OpenSearch queries
 
    GET /v1/traces                    # OpenSearch query
    GET /v1/traces/{trace_id}         # OpenSearch get
    GET /v1/traces/stats              # OpenSearch aggregations
-   GET /v1/traces/search             # Full-text search (nouveau)
+   GET /v1/traces/search             # Full-text search (new)
    ```
 
 8. **Index Templates & ILM**
@@ -1255,62 +1255,62 @@ Stack complète d'observabilité pour STOA Platform utilisant **Amazon OpenSearc
    ```
 
 9. **Alerting Rules**
-   - Pipeline failed > 3 fois/heure → Slack #stoa-alerts
+   - Pipeline failed > 3 times/hour → Slack #stoa-alerts
    - Duration P95 > 30s → Warning
    - AWX job timeout → Critical
    - Kafka consumer lag > 100 → Warning
 
-**Avantages OpenSearch vs in-memory**:
-| Aspect | In-Memory (actuel) | OpenSearch (cible) |
+**OpenSearch vs in-memory Benefits**:
+| Aspect | In-Memory (current) | OpenSearch (target) |
 |--------|-------------------|-------------------|
-| Persistance | ❌ Perdu au restart | ✅ Persistent |
-| Recherche | ❌ Basique | ✅ Full-text, agrégations |
-| Rétention | ❌ Limitée (500 traces) | ✅ Configurable (30 jours+) |
-| Scalabilité | ❌ Single node | ✅ Cluster possible |
-| Dashboards | ❌ UI custom uniquement | ✅ OpenSearch Dashboards |
-| Coût | ✅ Gratuit | ⚠️ ~$35/mois |
+| Persistence | ❌ Lost on restart | ✅ Persistent |
+| Search | ❌ Basic | ✅ Full-text, aggregations |
+| Retention | ❌ Limited (500 traces) | ✅ Configurable (30 days+) |
+| Scalability | ❌ Single node | ✅ Cluster possible |
+| Dashboards | ❌ Custom UI only | ✅ OpenSearch Dashboards |
+| Cost | ✅ Free | ⚠️ ~$35/month |
 
-**URLs Observabilité**:
+**Observability URLs**:
 | Service | URL |
 |---------|-----|
 | OpenSearch Dashboards | https://opensearch.stoa.cab-i.com/_dashboards |
 | Control-Plane Monitoring | https://console.stoa.cab-i.com/monitoring |
 | Prometheus (interne) | prometheus.stoa-system.svc.cluster.local:9090 |
 
-#### Phase 4.5 : Jenkins Orchestration Layer (Priorité Haute - Enterprise)
+#### Phase 4.5: Jenkins Orchestration Layer (High Priority - Enterprise)
 
-**Objectif**: Intégrer Jenkins comme couche d'orchestration auditable entre Kafka et AWX pour une vision entreprise avec traçabilité complète, approval gates et reporting.
+**Objective**: Integrate Jenkins as an auditable orchestration layer between Kafka and AWX for an enterprise vision with complete traceability, approval gates and reporting.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                      JENKINS ORCHESTRATION LAYER                                      │
 │                                                                                       │
 │   ┌─────────────────────────────────────────────────────────────────────────────┐    │
-│   │                         ARCHITECTURE ENTREPRISE                              │    │
+│   │                         ENTERPRISE ARCHITECTURE                              │    │
 │   │                                                                              │    │
 │   │   ┌──────────────┐                                                          │    │
-│   │   │     GUI      │  ← UI Métier (produit API, tenant, accès)               │    │
+│   │   │     GUI      │  ← Business UI (API product, tenant, access)            │    │
 │   │   └──────┬───────┘                                                          │    │
 │   │          │ REST                                                              │    │
 │   │   ┌──────▼────────┐                                                         │    │
-│   │   │ Backend Python│  ← règles, validations, RBAC                           │    │
+│   │   │ Backend Python│  ← rules, validations, RBAC                            │    │
 │   │   └──────┬────────┘                                                         │    │
 │   │          │ EVENT (intent)                                                    │    │
 │   │   ┌──────▼────────┐                                                         │    │
-│   │   │     Kafka     │  ← source d'événements                                  │    │
+│   │   │     Kafka     │  ← event source                                         │    │
 │   │   └──────┬────────┘                                                         │    │
 │   │          │ subscribe                                                         │    │
 │   │   ┌──────▼────────┐                                                         │    │
-│   │   │    Jenkins    │  ← ORCHESTRATEUR AUDITABLE                              │    │
+│   │   │    Jenkins    │  ← AUDITABLE ORCHESTRATOR                               │    │
 │   │   │               │     • Pipeline as Code (Jenkinsfile)                    │    │
 │   │   │               │     • Approval Gates                                     │    │
-│   │   │               │     • Audit Trail complet                               │    │
+│   │   │               │     • Complete Audit Trail                              │    │
 │   │   │               │     • Parallel execution                                │    │
 │   │   │               │     • Retry & rollback                                  │    │
 │   │   └──────┬────────┘                                                         │    │
 │   │          │ trigger                                                           │    │
 │   │   ┌──────▼────────┐                                                         │    │
-│   │   │      AWX      │  ← EXECUTION infra / gateway                            │    │
+│   │   │      AWX      │  ← infra / gateway EXECUTION                            │    │
 │   │   └───────────────┘                                                         │    │
 │   │                                                                              │    │
 │   └─────────────────────────────────────────────────────────────────────────────┘    │
@@ -1318,19 +1318,19 @@ Stack complète d'observabilité pour STOA Platform utilisant **Amazon OpenSearc
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Avantages Jenkins comme Orchestrateur**:
+**Benefits of Jenkins as Orchestrator**:
 
-| Aspect | Sans Jenkins (Kafka→AWX direct) | Avec Jenkins |
+| Aspect | Without Jenkins (Kafka→AWX direct) | With Jenkins |
 |--------|--------------------------------|--------------|
-| **Auditabilité** | Logs dispersés | Console centralisée, Blue Ocean UI |
-| **Approval Gates** | ❌ Pas de gates | ✅ `input` steps, RBAC approvers |
-| **Retry/Rollback** | ❌ Manuel | ✅ Stage retry, automatic rollback |
-| **Parallélisme** | ❌ Séquentiel | ✅ `parallel` stages |
+| **Auditability** | Scattered logs | Centralized console, Blue Ocean UI |
+| **Approval Gates** | ❌ No gates | ✅ `input` steps, RBAC approvers |
+| **Retry/Rollback** | ❌ Manual | ✅ Stage retry, automatic rollback |
+| **Parallelism** | ❌ Sequential | ✅ `parallel` stages |
 | **Notification** | ❌ Custom | ✅ Native Slack/Email/Teams |
-| **Compliance** | ❌ Logs Kafka | ✅ Build artifacts, audit trail |
-| **Pipeline as Code** | ❌ Config AWX | ✅ Jenkinsfile versionné Git |
+| **Compliance** | ❌ Kafka logs | ✅ Build artifacts, audit trail |
+| **Pipeline as Code** | ❌ AWX config | ✅ Git-versioned Jenkinsfile |
 
-**Architecture Détaillée**:
+**Detailed Architecture**:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -1366,7 +1366,7 @@ Stack complète d'observabilité pour STOA Platform utilisant **Amazon OpenSearc
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Déploiement Jenkins sur EKS**:
+**Jenkins Deployment on EKS**:
 
 ```yaml
 # jenkins/values.yaml (Helm)
@@ -1381,7 +1381,7 @@ controller:
       cpu: "2"
       memory: "4Gi"
 
-  # Plugins essentiels
+  # Essential plugins
   installPlugins:
     - kubernetes:latest
     - workflow-aggregator:latest
@@ -1423,7 +1423,7 @@ controller:
                       - group: "tenant-admin"
 
 agent:
-  # Agents Kubernetes dynamiques
+  # Dynamic Kubernetes agents
   podTemplates:
     - name: "stoa-agent"
       label: "stoa-agent"
@@ -1535,7 +1535,7 @@ pipeline {
                 script {
                     echo "Validating deployment request..."
 
-                    // Vérifier que l'API existe dans GitLab
+                    // Verify that the API exists in GitLab
                     def apiSpec = sh(
                         script: """
                             curl -s "https://api.stoa.cab-i.com/v1/tenants/${TENANT_ID}/apis/${API_NAME}" \
@@ -1548,7 +1548,7 @@ pipeline {
                         error "API ${API_NAME} not found for tenant ${TENANT_ID}"
                     }
 
-                    // Publier event Kafka: validation-passed
+                    // Publish Kafka event: validation-passed
                     kafkaPublish(
                         topic: 'pipeline.events',
                         message: [
@@ -1624,7 +1624,7 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 script {
-                    // Attendre que l'API soit accessible
+                    // Wait for the API to be accessible
                     retry(5) {
                         sleep(time: 10, unit: 'SECONDS')
 
@@ -1756,7 +1756,7 @@ pipeline {
             steps {
                 script {
                     if (!params.TARGET_VERSION) {
-                        // Récupérer la version précédente depuis GitLab
+                        // Retrieve previous version from GitLab
                         env.ROLLBACK_VERSION = sh(
                             script: """
                                 git log --oneline -2 apis/${params.TENANT_ID}/${params.API_NAME}/openapi.yaml \
@@ -1806,7 +1806,7 @@ pipeline {
         stage('Verify Rollback') {
             steps {
                 script {
-                    // Health check après rollback
+                    // Health check after rollback
                     retry(3) {
                         sleep 5
                         sh """
@@ -1821,7 +1821,7 @@ pipeline {
     post {
         always {
             script {
-                // Créer un incident ticket si rollback
+                // Create an incident ticket for rollback
                 sh """
                     curl -X POST "https://api.stoa.cab-i.com/v1/incidents" \
                         -H "Content-Type: application/json" \
@@ -1841,7 +1841,7 @@ pipeline {
 }
 ```
 
-**Jenkins Shared Library** (pour réutilisation):
+**Jenkins Shared Library** (for reuse):
 
 ```groovy
 // vars/kafkaPublish.groovy
@@ -1889,31 +1889,31 @@ def call(String status, Map details) {
 }
 ```
 
-**Dashboard Jenkins - Métriques**:
+**Jenkins Dashboard - Metrics**:
 
-| Métrique | Description | Objectif |
-|----------|-------------|----------|
-| **Deployment Success Rate** | % pipelines réussis | > 95% |
-| **Mean Time to Deploy (MTTD)** | Durée moyenne pipeline | < 10 min |
-| **Approval Wait Time** | Temps d'attente approbation | < 4h |
-| **Rollback Frequency** | Nb rollbacks/semaine | < 2 |
-| **Pipeline Queue Time** | Temps en attente | < 5 min |
+| Metric | Description | Target |
+|--------|-------------|--------|
+| **Deployment Success Rate** | % successful pipelines | > 95% |
+| **Mean Time to Deploy (MTTD)** | Average pipeline duration | < 10 min |
+| **Approval Wait Time** | Approval waiting time | < 4h |
+| **Rollback Frequency** | Rollbacks/week | < 2 |
+| **Pipeline Queue Time** | Queue waiting time | < 5 min |
 
-**Checklist Phase 4.5**:
-- [ ] Jenkins déployé sur EKS (Helm jenkins/jenkins)
-- [ ] Configuration JCasC (Jenkins Configuration as Code)
-- [ ] Intégration Keycloak SSO (OIDC)
-- [ ] Service Kafka Consumer → Jenkins Trigger
-- [ ] Jenkinsfile `deploy-api` avec approval gates
-- [ ] Jenkinsfile `rollback-api` avec emergency bypass
-- [ ] Jenkinsfile `promote-api` pour promotion entre envs
-- [ ] Jenkinsfile `delete-api` avec confirmation
+**Phase 4.5 Checklist**:
+- [ ] Jenkins deployed on EKS (Helm jenkins/jenkins)
+- [ ] JCasC Configuration (Jenkins Configuration as Code)
+- [ ] Keycloak SSO Integration (OIDC)
+- [ ] Kafka Consumer → Jenkins Trigger Service
+- [ ] Jenkinsfile `deploy-api` with approval gates
+- [ ] Jenkinsfile `rollback-api` with emergency bypass
+- [ ] Jenkinsfile `promote-api` for cross-env promotion
+- [ ] Jenkinsfile `delete-api` with confirmation
 - [ ] Shared Library (kafkaPublish, awxLaunch, notifyDeployment)
 - [ ] Blue Ocean UI accessible
-- [ ] Slack notifications configurées
-- [ ] Dashboard métriques Jenkins
-- [ ] Credentials AWX/Kafka/Keycloak dans Jenkins Credentials Store
-- [ ] Backup Jenkins config (PVC + S3)
+- [ ] Slack notifications configured
+- [ ] Jenkins metrics dashboard
+- [ ] AWX/Kafka/Keycloak credentials in Jenkins Credentials Store
+- [ ] Jenkins config backup (PVC + S3)
 
 **URLs Jenkins**:
 | Service | URL |
@@ -1922,22 +1922,22 @@ def call(String status, Map details) {
 | Blue Ocean | https://jenkins.stoa.cab-i.com/blue |
 | API | https://jenkins.stoa.cab-i.com/api/json |
 
-#### Phase 5 : Multi-Environment (Priorité Basse)
-1. **Environnement STAGING**
-   - Promotion DEV → STAGING
+#### Phase 5: Multi-Environment (Low Priority)
+1. **STAGING Environment**
+   - DEV → STAGING Promotion
    - Portal publication
 
 2. **OpenSearch Analytics**
-   - Global Policy par tenant
+   - Global Policy per tenant
    - Index pattern: {env}-{tenant}-analytics
 
-#### Phase 6 : Tenant Démo & Documentation (Beta Testing)
+#### Phase 6: Demo Tenant & Documentation (Beta Testing)
 
-**Objectif**: Créer un tenant de démonstration avec des utilisateurs beta testeurs et générer la documentation utilisateur (MkDocs).
+**Objective**: Create a demonstration tenant with beta tester users and generate user documentation (MkDocs).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                           BETA TESTING - TENANT DÉMO                                 │
+│                           BETA TESTING - DEMO TENANT                                 │
 │                                                                                      │
 │                        ┌──────────────────────────┐                                 │
 │                        │       KEYCLOAK           │                                 │
@@ -1966,23 +1966,23 @@ def call(String status, Map details) {
 │                    │  ├── demo-cpi@cab-i.com   │  (CPI - Full access)             │
 │                    │  └── demo-devops@cab-i.com│  (DevOps - Deploy only)          │
 │                    │                           │                                   │
-│                    │  APIs démo:               │                                   │
+│                    │  Demo APIs:               │                                   │
 │                    │  ├── petstore-api         │                                   │
 │                    │  └── weather-api          │                                   │
 │                    └───────────────────────────┘                                   │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-> **Note**: Le Developer Portal sera développé en Phase 8 comme portal custom React.
+> **Note**: The Developer Portal will be developed in Phase 8 as a custom React portal.
 
-1. **Créer le Tenant Démo dans GitOps** 🔲
+1. **Create Demo Tenant in GitOps** 🔲
 
    ```yaml
-   # iam/tenants.yaml - Ajout tenant-demo
+   # iam/tenants.yaml - Add tenant-demo
    tenants:
      - id: tenant-demo
        displayName: "Demo Tenant (Beta Testing)"
-       description: "Tenant de démonstration pour les beta testeurs"
+       description: "Demonstration tenant for beta testers"
        status: active
        createdAt: "2024-12-21T00:00:00Z"
 
@@ -2014,16 +2014,16 @@ def call(String status, Map details) {
          viewers: []
    ```
 
-2. **Créer les Utilisateurs Beta dans Keycloak** 🔲
+2. **Create Beta Users in Keycloak** 🔲
 
-   | User | Email | Rôle | Accès |
+   | User | Email | Role | Access |
    |------|-------|------|-------|
    | Demo CPI | demo-cpi@cab-i.com | `tenant-admin` | UI DevOps (full CRUD) |
    | Demo DevOps | demo-devops@cab-i.com | `devops` | UI DevOps (deploy only) |
 
    **Configuration Keycloak**:
    ```yaml
-   # Groupe: tenant-demo
+   # Group: tenant-demo
    users:
      - username: demo-cpi
        email: demo-cpi@cab-i.com
@@ -2058,9 +2058,9 @@ def call(String status, Map details) {
          tenant_id: ["tenant-demo"]
    ```
 
-3. **APIs Démo Pré-déployées** 🔲
+3. **Pre-deployed Demo APIs** 🔲
 
-   Créer des APIs de démonstration dans le tenant-demo pour que les beta testeurs puissent les explorer.
+   Create demonstration APIs in tenant-demo so beta testers can explore them.
 
    ```
    stoa-gitops/
@@ -2090,7 +2090,7 @@ def call(String status, Map details) {
    spec:
      displayName: "Petstore API (Demo)"
      version: "1.0.0"
-     description: "API de démonstration basée sur Swagger Petstore"
+     description: "Demo API based on Swagger Petstore"
      backend:
        url: "https://petstore.swagger.io/v2"
      security:
@@ -2102,84 +2102,84 @@ def call(String status, Map details) {
            period: minute
    ```
 
-4. **Workflow Beta Testeur** 🔲
+4. **Beta Tester Workflow** 🔲
 
    ```
    ┌─────────────────────────────────────────────────────────────────────────────────────┐
-   │                        PARCOURS BETA TESTEUR                                         │
+   │                        BETA TESTER JOURNEY                                           │
    │                                                                                      │
-   │  1. CONNEXION                                                                        │
+   │  1. LOGIN                                                                            │
    │     ┌─────────────────────────────────────────────────────────────────────────────┐ │
-   │     │  Accès: https://console.stoa.cab-i.com                                       │ │
-   │     │  → Redirect vers Keycloak                                                   │ │
+   │     │  Access: https://console.stoa.cab-i.com                                      │ │
+   │     │  → Redirect to Keycloak                                                     │ │
    │     │  → Login: demo-cpi@cab-i.com / DemoCPI2024!                                 │ │
-   │     │  → Redirect vers UI DevOps (JWT avec tenant_id=tenant-demo)                │ │
+   │     │  → Redirect to DevOps UI (JWT with tenant_id=tenant-demo)                  │ │
    │     └─────────────────────────────────────────────────────────────────────────────┘ │
    │                                                                                      │
-   │  2. UI DEVOPS - GESTION APIs                                                        │
+   │  2. DEVOPS UI - API MANAGEMENT                                                      │
    │     ┌─────────────────────────────────────────────────────────────────────────────┐ │
-   │     │  • Voir les APIs du tenant-demo (petstore-api, weather-api)                │ │
-   │     │  • Créer une nouvelle API de test                                          │ │
-   │     │  • Déployer sur l'environnement DEV                                        │ │
-   │     │  • Voir les traces du pipeline (GitLab → Kafka → AWX → Gateway)           │ │
+   │     │  • View tenant-demo APIs (petstore-api, weather-api)                       │ │
+   │     │  • Create a new test API                                                   │ │
+   │     │  • Deploy to DEV environment                                               │ │
+   │     │  • View pipeline traces (GitLab → Kafka → AWX → Gateway)                  │ │
    │     └─────────────────────────────────────────────────────────────────────────────┘ │
    │                                                                                      │
    └─────────────────────────────────────────────────────────────────────────────────────┘
    ```
 
-   > **Note**: Le Developer Portal sera ajouté en Phase 8.
+   > **Note**: The Developer Portal will be added in Phase 8.
 
-5. **Permissions par Rôle (UI DevOps)** 🔲
+5. **Permissions by Role (DevOps UI)** 🔲
 
    | Action | CPI (demo-cpi) | DevOps (demo-devops) |
    |--------|----------------|----------------------|
-   | Voir APIs tenant | ✅ | ✅ |
-   | Créer/Modifier API | ✅ | ✅ |
-   | Supprimer API | ✅ | ❌ |
-   | Déployer API | ✅ | ✅ |
-   | Gérer membres tenant | ✅ | ❌ |
-   | Voir traces pipeline | ✅ | ✅ |
+   | View tenant APIs | ✅ | ✅ |
+   | Create/Modify API | ✅ | ✅ |
+   | Delete API | ✅ | ❌ |
+   | Deploy API | ✅ | ✅ |
+   | Manage tenant members | ✅ | ❌ |
+   | View pipeline traces | ✅ | ✅ |
 
-6. **Checklist Déploiement Phase 6** 🔲
+6. **Phase 6 Deployment Checklist** 🔲
 
-   - [ ] Créer tenant-demo dans `iam/tenants.yaml` + commit GitLab
-   - [ ] Sync IAM → Keycloak (créer groupe + users)
-   - [ ] Créer APIs démo (petstore, weather) dans GitOps
-   - [ ] Déployer APIs démo sur Gateway DEV
-   - [ ] Tester parcours complet avec demo-cpi
-   - [ ] Tester parcours complet avec demo-devops
-   - [ ] Documenter accès beta testeurs
+   - [ ] Create tenant-demo in `iam/tenants.yaml` + commit to GitLab
+   - [ ] Sync IAM → Keycloak (create group + users)
+   - [ ] Create demo APIs (petstore, weather) in GitOps
+   - [ ] Deploy demo APIs on DEV Gateway
+   - [ ] Test complete workflow with demo-cpi
+   - [ ] Test complete workflow with demo-devops
+   - [ ] Document beta tester access
 
-7. **Credentials Beta Testeurs**
+7. **Beta Tester Credentials**
 
    | User | URL | Login | Password |
    |------|-----|-------|----------|
    | Demo CPI | https://console.stoa.cab-i.com | demo-cpi@cab-i.com | DemoCPI2024! |
    | Demo DevOps | https://console.stoa.cab-i.com | demo-devops@cab-i.com | DemoDevOps2024! |
 
-   > **Note**: Les credentials seront stockés dans Vault après validation beta.
+   > **Note**: Credentials will be stored in Vault after beta validation.
 
-8. **Documentation Utilisateur (MkDocs)** 🔲
+8. **User Documentation (MkDocs)** 🔲
 
-   Générer une documentation complète pour les beta testeurs et futurs utilisateurs de la plateforme.
+   Generate comprehensive documentation for beta testers and future platform users.
 
-   **Structure Documentation**:
+   **Documentation Structure**:
    ```
    docs/
    ├── user-guide/
    │   ├── README.md                    # Index documentation
-   │   ├── 01-getting-started.md        # Premiers pas
-   │   ├── 02-ui-devops-guide.md        # Guide UI DevOps
-   │   ├── 03-developer-portal-guide.md # Guide Developer Portal
-   │   ├── 04-api-lifecycle.md          # Cycle de vie d'une API
-   │   ├── 05-rbac-roles.md             # Rôles et permissions
-   │   └── 06-troubleshooting.md        # Dépannage
+   │   ├── 01-getting-started.md        # Getting started
+   │   ├── 02-ui-devops-guide.md        # DevOps UI Guide
+   │   ├── 03-developer-portal-guide.md # Developer Portal Guide
+   │   ├── 04-api-lifecycle.md          # API lifecycle
+   │   ├── 05-rbac-roles.md             # Roles and permissions
+   │   └── 06-troubleshooting.md        # Troubleshooting
    │
    ├── tutorials/
-   │   ├── create-first-api.md          # Tutoriel: Créer sa première API
-   │   ├── deploy-api.md                # Tutoriel: Déployer une API
-   │   ├── consume-api.md               # Tutoriel: Consommer une API
-   │   └── manage-team.md               # Tutoriel: Gérer son équipe
+   │   ├── create-first-api.md          # Tutorial: Create your first API
+   │   ├── deploy-api.md                # Tutorial: Deploy an API
+   │   ├── consume-api.md               # Tutorial: Consume an API
+   │   └── manage-team.md               # Tutorial: Manage your team
    │
    └── images/
        ├── login-flow.png
@@ -2189,114 +2189,114 @@ def call(String status, Map details) {
 
    **01-getting-started.md**:
    ```markdown
-   # Guide de Démarrage Rapide
+   # Quick Start Guide
 
-   ## Accès à la Plateforme APIM
+   ## APIM Platform Access
 
-   La plateforme APIM CAB-I dispose d'une interface principale:
+   The CAB-I APIM platform has one main interface:
 
    | Interface | URL | Description |
    |-----------|-----|-------------|
-   | UI DevOps | https://console.stoa.cab-i.com | Gestion des APIs, déploiements, monitoring |
+   | DevOps UI | https://console.stoa.cab-i.com | API management, deployments, monitoring |
 
-   > **Note**: Le Developer Portal custom sera disponible en Phase 8.
+   > **Note**: The custom Developer Portal will be available in Phase 8.
 
-   ## Connexion (SSO Keycloak)
+   ## Login (Keycloak SSO)
 
-   Toutes les interfaces utilisent **Keycloak** pour l'authentification.
-   Une seule connexion vous donne accès à toutes les applications.
+   All interfaces use **Keycloak** for authentication.
+   A single login gives you access to all applications.
 
-   ### Étapes de connexion:
-   1. Accédez à l'URL de l'interface souhaitée
-   2. Vous êtes redirigé vers la page de connexion Keycloak
-   3. Entrez votre email et mot de passe
-   4. Vous êtes redirigé vers l'application
+   ### Login steps:
+   1. Access the desired interface URL
+   2. You are redirected to the Keycloak login page
+   3. Enter your email and password
+   4. You are redirected to the application
 
-   ### Rôles Utilisateurs
+   ### User Roles
 
-   | Rôle | Description | Permissions |
+   | Role | Description | Permissions |
    |------|-------------|-------------|
-   | **CPI (Tenant Admin)** | Administrateur du tenant | CRUD complet sur APIs, Apps, Users |
-   | **DevOps** | Développeur/Opérateur | Créer/Modifier APIs, Déployer |
-   | **Viewer** | Lecture seule | Consulter APIs et statistiques |
+   | **CPI (Tenant Admin)** | Tenant administrator | Full CRUD on APIs, Apps, Users |
+   | **DevOps** | Developer/Operator | Create/Modify APIs, Deploy |
+   | **Viewer** | Read-only | View APIs and statistics |
 
-   ## Votre Premier Déploiement
+   ## Your First Deployment
 
-   1. **Connectez-vous** à l'UI DevOps
-   2. **Créez une API** via le formulaire ou import OpenAPI
-   3. **Déployez** sur l'environnement DEV
-   4. **Vérifiez** le déploiement dans la page Monitoring
-   5. **Testez** l'API via la Gateway
+   1. **Log in** to the DevOps UI
+   2. **Create an API** via the form or OpenAPI import
+   3. **Deploy** to the DEV environment
+   4. **Verify** the deployment in the Monitoring page
+   5. **Test** the API via the Gateway
    ```
 
    **02-ui-devops-guide.md**:
    ```markdown
-   # Guide UI DevOps
+   # DevOps UI Guide
 
    ## Dashboard
 
-   Le dashboard affiche une vue d'ensemble de votre tenant:
-   - Nombre d'APIs
-   - Déploiements récents
-   - Statut des pipelines
-   - Alertes en cours
+   The dashboard displays an overview of your tenant:
+   - Number of APIs
+   - Recent deployments
+   - Pipeline status
+   - Active alerts
 
-   ## Gestion des APIs
+   ## API Management
 
-   ### Créer une API
-   1. Cliquez sur **+ Nouvelle API**
-   2. Remplissez les informations:
-      - Nom (unique dans le tenant)
+   ### Create an API
+   1. Click on **+ New API**
+   2. Fill in the information:
+      - Name (unique within the tenant)
       - Version
       - Description
       - Backend URL
-   3. (Optionnel) Importez un fichier OpenAPI
-   4. Cliquez sur **Créer**
+   3. (Optional) Import an OpenAPI file
+   4. Click **Create**
 
-   ### Déployer une API
-   1. Sélectionnez l'API dans la liste
-   2. Cliquez sur **Déployer**
-   3. Choisissez l'environnement (DEV, STAGING, PROD)
-   4. Confirmez le déploiement
-   5. Suivez le pipeline dans l'onglet **Monitoring**
+   ### Deploy an API
+   1. Select the API from the list
+   2. Click **Deploy**
+   3. Choose the environment (DEV, STAGING, PROD)
+   4. Confirm the deployment
+   5. Follow the pipeline in the **Monitoring** tab
 
-   ### Pipeline de Déploiement
+   ### Deployment Pipeline
    ```
    GitLab Commit → Kafka Event → AWX Job → Gateway Deploy
    ```
-   Chaque étape est visible en temps réel dans la page Monitoring.
+   Each step is visible in real-time on the Monitoring page.
 
    ## Monitoring
 
-   ### Timeline des Pipelines
-   - Vue chronologique de tous les déploiements
-   - Filtres par statut, API, environnement
-   - Détail de chaque étape avec durée
+   ### Pipeline Timeline
+   - Chronological view of all deployments
+   - Filters by status, API, environment
+   - Detail of each step with duration
 
-   ### Statuts
-   - 🟢 **Success**: Déploiement réussi
-   - 🟡 **Pending**: En cours
-   - 🔴 **Failed**: Échec (cliquez pour voir l'erreur)
+   ### Statuses
+   - 🟢 **Success**: Successful deployment
+   - 🟡 **Pending**: In progress
+   - 🔴 **Failed**: Failed (click to see the error)
 
-   ## Gestion de l'Équipe (CPI uniquement)
+   ## Team Management (CPI only)
 
-   ### Ajouter un membre
-   1. Allez dans **Paramètres > Équipe**
-   2. Cliquez sur **+ Ajouter un membre**
-   3. Entrez l'email et le nom
-   4. Sélectionnez le rôle (CPI, DevOps, Viewer)
-   5. Confirmez
+   ### Add a member
+   1. Go to **Settings > Team**
+   2. Click on **+ Add member**
+   3. Enter the email and name
+   4. Select the role (CPI, DevOps, Viewer)
+   5. Confirm
 
-   L'utilisateur recevra un accès automatiquement après synchronisation Keycloak.
+   The user will receive access automatically after Keycloak synchronization.
    ```
 
-   > **Note**: Le guide Developer Portal sera ajouté après Phase 8.
+   > **Note**: The Developer Portal guide will be added after Phase 8.
 
    **03-api-lifecycle.md**:
    ```markdown
-   # Cycle de Vie d'une API
+   # API Lifecycle
 
-   ## États d'une API
+   ## API States
 
    ```
    ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
@@ -2304,38 +2304,38 @@ def call(String status, Map details) {
    └─────────┘    └──────────┘    └──────────┘    └──────────┘
         │              │               │               │
         │              │               │               │
-   Création       Déployé DEV     Promotion       Production
-   dans Git       Tests internes   UAT            Live
+   Created in     Deployed DEV    Promotion       Production
+   Git            Internal tests   UAT            Live
    ```
 
-   ## Workflow de Promotion
+   ## Promotion Workflow
 
-   1. **Développement (DEV)**
-      - Créer l'API dans l'UI DevOps
-      - Commit automatique dans GitLab
-      - Déployer sur Gateway DEV
-      - Tests d'intégration
+   1. **Development (DEV)**
+      - Create the API in the DevOps UI
+      - Automatic commit to GitLab
+      - Deploy to DEV Gateway
+      - Integration tests
 
    2. **Staging (STAGING)**
-      - Promouvoir depuis DEV
-      - Tests d'acceptation (UAT)
-      - Validation métier
+      - Promote from DEV
+      - Acceptance tests (UAT)
+      - Business validation
 
    3. **Production (PROD)**
-      - Approbation requise
-      - Déploiement Blue-Green
-      - Monitoring renforcé
+      - Approval required
+      - Blue-Green deployment
+      - Enhanced monitoring
 
    ## Rollback
 
-   En cas de problème:
-   1. Allez dans **Monitoring > Historique**
-   2. Sélectionnez une version précédente
-   3. Cliquez sur **Rollback**
-   4. Confirmez
+   In case of issues:
+   1. Go to **Monitoring > History**
+   2. Select a previous version
+   3. Click **Rollback**
+   4. Confirm
    ```
 
-   **Génération Automatique (MkDocs)**:
+   **Automatic Generation (MkDocs)**:
    ```yaml
    # mkdocs.yml
    site_name: STOA Platform - Documentation
@@ -2364,29 +2364,29 @@ def call(String status, Map details) {
 
    plugins:
      - search
-     - mkdocstrings  # Auto-génère doc depuis code Python
+     - mkdocstrings  # Auto-generates docs from Python code
    ```
 
-   **Déploiement Documentation**:
+   **Documentation Deployment**:
    - URL: https://docs.stoa.cab-i.com
    - CI/CD: GitLab Pages ou S3 + CloudFront
    - Build: `mkdocs build`
 
-   **Checklist Documentation**:
-   - [ ] Écrire 01-getting-started.md
-   - [ ] Écrire 02-ui-devops-guide.md avec screenshots
-   - [ ] Écrire 03-api-lifecycle.md
-   - [ ] Écrire 04-rbac-roles.md
-   - [ ] Écrire 05-troubleshooting.md (FAQ)
-   - [ ] Créer tutoriels pas-à-pas
-   - [ ] Capturer screenshots des interfaces
-   - [ ] Configurer MkDocs + thème Material
-   - [ ] Déployer sur GitLab Pages
-   - [ ] Ajouter lien "Documentation" dans UI DevOps
+   **Documentation Checklist**:
+   - [ ] Write 01-getting-started.md
+   - [ ] Write 02-ui-devops-guide.md with screenshots
+   - [ ] Write 03-api-lifecycle.md
+   - [ ] Write 04-rbac-roles.md
+   - [ ] Write 05-troubleshooting.md (FAQ)
+   - [ ] Create step-by-step tutorials
+   - [ ] Capture interface screenshots
+   - [ ] Configure MkDocs + Material theme
+   - [ ] Deploy on GitLab Pages
+   - [ ] Add "Documentation" link in DevOps UI
 
-#### Phase 7 : Sécurité Opérationnelle (Batch Jobs)
+#### Phase 7: Operational Security (Batch Jobs)
 
-**Objectif**: Mettre en place des jobs automatisés pour la sécurité opérationnelle : vérification des certificats, rotation des secrets, reporting d'utilisation, et scan de sécurité GitLab.
+**Objective**: Set up automated jobs for operational security: certificate expiration checks, secret rotation, usage reporting, and GitLab security scanning.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -2417,22 +2417,22 @@ def call(String status, Map details) {
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Job 1 : Vérification Expiration Certificats** 🔲
+1. **Job 1: Certificate Expiration Check** 🔲
 
-   **Sources vérifiées**:
+   **Sources checked**:
    | Source | Type | Exemple |
    |--------|------|---------|
    | Kubernetes | TLS Secrets | Ingress certificates, mTLS |
    | Vault | PKI Certificates | API certs, Client certs |
    | External | Endpoints HTTPS | Backend URLs, Partner APIs |
 
-   **Seuils d'alerte**:
-   | Niveau | Jours restants | Action |
+   **Alert thresholds**:
+   | Level | Days remaining | Action |
    |--------|----------------|--------|
-   | 🔴 CRITICAL | < 7 jours | Email + Slack + PagerDuty |
-   | 🟠 WARNING | < 30 jours | Email + Slack |
-   | 🟡 INFO | < 60 jours | Slack |
-   | 🟢 OK | > 60 jours | - |
+   | 🔴 CRITICAL | < 7 days | Email + Slack + PagerDuty |
+   | 🟠 WARNING | < 30 days | Email + Slack |
+   | 🟡 INFO | < 60 days | Slack |
+   | 🟢 OK | > 60 days | - |
 
    **CronJob**: Daily 6AM
    ```yaml
@@ -2452,31 +2452,31 @@ def call(String status, Map details) {
                  command: ["python", "-m", "src.jobs.certificate_checker"]
    ```
 
-2. **Job 2 : Rotation Automatique des Secrets** 🔲
+2. **Job 2: Automatic Secret Rotation** 🔲
 
-   **Policies de rotation**:
-   | Type de Secret | Fréquence | Auto-Rotate | Notifier avant |
+   **Rotation policies**:
+   | Secret Type | Frequency | Auto-Rotate | Notify before |
    |----------------|-----------|-------------|----------------|
-   | API Keys | 30 jours | ✅ Oui | 7 jours |
-   | OAuth Client Secrets | 90 jours | ✅ Oui | 14 jours |
-   | Database Passwords | 90 jours | ✅ Oui | 14 jours |
-   | Service Accounts | 180 jours | ✅ Oui | 30 jours |
-   | Encryption Keys | 365 jours | ❌ Manual | 60 jours |
+   | API Keys | 30 days | ✅ Yes | 7 days |
+   | OAuth Client Secrets | 90 days | ✅ Yes | 14 days |
+   | Database Passwords | 90 days | ✅ Yes | 14 days |
+   | Service Accounts | 180 days | ✅ Yes | 30 days |
+   | Encryption Keys | 365 days | ❌ Manual | 60 days |
 
-   **Fonctionnalités**:
-   - Génération de nouveaux secrets (alphanumeric, special chars)
-   - Mise à jour dans Vault avec metadata (last_rotated, rotated_by)
-   - Propagation vers Kubernetes Secrets et Keycloak Clients
-   - Post-rotation actions (restart deployments si nécessaire)
+   **Features**:
+   - Generate new secrets (alphanumeric, special chars)
+   - Update in Vault with metadata (last_rotated, rotated_by)
+   - Propagate to Kubernetes Secrets and Keycloak Clients
+   - Post-rotation actions (restart deployments if needed)
 
    **CronJobs**:
    - Weekly: Sunday 2AM
    - Monthly (forced): 1st of month 3AM
 
-3. **Job 3 : Reporting d'Utilisation par Tenant** 🔲
+3. **Job 3: Usage Reporting per Tenant** 🔲
 
-   **Métriques collectées**:
-   | Catégorie | Métriques |
+   **Metrics collected**:
+   | Category | Metrics |
    |-----------|-----------|
    | API Calls | Total, Success, Failed, Error Rate |
    | Bandwidth | Inbound MB, Outbound MB, Total |
@@ -2484,7 +2484,7 @@ def call(String status, Map details) {
    | Resources | Active APIs, Apps, Users |
    | Quota | Usage %, Exceeded |
 
-   **Sources de données**:
+   **Data sources**:
    ```
    ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
    │   Prometheus    │   │   webMethods    │   │   PostgreSQL    │
@@ -2505,20 +2505,20 @@ def call(String status, Map details) {
    ```
 
    **CronJobs**:
-   - Daily: 1AM (rapport quotidien)
-   - Weekly: Monday 2AM (rapport PDF hebdomadaire)
+   - Daily: 1AM (daily report)
+   - Weekly: Monday 2AM (weekly PDF report)
 
-4. **Job 4 : Scan Sécurité GitLab** 🔲
+4. **Job 4: GitLab Security Scan** 🔲
 
-   **Types de scan**:
-   | Scan | Outil | Détection |
+   **Scan types**:
+   | Scan | Tool | Detection |
    |------|-------|-----------|
    | Secret Detection | Gitleaks | API Keys, Passwords, Tokens, Certs |
    | SAST | Semgrep | SQL Injection, XSS, Hardcoded creds |
    | Dependency Check | Trivy | CVE, Outdated packages |
    | License Compliance | pip-licenses | GPL/LGPL, Proprietary |
 
-   **Règles Gitleaks** (`.gitleaks.toml`):
+   **Gitleaks rules** (`.gitleaks.toml`):
    - AWS Access Keys (`AKIA...`)
    - Generic API Keys
    - Passwords
@@ -2555,9 +2555,9 @@ def call(String status, Map details) {
 
    **CronJob**: Daily 3AM + On-commit (webhook)
 
-5. **Service de Notification** 🔲
+5. **Notification Service** 🔲
 
-   | Niveau | Canaux |
+   | Level | Channels |
    |--------|--------|
    | 🔴 CRITICAL | Email + Slack + PagerDuty |
    | 🟠 WARNING | Email + Slack |
@@ -2578,7 +2578,7 @@ def call(String status, Map details) {
        routing_key: vault:secret/data/notifications#pagerduty_key
    ```
 
-6. **Structure des Jobs** 🔲
+6. **Job Structure** 🔲
 
    ```
    control-plane-api/
@@ -2633,24 +2633,24 @@ def call(String status, Map details) {
          - trivy
    ```
 
-8. **Checklist Déploiement Phase 7** 🔲
+8. **Phase 7 Deployment Checklist** 🔲
 
-   - [ ] Créer image Docker `stoa-security-jobs` avec Python + outils
-   - [ ] Implémenter `certificate_checker.py`
-   - [ ] Implémenter `secret_rotation.py` avec intégration Vault
-   - [ ] Implémenter `usage_reporting.py` avec génération PDF
-   - [ ] Implémenter `security_scanner.py` avec Gitleaks/Semgrep/Trivy
-   - [ ] Créer `NotificationService` (Email/Slack/PagerDuty)
-   - [ ] Ajouter CronJobs dans Helm chart
-   - [ ] Configurer `.gitleaks.toml` dans repos GitLab
-   - [ ] Ajouter stages security-scan dans `.gitlab-ci.yml`
-   - [ ] Configurer alerting dans Grafana
-   - [ ] Tester chaque job manuellement
-   - [ ] Documenter les procédures de réponse aux alertes
+   - [ ] Create Docker image `stoa-security-jobs` with Python + tools
+   - [ ] Implement `certificate_checker.py`
+   - [ ] Implement `secret_rotation.py` with Vault integration
+   - [ ] Implement `usage_reporting.py` with PDF generation
+   - [ ] Implement `security_scanner.py` with Gitleaks/Semgrep/Trivy
+   - [ ] Create `NotificationService` (Email/Slack/PagerDuty)
+   - [ ] Add CronJobs in Helm chart
+   - [ ] Configure `.gitleaks.toml` in GitLab repos
+   - [ ] Add security-scan stages in `.gitlab-ci.yml`
+   - [ ] Configure alerting in Grafana
+   - [ ] Test each job manually
+   - [ ] Document alert response procedures
 
-9. **Monitoring des Jobs de Sécurité** 🔲
+9. **Security Jobs Monitoring** 🔲
 
-   **Architecture Observabilité Jobs**:
+   **Jobs Observability Architecture**:
    ```
    ┌─────────────────────────────────────────────────────────────────────────────────────┐
    │                      SECURITY JOBS OBSERVABILITY                                     │
@@ -2681,13 +2681,13 @@ def call(String status, Map details) {
    └─────────────────────────────────────────────────────────────────────────────────────┘
    ```
 
-   **Métriques Prometheus exposées par chaque job**:
+   **Prometheus metrics exposed by each job**:
    ```python
    # src/jobs/base_job.py
    from prometheus_client import Counter, Histogram, Gauge, push_to_gateway
 
    class BaseSecurityJob:
-       # Métriques communes à tous les jobs
+       # Common metrics for all jobs
        job_runs_total = Counter(
            'security_job_runs_total',
            'Total number of job executions',
@@ -2732,7 +2732,7 @@ def call(String status, Map details) {
 
    **Events Kafka** - Topic `security-job-results`:
    ```python
-   # Publié à la fin de chaque job
+   # Published at the end of each job
    {
        "job_name": "certificate-checker",
        "run_id": "run-abc123",
@@ -2787,13 +2787,13 @@ def call(String status, Map details) {
    }
    ```
 
-   **Alertes Prometheus (AlertManager)**:
+   **Prometheus Alerts (AlertManager)**:
    ```yaml
    # prometheus-rules.yaml
    groups:
      - name: security-jobs
        rules:
-         # Alerte si un job n'a pas tourné depuis 2x son intervalle
+         # Alert if a job hasn't run for 2x its interval
          - alert: SecurityJobNotRunning
            expr: |
              time() - security_job_last_run_timestamp > 2 * 86400
@@ -2804,7 +2804,7 @@ def call(String status, Map details) {
              summary: "Security job {{ $labels.job_name }} not running"
              description: "Job has not run for more than 2 days"
 
-         # Alerte si un job échoue
+         # Alert if a job fails
          - alert: SecurityJobFailed
            expr: |
              increase(security_job_runs_total{status="failure"}[1h]) > 0
@@ -2815,7 +2815,7 @@ def call(String status, Map details) {
              summary: "Security job {{ $labels.job_name }} failed"
              description: "Job execution failed in the last hour"
 
-         # Alerte si findings critiques détectés
+         # Alert if critical findings detected
          - alert: SecurityCriticalFindings
            expr: |
              security_job_findings_total{severity="critical"} > 0
@@ -2826,7 +2826,7 @@ def call(String status, Map details) {
              summary: "Critical security findings in {{ $labels.job_name }}"
              description: "{{ $value }} critical findings detected"
 
-         # Alerte si job prend trop de temps
+         # Alert if job takes too long
          - alert: SecurityJobSlow
            expr: |
              security_job_duration_seconds > 600
@@ -2880,7 +2880,7 @@ def call(String status, Map details) {
    └─────────────────────────────────────────────────────────────────────────────┘
    ```
 
-   **Helm Values pour Monitoring**:
+   **Helm Values for Monitoring**:
    ```yaml
    # values.yaml
    securityJobs:
@@ -2914,21 +2914,21 @@ def call(String status, Map details) {
              severity: warning
    ```
 
-   **Checklist Monitoring**:
-   - [ ] Déployer Prometheus Pushgateway
-   - [ ] Implémenter `BaseSecurityJob` avec métriques
-   - [ ] Créer topic Kafka `security-job-results`
-   - [ ] Configurer index template OpenSearch
-   - [ ] Créer règles AlertManager
-   - [ ] Importer dashboard Grafana
-   - [ ] Tester alertes (job failure, critical findings)
-   - [ ] Configurer rétention OpenSearch (90 jours)
+   **Monitoring Checklist**:
+   - [ ] Deploy Prometheus Pushgateway
+   - [ ] Implement `BaseSecurityJob` with metrics
+   - [ ] Create Kafka topic `security-job-results`
+   - [ ] Configure OpenSearch index template
+   - [ ] Create AlertManager rules
+   - [ ] Import Grafana dashboard
+   - [ ] Test alerts (job failure, critical findings)
+   - [ ] Configure OpenSearch retention (90 days)
 
-#### Phase 8 : Developer Portal Custom (React)
+#### Phase 8: Custom Developer Portal (React)
 
-**Objectif**: Développer un Developer Portal custom React intégré à l'architecture APIM GitOps avec SSO Keycloak unifié.
+**Objective**: Develop a custom React Developer Portal integrated with the APIM GitOps architecture with unified Keycloak SSO.
 
-> **Plan détaillé**: Voir [docs/DEVELOPER-PORTAL-PLAN.md](docs/DEVELOPER-PORTAL-PLAN.md)
+> **Detailed plan**: See [docs/DEVELOPER-PORTAL-PLAN.md](docs/DEVELOPER-PORTAL-PLAN.md)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -2972,69 +2972,69 @@ def call(String status, Map details) {
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Stack Technique**:
-| Composant | Technologie |
+**Technical Stack**:
+| Component | Technology |
 |-----------|-------------|
 | Frontend | React 18 + TypeScript + Vite |
 | Styling | TailwindCSS |
-| Auth | Keycloak OIDC (même realm que UI DevOps) |
+| Auth | Keycloak OIDC (same realm as DevOps UI) |
 | API Docs | Swagger-UI React |
 | Code Editor | Monaco Editor |
-| Backend | Control-Plane API (FastAPI) - nouveaux endpoints `/portal/*` |
+| Backend | Control-Plane API (FastAPI) - new `/portal/*` endpoints |
 
-**Fonctionnalités Clés**:
+**Key Features**:
 
-1. **Catalogue APIs** 🔲
-   - Liste des APIs publiées avec recherche
-   - Filtres par catégorie, tenant
-   - Cards avec nom, version, description
+1. **API Catalog** 🔲
+   - List of published APIs with search
+   - Filters by category, tenant
+   - Cards with name, version, description
 
-2. **Détail API** 🔲
-   - Informations générales
-   - Documentation OpenAPI (Swagger-UI)
-   - Bouton "Souscrire"
+2. **API Detail** 🔲
+   - General information
+   - OpenAPI documentation (Swagger-UI)
+   - "Subscribe" button
    - Code samples (curl, Python, JavaScript)
 
-3. **Gestion Applications** 🔲
-   - Créer une application (génère client_id, client_secret, api_key)
-   - Voir mes applications
-   - Rotation API Key
-   - Supprimer application
+3. **Application Management** 🔲
+   - Create an application (generates client_id, client_secret, api_key)
+   - View my applications
+   - API Key rotation
+   - Delete application
 
-4. **Souscriptions** 🔲
-   - Souscrire une application à une API
-   - Voir mes souscriptions
-   - Désouscrire
+4. **Subscriptions** 🔲
+   - Subscribe an application to an API
+   - View my subscriptions
+   - Unsubscribe
 
 5. **Try-It Console** 🔲
-   - Sélection méthode HTTP, path, headers
-   - Body editor JSON (Monaco)
-   - Envoi requête via proxy backend
-   - Affichage réponse (status, headers, body, timing)
+   - HTTP method, path, headers selection
+   - JSON body editor (Monaco)
+   - Send request via backend proxy
+   - Response display (status, headers, body, timing)
 
-**Endpoints Backend à Ajouter** (Control-Plane API):
+**Backend Endpoints to Add** (Control-Plane API):
 ```
-# Catalogue
-GET    /portal/apis                    # Liste APIs publiées
-GET    /portal/apis/{api_id}           # Détail API
-GET    /portal/apis/{api_id}/spec      # Spec OpenAPI
+# Catalog
+GET    /portal/apis                    # List published APIs
+GET    /portal/apis/{api_id}           # API detail
+GET    /portal/apis/{api_id}/spec      # OpenAPI spec
 
 # Applications
-GET    /portal/my/applications         # Mes applications
-POST   /portal/applications            # Créer application
-DELETE /portal/applications/{app_id}   # Supprimer
+GET    /portal/my/applications         # My applications
+POST   /portal/applications            # Create application
+DELETE /portal/applications/{app_id}   # Delete
 POST   /portal/applications/{app_id}/rotate-key  # Rotation
 
-# Souscriptions
-GET    /portal/my/subscriptions        # Mes souscriptions
-POST   /portal/subscriptions           # Souscrire
-DELETE /portal/subscriptions/{sub_id}  # Désouscrire
+# Subscriptions
+GET    /portal/my/subscriptions        # My subscriptions
+POST   /portal/subscriptions           # Subscribe
+DELETE /portal/subscriptions/{sub_id}  # Unsubscribe
 
 # Try-It
-POST   /portal/try-it                  # Proxy vers Gateway
+POST   /portal/try-it                  # Proxy to Gateway
 ```
 
-**Keycloak - Nouveau Client**:
+**Keycloak - New Client**:
 ```yaml
 client_id: developer-portal
 client_type: public
@@ -3042,35 +3042,35 @@ valid_redirect_uris:
   - https://portal.stoa.cab-i.com/*
   - http://localhost:3001/*
 roles:
-  - developer  # Accès portal
+  - developer  # Portal access
 ```
 
-**Intégration Kafka**:
-- `application-created` → Audit + sync GitLab
-- `subscription-created` → Audit + provisionning Gateway
-- `api-key-rotated` → Audit + invalidation cache
+**Kafka Integration**:
+- `application-created` → Audit + GitLab sync
+- `subscription-created` → Audit + Gateway provisioning
+- `api-key-rotated` → Audit + cache invalidation
 
-**Checklist Phase 8**:
-- [ ] Setup projet Vite + React + TypeScript + TailwindCSS
-- [ ] Configuration Keycloak OIDC (client developer-portal)
-- [ ] Layout responsive (Header, Sidebar, Footer)
-- [ ] Page Catalogue APIs avec recherche/filtres
-- [ ] Page Détail API avec Swagger-UI
-- [ ] Page Mes Applications (CRUD)
-- [ ] Affichage credentials sécurisé (visible une fois)
-- [ ] Page Souscriptions
-- [ ] Try-It Console avec Monaco Editor
+**Phase 8 Checklist**:
+- [ ] Setup Vite + React + TypeScript + TailwindCSS project
+- [ ] Configure Keycloak OIDC (developer-portal client)
+- [ ] Responsive layout (Header, Sidebar, Footer)
+- [ ] API Catalog page with search/filters
+- [ ] API Detail page with Swagger-UI
+- [ ] My Applications page (CRUD)
+- [ ] Secure credentials display (visible once)
+- [ ] Subscriptions page
+- [ ] Try-It Console with Monaco Editor
 - [ ] Code Samples (curl, Python, JS)
-- [ ] Endpoints `/portal/*` dans Control-Plane API
-- [ ] Events Kafka pour audit
-- [ ] Déploiement Kubernetes (Helm)
+- [ ] `/portal/*` endpoints in Control-Plane API
+- [ ] Kafka events for audit
+- [ ] Kubernetes deployment (Helm)
 - [ ] URL: https://portal.stoa.cab-i.com
 
-#### Phase 9 : Système de Ticketing (Demandes de Production)
+#### Phase 9: Ticketing System (Production Requests)
 
-**Objectif**: Implémenter un workflow de validation manuelle pour les promotions vers PROD avec traçabilité complète et règle anti-self-approval.
+**Objective**: Implement a manual validation workflow for PROD promotions with complete traceability and anti-self-approval rule.
 
-> **Plan détaillé**: Voir [docs/TICKETING-SYSTEM-PLAN.md](docs/TICKETING-SYSTEM-PLAN.md)
+> **Detailed plan**: See [docs/TICKETING-SYSTEM-PLAN.md](docs/TICKETING-SYSTEM-PLAN.md)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -3089,7 +3089,7 @@ roles:
 │   ┌─────────────────────────────────────────────────────────────────────────────┐   │
 │   │                              FLUX                                            │   │
 │   │                                                                              │   │
-│   │  DevOps ──▶ Crée demande ──▶ Git (requests/prod/) ──▶ Event Kafka           │   │
+│   │  DevOps ──▶ Create request ──▶ Git (requests/prod/) ──▶ Kafka Event          │   │
 │   │                                        │                                     │   │
 │   │                                        ▼                                     │   │
 │   │  CPI Admin ◀── Notification ◀── UI Console ──▶ Approve/Reject               │   │
@@ -3105,18 +3105,18 @@ roles:
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Fonctionnalités Clés**:
+**Key Features**:
 
-| Fonctionnalité | Description |
+| Feature | Description |
 |----------------|-------------|
-| Créer une demande | DevOps soumet une demande de promotion STAGING → PROD |
-| Validation RBAC | Seuls les CPI/Admins peuvent approuver |
-| Anti-self-approval | Le demandeur ne peut pas approuver sa propre demande |
-| Workflow automatisé | Approbation → AWX Job → Déploiement PROD |
-| Notifications | Email + Slack à chaque étape |
-| Historique complet | Audit trail dans Git |
+| Create request | DevOps submits a STAGING → PROD promotion request |
+| RBAC validation | Only CPI/Admins can approve |
+| Anti-self-approval | Requester cannot approve their own request |
+| Automated workflow | Approval → AWX Job → PROD deployment |
+| Notifications | Email + Slack at each step |
+| Complete history | Audit trail in Git |
 
-**Structure GitOps**:
+**GitOps Structure**:
 ```
 stoa-gitops/
 └── requests/
@@ -3166,68 +3166,68 @@ status:
 
 **RBAC**:
 
-| Rôle | Créer demande | Approuver | Rejeter | Voir |
-|------|---------------|-----------|---------|------|
-| DevOps | ✅ Son tenant | ❌ | ❌ | Ses demandes |
-| CPI (Tenant Admin) | ✅ Son tenant | ✅ Son tenant* | ✅ Son tenant | Son tenant |
-| CPI Admin | ✅ Tous | ✅ Tous* | ✅ Tous | Tous |
+| Role | Create request | Approve | Reject | View |
+|------|----------------|---------|--------|------|
+| DevOps | ✅ Own tenant | ❌ | ❌ | Own requests |
+| CPI (Tenant Admin) | ✅ Own tenant | ✅ Own tenant* | ✅ Own tenant | Own tenant |
+| CPI Admin | ✅ All | ✅ All* | ✅ All | All |
 
-*\* Sauf ses propres demandes (anti-self-approval)*
+*\* Except own requests (anti-self-approval)*
 
 **Endpoints API**:
 ```
-# Liste et recherche
+# List and search
 GET    /v1/requests/prod?state=pending&tenant=...
 
-# Mes demandes
+# My requests
 GET    /v1/requests/prod/my
 
-# Demandes en attente pour moi (approbateur)
+# Pending requests for me (approver)
 GET    /v1/requests/prod/pending
 
-# Créer une demande
+# Create a request
 POST   /v1/requests/prod
 
-# Détail
+# Detail
 GET    /v1/requests/prod/{id}
 
-# Approuver (déclenche AWX automatiquement)
+# Approve (triggers AWX automatically)
 POST   /v1/requests/prod/{id}/approve
 
-# Rejeter (reason obligatoire)
+# Reject (reason required)
 POST   /v1/requests/prod/{id}/reject
 
 # Stats dashboard
 GET    /v1/requests/prod/stats
 ```
 
-**Intégration Kafka**:
-- `request-created` → Notification approbateurs
-- `request-approved` → Trigger AWX + notification demandeur
-- `request-rejected` → Notification demandeur
-- `deployment-started` → Notification demandeur + approbateur
-- `deployment-succeeded` → Notification tous
-- `deployment-failed` → Notification tous + ops
+**Kafka Integration**:
+- `request-created` → Notify approvers
+- `request-approved` → Trigger AWX + notify requester
+- `request-rejected` → Notify requester
+- `deployment-started` → Notify requester + approver
+- `deployment-succeeded` → Notify all
+- `deployment-failed` → Notify all + ops
 
-**Checklist Phase 9**:
-- [ ] Modèle Pydantic `PromotionRequest`
-- [ ] Service Git pour CRUD requests
-- [ ] Endpoints CRUD `/v1/requests/prod`
-- [ ] Endpoint approve avec anti-self-approval
-- [ ] Endpoint reject avec reason obligatoire
-- [ ] Trigger AWX sur approbation
-- [ ] Webhook callback AWX → update status
-- [ ] UI - Page liste demandes avec filtres
-- [ ] UI - Formulaire nouvelle demande
-- [ ] UI - Page détail avec timeline
-- [ ] UI - Boutons Approve/Reject
-- [ ] Events Kafka pour notifications
-- [ ] Templates email (created, approved, rejected, deployed, failed)
-- [ ] Notifications Slack
+**Phase 9 Checklist**:
+- [ ] Pydantic model `PromotionRequest`
+- [ ] Git service for CRUD requests
+- [ ] CRUD endpoints `/v1/requests/prod`
+- [ ] Approve endpoint with anti-self-approval
+- [ ] Reject endpoint with required reason
+- [ ] Trigger AWX on approval
+- [ ] AWX webhook callback → update status
+- [ ] UI - Request list page with filters
+- [ ] UI - New request form
+- [ ] UI - Detail page with timeline
+- [ ] UI - Approve/Reject buttons
+- [ ] Kafka events for notifications
+- [ ] Email templates (created, approved, rejected, deployed, failed)
+- [ ] Slack notifications
 
-#### Phase 9.5 : Production Readiness
+#### Phase 9.5: Production Readiness
 
-**Objectif**: Préparer la plateforme APIM pour le passage en production avec toutes les garanties de fiabilité, sécurité et opérabilité.
+**Objective**: Prepare the APIM platform for production with all guarantees of reliability, security, and operability.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -3273,57 +3273,57 @@ GET    /v1/requests/prod/stats
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**SLO Cibles**:
+**Target SLOs**:
 
-| Métrique | Objectif | Mesure |
-|----------|----------|--------|
-| Availability | 99.9% | < 8.76h downtime/an |
+| Metric | Objective | Measurement |
+|--------|-----------|-------------|
+| Availability | 99.9% | < 8.76h downtime/year |
 | API Latency p95 | < 500ms | Prometheus |
 | Deployment Success Rate | > 99% | Jenkins metrics |
 | MTTR (P1 incidents) | < 1h | Runbook SLA |
 | Error Rate | < 0.1% | Grafana dashboard |
 
-**Composants Production Readiness**:
+**Production Readiness Components**:
 
-| Composant | Description | Priorité |
+| Component | Description | Priority |
 |-----------|-------------|----------|
 | Backup AWX | CronJob backup PostgreSQL → S3 | P0 |
 | Backup Vault | Snapshot storage + unseal keys | P0 |
-| Load Testing | K6/Gatling pipeline avec seuils | P0 |
-| Runbooks | Procédures opérationnelles | P0 |
-| Security Audit | Scan OWASP ZAP + remédiation | P0 |
+| Load Testing | K6/Gatling pipeline with thresholds | P0 |
+| Runbooks | Operational procedures | P0 |
+| Security Audit | OWASP ZAP scan + remediation | P0 |
 | Chaos Testing | Litmus/Chaos Mesh validation | P1 |
 | SLO Dashboard | Grafana + alerting | P0 |
 
-**Runbooks à Documenter**:
+**Runbooks to Document**:
 - Incident: API Gateway down
 - Incident: AWX job failure
 - Incident: Vault sealed
-- Incident: Kafka lag élevé
-- Procédure: Rollback d'urgence
-- Procédure: Scaling horizontal
-- Procédure: Rotation des secrets
-- Procédure: DR failover
+- Incident: High Kafka lag
+- Procedure: Emergency rollback
+- Procedure: Horizontal scaling
+- Procedure: Secret rotation
+- Procedure: DR failover
 
-**Checklist Phase 9.5**:
-- [ ] Script backup AWX database (PostgreSQL) → S3
-- [ ] Script backup Vault snapshot → S3 + KMS
-- [ ] CronJob Kubernetes pour backups quotidiens
-- [ ] Procédures de restore documentées et testées
-- [ ] Pipeline Load Testing (K6 ou Gatling)
-- [ ] Seuils de performance définis (p95, p99)
-- [ ] Runbooks opérationnels (docs/runbooks/)
-- [ ] Scan OWASP ZAP sur API et UI
-- [ ] Remédiation vulnérabilités critiques
+**Phase 9.5 Checklist**:
+- [ ] AWX database backup script (PostgreSQL) → S3
+- [ ] Vault snapshot backup script → S3 + KMS
+- [ ] Kubernetes CronJob for daily backups
+- [ ] Restore procedures documented and tested
+- [ ] Load Testing pipeline (K6 or Gatling)
+- [ ] Performance thresholds defined (p95, p99)
+- [ ] Operational runbooks (docs/runbooks/)
+- [ ] OWASP ZAP scan on API and UI
+- [ ] Critical vulnerability remediation
 - [ ] Chaos Testing (pod kill, network latency)
-- [ ] Validation auto-healing Kubernetes
-- [ ] SLO/SLA documentés
-- [ ] Dashboard SLO dans Grafana
-- [ ] Alertes configurées sur SLO breach
+- [ ] Kubernetes auto-healing validation
+- [ ] SLO/SLA documented
+- [ ] SLO Dashboard in Grafana
+- [ ] Alerts configured on SLO breach
 
-#### Phase 10 : Resource Lifecycle Management (Non-Production Auto-Teardown)
+#### Phase 10: Resource Lifecycle Management (Non-Production Auto-Teardown)
 
-**Objectif**: Implémenter une stratégie de tagging obligatoire et d'auto-suppression des ressources non-production pour optimiser les coûts et éviter l'accumulation de ressources orphelines.
+**Objective**: Implement a mandatory tagging strategy and auto-deletion of non-production resources to optimize costs and avoid accumulation of orphaned resources.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -3404,26 +3404,26 @@ GET    /v1/requests/prod/stats
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Tags Obligatoires**:
+**Mandatory Tags**:
 
-| Tag | Description | Valeurs Possibles | Obligatoire |
-|-----|-------------|-------------------|-------------|
-| `environment` | Environnement cible | `dev`, `staging`, `sandbox`, `demo` | ✅ |
-| `owner` | Email du responsable | Email valide | ✅ |
-| `project` | Nom du projet/tenant | String | ✅ |
-| `cost-center` | Code centre de coût | Code numérique | ✅ |
-| `ttl` | Durée de vie | `7d`, `14d`, `30d` (max) | ✅ Non-prod |
-| `created_at` | Date création | ISO 8601 (auto-généré) | ✅ Auto |
-| `auto-teardown` | Suppression auto | `true`, `false` | ✅ Non-prod |
-| `data-class` | Classification données | `public`, `internal`, `confidential`, `restricted` | ✅ |
+| Tag | Description | Possible Values | Required |
+|-----|-------------|-----------------|----------|
+| `environment` | Target environment | `dev`, `staging`, `sandbox`, `demo` | ✅ |
+| `owner` | Responsible person's email | Valid email | ✅ |
+| `project` | Project/tenant name | String | ✅ |
+| `cost-center` | Cost center code | Numeric code | ✅ |
+| `ttl` | Time to live | `7d`, `14d`, `30d` (max) | ✅ Non-prod |
+| `created_at` | Creation date | ISO 8601 (auto-generated) | ✅ Auto |
+| `auto-teardown` | Auto deletion | `true`, `false` | ✅ Non-prod |
+| `data-class` | Data classification | `public`, `internal`, `confidential`, `restricted` | ✅ |
 
-**Guardrails (Règles de Protection)**:
+**Guardrails (Protection Rules)**:
 
-1. **Tag Validation** - Rejeter tout déploiement sans tags obligatoires
-2. **TTL Maximum** - 30 jours max pour environnements non-prod
-3. **Data Classification** - Ressources `restricted` exclues de l'auto-teardown
-4. **Owner Notification** - 48h avant expiration → 24h → suppression
-5. **Audit Trail** - Toute suppression loggée dans Kafka + S3
+1. **Tag Validation** - Reject any deployment without mandatory tags
+2. **Maximum TTL** - 30 days max for non-prod environments
+3. **Data Classification** - `restricted` resources excluded from auto-teardown
+4. **Owner Notification** - 48h before expiration → 24h → deletion
+5. **Audit Trail** - All deletions logged to Kafka + S3
 
 **Terraform - Module common_tags**:
 ```hcl
@@ -3498,7 +3498,7 @@ output "tags" {
 }
 ```
 
-**Utilisation Terraform**:
+**Terraform Usage**:
 ```hcl
 # terraform/environments/dev/main.tf
 module "tags" {
@@ -3568,10 +3568,10 @@ def handler(event, context):
 ```
 
 **Alternative: n8n Workflow (Low-Code)**:
-- Pour environnements multi-cloud (AWS + Azure + GCP)
-- Workflow visuel avec nœuds configurables
-- Intégration Slack/Teams pour notifications
-- Dashboard de reporting des ressources expirées
+- For multi-cloud environments (AWS + Azure + GCP)
+- Visual workflow with configurable nodes
+- Slack/Teams integration for notifications
+- Expired resources reporting dashboard
 
 **Kubernetes - OPA Gatekeeper Policy**:
 ```yaml
@@ -3665,28 +3665,28 @@ jobs:
           fi
 ```
 
-**Intégration Kafka**:
-- `resource-created` → Log création avec tags
-- `resource-expiring` → Notification 48h/24h avant expiration
-- `resource-deleted` → Audit trail suppression
-- `tag-violation` → Alerte déploiement sans tags
+**Kafka Integration**:
+- `resource-created` → Log creation with tags
+- `resource-expiring` → Notification 48h/24h before expiration
+- `resource-deleted` → Deletion audit trail
+- `tag-violation` → Alert on deployment without tags
 
-**Checklist Phase 10**:
-- [ ] Module Terraform `common_tags` avec validations
-- [ ] Lambda `resource-cleanup` avec EventBridge schedule
-- [ ] Notifications owner (48h → 24h → delete)
-- [ ] OPA Gatekeeper policies pour Kubernetes
+**Phase 10 Checklist**:
+- [ ] Terraform module `common_tags` with validations
+- [ ] Lambda `resource-cleanup` with EventBridge schedule
+- [ ] Owner notifications (48h → 24h → delete)
+- [ ] OPA Gatekeeper policies for Kubernetes
 - [ ] GitHub Actions workflow `tag-governance.yaml`
-- [ ] Dashboard Grafana "Resource Lifecycle"
-- [ ] Events Kafka (resource-created, expiring, deleted)
-- [ ] Exclusion ressources `data-class=restricted`
-- [ ] Exclusion environnement `prod` (auto-teardown=false)
-- [ ] Documentation tagging policy
-- [ ] Alternative n8n workflow pour multi-cloud (optionnel)
+- [ ] Grafana dashboard "Resource Lifecycle"
+- [ ] Kafka events (resource-created, expiring, deleted)
+- [ ] Exclude `data-class=restricted` resources
+- [ ] Exclude `prod` environment (auto-teardown=false)
+- [ ] Tagging policy documentation
+- [ ] Alternative n8n workflow for multi-cloud (optional)
 
-#### Phase 11 : Resource Lifecycle Advanced (Gouvernance Avancée)
+#### Phase 11: Resource Lifecycle Advanced (Advanced Governance)
 
-**Objectif**: Compléter la Phase 10 avec des fonctionnalités avancées de gouvernance : quotas, whitelist, destruction ordonnée, métriques de coûts et self-service TTL extension.
+**Objective**: Complete Phase 10 with advanced governance features: quotas, whitelist, ordered destruction, cost metrics, and self-service TTL extension.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -3790,7 +3790,7 @@ jobs:
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Quotas par Projet** (Terraform):
+**Quotas per Project** (Terraform):
 ```hcl
 # terraform/modules/project_quotas/variables.tf
 variable "project_quotas" {
@@ -3814,7 +3814,7 @@ variable "project_quotas" {
   }
 }
 
-# Service Quotas AWS + validation avant déploiement
+# AWS Service Quotas + validation before deployment
 resource "aws_servicequotas_service_quota" "ec2_instances" {
   quota_code   = "L-1216C47A"
   service_code = "ec2"
@@ -3826,7 +3826,7 @@ resource "aws_servicequotas_service_quota" "ec2_instances" {
 ```yaml
 # config/whitelist.yaml
 never_delete:
-  # Par ARN pattern
+  # By ARN pattern
   aws_resources:
     - "arn:aws:ec2:*:*:instance/i-stoa-*"
     - "arn:aws:rds:*:*:db:stoa-prod-*"
@@ -3834,7 +3834,7 @@ never_delete:
     - "arn:aws:s3:::stoa-backups"
     - "arn:aws:lambda:*:*:function:stoa-core-*"
 
-  # Par tag
+  # By tag
   tags:
     - key: critical
       value: "true"
@@ -3860,7 +3860,7 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/v1/resources", tags=["Resources"])
 
 class TTLExtendRequest(BaseModel):
-    extend_days: int  # 7 ou 14
+    extend_days: int  # 7 or 14
     reason: str
 
 @router.patch("/{resource_id}/ttl")
@@ -3870,19 +3870,19 @@ async def extend_ttl(resource_id: str, request: TTLExtendRequest, user: User = D
     """
     resource = await get_resource(resource_id)
 
-    # Vérifier ownership
+    # Check ownership
     if resource.tags.get("owner") != user.email:
         raise HTTPException(403, "Only resource owner can extend TTL")
 
-    # Vérifier limite extensions
+    # Check extension limit
     if resource.extension_count >= 2:
         raise HTTPException(400, "Maximum 2 extensions allowed (60 days total)")
 
-    # Vérifier jours demandés
+    # Check requested days
     if request.extend_days not in [7, 14]:
         raise HTTPException(400, "Extension must be 7 or 14 days")
 
-    # Mettre à jour le tag TTL
+    # Update TTL tag
     new_ttl = f"{int(resource.tags['ttl'].replace('d', '')) + request.extend_days}d"
     await update_resource_tag(resource_id, "ttl", new_ttl)
     await increment_extension_count(resource_id)
@@ -3899,7 +3899,7 @@ async def extend_ttl(resource_id: str, request: TTLExtendRequest, user: User = D
     return {"message": f"TTL extended to {new_ttl}", "extensions_remaining": 2 - resource.extension_count - 1}
 ```
 
-**Lambda Destruction Ordonnée**:
+**Lambda Ordered Destruction**:
 ```python
 # lambda/resource_cleanup/ordered_destroy.py
 DESTRUCTION_ORDER = [
@@ -3930,7 +3930,7 @@ async def ordered_destroy(resources: list):
                     # Continue with next resource
 ```
 
-**Métriques Coût Évité** (Grafana/Prometheus):
+**Cost Avoided Metrics** (Grafana/Prometheus):
 ```python
 # lambda/resource_cleanup/cost_calculator.py
 AWS_PRICING = {
@@ -3960,7 +3960,7 @@ def calculate_cost_avoided(resource, remaining_hours: int) -> float:
     return hourly_rate * remaining_hours
 ```
 
-**n8n Workflow Complet avec Board Notion**:
+**Complete n8n Workflow with Notion Board**:
 ```json
 {
   "name": "Resource Cleanup Advanced",
@@ -3981,23 +3981,23 @@ def calculate_cost_avoided(resource, remaining_hours: int) -> float:
 }
 ```
 
-**Checklist Phase 11**:
-- [ ] Système de quotas par projet (Terraform + Service Quotas AWS)
+**Phase 11 Checklist**:
+- [ ] Per-project quota system (Terraform + AWS Service Quotas)
 - [ ] Whitelist configuration (YAML + validation)
-- [ ] Destruction ordonnée (dépendances AWS)
-- [ ] API self-service TTL extension (`PATCH /v1/resources/{id}/ttl`)
-- [ ] Boutons Snooze dans emails (7j, 14j)
-- [ ] Limite 2 extensions max (60j total)
-- [ ] Calcul coût évité (pricing AWS)
-- [ ] Dashboard Grafana "Cost Savings"
-- [ ] Métriques Prometheus (resources_deleted, cost_avoided_usd)
-- [ ] n8n workflow complet avec Notion board
-- [ ] Cron horaire (au lieu de quotidien) pour pré-alertes
-- [ ] Event Kafka `resource-ttl-extended`
+- [ ] Ordered destruction (AWS dependencies)
+- [ ] Self-service TTL extension API (`PATCH /v1/resources/{id}/ttl`)
+- [ ] Snooze buttons in emails (7d, 14d)
+- [ ] Max 2 extensions limit (60d total)
+- [ ] Cost avoided calculation (AWS pricing)
+- [ ] Grafana dashboard "Cost Savings"
+- [ ] Prometheus metrics (resources_deleted, cost_avoided_usd)
+- [ ] Complete n8n workflow with Notion board
+- [ ] Hourly cron (instead of daily) for pre-alerts
+- [ ] Kafka event `resource-ttl-extended`
 
 ---
 
-### Architecture Cible Complète
+### Complete Target Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -4042,18 +4042,18 @@ def calculate_cost_avoided(resource, remaining_hours: int) -> float:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Estimation Temps de Développement
+### Development Time Estimation
 
-| Phase | Description | Durée Estimée |
-|-------|-------------|---------------|
-| Phase 1 | Kafka/Redpanda + AWX Automation | À planifier |
-| Phase 2 | GitOps + Variables d'Environnement + IAM | À planifier |
-| Phase 3 | Vault + Gateway Alias | À planifier |
-| Phase 4 | OpenSearch + Monitoring | À planifier |
-| Phase 5 | Multi-environnements (dev/staging/prod) | À planifier |
-| Phase 6 | Demo Tenant + SSO Unifié + Documentation | À planifier |
-| Phase 7 | Sécurité Opérationnelle (Batch Jobs) | À planifier |
-| Phase 8 | Developer Portal Custom (React) | À planifier |
-| Phase 9 | Ticketing (Demandes de Production) | À planifier |
-| Phase 9.5 | Production Readiness | À planifier |
-| Phase 10 | Resource Lifecycle (Tagging + Auto-Teardown) | À planifier |
+| Phase | Description | Estimated Duration |
+|-------|-------------|-------------------|
+| Phase 1 | Kafka/Redpanda + AWX Automation | To be planned |
+| Phase 2 | GitOps + Environment Variables + IAM | To be planned |
+| Phase 3 | Vault + Gateway Alias | To be planned |
+| Phase 4 | OpenSearch + Monitoring | To be planned |
+| Phase 5 | Multi-environments (dev/staging/prod) | To be planned |
+| Phase 6 | Demo Tenant + Unified SSO + Documentation | To be planned |
+| Phase 7 | Operational Security (Batch Jobs) | To be planned |
+| Phase 8 | Custom Developer Portal (React) | To be planned |
+| Phase 9 | Ticketing (Production Requests) | To be planned |
+| Phase 9.5 | Production Readiness | To be planned |
+| Phase 10 | Resource Lifecycle (Tagging + Auto-Teardown) | To be planned |

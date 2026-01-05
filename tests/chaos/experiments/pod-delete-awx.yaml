@@ -1,0 +1,194 @@
+# =============================================================================
+# Chaos Experiment: AWX Pod Delete
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Tests AWX recovery when components are killed
+# Expected: Kubernetes recreates pods, running jobs resume/retry
+# =============================================================================
+
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: awx-web-pod-delete
+  namespace: awx
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: awx-web
+    chaos-type: pod-delete
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: awx
+    applabel: "app.kubernetes.io/name=awx-web"
+    appkind: deployment
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "30"
+            - name: PODS_AFFECTED_PERC
+              value: "100"      # Delete all web pods
+            - name: CHAOS_INTERVAL
+              value: "10"
+            - name: FORCE
+              value: "false"
+            - name: SEQUENCE
+              value: "serial"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          - name: "awx-health-check"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://awx-service.awx.svc/api/v2/ping/"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 30
+              interval: 10
+              retry: 5
+              probePollingInterval: 5
+
+---
+# AWX Task Pod Delete
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: awx-task-pod-delete
+  namespace: awx
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: awx-task
+    chaos-type: pod-delete
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: awx
+    applabel: "app.kubernetes.io/name=awx-task"
+    appkind: deployment
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "30"
+            - name: PODS_AFFECTED_PERC
+              value: "50"       # Only half of task workers
+            - name: CHAOS_INTERVAL
+              value: "15"
+            - name: FORCE
+              value: "false"
+            - name: SEQUENCE
+              value: "serial"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          # Verify AWX API still responds
+          - name: "awx-api-check"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://awx-service.awx.svc/api/v2/ping/"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 15
+              interval: 10
+              retry: 3
+              probePollingInterval: 5
+
+---
+# AWX PostgreSQL Pod Delete (careful!)
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: awx-postgres-pod-delete
+  namespace: awx
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: awx-postgres
+    chaos-type: pod-delete
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: awx
+    applabel: "app.kubernetes.io/name=awx-postgres"
+    appkind: statefulset
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "20"       # Short duration for DB
+            - name: PODS_AFFECTED_PERC
+              value: "100"
+            - name: CHAOS_INTERVAL
+              value: "20"
+            - name: FORCE
+              value: "false"    # Graceful shutdown
+            - name: SEQUENCE
+              value: "serial"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          # Wait for postgres to be ready
+          - name: "postgres-ready"
+            type: "cmdProbe"
+            cmdProbe/inputs:
+              command: "pg_isready -h awx-postgres.awx.svc -p 5432 -U awx"
+              source:
+                image: "bitnami/postgresql:15"
+              comparator:
+                type: "string"
+                criteria: "contains"
+                value: "accepting connections"
+            mode: "EOT"
+            runProperties:
+              probeTimeout: 60
+              interval: 10
+              retry: 6
+
+          # Verify AWX can connect after recovery
+          - name: "awx-db-connection"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://awx-service.awx.svc/api/v2/ping/"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+            mode: "EOT"
+            runProperties:
+              probeTimeout: 120
+              interval: 15
+              retry: 8

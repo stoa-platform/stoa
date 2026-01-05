@@ -1,0 +1,108 @@
+{{- if .Values.backup.enabled }}
+# =============================================================================
+# Backup RBAC Configuration
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# ServiceAccount and RBAC for backup CronJobs
+# =============================================================================
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.backup.serviceAccountName | default "stoa-backup" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-backup
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: stoa-platform
+  {{- if .Values.backup.serviceAccountAnnotations }}
+  annotations:
+    {{- toYaml .Values.backup.serviceAccountAnnotations | nindent 4 }}
+  {{- end }}
+---
+# Role for AWX namespace access (for database backup)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: stoa-backup-awx
+  namespace: {{ .Values.backup.awx.namespace | default "awx" }}
+  labels:
+    app.kubernetes.io/name: stoa-backup
+    app.kubernetes.io/component: backup
+rules:
+  # Access to AWX PostgreSQL pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  # Access to AWX secrets (for database password)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: stoa-backup-awx
+  namespace: {{ .Values.backup.awx.namespace | default "awx" }}
+  labels:
+    app.kubernetes.io/name: stoa-backup
+    app.kubernetes.io/component: backup
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.backup.serviceAccountName | default "stoa-backup" }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: stoa-backup-awx
+  apiGroup: rbac.authorization.k8s.io
+---
+# Role for Vault namespace access (for snapshot backup)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: stoa-backup-vault
+  namespace: {{ .Values.backup.vault.namespace | default "vault" }}
+  labels:
+    app.kubernetes.io/name: stoa-backup
+    app.kubernetes.io/component: backup
+rules:
+  # Access to Vault pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  # Access to Vault secrets (for root token if needed)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+  # Restart Vault after restore
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets/status"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: stoa-backup-vault
+  namespace: {{ .Values.backup.vault.namespace | default "vault" }}
+  labels:
+    app.kubernetes.io/name: stoa-backup
+    app.kubernetes.io/component: backup
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.backup.serviceAccountName | default "stoa-backup" }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: stoa-backup-vault
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

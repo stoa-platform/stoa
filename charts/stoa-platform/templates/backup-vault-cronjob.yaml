@@ -1,0 +1,195 @@
+{{- if and .Values.backup.enabled .Values.backup.vault.enabled }}
+# =============================================================================
+# Vault Raft Snapshot Backup CronJob
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Daily backup of Vault Raft snapshots to S3
+# =============================================================================
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-vault
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: backup-vault
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: stoa-platform
+    backup-type: vault-snapshot
+  annotations:
+    description: "Daily Vault Raft snapshot to S3"
+spec:
+  schedule: "{{ .Values.backup.vault.schedule | default "0 3 * * *" }}"
+  timeZone: "{{ .Values.backup.timezone | default "Europe/Paris" }}"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit | default 3 }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit | default 3 }}
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.backup.vault.backoffLimit | default 2 }}
+      ttlSecondsAfterFinished: {{ .Values.backup.ttlSecondsAfterFinished | default 86400 }}
+      activeDeadlineSeconds: {{ .Values.backup.vault.activeDeadlineSeconds | default 1800 }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: backup-vault
+            app.kubernetes.io/component: backup
+          annotations:
+            prometheus.io/scrape: "false"
+        spec:
+          serviceAccountName: {{ .Values.backup.serviceAccountName | default "stoa-backup" }}
+          restartPolicy: Never
+          {{- with .Values.backup.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.backup.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+            - name: backup
+              image: "{{ .Values.backup.vault.image.repository | default "hashicorp/vault" }}:{{ .Values.backup.vault.image.tag | default "1.15" }}"
+              imagePullPolicy: {{ .Values.backup.vault.image.pullPolicy | default "IfNotPresent" }}
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+
+                  echo "=========================================="
+                  echo "Vault Raft Snapshot Backup"
+                  echo "Date: $(date)"
+                  echo "=========================================="
+
+                  # Configuration
+                  BACKUP_DATE=$(date +%Y-%m-%d)
+                  BACKUP_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_FILENAME="vault-snapshot-${BACKUP_TIMESTAMP}.snap"
+                  S3_PATH="s3://${S3_BUCKET}/vault/${BACKUP_DATE}/${BACKUP_FILENAME}"
+                  TEMP_DIR="/tmp/backup"
+
+                  mkdir -p "$TEMP_DIR"
+
+                  # Install AWS CLI
+                  echo "Installing AWS CLI..."
+                  apk add --no-cache aws-cli curl jq >/dev/null 2>&1 || {
+                    # Fallback for non-Alpine images
+                    curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+                    unzip -q /tmp/awscliv2.zip -d /tmp
+                    /tmp/aws/install --bin-dir /tmp/bin --install-dir /tmp/aws-cli 2>/dev/null || true
+                    export PATH="/tmp/bin:$PATH"
+                  }
+
+                  # Check Vault status
+                  echo "Checking Vault status..."
+                  vault status -format=json > /tmp/vault-status.json || {
+                    echo "ERROR: Cannot connect to Vault at $VAULT_ADDR"
+                    exit 1
+                  }
+
+                  SEALED=$(cat /tmp/vault-status.json | jq -r '.sealed')
+                  if [ "$SEALED" = "true" ]; then
+                    echo "ERROR: Vault is sealed - cannot take snapshot"
+                    exit 1
+                  fi
+                  echo "Vault is unsealed and ready"
+
+                  # Take Raft snapshot
+                  echo "Creating Raft snapshot..."
+                  vault operator raft snapshot save "${TEMP_DIR}/${BACKUP_FILENAME}"
+
+                  if [ ! -f "${TEMP_DIR}/${BACKUP_FILENAME}" ]; then
+                    echo "ERROR: Snapshot file not created"
+                    exit 1
+                  fi
+
+                  # Get snapshot size
+                  BACKUP_SIZE=$(du -h "${TEMP_DIR}/${BACKUP_FILENAME}" | cut -f1)
+                  echo "Snapshot size: $BACKUP_SIZE"
+
+                  # Upload to S3
+                  echo "Uploading to S3..."
+                  aws s3 cp "${TEMP_DIR}/${BACKUP_FILENAME}" "$S3_PATH" \
+                    --sse aws:kms \
+                    {{- if .Values.backup.kmsKeyId }}
+                    --sse-kms-key-id "{{ .Values.backup.kmsKeyId }}" \
+                    {{- end }}
+                    --only-show-errors
+
+                  # Verify upload
+                  echo "Verifying upload..."
+                  aws s3 ls "$S3_PATH" || exit 1
+
+                  # Cleanup old snapshots (keep last N)
+                  echo "Cleaning up old snapshots..."
+                  KEEP_COUNT={{ .Values.backup.vault.retentionCount | default 7 }}
+                  aws s3 ls "s3://${S3_BUCKET}/vault/" --recursive | \
+                    sort -r | \
+                    tail -n +$((KEEP_COUNT + 1)) | \
+                    awk '{print $4}' | \
+                    while read -r file; do
+                      if [ -n "$file" ]; then
+                        echo "Deleting old snapshot: $file"
+                        aws s3 rm "s3://${S3_BUCKET}/${file}"
+                      fi
+                    done || true
+
+                  # Send Slack notification on success
+                  {{- if .Values.backup.slack.enabled }}
+                  if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+                    curl -s -X POST -H 'Content-type: application/json' \
+                      --data "{\"channel\": \"#ops-alerts\", \"username\": \"STOA Backup Bot\", \"icon_emoji\": \":floppy_disk:\", \"attachments\": [{\"color\": \"#36a64f\", \"text\": \":white_check_mark: *Vault Backup Success*\n*Size:* ${BACKUP_SIZE}\n*Path:* ${S3_PATH}\n*Environment:* ${ENVIRONMENT}\"}]}" \
+                      "$SLACK_WEBHOOK_URL" || true
+                  fi
+                  {{- end }}
+
+                  # Cleanup
+                  rm -rf "$TEMP_DIR"
+
+                  echo "=========================================="
+                  echo "Backup completed successfully!"
+                  echo "S3 Path: $S3_PATH"
+                  echo "=========================================="
+              env:
+                - name: S3_BUCKET
+                  value: "{{ .Values.backup.s3Bucket }}"
+                - name: AWS_REGION
+                  value: "{{ .Values.backup.awsRegion | default "eu-west-3" }}"
+                - name: ENVIRONMENT
+                  value: "{{ .Values.global.environment | default "dev" }}"
+                - name: VAULT_ADDR
+                  value: "{{ .Values.backup.vault.address | default "http://vault.vault.svc:8200" }}"
+                - name: VAULT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.backup.vault.tokenSecretName | default "vault-backup-token" }}
+                      key: {{ .Values.backup.vault.tokenSecretKey | default "token" }}
+                {{- if .Values.backup.slack.enabled }}
+                - name: SLACK_WEBHOOK_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.backup.slack.secretName | default "slack-webhook" }}
+                      key: {{ .Values.backup.slack.secretKey | default "webhook-url" }}
+                      optional: true
+                {{- end }}
+              resources:
+                requests:
+                  cpu: {{ .Values.backup.vault.resources.requests.cpu | default "100m" }}
+                  memory: {{ .Values.backup.vault.resources.requests.memory | default "128Mi" }}
+                limits:
+                  cpu: {{ .Values.backup.vault.resources.limits.cpu | default "200m" }}
+                  memory: {{ .Values.backup.vault.resources.limits.memory | default "256Mi" }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 1Gi
+{{- end }}

@@ -1,20 +1,20 @@
-# Developer Portal Custom - Plan de Développement
+# Developer Portal Custom - Development Plan
 
-## 📋 Vue d'ensemble
+## 📋 Overview
 
-**Objectif** : Remplacer le Developer Portal IBM par un portal custom React intégré à l'architecture APIM GitOps.
+**Objective**: Replace the IBM Developer Portal with a custom React portal integrated into the APIM GitOps architecture.
 
-**Durée estimée** : 3 semaines
+**Estimated Duration**: 3 weeks
 
-**Stack technique** :
-- Frontend : React + TypeScript + Vite + TailwindCSS
-- Auth : Keycloak OIDC
-- Backend : Control Plane API (FastAPI) - endpoints à ajouter
-- Documentation : Swagger-UI ou Redoc
+**Tech Stack**:
+- Frontend: React + TypeScript + Vite + TailwindCSS
+- Auth: Keycloak OIDC
+- Backend: Control Plane API (FastAPI) - endpoints to add
+- Documentation: Swagger-UI or Redoc
 
 ---
 
-## 📁 Structure du Projet
+## 📁 Project Structure
 
 ```
 developer-portal/
@@ -78,99 +78,99 @@ developer-portal/
 
 ---
 
-## 📅 Planning Semaine par Semaine
+## 📅 Week-by-Week Planning
 
-### Semaine 1 : Fondations + Catalogue
+### Week 1: Foundations + Catalog
 
-| Jour | Tâches | Fichiers |
+| Day | Tasks | Files |
 |------|--------|----------|
-| **J1** | Setup projet Vite + React + TS + Tailwind | `package.json`, `vite.config.ts`, `tailwind.config.js` |
-| **J1** | Config Keycloak OIDC | `src/services/auth.service.ts`, `src/hooks/useAuth.ts` |
-| **J2** | Layout principal | `src/components/layout/*` |
-| **J2** | Routing React Router | `src/App.tsx` |
-| **J3** | Page ApiCatalog | `src/pages/ApiCatalog.tsx` |
-| **J3** | Composant ApiCard | `src/components/api/ApiCard.tsx` |
-| **J4** | Page ApiDetail (structure) | `src/pages/ApiDetail.tsx` |
-| **J4** | Tabs (Doc, Try-It, Code) | `src/pages/ApiDetail.tsx` |
-| **J5** | Intégration Swagger-UI | `src/components/api/SwaggerViewer.tsx` |
+| **D1** | Setup Vite + React + TS + Tailwind project | `package.json`, `vite.config.ts`, `tailwind.config.js` |
+| **D1** | Configure Keycloak OIDC | `src/services/auth.service.ts`, `src/hooks/useAuth.ts` |
+| **D2** | Main layout | `src/components/layout/*` |
+| **D2** | React Router routing | `src/App.tsx` |
+| **D3** | ApiCatalog page | `src/pages/ApiCatalog.tsx` |
+| **D3** | ApiCard component | `src/components/api/ApiCard.tsx` |
+| **D4** | ApiDetail page (structure) | `src/pages/ApiDetail.tsx` |
+| **D4** | Tabs (Doc, Try-It, Code) | `src/pages/ApiDetail.tsx` |
+| **D5** | Swagger-UI integration | `src/components/api/SwaggerViewer.tsx` |
 
-**Checklist S1** :
-- [ ] Projet initialisé avec Vite
-- [ ] TailwindCSS configuré
-- [ ] Keycloak auth fonctionnelle
-- [ ] Layout responsive
-- [ ] Catalogue APIs avec recherche
-- [ ] Page détail avec doc OpenAPI
+**W1 Checklist**:
+- [ ] Project initialized with Vite
+- [ ] TailwindCSS configured
+- [ ] Keycloak auth functional
+- [ ] Responsive layout
+- [ ] API Catalog with search
+- [ ] Detail page with OpenAPI doc
 
 ---
 
-### Semaine 2 : Applications + Souscriptions
+### Week 2: Applications + Subscriptions
 
-| Jour | Tâches | Fichiers |
+| Day | Tasks | Files |
 |------|--------|----------|
-| **J1** | Page MyApplications | `src/pages/MyApplications.tsx` |
-| **J1** | Composant AppCard | `src/components/application/AppCard.tsx` |
-| **J2** | Page CreateApplication | `src/pages/CreateApplication.tsx` |
-| **J2** | Formulaire création app | `src/pages/CreateApplication.tsx` |
-| **J3** | ApiKeyDisplay sécurisé | `src/components/application/ApiKeyDisplay.tsx` |
-| **J3** | CredentialsModal | `src/components/application/CredentialsModal.tsx` |
-| **J4** | Page Subscriptions | `src/pages/Subscriptions.tsx` |
-| **J4** | SubscribeButton | `src/components/api/SubscribeButton.tsx` |
-| **J5** | Flow complet end-to-end | Tests manuels |
+| **D1** | MyApplications page | `src/pages/MyApplications.tsx` |
+| **D1** | AppCard component | `src/components/application/AppCard.tsx` |
+| **D2** | CreateApplication page | `src/pages/CreateApplication.tsx` |
+| **D2** | Application creation form | `src/pages/CreateApplication.tsx` |
+| **D3** | Secure ApiKeyDisplay | `src/components/application/ApiKeyDisplay.tsx` |
+| **D3** | CredentialsModal | `src/components/application/CredentialsModal.tsx` |
+| **D4** | Subscriptions page | `src/pages/Subscriptions.tsx` |
+| **D4** | SubscribeButton | `src/components/api/SubscribeButton.tsx` |
+| **D5** | Full end-to-end flow | Manual testing |
 
-**Checklist S2** :
-- [ ] Liste mes applications
-- [ ] Créer une application
-- [ ] Afficher credentials (API Key visible une fois)
-- [ ] Rotation API Key
-- [ ] Liste mes souscriptions
-- [ ] Souscrire à une API
-- [ ] Désouscrire
+**W2 Checklist**:
+- [ ] List my applications
+- [ ] Create an application
+- [ ] Display credentials (API Key visible once)
+- [ ] Rotate API Key
+- [ ] List my subscriptions
+- [ ] Subscribe to an API
+- [ ] Unsubscribe
 
 ---
 
-### Semaine 3 : Try-It + Polish
+### Week 3: Try-It + Polish
 
-| Jour | Tâches | Fichiers |
+| Day | Tasks | Files |
 |------|--------|----------|
-| **J1** | RequestBuilder | `src/components/tryit/RequestBuilder.tsx` |
-| **J1** | Sélection méthode, URL, params | `src/components/tryit/RequestBuilder.tsx` |
-| **J2** | HeadersEditor | `src/components/tryit/HeadersEditor.tsx` |
-| **J2** | Body editor (JSON) | `src/components/tryit/RequestBuilder.tsx` |
-| **J3** | ResponseViewer | `src/components/tryit/ResponseViewer.tsx` |
-| **J3** | Affichage status, headers, body, timing | `src/components/tryit/ResponseViewer.tsx` |
-| **J4** | CodeSamples | `src/components/api/CodeSamples.tsx` |
-| **J4** | Génération curl, Python, JavaScript | `src/components/api/CodeSamples.tsx` |
-| **J5** | Polish UI | Global |
-| **J5** | Loading states, error handling, responsive | Global |
+| **D1** | RequestBuilder | `src/components/tryit/RequestBuilder.tsx` |
+| **D1** | Method, URL, params selection | `src/components/tryit/RequestBuilder.tsx` |
+| **D2** | HeadersEditor | `src/components/tryit/HeadersEditor.tsx` |
+| **D2** | Body editor (JSON) | `src/components/tryit/RequestBuilder.tsx` |
+| **D3** | ResponseViewer | `src/components/tryit/ResponseViewer.tsx` |
+| **D3** | Display status, headers, body, timing | `src/components/tryit/ResponseViewer.tsx` |
+| **D4** | CodeSamples | `src/components/api/CodeSamples.tsx` |
+| **D4** | Generate curl, Python, JavaScript | `src/components/api/CodeSamples.tsx` |
+| **D5** | Polish UI | Global |
+| **D5** | Loading states, error handling, responsive | Global |
 
-**Checklist S3** :
-- [ ] Console Try-It fonctionnelle
-- [ ] Requête envoyée via proxy backend
-- [ ] Réponse affichée (status, headers, body)
-- [ ] Timing affiché
-- [ ] Code samples générés
-- [ ] UI responsive
-- [ ] Gestion erreurs
+**W3 Checklist**:
+- [ ] Functional Try-It console
+- [ ] Request sent via backend proxy
+- [ ] Response displayed (status, headers, body)
+- [ ] Timing displayed
+- [ ] Code samples generated
+- [ ] Responsive UI
+- [ ] Error handling
 
 ---
 
-## 🔌 Endpoints Backend à Ajouter
+## 🔌 Backend Endpoints to Add
 
-Ajouter ces endpoints dans le Control Plane API (FastAPI).
+Add these endpoints in the Control Plane API (FastAPI).
 
-### Catalogue APIs
+### API Catalog
 
 ```
 GET    /portal/apis
        Query params: ?category=&search=&tenant=
-       Response: Liste des APIs publiées
+       Response: List of published APIs
 
 GET    /portal/apis/{api_id}
-       Response: Détail API (name, version, description, tenant, etc.)
+       Response: API detail (name, version, description, tenant, etc.)
 
 GET    /portal/apis/{api_id}/spec
-       Response: Spec OpenAPI (JSON ou YAML)
+       Response: OpenAPI spec (JSON or YAML)
 ```
 
 ### Applications
@@ -178,29 +178,29 @@ GET    /portal/apis/{api_id}/spec
 ```
 GET    /portal/my/applications
        Auth: Bearer token
-       Response: Liste des applications du développeur connecté
+       Response: List of applications for the connected developer
 
 POST   /portal/applications
        Body: { name, description, callback_urls }
        Response: { id, name, client_id, client_secret, api_key }
-       Note: client_secret et api_key visibles une seule fois
+       Note: client_secret and api_key visible only once
 
 GET    /portal/applications/{app_id}
-       Response: Détail application (sans secrets)
+       Response: Application detail (without secrets)
 
 DELETE /portal/applications/{app_id}
        Response: 204 No Content
 
 POST   /portal/applications/{app_id}/rotate-key
        Response: { new_api_key }
-       Note: Nouvelle clé visible une seule fois
+       Note: New key visible only once
 ```
 
-### Souscriptions
+### Subscriptions
 
 ```
 GET    /portal/my/subscriptions
-       Response: Liste des souscriptions (app -> API)
+       Response: List of subscriptions (app -> API)
 
 POST   /portal/subscriptions
        Body: { application_id, api_id }
@@ -214,7 +214,7 @@ DELETE /portal/subscriptions/{subscription_id}
 
 ```
 POST   /portal/try-it
-       Body: { 
+       Body: {
          api_id,
          application_id,
          method,
@@ -228,12 +228,12 @@ POST   /portal/try-it
          body,
          timing_ms
        }
-       Note: Le backend ajoute l'API Key et forward vers le Gateway
+       Note: The backend adds the API Key and forwards to the Gateway
 ```
 
 ---
 
-## 📦 Dépendances NPM
+## 📦 NPM Dependencies
 
 ### package.json
 
@@ -279,7 +279,7 @@ POST   /portal/try-it
 
 ---
 
-## ⚙️ Fichiers de Configuration
+## ⚙️ Configuration Files
 
 ### vite.config.ts
 
@@ -364,7 +364,7 @@ export default {
 ### Realm / Client
 
 ```yaml
-Realm: stoa-platform (existant)
+Realm: stoa-platform (existing)
 
 Client:
   client_id: developer-portal
@@ -375,9 +375,9 @@ Client:
   web_origins:
     - http://localhost:3001
     - https://portal.stoa.cab-i.com
-  
-Rôle à créer:
-  - developer (accès portal)
+
+Role to create:
+  - developer (portal access)
 ```
 
 ### src/services/auth.service.ts
@@ -404,7 +404,7 @@ VITE_API_URL=https://api.stoa.cab-i.com
 
 ---
 
-## 🎨 Composants Clés
+## 🎨 Key Components
 
 ### SwaggerViewer.tsx
 
@@ -515,68 +515,68 @@ print(response.json())`,
 
 ---
 
-## ✅ Checklist Finale
+## ✅ Final Checklist
 
-### Fonctionnalités
+### Features
 
-- [ ] **Auth** : Connexion Keycloak
-- [ ] **Auth** : Déconnexion
-- [ ] **Auth** : Protection des routes
+- [ ] **Auth**: Keycloak login
+- [ ] **Auth**: Logout
+- [ ] **Auth**: Route protection
 
-- [ ] **Catalogue** : Liste des APIs
-- [ ] **Catalogue** : Recherche par nom
-- [ ] **Catalogue** : Filtre par catégorie
-- [ ] **Catalogue** : Filtre par tenant
+- [ ] **Catalog**: List APIs
+- [ ] **Catalog**: Search by name
+- [ ] **Catalog**: Filter by category
+- [ ] **Catalog**: Filter by tenant
 
-- [ ] **API Detail** : Informations générales
-- [ ] **API Detail** : Documentation Swagger
-- [ ] **API Detail** : Bouton souscrire
+- [ ] **API Detail**: General information
+- [ ] **API Detail**: Swagger documentation
+- [ ] **API Detail**: Subscribe button
 
-- [ ] **Applications** : Liste mes apps
-- [ ] **Applications** : Créer une app
-- [ ] **Applications** : Voir credentials
-- [ ] **Applications** : Rotation API Key
-- [ ] **Applications** : Supprimer app
+- [ ] **Applications**: List my apps
+- [ ] **Applications**: Create an app
+- [ ] **Applications**: View credentials
+- [ ] **Applications**: Rotate API Key
+- [ ] **Applications**: Delete app
 
-- [ ] **Souscriptions** : Liste mes souscriptions
-- [ ] **Souscriptions** : Souscrire
-- [ ] **Souscriptions** : Désouscrire
+- [ ] **Subscriptions**: List my subscriptions
+- [ ] **Subscriptions**: Subscribe
+- [ ] **Subscriptions**: Unsubscribe
 
-- [ ] **Try-It** : Sélection méthode/path
-- [ ] **Try-It** : Headers custom
-- [ ] **Try-It** : Body JSON
-- [ ] **Try-It** : Envoi requête
-- [ ] **Try-It** : Affichage réponse
+- [ ] **Try-It**: Method/path selection
+- [ ] **Try-It**: Custom headers
+- [ ] **Try-It**: JSON body
+- [ ] **Try-It**: Send request
+- [ ] **Try-It**: Display response
 
-- [ ] **Code Samples** : curl
-- [ ] **Code Samples** : Python
-- [ ] **Code Samples** : JavaScript
+- [ ] **Code Samples**: curl
+- [ ] **Code Samples**: Python
+- [ ] **Code Samples**: JavaScript
 
-### Technique
+### Technical
 
 - [ ] Responsive design
 - [ ] Loading states
 - [ ] Error handling
 - [ ] Toast notifications
-- [ ] Dark mode (optionnel)
+- [ ] Dark mode (optional)
 
 ---
 
-## 🚀 Commandes de Démarrage
+## 🚀 Getting Started
 
 ```bash
-# Créer le projet
+# Create the project
 npm create vite@latest developer-portal -- --template react-ts
 cd developer-portal
 
-# Installer les dépendances
+# Install dependencies
 npm install react-router-dom axios keycloak-js @react-keycloak/web
 npm install swagger-ui-react @monaco-editor/react
 npm install react-hot-toast lucide-react clsx date-fns
 npm install -D tailwindcss postcss autoprefixer
 npx tailwindcss init -p
 
-# Lancer le dev server
+# Start the dev server
 npm run dev
 ```
 
@@ -584,11 +584,11 @@ npm run dev
 
 ## 📝 Notes
 
-- Le backend (Control Plane API) doit exposer les endpoints `/portal/*`
-- Les credentials (client_secret, api_key) ne sont visibles qu'une fois à la création
-- Le Try-It passe par un proxy backend pour ajouter l'API Key automatiquement
-- Keycloak : utiliser le realm existant `stoa-platform` avec un nouveau client `developer-portal`
+- The backend (Control Plane API) must expose the `/portal/*` endpoints
+- Credentials (client_secret, api_key) are only visible once at creation
+- Try-It goes through a backend proxy to automatically add the API Key
+- Keycloak: use the existing `stoa-platform` realm with a new `developer-portal` client
 
 ---
 
-Bon développement ! 🎯
+Happy coding! 🎯

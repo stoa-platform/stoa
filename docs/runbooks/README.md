@@ -1,60 +1,62 @@
-# STOA Platform - Runbooks Operationnels
+# STOA Platform - Operational Runbooks
 
 > **Linear Issue**: CAB-107 (APIM-9504)
 > **Phase**: 9.5 - Production Readiness
 > **Last Updated**: 2024-12-28
 
-Ce repertoire contient les procedures operationnelles pour la gestion des incidents sur la plateforme STOA.
+This directory contains operational procedures for incident management on the STOA platform.
 
 ---
 
-## Index des Runbooks
+## Runbook Index
 
-### Critical (Action immediate requise)
-
-| Runbook | Description | Impact |
-|---------|-------------|--------|
-| [Vault Sealed](critical/vault-sealed.md) | HashiCorp Vault en etat sealed | Secrets inaccessibles, authentification KO |
-| [Gateway Down](critical/gateway-down.md) | webMethods API Gateway indisponible | Toutes les APIs down |
-| [Database Connection](critical/database-connection.md) | Problemes de connexion PostgreSQL/RDS | Keycloak et services down |
-
-### High (Resolution dans l'heure)
+### Critical (Immediate action required)
 
 | Runbook | Description | Impact |
 |---------|-------------|--------|
-| [Gateway High Latency](high/gateway-high-latency.md) | Latence elevee sur le Gateway | SLA de latence compromis |
-| [Kafka Lag](high/kafka-lag.md) | Consumer lag eleve sur Redpanda | Deploiements retardes |
-| [Certificate Expiration](high/certificate-expiration.md) | Certificats TLS expirant/expires | Services HTTPS inaccessibles |
+| [Vault Sealed](critical/vault-sealed.md) | HashiCorp Vault in sealed state | Secrets inaccessible, authentication down |
+| [Vault Restore](critical/vault-restore.md) | Vault restore from S3 snapshot | Secrets recovery |
+| [AWX Restore](critical/awx-restore.md) | AWX restore from S3 backup | Configuration recovery |
+| [Gateway Down](critical/gateway-down.md) | webMethods API Gateway unavailable | All APIs down |
+| [Database Connection](critical/database-connection.md) | PostgreSQL/RDS connection issues | Keycloak and services down |
 
-### Medium (Resolution dans la journee)
+### High (Resolution within the hour)
 
 | Runbook | Description | Impact |
 |---------|-------------|--------|
-| [Jenkins Pipeline Stuck](medium/jenkins-pipeline-stuck.md) | Pipeline CI/CD bloque | Builds et deploiements bloques |
-| [AWX Unreachable](medium/awx-unreachable.md) | AWX (Ansible Tower) inaccessible | Automation des deploiements KO |
-| [API Rollback](medium/api-rollback.md) | Procedure de rollback d'une API | Restaurer version precedente |
+| [Gateway High Latency](high/gateway-high-latency.md) | High latency on Gateway | Latency SLA compromised |
+| [Kafka Lag](high/kafka-lag.md) | High consumer lag on Redpanda | Deployments delayed |
+| [Certificate Expiration](high/certificate-expiration.md) | TLS certificates expiring/expired | HTTPS services inaccessible |
+
+### Medium (Resolution within the day)
+
+| Runbook | Description | Impact |
+|---------|-------------|--------|
+| [Jenkins Pipeline Stuck](medium/jenkins-pipeline-stuck.md) | CI/CD pipeline stuck | Builds and deployments blocked |
+| [AWX Unreachable](medium/awx-unreachable.md) | AWX (Ansible Tower) inaccessible | Deployment automation down |
+| [API Rollback](medium/api-rollback.md) | API rollback procedure | Restore previous version |
 
 ---
 
 ## Quick Reference
 
-### Commandes de diagnostic frequentes
+### Common diagnostic commands
 
 ```bash
-# Statut global des pods
+# Global pod status
 kubectl get pods -A | grep -v Running
 
-# Events recents (toutes namespaces)
+# Recent events (all namespaces)
 kubectl get events -A --sort-by='.lastTimestamp' | tail -30
 
-# Logs d'un service specifique
+# Logs for a specific service
 kubectl logs -n <namespace> deploy/<deployment> --tail=100
 
-# Metriques CPU/Memory
+# CPU/Memory metrics
 kubectl top pods -A | sort -k3 -h -r | head -20
 ```
 
-### Namespaces STOA
+### STOA Namespaces
 
 | Namespace | Services |
 |-----------|----------|
@@ -67,9 +69,9 @@ kubectl top pods -A | sort -k3 -h -r | head -20
 | `jenkins` | Jenkins CI/CD |
 | `monitoring` | Prometheus, Grafana |
 | `argocd` | ArgoCD GitOps |
-| `cert-manager` | Gestion des certificats |
+| `cert-manager` | Certificate management |
 
-### URLs Principales
+### Main URLs
 
 | Service | URL |
 |---------|-----|
@@ -86,12 +88,12 @@ kubectl top pods -A | sort -k3 -h -r | head -20
 
 ## Escalation Matrix
 
-| Severite | Temps de reponse | Qui contacter |
-|----------|------------------|---------------|
+| Severity | Response time | Who to contact |
+|----------|---------------|----------------|
 | Critical | < 15 min | On-call + Platform Lead |
-| High | < 1 heure | On-call DevOps |
-| Medium | < 4 heures | Platform Team |
-| Low | < 24 heures | Ticket standard |
+| High | < 1 hour | On-call DevOps |
+| Medium | < 4 hours | Platform Team |
+| Low | < 24 hours | Standard ticket |
 
 ### Contacts
 
@@ -104,34 +106,34 @@ kubectl top pods -A | sort -k3 -h -r | head -20
 
 ---
 
-## Template de Runbook
+## Runbook Template
 
-Voir [_TEMPLATE.md](_TEMPLATE.md) pour creer un nouveau runbook.
+See [_TEMPLATE.md](_TEMPLATE.md) to create a new runbook.
 
-Structure standard:
-1. **Symptomes** - Alertes, comportement, impact
-2. **Diagnostic rapide** - Checklist < 5 min
-3. **Resolution** - Actions par cause
+Standard structure:
+1. **Symptoms** - Alerts, behavior, impact
+2. **Quick Diagnosis** - Checklist < 5 min
+3. **Resolution** - Actions by cause
 4. **Verification** - Post-resolution checks
-5. **Escalation** - Qui contacter
-6. **Prevention** - Monitoring recommande
+5. **Escalation** - Who to contact
+6. **Prevention** - Recommended monitoring
 
 ---
 
-## Contribution
+## Contributing
 
-Pour ajouter ou modifier un runbook:
+To add or modify a runbook:
 
-1. Creer une branche `docs/runbook-<component>`
-2. Copier le template `_TEMPLATE.md`
-3. Remplir toutes les sections
-4. Tester les commandes
-5. Creer une PR vers `main`
+1. Create a branch `docs/runbook-<component>`
+2. Copy the template `_TEMPLATE.md`
+3. Fill in all sections
+4. Test the commands
+5. Create a PR to `main`
 
 ---
 
-## Historique
+## History
 
 | Date | Modification |
 |------|--------------|
-| 2024-12-28 | Creation initiale - 9 runbooks |
+| 2024-12-28 | Initial creation - 9 runbooks |

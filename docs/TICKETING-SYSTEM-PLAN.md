@@ -1,29 +1,29 @@
-# Système de Ticketing - Demandes de Production
+# Ticketing System - Production Requests
 
-## 📋 Vue d'ensemble
+## 📋 Overview
 
-**Objectif** : Implémenter un workflow de validation manuelle pour les promotions vers PROD avec traçabilité complète.
+**Objective**: Implement a manual validation workflow for PROD promotions with complete traceability.
 
-**Durée estimée** : 1 semaine
+**Estimated Duration**: 1 week
 
-**Intégration** : Ajout à la Console APIM existante (pas d'outil externe)
-
----
-
-## 🎯 Fonctionnalités
-
-| Fonctionnalité | Description |
-|----------------|-------------|
-| Créer une demande | DevOps soumet une demande de promotion STAGING → PROD |
-| Validation RBAC | Seuls les CPI/Admins peuvent approuver |
-| Règle anti-self-approval | Le demandeur ne peut pas approuver sa propre demande |
-| Workflow automatisé | Approbation → AWX Job → Déploiement PROD |
-| Notifications | Email + Slack à chaque étape |
-| Historique complet | Audit trail dans Git |
+**Integration**: Added to the existing APIM Console (no external tools)
 
 ---
 
-## 📁 Structure dans Git
+## 🎯 Features
+
+| Feature | Description |
+|---------|-------------|
+| Create a request | DevOps submits a STAGING → PROD promotion request |
+| RBAC Validation | Only CPI/Admins can approve |
+| Anti-self-approval rule | Requester cannot approve their own request |
+| Automated workflow | Approval → AWX Job → PROD Deployment |
+| Notifications | Email + Slack at each step |
+| Complete history | Audit trail in Git |
+
+---
+
+## 📁 Git Structure
 
 ```
 stoa-gitops/
@@ -46,7 +46,7 @@ stoa-gitops/
 
 ---
 
-## 📄 Format du Ticket YAML
+## 📄 YAML Ticket Format
 
 ```yaml
 # requests/prod/2024/12/PR-2024-0003.yaml
@@ -59,7 +59,7 @@ metadata:
   tenant: tenant-finance
 
 spec:
-  # Cible de la promotion
+  # Promotion target
   target:
     type: api                      # api | application | policy
     name: payment-api
@@ -67,7 +67,7 @@ spec:
     sourceEnvironment: staging
     targetEnvironment: prod
   
-  # Justification
+  # Request details
   request:
     justification: "New PCI-DSS compliant payment flow"
     releaseNotes: |
@@ -76,20 +76,20 @@ spec:
       - Performance improvements
     impactAssessment: low          # low | medium | high | critical
     rollbackPlan: "Revert to v2.0.0 via emergency deploy"
-    scheduledDate: null            # null = ASAP, ou date ISO
-    
-  # Validation pré-déploiement
+    scheduledDate: null            # null = ASAP, or ISO date
+
+  # Pre-deployment validation
   preChecks:
     stagingTestsPassed: true
     securityScanPassed: true
     performanceTestsPassed: true
     testEvidenceUrl: "https://gitlab.cab-i.com/pipeline/12345"
 
-# Status (géré par le système)
+# Status (managed by the system)
 status:
   state: pending                   # pending | approved | rejected | deploying | deployed | failed
-  
-  # Historique des actions
+
+  # Action history
   history:
     - action: created
       at: "2024-12-23T10:30:00Z"
@@ -105,13 +105,13 @@ status:
       by: system
       jobId: "awx-job-5678"
       deploymentId: "deploy-abc123"
-      
-  # Infos supplémentaires
+
+  # Additional info
   approvedBy: jean.dupont@cab-i.com
   approvedAt: "2024-12-23T14:15:00Z"
   deployedAt: "2024-12-23T14:20:00Z"
   
-  # En cas de rejet
+  # In case of rejection
   rejectedBy: null
   rejectedAt: null
   rejectionReason: null
@@ -136,11 +136,11 @@ status:
 │   └──────────┘                   └──────────┘                                   │
 │                                                                                  │
 │   Transitions:                                                                   │
-│   • PENDING → APPROVED : CPI approuve                                           │
-│   • PENDING → REJECTED : CPI rejette                                            │
-│   • APPROVED → DEPLOYING : AWX job démarre                                      │
-│   • DEPLOYING → DEPLOYED : AWX job succès                                       │
-│   • DEPLOYING → FAILED : AWX job échec                                          │
+│   • PENDING → APPROVED : CPI approves                                           │
+│   • PENDING → REJECTED : CPI rejects                                            │
+│   • APPROVED → DEPLOYING : AWX job starts                                       │
+│   • DEPLOYING → DEPLOYED : AWX job succeeds                                     │
+│   • DEPLOYING → FAILED : AWX job fails                                          │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -149,58 +149,58 @@ status:
 
 ## 🔐 RBAC
 
-| Rôle | Créer demande | Approuver | Rejeter | Voir |
-|------|---------------|-----------|---------|------|
-| **DevOps** | ✅ Son tenant | ❌ | ❌ | Ses demandes |
-| **CPI (Tenant Admin)** | ✅ Son tenant | ✅ Son tenant* | ✅ Son tenant | Son tenant |
-| **CPI Admin** | ✅ Tous | ✅ Tous* | ✅ Tous | Tous |
-| **Viewer** | ❌ | ❌ | ❌ | Son tenant |
+| Role | Create request | Approve | Reject | View |
+|------|----------------|---------|--------|------|
+| **DevOps** | ✅ Own tenant | ❌ | ❌ | Own requests |
+| **CPI (Tenant Admin)** | ✅ Own tenant | ✅ Own tenant* | ✅ Own tenant | Own tenant |
+| **CPI Admin** | ✅ All | ✅ All* | ✅ All | All |
+| **Viewer** | ❌ | ❌ | ❌ | Own tenant |
 
-*\* Sauf ses propres demandes (anti-self-approval)*
+*\* Except own requests (anti-self-approval)*
 
 ---
 
-## 📅 Planning Jour par Jour
+## 📅 Day-by-Day Planning
 
-### Jour 1 : Modèle de Données + API CRUD
+### Day 1: Data Model + CRUD API
 
-| Tâche | Fichiers |
-|-------|----------|
-| Définir le modèle Pydantic | `src/models/promotion_request.py` |
-| Service Git pour les requests | `src/services/promotion_request_service.py` |
-| Endpoints CRUD | `src/routers/promotion_requests.py` |
-| Tests unitaires | `tests/test_promotion_requests.py` |
+| Task | Files |
+|------|-------|
+| Define Pydantic model | `src/models/promotion_request.py` |
+| Git service for requests | `src/services/promotion_request_service.py` |
+| CRUD endpoints | `src/routers/promotion_requests.py` |
+| Unit tests | `tests/test_promotion_requests.py` |
 
-**Endpoints à créer :**
+**Endpoints to create:**
 
 ```python
-GET    /v1/requests/prod                    # Liste (filtres: state, tenant, createdBy)
-POST   /v1/requests/prod                    # Créer demande
-GET    /v1/requests/prod/{id}               # Détail
-GET    /v1/requests/prod/pending            # Demandes en attente pour moi
-GET    /v1/requests/prod/my                 # Mes demandes
+GET    /v1/requests/prod                    # List (filters: state, tenant, createdBy)
+POST   /v1/requests/prod                    # Create request
+GET    /v1/requests/prod/{id}               # Detail
+GET    /v1/requests/prod/pending            # Pending requests for me
+GET    /v1/requests/prod/my                 # My requests
 ```
 
 ---
 
-### Jour 2 : Workflow Approbation
+### Day 2: Approval Workflow
 
-| Tâche | Fichiers |
-|-------|----------|
-| Endpoint approve | `src/routers/promotion_requests.py` |
-| Endpoint reject | `src/routers/promotion_requests.py` |
-| Validation RBAC | `src/auth/permissions.py` |
+| Task | Files |
+|------|-------|
+| Approve endpoint | `src/routers/promotion_requests.py` |
+| Reject endpoint | `src/routers/promotion_requests.py` |
+| RBAC validation | `src/auth/permissions.py` |
 | Anti-self-approval check | `src/services/promotion_request_service.py` |
-| Trigger AWX sur approval | `src/services/awx_service.py` |
+| Trigger AWX on approval | `src/services/awx_service.py` |
 
-**Endpoints à créer :**
+**Endpoints to create:**
 
 ```python
-POST   /v1/requests/prod/{id}/approve       # Approuver (+ comment optionnel)
-POST   /v1/requests/prod/{id}/reject        # Rejeter (+ reason obligatoire)
+POST   /v1/requests/prod/{id}/approve       # Approve (+ optional comment)
+POST   /v1/requests/prod/{id}/reject        # Reject (+ mandatory reason)
 ```
 
-**Logique approve :**
+**Approve logic:**
 
 ```python
 async def approve_request(request_id: str, approver: User, comment: str = None):
@@ -245,16 +245,16 @@ async def approve_request(request_id: str, approver: User, comment: str = None):
 
 ---
 
-### Jour 3 : Intégration AWX + Callbacks
+### Day 3: AWX Integration + Callbacks
 
-| Tâche | Fichiers |
-|-------|----------|
-| Créer job template AWX pour PROD | AWX config |
-| Callback webhook AWX → API | `src/webhooks/awx_callback.py` |
-| Update status sur succès/échec | `src/services/promotion_request_service.py` |
-| Retry logic si échec | `src/services/promotion_request_service.py` |
+| Task | Files |
+|------|-------|
+| Create AWX job template for PROD | AWX config |
+| AWX → API callback webhook | `src/webhooks/awx_callback.py` |
+| Update status on success/failure | `src/services/promotion_request_service.py` |
+| Retry logic on failure | `src/services/promotion_request_service.py` |
 
-**Webhook callback :**
+**Webhook callback:**
 
 ```python
 @router.post("/webhooks/awx/job-complete")
@@ -288,17 +288,17 @@ async def awx_job_complete(payload: AWXJobCallback):
 
 ---
 
-### Jour 4 : UI - Liste et Filtres
+### Day 4: UI - List and Filters
 
-| Tâche | Fichiers |
-|-------|----------|
-| Page ProductionRequests | `src/pages/ProductionRequests.tsx` |
-| Composant RequestCard | `src/components/requests/RequestCard.tsx` |
-| Filtres (state, tenant) | `src/components/requests/RequestFilters.tsx` |
-| Badge status avec couleurs | `src/components/requests/StatusBadge.tsx` |
-| Hook useRequests | `src/hooks/useRequests.ts` |
+| Task | Files |
+|------|-------|
+| ProductionRequests page | `src/pages/ProductionRequests.tsx` |
+| RequestCard component | `src/components/requests/RequestCard.tsx` |
+| Filters (state, tenant) | `src/components/requests/RequestFilters.tsx` |
+| Status badge with colors | `src/components/requests/StatusBadge.tsx` |
+| useRequests hook | `src/hooks/useRequests.ts` |
 
-**Structure UI :**
+**UI structure:**
 
 ```
 src/
@@ -315,17 +315,17 @@ src/
 
 ---
 
-### Jour 5 : UI - Formulaire de Demande
+### Day 5: UI - Request Form
 
-| Tâche | Fichiers |
-|-------|----------|
-| Page NewRequest | `src/pages/NewProductionRequest.tsx` |
-| Formulaire avec validation | `src/pages/NewProductionRequest.tsx` |
-| Sélecteur API/Version | `src/components/requests/ApiVersionSelector.tsx` |
-| Champs pre-checks | `src/components/requests/PreChecksForm.tsx` |
-| Submit + redirection | `src/pages/NewProductionRequest.tsx` |
+| Task | Files |
+|------|-------|
+| NewRequest page | `src/pages/NewProductionRequest.tsx` |
+| Form with validation | `src/pages/NewProductionRequest.tsx` |
+| API/Version selector | `src/components/requests/ApiVersionSelector.tsx` |
+| Pre-checks fields | `src/components/requests/PreChecksForm.tsx` |
+| Submit + redirect | `src/pages/NewProductionRequest.tsx` |
 
-**Champs du formulaire :**
+**Form fields:**
 
 ```typescript
 interface NewRequestForm {
@@ -351,17 +351,17 @@ interface NewRequestForm {
 
 ---
 
-### Jour 6 : UI - Détail et Actions
+### Day 6: UI - Detail and Actions
 
-| Tâche | Fichiers |
-|-------|----------|
-| Page RequestDetail | `src/pages/RequestDetail.tsx` |
-| Timeline des actions | `src/components/requests/RequestTimeline.tsx` |
-| Boutons Approve/Reject | `src/components/requests/ApprovalActions.tsx` |
-| Modal de confirmation | `src/components/requests/ConfirmModal.tsx` |
-| Modal de rejet (reason) | `src/components/requests/RejectModal.tsx` |
+| Task | Files |
+|------|-------|
+| RequestDetail page | `src/pages/RequestDetail.tsx` |
+| Actions timeline | `src/components/requests/RequestTimeline.tsx` |
+| Approve/Reject buttons | `src/components/requests/ApprovalActions.tsx` |
+| Confirmation modal | `src/components/requests/ConfirmModal.tsx` |
+| Rejection modal (reason) | `src/components/requests/RejectModal.tsx` |
 
-**Page détail :**
+**Detail page:**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -407,84 +407,84 @@ interface NewRequestForm {
 
 ---
 
-### Jour 7 : Notifications + Polish
+### Day 7: Notifications + Polish
 
-| Tâche | Fichiers |
-|-------|----------|
-| Notifications Kafka | `src/services/notification_service.py` |
+| Task | Files |
+|------|-------|
+| Kafka notifications | `src/services/notification_service.py` |
 | Email templates | `src/templates/emails/` |
 | Slack notifications | `src/services/slack_service.py` |
-| Loading states UI | Global |
-| Error handling UI | Global |
-| Tests E2E | `tests/e2e/` |
+| UI loading states | Global |
+| UI error handling | Global |
+| E2E tests | `tests/e2e/` |
 
-**Events Kafka :**
+**Kafka events:**
 
 ```python
 # Topics
 TOPIC_PROMOTION_REQUESTS = "promotion-requests"
 
 # Events
-"request-created"      # Nouvelle demande
-"request-approved"     # Demande approuvée
-"request-rejected"     # Demande rejetée
-"deployment-started"   # Déploiement lancé
-"deployment-succeeded" # Déploiement réussi
-"deployment-failed"    # Déploiement échoué
+"request-created"      # New request
+"request-approved"     # Request approved
+"request-rejected"     # Request rejected
+"deployment-started"   # Deployment started
+"deployment-succeeded" # Deployment succeeded
+"deployment-failed"    # Deployment failed
 ```
 
-**Templates Email :**
+**Email templates:**
 
 ```
 src/templates/emails/
-├── request_created.html       # Pour les approbateurs
-├── request_approved.html      # Pour le demandeur
-├── request_rejected.html      # Pour le demandeur
-├── deployment_started.html    # Pour le demandeur + approbateur
-├── deployment_succeeded.html  # Pour tous
-└── deployment_failed.html     # Pour tous + ops
+├── request_created.html       # For approvers
+├── request_approved.html      # For requester
+├── request_rejected.html      # For requester
+├── deployment_started.html    # For requester + approver
+├── deployment_succeeded.html  # For everyone
+└── deployment_failed.html     # For everyone + ops
 ```
 
 ---
 
-## 🔌 Endpoints API Complets
+## 🔌 Complete API Endpoints
 
 ```python
 # src/routers/promotion_requests.py
 
-# Liste et recherche
+# List and search
 GET    /v1/requests/prod
        Query: ?state=pending&tenant=tenant-finance&createdBy=user@email
        Response: List[PromotionRequest]
 
-# Mes demandes
+# My requests
 GET    /v1/requests/prod/my
        Response: List[PromotionRequest]
 
-# Demandes en attente pour moi (approbateur)
+# Pending requests for me (approver)
 GET    /v1/requests/prod/pending
        Response: List[PromotionRequest]
 
-# Créer une demande
+# Create a request
 POST   /v1/requests/prod
        Body: CreatePromotionRequest
        Response: PromotionRequest
 
-# Détail d'une demande
+# Request detail
 GET    /v1/requests/prod/{id}
        Response: PromotionRequest
 
-# Approuver
+# Approve
 POST   /v1/requests/prod/{id}/approve
        Body: { comment?: string }
        Response: PromotionRequest
 
-# Rejeter
+# Reject
 POST   /v1/requests/prod/{id}/reject
        Body: { reason: string }  # Required
        Response: PromotionRequest
 
-# Stats (pour dashboard)
+# Stats (for dashboard)
 GET    /v1/requests/prod/stats
        Response: {
          pending: number,
@@ -496,7 +496,7 @@ GET    /v1/requests/prod/stats
 
 ---
 
-## 📦 Modèles Pydantic
+## 📦 Pydantic Models
 
 ```python
 # src/models/promotion_request.py
@@ -570,7 +570,7 @@ class RejectRequest(BaseModel):
 
 ---
 
-## 🖥️ Composants React
+## 🖥️ React Components
 
 ### RequestCard.tsx
 
@@ -683,70 +683,70 @@ export const RequestTimeline: React.FC<{ history: HistoryEntry[] }> = ({ history
 
 ---
 
-## ✅ Checklist Finale
+## ✅ Final Checklist
 
 ### Backend
 
-- [ ] Modèle PromotionRequest
-- [ ] Service Git (CRUD requests)
-- [ ] Endpoint GET /requests/prod (liste + filtres)
-- [ ] Endpoint POST /requests/prod (créer)
-- [ ] Endpoint GET /requests/prod/{id} (détail)
-- [ ] Endpoint POST /requests/prod/{id}/approve
-- [ ] Endpoint POST /requests/prod/{id}/reject
-- [ ] Validation RBAC
-- [ ] Check anti-self-approval
-- [ ] Trigger AWX sur approval
-- [ ] Webhook callback AWX
+- [ ] PromotionRequest model
+- [ ] Git service (CRUD requests)
+- [ ] GET /requests/prod endpoint (list + filters)
+- [ ] POST /requests/prod endpoint (create)
+- [ ] GET /requests/prod/{id} endpoint (detail)
+- [ ] POST /requests/prod/{id}/approve endpoint
+- [ ] POST /requests/prod/{id}/reject endpoint
+- [ ] RBAC validation
+- [ ] Anti-self-approval check
+- [ ] Trigger AWX on approval
+- [ ] AWX webhook callback
 - [ ] Update status deployed/failed
 
 ### Frontend
 
-- [ ] Page ProductionRequests (liste)
-- [ ] Filtres (state, tenant, search)
+- [ ] ProductionRequests page (list)
+- [ ] Filters (state, tenant, search)
 - [ ] RequestCard component
 - [ ] StatusBadge component
-- [ ] Page NewProductionRequest (formulaire)
-- [ ] Validation formulaire
-- [ ] Page RequestDetail
+- [ ] NewProductionRequest page (form)
+- [ ] Form validation
+- [ ] RequestDetail page
 - [ ] RequestTimeline component
-- [ ] Bouton Approve + confirmation
-- [ ] Bouton Reject + modal reason
+- [ ] Approve button + confirmation
+- [ ] Reject button + reason modal
 - [ ] Loading states
 - [ ] Error handling
 - [ ] Toast notifications
 
 ### Notifications
 
-- [ ] Event Kafka request-created
-- [ ] Event Kafka request-approved
-- [ ] Event Kafka request-rejected
-- [ ] Event Kafka deployment-succeeded
-- [ ] Event Kafka deployment-failed
-- [ ] Email aux approbateurs (nouvelle demande)
-- [ ] Email au demandeur (approved/rejected)
+- [ ] Kafka event request-created
+- [ ] Kafka event request-approved
+- [ ] Kafka event request-rejected
+- [ ] Kafka event deployment-succeeded
+- [ ] Kafka event deployment-failed
+- [ ] Email to approvers (new request)
+- [ ] Email to requester (approved/rejected)
 - [ ] Slack notifications
 
 ### Tests
 
-- [ ] Tests unitaires service
-- [ ] Tests unitaires endpoints
-- [ ] Test workflow complet
-- [ ] Test RBAC
-- [ ] Test anti-self-approval
+- [ ] Service unit tests
+- [ ] Endpoint unit tests
+- [ ] Full workflow test
+- [ ] RBAC test
+- [ ] Anti-self-approval test
 
 ---
 
-## 🚀 Commandes de Démarrage
+## 🚀 Getting Started Commands
 
 ```bash
-# Backend - Ajouter les fichiers
+# Backend - Add files
 touch src/models/promotion_request.py
 touch src/services/promotion_request_service.py
 touch src/routers/promotion_requests.py
 touch src/webhooks/awx_callback.py
 
-# Frontend - Ajouter les fichiers
+# Frontend - Add files
 mkdir -p src/pages
 mkdir -p src/components/requests
 touch src/pages/ProductionRequests.tsx
@@ -764,13 +764,13 @@ touch src/hooks/useRequests.ts
 
 ## 📝 Notes
 
-- Les tickets sont stockés dans Git → audit trail natif
-- Le demandeur ne peut JAMAIS approuver sa propre demande
-- L'approbation déclenche automatiquement AWX
-- Le callback AWX met à jour le status dans Git
-- Notifications à chaque étape du workflow
-- Historique complet conservé dans le ticket YAML
+- Tickets are stored in Git → native audit trail
+- The requester can NEVER approve their own request
+- Approval automatically triggers AWX
+- The AWX callback updates the status in Git
+- Notifications at each workflow step
+- Complete history preserved in the YAML ticket
 
 ---
 
-Bon développement ! 🎯
+Happy coding! 🎯

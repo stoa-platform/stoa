@@ -1,0 +1,317 @@
+# =============================================================================
+# Chaos Workflow: Full STOA Platform Chaos Suite
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Comprehensive chaos testing workflow running all experiments
+# Run in staging environment only, NEVER in production
+# =============================================================================
+
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosWorkflow
+metadata:
+  name: stoa-full-chaos-suite
+  namespace: litmus
+  labels:
+    app.kubernetes.io/name: chaos-workflow
+    app.kubernetes.io/component: full-suite
+    environment: staging
+spec:
+  # Workflow configuration
+  schedule:
+    # Run weekly on Saturday at 2 AM UTC (staging only)
+    cron: "0 2 * * 6"
+
+  # Workflow steps - run experiments sequentially
+  workflowSpec:
+    entrypoint: stoa-chaos-suite
+    serviceAccountName: litmus-admin
+
+    templates:
+      - name: stoa-chaos-suite
+        steps:
+          # =========================================
+          # Stage 1: API Layer Resilience
+          # =========================================
+          - - name: api-pod-delete
+              template: run-experiment
+              arguments:
+                parameters:
+                  - name: experiment-name
+                    value: "pod-delete-api"
+                  - name: namespace
+                    value: "stoa-system"
+                  - name: description
+                    value: "Delete Control-Plane API pods"
+
+          - - name: wait-api-recovery
+              template: wait
+              arguments:
+                parameters:
+                  - name: duration
+                    value: "60s"
+
+          - - name: mcp-pod-delete
+              template: run-experiment
+              arguments:
+                parameters:
+                  - name: experiment-name
+                    value: "pod-delete-mcp"
+                  - name: namespace
+                    value: "stoa-system"
+                  - name: description
+                    value: "Delete MCP Gateway pods"
+
+          - - name: wait-mcp-recovery
+              template: wait
+              arguments:
+                parameters:
+                  - name: duration
+                    value: "60s"
+
+          # =========================================
+          # Stage 2: Network Resilience
+          # =========================================
+          - - name: network-latency-test
+              template: run-experiment
+              arguments:
+                parameters:
+                  - name: experiment-name
+                    value: "network-latency"
+                  - name: namespace
+                    value: "stoa-system"
+                  - name: description
+                    value: "Inject 500ms network latency"
+
+          - - name: wait-network-recovery
+              template: wait
+              arguments:
+                parameters:
+                  - name: duration
+                    value: "30s"
+
+          # =========================================
+          # Stage 3: Resource Stress
+          # =========================================
+          - - name: cpu-stress-test
+              template: run-experiment
+              arguments:
+                parameters:
+                  - name: experiment-name
+                    value: "cpu-stress-api"
+                  - name: namespace
+                    value: "stoa-system"
+                  - name: description
+                    value: "CPU stress on API pods"
+
+          - - name: wait-stress-recovery
+              template: wait
+              arguments:
+                parameters:
+                  - name: duration
+                    value: "60s"
+
+          # =========================================
+          # Stage 4: Infrastructure Resilience
+          # =========================================
+          - - name: vault-pod-delete
+              template: run-experiment
+              arguments:
+                parameters:
+                  - name: experiment-name
+                    value: "vault-pod-delete"
+                  - name: namespace
+                    value: "vault"
+                  - name: description
+                    value: "Delete Vault pod (test auto-unseal)"
+
+          - - name: wait-vault-recovery
+              template: wait
+              arguments:
+                parameters:
+                  - name: duration
+                    value: "120s"
+
+          - - name: awx-pod-delete
+              template: run-experiment
+              arguments:
+                parameters:
+                  - name: experiment-name
+                    value: "awx-web-pod-delete"
+                  - name: namespace
+                    value: "awx"
+                  - name: description
+                    value: "Delete AWX web pods"
+
+          - - name: wait-awx-recovery
+              template: wait
+              arguments:
+                parameters:
+                  - name: duration
+                    value: "90s"
+
+          # =========================================
+          # Stage 5: Final Validation
+          # =========================================
+          - - name: validate-platform
+              template: validate-all
+
+      # Template: Run a chaos experiment
+      - name: run-experiment
+        inputs:
+          parameters:
+            - name: experiment-name
+            - name: namespace
+            - name: description
+        container:
+          image: litmuschaos/chaos-runner:3.0.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Starting experiment: {{inputs.parameters.description}}"
+              kubectl apply -f /experiments/{{inputs.parameters.experiment-name}}.yaml -n {{inputs.parameters.namespace}}
+
+              # Wait for experiment to complete
+              while true; do
+                STATUS=$(kubectl get chaosengine {{inputs.parameters.experiment-name}} -n {{inputs.parameters.namespace}} -o jsonpath='{.status.engineStatus}')
+                if [ "$STATUS" = "completed" ] || [ "$STATUS" = "stopped" ]; then
+                  echo "Experiment completed with status: $STATUS"
+                  break
+                fi
+                echo "Waiting for experiment to complete... Current status: $STATUS"
+                sleep 10
+              done
+
+              # Get result
+              RESULT=$(kubectl get chaosengine {{inputs.parameters.experiment-name}} -n {{inputs.parameters.namespace}} -o jsonpath='{.status.experiments[0].verdict}')
+              echo "Experiment verdict: $RESULT"
+
+              if [ "$RESULT" != "Pass" ]; then
+                echo "ERROR: Experiment failed!"
+                exit 1
+              fi
+
+      # Template: Wait for recovery
+      - name: wait
+        inputs:
+          parameters:
+            - name: duration
+        container:
+          image: busybox:1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Waiting {{inputs.parameters.duration}} for recovery..."
+              sleep {{inputs.parameters.duration}}
+              echo "Wait complete"
+
+      # Template: Validate all services
+      - name: validate-all
+        container:
+          image: curlimages/curl:8.4.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "=== Final Platform Validation ==="
+              FAILED=0
+
+              # Check Control-Plane API
+              echo "Checking Control-Plane API..."
+              if curl -sf http://control-plane-api.stoa-system.svc:8000/v1/health > /dev/null; then
+                echo "✓ Control-Plane API: OK"
+              else
+                echo "✗ Control-Plane API: FAILED"
+                FAILED=1
+              fi
+
+              # Check MCP Gateway
+              echo "Checking MCP Gateway..."
+              if curl -sf http://mcp-gateway.stoa-system.svc:8001/health > /dev/null; then
+                echo "✓ MCP Gateway: OK"
+              else
+                echo "✗ MCP Gateway: FAILED"
+                FAILED=1
+              fi
+
+              # Check Vault
+              echo "Checking Vault..."
+              if curl -sf http://vault.vault.svc:8200/v1/sys/health > /dev/null; then
+                echo "✓ Vault: OK"
+              else
+                echo "✗ Vault: FAILED"
+                FAILED=1
+              fi
+
+              # Check AWX
+              echo "Checking AWX..."
+              if curl -sf http://awx-service.awx.svc/api/v2/ping/ > /dev/null; then
+                echo "✓ AWX: OK"
+              else
+                echo "✗ AWX: FAILED"
+                FAILED=1
+              fi
+
+              echo "=== Validation Complete ==="
+
+              if [ $FAILED -eq 1 ]; then
+                echo "ERROR: Some services failed validation!"
+                exit 1
+              fi
+
+              echo "All services are healthy!"
+
+---
+# Simplified workflow for quick chaos testing
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosWorkflow
+metadata:
+  name: stoa-quick-chaos
+  namespace: litmus
+  labels:
+    app.kubernetes.io/name: chaos-workflow
+    app.kubernetes.io/component: quick-test
+spec:
+  workflowSpec:
+    entrypoint: quick-chaos
+    serviceAccountName: litmus-admin
+
+    templates:
+      - name: quick-chaos
+        steps:
+          # Only run pod-delete tests
+          - - name: api-pod-delete
+              template: run-pod-delete
+              arguments:
+                parameters:
+                  - name: target
+                    value: "control-plane-api"
+                  - name: namespace
+                    value: "stoa-system"
+
+          - - name: mcp-pod-delete
+              template: run-pod-delete
+              arguments:
+                parameters:
+                  - name: target
+                    value: "mcp-gateway"
+                  - name: namespace
+                    value: "stoa-system"
+
+      - name: run-pod-delete
+        inputs:
+          parameters:
+            - name: target
+            - name: namespace
+        container:
+          image: bitnami/kubectl:1.28
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Deleting pods for {{inputs.parameters.target}}..."
+              kubectl delete pod -l app.kubernetes.io/name={{inputs.parameters.target}} -n {{inputs.parameters.namespace}} --wait=false
+
+              echo "Waiting for pods to recover..."
+              sleep 30
+
+              kubectl wait --for=condition=ready pod -l app.kubernetes.io/name={{inputs.parameters.target}} -n {{inputs.parameters.namespace}} --timeout=120s
+
+              echo "Recovery verified for {{inputs.parameters.target}}"

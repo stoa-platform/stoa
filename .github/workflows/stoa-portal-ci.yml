@@ -111,7 +111,7 @@ jobs:
 
           case "$ENV" in
             dev)
-              echo "BASE_DOMAIN=dev.stoa.cab-i.com" >> $GITHUB_OUTPUT
+              echo "BASE_DOMAIN=stoa.cab-i.com" >> $GITHUB_OUTPUT
               ;;
             staging)
               echo "BASE_DOMAIN=staging.stoa.cab-i.com" >> $GITHUB_OUTPUT

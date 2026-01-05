@@ -8,6 +8,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2026-01-05) - Developer Portal Enhancement
+
+- **STOA Developer Portal** - API Consumer features (`portal/`)
+  - **API Catalog** (`src/pages/apis/`):
+    - `APICatalog.tsx` - Browse all published APIs with search/filter
+    - `APIDetail.tsx` - API details with OpenAPI spec viewer
+    - `APITestingSandbox.tsx` - Interactive API testing sandbox
+
+  - **Consumer Applications** (`src/pages/apps/`):
+    - `MyApplications.tsx` - Create and manage consumer apps
+    - `ApplicationDetail.tsx` - App credentials and subscriptions
+
+  - **Subscriptions** (`src/pages/subscriptions/`):
+    - `MySubscriptions.tsx` - Manage API and MCP Tool subscriptions
+    - Support for both API and MCP Tool subscription types
+
+  - **API Testing Components** (`src/components/testing/`):
+    - `EnvironmentSelector.tsx` - Environment dropdown with production warnings
+    - `RequestBuilder.tsx` - Request configuration (method, path, headers, body)
+    - `ResponseViewer.tsx` - Response display with timing, status codes
+    - `SandboxConfirmationModal.tsx` - Production environment confirmation
+
+  - **Configuration** (`src/config.ts`):
+    - `portalMode` - production vs non-production portal
+    - `enableApplications` - Consumer apps feature flag
+    - `enableAPITesting` - Testing sandbox feature flag
+    - `testing.requireSandboxConfirmation` - Production safety
+
+  - **Portal Deployment**:
+    - URL: https://portal.stoa.cab-i.com
+    - Keycloak client: `stoa-portal`
+    - CI/CD: `.github/workflows/stoa-portal-ci.yml`
+
 ### Added (2026-01-05) - Phase 9.5 Production Readiness (CAB-103)
 
 > **Related Tickets**:

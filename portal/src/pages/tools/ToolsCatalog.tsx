@@ -43,13 +43,20 @@ export function ToolsCatalog() {
     error,
     refetch,
   } = useTools({
-    category: selectedCategory !== 'All' ? selectedCategory : undefined,
-    search: searchQuery || undefined,
+    tag: selectedCategory !== 'All' ? selectedCategory : undefined,
   });
 
   const { data: categories } = useToolCategories();
 
-  const tools = toolsData?.items || [];
+  // Filter by search query client-side (MCP Gateway may not support server-side search)
+  const allTools = toolsData?.tools || [];
+  const tools = searchQuery
+    ? allTools.filter((tool: MCPTool) =>
+        tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tool.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tool.displayName?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : allTools;
   const allCategories = ['All', ...(categories || [])];
 
   return (
@@ -137,13 +144,14 @@ export function ToolsCatalog() {
             {selectedCategory !== 'All' && ` in ${selectedCategory}`}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tools.map((tool: MCPTool) => {
-              const status = statusConfig[tool.status as ToolStatus] || statusConfig.active;
+            {tools.map((tool: MCPTool, index: number) => {
+              const status = statusConfig[(tool.status || 'active') as ToolStatus] || statusConfig.active;
+              const toolId = tool.name || tool.id || `tool-${index}`; // MCP tools use name as identifier
 
               return (
                 <Link
-                  key={tool.id}
-                  to={`/tools/${tool.id}`}
+                  key={toolId}
+                  to={`/tools/${encodeURIComponent(toolId)}`}
                   className="bg-white rounded-lg border border-gray-200 p-5 hover:border-primary-300 hover:shadow-md transition-all group"
                 >
                   <div className="flex items-start justify-between mb-3">
@@ -156,7 +164,7 @@ export function ToolsCatalog() {
                   </div>
 
                   <h3 className="font-semibold text-gray-900 group-hover:text-primary-700 transition-colors">
-                    {tool.displayName}
+                    {tool.displayName || tool.name}
                   </h3>
                   <p className="text-sm text-gray-500 mt-1 line-clamp-2">
                     {tool.description}
@@ -178,9 +186,9 @@ export function ToolsCatalog() {
                   </div>
 
                   <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                    {tool.category ? (
+                    {(tool.category || (tool.tags && tool.tags.length > 0)) ? (
                       <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                        {tool.category}
+                        {tool.category || tool.tags?.[0]}
                       </span>
                     ) : (
                       <span />

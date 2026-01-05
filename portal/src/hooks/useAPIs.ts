@@ -23,7 +23,7 @@ export function useAPIs(params?: ListAPIsParams) {
  * Hook to get a single API by ID
  */
 export function useAPI(id: string | undefined) {
-  return useQuery<API>({
+  return useQuery<API | null>({
     queryKey: ['api', id],
     queryFn: () => apiCatalogService.getAPI(id!),
     enabled: !!id,

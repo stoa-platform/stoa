@@ -80,7 +80,7 @@ export function SubscribeToToolModal({
     e.preventDefault();
 
     await onSubmit({
-      toolId: tool.id,
+      toolId: tool.name || tool.id || '', // MCP tools use name as identifier
       plan: selectedPlan,
     });
   };
@@ -111,7 +111,7 @@ export function SubscribeToToolModal({
                 Subscribe to Tool
               </h2>
               <p className="text-sm text-gray-500 mt-1">
-                {tool.displayName} v{tool.version}
+                {tool.displayName || tool.name}{tool.version ? ` v${tool.version}` : ''}
               </p>
             </div>
             <button
@@ -136,11 +136,11 @@ export function SubscribeToToolModal({
 
               {/* Tool Info */}
               <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900">{tool.displayName}</h4>
+                <h4 className="font-medium text-gray-900">{tool.displayName || tool.name}</h4>
                 <p className="text-sm text-gray-500 mt-1">{tool.description}</p>
-                {tool.category && (
+                {(tool.category || (tool.tags && tool.tags.length > 0)) && (
                   <span className="inline-block mt-2 px-2 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded">
-                    {tool.category}
+                    {tool.category || tool.tags?.[0]}
                   </span>
                 )}
               </div>

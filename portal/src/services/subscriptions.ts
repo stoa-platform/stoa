@@ -1,37 +1,50 @@
 /**
- * STOA Developer Portal - Subscriptions Service
+ * STOA Developer Portal - MCP Subscriptions Service
  *
- * Service for managing API subscriptions.
+ * ⚠️ IMPORTANT: MCP Subscriptions are on MCP Gateway, NOT Control-Plane API!
+ *
+ * Reference: Linear CAB-247
  */
 
-import { apiClient } from './api';
-import type { APISubscription, PaginatedResponse } from '../types';
+import { mcpClient } from './mcpClient';
+import type {
+  MCPSubscription,
+  MCPSubscriptionCreate,
+  MCPSubscriptionConfig,
+} from '../types';
+
+// ============ Types ============
 
 export interface ListSubscriptionsParams {
   page?: number;
-  pageSize?: number;
-  applicationId?: string;
-  apiId?: string;
-  status?: 'pending' | 'active' | 'suspended' | 'cancelled';
+  page_size?: number;
+  status?: 'active' | 'expired' | 'revoked';
 }
 
-export interface SubscribeToAPIRequest {
-  applicationId: string;
-  apiId: string;
-  plan: 'free' | 'basic' | 'premium' | 'enterprise';
+export interface SubscriptionsListResponse {
+  subscriptions: MCPSubscription[];
+  total: number;
+  page: number;
+  page_size: number;
 }
+
+export interface CreateSubscriptionResponse {
+  subscription: MCPSubscription;
+  api_key: string; // ⚠️ Shown only ONCE!
+}
+
+// ============ Service ============
 
 export const subscriptionsService = {
   /**
-   * List user's API subscriptions
+   * List my MCP subscriptions
+   * GET /mcp/v1/subscriptions
    */
-  listSubscriptions: async (params?: ListSubscriptionsParams): Promise<PaginatedResponse<APISubscription>> => {
-    const response = await apiClient.get<PaginatedResponse<APISubscription>>('/v1/subscriptions', {
+  listSubscriptions: async (params?: ListSubscriptionsParams): Promise<SubscriptionsListResponse> => {
+    const response = await mcpClient.get<SubscriptionsListResponse>('/mcp/v1/subscriptions', {
       params: {
         page: params?.page || 1,
-        page_size: params?.pageSize || 20,
-        application_id: params?.applicationId,
-        api_id: params?.apiId,
+        page_size: params?.page_size || 20,
         status: params?.status,
       },
     });
@@ -39,44 +52,59 @@ export const subscriptionsService = {
   },
 
   /**
-   * Get a single subscription by ID
+   * Get subscription details
+   * GET /mcp/v1/subscriptions/{id}
    */
-  getSubscription: async (id: string): Promise<APISubscription> => {
-    const response = await apiClient.get<APISubscription>(`/v1/subscriptions/${id}`);
+  getSubscription: async (id: string): Promise<MCPSubscription> => {
+    const response = await mcpClient.get<MCPSubscription>(`/mcp/v1/subscriptions/${id}`);
     return response.data;
   },
 
   /**
-   * Subscribe an application to an API
+   * Create a new subscription
+   * POST /mcp/v1/subscriptions
+   *
+   * ⚠️ The API key is returned only ONCE! Store/display immediately.
    */
-  subscribe: async (data: SubscribeToAPIRequest): Promise<APISubscription> => {
-    const response = await apiClient.post<APISubscription>('/v1/subscriptions', data);
+  createSubscription: async (data: MCPSubscriptionCreate): Promise<CreateSubscriptionResponse> => {
+    const response = await mcpClient.post<CreateSubscriptionResponse>('/mcp/v1/subscriptions', data);
     return response.data;
   },
 
   /**
-   * Cancel a subscription
+   * Revoke a subscription
+   * DELETE /mcp/v1/subscriptions/{id}
    */
-  cancelSubscription: async (id: string): Promise<void> => {
-    await apiClient.delete(`/v1/subscriptions/${id}`);
+  revokeSubscription: async (id: string): Promise<void> => {
+    await mcpClient.delete(`/mcp/v1/subscriptions/${id}`);
   },
 
   /**
-   * Get subscription usage statistics
+   * Regenerate API key for a subscription
+   * POST /mcp/v1/subscriptions/{id}/regenerate
+   *
+   * ⚠️ Old key is immediately invalidated!
    */
-  getUsage: async (id: string): Promise<APISubscription['usage']> => {
-    const response = await apiClient.get<APISubscription['usage']>(`/v1/subscriptions/${id}/usage`);
+  regenerateApiKey: async (id: string): Promise<{ api_key: string }> => {
+    const response = await mcpClient.post<{ api_key: string }>(`/mcp/v1/subscriptions/${id}/regenerate`);
     return response.data;
   },
 
   /**
-   * Get subscriptions for a specific application
+   * Get claude_desktop_config.json export
+   * GET /mcp/v1/subscriptions/{id}/config
    */
-  getByApplication: async (applicationId: string): Promise<APISubscription[]> => {
-    const response = await apiClient.get<{ items: APISubscription[] }>('/v1/subscriptions', {
-      params: { application_id: applicationId },
-    });
-    return response.data.items;
+  getConfigExport: async (id: string): Promise<MCPSubscriptionConfig> => {
+    const response = await mcpClient.get<MCPSubscriptionConfig>(`/mcp/v1/subscriptions/${id}/config`);
+    return response.data;
+  },
+
+  /**
+   * Get subscriptions for current user (convenience wrapper)
+   */
+  getMySubscriptions: async (): Promise<MCPSubscription[]> => {
+    const response = await subscriptionsService.listSubscriptions();
+    return response.subscriptions;
   },
 };
 

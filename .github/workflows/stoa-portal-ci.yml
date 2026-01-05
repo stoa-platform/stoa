@@ -12,14 +12,14 @@ on:
     branches:
       - main
     paths:
-      - 'stoa-portal/**'
+      - 'portal/**'
       - '.github/workflows/stoa-portal-ci.yml'
 
   pull_request:
     branches:
       - main
     paths:
-      - 'stoa-portal/**'
+      - 'portal/**'
       - '.github/workflows/stoa-portal-ci.yml'
 
   workflow_dispatch:
@@ -59,29 +59,29 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: stoa-portal/package-lock.json
+          cache-dependency-path: portal/package-lock.json
 
       - name: Install dependencies
-        working-directory: stoa-portal
+        working-directory: portal
         run: npm ci
 
       - name: Run linter
-        working-directory: stoa-portal
+        working-directory: portal
         run: npm run lint
 
       - name: Run tests
-        working-directory: stoa-portal
+        working-directory: portal
         run: npm run test
 
       - name: Build
-        working-directory: stoa-portal
+        working-directory: portal
         run: npm run build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: stoa-portal-dist
-          path: stoa-portal/dist
+          path: portal/dist
           retention-days: 7
 
   # ==========================================================================
@@ -139,7 +139,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: stoa-portal
+          context: portal
           push: true
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.env.outputs.ENVIRONMENT }}-${{ github.sha }}
@@ -186,12 +186,12 @@ jobs:
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name apim-cluster --region ${{ env.AWS_REGION }}
+          aws eks update-kubeconfig --name apim-dev-cluster --region ${{ env.AWS_REGION }}
 
       - name: Apply Kubernetes manifests
         run: |
           # Apply all k8s manifests
-          kubectl apply -f stoa-portal/k8s/
+          kubectl apply -f portal/k8s/
 
       - name: Update deployment image
         run: |

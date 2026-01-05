@@ -46,7 +46,7 @@ const getAvailableEnvironments = (): Environment[] => {
 
   // Non-production portal has multiple environments
   const envList = config.testing?.availableEnvironments || ['dev'];
-  return envList.map((env) => ({
+  return envList.map((env: string) => ({
     id: env,
     name: env,
     displayName: env === 'dev' ? 'Development' : env.charAt(0).toUpperCase() + env.slice(1),

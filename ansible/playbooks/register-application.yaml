@@ -1,0 +1,192 @@
+---
+# Playbook: Register Application in Gateway
+# Associates an application with APIs via OIDC authentication
+#
+# Required variables:
+#   - application_name: Application name (e.g., "awx-automation")
+#   - application_description: Application description
+#   - client_id: Keycloak client ID (client_id claim value)
+#   - api_ids: List of API IDs to consume
+#
+# Optional variables:
+#   - contact_email: Contact email (default: admin@cab-i.com)
+#   - auth_strategy_id: OIDC strategy ID (if not specified, uses existing or none)
+#
+# IMPORTANT: The playbook uses newApisForAssociation with consumingAPIs=[] format
+# This is required for the Gateway API to properly associate APIs
+
+- name: Register Application in Gateway
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Gateway configuration
+    _gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
+    _gateway_user: "Administrator"
+    _gateway_password: "manage"
+
+    # Application configuration
+    _app_name: ""
+    _app_description: ""
+    _client_id: ""
+    _api_ids: []
+    _contact_email: "admin@cab-i.com"
+    _auth_strategy_id: ""
+
+    # Final values
+    gw_url: "{{ gateway_url | default(_gateway_url) }}"
+    gw_user: "{{ gateway_user | default(_gateway_user) }}"
+    gw_password: "{{ gateway_password | default(_gateway_password) }}"
+    app_name: "{{ application_name | default(_app_name) }}"
+    app_description: "{{ application_description | default(_app_description) }}"
+    app_client_id: "{{ client_id | default(_client_id) }}"
+    consuming_apis: "{{ api_ids | default(_api_ids) }}"
+    contact_email_val: "{{ contact_email | default(_contact_email) }}"
+    strategy_id: "{{ auth_strategy_id | default(_auth_strategy_id) }}"
+
+  tasks:
+    - name: Display registration info
+      debug:
+        msg: |
+          Registering Application '{{ app_name }}'
+          Client ID: {{ app_client_id }}
+          APIs to consume: {{ consuming_apis }}
+
+    - name: Check if application exists
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/applications"
+        method: GET
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200]
+      register: all_apps
+
+    - name: Find existing application
+      set_fact:
+        existing_app: "{{ all_apps.json.applications | selectattr('name', 'equalto', app_name) | list | first | default({}) }}"
+
+    - name: Set application exists fact
+      set_fact:
+        app_exists: "{{ existing_app.id is defined }}"
+        existing_app_id: "{{ existing_app.id | default('') }}"
+        existing_consuming_apis: "{{ existing_app.consumingAPIs | default([]) }}"
+        existing_strategy_ids: "{{ existing_app.authStrategyIds | default([]) }}"
+
+    - name: Create application
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/applications"
+        method: POST
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "{{ app_name }}"
+          description: "{{ app_description }}"
+          contactEmails:
+            - "{{ contact_email_val }}"
+          identifiers:
+            - name: "client_id"
+              key: "openIdClaims"
+              value:
+                - "{{ app_client_id }}"
+          subscription: false
+        status_code: [200, 201]
+      register: create_result
+      when: not app_exists
+
+    - name: Set application ID
+      set_fact:
+        app_id: "{{ create_result.json.id if not app_exists else existing_app_id }}"
+
+    - name: Display application ID
+      debug:
+        msg: "Application ID: {{ app_id }}"
+
+    # Calculate which APIs need to be added
+    - name: Calculate new APIs to associate
+      set_fact:
+        new_apis_to_add: "{{ consuming_apis | difference(existing_consuming_apis) }}"
+      when: app_exists
+
+    - name: Set new APIs for new application
+      set_fact:
+        new_apis_to_add: "{{ consuming_apis }}"
+      when: not app_exists
+
+    - name: Determine auth strategy IDs to use
+      set_fact:
+        # Use provided strategy_id, or keep existing ones
+        final_strategy_ids: "{{ [strategy_id] if strategy_id else existing_strategy_ids | default([]) }}"
+
+    - name: Display APIs to associate
+      debug:
+        msg: |
+          Existing APIs: {{ existing_consuming_apis | default([]) }}
+          APIs to add: {{ new_apis_to_add }}
+          Auth Strategy IDs: {{ final_strategy_ids }}
+      when: new_apis_to_add | length > 0
+
+    # IMPORTANT: Use consumingAPIs=[] with newApisForAssociation
+    # This is the format required by Gateway API (discovered via HAR analysis)
+    - name: Associate application with APIs
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/applications/{{ app_id }}"
+        method: PUT
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "{{ app_name }}"
+          description: "{{ app_description }}"
+          contactEmails:
+            - "{{ contact_email_val }}"
+          identifiers:
+            - name: "client_id"
+              key: "openIdClaims"
+              value:
+                - "{{ app_client_id }}"
+          subscription: false
+          consumingAPIs: []
+          newApisForAssociation: "{{ new_apis_to_add }}"
+          authStrategyIds: "{{ final_strategy_ids }}"
+        status_code: [200]
+      register: update_result
+      when: new_apis_to_add | length > 0
+
+    - name: Verify application configuration
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/applications/{{ app_id }}"
+        method: GET
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200]
+      register: final_app
+
+    - name: Registration summary
+      debug:
+        msg: |
+          ========================================
+          Application Registration Complete
+          ----------------------------------------
+          Name: {{ app_name }}
+          ID: {{ app_id }}
+          Client ID: {{ app_client_id }}
+          Status: {{ 'CREATED' if not app_exists else 'UPDATED' }}
+          Consuming APIs: {{ final_app.json.applications[0].consumingAPIs | default([]) }}
+          Auth Strategy IDs: {{ final_app.json.applications[0].authStrategyIds | default([]) }}
+          ========================================

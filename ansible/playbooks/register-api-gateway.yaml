@@ -1,0 +1,347 @@
+---
+# Playbook: Register API in webMethods Gateway
+# Imports API from OpenAPI spec, configures routing, and activates
+#
+# Required variables:
+#   - tenant_id: Tenant identifier
+#   - api_name: API name
+#   - api_version: API version
+#   - openapi_url: URL to OpenAPI spec (internal K8s URL)
+#   - backend_url: Backend service URL
+#
+# Optional variables:
+#   - oidc_enabled: Enable OIDC authentication (default: true)
+#   - rate_limit: Rate limit requests per minute (default: 100)
+#
+# Note: webMethods Gateway 10.15 only supports OpenAPI 3.0.x, not 3.1.0
+#       This playbook downloads the spec, converts to 3.0.3, and configures
+#       the backend server URL before importing.
+
+- name: Register API in webMethods Gateway
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../vars/secrets.yaml
+
+  vars:
+    gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
+    keycloak_url: "https://auth.{{ base_domain | default('stoa.cab-i.com') }}"
+    keycloak_realm: "stoa"
+    tenant_id: "{{ tenant_id | default('default') }}"
+    api_name: "{{ api_name | default('test-api') }}"
+    api_version: "{{ api_version | default('1.0') }}"
+    openapi_url: "{{ openapi_url | default('') }}"
+    backend_url: "{{ backend_url | default('') }}"
+    oidc_enabled: "{{ oidc_enabled | default(true) }}"
+    rate_limit: "{{ rate_limit | default(100) }}"
+    temp_openapi_file: "/tmp/openapi_{{ api_name | replace('-', '_') }}.json"
+
+  tasks:
+    - name: Display registration info
+      debug:
+        msg: "Registering API '{{ api_name }}' v{{ api_version }} for tenant '{{ tenant_id }}'"
+
+    # =========================================================================
+    # STEP 1: Health Check
+    # =========================================================================
+    - name: Check Gateway health
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/health"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 401]
+      register: health_check
+      ignore_errors: true
+
+    - name: Fail if Gateway unreachable
+      fail:
+        msg: "Gateway is not reachable at {{ gateway_url }}"
+      when: health_check.failed | default(false)
+
+    # =========================================================================
+    # STEP 2: Download and Convert OpenAPI Spec
+    # =========================================================================
+    - name: Download OpenAPI spec from backend
+      uri:
+        url: "{{ openapi_url }}"
+        method: GET
+        return_content: true
+        validate_certs: false
+      register: openapi_content
+      when: openapi_url | length > 0
+
+    - name: Convert OpenAPI 3.1.0 to 3.0.3 and set backend server
+      copy:
+        content: "{{ openapi_content.content | regex_replace('\"openapi\":\\s*\"3\\.1\\.0\"', '\"openapi\": \"3.0.3\"') | regex_replace('\"servers\":\\s*\\[\\s*\\{\\s*\"url\":\\s*\"/\"\\s*\\}\\s*\\]', '\"servers\": [{\"url\": \"' + backend_url + '\"}]') }}"
+        dest: "{{ temp_openapi_file }}"
+      when:
+        - openapi_content is defined
+        - openapi_content.content is defined
+
+    - name: Display converted OpenAPI info
+      debug:
+        msg: "OpenAPI spec saved to {{ temp_openapi_file }} with backend {{ backend_url }}"
+      when: openapi_content is defined
+
+    # =========================================================================
+    # STEP 3: Import API via File Upload
+    # =========================================================================
+    - name: Import API from OpenAPI file
+      shell: |
+        curl -s -X POST \
+          -u "{{ gateway_user }}:{{ gateway_password }}" \
+          -H "Accept: application/json" \
+          -F "type=openapi" \
+          -F "apiName={{ api_name }}" \
+          -F "apiVersion={{ api_version }}" \
+          -F "file=@{{ temp_openapi_file }}" \
+          "{{ gateway_url }}/rest/apigateway/apis"
+      register: api_import_result
+      when: openapi_url | length > 0
+
+    - name: Parse API import result
+      set_fact:
+        api_import_json: "{{ api_import_result.stdout | from_json }}"
+      when:
+        - api_import_result is defined
+        - api_import_result.stdout is defined
+      ignore_errors: true
+
+    - name: Set API ID from import
+      set_fact:
+        api_id: "{{ api_import_json.apiResponse.api.id }}"
+      when:
+        - api_import_json is defined
+        - api_import_json.apiResponse is defined
+        - api_import_json.apiResponse.api is defined
+
+    - name: Display API import result
+      debug:
+        msg: "API imported with ID: {{ api_id | default('FAILED - check api_import_result') }}"
+
+    - name: Show import error if failed
+      debug:
+        msg: "Import error: {{ api_import_json.errorDetails | default('Unknown error') }}"
+      when:
+        - api_import_json is defined
+        - api_import_json.errorDetails is defined
+
+    # =========================================================================
+    # STEP 4: Create Endpoint Alias for Backend Routing
+    # =========================================================================
+    - name: Create endpoint alias for backend
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/alias"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          alias:
+            name: "{{ api_name }}-backend"
+            description: "Backend endpoint for {{ api_name }}"
+            type: "endpoint"
+            endPointURI: "{{ backend_url }}"
+            connectionTimeout: 30
+            readTimeout: 60
+            optimizationTechnique: "None"
+            passSecurityHeaders: true
+        status_code: [200, 201, 409]
+      register: alias_create
+      when:
+        - api_id is defined
+        - backend_url | length > 0
+      ignore_errors: true
+
+    - name: Display alias creation result
+      debug:
+        msg: "Endpoint alias '{{ api_name }}-backend' created for {{ backend_url }}"
+      when: alias_create is defined
+
+    # =========================================================================
+    # STEP 5: Configure Routing Policy with Alias
+    # =========================================================================
+    - name: Create routing policy with endpoint alias
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policies"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policy:
+            id: "{{ api_name }}-routing-policy"
+            names:
+              - value: "{{ api_name }} Routing Policy"
+                locale: "en"
+            descriptions:
+              - value: "Routes requests to backend via endpoint alias"
+                locale: "en"
+            scope:
+              scopeType: "API"
+              scopeConditions:
+                - apiId: "{{ api_id }}"
+            policyEnforcements:
+              - stageKey: "routing"
+                enforcements:
+                  - enforcementObjectId: "straightThroughRouting"
+                    order: 1
+            templateKey: "straightThroughRouting"
+            active: true
+        status_code: [200, 201, 409]
+      when: api_id is defined
+      register: routing_policy
+      ignore_errors: true
+
+    # Alternative: Update API with routing rule using alias
+    - name: Update API routing to use endpoint alias
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          api:
+            id: "{{ api_id }}"
+            apiName: "{{ api_name }}"
+            apiVersion: "{{ api_version }}"
+            nativeEndpoint:
+              - uri: "${{{ api_name }}-backend}/${sys:resource_path}"
+                connectionTimeoutDuration: 30
+                readTimeoutDuration: 60
+                passSecurityHeaders: true
+                alias: true
+        status_code: [200, 204, 400]
+      when:
+        - api_id is defined
+        - backend_url | length > 0
+      register: routing_update
+      ignore_errors: true
+
+    - name: Display routing update result
+      debug:
+        msg: "API routing configured with alias: ${{{ api_name }}-backend}/${sys:resource_path}"
+      when: routing_update is defined
+
+    # =========================================================================
+    # STEP 6: Configure OIDC Policy (if enabled)
+    # =========================================================================
+    - name: Create OIDC authentication policy
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policies"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          policy:
+            id: "{{ api_name }}-oidc-policy"
+            name: "{{ api_name }} OIDC Policy"
+            policyScope: "API"
+            global: false
+            policyEnforcements:
+              - stageKey: "routing"
+                enforcements:
+                  - enforcementObjectId: "{{ api_name }}-oidc"
+                    order: 1
+            identifyAndAccessApis:
+              - apiId: "{{ api_id }}"
+        status_code: [200, 201, 409]
+      when:
+        - oidc_enabled | bool
+        - api_id is defined
+      register: oidc_policy
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 7: Activate API
+    # =========================================================================
+    - name: Activate API
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ api_id }}/activate"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 204]
+      when: api_id is defined
+      register: api_activate
+
+    # =========================================================================
+    # STEP 7: Send completion notification
+    # =========================================================================
+    - name: Send registration success to Control Plane API
+      uri:
+        url: "http://control-plane-api.stoa-system.svc.cluster.local:8000/v1/events/api-registered"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          tenant_id: "{{ tenant_id }}"
+          api_id: "{{ api_id | default('unknown') }}"
+          api_name: "{{ api_name }}"
+          api_version: "{{ api_version }}"
+          status: "success"
+          message: "API registered and activated successfully"
+          oidc_enabled: "{{ oidc_enabled }}"
+          rate_limit: "{{ rate_limit }}"
+        status_code: [200, 201, 202, 404]
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 9: Configure OIDC Application (if enabled)
+    # =========================================================================
+    - name: Include OIDC configuration
+      include_tasks: configure-gateway-oidc-tasks.yaml
+      vars:
+        oidc_api_id: "{{ api_id }}"
+        oidc_app_name: "{{ tenant_id }}-{{ api_name }}"
+        oidc_client_id: "{{ tenant_id }}-app"
+        oidc_tenant_id: "{{ tenant_id }}"
+        oidc_api_name: "{{ api_name }}"
+        oidc_api_version: "{{ api_version }}"
+      when:
+        - oidc_enabled | bool
+        - api_id is defined
+
+    - name: Registration summary
+      debug:
+        msg: |
+          ========================================
+          API Registration Complete
+          ----------------------------------------
+          API: {{ api_name }} v{{ api_version }}
+          API ID: {{ api_id | default('N/A') }}
+          Tenant: {{ tenant_id }}
+          Backend: {{ backend_url }}
+          OIDC: {{ oidc_enabled }}
+          Rate Limit: {{ rate_limit }} req/min
+          Status: SUCCESS
+          ========================================

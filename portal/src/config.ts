@@ -16,6 +16,9 @@ const ENVIRONMENT = import.meta.env.VITE_ENVIRONMENT || 'production';
 const IS_DEV = ENVIRONMENT === 'dev' || ENVIRONMENT === 'development';
 
 export const config = {
+  // Base domain at root level for easy access
+  baseDomain: BASE_DOMAIN,
+
   // Application metadata
   app: {
     title: import.meta.env.VITE_APP_TITLE || 'STOA Developer Portal',

@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-portal-config
+  namespace: stoa-system
+  labels:
+    app: stoa-portal
+data:
+  # These values are baked into the Docker image at build time
+  # This ConfigMap is for documentation/reference purposes
+  # To change values, rebuild the image with different build args
+
+  BASE_DOMAIN: "stoa.cab-i.com"
+  ENVIRONMENT: "production"
+
+  # Keycloak Configuration
+  KEYCLOAK_URL: "https://auth.stoa.cab-i.com"
+  KEYCLOAK_REALM: "stoa"
+  KEYCLOAK_CLIENT_ID: "stoa-portal"
+
+  # Service URLs
+  MCP_URL: "https://mcp.stoa.cab-i.com"
+  API_URL: "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0"
+  CONSOLE_URL: "https://console.stoa.cab-i.com"
+  DOCS_URL: "https://docs.stoa.cab-i.com"
+
+  # Feature Flags
+  ENABLE_MCP_TOOLS: "true"
+  ENABLE_SUBSCRIPTIONS: "true"
+  ENABLE_API_CATALOG: "false"

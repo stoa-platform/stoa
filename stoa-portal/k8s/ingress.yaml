@@ -5,23 +5,13 @@ metadata:
   namespace: stoa-system
   labels:
     app: stoa-portal
+    app.kubernetes.io/name: stoa-portal
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: stoa-platform
   annotations:
-    # ALB Ingress Controller annotations
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: "443"
-    alb.ingress.kubernetes.io/certificate-arn: ${ACM_CERTIFICATE_ARN}
-    alb.ingress.kubernetes.io/group.name: stoa-platform
-    alb.ingress.kubernetes.io/healthcheck-path: /health
-    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
-    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
-    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
-    alb.ingress.kubernetes.io/unhealthy-threshold-count: "2"
-    # Security headers
-    alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
+  ingressClassName: nginx
   rules:
     - host: portal.stoa.cab-i.com
       http:
@@ -33,3 +23,7 @@ spec:
                 name: stoa-portal
                 port:
                   number: 80
+  tls:
+    - hosts:
+        - portal.stoa.cab-i.com
+      secretName: stoa-portal-tls

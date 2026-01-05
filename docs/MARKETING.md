@@ -1,35 +1,35 @@
-# STOA Platform v2 - Plateforme de Gestion d'APIs Enterprise
+# STOA Platform v2 - Enterprise API Management Platform
 
-> **Solution souveraine de gestion d'APIs pour les secteurs régulés**
-
----
-
-## Le Défi des Entreprises Régulées
-
-Les banques, assurances et institutions financières françaises font face à des défis majeurs dans leur transformation digitale :
-
-| Défi | Impact |
-|------|--------|
-| **Conformité réglementaire** | RGPD, DSP2, Solvabilité II, exigences ACPR/AMF |
-| **Souveraineté des données** | Obligation d'hébergement sur territoire français/européen |
-| **Sécurité renforcée** | Protection des données sensibles, audit trail complet |
-| **Time-to-Market** | Pression concurrentielle des FinTechs et InsurTechs |
-| **Legacy Integration** | Connexion avec les systèmes historiques (mainframes, COBOL) |
-| **Multi-partenaires** | Écosystème Open Banking, agrégateurs, DSP2 |
+> **Sovereign API management solution for regulated industries**
 
 ---
 
-## Notre Solution : STOA Platform v2
+## The Challenge for Regulated Enterprises
+
+French banks, insurance companies, and financial institutions face major challenges in their digital transformation:
+
+| Challenge | Impact |
+|-----------|--------|
+| **Regulatory compliance** | GDPR, PSD2, Solvency II, ACPR/AMF requirements |
+| **Data sovereignty** | Mandatory hosting on French/European territory |
+| **Enhanced security** | Sensitive data protection, complete audit trail |
+| **Time-to-Market** | Competitive pressure from FinTechs and InsurTechs |
+| **Legacy Integration** | Connection with legacy systems (mainframes, COBOL) |
+| **Multi-partner** | Open Banking ecosystem, aggregators, PSD2 |
+
+---
+
+## Our Solution: STOA Platform v2
 
 ### Vision
 
-Une plateforme **100% souveraine** de gestion d'APIs, conçue pour les exigences des secteurs banque et assurance, déployable sur :
+A **100% sovereign** API management platform, designed for banking and insurance sector requirements, deployable on:
 
-- **Cloud Souverain** (OVHcloud, Scaleway, Outscale, NumSpot)
-- **Cloud Privé** (VMware, OpenStack, Kubernetes on-premise)
-- **Cloud Hybride** (combinaison des deux)
+- **Sovereign Cloud** (OVHcloud, Scaleway, Outscale, NumSpot)
+- **Private Cloud** (VMware, OpenStack, Kubernetes on-premise)
+- **Hybrid Cloud** (combination of both)
 
-### Architecture Cible
+### Target Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -38,7 +38,7 @@ Une plateforme **100% souveraine** de gestion d'APIs, conçue pour les exigences
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │                      CONTROL PLANE (GitOps)                            │ │
 │  │                                                                         │ │
-│  │   Console Web ──► API Backend ──► GitLab (Source of Truth)             │ │
+│  │   Web Console ──► API Backend ──► GitLab (Source of Truth)             │ │
 │  │        │              │                    │                            │ │
 │  │        │              ▼                    ▼                            │ │
 │  │        │         Keycloak            Kafka/Redpanda                     │ │
@@ -64,7 +64,7 @@ Une plateforme **100% souveraine** de gestion d'APIs, conçue pour les exigences
 │  │        │           DATA PLANE  │                                        │ │
 │  │        │                       ▼                                        │ │
 │  │        │              ┌─────────────────┐                               │ │
-│  │        └─────────────►│   API Gateway   │◄──── APIs Métier              │ │
+│  │        └─────────────►│   API Gateway   │◄──── Business APIs            │ │
 │  │                       │  (Kong/wM/Apigee)│      (Backend Services)      │ │
 │  │                       └─────────────────┘                               │ │
 │  │                              │                                          │ │
@@ -85,22 +85,22 @@ Une plateforme **100% souveraine** de gestion d'APIs, conçue pour les exigences
 
 ---
 
-## Proposition de Valeur
+## Value Proposition
 
-### 1. Souveraineté Totale
+### 1. Total Sovereignty
 
-| Aspect | Garantie |
-|--------|----------|
-| **Hébergement** | 100% France/UE, cloud souverain certifié SecNumCloud |
-| **Code Source** | Open source, auditable, pas de vendor lock-in |
-| **Données** | Chiffrement AES-256, clés gérées par le client |
-| **Conformité** | RGPD by design, audit trail immutable |
+| Aspect | Guarantee |
+|--------|-----------|
+| **Hosting** | 100% France/EU, SecNumCloud certified sovereign cloud |
+| **Source Code** | Open source, auditable, no vendor lock-in |
+| **Data** | AES-256 encryption, customer-managed keys |
+| **Compliance** | GDPR by design, immutable audit trail |
 
-### 2. Sécurité Enterprise
+### 2. Enterprise Security
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    MODÈLE DE SÉCURITÉ                            │
+│                    SECURITY MODEL                                │
 │                                                                  │
 │   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
 │   │   Keycloak   │    │    Vault     │    │  OPA/Gatekeeper│    │
@@ -115,65 +115,65 @@ Une plateforme **100% souveraine** de gestion d'APIs, conçue pour les exigences
 │                    │  Architecture    │                          │
 │                    └──────────────────┘                          │
 │                                                                  │
-│   • Authentification OIDC/SAML                                  │
-│   • RBAC granulaire (4 niveaux)                                 │
-│   • Secrets rotation automatique                                 │
-│   • Audit trail complet (Kafka + OpenSearch)                    │
-│   • Anti-self-approval pour production                          │
-│   • Network policies Kubernetes                                  │
+│   • OIDC/SAML Authentication                                    │
+│   • Granular RBAC (4 levels)                                    │
+│   • Automatic secrets rotation                                   │
+│   • Complete audit trail (Kafka + OpenSearch)                   │
+│   • Anti-self-approval for production                           │
+│   • Kubernetes network policies                                  │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 3. Multi-Tenant Native
+### 3. Native Multi-Tenant
 
-Conçu dès le départ pour gérer plusieurs entités :
+Designed from the ground up to manage multiple entities:
 
-- **Banque** : Séparation par filiales, métiers, partenaires
-- **Assurance** : Isolation par marques, réseaux de distribution
-- **Groupe** : Mutualisation de la plateforme, facturation par tenant
+- **Banking**: Separation by subsidiaries, business lines, partners
+- **Insurance**: Isolation by brands, distribution networks
+- **Group**: Platform pooling, per-tenant billing
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    MULTI-TENANCY                                 │
 │                                                                  │
-│   Tenant A (Banque Retail)     Tenant B (Banque Privée)         │
-│   ├── APIs Comptes             ├── APIs Gestion Fortune         │
-│   ├── APIs Paiements           ├── APIs Reporting               │
-│   ├── APIs Crédits             └── APIs Conformité              │
-│   └── APIs DSP2                                                  │
+│   Tenant A (Retail Banking)      Tenant B (Private Banking)     │
+│   ├── Account APIs               ├── Wealth Management APIs     │
+│   ├── Payment APIs               ├── Reporting APIs             │
+│   ├── Credit APIs                └── Compliance APIs            │
+│   └── PSD2 APIs                                                  │
 │                                                                  │
-│   Tenant C (Assurance Auto)    Tenant D (Assurance Vie)         │
-│   ├── APIs Souscription        ├── APIs Épargne                 │
-│   ├── APIs Sinistres           ├── APIs Succession              │
-│   └── APIs Partenaires         └── APIs Fiscalité               │
+│   Tenant C (Auto Insurance)      Tenant D (Life Insurance)      │
+│   ├── Subscription APIs          ├── Savings APIs               │
+│   ├── Claims APIs                ├── Succession APIs            │
+│   └── Partner APIs               └── Tax APIs                   │
 │                                                                  │
 │   ════════════════════════════════════════════════════════════  │
-│   │              ISOLATION COMPLÈTE                          │  │
-│   │  • Namespaces Kubernetes dédiés                          │  │
-│   │  • Secrets Vault séparés                                 │  │
-│   │  • Quotas et Rate Limiting par tenant                    │  │
-│   │  • Facturation et métriques isolées                      │  │
+│   │              COMPLETE ISOLATION                          │  │
+│   │  • Dedicated Kubernetes namespaces                       │  │
+│   │  • Separate Vault secrets                                │  │
+│   │  • Per-tenant quotas and rate limiting                   │  │
+│   │  • Isolated billing and metrics                          │  │
 │   ════════════════════════════════════════════════════════════  │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 4. GitOps & Automatisation
+### 4. GitOps & Automation
 
-**Infrastructure as Code** pour une traçabilité totale :
+**Infrastructure as Code** for complete traceability:
 
-| Composant | Technologie | Bénéfice |
-|-----------|-------------|----------|
+| Component | Technology | Benefit |
+|-----------|------------|---------|
 | Source of Truth | GitLab | Versioning, audit, rollback |
 | Orchestration | Jenkins | Approval gates, pipeline as code |
-| Automation | AWX/Ansible | Déploiements reproductibles |
-| Sync | ArgoCD | Réconciliation continue |
+| Automation | AWX/Ansible | Reproducible deployments |
+| Sync | ArgoCD | Continuous reconciliation |
 
-**Workflow de déploiement production** :
+**Production deployment workflow**:
 
 ```
-Développeur ──► Pull Request ──► Review ──► Merge
+Developer ──► Pull Request ──► Review ──► Merge
                                               │
                                               ▼
                                          Jenkins Pipeline
@@ -192,182 +192,182 @@ Développeur ──► Pull Request ──► Review ──► Merge
 
 ---
 
-## Cas d'Usage Sectoriels
+## Sector Use Cases
 
-### Banque : Open Banking & DSP2
+### Banking: Open Banking & PSD2
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    OPEN BANKING PLATFORM                         │
 │                                                                  │
-│   Agrégateurs (Bankin, Linxo)                                   │
+│   Aggregators (Bankin, Linxo)                                   │
 │          │                                                       │
 │          ▼                                                       │
 │   ┌──────────────┐                                              │
 │   │ API Gateway  │◄──── Rate Limiting (TPP quotas)              │
-│   │   (DSP2)     │◄──── OAuth2 + QWAC/QSEAL                     │
+│   │   (PSD2)     │◄──── OAuth2 + QWAC/QSEAL                     │
 │   └──────┬───────┘◄──── Consent Management                      │
 │          │                                                       │
 │          ▼                                                       │
 │   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐     │
 │   │   AIS API    │    │   PIS API    │    │   CBPII API  │     │
-│   │ (Consultation│    │  (Paiement)  │    │  (Solde)     │     │
+│   │(Consultation)│    │  (Payment)   │    │  (Balance)   │     │
 │   └──────────────┘    └──────────────┘    └──────────────┘     │
 │                                                                  │
-│   Conformité : DSP2, RTS SCA, Guidelines EBA                    │
+│   Compliance: PSD2, RTS SCA, EBA Guidelines                     │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Bénéfices** :
-- Conformité DSP2 native
-- Gestion des consentements intégrée
-- Monitoring TPP en temps réel
-- Reporting régulateur automatisé
+**Benefits**:
+- Native PSD2 compliance
+- Integrated consent management
+- Real-time TPP monitoring
+- Automated regulator reporting
 
-### Assurance : Écosystème Partenaires
+### Insurance: Partner Ecosystem
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    PARTNER ECOSYSTEM                             │
 │                                                                  │
-│   Courtiers    Comparateurs    Bancassurance    Affinitaires   │
-│       │             │               │                │          │
-│       └─────────────┴───────────────┴────────────────┘          │
+│   Brokers      Comparison Sites    Bancassurance    Affiliates  │
+│       │             │                   │               │        │
+│       └─────────────┴───────────────────┴───────────────┘        │
 │                              │                                   │
 │                              ▼                                   │
 │                    ┌──────────────────┐                         │
 │                    │   API Gateway    │                         │
-│                    │  (Partenaires)   │                         │
+│                    │   (Partners)     │                         │
 │                    └────────┬─────────┘                         │
 │                             │                                    │
 │       ┌─────────────────────┼─────────────────────┐             │
 │       ▼                     ▼                     ▼             │
 │   ┌────────┐          ┌────────┐          ┌────────┐           │
-│   │ Tarif  │          │ Souscr.│          │Sinistre│           │
+│   │ Quote  │          │ Subscr.│          │ Claims │           │
 │   │  API   │          │  API   │          │  API   │           │
 │   └────────┘          └────────┘          └────────┘           │
 │                                                                  │
-│   Fonctionnalités :                                             │
-│   • Onboarding partenaire self-service                          │
-│   • API Keys avec quotas personnalisés                          │
-│   • Dashboard analytics par partenaire                          │
-│   • Facturation à l'usage                                       │
+│   Features:                                                      │
+│   • Self-service partner onboarding                             │
+│   • API Keys with custom quotas                                 │
+│   • Per-partner analytics dashboard                             │
+│   • Usage-based billing                                         │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Bénéfices** :
-- Time-to-market partenaires réduit (jours vs mois)
-- Self-service pour les partenaires
-- Visibilité complète sur l'usage
-- Monétisation des APIs
+**Benefits**:
+- Reduced partner time-to-market (days vs months)
+- Self-service for partners
+- Complete usage visibility
+- API monetization
 
 ---
 
-## Options de Déploiement
+## Deployment Options
 
-### Cloud Souverain (Recommandé Secteur Régulé)
+### Sovereign Cloud (Recommended for Regulated Sector)
 
-| Provider | Certification | Localisation |
-|----------|---------------|--------------|
+| Provider | Certification | Location |
+|----------|---------------|----------|
 | **OVHcloud** | SecNumCloud, HDS | France |
 | **Scaleway** | ISO 27001 | France |
 | **Outscale** | SecNumCloud | France |
 | **NumSpot** | SecNumCloud | France |
 | **S3NS** (Thales) | SecNumCloud | France |
 
-### Cloud Privé (On-Premise)
+### Private Cloud (On-Premise)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    DÉPLOIEMENT ON-PREMISE                        │
+│                    ON-PREMISE DEPLOYMENT                         │
 │                                                                  │
-│   Infrastructure Client                                          │
+│   Customer Infrastructure                                        │
 │   ├── Kubernetes (OpenShift, Rancher, vanilla K8s)              │
 │   ├── VMware vSphere                                             │
 │   └── Bare Metal                                                 │
 │                                                                  │
-│   Prérequis :                                                    │
+│   Prerequisites:                                                 │
 │   • Kubernetes 1.25+                                             │
-│   • Stockage persistent (Ceph, NetApp, Pure)                    │
+│   • Persistent storage (Ceph, NetApp, Pure)                     │
 │   • Load Balancer (F5, HAProxy, MetalLB)                        │
-│   • Registry privée (Harbor, Nexus)                             │
+│   • Private registry (Harbor, Nexus)                            │
 │                                                                  │
-│   Livrables :                                                    │
+│   Deliverables:                                                  │
 │   • Helm Charts                                                  │
 │   • Ansible Playbooks                                            │
-│   • Documentation opérationnelle                                 │
+│   • Operational documentation                                    │
 │   • Runbooks                                                     │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Hybride
+### Hybrid
 
-Combinaison cloud souverain + on-premise :
-- **Control Plane** : Cloud souverain (haute disponibilité)
-- **Data Plane** : On-premise (données sensibles)
-- **Disaster Recovery** : Cross-cloud
+Sovereign cloud + on-premise combination:
+- **Control Plane**: Sovereign cloud (high availability)
+- **Data Plane**: On-premise (sensitive data)
+- **Disaster Recovery**: Cross-cloud
 
 ---
 
-## Conformité & Certifications
+## Compliance & Certifications
 
-| Réglementation | Couverture |
-|----------------|------------|
-| **RGPD** | Privacy by design, droit à l'oubli, portabilité |
-| **DSP2/PSD2** | APIs réglementaires, SCA, TPP management |
-| **Solvabilité II** | Audit trail, reporting |
-| **LPM** | Hébergement souverain, OIV compatible |
-| **DORA** | Résilience opérationnelle, tests de continuité |
-| **NIS2** | Cybersécurité, notification incidents |
+| Regulation | Coverage |
+|------------|----------|
+| **GDPR** | Privacy by design, right to erasure, portability |
+| **PSD2** | Regulatory APIs, SCA, TPP management |
+| **Solvency II** | Audit trail, reporting |
+| **LPM** | Sovereign hosting, OIV compatible |
+| **DORA** | Operational resilience, continuity testing |
+| **NIS2** | Cybersecurity, incident notification |
 
-### Audit Trail Immutable
+### Immutable Audit Trail
 
 ```
-Toute action ──► Kafka Event ──► OpenSearch ──► Rétention 7 ans
+Every action ──► Kafka Event ──► OpenSearch ──► 7-year retention
                      │
                      ▼
-              S3 (Archive légale)
+              S3 (Legal archive)
 ```
 
 ---
 
-## Comparatif Concurrentiel
+## Competitive Comparison
 
-| Critère | STOA Platform v2 | Solutions SaaS US | Solutions Legacy |
-|---------|------------------|-------------------|------------------|
-| **Souveraineté** | ✅ 100% France/UE | ❌ USA (Cloud Act) | ⚠️ Variable |
-| **Open Source** | ✅ Auditable | ❌ Propriétaire | ❌ Propriétaire |
-| **Multi-Tenant** | ✅ Native | ⚠️ Limité | ❌ Silos |
-| **GitOps** | ✅ Natif | ❌ Non | ❌ Non |
-| **Approval Gates** | ✅ Intégré | ⚠️ Add-on | ❌ Manuel |
-| **Coût** | 💰 Prévisible | 💰💰💰 À l'usage | 💰💰 Licence |
-| **Vendor Lock-in** | ✅ Aucun | ❌ Fort | ❌ Fort |
+| Criteria | STOA Platform v2 | US SaaS Solutions | Legacy Solutions |
+|----------|------------------|-------------------|------------------|
+| **Sovereignty** | ✅ 100% France/EU | ❌ USA (Cloud Act) | ⚠️ Variable |
+| **Open Source** | ✅ Auditable | ❌ Proprietary | ❌ Proprietary |
+| **Multi-Tenant** | ✅ Native | ⚠️ Limited | ❌ Silos |
+| **GitOps** | ✅ Native | ❌ No | ❌ No |
+| **Approval Gates** | ✅ Integrated | ⚠️ Add-on | ❌ Manual |
+| **Cost** | 💰 Predictable | 💰💰💰 Usage-based | 💰💰 License |
+| **Vendor Lock-in** | ✅ None | ❌ Strong | ❌ Strong |
 
 ---
 
-## Modèle Économique
+## Business Model
 
 ### Licensing
 
-| Tier | Cible | Inclus |
-|------|-------|--------|
-| **Community** | POC, Startup | Core features, support communautaire |
-| **Enterprise** | ETI | + Support 8x5, SLA 99.5% |
-| **Premium** | Grands Comptes | + Support 24x7, SLA 99.9%, consulting |
+| Tier | Target | Includes |
+|------|--------|----------|
+| **Community** | POC, Startup | Core features, community support |
+| **Enterprise** | Mid-market | + 8x5 support, 99.5% SLA |
+| **Premium** | Large Accounts | + 24x7 support, 99.9% SLA, consulting |
 
 ### Services
 
-- **Implémentation** : Déploiement clé en main
-- **Formation** : Équipes Dev, Ops, Sécurité
-- **Consulting** : Architecture, migration, optimisation
-- **Support** : N2/N3, astreinte, évolutions
+- **Implementation**: Turnkey deployment
+- **Training**: Dev, Ops, Security teams
+- **Consulting**: Architecture, migration, optimization
+- **Support**: L2/L3, on-call, upgrades
 
 ---
 
-## Feuille de Route
+## Roadmap
 
 ```
 2025 Q1          2025 Q2          2025 Q3          2025 Q4
@@ -382,33 +382,33 @@ Toute action ──► Kafka Event ──► OpenSearch ──► Rétention 7 a
    ▼                ▼                ▼                ▼
 
 • Core Platform   • Ticketing      • Portal        • Multi-region
-• GitOps          • Jenkins        • Analytics     • DR automatisé
+• GitOps          • Jenkins        • Analytics     • Automated DR
 • Monitoring      • Prod Hardening • Cost Mgmt     • Marketplace
 • Multi-tenant    • SLO/SLA        • Self-service  • APIs
 ```
 
 ---
 
-## Pourquoi Nous Choisir ?
+## Why Choose Us?
 
-### Expertise Sectorielle
+### Sector Expertise
 
-- **15+ ans** d'expérience dans les SI Banque/Assurance
-- **Connaissance métier** : DSP2, Solvabilité, RGPD
-- **Références** : [À compléter]
+- **15+ years** experience in Banking/Insurance IT
+- **Business knowledge**: PSD2, Solvency, GDPR
+- **References**: [To be completed]
 
-### Approche Pragmatique
+### Pragmatic Approach
 
-- **MVP en 8 semaines**
-- **Production-ready en 16 semaines**
-- **Méthodologie Agile** avec sprints de 2 semaines
-- **Transparence** : GitOps, tout est versionné et auditable
+- **MVP in 8 weeks**
+- **Production-ready in 16 weeks**
+- **Agile methodology** with 2-week sprints
+- **Transparency**: GitOps, everything is versioned and auditable
 
-### Engagement Qualité
+### Quality Commitment
 
-- **SLA contractuel** jusqu'à 99.9%
-- **Support français** basé en France
-- **Évolutions continues** avec roadmap partagée
+- **Contractual SLA** up to 99.9%
+- **French support** based in France
+- **Continuous improvements** with shared roadmap
 
 ---
 
@@ -416,10 +416,10 @@ Toute action ──► Kafka Event ──► OpenSearch ──► Rétention 7 a
 
 **CAB Ingénierie**
 
-- **Web** : [www.cab-i.com](https://www.cab-i.com)
-- **Email** : contact@cab-i.com
-- **LinkedIn** : CAB Ingénierie
+- **Web**: [www.cab-i.com](https://www.cab-i.com)
+- **Email**: contact@cab-i.com
+- **LinkedIn**: CAB Ingénierie
 
 ---
 
-*Document confidentiel - © 2025 CAB Ingénierie*
+*Confidential document - © 2025 CAB Ingénierie*

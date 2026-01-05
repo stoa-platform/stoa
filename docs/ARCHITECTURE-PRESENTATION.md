@@ -1,12 +1,12 @@
-# STOA Platform v2 - Architecture Finale
+# STOA Platform v2 - Final Architecture
 
-## Présentation Exécutive
+## Executive Summary
 
-**STOA Platform v2** est une plateforme de gestion d'APIs multi-tenant conçue pour l'entreprise, intégrant les meilleures pratiques DevOps, GitOps et Event-Driven Architecture.
+**STOA Platform v2** is a multi-tenant API management platform designed for enterprise, integrating best practices in DevOps, GitOps and Event-Driven Architecture.
 
 ---
 
-## Vue d'Ensemble
+## Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -65,12 +65,12 @@
 
 ---
 
-## Pourquoi Kafka ? Le Coeur de l'Architecture
+## Why Kafka? The Heart of the Architecture
 
-### Le Problème Sans Kafka
+### The Problem Without Kafka
 
 ```
-                    ARCHITECTURE SYNCHRONE (Anti-Pattern)
+                    SYNCHRONOUS ARCHITECTURE (Anti-Pattern)
                     ══════════════════════════════════════
 
     ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
@@ -79,32 +79,32 @@
          │               │               │               │
          │               │               │               │
          ▼               ▼               ▼               ▼
-    ⏳ Attente      ⏳ Bloqué       ⏳ Timeout      ❌ Échec
+    ⏳ Waiting      ⏳ Blocked       ⏳ Timeout      ❌ Failure
 
-    Problèmes:
-    ❌ Couplage fort entre services
-    ❌ Timeout en cascade (API attend AWX qui attend Gateway)
-    ❌ Pas de retry automatique
-    ❌ Perte de données si un service tombe
-    ❌ Impossible de scaler indépendamment
-    ❌ Un service lent bloque tout le pipeline
+    Problems:
+    ❌ Tight coupling between services
+    ❌ Cascading timeouts (API waits for AWX which waits for Gateway)
+    ❌ No automatic retry
+    ❌ Data loss if a service goes down
+    ❌ Cannot scale independently
+    ❌ A slow service blocks the entire pipeline
 ```
 
-### La Solution Avec Kafka
+### The Solution With Kafka
 
 ```
-                    ARCHITECTURE EVENT-DRIVEN (Best Practice)
+                    EVENT-DRIVEN ARCHITECTURE (Best Practice)
                     ═══════════════════════════════════════════
 
     ┌─────────┐     ┌─────────┐     ┌─────────────────────────────────────┐
     │   UI    │────▶│   API   │────▶│              KAFKA                  │
     └─────────┘     └─────────┘     │                                     │
          │               │          │  ┌─────────────────────────────┐    │
-         │          ✅ Retour       │  │     TOPICS                  │    │
-         │          immédiat        │  │                             │    │
+         │          ✅ Immediate    │  │     TOPICS                  │    │
+         │          return          │  │                             │    │
          ▼               │          │  │  api-created ──────────┐   │    │
-    ✅ Réponse          │          │  │  api-updated ──────────┤   │    │
-    instantanée          │          │  │  deploy-requests ──────┤   │    │
+    ✅ Instant          │          │  │  api-updated ──────────┤   │    │
+    response             │          │  │  deploy-requests ──────┤   │    │
                          │          │  │  deploy-results ───────┤   │    │
                          │          │  │  audit-log ────────────┤   │    │
                          │          │  │  notifications ────────┤   │    │
@@ -131,18 +131,18 @@
                          └────▶ Notification
                                (via Kafka)
 
-    Avantages:
-    ✅ Découplage total des services
-    ✅ Réponse immédiate à l'utilisateur
-    ✅ Retry automatique (Kafka retention)
-    ✅ Aucune perte de données (persistance)
-    ✅ Scaling horizontal de chaque consumer
-    ✅ Traçabilité complète (event sourcing)
+    Advantages:
+    ✅ Complete service decoupling
+    ✅ Immediate response to user
+    ✅ Automatic retry (Kafka retention)
+    ✅ No data loss (persistence)
+    ✅ Horizontal scaling of each consumer
+    ✅ Complete traceability (event sourcing)
 ```
 
 ---
 
-## Topics Kafka - Vue Détaillée
+## Kafka Topics - Detailed View
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -201,7 +201,7 @@
 
 ---
 
-## Flux de Déploiement - Event-Driven
+## Deployment Flow - Event-Driven
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -220,8 +220,8 @@
 │                               ✅ 200 OK                        │                        │
 │                           (< 100ms)                            │                        │
 │                                                                │                        │
-│  2. PROCESSING (Asynchrone)                                    │                        │
-│  ══════════════════════════                                    │                        │
+│  2. PROCESSING (Asynchronous)                                  │                        │
+│  ════════════════════════════                                  │                        │
 │                                                                ▼                        │
 │                                                         ┌──────────────┐               │
 │     ┌──────────────┐                                    │     AWX      │               │
@@ -266,29 +266,29 @@
 
 ---
 
-## Avantages Clés de Kafka
+## Key Kafka Advantages
 
-### 1. Découplage & Résilience
+### 1. Decoupling & Resilience
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    RESILIENCE PATTERN                            │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│   SCENARIO: AWX est indisponible pendant 2 heures               │
+│   SCENARIO: AWX is unavailable for 2 hours                      │
 │                                                                  │
-│   SANS KAFKA:                                                    │
-│   ───────────                                                    │
-│   ❌ Tous les déploiements échouent                             │
-│   ❌ Les utilisateurs voient des erreurs                        │
-│   ❌ Données perdues, retry manuel nécessaire                   │
+│   WITHOUT KAFKA:                                                 │
+│   ──────────────                                                 │
+│   ❌ All deployments fail                                       │
+│   ❌ Users see errors                                           │
+│   ❌ Data lost, manual retry required                           │
 │                                                                  │
-│   AVEC KAFKA:                                                    │
+│   WITH KAFKA:                                                    │
 │   ───────────                                                    │
-│   ✅ Les events sont stockés dans le topic                      │
-│   ✅ L'API répond "accepted" immédiatement                      │
-│   ✅ AWX revient → consomme tous les events en attente          │
-│   ✅ Aucune perte, aucune intervention manuelle                 │
+│   ✅ Events are stored in the topic                             │
+│   ✅ API responds "accepted" immediately                        │
+│   ✅ AWX returns → consumes all pending events                  │
+│   ✅ No loss, no manual intervention                            │
 │                                                                  │
 │   ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐  │
 │   │ Event 1 │     │ Event 2 │     │ Event 3 │     │ Event 4 │  │
@@ -297,21 +297,21 @@
 │        │               │               │               │        │
 │        └───────────────┴───────────────┴───────────────┘        │
 │                              │                                   │
-│                    Kafka Retention (7 jours)                     │
+│                    Kafka Retention (7 days)                      │
 │                              │                                   │
 │                              ▼                                   │
 │                     ┌───────────────┐                           │
-│                     │  AWX revient  │                           │
-│                     │  à 12:00      │                           │
+│                     │  AWX returns  │                           │
+│                     │  at 12:00     │                           │
 │                     │               │                           │
-│                     │  Traite les   │                           │
+│                     │  Processes    │                           │
 │                     │  4 events     │                           │
 │                     └───────────────┘                           │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2. Scalabilité Horizontale
+### 2. Horizontal Scalability
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -326,17 +326,17 @@
 │   └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘  │
 │        │           │           │           │           │        │
 │        │           │           │           │           │        │
-│   AVANT (1 consumer)                                            │
-│   ──────────────────                                            │
+│   BEFORE (1 consumer)                                           │
+│   ───────────────────                                           │
 │        │           │           │           │           │        │
 │        └───────────┴───────────┴───────────┴───────────┘        │
 │                              │                                   │
 │                    ┌─────────────────┐                          │
-│                    │  AWX Worker 1   │  ← Surcharge!            │
-│                    │  (toutes parts) │                          │
+│                    │  AWX Worker 1   │  ← Overloaded!           │
+│                    │  (all parts)    │                          │
 │                    └─────────────────┘                          │
 │                                                                  │
-│   APRES (3 consumers - Consumer Group)                          │
+│   AFTER (3 consumers - Consumer Group)                          │
 │   ────────────────────────────────────                          │
 │        │           │           │           │           │        │
 │        └─────┬─────┘           │           └─────┬─────┘        │
@@ -347,7 +347,7 @@
 │   │  (Part 0, 1)    │ │  (Part 2, 3)    │ │  (Part 4, 5)    │  │
 │   └─────────────────┘ └─────────────────┘ └─────────────────┘  │
 │                                                                  │
-│   Résultat: 3x plus de throughput, automatiquement réparti     │
+│   Result: 3x more throughput, automatically distributed         │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -359,9 +359,9 @@
 │                    AUDIT & COMPLIANCE                            │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│   Topic: audit-log (retention: 1 an, compaction: key)           │
+│   Topic: audit-log (retention: 1 year, compaction: key)         │
 │                                                                  │
-│   Chaque action est un event immuable:                          │
+│   Each action is an immutable event:                            │
 │                                                                  │
 │   ┌─────────────────────────────────────────────────────────┐   │
 │   │ Offset 1001 │ 2024-12-21 10:15:23                       │   │
@@ -385,11 +385,11 @@
 │   │ }                                                        │   │
 │   └─────────────────────────────────────────────────────────┘   │
 │                                                                  │
-│   Avantages:                                                     │
-│   ✅ Traçabilité complète (qui, quoi, quand)                    │
-│   ✅ Replay possible (reconstuire l'état)                       │
-│   ✅ Conformité réglementaire (audit trail)                     │
-│   ✅ Forensics en cas d'incident                                │
+│   Advantages:                                                    │
+│   ✅ Complete traceability (who, what, when)                    │
+│   ✅ Replay possible (reconstruct state)                        │
+│   ✅ Regulatory compliance (audit trail)                        │
+│   ✅ Forensics in case of incident                              │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -401,7 +401,7 @@
 │                    MULTI-CONSUMER PATTERN                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│   Un seul event "api-created" déclenche N actions parallèles:   │
+│   A single "api-created" event triggers N parallel actions:     │
 │                                                                  │
 │                      ┌──────────────────┐                       │
 │                      │   Control-Plane  │                       │
@@ -427,11 +427,11 @@
 │  └─────────────┘      └─────────────┘      └─────────────┘     │
 │         │                     │                     │           │
 │         ▼                     ▼                     ▼           │
-│  Déploie sur K8s      Indexe pour        Notifie l'équipe      │
-│                       recherche                                 │
+│  Deploys to K8s        Indexes for           Notifies team     │
+│                        search                                   │
 │                                                                  │
-│   Chaque consumer group lit TOUT le topic indépendamment       │
-│   → Ajout d'un nouveau consumer = 0 impact sur les autres      │
+│   Each consumer group reads ALL the topic independently         │
+│   → Adding a new consumer = 0 impact on others                  │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -442,62 +442,62 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    POURQUOI REDPANDA ?                           │
+│                    WHY REDPANDA?                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │   ┌─────────────────────────────────────────────────────────┐   │
 │   │                                                          │   │
-│   │   100% COMPATIBLE API KAFKA                              │   │
+│   │   100% KAFKA API COMPATIBLE                              │   │
 │   │   ══════════════════════════                             │   │
 │   │                                                          │   │
-│   │   • Même protocole, mêmes clients                        │   │
-│   │   • kafka-python, librdkafka fonctionnent               │   │
-│   │   • Migration transparente                               │   │
+│   │   • Same protocol, same clients                          │   │
+│   │   • kafka-python, librdkafka work                        │   │
+│   │   • Transparent migration                                │   │
 │   │                                                          │   │
 │   └─────────────────────────────────────────────────────────┘   │
 │                                                                  │
 │   ┌──────────────────────┬──────────────────────┐               │
 │   │   Apache Kafka       │   Redpanda           │               │
 │   ├──────────────────────┼──────────────────────┤               │
-│   │   JVM (Java)         │   C++ natif          │               │
-│   │   ZooKeeper requis*  │   No ZooKeeper       │               │
+│   │   JVM (Java)         │   Native C++         │               │
+│   │   ZooKeeper required*│   No ZooKeeper       │               │
 │   │   3+ nodes min       │   1 node possible    │               │
 │   │   ~2GB RAM min       │   ~500MB RAM         │               │
-│   │   Config complexe    │   Config simple      │               │
-│   │   Latence ~10ms      │   Latence ~1ms       │               │
+│   │   Complex config     │   Simple config      │               │
+│   │   Latency ~10ms      │   Latency ~1ms       │               │
 │   └──────────────────────┴──────────────────────┘               │
-│   * KRaft mode disponible depuis Kafka 3.x                      │
+│   * KRaft mode available since Kafka 3.x                        │
 │                                                                  │
-│   POUR NOTRE CAS (EKS avec ressources limitées):                │
-│   ───────────────────────────────────────────────               │
-│   ✅ Redpanda = moins de ressources                             │
-│   ✅ Redpanda = déploiement simplifié                           │
-│   ✅ Redpanda Console incluse (UI admin)                        │
-│   ✅ Même API = migration vers Kafka possible                   │
+│   FOR OUR CASE (EKS with limited resources):                    │
+│   ──────────────────────────────────────────                    │
+│   ✅ Redpanda = fewer resources                                 │
+│   ✅ Redpanda = simplified deployment                           │
+│   ✅ Redpanda Console included (admin UI)                       │
+│   ✅ Same API = migration to Kafka possible                     │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Composants de la Plateforme
+## Platform Components
 
-### Stack Technique
+### Technical Stack
 
-| Couche | Composant | Rôle |
-|--------|-----------|------|
-| **Frontend** | React + TypeScript | UI DevOps multi-tenant |
+| Layer | Component | Role |
+|-------|-----------|------|
+| **Frontend** | React + TypeScript | Multi-tenant DevOps UI |
 | **Backend** | FastAPI (Python) | REST API, Kafka Producer |
-| **Event Streaming** | Redpanda (Kafka API) | Hub de communication |
-| **Automation** | AWX (Ansible) | Déploiement Gateway |
-| **GitOps** | ArgoCD | Sync Kubernetes |
+| **Event Streaming** | Redpanda (Kafka API) | Communication Hub |
+| **Automation** | AWX (Ansible) | Gateway Deployment |
+| **GitOps** | ArgoCD | Kubernetes Sync |
 | **Identity** | Keycloak | SSO, RBAC, OIDC |
 | **Secrets** | HashiCorp Vault | Rotation, PKI |
 | **Observability** | OpenSearch | Logs, Traces, Analytics |
-| **Monitoring** | Prometheus + Grafana | Métriques, Alerting |
+| **Monitoring** | Prometheus + Grafana | Metrics, Alerting |
 | **Runtime** | webMethods Gateway | API Management |
 
-### Infrastructure AWS
+### AWS Infrastructure
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -544,7 +544,7 @@
 
 ---
 
-## Sécurité
+## Security
 
 ### Defense in Depth
 
@@ -555,16 +555,16 @@
 │                                                                  │
 │   Layer 1: NETWORK                                               │
 │   ─────────────────                                              │
-│   • VPC isolé                                                    │
+│   • Isolated VPC                                                 │
 │   • Security Groups                                              │
-│   • Private subnets pour workloads                              │
+│   • Private subnets for workloads                               │
 │   • TLS everywhere (cert-manager)                               │
 │                                                                  │
 │   Layer 2: IDENTITY                                              │
 │   ─────────────────                                              │
 │   • Keycloak (OIDC/SAML)                                        │
 │   • JWT validation                                               │
-│   • RBAC multi-tenant                                           │
+│   • Multi-tenant RBAC                                           │
 │   • Session management                                          │
 │                                                                  │
 │   Layer 3: APPLICATION                                           │
@@ -578,7 +578,7 @@
 │   ─────────────                                                  │
 │   • Vault (secrets management)                                  │
 │   • Encryption at rest (RDS, EBS)                               │
-│   • Secret rotation (auto)                                      │
+│   • Automatic secret rotation                                   │
 │   • Backup encryption                                           │
 │                                                                  │
 │   Layer 5: MONITORING                                            │
@@ -597,36 +597,36 @@
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| **Phase 1** | Kafka/Redpanda + AWX Automation | ✅ Complété |
-| **Phase 2** | GitOps + Variables + IAM | 🔄 En cours |
-| **Phase 3** | Vault + Gateway Alias | 📋 Planifié |
-| **Phase 4** | OpenSearch + Monitoring | 📋 Planifié |
-| **Phase 5** | Multi-environnements | 📋 Planifié |
-| **Phase 6** | Demo Tenant + SSO + Docs | 📋 Planifié |
-| **Phase 7** | Security Batch Jobs | 📋 Planifié |
-| **Phase 8** | Developer Portal Custom (React) | 📋 Planifié |
-| **Phase 9** | Ticketing (Demandes de Production) | 📋 Planifié |
-| **Phase 10** | Resource Lifecycle (Tagging + Auto-Teardown) | 📋 Planifié |
+| **Phase 1** | Kafka/Redpanda + AWX Automation | ✅ Completed |
+| **Phase 2** | GitOps + Variables + IAM | 🔄 In Progress |
+| **Phase 3** | Vault + Gateway Alias | 📋 Planned |
+| **Phase 4** | OpenSearch + Monitoring | 📋 Planned |
+| **Phase 5** | Multi-environments | 📋 Planned |
+| **Phase 6** | Demo Tenant + SSO + Docs | 📋 Planned |
+| **Phase 7** | Security Batch Jobs | 📋 Planned |
+| **Phase 8** | Custom Developer Portal (React) | 📋 Planned |
+| **Phase 9** | Ticketing (Production Requests) | 📋 Planned |
+| **Phase 10** | Resource Lifecycle (Tagging + Auto-Teardown) | 📋 Planned |
 
 ---
 
-## Phase 8 - Developer Portal Custom
+## Phase 8 - Custom Developer Portal
 
-**Objectif**: Développer un Developer Portal custom React, unifié avec le SSO Keycloak.
+**Objective**: Develop a custom React Developer Portal, unified with Keycloak SSO.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                         DEVELOPER PORTAL - ARCHITECTURE                              │
 │                                                                                      │
 │   ┌─────────────────────────────────────────────────────────────────────────────┐   │
-│   │                              DÉVELOPPEURS                                    │   │
+│   │                              DEVELOPERS                                      │   │
 │   │                                                                              │   │
-│   │   • Découvrir les APIs disponibles                                          │   │
-│   │   • Lire la documentation OpenAPI                                           │   │
-│   │   • Créer des applications                                                   │   │
-│   │   • Souscrire aux APIs                                                       │   │
-│   │   • Tester les APIs (Try-It)                                                │   │
-│   │   • Obtenir des code samples                                                │   │
+│   │   • Discover available APIs                                                  │   │
+│   │   • Read OpenAPI documentation                                               │   │
+│   │   • Create applications                                                      │   │
+│   │   • Subscribe to APIs                                                        │   │
+│   │   • Test APIs (Try-It)                                                       │   │
+│   │   • Get code samples                                                         │   │
 │   └─────────────────────────────────────────────────────────────────────────────┘   │
 │                                       │                                              │
 │                                       ▼                                              │
@@ -635,8 +635,8 @@
 │   │                         https://portal.stoa.cab-i.com                        │   │
 │   │                                                                              │   │
 │   │   ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐               │   │
-│   │   │ Catalogue  │ │  API Doc   │ │   Apps &   │ │  Try-It    │               │   │
-│   │   │   APIs     │ │  Swagger   │ │   Subs     │ │  Console   │               │   │
+│   │   │   API      │ │  API Doc   │ │   Apps &   │ │  Try-It    │               │   │
+│   │   │  Catalog   │ │  Swagger   │ │   Subs     │ │  Console   │               │   │
 │   │   └────────────┘ └────────────┘ └────────────┘ └────────────┘               │   │
 │   └───────────────────────────────────┬─────────────────────────────────────────┘   │
 │                                       │                                              │
@@ -646,10 +646,10 @@
 │   │                      CONTROL-PLANE API (FastAPI)                             │   │
 │   │                                                                              │   │
 │   │   ┌─────────────────────────────────────────────────────────────────────┐   │   │
-│   │   │  /portal/apis         → Liste APIs publiées                         │   │   │
+│   │   │  /portal/apis         → List published APIs                         │   │   │
 │   │   │  /portal/applications → CRUD Applications + credentials             │   │   │
-│   │   │  /portal/subscriptions→ Gestion souscriptions                       │   │   │
-│   │   │  /portal/try-it       → Proxy requêtes → Gateway                    │   │   │
+│   │   │  /portal/subscriptions→ Subscription management                     │   │   │
+│   │   │  /portal/try-it       → Proxy requests → Gateway                    │   │   │
 │   │   └─────────────────────────────────────────────────────────────────────┘   │   │
 │   │                                       │                                      │   │
 │   │                          ┌────────────┴────────────┐                        │   │
@@ -666,10 +666,10 @@
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Stack Technique
+### Technical Stack
 
-| Composant | Technologie |
-|-----------|-------------|
+| Component | Technology |
+|-----------|------------|
 | Frontend | React 18 + TypeScript + Vite |
 | Styling | TailwindCSS |
 | Auth | Keycloak OIDC |
@@ -677,9 +677,9 @@
 | Code Editor | Monaco Editor |
 | Backend | Control-Plane API (FastAPI) |
 
-### Intégration Kafka
+### Kafka Integration
 
-Le Developer Portal utilise Kafka pour les événements :
+The Developer Portal uses Kafka for events:
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -699,27 +699,27 @@ Le Developer Portal utilise Kafka pour les événements :
              └─────────────┘            └─────────────┘            └─────────────┘
 ```
 
-**Topics Kafka utilisés** :
-- `application-created` → Sync GitLab + provisionning Gateway
+**Kafka Topics Used**:
+- `application-created` → Sync GitLab + Gateway provisioning
 - `application-deleted` → Cleanup
-- `subscription-created` → Activation API Key pour l'API
-- `subscription-deleted` → Révocation
-- `api-key-rotated` → Invalidation cache + audit
+- `subscription-created` → API Key activation for the API
+- `subscription-deleted` → Revocation
+- `api-key-rotated` → Cache invalidation + audit
 
-### Plan Détaillé
+### Detailed Plan
 
-Voir [DEVELOPER-PORTAL-PLAN.md](DEVELOPER-PORTAL-PLAN.md) pour :
-- Structure du projet
-- Planning semaine par semaine
-- Composants React détaillés
-- Endpoints backend
-- Configuration Keycloak
+See [DEVELOPER-PORTAL-PLAN.md](DEVELOPER-PORTAL-PLAN.md) for:
+- Project structure
+- Week-by-week planning
+- Detailed React components
+- Backend endpoints
+- Keycloak configuration
 
 ---
 
-## Phase 9 - Ticketing (Demandes de Production)
+## Phase 9 - Ticketing (Production Requests)
 
-**Objectif**: Workflow de validation manuelle pour les promotions STAGING → PROD avec règle anti-self-approval.
+**Objective**: Manual validation workflow for STAGING → PROD promotions with anti-self-approval rule.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -737,12 +737,12 @@ Voir [DEVELOPER-PORTAL-PLAN.md](DEVELOPER-PORTAL-PLAN.md) pour :
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Flux Event-Driven
+### Event-Driven Flow
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │   DevOps    │────▶│   Git       │────▶│   Kafka     │
-│   (Demande) │     │  (Commit)   │     │  (Event)    │
+│   (Request) │     │  (Commit)   │     │  (Event)    │
 └─────────────┘     └─────────────┘     └──────┬──────┘
                                                │
                           ┌────────────────────┴────────────────────┐
@@ -753,7 +753,7 @@ Voir [DEVELOPER-PORTAL-PLAN.md](DEVELOPER-PORTAL-PLAN.md) pour :
                    │   (CPI)     │                           │  (#prod)    │
                    └─────────────┘                           └─────────────┘
                           │
-                          │ CPI approuve
+                          │ CPI approves
                           ▼
                    ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
                    │   API       │────▶│   Kafka     │────▶│    AWX      │
@@ -770,38 +770,38 @@ Voir [DEVELOPER-PORTAL-PLAN.md](DEVELOPER-PORTAL-PLAN.md) pour :
 
 ### RBAC & Anti-Self-Approval
 
-| Rôle | Créer | Approuver | Note |
-|------|-------|-----------|------|
-| DevOps | ✅ | ❌ | Crée pour son tenant |
-| CPI Tenant | ✅ | ✅* | *Sauf ses propres demandes |
-| CPI Admin | ✅ | ✅* | *Sauf ses propres demandes |
+| Role | Create | Approve | Note |
+|------|--------|---------|------|
+| DevOps | ✅ | ❌ | Creates for their tenant |
+| Tenant CPI | ✅ | ✅* | *Except their own requests |
+| Admin CPI | ✅ | ✅* | *Except their own requests |
 
-### Intégration Kafka
+### Kafka Integration
 
-**Topics utilisés** :
-- `promotion-requests` (topic principal)
+**Topics Used**:
+- `promotion-requests` (main topic)
 
-**Events** :
-- `request-created` → Notification CPI
-- `request-approved` → Trigger AWX + notification demandeur
-- `request-rejected` → Notification demandeur
-- `deployment-succeeded` → Notification tous
-- `deployment-failed` → Notification ops
+**Events**:
+- `request-created` → CPI Notification
+- `request-approved` → Trigger AWX + requester notification
+- `request-rejected` → Requester notification
+- `deployment-succeeded` → Notify all
+- `deployment-failed` → Ops notification
 
-### Plan Détaillé
+### Detailed Plan
 
-Voir [TICKETING-SYSTEM-PLAN.md](TICKETING-SYSTEM-PLAN.md) pour :
-- Format YAML des tickets
-- Endpoints API complets
-- Modèles Pydantic
-- Composants React (RequestCard, Timeline, etc.)
-- Templates email
+See [TICKETING-SYSTEM-PLAN.md](TICKETING-SYSTEM-PLAN.md) for:
+- Ticket YAML format
+- Complete API endpoints
+- Pydantic models
+- React components (RequestCard, Timeline, etc.)
+- Email templates
 
 ---
 
 ## Phase 10 - Resource Lifecycle Management
 
-**Objectif**: Tagging obligatoire et auto-suppression des ressources non-production pour optimiser les coûts.
+**Objective**: Mandatory tagging and auto-deletion of non-production resources to optimize costs.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
@@ -811,11 +811,11 @@ Voir [TICKETING-SYSTEM-PLAN.md](TICKETING-SYSTEM-PLAN.md) pour :
 │   │                         MANDATORY TAGS                                       │   │
 │   │                                                                              │   │
 │   │   environment    : dev | staging | sandbox | demo                           │   │
-│   │   owner          : email du responsable                                     │   │
-│   │   project        : nom du projet / tenant                                   │   │
-│   │   cost-center    : code centre de coût                                      │   │
-│   │   ttl            : durée de vie (7d, 14d, 30d max)                          │   │
-│   │   created_at     : date de création (auto)                                  │   │
+│   │   owner          : responsible's email                                      │   │
+│   │   project        : project / tenant name                                    │   │
+│   │   cost-center    : cost center code                                         │   │
+│   │   ttl            : time-to-live (7d, 14d, 30d max)                          │   │
+│   │   created_at     : creation date (auto)                                     │   │
 │   │   auto-teardown  : true | false                                             │   │
 │   │   data-class     : public | internal | confidential | restricted            │   │
 │   │                                                                              │   │
@@ -851,37 +851,37 @@ Voir [TICKETING-SYSTEM-PLAN.md](TICKETING-SYSTEM-PLAN.md) pour :
 
 ### Guardrails
 
-| Règle | Description |
-|-------|-------------|
-| **Tag Validation** | Rejeter déploiement sans tags obligatoires |
-| **TTL Maximum** | 30 jours max pour non-prod |
-| **Data Protection** | `data-class=restricted` exclu de l'auto-teardown |
-| **Owner Notification** | 48h → 24h → suppression |
-| **Prod Exclusion** | `environment=prod` jamais supprimé automatiquement |
+| Rule | Description |
+|------|-------------|
+| **Tag Validation** | Reject deployment without mandatory tags |
+| **Maximum TTL** | 30 days max for non-prod |
+| **Data Protection** | `data-class=restricted` excluded from auto-teardown |
+| **Owner Notification** | 48h → 24h → deletion |
+| **Prod Exclusion** | `environment=prod` never automatically deleted |
 
-### Intégration Kafka
+### Kafka Integration
 
-**Topics utilisés** :
-- `resource-created` → Log création avec tags
-- `resource-expiring` → Notification 48h/24h avant expiration
-- `resource-deleted` → Audit trail suppression
-- `tag-violation` → Alerte déploiement sans tags
+**Topics Used**:
+- `resource-created` → Log creation with tags
+- `resource-expiring` → Notification 48h/24h before expiration
+- `resource-deleted` → Deletion audit trail
+- `tag-violation` → Alert deployment without tags
 
-### Implémentation
+### Implementation
 
-| Composant | Technologie | Rôle |
-|-----------|-------------|------|
-| Module Terraform | `common_tags` | Tags standardisés avec validations |
-| Lambda | `resource-cleanup` | Suppression ressources expirées |
-| EventBridge | Cron 2h UTC | Déclencheur quotidien |
-| OPA Gatekeeper | K8s admission | Rejet pods sans tags |
-| GitHub Actions | CI check | Validation tags avant merge |
+| Component | Technology | Role |
+|-----------|------------|------|
+| Terraform Module | `common_tags` | Standardized tags with validations |
+| Lambda | `resource-cleanup` | Delete expired resources |
+| EventBridge | Cron 2h UTC | Daily trigger |
+| OPA Gatekeeper | K8s admission | Reject pods without tags |
+| GitHub Actions | CI check | Tag validation before merge |
 
 ---
 
 ## Gateway Admin Proxy (Phase 2.5)
 
-### Architecture OIDC pour Administration Gateway
+### OIDC Architecture for Gateway Administration
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -893,8 +893,8 @@ Voir [TICKETING-SYSTEM-PLAN.md](TICKETING-SYSTEM-PLAN.md) pour :
 │   │  (UI/AWX)   │                    │  ┌─────────────────────────┐   │    │
 │   │             │─── JWT Token ─────▶│  │  POST /v1/gateway/apis  │   │    │
 │   │             │                    │  │                         │   │    │
-│   └─────────────┘                    │  │  • Valide JWT (OIDC)    │   │    │
-│                                      │  │  • Forward au Gateway   │   │    │
+│   └─────────────┘                    │  │  • Validates JWT (OIDC) │   │    │
+│                                      │  │  • Forwards to Gateway  │   │    │
 │                                      │  │  • Audit trail          │   │    │
 │                                      │  └───────────┬─────────────┘   │    │
 │                                      └──────────────┼─────────────────┘    │
@@ -905,7 +905,7 @@ Voir [TICKETING-SYSTEM-PLAN.md](TICKETING-SYSTEM-PLAN.md) pour :
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
 │   │                      webMethods Gateway                              │   │
 │   │  ┌─────────────────────────────────────────────────────────────┐    │   │
-│   │  │  Gateway-Admin-API (Proxy vers port 5555)                   │    │   │
+│   │  │  Gateway-Admin-API (Proxy to port 5555)                     │    │   │
 │   │  │                                                             │    │   │
 │   │  │  ┌─────────────┐   ┌──────────────┐   ┌────────────────┐   │    │   │
 │   │  │  │ JWT Valid   │──▶│   Routing    │──▶│  Basic Auth    │   │    │   │
@@ -929,10 +929,10 @@ Voir [TICKETING-SYSTEM-PLAN.md](TICKETING-SYSTEM-PLAN.md) pour :
 
 ### OpenAPI 3.1.0 Compatibility
 
-webMethods Gateway 10.15 ne supporte pas OpenAPI 3.1.0. Le playbook `deploy-api.yaml` convertit automatiquement :
+webMethods Gateway 10.15 does not support OpenAPI 3.1.0. The `deploy-api.yaml` playbook automatically converts:
 
 ```yaml
-# Détection et conversion automatique
+# Automatic detection and conversion
 - name: Detect OpenAPI version and type
   set_fact:
     openapi_version: "{{ openapi_spec_content.json.openapi | default('2.0') }}"
@@ -944,47 +944,47 @@ webMethods Gateway 10.15 ne supporte pas OpenAPI 3.1.0. Le playbook `deploy-api.
   when: openapi_version is version('3.1.0', '>=')
 ```
 
-| Version OpenAPI | Support Gateway | Action |
+| OpenAPI Version | Gateway Support | Action |
 |-----------------|-----------------|--------|
-| Swagger 2.0 | ✅ Natif | Aucune conversion |
-| OpenAPI 3.0.x | ✅ Natif | Aucune conversion |
-| OpenAPI 3.1.x | ❌ Non supporté | Conversion → 3.0.0 |
+| Swagger 2.0 | ✅ Native | No conversion |
+| OpenAPI 3.0.x | ✅ Native | No conversion |
+| OpenAPI 3.1.x | ❌ Not supported | Conversion → 3.0.0 |
 
 ---
 
 ## Conclusion
 
-### Kafka comme Colonne Vertébrale
+### Kafka as the Backbone
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                  │
-│   KAFKA N'EST PAS JUSTE UN MESSAGE BROKER                       │
-│   ═══════════════════════════════════════                       │
+│   KAFKA IS NOT JUST A MESSAGE BROKER                            │
+│   ══════════════════════════════════                            │
 │                                                                  │
-│   C'est:                                                         │
+│   It is:                                                         │
 │                                                                  │
-│   🔗 Le SYSTÈME NERVEUX de la plateforme                        │
-│      → Tous les composants communiquent via Kafka               │
+│   🔗 The NERVOUS SYSTEM of the platform                         │
+│      → All components communicate via Kafka                     │
 │                                                                  │
-│   📜 Le JOURNAL DE BORD immuable                                │
-│      → Chaque action est tracée et auditable                    │
+│   📜 The immutable LOG BOOK                                     │
+│      → Each action is traced and auditable                      │
 │                                                                  │
-│   ⚡ Le DÉCOUPLEUR universel                                    │
-│      → Services indépendants, évolutifs, résilients             │
+│   ⚡ The universal DECOUPLER                                    │
+│      → Independent, scalable, resilient services                │
 │                                                                  │
-│   🔄 Le REPLAY ENGINE                                           │
-│      → Reconstruire l'état, debugger, analyser                  │
+│   🔄 The REPLAY ENGINE                                          │
+│      → Reconstruct state, debug, analyze                        │
 │                                                                  │
-│   📊 La SOURCE DE VÉRITÉ pour les analytics                     │
-│      → OpenSearch consomme, agrège, visualise                   │
+│   📊 The SOURCE OF TRUTH for analytics                          │
+│      → OpenSearch consumes, aggregates, visualizes              │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Contact
 
-| Rôle | Contact |
+| Role | Contact |
 |------|---------|
 | Architecture | architecture@cab-i.com |
 | Platform Team | platform-team@cab-i.com |
@@ -992,5 +992,5 @@ webMethods Gateway 10.15 ne supporte pas OpenAPI 3.1.0. Le playbook `deploy-api.
 
 ---
 
-*Document mis à jour le 23 Décembre 2024*
+*Document updated on December 23, 2024*
 *STOA Platform v2 - CAB Ingénierie*

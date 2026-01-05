@@ -1,0 +1,194 @@
+# =============================================================================
+# Chaos Experiment: CPU Stress
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Stresses CPU to test resource limits and throttling behavior
+# Expected: HPA scales pods, services remain responsive under load
+# =============================================================================
+
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: cpu-stress-api
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: control-plane-api
+    chaos-type: cpu-stress
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: stoa-system
+    applabel: "app.kubernetes.io/name=control-plane-api"
+    appkind: deployment
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-cpu-hog
+      spec:
+        components:
+          env:
+            # CPU stress configuration
+            - name: CPU_CORES
+              value: "2"        # Stress 2 CPU cores
+            - name: CPU_LOAD
+              value: "80"       # 80% CPU load
+            - name: TOTAL_CHAOS_DURATION
+              value: "120"      # 2 minutes
+            - name: PODS_AFFECTED_PERC
+              value: "50"       # 50% of pods
+
+            # Container targeting
+            - name: TARGET_CONTAINER
+              value: ""         # Empty = all containers
+
+            # Container runtime
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          - name: "api-still-responsive"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://control-plane-api.stoa-system.svc:8000/v1/health"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+              responseTimeout: 5000  # 5s timeout under stress
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 10
+              interval: 15
+              retry: 3
+              probePollingInterval: 5
+
+          - name: "check-hpa-scaling"
+            type: "k8sProbe"
+            k8sProbe/inputs:
+              group: "autoscaling"
+              version: "v2"
+              resource: "horizontalpodautoscalers"
+              namespace: "stoa-system"
+              resourceNames: "control-plane-api"
+              operation: "present"
+            mode: "Edge"
+            runProperties:
+              probeTimeout: 30
+              interval: 30
+              retry: 2
+
+---
+# CPU stress targeting MCP Gateway
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: cpu-stress-mcp
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: mcp-gateway
+    chaos-type: cpu-stress
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: stoa-system
+    applabel: "app.kubernetes.io/name=mcp-gateway"
+    appkind: deployment
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-cpu-hog
+      spec:
+        components:
+          env:
+            - name: CPU_CORES
+              value: "2"
+            - name: CPU_LOAD
+              value: "80"
+            - name: TOTAL_CHAOS_DURATION
+              value: "120"
+            - name: PODS_AFFECTED_PERC
+              value: "50"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          - name: "mcp-still-responsive"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://mcp-gateway.stoa-system.svc:8001/health"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+              responseTimeout: 5000
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 10
+              interval: 15
+              retry: 3
+              probePollingInterval: 5
+
+---
+# Memory stress experiment (bonus)
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: memory-stress-api
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: control-plane-api
+    chaos-type: memory-stress
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: stoa-system
+    applabel: "app.kubernetes.io/name=control-plane-api"
+    appkind: deployment
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-memory-hog
+      spec:
+        components:
+          env:
+            - name: MEMORY_CONSUMPTION
+              value: "500"      # 500MB memory consumption
+            - name: NUMBER_OF_WORKERS
+              value: "1"
+            - name: TOTAL_CHAOS_DURATION
+              value: "60"
+            - name: PODS_AFFECTED_PERC
+              value: "50"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          - name: "api-still-responsive"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://control-plane-api.stoa-system.svc:8000/v1/health"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 10
+              interval: 15
+              retry: 3
+              probePollingInterval: 5

@@ -1,0 +1,154 @@
+# =============================================================================
+# Backup Configuration Values
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Configuration for AWX and Vault backup CronJobs
+# =============================================================================
+
+# Global settings
+global:
+  environment: dev
+
+# Backup configuration
+backup:
+  # Enable/disable backup CronJobs
+  enabled: true
+
+  # Service account name
+  serviceAccountName: stoa-backup
+
+  # IRSA annotations (set via Terraform output)
+  serviceAccountAnnotations: {}
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/stoa-backup-role-dev
+
+  # S3 bucket for backups (set via Terraform output)
+  s3Bucket: ""  # Required: stoa-backups-dev-eu-west-3
+
+  # AWS region
+  awsRegion: eu-west-3
+
+  # KMS key ID for encryption (optional - uses default S3 encryption if not set)
+  kmsKeyId: ""
+
+  # Timezone for CronJob schedules
+  timezone: Europe/Paris
+
+  # Job history limits
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  ttlSecondsAfterFinished: 86400  # 24 hours
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+
+  # Slack notifications
+  slack:
+    enabled: true
+    secretName: slack-webhook
+    secretKey: webhook-url
+
+  # -----------------------------------------------------------------------------
+  # AWX Backup Configuration
+  # -----------------------------------------------------------------------------
+  awx:
+    enabled: true
+
+    # Schedule: Daily at 2:00 AM Paris time
+    schedule: "0 2 * * *"
+
+    # AWX namespace
+    namespace: awx
+
+    # PostgreSQL pod selector
+    podSelector: "app.kubernetes.io/component=database"
+
+    # Database settings
+    database: awx
+    user: awx
+
+    # Job settings
+    backoffLimit: 2
+    activeDeadlineSeconds: 3600  # 1 hour timeout
+
+    # Container image
+    image:
+      repository: bitnami/postgresql
+      tag: "15"
+      pullPolicy: IfNotPresent
+
+    # Resources
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  # -----------------------------------------------------------------------------
+  # Vault Backup Configuration
+  # -----------------------------------------------------------------------------
+  vault:
+    enabled: true
+
+    # Schedule: Daily at 3:00 AM Paris time
+    schedule: "0 3 * * *"
+
+    # Vault namespace
+    namespace: vault
+
+    # Vault address
+    address: "http://vault.vault.svc:8200"
+
+    # Token secret reference
+    tokenSecretName: vault-backup-token
+    tokenSecretKey: token
+
+    # Retention: Keep last N snapshots
+    retentionCount: 7
+
+    # Job settings
+    backoffLimit: 2
+    activeDeadlineSeconds: 1800  # 30 minutes timeout
+
+    # Container image
+    image:
+      repository: hashicorp/vault
+      tag: "1.15"
+      pullPolicy: IfNotPresent
+
+    # Resources
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+# =============================================================================
+# Environment-specific overrides
+# =============================================================================
+#
+# For dev environment:
+# backup:
+#   s3Bucket: stoa-backups-dev-eu-west-3
+#   serviceAccountAnnotations:
+#     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/stoa-backup-role-dev
+#
+# For staging environment:
+# backup:
+#   s3Bucket: stoa-backups-staging-eu-west-3
+#   awx:
+#     schedule: "0 1 * * *"  # 1:00 AM
+#   vault:
+#     schedule: "0 2 * * *"  # 2:00 AM
+#
+# For prod environment:
+# backup:
+#   s3Bucket: stoa-backups-prod-eu-west-3
+#   successfulJobsHistoryLimit: 5
+#   failedJobsHistoryLimit: 5
+#   vault:
+#     retentionCount: 14  # Keep 2 weeks

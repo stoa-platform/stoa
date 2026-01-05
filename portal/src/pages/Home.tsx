@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Wrench, CreditCard, BookOpen, ArrowRight, Zap, Shield, Code } from 'lucide-react';
+import { Wrench, CreditCard, BookOpen, ArrowRight, Zap, Shield, Code, AppWindow } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { config } from '../config';
 
@@ -15,18 +15,25 @@ export function HomePage() {
       enabled: config.features.enableMCPTools,
     },
     {
-      icon: CreditCard,
-      title: 'My Subscriptions',
-      description: 'Manage your tool subscriptions and monitor usage',
-      href: '/subscriptions',
-      enabled: config.features.enableSubscriptions,
-    },
-    {
       icon: BookOpen,
       title: 'API Catalog',
       description: 'Browse available APIs and integrate them into your applications',
       href: '/apis',
       enabled: config.features.enableAPICatalog,
+    },
+    {
+      icon: AppWindow,
+      title: 'My Applications',
+      description: 'Create and manage your consumer applications with API credentials',
+      href: '/apps',
+      enabled: config.features.enableApplications,
+    },
+    {
+      icon: CreditCard,
+      title: 'My Subscriptions',
+      description: 'Manage your tool and API subscriptions, monitor usage',
+      href: '/subscriptions',
+      enabled: config.features.enableSubscriptions,
     },
   ].filter(f => f.enabled);
 

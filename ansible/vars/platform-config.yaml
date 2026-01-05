@@ -26,7 +26,13 @@ keycloak:
     control_plane_ui:
       client_id: control-plane-ui
       public: true
-      # Used by the DevOps UI
+      # Used by the DevOps/Admin Console UI
+
+    stoa_portal:
+      client_id: stoa-portal
+      public: true
+      # Used by the Developer Portal UI
+      # Different from control-plane-ui (different audience)
 
     control_plane_api:
       client_id: control-plane-api
@@ -122,6 +128,7 @@ awx:
     provision_tenant: "Provision Tenant"
     register_api_gateway: "Register API Gateway"
     bootstrap_platform: "Bootstrap Platform"
+    setup_stoa_portal: "Setup STOA Portal"
 
 # =============================================================================
 # GITLAB CONFIGURATION
@@ -187,6 +194,17 @@ applications:
       value: control-plane-api
     consuming_apis:
       - gateway_admin
+
+  stoa_portal:
+    name: stoa-portal
+    description: "STOA Developer Portal Application"
+    contact_email: developers@cab-i.com
+    identifier:
+      key: openIdClaims
+      name: client_id
+      value: stoa-portal
+    consuming_apis:
+      - control_plane
 
 # =============================================================================
 # SCOPE NAMING CONVENTION

@@ -26,7 +26,8 @@ STOA Platform v2 - Multi-tenant API Management with:
 ## Architecture
 
 ### Components
-- **control-plane-ui/**: React TypeScript UI with RBAC
+- **control-plane-ui/**: Console UI (React) - API Provider interface for tenant/API management
+- **portal/**: Developer Portal (React + Vite) - API Consumer portal for browse, subscribe, test APIs
 - **control-plane-api/**: FastAPI backend with Keycloak auth
 - **mcp-gateway/**: MCP Gateway for AI-Native API access
 - **charts/stoa-platform/**: Helm chart for K8s deployment
@@ -58,8 +59,11 @@ STOA Platform v2 - Multi-tenant API Management with:
 
 ### Development
 ```bash
-# UI Development
+# Console UI Development (API Provider)
 cd control-plane-ui && npm install && npm start
+
+# Developer Portal Development (API Consumer)
+cd portal && npm install && npm run dev
 
 # API Development
 cd control-plane-api && pip install -r requirements.txt && uvicorn src.main:app --reload
@@ -69,6 +73,9 @@ cd mcp-gateway && pip install -e ".[dev,k8s]" && python -m src.main
 
 # Run MCP Gateway tests
 cd mcp-gateway && pytest --cov=src
+
+# Run Portal tests
+cd portal && npm run test
 
 # Helm lint
 helm lint charts/stoa-platform
@@ -108,7 +115,8 @@ kubectl get tools -n tenant-acme
 ```
 
 ## Key URLs (Production)
-- Console UI: https://console.stoa.cab-i.com
+- Console UI: https://console.stoa.cab-i.com (API Provider)
+- **Developer Portal**: https://portal.stoa.cab-i.com (API Consumer)
 - API (direct): https://api.stoa.cab-i.com
 - **API Gateway Runtime**: https://apis.stoa.cab-i.com (OIDC auth)
   - Control-Plane-API: `https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`

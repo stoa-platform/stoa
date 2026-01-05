@@ -73,16 +73,19 @@ kubectl top pods -A | sort -k3 -h -r | head -20
 
 ### Main URLs
 
-| Service | URL |
-|---------|-----|
-| Gateway | https://gateway.stoa.cab-i.com |
-| DevOps UI | https://console.stoa.cab-i.com |
-| Control Plane API | https://api.stoa.cab-i.com |
-| Keycloak | https://auth.stoa.cab-i.com |
-| Grafana | https://grafana.stoa.cab-i.com |
-| AWX | https://awx.stoa.cab-i.com |
-| ArgoCD | https://argocd.stoa.cab-i.com |
-| Vault | https://vault.stoa.cab-i.com |
+| Service | URL | Description |
+|---------|-----|-------------|
+| Console UI | https://console.stoa.cab-i.com | API Provider interface |
+| **Developer Portal** | https://portal.stoa.cab-i.com | API Consumer portal |
+| API Gateway Runtime | https://apis.stoa.cab-i.com | APIs via Gateway |
+| Gateway Admin | https://gateway.stoa.cab-i.com | Gateway console |
+| MCP Gateway | https://mcp.stoa.cab-i.com | AI-Native MCP endpoint |
+| Control Plane API | https://api.stoa.cab-i.com | REST API backend |
+| Keycloak | https://auth.stoa.cab-i.com | Identity Provider |
+| Grafana | https://grafana.stoa.cab-i.com | Monitoring |
+| AWX | https://awx.stoa.cab-i.com | Automation |
+| ArgoCD | https://argocd.stoa.cab-i.com | GitOps CD |
+| Vault | https://vault.stoa.cab-i.com | Secrets management |
 
 ---
 

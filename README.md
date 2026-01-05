@@ -7,14 +7,15 @@ Multi-tenant API Management Platform with Control-Plane UI, GitOps and Event-Dri
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         CLIENTS                                      │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │
-│  │   UI React   │    │  Third-party │    │   Partners   │          │
-│  │  (Keycloak)  │    │   (OAuth2)   │    │   (OAuth2)   │          │
-│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘          │
-└─────────┼───────────────────┼───────────────────┼───────────────────┘
-          │                   │                   │
-          │                   │                   │
-          ▼                   ▼                   ▼
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────┐│
+│  │Console (UI)  │  │  Developer   │  │  Third-party │  │ Partners ││
+│  │ (Keycloak)   │  │   Portal     │  │   (OAuth2)   │  │ (OAuth2) ││
+│  │ API Provider │  │ API Consumer │  │              │  │          ││
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └────┬─────┘│
+└─────────┼─────────────────┼──────────────────┼──────────────┼──────┘
+          │                 │                    │              │
+          │                 │                    │              │
+          ▼                 ▼                    ▼              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    webMethods GATEWAY                                │
 │  ┌────────────────────────────────────────────────────────────────┐ │
@@ -45,23 +46,26 @@ Multi-tenant API Management Platform with Control-Plane UI, GitOps and Event-Dri
 
 ### Access Flow
 
-| Client | Path | Auth |
-|--------|------|------|
-| UI React | `gateway.stoa.cab-i.com/control-plane/v1/*` | Keycloak OIDC (user) |
-| Third-party/M2M | `gateway.stoa.cab-i.com/control-plane/v1/*` | OAuth2 Client Credentials |
-| Business APIs | `gateway.stoa.cab-i.com/apis/{tenant}/*` | API Key / OAuth2 |
+| Client | Path | Auth | Purpose |
+|--------|------|------|---------|
+| Console UI | `apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/*` | Keycloak OIDC | API Provider (Tenant/API management) |
+| Developer Portal | `apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/*` | Keycloak OIDC | API Consumer (Browse, Subscribe, Test) |
+| Third-party/M2M | `apis.stoa.cab-i.com/gateway/*` | OAuth2 Client Credentials | Business API access |
+| Business APIs | `apis.stoa.cab-i.com/gateway/{api}/*` | API Key / OAuth2 | Runtime API calls |
 
 ## Components
 
-| Component | Description | Technology |
-|-----------|-------------|------------|
-| UI Control-Plane | RBAC Interface for API management | React + TypeScript |
-| Control-Plane API | REST Backend with RBAC | FastAPI (Python) |
-| Keycloak | Identity Provider (OIDC) | Keycloak |
-| GitLab | GitOps Source of Truth | GitLab |
-| Kafka | Event streaming | Redpanda |
-| AWX | Automation/Orchestration | AWX/Ansible |
-| webMethods Gateway | API Gateway runtime | webMethods |
+| Component | Description | Technology | URL |
+|-----------|-------------|------------|-----|
+| Console UI | RBAC Interface for API Provider (management) | React + TypeScript | console.stoa.cab-i.com |
+| **Developer Portal** | API Consumer Portal (browse, subscribe, test) | React + TypeScript + Vite | portal.stoa.cab-i.com |
+| Control-Plane API | REST Backend with RBAC | FastAPI (Python) | api.stoa.cab-i.com |
+| MCP Gateway | AI-Native API Access (MCP Protocol) | FastAPI + OPA | mcp.stoa.cab-i.com |
+| Keycloak | Identity Provider (OIDC) | Keycloak | auth.stoa.cab-i.com |
+| GitLab | GitOps Source of Truth | GitLab | gitlab.com |
+| Kafka | Event streaming | Redpanda | (internal) |
+| AWX | Automation/Orchestration | AWX/Ansible | awx.stoa.cab-i.com |
+| webMethods Gateway | API Gateway runtime | webMethods | apis.stoa.cab-i.com |
 
 ## RBAC Roles
 
@@ -106,12 +110,21 @@ stoa/
 │   │   └── services/        # Business logic (GitLab, Kafka, Gateway, etc.)
 │   ├── Dockerfile
 │   └── requirements.txt
-├── control-plane-ui/        # React frontend
+├── control-plane-ui/        # React frontend (Console - API Provider)
 │   ├── src/
 │   │   ├── components/
 │   │   ├── pages/
 │   │   ├── contexts/
 │   │   └── services/
+│   ├── Dockerfile
+│   └── package.json
+├── portal/                  # Developer Portal (API Consumer)
+│   ├── src/
+│   │   ├── components/     # UI components (layout, testing, apps)
+│   │   ├── pages/          # Routes (apis, tools, subscriptions, apps)
+│   │   ├── contexts/       # Auth context (Keycloak OIDC)
+│   │   ├── hooks/          # React Query hooks
+│   │   └── services/       # API services
 │   ├── Dockerfile
 │   └── package.json
 ├── ansible/                 # Ansible playbooks (Phase 2.5)
@@ -254,18 +267,21 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 
 ## URLs
 
-### DEV Environment
+### Production Environment
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Control Plane UI | https://console.stoa.cab-i.com | API management interface |
+| Console UI | https://console.stoa.cab-i.com | API Provider interface (tenant/API management) |
+| **Developer Portal** | https://portal.stoa.cab-i.com | API Consumer portal (browse, subscribe, test) |
 | Control Plane API (direct) | https://api.stoa.cab-i.com | REST API backend (direct access) |
 | **API Gateway Runtime** | https://apis.stoa.cab-i.com | APIs via Gateway (OIDC auth) |
+| **MCP Gateway** | https://mcp.stoa.cab-i.com | AI-Native MCP Protocol endpoint |
 | Keycloak (Auth) | https://auth.stoa.cab-i.com | Identity Provider (OIDC) |
 | Keycloak Admin | https://auth.stoa.cab-i.com/admin/ | Keycloak admin console |
 | API Gateway UI | https://gateway.stoa.cab-i.com/apigatewayui/ | Gateway console (admin: Administrator/manage) |
 | **ArgoCD** | https://argocd.stoa.cab-i.com | GitOps CD (admin/demo) |
 | **AWX (Ansible)** | https://awx.stoa.cab-i.com | Automation (admin/demo) |
+| Vault | https://vault.stoa.cab-i.com | HashiCorp Vault (secrets) |
 | Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n stoa-system` | Kafka administration (internal) |
 | **GitLab GitOps** | https://gitlab.com/cab6961310/stoa-gitops | Source of Truth (tenants)
 
@@ -403,8 +419,9 @@ Keycloak is configured as central IdP for OIDC authentication:
 | Client ID | Type | Usage |
 |-----------|------|-------|
 | `control-plane-api` | Confidential | Backend API authentication |
-| `control-plane-ui` | Public | Frontend SPA (PKCE) |
-| `api-gateway` | Confidential | Gateway JWT validation (future) |
+| `control-plane-ui` | Public | Console SPA (PKCE) - API Provider |
+| `stoa-portal` | Public | Developer Portal SPA (PKCE) - API Consumer |
+| `api-gateway` | Confidential | Gateway JWT validation |
 
 **Realm Roles**:
 | Role | Description |

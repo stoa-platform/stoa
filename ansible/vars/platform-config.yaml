@@ -164,7 +164,7 @@ applications:
     contact_email: admin@cab-i.com
     identifier:
       key: openIdClaims
-      name: client_id          # Use client_id claim
+      name: azp                 # Use azp (authorized party) claim for public clients
       value: control-plane-ui
     # APIs this application can consume
     consuming_apis:
@@ -177,7 +177,7 @@ applications:
     contact_email: admin@cab-i.com
     identifier:
       key: openIdClaims
-      name: client_id          # Use client_id claim (not azp)
+      name: azp                 # Use azp (authorized party) claim
       value: awx-automation
     # APIs this application can consume
     consuming_apis:
@@ -190,7 +190,7 @@ applications:
     contact_email: admin@cab-i.com
     identifier:
       key: openIdClaims
-      name: client_id          # Use client_id claim
+      name: azp                 # Use azp (authorized party) claim
       value: control-plane-api
     consuming_apis:
       - gateway_admin
@@ -201,7 +201,7 @@ applications:
     contact_email: developers@cab-i.com
     identifier:
       key: openIdClaims
-      name: client_id
+      name: azp                 # Use azp (authorized party) claim for public clients
       value: stoa-portal
     consuming_apis:
       - control_plane

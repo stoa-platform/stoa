@@ -1,70 +1,88 @@
 # Developer Portal Custom - Development Plan
 
+> **Status**: ✅ **COMPLETED** (CAB-246)
+> **Completion Date**: January 2025
+> **Production URL**: https://portal.stoa.cab-i.com
+
 ## 📋 Overview
 
 **Objective**: Replace the IBM Developer Portal with a custom React portal integrated into the APIM GitOps architecture.
 
-**Estimated Duration**: 3 weeks
+**Estimated Duration**: 3 weeks → **Actual: Completed in 6 sprints**
 
 **Tech Stack**:
-- Frontend: React + TypeScript + Vite + TailwindCSS
-- Auth: Keycloak OIDC
-- Backend: Control Plane API (FastAPI) - endpoints to add
-- Documentation: Swagger-UI or Redoc
+- Frontend: React 18 + TypeScript + Vite + TailwindCSS
+- Auth: Keycloak OIDC (client: `stoa-portal`)
+- Backend: Control Plane API (FastAPI) via Gateway
+- Documentation: OpenAPI Viewer component
 
 ---
 
-## 📁 Project Structure
+## 📁 Project Structure (Implemented)
 
 ```
-developer-portal/
+portal/                          # Actual implementation location
 ├── src/
 │   ├── pages/
-│   │   ├── Home.tsx
-│   │   ├── ApiCatalog.tsx
-│   │   ├── ApiDetail.tsx
-│   │   ├── TryIt.tsx
-│   │   ├── MyApplications.tsx
-│   │   ├── CreateApplication.tsx
-│   │   ├── Subscriptions.tsx
-│   │   ├── Profile.tsx
-│   │   └── Login.tsx
+│   │   ├── Home.tsx             # ✅ Implemented
+│   │   ├── apis/
+│   │   │   ├── APICatalog.tsx   # ✅ Implemented
+│   │   │   ├── APIDetail.tsx    # ✅ Implemented
+│   │   │   └── APITestingSandbox.tsx  # ✅ Implemented
+│   │   ├── apps/
+│   │   │   ├── MyApplications.tsx     # ✅ Implemented
+│   │   │   └── ApplicationDetail.tsx  # ✅ Implemented
+│   │   ├── subscriptions/
+│   │   │   └── MySubscriptions.tsx    # ✅ Implemented
+│   │   ├── tools/               # MCP Tools (bonus feature)
+│   │   │   ├── ToolsCatalog.tsx
+│   │   │   └── ToolDetail.tsx
+│   │   └── Profile.tsx          # ✅ Implemented
 │   │
 │   ├── components/
 │   │   ├── layout/
-│   │   │   ├── Header.tsx
-│   │   │   ├── Footer.tsx
-│   │   │   └── Sidebar.tsx
-│   │   ├── api/
-│   │   │   ├── ApiCard.tsx
-│   │   │   ├── SwaggerViewer.tsx
-│   │   │   ├── CodeSamples.tsx
-│   │   │   └── SubscribeButton.tsx
-│   │   ├── application/
-│   │   │   ├── AppCard.tsx
-│   │   │   ├── ApiKeyDisplay.tsx
-│   │   │   └── CredentialsModal.tsx
-│   │   └── tryit/
-│   │       ├── RequestBuilder.tsx
-│   │       ├── ResponseViewer.tsx
-│   │       └── HeadersEditor.tsx
+│   │   │   ├── Header.tsx       # ✅ Implemented
+│   │   │   ├── Sidebar.tsx      # ✅ Implemented
+│   │   │   └── Layout.tsx       # ✅ Implemented
+│   │   ├── apis/
+│   │   │   ├── APICard.tsx      # ✅ Implemented
+│   │   │   ├── APIFilters.tsx   # ✅ Implemented
+│   │   │   ├── EndpointList.tsx # ✅ Implemented
+│   │   │   └── OpenAPIViewer.tsx # ✅ Implemented
+│   │   ├── apps/
+│   │   │   ├── ApplicationCard.tsx   # ✅ Implemented
+│   │   │   ├── CreateAppModal.tsx    # ✅ Implemented
+│   │   │   └── CredentialsViewer.tsx # ✅ Implemented
+│   │   ├── testing/
+│   │   │   ├── EnvironmentSelector.tsx  # ✅ Implemented
+│   │   │   ├── RequestBuilder.tsx       # ✅ Implemented
+│   │   │   ├── ResponseViewer.tsx       # ✅ Implemented
+│   │   │   └── SandboxConfirmationModal.tsx # ✅ Implemented
+│   │   └── subscriptions/
+│   │       └── SubscriptionCard.tsx  # ✅ Implemented
 │   │
 │   ├── services/
-│   │   ├── api.service.ts
-│   │   ├── auth.service.ts
-│   │   └── portal.service.ts
+│   │   ├── api.ts               # ✅ Axios client with auth
+│   │   ├── apiCatalog.ts        # ✅ API catalog service
+│   │   ├── applications.ts      # ✅ Applications service
+│   │   └── subscriptions.ts     # ✅ Subscriptions service
 │   │
 │   ├── hooks/
-│   │   ├── useAuth.ts
-│   │   ├── useApis.ts
-│   │   ├── useApplications.ts
-│   │   └── useSubscriptions.ts
+│   │   ├── useAPIs.ts           # ✅ React Query hooks
+│   │   ├── useApplications.ts   # ✅ React Query hooks
+│   │   └── useSubscriptions.ts  # ✅ React Query hooks
+│   │
+│   ├── contexts/
+│   │   └── AuthContext.tsx      # ✅ Keycloak auth context
 │   │
 │   ├── types/
-│   │   └── index.ts
+│   │   ├── api.ts               # ✅ API types
+│   │   ├── application.ts       # ✅ Application types
+│   │   └── subscription.ts      # ✅ Subscription types
 │   │
-│   ├── App.tsx
-│   └── main.tsx
+│   ├── config.ts                # ✅ Portal configuration
+│   ├── App.tsx                  # ✅ Routes
+│   └── main.tsx                 # ✅ Entry point
 │
 ├── public/
 │   └── favicon.ico
@@ -73,7 +91,8 @@ developer-portal/
 ├── vite.config.ts
 ├── tailwind.config.js
 ├── tsconfig.json
-└── README.md
+├── vitest.config.ts             # Unit tests config
+└── Dockerfile                   # Production build
 ```
 
 ---
@@ -95,12 +114,12 @@ developer-portal/
 | **D5** | Swagger-UI integration | `src/components/api/SwaggerViewer.tsx` |
 
 **W1 Checklist**:
-- [ ] Project initialized with Vite
-- [ ] TailwindCSS configured
-- [ ] Keycloak auth functional
-- [ ] Responsive layout
-- [ ] API Catalog with search
-- [ ] Detail page with OpenAPI doc
+- [x] Project initialized with Vite
+- [x] TailwindCSS configured
+- [x] Keycloak auth functional
+- [x] Responsive layout
+- [x] API Catalog with search
+- [x] Detail page with OpenAPI doc
 
 ---
 
@@ -119,13 +138,13 @@ developer-portal/
 | **D5** | Full end-to-end flow | Manual testing |
 
 **W2 Checklist**:
-- [ ] List my applications
-- [ ] Create an application
-- [ ] Display credentials (API Key visible once)
-- [ ] Rotate API Key
-- [ ] List my subscriptions
-- [ ] Subscribe to an API
-- [ ] Unsubscribe
+- [x] List my applications
+- [x] Create an application
+- [x] Display credentials (API Key visible once)
+- [x] Rotate API Key
+- [x] List my subscriptions
+- [x] Subscribe to an API
+- [x] Unsubscribe
 
 ---
 
@@ -145,13 +164,13 @@ developer-portal/
 | **D5** | Loading states, error handling, responsive | Global |
 
 **W3 Checklist**:
-- [ ] Functional Try-It console
-- [ ] Request sent via backend proxy
-- [ ] Response displayed (status, headers, body)
-- [ ] Timing displayed
-- [ ] Code samples generated
-- [ ] Responsive UI
-- [ ] Error handling
+- [x] Functional Try-It console (API Testing Sandbox)
+- [x] Request sent via Gateway proxy
+- [x] Response displayed (status, headers, body)
+- [x] Timing displayed
+- [x] Code samples generated
+- [x] Responsive UI
+- [x] Error handling
 
 ---
 
@@ -361,45 +380,55 @@ export default {
 
 ## 🔐 Configuration Keycloak
 
-### Realm / Client
+### Realm / Client (Implemented)
 
 ```yaml
-Realm: stoa-platform (existing)
+Realm: stoa (existing)
 
 Client:
-  client_id: developer-portal
+  client_id: stoa-portal              # Actual client ID used
   client_type: public
   valid_redirect_uris:
-    - http://localhost:3001/*
+    - http://localhost:5173/*         # Vite dev server
     - https://portal.stoa.cab-i.com/*
   web_origins:
-    - http://localhost:3001
+    - http://localhost:5173
     - https://portal.stoa.cab-i.com
 
-Role to create:
-  - developer (portal access)
+Roles used:
+  - stoa:read   (API Consumer access)
+  - stoa:write  (create apps, subscribe)
 ```
 
-### src/services/auth.service.ts
+### src/contexts/AuthContext.tsx (Implemented)
 
 ```typescript
+// Uses @react-keycloak/web with custom AuthContext
+import { ReactKeycloakProvider } from '@react-keycloak/web';
 import Keycloak from 'keycloak-js';
 
 const keycloak = new Keycloak({
-  url: import.meta.env.VITE_KEYCLOAK_URL,
-  realm: import.meta.env.VITE_KEYCLOAK_REALM,
-  clientId: 'developer-portal'
+  url: config.keycloak.url,       // https://auth.stoa.cab-i.com
+  realm: config.keycloak.realm,   // stoa
+  clientId: 'stoa-portal'
 });
 
-export { keycloak };
+// AuthContext provides: user, isAuthenticated, login, logout, getAccessToken
 ```
 
-### .env
+### Environment Variables (Production)
 
 ```env
-VITE_KEYCLOAK_URL=https://keycloak.stoa.cab-i.com
-VITE_KEYCLOAK_REALM=stoa-platform
-VITE_API_URL=https://api.stoa.cab-i.com
+VITE_BASE_DOMAIN=stoa.cab-i.com
+VITE_KEYCLOAK_URL=https://auth.stoa.cab-i.com
+VITE_KEYCLOAK_REALM=stoa
+VITE_API_URL=https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0
+VITE_PORTAL_MODE=production
+VITE_ENABLE_MCP_TOOLS=true
+VITE_ENABLE_API_CATALOG=true
+VITE_ENABLE_API_TESTING=true
+VITE_ENABLE_SUBSCRIPTIONS=true
+VITE_ENABLE_APPLICATIONS=true
 ```
 
 ---
@@ -519,46 +548,48 @@ print(response.json())`,
 
 ### Features
 
-- [ ] **Auth**: Keycloak login
-- [ ] **Auth**: Logout
-- [ ] **Auth**: Route protection
+- [x] **Auth**: Keycloak login
+- [x] **Auth**: Logout
+- [x] **Auth**: Route protection
 
-- [ ] **Catalog**: List APIs
-- [ ] **Catalog**: Search by name
-- [ ] **Catalog**: Filter by category
-- [ ] **Catalog**: Filter by tenant
+- [x] **Catalog**: List APIs
+- [x] **Catalog**: Search by name
+- [x] **Catalog**: Filter by category
+- [x] **Catalog**: Filter by tenant
 
-- [ ] **API Detail**: General information
-- [ ] **API Detail**: Swagger documentation
-- [ ] **API Detail**: Subscribe button
+- [x] **API Detail**: General information
+- [x] **API Detail**: OpenAPI documentation (custom viewer)
+- [x] **API Detail**: Subscribe button
 
-- [ ] **Applications**: List my apps
-- [ ] **Applications**: Create an app
-- [ ] **Applications**: View credentials
-- [ ] **Applications**: Rotate API Key
-- [ ] **Applications**: Delete app
+- [x] **Applications**: List my apps
+- [x] **Applications**: Create an app
+- [x] **Applications**: View credentials
+- [x] **Applications**: Rotate API Key
+- [x] **Applications**: Delete app
 
-- [ ] **Subscriptions**: List my subscriptions
-- [ ] **Subscriptions**: Subscribe
-- [ ] **Subscriptions**: Unsubscribe
+- [x] **Subscriptions**: List my subscriptions
+- [x] **Subscriptions**: Subscribe
+- [x] **Subscriptions**: Unsubscribe
 
-- [ ] **Try-It**: Method/path selection
-- [ ] **Try-It**: Custom headers
-- [ ] **Try-It**: JSON body
-- [ ] **Try-It**: Send request
-- [ ] **Try-It**: Display response
+- [x] **Try-It (API Testing Sandbox)**: Method/path selection
+- [x] **Try-It**: Custom headers
+- [x] **Try-It**: JSON body
+- [x] **Try-It**: Send request
+- [x] **Try-It**: Display response
+- [x] **Try-It**: Environment selector
+- [x] **Try-It**: Production sandbox confirmation
 
-- [ ] **Code Samples**: curl
-- [ ] **Code Samples**: Python
-- [ ] **Code Samples**: JavaScript
+- [x] **Code Samples**: curl
+- [x] **Code Samples**: Python
+- [x] **Code Samples**: JavaScript
 
 ### Technical
 
-- [ ] Responsive design
-- [ ] Loading states
-- [ ] Error handling
-- [ ] Toast notifications
-- [ ] Dark mode (optional)
+- [x] Responsive design
+- [x] Loading states
+- [x] Error handling
+- [x] Toast notifications
+- [ ] Dark mode (not implemented - future enhancement)
 
 ---
 
@@ -587,7 +618,51 @@ npm run dev
 - The backend (Control Plane API) must expose the `/portal/*` endpoints
 - Credentials (client_secret, api_key) are only visible once at creation
 - Try-It goes through a backend proxy to automatically add the API Key
-- Keycloak: use the existing `stoa-platform` realm with a new `developer-portal` client
+- Keycloak: use the existing `stoa` realm with the `stoa-portal` client
+
+---
+
+## 🎉 Implementation Notes (CAB-246)
+
+### What Was Built
+
+The Developer Portal was implemented as a separate React application (`portal/`) distinct from the Console UI (`control-plane-ui/`):
+
+| Application | Purpose | URL | Keycloak Client |
+|------------|---------|-----|-----------------|
+| Console UI | API Provider (DevOps, Admin) | https://console.stoa.cab-i.com | control-plane-ui |
+| Developer Portal | API Consumer (Browse, Subscribe, Test) | https://portal.stoa.cab-i.com | stoa-portal |
+
+### Key Implementation Details
+
+1. **Project Structure**: Located in `portal/` directory (not `developer-portal/`)
+2. **Vite Dev Server**: Port 5173 (not 3001 as originally planned)
+3. **Keycloak Client**: `stoa-portal` (not `developer-portal`)
+4. **API Access**: Via Gateway at `apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`
+5. **OpenAPI Viewer**: Custom component (not swagger-ui-react)
+6. **State Management**: React Query (TanStack Query) for server state
+
+### Bonus Features Implemented
+
+- **MCP Tools Catalog**: Browse and test AI-powered tools
+- **Portal Modes**: Production vs Non-Production with different sandbox behaviors
+- **Environment Selector**: Support for multiple environments (dev, staging, prod)
+- **Sandbox Confirmation**: Modal confirmation for production API testing
+- **Test History**: Track recent API test requests
+
+### CI/CD
+
+- **Workflow**: `.github/workflows/stoa-portal-ci.yml`
+- **Docker Image**: Built on push to main
+- **Deployment**: Kubernetes via Helm chart
+
+### Future Enhancements
+
+- [ ] Dark mode theme
+- [ ] Non-production portal deployment (`portal.dev.stoa.cab-i.com`)
+- [ ] API usage analytics dashboard
+- [ ] Webhook management
+- [ ] Team collaboration features
 
 ---
 

@@ -1,0 +1,122 @@
+# CAB-279: Subscription CRD
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: subscriptions.stoa.cab-i.com
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  group: stoa.cab-i.com
+  names:
+    kind: Subscription
+    listKind: SubscriptionList
+    plural: subscriptions
+    singular: subscription
+    shortNames:
+      - sub
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - tenantId
+                - toolId
+                - subscriberId
+              properties:
+                tenantId:
+                  type: string
+                  description: ID of the tenant this subscription belongs to
+                toolId:
+                  type: string
+                  description: Full tool ID (namespace_toolname)
+                toolName:
+                  type: string
+                  description: Tool name without namespace prefix
+                toolNamespace:
+                  type: string
+                  description: Namespace where the tool is deployed
+                subscriberId:
+                  type: string
+                  description: User ID of the subscriber
+                subscriberEmail:
+                  type: string
+                  format: email
+                applicationId:
+                  type: string
+                  description: Application ID for grouping subscriptions
+                applicationName:
+                  type: string
+                  description: Human-readable application name
+                plan:
+                  type: string
+                  description: Subscription plan (e.g., standard, premium)
+                  default: standard
+                status:
+                  type: string
+                  enum: [pending, active, suspended, revoked, expired]
+                  default: pending
+                approvedBy:
+                  type: string
+                  description: User who approved the subscription
+                approvedAt:
+                  type: string
+                  format: date-time
+                revokedBy:
+                  type: string
+                revokedAt:
+                  type: string
+                  format: date-time
+                revokedReason:
+                  type: string
+                expiresAt:
+                  type: string
+                  format: date-time
+                quota:
+                  type: object
+                  properties:
+                    requestsPerDay:
+                      type: integer
+                      minimum: 1
+                    requestsPerMinute:
+                      type: integer
+                      minimum: 1
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Active, Suspended, Revoked, Expired]
+                apiKeyPrefix:
+                  type: string
+                  description: First 8 chars of API key for identification
+                usageToday:
+                  type: integer
+                lastUsed:
+                  type: string
+                  format: date-time
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Tenant
+          type: string
+          jsonPath: .spec.tenantId
+        - name: Tool
+          type: string
+          jsonPath: .spec.toolName
+        - name: Status
+          type: string
+          jsonPath: .spec.status
+        - name: Subscriber
+          type: string
+          jsonPath: .spec.subscriberId
+          priority: 1
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

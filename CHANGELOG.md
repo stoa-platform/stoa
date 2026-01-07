@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2026-01-07) - Demo Tenants Setup (CAB-279)
+
+> **Related Ticket**: CAB-279 - Setup 2 Demo Tenants for MVP
+
+- **Demo Tenants** (`deploy/demo-tenants/`)
+  - `team-alpha.yaml` - Sales & Finance tenant (CRM, Billing tools)
+  - `team-beta.yaml` - Operations tenant (Inventory, Notifications tools)
+  - `subscriptions.yaml` - Pre-approved tool subscriptions
+  - `kustomization.yaml` - Kustomize deployment configuration
+  - `README.md` - Deployment and testing documentation
+
+- **Seed Script** (`scripts/seed-demo-data.py`)
+  - Creates tenants via Control-Plane API
+  - Assigns E2E test users to tenants
+  - Creates tool subscriptions with API keys
+  - Supports Keycloak authentication
+  - Prints access matrix summary
+
+- **User-Tenant Assignments**
+  - `e2e-tenant-admin` → team-alpha (admin)
+  - `e2e-devops` → team-beta (admin)
+  - `e2e-viewer` → both tenants (viewer)
+
 ### Added (2026-01-07) - Demo MCP Tools for Multi-Tenant Isolation (CAB-290)
 
 > **Related Ticket**: CAB-290 - Demo MCP Tools

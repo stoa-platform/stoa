@@ -1,0 +1,112 @@
+# CAB-279: Demo Tool Subscriptions
+# Purpose: Pre-approved subscriptions for demo tenants
+---
+# Team Alpha Subscriptions
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Subscription
+metadata:
+  name: team-alpha-crm-search
+  namespace: stoa-system
+  labels:
+    stoa.cab-i.com/tenant: team-alpha
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/created-by: cab-279
+spec:
+  tenantId: team-alpha
+  toolId: team_alpha_crm_search
+  toolName: crm-search
+  toolNamespace: team-alpha
+  subscriberId: e2e-tenant-admin
+  subscriberEmail: alice@demo.stoa.io
+  applicationId: demo-app-alpha
+  applicationName: "Alpha Demo Application"
+  plan: standard
+  status: active
+  approvedBy: system
+  approvedAt: "2026-01-07T00:00:00Z"
+  quota:
+    requestsPerDay: 1000
+    requestsPerMinute: 60
+---
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Subscription
+metadata:
+  name: team-alpha-billing-invoice
+  namespace: stoa-system
+  labels:
+    stoa.cab-i.com/tenant: team-alpha
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/created-by: cab-279
+spec:
+  tenantId: team-alpha
+  toolId: team_alpha_billing_invoice
+  toolName: billing-invoice
+  toolNamespace: team-alpha
+  subscriberId: e2e-tenant-admin
+  subscriberEmail: alice@demo.stoa.io
+  applicationId: demo-app-alpha
+  applicationName: "Alpha Demo Application"
+  plan: standard
+  status: active
+  approvedBy: system
+  approvedAt: "2026-01-07T00:00:00Z"
+  quota:
+    requestsPerDay: 500
+    requestsPerMinute: 30
+---
+# Team Beta Subscriptions
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Subscription
+metadata:
+  name: team-beta-inventory-lookup
+  namespace: stoa-system
+  labels:
+    stoa.cab-i.com/tenant: team-beta
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/created-by: cab-279
+spec:
+  tenantId: team-beta
+  toolId: team_beta_inventory_lookup
+  toolName: inventory-lookup
+  toolNamespace: team-beta
+  subscriberId: e2e-devops
+  subscriberEmail: bob@demo.stoa.io
+  applicationId: demo-app-beta
+  applicationName: "Beta Demo Application"
+  plan: standard
+  status: active
+  approvedBy: system
+  approvedAt: "2026-01-07T00:00:00Z"
+  quota:
+    requestsPerDay: 2000
+    requestsPerMinute: 120
+---
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Subscription
+metadata:
+  name: team-beta-notifications-send
+  namespace: stoa-system
+  labels:
+    stoa.cab-i.com/tenant: team-beta
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/created-by: cab-279
+spec:
+  tenantId: team-beta
+  toolId: team_beta_notifications_send
+  toolName: notifications-send
+  toolNamespace: team-beta
+  subscriberId: e2e-devops
+  subscriberEmail: bob@demo.stoa.io
+  applicationId: demo-app-beta
+  applicationName: "Beta Demo Application"
+  plan: standard
+  status: active
+  approvedBy: system
+  approvedAt: "2026-01-07T00:00:00Z"
+  quota:
+    requestsPerDay: 1000
+    requestsPerMinute: 100

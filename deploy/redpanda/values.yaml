@@ -1,0 +1,55 @@
+# Redpanda Helm Values for STOA Platform
+# Single-node development configuration
+
+# Cluster settings
+statefulset:
+  replicas: 1
+
+# Resource limits for dev environment
+resources:
+  cpu:
+    cores: 1
+  memory:
+    container:
+      max: 2Gi
+
+# Storage
+storage:
+  persistentVolume:
+    enabled: true
+    size: 10Gi
+    storageClass: gp2
+
+# TLS disabled for internal cluster communication
+tls:
+  enabled: false
+
+# External access disabled
+external:
+  enabled: false
+
+# Authentication disabled for simplicity
+auth:
+  sasl:
+    enabled: false
+
+# Listeners
+listeners:
+  kafka:
+    port: 9092
+  admin:
+    port: 9644
+  schemaRegistry:
+    enabled: false
+
+# Console (Redpanda Console UI)
+console:
+  enabled: true
+  config:
+    kafka:
+      brokers:
+        - redpanda-0.redpanda.stoa-system.svc.cluster.local:9092
+
+# Monitoring
+monitoring:
+  enabled: false

@@ -1,0 +1,128 @@
+# CAB-290: Demo MCP Tool - Billing Invoice
+# Tenant: team-alpha
+# Purpose: Illustrate multi-tenant isolation with mock invoice generation
+---
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tool
+metadata:
+  name: billing-invoice
+  namespace: team-alpha
+  labels:
+    stoa.cab-i.com/tenant: team-alpha
+    stoa.cab-i.com/category: finance
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/owner: team-alpha-admin
+    stoa.cab-i.com/created-by: cab-290
+spec:
+  displayName: "Billing Invoice Generator"
+  description: "Generate invoices for customers. Creates PDF invoices with line items, taxes, and payment terms based on customer orders."
+  version: "1.0.0"
+  tags:
+    - billing
+    - invoice
+    - finance
+    - pdf
+
+  # Mock endpoint - returns static demo data
+  endpoint: "https://httpbin.org/post"
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      customer_id:
+        type: string
+        description: "Customer ID to generate invoice for"
+      order_ids:
+        type: array
+        items:
+          type: string
+        description: "List of order IDs to include in invoice"
+      due_days:
+        type: integer
+        description: "Payment due in days"
+        default: 30
+      include_tax:
+        type: boolean
+        description: "Include tax calculations"
+        default: true
+      currency:
+        type: string
+        description: "Invoice currency (ISO 4217)"
+        default: "EUR"
+        enum:
+          - EUR
+          - USD
+          - GBP
+    required:
+      - customer_id
+
+  authentication:
+    type: none
+
+  timeout: "60s"
+
+  rateLimit:
+    requestsPerMinute: 30
+    burst: 5
+
+  enabled: true
+
+  apiRef:
+    name: "Billing-API"
+    version: "1.5"
+    operationId: "generateInvoice"
+---
+# ConfigMap with mock response data for demo purposes
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: billing-invoice-mock-data
+  namespace: team-alpha
+  labels:
+    stoa.cab-i.com/tenant: team-alpha
+    stoa.cab-i.com/tool: billing-invoice
+data:
+  response.json: |
+    {
+      "success": true,
+      "tool": "billing-invoice",
+      "tenant": "team-alpha",
+      "data": {
+        "invoice": {
+          "invoice_id": "INV-2026-00142",
+          "customer_id": "CUST-001",
+          "customer_name": "ACME Corporation",
+          "issue_date": "2026-01-07",
+          "due_date": "2026-02-06",
+          "status": "generated",
+          "currency": "EUR",
+          "line_items": [
+            {
+              "description": "API Gateway Enterprise License - Monthly",
+              "quantity": 1,
+              "unit_price": 2500.00,
+              "total": 2500.00
+            },
+            {
+              "description": "Premium Support Package",
+              "quantity": 1,
+              "unit_price": 500.00,
+              "total": 500.00
+            },
+            {
+              "description": "Additional API Calls (10M)",
+              "quantity": 3,
+              "unit_price": 150.00,
+              "total": 450.00
+            }
+          ],
+          "subtotal": 3450.00,
+          "tax_rate": 0.20,
+          "tax_amount": 690.00,
+          "total": 4140.00,
+          "pdf_url": "https://billing.stoa.cab-i.com/invoices/INV-2026-00142.pdf"
+        }
+      }
+    }

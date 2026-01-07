@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2026-01-07) - Demo MCP Tools for Multi-Tenant Isolation (CAB-290)
+
+> **Related Ticket**: CAB-290 - Demo MCP Tools
+
+- **Demo Tools** (`deploy/demo-tools/`)
+  - `crm-search.yaml` - CRM customer search (team-alpha tenant)
+  - `billing-invoice.yaml` - Invoice generator (team-alpha tenant)
+  - `inventory-lookup.yaml` - Stock level checker (team-beta tenant)
+  - `notifications-send.yaml` - Multi-channel notifications (team-beta tenant)
+  - `kustomization.yaml` - Kustomize deployment
+  - `README.md` - Usage documentation and testing guide
+
+- **Multi-Tenant Isolation Demo**
+  - team-alpha: Sales & Finance tools (crm-search, billing-invoice)
+  - team-beta: Operations & Communications tools (inventory-lookup, notifications-send)
+  - Namespace-based isolation with OPA policy enforcement
+  - Mock ConfigMaps with sample response data
+
 ### Added (2026-01-07) - API Subscriptions System (CAB-247)
 
 > **Related Ticket**: CAB-247 - API Subscriptions & API Key Management

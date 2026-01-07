@@ -1,0 +1,124 @@
+# CAB-290: Demo MCP Tool - CRM Search
+# Tenant: team-alpha
+# Purpose: Illustrate multi-tenant isolation with mock CRM search functionality
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-alpha
+  labels:
+    stoa.cab-i.com/tenant: team-alpha
+    stoa.cab-i.com/environment: demo
+---
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tool
+metadata:
+  name: crm-search
+  namespace: team-alpha
+  labels:
+    stoa.cab-i.com/tenant: team-alpha
+    stoa.cab-i.com/category: sales
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/owner: team-alpha-admin
+    stoa.cab-i.com/created-by: cab-290
+spec:
+  displayName: "CRM Search"
+  description: "Search customers in CRM database. Returns matching customer records based on query criteria including name, email, or company."
+  version: "1.0.0"
+  tags:
+    - crm
+    - customers
+    - search
+    - sales
+
+  # Mock endpoint - returns static demo data
+  # In production, this would point to an actual CRM API
+  endpoint: "https://httpbin.org/post"
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      query:
+        type: string
+        description: "Search query (customer name, email, or company)"
+      limit:
+        type: integer
+        description: "Maximum number of results to return"
+        default: 10
+      include_inactive:
+        type: boolean
+        description: "Include inactive customers in results"
+        default: false
+    required:
+      - query
+
+  authentication:
+    type: none
+
+  timeout: "30s"
+
+  rateLimit:
+    requestsPerMinute: 60
+    burst: 10
+
+  enabled: true
+
+  apiRef:
+    name: "CRM-API"
+    version: "2.0"
+    operationId: "searchCustomers"
+---
+# ConfigMap with mock response data for demo purposes
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crm-search-mock-data
+  namespace: team-alpha
+  labels:
+    stoa.cab-i.com/tenant: team-alpha
+    stoa.cab-i.com/tool: crm-search
+data:
+  response.json: |
+    {
+      "success": true,
+      "tool": "crm-search",
+      "tenant": "team-alpha",
+      "data": {
+        "customers": [
+          {
+            "id": "CUST-001",
+            "name": "ACME Corporation",
+            "email": "contact@acme.com",
+            "company": "ACME Corp",
+            "status": "active",
+            "created_at": "2025-03-15T10:00:00Z",
+            "total_orders": 47,
+            "lifetime_value": 125000.00
+          },
+          {
+            "id": "CUST-002",
+            "name": "TechStart Inc",
+            "email": "info@techstart.io",
+            "company": "TechStart Inc",
+            "status": "active",
+            "created_at": "2025-06-22T14:30:00Z",
+            "total_orders": 23,
+            "lifetime_value": 67500.00
+          },
+          {
+            "id": "CUST-003",
+            "name": "Global Logistics",
+            "email": "sales@globallogistics.com",
+            "company": "Global Logistics Ltd",
+            "status": "active",
+            "created_at": "2024-11-08T09:15:00Z",
+            "total_orders": 156,
+            "lifetime_value": 450000.00
+          }
+        ],
+        "total": 3,
+        "query_time_ms": 12
+      }
+    }

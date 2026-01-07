@@ -1,0 +1,87 @@
+# CAB-279: Demo Tenant - Team Alpha
+# Purpose: Sales & Finance team with CRM and Billing tools
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-alpha
+  labels:
+    stoa.cab-i.com/tenant: team-alpha
+    stoa.cab-i.com/environment: demo
+  annotations:
+    stoa.cab-i.com/description: "Team Alpha - Sales & Finance"
+    stoa.cab-i.com/created-by: cab-279
+---
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tenant
+metadata:
+  name: team-alpha
+  namespace: stoa-system
+  labels:
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/created-by: cab-279
+spec:
+  displayName: "Team Alpha - Sales & Finance"
+  description: "Demo tenant for CRM and Billing tools"
+
+  # Contact information
+  contact:
+    name: "Alice Demo"
+    email: "alice@demo.stoa.io"
+
+  # Quotas and limits
+  quota:
+    maxSubscriptions: 10
+    maxRequestsPerDay: 10000
+    maxToolsPerNamespace: 20
+
+  # Rate limiting
+  rateLimit:
+    requestsPerMinute: 100
+    burst: 20
+
+  # Assigned users (mapped from Keycloak)
+  users:
+    - userId: "e2e-tenant-admin"
+      role: admin
+      email: "alice@demo.stoa.io"
+    - userId: "e2e-viewer"
+      role: viewer
+      email: "viewer@demo.stoa.io"
+
+  # Tools accessible to this tenant
+  allowedTools:
+    - team_alpha_crm_search
+    - team_alpha_billing_invoice
+
+  # Namespace binding
+  namespaces:
+    - team-alpha
+
+  enabled: true
+---
+# ConfigMap with tenant metadata for reference
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: team-alpha-config
+  namespace: team-alpha
+  labels:
+    stoa.cab-i.com/tenant: team-alpha
+data:
+  tenant.json: |
+    {
+      "id": "team-alpha",
+      "displayName": "Team Alpha - Sales & Finance",
+      "description": "Demo tenant for CRM and Billing tools",
+      "tools": ["crm-search", "billing-invoice"],
+      "users": [
+        {"id": "e2e-tenant-admin", "role": "admin", "email": "alice@demo.stoa.io"},
+        {"id": "e2e-viewer", "role": "viewer", "email": "viewer@demo.stoa.io"}
+      ],
+      "quota": {
+        "maxSubscriptions": 10,
+        "maxRequestsPerDay": 10000
+      }
+    }

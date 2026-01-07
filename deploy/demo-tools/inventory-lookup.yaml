@@ -1,0 +1,135 @@
+# CAB-290: Demo MCP Tool - Inventory Lookup
+# Tenant: team-beta
+# Purpose: Illustrate multi-tenant isolation with mock inventory check
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-beta
+  labels:
+    stoa.cab-i.com/tenant: team-beta
+    stoa.cab-i.com/environment: demo
+---
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tool
+metadata:
+  name: inventory-lookup
+  namespace: team-beta
+  labels:
+    stoa.cab-i.com/tenant: team-beta
+    stoa.cab-i.com/category: operations
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/owner: team-beta-admin
+    stoa.cab-i.com/created-by: cab-290
+spec:
+  displayName: "Inventory Lookup"
+  description: "Check stock levels and product availability across warehouses. Returns real-time inventory data including quantity, location, and reorder status."
+  version: "1.0.0"
+  tags:
+    - inventory
+    - stock
+    - warehouse
+    - operations
+
+  # Mock endpoint - returns static demo data
+  endpoint: "https://httpbin.org/post"
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      sku:
+        type: string
+        description: "Product SKU to look up"
+      warehouse_id:
+        type: string
+        description: "Specific warehouse ID (optional, all if not specified)"
+      include_reserved:
+        type: boolean
+        description: "Include reserved stock in calculations"
+        default: true
+      check_reorder:
+        type: boolean
+        description: "Check if reorder is needed"
+        default: true
+    required:
+      - sku
+
+  authentication:
+    type: none
+
+  timeout: "15s"
+
+  rateLimit:
+    requestsPerMinute: 120
+    burst: 20
+
+  enabled: true
+
+  apiRef:
+    name: "Inventory-API"
+    version: "3.0"
+    operationId: "getStockLevel"
+---
+# ConfigMap with mock response data for demo purposes
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inventory-lookup-mock-data
+  namespace: team-beta
+  labels:
+    stoa.cab-i.com/tenant: team-beta
+    stoa.cab-i.com/tool: inventory-lookup
+data:
+  response.json: |
+    {
+      "success": true,
+      "tool": "inventory-lookup",
+      "tenant": "team-beta",
+      "data": {
+        "product": {
+          "sku": "WIDGET-PRO-500",
+          "name": "Widget Pro 500",
+          "category": "Electronics",
+          "unit": "piece"
+        },
+        "inventory": {
+          "total_available": 1247,
+          "total_reserved": 89,
+          "total_on_hand": 1336,
+          "warehouses": [
+            {
+              "warehouse_id": "WH-EU-01",
+              "location": "Amsterdam, NL",
+              "available": 523,
+              "reserved": 45,
+              "on_hand": 568,
+              "last_updated": "2026-01-07T11:45:00Z"
+            },
+            {
+              "warehouse_id": "WH-EU-02",
+              "location": "Frankfurt, DE",
+              "available": 412,
+              "reserved": 32,
+              "on_hand": 444,
+              "last_updated": "2026-01-07T11:42:00Z"
+            },
+            {
+              "warehouse_id": "WH-EU-03",
+              "location": "Paris, FR",
+              "available": 312,
+              "reserved": 12,
+              "on_hand": 324,
+              "last_updated": "2026-01-07T11:40:00Z"
+            }
+          ]
+        },
+        "reorder": {
+          "needs_reorder": false,
+          "reorder_point": 500,
+          "reorder_quantity": 1000,
+          "lead_time_days": 14
+        }
+      }
+    }

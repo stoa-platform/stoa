@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from .config import settings
 from .logging_config import configure_logging, get_logger
-from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway
+from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .middleware.metrics import MetricsMiddleware, get_metrics
 from .services.gateway_service import gateway_service
@@ -136,6 +136,7 @@ app = FastAPI(
         {"name": "Webhooks", "description": "GitLab webhook handlers for GitOps"},
         {"name": "Traces", "description": "Pipeline monitoring and tracing"},
         {"name": "Gateway", "description": "webMethods Gateway administration via OIDC proxy"},
+        {"name": "Subscriptions", "description": "API subscription and API key management"},
     ],
     contact={
         "name": "CAB Ingenierie",
@@ -168,6 +169,7 @@ app.include_router(events.router)
 app.include_router(webhooks.router)
 app.include_router(traces.router)
 app.include_router(gateway.router)
+app.include_router(subscriptions.router)
 
 @app.get("/health")
 async def health():

@@ -68,6 +68,16 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"  # json, text
 
+    # Database (PostgreSQL)
+    DATABASE_URL: str = "postgresql+asyncpg://stoa:stoa@localhost:5432/stoa"
+    DATABASE_POOL_SIZE: int = 5
+    DATABASE_MAX_OVERFLOW: int = 10
+
+    @property
+    def database_url_sync(self) -> str:
+        """Return sync database URL for Alembic migrations"""
+        return self.DATABASE_URL.replace("+asyncpg", "")
+
     @property
     def cors_origins_list(self) -> List[str]:
         """Return CORS origins as a list"""

@@ -8,6 +8,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2026-01-07) - E2E Testing Infrastructure (CAB-238)
+
+> **Related Ticket**: CAB-238 - E2E Testing Infrastructure
+
+- **E2E Test Framework** (`tests/e2e/`)
+  - **Stack**: Playwright + pytest for browser automation
+  - **Authentication**: Keycloak OIDC integration with console.stoa.cab-i.com
+
+  - **Test Fixtures** (`conftest.py`):
+    - `keycloak_login` - Factory fixture for role-based login
+    - `authenticated_page` - Pre-authenticated page fixture
+    - `get_token` - JWT access token extraction from browser storage
+    - AWS Secrets Manager integration for secure credential storage
+
+  - **Test Scenarios** (`scenarios/test_auth_flow.py`):
+    - `test_redirect_to_keycloak_when_unauthenticated` - Auth redirect validation
+    - `test_admin_login_success` - Admin (cpi-admin) login flow
+    - `test_tenant_admin_login_success` - Tenant admin login flow
+    - `test_viewer_login_success` - Viewer (read-only) login flow
+    - `test_invalid_credentials_shows_error` - Error handling validation
+    - `test_token_contains_required_claims` - JWT claims validation
+    - `test_logout_clears_session` - Logout flow validation
+    - `test_accessing_protected_route_after_logout` - Session protection
+    - `test_token_refresh_before_expiry` - Token refresh mechanism
+
+  - **Test Users in Keycloak** (realm: `stoa`):
+    - `e2e-admin` - cpi-admin role (stoa:admin, stoa:write, stoa:read)
+    - `e2e-tenant-admin` - tenant-admin role (stoa:write, stoa:read)
+    - `e2e-devops` - devops role (stoa:write, stoa:read)
+    - `e2e-viewer` - viewer role (stoa:read)
+
+  - **Setup Script** (`scripts/setup_test_users.sh`):
+    - Creates test users in Keycloak via Admin API
+    - Assigns RBAC roles to users
+    - Stores credentials in AWS Secrets Manager (`stoa/e2e-test-credentials`)
+
+  - **Configuration**:
+    - `pytest.ini` - Test markers (auth, smoke, slow)
+    - `fixtures/users.json` - User configuration with role mappings
+    - Environment variables for Keycloak/Console URLs
+
+  - **Documentation** (`docs/E2E-TESTING.md`):
+    - Setup and installation guide
+    - Running tests locally and in CI/CD
+    - Fixture usage examples
+    - GitLab CI and GitHub Actions integration
+
 ### Added (2026-01-05) - Developer Portal Enhancement (CAB-246)
 
 > **Related Ticket**: CAB-246 - STOA Developer Portal Enhancement

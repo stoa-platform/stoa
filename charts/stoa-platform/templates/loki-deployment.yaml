@@ -109,7 +109,7 @@ spec:
         {{- include "stoa-platform.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: loki
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/loki-deployment.yaml") . | sha256sum }}
+        checksum/config: {{ .Values.loki | toYaml | sha256sum }}
     spec:
       securityContext:
         fsGroup: 10001

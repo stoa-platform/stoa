@@ -1,0 +1,52 @@
+{{/*
+Loki Ingress - deployed in the same namespace as the Helm release.
+
+For Grafana and Prometheus ingresses, apply the standalone manifests:
+  kubectl apply -f deploy/observability/grafana-ingress.yaml -n monitoring
+  kubectl apply -f deploy/observability/prometheus-ingress.yaml -n monitoring
+
+These services are in the monitoring namespace (kube-prometheus-stack),
+which is different from the stoa-system namespace where this Helm chart is deployed.
+*/}}
+{{- if and .Values.loki.enabled .Values.observability.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-loki
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: loki
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.observability.ingress.clusterIssuer | default "letsencrypt-prod" }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    {{- if .Values.observability.loki.basicAuth.enabled }}
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: {{ .Values.observability.loki.basicAuth.secretName | default "loki-basic-auth" }}
+    nginx.ingress.kubernetes.io/auth-realm: "Loki - Authentication Required"
+    {{- end }}
+    {{- with .Values.observability.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.observability.ingress.className | default "nginx" }}
+  tls:
+    - hosts:
+        - {{ .Values.observability.loki.host | default (printf "loki.%s" .Values.global.baseDomain) }}
+      secretName: {{ include "stoa-platform.fullname" . }}-loki-tls
+  rules:
+    - host: {{ .Values.observability.loki.host | default (printf "loki.%s" .Values.global.baseDomain) }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "stoa-platform.fullname" . }}-loki
+                port:
+                  number: 3100
+{{- end }}

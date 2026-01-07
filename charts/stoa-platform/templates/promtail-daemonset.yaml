@@ -153,7 +153,7 @@ spec:
         {{- include "stoa-platform.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: promtail
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/promtail-daemonset.yaml") . | sha256sum }}
+        checksum/config: {{ .Values.promtail | toYaml | sha256sum }}
     spec:
       serviceAccountName: {{ include "stoa-platform.fullname" . }}-promtail
       securityContext:

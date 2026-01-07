@@ -131,7 +131,7 @@ spec:
             slo: availability
           annotations:
             summary: "API availability below 99.9% SLO"
-            description: "Current availability is {{ $value | humanizePercentage }}. SLO target is 99.9%."
+            description: "Current availability is {{ "{{" }} $value | humanizePercentage {{ "}}" }}. SLO target is 99.9%."
             runbook_url: "https://github.com/example/stoa/docs/runbooks/critical/availability-breach.md"
 
         - alert: SLOAvailabilityWarning
@@ -143,7 +143,7 @@ spec:
             slo: availability
           annotations:
             summary: "API availability approaching SLO threshold"
-            description: "Current availability is {{ $value | humanizePercentage }}. Getting close to 99.9% SLO."
+            description: "Current availability is {{ "{{" }} $value | humanizePercentage {{ "}}" }}. Getting close to 99.9% SLO."
 
         # ---------------------------------------------------------------------
         # Latency Alerts
@@ -157,7 +157,7 @@ spec:
             slo: latency
           annotations:
             summary: "API p95 latency exceeds 500ms SLO"
-            description: "Current p95 latency is {{ $value | humanizeDuration }}. SLO target is 500ms."
+            description: "Current p95 latency is {{ "{{" }} $value | humanizeDuration {{ "}}" }}. SLO target is 500ms."
 
         - alert: SLOLatencyP99Breach
           expr: slo:api_latency_p99:seconds > 1
@@ -168,7 +168,7 @@ spec:
             slo: latency
           annotations:
             summary: "API p99 latency exceeds 1000ms SLO"
-            description: "Current p99 latency is {{ $value | humanizeDuration }}. SLO target is 1000ms."
+            description: "Current p99 latency is {{ "{{" }} $value | humanizeDuration {{ "}}" }}. SLO target is 1000ms."
 
         - alert: SLOLatencyCritical
           expr: slo:api_latency_p95:seconds > 2
@@ -179,7 +179,7 @@ spec:
             slo: latency
           annotations:
             summary: "API latency critically high"
-            description: "p95 latency is {{ $value | humanizeDuration }}. Service may be degraded."
+            description: "p95 latency is {{ "{{" }} $value | humanizeDuration {{ "}}" }}. Service may be degraded."
 
         # ---------------------------------------------------------------------
         # Error Rate Alerts
@@ -193,7 +193,7 @@ spec:
             slo: error_rate
           annotations:
             summary: "API error rate exceeds 0.1% SLO"
-            description: "Current error rate is {{ $value | humanizePercentage }}. SLO target is < 0.1%."
+            description: "Current error rate is {{ "{{" }} $value | humanizePercentage {{ "}}" }}. SLO target is < 0.1%."
 
         - alert: SLOErrorRateWarning
           expr: slo:api_error_rate:ratio > 0.0005 and slo:api_error_rate:ratio <= 0.001
@@ -204,7 +204,7 @@ spec:
             slo: error_rate
           annotations:
             summary: "API error rate approaching SLO threshold"
-            description: "Current error rate is {{ $value | humanizePercentage }}."
+            description: "Current error rate is {{ "{{" }} $value | humanizePercentage {{ "}}" }}."
 
         # ---------------------------------------------------------------------
         # Error Budget Alerts
@@ -218,7 +218,7 @@ spec:
             slo: error_budget
           annotations:
             summary: "Error budget below 20%"
-            description: "Only {{ $value | humanizePercentage }} of monthly error budget remaining. Consider freezing non-critical changes."
+            description: "Only {{ "{{" }} $value | humanizePercentage {{ "}}" }} of monthly error budget remaining. Consider freezing non-critical changes."
 
         - alert: ErrorBudgetExhausted
           expr: slo:error_budget:remaining_ratio < 0.05
@@ -229,7 +229,7 @@ spec:
             slo: error_budget
           annotations:
             summary: "Error budget nearly exhausted"
-            description: "Only {{ $value | humanizePercentage }} of error budget remaining. Prioritize reliability work."
+            description: "Only {{ "{{" }} $value | humanizePercentage {{ "}}" }} of error budget remaining. Prioritize reliability work."
 
         # ---------------------------------------------------------------------
         # Component-Specific Alerts
@@ -264,5 +264,5 @@ spec:
             channel: ops-alerts
           annotations:
             summary: "High request rate detected"
-            description: "Current request rate is {{ $value }} req/s. Consider scaling."
+            description: "Current request rate is {{ "{{" }} $value {{ "}}" }} req/s. Consider scaling."
 {{- end }}

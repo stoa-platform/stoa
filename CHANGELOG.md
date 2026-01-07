@@ -73,6 +73,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - alembic==1.13.1
   - psycopg2-binary==2.9.9
 
+- **Database Deployment** (`deploy/database/`)
+  - `postgres-statefulset.yaml` - PostgreSQL 15 StatefulSet for subscriptions
+  - `alembic-migration-job.yaml` - Kubernetes Job for running migrations
+  - Service: `control-plane-db.stoa-system.svc.cluster.local:5432`
+  - Storage: 10Gi PVC with gp2 storage class
+
 ### Added (2026-01-07) - Loki Log Aggregation (CAB-281)
 
 > **Related Ticket**: CAB-281 - Loki Log Aggregation Implementation

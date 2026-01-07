@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2026-01-07) - MCP Gateway Traceability Dashboard (CAB-282)
+
+> **Related Ticket**: CAB-282 - Dashboard Grafana MCP Traceability
+
+- **Grafana Dashboard** (`deploy/grafana/dashboards/`)
+  - `mcp-gateway-traceability.json` - Full dashboard definition
+  - `mcp-gateway-configmap.yaml` - K8s ConfigMap for Grafana sidecar
+
+- **Dashboard Panels**
+  - Real-time MCP logs via Loki
+  - Calls by Tenant (bar chart, 5m rate)
+  - Latency P95 by Tool (time series)
+  - Error Rate / Success Rate (stat panels)
+  - Total Calls Today (stat)
+  - Calls by Tool (pie chart)
+  - Request Rate by Status (stacked time series)
+  - Top 10 Tools by Invocations (table)
+
+- **Template Variables**
+  - `$tenant` - Filter by tenant ID
+  - `$tool` - Filter by tool name
+  - `$search` - Full-text log search
+
 ### Added (2026-01-07) - Demo Tenants Setup (CAB-279)
 
 > **Related Ticket**: CAB-279 - Setup 2 Demo Tenants for MVP

@@ -8,6 +8,71 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2026-01-07) - API Subscriptions System (CAB-247)
+
+> **Related Ticket**: CAB-247 - API Subscriptions & API Key Management
+
+- **Database Layer** (`control-plane-api/`)
+  - SQLAlchemy + asyncpg for async PostgreSQL support
+  - Alembic migrations infrastructure
+  - `src/database.py` - Async session management with connection pooling
+  - `src/config.py` - DATABASE_URL configuration
+
+- **Subscription Model** (`src/models/subscription.py`)
+  - SQLAlchemy model with UUID primary key
+  - Fields: application_id, subscriber_id, api_id, tenant_id, plan_id
+  - API key storage: hashed (SHA-256), prefix for display
+  - Status enum: pending, active, suspended, revoked, expired
+  - Audit fields: approved_by, revoked_by, timestamps
+  - Composite indexes for common queries
+
+- **Pydantic Schemas** (`src/schemas/subscription.py`)
+  - `SubscriptionCreate` - New subscription request
+  - `SubscriptionResponse` - Subscription details
+  - `SubscriptionListResponse` - Paginated list with total/pages
+  - `SubscriptionApprove` - Approval with optional expiration
+  - `SubscriptionRevoke` - Revocation with reason
+  - `APIKeyResponse` - API key shown once at creation
+
+- **Repository** (`src/repositories/subscription.py`)
+  - Async CRUD operations with SQLAlchemy
+  - Methods: create, get_by_id, get_by_api_key_hash
+  - List methods: by_subscriber, by_tenant, by_api, pending
+  - Status management with actor tracking
+  - Statistics aggregation
+
+- **API Key Service** (`src/services/api_key.py`)
+  - Key format: `stoa_sk_{32 hex chars}` (128 bits entropy)
+  - SHA-256 hashing for secure storage
+  - Format validation and key masking
+
+- **REST API Endpoints** (`src/routers/subscriptions.py`)
+  - **Subscriber endpoints** (Developer Portal):
+    - `POST /v1/subscriptions` - Create subscription (returns API key once)
+    - `GET /v1/subscriptions/my` - List my subscriptions
+    - `GET /v1/subscriptions/{id}` - Get subscription details
+    - `DELETE /v1/subscriptions/{id}` - Cancel subscription
+  - **Admin endpoints** (Control Plane):
+    - `GET /v1/subscriptions/tenant/{tenant_id}` - List tenant subscriptions
+    - `GET /v1/subscriptions/tenant/{tenant_id}/pending` - Pending approvals
+    - `POST /v1/subscriptions/{id}/approve` - Approve subscription
+    - `POST /v1/subscriptions/{id}/revoke` - Revoke with reason
+    - `POST /v1/subscriptions/{id}/suspend` - Suspend subscription
+    - `POST /v1/subscriptions/{id}/reactivate` - Reactivate subscription
+  - **Gateway endpoint**:
+    - `POST /v1/subscriptions/validate-key` - Validate API key
+
+- **Alembic Migration** (`alembic/versions/001_create_subscriptions_table.py`)
+  - Creates subscriptions table with all columns
+  - Indexes: application_id, subscriber_id, api_id, tenant_id
+  - Composite indexes: tenant+api, subscriber+status, application+api
+
+- **Dependencies Added** (`requirements.txt`)
+  - sqlalchemy[asyncio]==2.0.25
+  - asyncpg==0.29.0
+  - alembic==1.13.1
+  - psycopg2-binary==2.9.9
+
 ### Added (2026-01-07) - Loki Log Aggregation (CAB-281)
 
 > **Related Ticket**: CAB-281 - Loki Log Aggregation Implementation

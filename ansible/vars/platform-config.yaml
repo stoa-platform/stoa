@@ -217,3 +217,33 @@ scope_naming:
     - admin
     - read
     - write
+
+# =============================================================================
+# DATABASE CONFIGURATION (CAB-247)
+# =============================================================================
+database:
+  # PostgreSQL for Subscriptions
+  host: "control-plane-db.stoa-system.svc.cluster.local"
+  port: 5432
+  name: stoa
+  user: stoa
+  # password: Set via environment or secrets
+
+  # Connection string patterns
+  url_sync: "postgresql://{{ database.user }}:{{ db_password }}@{{ database.host }}:{{ database.port }}/{{ database.name }}"
+  url_async: "postgresql+asyncpg://{{ database.user }}:{{ db_password }}@{{ database.host }}:{{ database.port }}/{{ database.name }}"
+
+  # Storage
+  storage:
+    size: 10Gi
+    class: gp2
+
+# =============================================================================
+# KAFKA / REDPANDA CONFIGURATION
+# =============================================================================
+kafka:
+  bootstrap_servers: "redpanda.stoa-system.svc.cluster.local:9092"
+  security_protocol: PLAINTEXT
+  topics:
+    deploy_requests: deploy-requests
+    metering_events: stoa.metering.events

@@ -3,6 +3,8 @@ E2E Authentication Flow Tests (CAB-238)
 Tests Keycloak authentication for STOA Console
 """
 
+import re
+
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -15,14 +17,23 @@ class TestAuthenticationFlow:
     def test_redirect_to_keycloak_when_unauthenticated(
         self, page: Page, keycloak_config: dict
     ):
-        """Verify unauthenticated users are redirected to Keycloak."""
+        """Verify unauthenticated users are redirected to login page."""
         # Navigate to console
         page.goto(keycloak_config["console_url"])
 
-        # Should redirect to Keycloak login
-        expect(page).to_have_url_matching(f"{keycloak_config['url']}.*")
+        # Wait for either console login page or Keycloak form
+        page.wait_for_selector(
+            "#username, button:has-text('Login with Keycloak'), button:has-text('Login')",
+            timeout=15000
+        )
 
-        # Keycloak login form should be visible
+        # If we're on console /login page, click login button to go to Keycloak
+        login_button = page.locator("button:has-text('Login with Keycloak'), button:has-text('Login')")
+        if login_button.count() > 0 and "/login" in page.url:
+            login_button.first.click()
+            page.wait_for_selector("#username", timeout=10000)
+
+        # Should now be on Keycloak - verify login form is visible
         expect(page.locator("#username")).to_be_visible()
         expect(page.locator("#password")).to_be_visible()
         expect(page.locator("#kc-login")).to_be_visible()
@@ -34,8 +45,11 @@ class TestAuthenticationFlow:
         # Perform login
         result = keycloak_login("admin")
 
-        # Verify redirect to console
-        expect(page).to_have_url_matching(f"{keycloak_config['console_url']}.*")
+        # Verify we're on console (not login/auth pages)
+        current_url = page.url
+        assert keycloak_config["console_url"] in current_url
+        assert "/login" not in current_url
+        assert "auth.stoa.cab-i.com" not in current_url
 
         # Verify user info
         assert result["role"] == "admin"
@@ -51,7 +65,8 @@ class TestAuthenticationFlow:
         """Test successful tenant admin login flow."""
         result = keycloak_login("tenant_admin")
 
-        expect(page).to_have_url_matching(f"{keycloak_config['console_url']}.*")
+        current_url = page.url
+        assert keycloak_config["console_url"] in current_url
 
         assert result["role"] == "tenant_admin"
         assert "stoa:write" in result["scopes"]
@@ -66,7 +81,8 @@ class TestAuthenticationFlow:
         """Test successful viewer login flow."""
         result = keycloak_login("viewer")
 
-        expect(page).to_have_url_matching(f"{keycloak_config['console_url']}.*")
+        current_url = page.url
+        assert keycloak_config["console_url"] in current_url
 
         assert result["role"] == "viewer"
         assert "stoa:read" in result["scopes"]
@@ -81,8 +97,16 @@ class TestAuthenticationFlow:
         """Test login with invalid credentials shows error message."""
         page.goto(keycloak_config["console_url"])
 
-        # Wait for Keycloak login page
-        page.wait_for_url(f"{keycloak_config['url']}/**", timeout=10000)
+        # Wait for login page and navigate to Keycloak if needed
+        page.wait_for_selector(
+            "#username, button:has-text('Login with Keycloak'), button:has-text('Login')",
+            timeout=15000
+        )
+
+        login_button = page.locator("button:has-text('Login with Keycloak'), button:has-text('Login')")
+        if login_button.count() > 0 and "/login" in page.url:
+            login_button.first.click()
+            page.wait_for_selector("#username", timeout=10000)
 
         # Enter invalid credentials
         page.locator("#username").fill("invalid@test.com")
@@ -90,7 +114,7 @@ class TestAuthenticationFlow:
         page.locator("#kc-login").click()
 
         # Should show error message
-        error_message = page.locator(".alert-error, #kc-content-wrapper .alert")
+        error_message = page.locator(".alert-error, #kc-content-wrapper .alert, .kc-feedback-text")
         expect(error_message).to_be_visible(timeout=5000)
 
     def test_token_contains_required_claims(
@@ -158,10 +182,13 @@ class TestLogoutFlow:
         page.evaluate("localStorage.clear(); sessionStorage.clear();")
 
         # Try to access protected route
-        page.goto(f"{keycloak_config['console_url']}/dashboard")
+        page.goto(f"{keycloak_config['console_url']}/apis")
 
-        # Should redirect to Keycloak
-        expect(page).to_have_url_matching(f"{keycloak_config['url']}.*")
+        # Should redirect to login page or Keycloak
+        page.wait_for_selector(
+            "#username, button:has-text('Login with Keycloak'), button:has-text('Login')",
+            timeout=15000
+        )
 
 
 @pytest.mark.auth

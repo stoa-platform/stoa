@@ -1,37 +1,38 @@
 {
   "users": {
     "admin": {
-      "username": "cpi-admin@stoa.cab-i.com",
-      "password": "${CPI_ADMIN_PASSWORD}",
+      "username": "e2e-admin",
+      "password": "${E2E_ADMIN_PASSWORD}",
       "scopes": ["stoa:admin", "stoa:write", "stoa:read"],
       "role": "cpi-admin",
-      "description": "Full platform access"
+      "description": "Full platform access - E2E test user"
     },
     "tenant_admin": {
-      "username": "tenant-admin@stoa.cab-i.com",
-      "password": "${TENANT_ADMIN_PASSWORD}",
+      "username": "e2e-tenant-admin",
+      "password": "${E2E_TENANT_ADMIN_PASSWORD}",
       "scopes": ["stoa:write", "stoa:read"],
       "role": "tenant-admin",
-      "description": "Manage own tenant"
+      "description": "Manage own tenant - E2E test user"
     },
     "devops": {
-      "username": "devops@stoa.cab-i.com",
-      "password": "${DEVOPS_PASSWORD}",
+      "username": "e2e-devops",
+      "password": "${E2E_DEVOPS_PASSWORD}",
       "scopes": ["stoa:write", "stoa:read"],
       "role": "devops",
-      "description": "Deploy and promote APIs"
+      "description": "Deploy and promote APIs - E2E test user"
     },
     "viewer": {
-      "username": "viewer@stoa.cab-i.com",
-      "password": "${VIEWER_PASSWORD}",
+      "username": "e2e-viewer",
+      "password": "${E2E_VIEWER_PASSWORD}",
       "scopes": ["stoa:read"],
       "role": "viewer",
-      "description": "Read-only access"
+      "description": "Read-only access - E2E test user"
     }
   },
   "keycloak": {
     "realm": "stoa",
     "client_id": "stoa-console",
     "auth_url": "https://auth.stoa.cab-i.com"
-  }
+  },
+  "_comment": "Passwords are fetched from AWS Secrets Manager (stoa/e2e-test-credentials) or environment variables"
 }

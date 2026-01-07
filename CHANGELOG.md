@@ -79,6 +79,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Service: `control-plane-db.stoa-system.svc.cluster.local:5432`
   - Storage: 10Gi PVC with gp2 storage class
 
+- **Helm Chart Integration** (`charts/stoa-platform/`)
+  - `templates/database/postgres-statefulset.yaml` - PostgreSQL as Helm template
+  - `values.yaml` - Database configuration section with credentials, storage, resources
+
+- **Ansible Playbook** (`ansible/playbooks/deploy-subscriptions-db.yaml`)
+  - Automated database deployment with Alembic migrations
+  - AWX-compatible with environment variable overrides
+  - Tags: `database`, `migrations`, `api`, `secret`
+  - Updates control-plane-api with DATABASE_URL
+
+- **Redpanda Deployment** (`deploy/redpanda/values.yaml`)
+  - Kafka-compatible message broker for event streaming
+  - Single-node dev configuration
+  - Console UI enabled
+
 ### Added (2026-01-07) - Loki Log Aggregation (CAB-281)
 
 > **Related Ticket**: CAB-281 - Loki Log Aggregation Implementation

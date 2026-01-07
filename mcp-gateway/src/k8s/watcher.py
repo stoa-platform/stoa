@@ -574,8 +574,12 @@ class ToolWatcher:
         return sanitized.strip("_")
 
 
-async def get_tool_watcher() -> ToolWatcher:
+async def get_tool_watcher(start: bool = True) -> ToolWatcher:
     """Get or create the singleton tool watcher.
+
+    Args:
+        start: If True, start the watcher immediately (default).
+               Set to False to set callbacks before starting.
 
     Returns:
         The global ToolWatcher instance.
@@ -595,7 +599,8 @@ async def get_tool_watcher() -> ToolWatcher:
             kubeconfig=kubeconfig,
             enabled=k8s_enabled,
         )
-        await _watcher.startup()
+        if start:
+            await _watcher.startup()
 
     return _watcher
 

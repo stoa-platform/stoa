@@ -26,6 +26,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Namespace-based isolation with OPA policy enforcement
   - Mock ConfigMaps with sample response data
 
+### Fixed (2026-01-07) - MCP Gateway K8s Watcher Integration
+
+- **K8s Watcher Fixes** (`mcp-gateway/`)
+  - Connected K8s watcher callbacks to ToolRegistry for dynamic tool registration
+  - Updated `src/main.py` to set callbacks before starting watcher
+  - Added `kubernetes-asyncio` to Docker image dependencies
+  - Updated `mcp-gateway/Dockerfile` to install `.[k8s]` extras
+
+- **RBAC Configuration**
+  - Created `stoa-mcp-gateway` ServiceAccount
+  - Created ClusterRole with permissions for tools, toolsets CRDs
+  - Created ClusterRoleBinding for all-namespace access
+
 ### Added (2026-01-07) - API Subscriptions System (CAB-247)
 
 > **Related Ticket**: CAB-247 - API Subscriptions & API Key Management

@@ -1,0 +1,119 @@
+# PostgreSQL StatefulSet for Control-Plane API
+# Stores subscriptions, API keys, and other relational data
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: control-plane-db-secret
+  namespace: stoa-system
+  labels:
+    app: control-plane-db
+type: Opaque
+stringData:
+  POSTGRES_USER: stoa
+  POSTGRES_PASSWORD: stoa-db-password-2026
+  POSTGRES_DB: stoa
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-plane-db-init
+  namespace: stoa-system
+  labels:
+    app: control-plane-db
+data:
+  init.sql: |
+    -- Create extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+    -- Grant permissions
+    GRANT ALL PRIVILEGES ON DATABASE stoa TO stoa;
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-plane-db
+  namespace: stoa-system
+  labels:
+    app: control-plane-db
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: control-plane-db
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: control-plane-db
+  namespace: stoa-system
+  labels:
+    app: control-plane-db
+spec:
+  serviceName: control-plane-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: control-plane-db
+  template:
+    metadata:
+      labels:
+        app: control-plane-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          envFrom:
+            - secretRef:
+                name: control-plane-db-secret
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - stoa
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - stoa
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: control-plane-db-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: gp2

@@ -1,0 +1,196 @@
+# Alembic Migration Job
+# Runs database migrations for control-plane-api
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: alembic-migration
+  namespace: stoa-system
+  labels:
+    app: alembic-migration
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migration
+          image: python:3.11-slim
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Installing dependencies..."
+              pip install --quiet sqlalchemy psycopg2-binary alembic
+
+              echo "Creating migration files..."
+              mkdir -p /app/alembic/versions
+              cd /app
+
+              # Create alembic.ini
+              cat > alembic.ini <<'EOF'
+              [alembic]
+              script_location = alembic
+              prepend_sys_path = .
+              sqlalchemy.url = %(DATABASE_URL)s
+
+              [loggers]
+              keys = root,sqlalchemy,alembic
+
+              [handlers]
+              keys = console
+
+              [formatters]
+              keys = generic
+
+              [logger_root]
+              level = WARN
+              handlers = console
+
+              [logger_sqlalchemy]
+              level = WARN
+              handlers =
+              qualname = sqlalchemy.engine
+
+              [logger_alembic]
+              level = INFO
+              handlers =
+              qualname = alembic
+
+              [handler_console]
+              class = StreamHandler
+              args = (sys.stderr,)
+              level = NOTSET
+              formatter = generic
+
+              [formatter_generic]
+              format = %(levelname)-5.5s [%(name)s] %(message)s
+              EOF
+
+              # Create env.py
+              cat > alembic/env.py <<'ENVPY'
+              from logging.config import fileConfig
+              from sqlalchemy import engine_from_config, pool
+              from alembic import context
+              import os
+
+              config = context.config
+              config.set_main_option("sqlalchemy.url", os.environ.get("DATABASE_URL", "").replace("+asyncpg", ""))
+
+              if config.config_file_name is not None:
+                  fileConfig(config.config_file_name)
+
+              target_metadata = None
+
+              def run_migrations_online():
+                  connectable = engine_from_config(
+                      config.get_section(config.config_ini_section, {}),
+                      prefix="sqlalchemy.",
+                      poolclass=pool.NullPool,
+                  )
+                  with connectable.connect() as connection:
+                      context.configure(connection=connection, target_metadata=target_metadata)
+                      with context.begin_transaction():
+                          context.run_migrations()
+
+              run_migrations_online()
+              ENVPY
+
+              # Create migration script
+              cat > alembic/versions/001_create_subscriptions_table.py <<'MIGRATION'
+              """create subscriptions table
+
+              Revision ID: 001
+              Revises:
+              Create Date: 2026-01-07
+              """
+              from alembic import op
+              import sqlalchemy as sa
+              from sqlalchemy.dialects import postgresql
+
+              revision = '001'
+              down_revision = None
+              branch_labels = None
+              depends_on = None
+
+              def upgrade():
+                  op.create_table(
+                      'subscriptions',
+                      sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+                      sa.Column('application_id', sa.String(255), nullable=False),
+                      sa.Column('application_name', sa.String(255), nullable=False),
+                      sa.Column('subscriber_id', sa.String(255), nullable=False),
+                      sa.Column('subscriber_email', sa.String(255), nullable=False),
+                      sa.Column('api_id', sa.String(255), nullable=False),
+                      sa.Column('api_name', sa.String(255), nullable=False),
+                      sa.Column('api_version', sa.String(50), nullable=False),
+                      sa.Column('tenant_id', sa.String(255), nullable=False),
+                      sa.Column('plan_id', sa.String(255), nullable=True),
+                      sa.Column('plan_name', sa.String(255), nullable=True),
+                      sa.Column('api_key_hash', sa.String(512), nullable=False),
+                      sa.Column('api_key_prefix', sa.String(10), nullable=False),
+                      sa.Column('status', sa.Enum('pending', 'active', 'suspended', 'revoked', 'expired', name='subscriptionstatus'), nullable=False),
+                      sa.Column('status_reason', sa.Text(), nullable=True),
+                      sa.Column('created_at', sa.DateTime(), nullable=False),
+                      sa.Column('updated_at', sa.DateTime(), nullable=False),
+                      sa.Column('approved_at', sa.DateTime(), nullable=True),
+                      sa.Column('expires_at', sa.DateTime(), nullable=True),
+                      sa.Column('revoked_at', sa.DateTime(), nullable=True),
+                      sa.Column('approved_by', sa.String(255), nullable=True),
+                      sa.Column('revoked_by', sa.String(255), nullable=True),
+                      sa.PrimaryKeyConstraint('id'),
+                      sa.UniqueConstraint('api_key_hash')
+                  )
+                  op.create_index('ix_subscriptions_application_id', 'subscriptions', ['application_id'])
+                  op.create_index('ix_subscriptions_subscriber_id', 'subscriptions', ['subscriber_id'])
+                  op.create_index('ix_subscriptions_api_id', 'subscriptions', ['api_id'])
+                  op.create_index('ix_subscriptions_tenant_id', 'subscriptions', ['tenant_id'])
+                  op.create_index('ix_subscriptions_tenant_api', 'subscriptions', ['tenant_id', 'api_id'])
+                  op.create_index('ix_subscriptions_subscriber_status', 'subscriptions', ['subscriber_id', 'status'])
+                  op.create_index('ix_subscriptions_application_api', 'subscriptions', ['application_id', 'api_id'])
+
+              def downgrade():
+                  op.drop_index('ix_subscriptions_application_api', 'subscriptions')
+                  op.drop_index('ix_subscriptions_subscriber_status', 'subscriptions')
+                  op.drop_index('ix_subscriptions_tenant_api', 'subscriptions')
+                  op.drop_index('ix_subscriptions_tenant_id', 'subscriptions')
+                  op.drop_index('ix_subscriptions_api_id', 'subscriptions')
+                  op.drop_index('ix_subscriptions_subscriber_id', 'subscriptions')
+                  op.drop_index('ix_subscriptions_application_id', 'subscriptions')
+                  op.drop_table('subscriptions')
+                  op.execute('DROP TYPE IF EXISTS subscriptionstatus')
+              MIGRATION
+
+              # Create script.py.mako (required by alembic)
+              cat > alembic/script.py.mako <<'MAKO'
+              """empty message
+
+              Revision ID: ${up_revision}
+              Revises: ${down_revision | comma,n}
+              Create Date: ${create_date}
+              """
+              from alembic import op
+              import sqlalchemy as sa
+              ${imports if imports else ""}
+
+              revision = ${repr(up_revision)}
+              down_revision = ${repr(down_revision)}
+              branch_labels = ${repr(branch_labels)}
+              depends_on = ${repr(depends_on)}
+
+              def upgrade():
+                  ${upgrades if upgrades else "pass"}
+
+              def downgrade():
+                  ${downgrades if downgrades else "pass"}
+              MAKO
+
+              echo "Running migration..."
+              alembic upgrade head
+
+              echo "Migration completed!"
+              alembic current
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://stoa:stoa-db-password-2026@control-plane-db.stoa-system.svc.cluster.local:5432/stoa"

@@ -1,0 +1,17 @@
+# Terraform providers (binaires, pas ton code)
+**/.terraform/providers/
+**/.terraform/modules/
+*.tfstate
+*.tfstate.backup
+
+# Node dependencies (pas ton code)
+**/node_modules/
+
+# Git objects (pas ton code)
+.git/objects/
+.git/index
+
+# Build artifacts
+**/dist/
+**/build/
+**/__pycache__/

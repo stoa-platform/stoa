@@ -310,6 +310,79 @@ The API Gateway can validate API keys by calling the `/v1/subscriptions/validate
 | **Tenant Admin** | View tenant subscriptions, approve/revoke/suspend |
 | **CPI Admin** | All tenant admin permissions across all tenants |
 
+## Kubernetes Deployment
+
+### Via Helm Chart
+
+The PostgreSQL database is included in the stoa-platform Helm chart:
+
+```bash
+# Deploy with database enabled (default)
+helm upgrade --install stoa-platform ./charts/stoa-platform \
+  -n stoa-system --create-namespace \
+  --set database.enabled=true \
+  --set database.password=your-secure-password
+
+# Check database status
+kubectl get statefulset control-plane-db -n stoa-system
+kubectl get pvc -n stoa-system | grep control-plane-db
+```
+
+### Helm Values
+
+```yaml
+database:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "15-alpine"
+  user: stoa
+  password: stoa-db-password-2026  # Override in production!
+  name: stoa
+  persistence:
+    size: 10Gi
+    storageClass: gp2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+```
+
+### Manual Deployment
+
+```bash
+# Deploy PostgreSQL
+kubectl apply -f deploy/database/postgres-statefulset.yaml
+
+# Wait for database
+kubectl wait --for=condition=ready pod/control-plane-db-0 -n stoa-system --timeout=120s
+
+# Run migrations
+kubectl apply -f deploy/database/alembic-migration-job.yaml
+
+# Check migration status
+kubectl logs job/alembic-migration -n stoa-system
+```
+
+### Redpanda (Kafka)
+
+```bash
+# Add Redpanda Helm repo
+helm repo add redpanda https://charts.redpanda.com
+helm repo update
+
+# Deploy Redpanda
+helm install redpanda redpanda/redpanda \
+  -n stoa-system \
+  -f deploy/redpanda/values.yaml
+
+# Verify
+kubectl get pods -n stoa-system | grep redpanda
+```
+
 ## Related Documentation
 
 - [Developer Portal Plan](DEVELOPER-PORTAL-PLAN.md)

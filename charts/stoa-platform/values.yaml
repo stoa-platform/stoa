@@ -211,3 +211,49 @@ promtail:
 
   # Tolerations (already includes master/control-plane by default)
   tolerations: []
+
+# =============================================================================
+# PostgreSQL Database Configuration (CAB-247)
+# =============================================================================
+database:
+  enabled: true
+
+  # Image configuration
+  image:
+    repository: postgres
+    tag: "15-alpine"
+    pullPolicy: IfNotPresent
+
+  # Database credentials
+  user: stoa
+  password: stoa-db-password-2026
+  name: stoa
+
+  # Persistence
+  persistence:
+    size: 10Gi
+    storageClass: gp2  # AWS EBS
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+# =============================================================================
+# Redpanda (Kafka) Configuration
+# =============================================================================
+redpanda:
+  # Note: Redpanda is deployed via its own Helm chart
+  # See deploy/redpanda/values.yaml for configuration
+  # Service: redpanda.stoa-system.svc.cluster.local:9092
+  enabled: false  # Managed separately

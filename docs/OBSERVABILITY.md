@@ -47,6 +47,16 @@ This document describes the observability setup for the STOA Platform, including
 | Prometheus | https://prometheus.stoa.cab-i.com | Metrics & Alerting |
 | Loki | https://loki.stoa.cab-i.com | Log Aggregation |
 
+### Authentication
+
+All observability endpoints are secured with Keycloak OIDC authentication:
+
+- **Grafana**: Native OIDC integration
+- **Prometheus**: OAuth2-proxy sidecar
+- **Loki**: OAuth2-proxy sidecar
+
+Users can login with their Keycloak credentials (e.g., `admin@cab-i.com`).
+
 ## Installation
 
 ### Prerequisites
@@ -92,6 +102,78 @@ This deploys:
 - Promtail DaemonSet for log collection
 - Loki Ingress for external access
 - ServiceMonitors for Control-Plane API and MCP Gateway
+
+### 4. Enable Keycloak Authentication (Optional)
+
+To enable Keycloak SSO for all observability endpoints:
+
+#### Step 1: Create Keycloak Client
+
+1. Go to https://auth.stoa.cab-i.com
+2. Login as admin
+3. Select realm: `stoa`
+4. Go to **Clients** > **Create Client**
+5. Configure:
+   - Client ID: `observability`
+   - Client Protocol: `openid-connect`
+   - Access Type: `confidential`
+6. Set **Valid Redirect URIs**:
+   ```
+   https://grafana.stoa.cab-i.com/*
+   https://prometheus.stoa.cab-i.com/oauth2/callback
+   https://loki.stoa.cab-i.com/oauth2/callback
+   ```
+7. Save and go to **Credentials** tab
+8. Copy the **Client Secret**
+
+#### Step 2: Run Setup Script
+
+```bash
+# Replace <CLIENT_SECRET> with the secret from Keycloak
+./deploy/observability/setup-keycloak-auth.sh <CLIENT_SECRET>
+```
+
+This script will:
+- Create oauth2-proxy secrets
+- Deploy oauth2-proxy for Prometheus and Loki
+- Update Ingresses to use oauth2-proxy
+- Configure Grafana with native OIDC
+
+#### Manual Setup (Alternative)
+
+If you prefer manual setup:
+
+```bash
+# Generate cookie secret
+COOKIE_SECRET=$(openssl rand -base64 32 | tr -- '+/' '-_')
+CLIENT_SECRET="<your-keycloak-client-secret>"
+
+# Create secrets
+kubectl create secret generic oauth2-proxy-secret -n stoa-monitoring \
+  --from-literal=cookie-secret="$COOKIE_SECRET" \
+  --from-literal=client-secret="$CLIENT_SECRET"
+
+kubectl create secret generic oauth2-proxy-secret -n stoa-system \
+  --from-literal=cookie-secret="$COOKIE_SECRET" \
+  --from-literal=client-secret="$CLIENT_SECRET"
+
+kubectl create secret generic grafana-oidc-secret -n stoa-monitoring \
+  --from-literal=GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET="$CLIENT_SECRET"
+
+# Deploy oauth2-proxy
+kubectl apply -f deploy/observability/oauth2-proxy-prometheus.yaml
+kubectl apply -f deploy/observability/oauth2-proxy-loki.yaml
+
+# Update Ingresses
+kubectl apply -f deploy/observability/prometheus-ingress.yaml
+kubectl apply -f deploy/observability/loki-ingress.yaml
+
+# Upgrade Grafana with OIDC
+helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  -n stoa-monitoring \
+  -f deploy/observability/values-grafana-oidc.yaml \
+  --reuse-values
+```
 
 ## Metrics
 

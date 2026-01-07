@@ -1,0 +1,48 @@
+# Keycloak Client Configuration for Observability Stack
+#
+# This creates a client in Keycloak for Grafana, Prometheus, and Loki authentication.
+# Apply this using Keycloak Admin API or via the Keycloak Admin Console.
+#
+# Manual steps in Keycloak Admin Console (https://auth.stoa.cab-i.com):
+# 1. Login as admin
+# 2. Select realm: stoa
+# 3. Go to Clients > Create Client
+# 4. Configure as shown below
+
+# Client Configuration:
+# ---------------------
+# Client ID: observability
+# Client Protocol: openid-connect
+# Access Type: confidential
+# Valid Redirect URIs:
+#   - https://grafana.stoa.cab-i.com/*
+#   - https://prometheus.stoa.cab-i.com/oauth2/callback
+#   - https://loki.stoa.cab-i.com/oauth2/callback
+# Web Origins: +
+#
+# After creation, go to Credentials tab and copy the Secret.
+
+---
+# Secret for oauth2-proxy (used by Prometheus and Loki)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oauth2-proxy-secret
+  namespace: stoa-monitoring
+type: Opaque
+stringData:
+  # Generate with: openssl rand -base64 32 | tr -d '\n'
+  cookie-secret: "REPLACE_WITH_RANDOM_32_BYTE_BASE64"
+  # Get this from Keycloak after creating the client
+  client-secret: "REPLACE_WITH_KEYCLOAK_CLIENT_SECRET"
+---
+# Secret for Loki oauth2-proxy
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oauth2-proxy-secret
+  namespace: stoa-system
+type: Opaque
+stringData:
+  cookie-secret: "REPLACE_WITH_RANDOM_32_BYTE_BASE64"
+  client-secret: "REPLACE_WITH_KEYCLOAK_CLIENT_SECRET"

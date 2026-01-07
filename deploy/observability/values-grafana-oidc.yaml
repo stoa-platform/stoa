@@ -1,0 +1,63 @@
+# Grafana OIDC Configuration for kube-prometheus-stack
+# Apply with: helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack -n stoa-monitoring -f values-grafana-oidc.yaml
+#
+# Prerequisites:
+# 1. Create Keycloak client 'observability' in realm 'stoa'
+# 2. Set client as confidential with redirect URIs: https://grafana.stoa.cab-i.com/*
+# 3. Replace KEYCLOAK_CLIENT_SECRET below with actual secret
+
+grafana:
+  # Admin credentials (keeping existing)
+  adminPassword: ""  # Keep existing password
+
+  # Grafana configuration
+  grafana.ini:
+    server:
+      root_url: https://grafana.stoa.cab-i.com
+
+    # Auth configuration
+    auth:
+      # Disable anonymous access
+      disable_login_form: false
+      # Allow OAuth auto-login
+      oauth_auto_login: false
+
+    # Keycloak OIDC configuration
+    auth.generic_oauth:
+      enabled: true
+      name: Keycloak
+      allow_sign_up: true
+      auto_login: false
+      client_id: observability
+      client_secret: ${GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}
+      scopes: openid profile email roles
+      auth_url: https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/auth
+      token_url: https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token
+      api_url: https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/userinfo
+      # Role mapping
+      role_attribute_path: contains(realm_access.roles[*], 'admin') && 'Admin' || contains(realm_access.roles[*], 'cpi-admin') && 'Admin' || contains(realm_access.roles[*], 'editor') && 'Editor' || 'Viewer'
+      # TLS verification (set to false if using self-signed certs)
+      tls_skip_verify_insecure: false
+      # Use PKCE
+      use_pkce: true
+
+    # Users configuration
+    users:
+      # Allow users to be created via OAuth
+      allow_sign_up: true
+      # Auto-assign org role for new users
+      auto_assign_org_role: Viewer
+
+  # Environment variables for secrets
+  envFromSecret: grafana-oidc-secret
+
+  # Persistence (recommended for production)
+  persistence:
+    enabled: true
+    size: 10Gi
+
+# Prometheus configuration (unchanged)
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false

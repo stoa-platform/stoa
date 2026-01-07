@@ -1,0 +1,131 @@
+# CAB-290: Demo MCP Tool - Notifications Send
+# Tenant: team-beta
+# Purpose: Illustrate multi-tenant isolation with mock notification sending
+---
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tool
+metadata:
+  name: notifications-send
+  namespace: team-beta
+  labels:
+    stoa.cab-i.com/tenant: team-beta
+    stoa.cab-i.com/category: communications
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/owner: team-beta-admin
+    stoa.cab-i.com/created-by: cab-290
+spec:
+  displayName: "Send Notification"
+  description: "Send notifications to users via multiple channels (email, SMS, push, Slack). Supports templated messages and delivery scheduling."
+  version: "1.0.0"
+  tags:
+    - notifications
+    - email
+    - sms
+    - communications
+
+  # Mock endpoint - returns static demo data
+  endpoint: "https://httpbin.org/post"
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      recipient:
+        type: string
+        description: "Recipient identifier (email, phone, or user ID)"
+      channel:
+        type: string
+        description: "Notification channel"
+        enum:
+          - email
+          - sms
+          - push
+          - slack
+        default: "email"
+      subject:
+        type: string
+        description: "Notification subject/title"
+      message:
+        type: string
+        description: "Notification body content"
+      template_id:
+        type: string
+        description: "Optional template ID for pre-defined messages"
+      template_vars:
+        type: object
+        description: "Variables to substitute in template"
+        additionalProperties:
+          type: string
+      priority:
+        type: string
+        description: "Message priority"
+        enum:
+          - low
+          - normal
+          - high
+          - urgent
+        default: "normal"
+      schedule_at:
+        type: string
+        description: "ISO 8601 datetime to schedule delivery (optional)"
+        format: date-time
+    required:
+      - recipient
+      - channel
+      - message
+
+  authentication:
+    type: none
+
+  timeout: "30s"
+
+  rateLimit:
+    requestsPerMinute: 100
+    burst: 20
+
+  enabled: true
+
+  apiRef:
+    name: "Notifications-API"
+    version: "2.0"
+    operationId: "sendNotification"
+---
+# ConfigMap with mock response data for demo purposes
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notifications-send-mock-data
+  namespace: team-beta
+  labels:
+    stoa.cab-i.com/tenant: team-beta
+    stoa.cab-i.com/tool: notifications-send
+data:
+  response.json: |
+    {
+      "success": true,
+      "tool": "notifications-send",
+      "tenant": "team-beta",
+      "data": {
+        "notification": {
+          "notification_id": "NOTIF-2026-01-07-a8f3b2c1",
+          "status": "queued",
+          "channel": "email",
+          "recipient": "user@example.com",
+          "subject": "Order Shipped",
+          "created_at": "2026-01-07T12:30:00Z",
+          "scheduled_at": null,
+          "estimated_delivery": "2026-01-07T12:30:05Z"
+        },
+        "delivery": {
+          "provider": "sendgrid",
+          "message_id": "sg_msg_abc123def456",
+          "cost_credits": 1
+        },
+        "quota": {
+          "daily_limit": 10000,
+          "daily_used": 1247,
+          "daily_remaining": 8753
+        }
+      }
+    }

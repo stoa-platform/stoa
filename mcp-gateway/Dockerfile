@@ -14,9 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 
-# Install dependencies using pip
+# Install dependencies using pip (including k8s extras for CRD watcher)
 RUN pip install --no-cache-dir hatchling && \
-    pip install --no-cache-dir .
+    pip install --no-cache-dir ".[k8s]"
 
 # Production image
 FROM python:3.11-slim AS production

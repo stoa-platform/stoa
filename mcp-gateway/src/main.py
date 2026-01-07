@@ -21,6 +21,7 @@ from .config import get_settings
 from .handlers import mcp_router
 from .middleware import MetricsMiddleware
 from .services import get_tool_registry, shutdown_tool_registry
+from .k8s import get_tool_watcher, shutdown_tool_watcher
 
 # Configure structured logging
 structlog.configure(
@@ -61,7 +62,37 @@ async def lifespan(app: FastAPI):
     app_state["started_at"] = datetime.now(timezone.utc)
 
     # Initialize tool registry
-    await get_tool_registry()
+    registry = await get_tool_registry()
+
+    # Initialize K8s watcher and connect to registry
+    if settings.k8s_watcher_enabled:
+        # Get watcher without starting (to set callbacks first)
+        watcher = await get_tool_watcher(start=False)
+
+        # Define callbacks to connect watcher to registry
+        async def on_tool_added(tool):
+            registry.register(tool)
+            logger.info("K8s tool registered", tool_name=tool.name)
+
+        async def on_tool_removed(tool_name):
+            registry.unregister(tool_name)
+            logger.info("K8s tool unregistered", tool_name=tool_name)
+
+        async def on_tool_modified(tool):
+            registry.register(tool)  # Register overwrites existing
+            logger.info("K8s tool updated", tool_name=tool.name)
+
+        # Set callbacks BEFORE starting to catch initial events
+        watcher.set_callbacks(
+            on_added=on_tool_added,
+            on_removed=on_tool_removed,
+            on_modified=on_tool_modified,
+        )
+
+        # Now start the watcher
+        await watcher.startup()
+
+        logger.info("K8s watcher connected to tool registry")
 
     app_state["ready"] = True
 
@@ -76,6 +107,9 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down STOA MCP Gateway")
     app_state["ready"] = False
+
+    # Cleanup K8s watcher
+    await shutdown_tool_watcher()
 
     # Cleanup tool registry
     await shutdown_tool_registry()

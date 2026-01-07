@@ -9,11 +9,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .config import settings
+from .logging_config import configure_logging, get_logger
 from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .middleware.metrics import MetricsMiddleware, get_metrics
 from .services.gateway_service import gateway_service
 from .workers.deployment_worker import deployment_worker
+
+# Configure structured logging (CAB-281)
+configure_logging()
+logger = get_logger(__name__)
 
 # Flag to control worker startup (can be disabled for dev/testing)
 ENABLE_WORKER = os.getenv("ENABLE_DEPLOYMENT_WORKER", "true").lower() == "true"
@@ -21,52 +26,52 @@ ENABLE_WORKER = os.getenv("ENABLE_DEPLOYMENT_WORKER", "true").lower() == "true"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print(f"Starting STOA Control-Plane API v{settings.VERSION}")
+    logger.info("Starting STOA Control-Plane API", version=settings.VERSION, environment=settings.ENVIRONMENT)
 
     # Initialize services
     worker_task = None
     try:
         await kafka_service.kafka_service.connect()
-        print("Kafka connected")
+        logger.info("Kafka connected")
     except Exception as e:
-        print(f"Warning: Failed to connect Kafka: {e}")
+        logger.warning("Failed to connect Kafka", error=str(e))
 
     try:
         await git_service.git_service.connect()
-        print("GitLab connected")
+        logger.info("GitLab connected")
     except Exception as e:
-        print(f"Warning: Failed to connect GitLab: {e}")
+        logger.warning("Failed to connect GitLab", error=str(e))
 
     try:
         await awx_service.awx_service.connect()
-        print("AWX connected")
+        logger.info("AWX connected")
     except Exception as e:
-        print(f"Warning: Failed to connect AWX: {e}")
+        logger.warning("Failed to connect AWX", error=str(e))
 
     try:
         await keycloak_service.keycloak_service.connect()
-        print("Keycloak connected")
+        logger.info("Keycloak connected")
     except Exception as e:
-        print(f"Warning: Failed to connect Keycloak: {e}")
+        logger.warning("Failed to connect Keycloak", error=str(e))
 
     try:
         await gateway_service.connect()
-        print(f"Gateway connected (OIDC proxy: {settings.GATEWAY_USE_OIDC_PROXY})")
+        logger.info("Gateway connected", oidc_proxy=settings.GATEWAY_USE_OIDC_PROXY)
     except Exception as e:
-        print(f"Warning: Failed to connect Gateway: {e}")
+        logger.warning("Failed to connect Gateway", error=str(e))
 
     # Start deployment worker in background
     if ENABLE_WORKER:
         try:
             worker_task = asyncio.create_task(deployment_worker.start())
-            print("Deployment worker started")
+            logger.info("Deployment worker started")
         except Exception as e:
-            print(f"Warning: Failed to start deployment worker: {e}")
+            logger.warning("Failed to start deployment worker", error=str(e))
 
     yield
 
     # Shutdown
-    print("Shutting down...")
+    logger.info("Shutting down...")
 
     # Stop deployment worker
     if ENABLE_WORKER and worker_task:

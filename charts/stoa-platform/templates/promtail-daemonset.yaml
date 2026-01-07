@@ -1,0 +1,233 @@
+{{- if .Values.promtail.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-promtail-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: promtail
+data:
+  promtail-config.yml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+      log_level: {{ .Values.promtail.logLevel | default "info" }}
+
+    positions:
+      filename: /run/promtail/positions.yaml
+
+    clients:
+      - url: http://{{ include "stoa-platform.fullname" . }}-loki:3100/loki/api/v1/push
+        tenant_id: {{ .Values.promtail.tenantId | default "stoa" }}
+        batchwait: 1s
+        batchsize: 1048576
+        timeout: 10s
+
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          # Only scrape pods in STOA namespaces
+          - source_labels: [__meta_kubernetes_namespace]
+            regex: {{ .Values.promtail.namespaceRegex | default "stoa-system|stoa-.*" }}
+            action: keep
+          # Extract namespace
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          # Extract pod name
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          # Extract container name
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+          # Extract app label
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+          # Extract component label
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            target_label: component
+          # Extract instance label
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_instance]
+            target_label: instance
+          # Set log path
+          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+            target_label: __path__
+            separator: /
+            replacement: /var/log/pods/*$1/$2/*.log
+        pipeline_stages:
+          # Parse CRI/Docker log format
+          - cri: {}
+          # Try to parse JSON logs
+          - match:
+              selector: '{namespace=~"stoa.*"}'
+              stages:
+                - json:
+                    expressions:
+                      level: level
+                      message: message
+                      msg: msg
+                      timestamp: timestamp
+                      time: time
+                      logger: logger
+                      request_id: request_id
+                      trace_id: trace_id
+                      span_id: span_id
+                      tenant_id: tenant_id
+                      user_id: user_id
+                      endpoint: endpoint
+                      method: method
+                      status_code: status_code
+                      duration_ms: duration_ms
+                      tool_name: tool_name
+                      error: error
+                - labels:
+                    level:
+                    logger:
+                    tenant_id:
+                - template:
+                    source: output_message
+                    template: '{{ `{{ if .message }}{{ .message }}{{ else if .msg }}{{ .msg }}{{ else }}{{ .Entry }}{{ end }}` }}'
+                - output:
+                    source: output_message
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-promtail
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: promtail
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-promtail
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: promtail
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/proxy
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-promtail
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: promtail
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "stoa-platform.fullname" . }}-promtail
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "stoa-platform.fullname" . }}-promtail
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-promtail
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: promtail
+spec:
+  selector:
+    matchLabels:
+      {{- include "stoa-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: promtail
+  template:
+    metadata:
+      labels:
+        {{- include "stoa-platform.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: promtail
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/promtail-daemonset.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "stoa-platform.fullname" . }}-promtail
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+      containers:
+        - name: promtail
+          image: "{{ .Values.promtail.image.repository | default "grafana/promtail" }}:{{ .Values.promtail.image.tag | default "2.9.4" }}"
+          imagePullPolicy: {{ .Values.promtail.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - -config.file=/etc/promtail/promtail-config.yml
+          ports:
+            - name: http
+              containerPort: 9080
+              protocol: TCP
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.promtail.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - DAC_READ_SEARCH
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: config
+              mountPath: /etc/promtail
+            - name: run
+              mountPath: /run/promtail
+            - name: pods
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: containers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        {{- with .Values.promtail.tolerations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "stoa-platform.fullname" . }}-promtail-config
+        - name: run
+          hostPath:
+            path: /run/promtail
+        - name: pods
+          hostPath:
+            path: /var/log/pods
+        - name: containers
+          hostPath:
+            path: /var/lib/docker/containers
+      {{- with .Values.promtail.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

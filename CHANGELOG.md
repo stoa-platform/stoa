@@ -8,6 +8,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2026-01-07) - Loki Log Aggregation (CAB-281)
+
+> **Related Ticket**: CAB-281 - Loki Log Aggregation Implementation
+
+- **Loki Configuration** (`docker/observability/loki/loki-config.yml`)
+  - TSDB storage backend with filesystem
+  - 30-day log retention policy
+  - Structured metadata support for JSON log fields
+  - Query and ingestion limits configured
+  - Compactor with automatic retention enforcement
+
+- **Promtail Configuration** (`docker/observability/promtail/promtail-config.yml`)
+  - Docker container log scraping (for development)
+  - Kubernetes pod log scraping (for production)
+  - JSON log parsing with field extraction
+  - Label extraction: level, logger, tenant_id, component
+  - CRI/Docker log format support
+
+- **Kubernetes Manifests** (`charts/stoa-platform/templates/`)
+  - `loki-deployment.yaml` - Loki StatefulSet with PVC
+  - `promtail-daemonset.yaml` - Promtail DaemonSet with RBAC
+  - Configurable via `loki.enabled`, `promtail.enabled`
+  - Namespace filtering for STOA components
+
+- **Structured Logging** (`control-plane-api/src/logging_config.py`)
+  - Structlog integration matching MCP Gateway pattern
+  - JSON output format for Loki ingestion
+  - Context binding for tenant_id, request_id, etc.
+  - Log level configuration via `LOG_LEVEL` env var
+  - Text format option for local development
+
+- **Grafana Dashboard** (`docker/observability/grafana/dashboards/logs-explorer.json`)
+  - Log statistics: total entries, errors, warnings, rate
+  - Log volume by level and component over time
+  - Error rate visualization by component
+  - Live log stream with search filter
+  - Collapsible panels: Error Logs, Auth Logs, HTTP Requests
+  - Variables: namespace, component, search text
+
 ### Added (2026-01-07) - Prometheus + Grafana Monitoring (CAB-11)
 
 > **Related Ticket**: CAB-11 - Prometheus + Grafana Implementation
@@ -1178,5 +1217,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 | API Gateway Admin | https://gateway.stoa.cab-i.com | Administrator/manage |
 | ArgoCD | https://argocd.stoa.cab-i.com | GitOps CD |
 | Vault | https://vault.stoa.cab-i.com | Secrets Management |
+| **Grafana** | https://grafana.stoa.cab-i.com | Dashboards & Visualization |
+| **Prometheus** | https://prometheus.stoa.cab-i.com | Metrics & Alerting |
+| **Loki** | https://loki.stoa.cab-i.com | Log Aggregation |
 
 > **Architecture**: The UI calls the API via the Gateway (`apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`) for centralized OIDC authentication.

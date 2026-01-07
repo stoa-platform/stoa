@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from .config import settings
 from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway
 from .services import kafka_service, git_service, awx_service, keycloak_service
+from .middleware.metrics import MetricsMiddleware, get_metrics
 from .services.gateway_service import gateway_service
 from .workers.deployment_worker import deployment_worker
 
@@ -149,6 +150,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Prometheus metrics middleware
+app.add_middleware(MetricsMiddleware)
+
 # Routers
 app.include_router(tenants.router)
 app.include_router(apis.router)
@@ -171,3 +175,9 @@ async def root():
         "version": settings.VERSION,
         "docs": "/docs",
     }
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    """Prometheus metrics endpoint."""
+    return get_metrics()

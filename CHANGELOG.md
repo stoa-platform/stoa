@@ -8,6 +8,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2026-01-07) - Prometheus + Grafana Monitoring (CAB-11)
+
+> **Related Ticket**: CAB-11 - Prometheus + Grafana Implementation
+
+- **Control-Plane API Metrics** (`control-plane-api/src/middleware/metrics.py`)
+  - Prometheus metrics middleware following MCP Gateway pattern
+  - Metrics prefix: `stoa_control_plane_`
+  - `stoa_control_plane_http_requests_total` - Counter with method, endpoint, status_code labels
+  - `stoa_control_plane_http_request_duration_seconds` - Histogram with latency buckets
+  - `stoa_control_plane_http_requests_in_progress` - Gauge for concurrent requests
+  - `/metrics` endpoint for Prometheus scraping
+
+- **ServiceMonitor CRDs** (`charts/stoa-platform/templates/`)
+  - `servicemonitor-control-plane-api.yaml` - ServiceMonitor for Control-Plane API
+  - `servicemonitor-mcp-gateway.yaml` - ServiceMonitor for MCP Gateway
+  - Configurable via `monitoring.enabled`, `monitoring.interval`, `monitoring.scrapeTimeout`
+
+- **Grafana Dashboards** (`docker/observability/grafana/dashboards/`)
+  - `platform-overview.json` - High-level platform health dashboard
+    - Total requests/sec across all services
+    - Error rate (5xx) with thresholds
+    - P95 latency with SLO thresholds
+    - Service status and availability
+  - `control-plane-api.json` - Control-Plane API detailed metrics
+    - Request rate by endpoint and method
+    - Latency percentiles (P50, P95, P99)
+    - Error rate by status code and endpoint
+    - In-progress requests tracking
+  - `mcp-gateway.json` - MCP Gateway detailed metrics
+    - HTTP request metrics
+    - MCP tool invocations by tool and status
+    - Tool invocation duration by tool
+    - Authentication metrics (success/failure, failure reasons)
+    - Backend request metrics by service
+
 ### Added (2026-01-07) - E2E Testing Infrastructure (CAB-238)
 
 > **Related Ticket**: CAB-238 - E2E Testing Infrastructure

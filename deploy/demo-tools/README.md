@@ -23,6 +23,54 @@ The MCP Gateway enforces this isolation via:
 2. OPA policies based on JWT claims
 3. Tool CRD ownership labels
 
+## Prerequisites
+
+Before deploying demo tools, ensure the MCP Gateway has RBAC permissions to watch Tool CRDs:
+
+```bash
+# Create ServiceAccount and RBAC (if not already done via Helm)
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stoa-mcp-gateway
+  namespace: stoa-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: stoa-mcp-gateway-tools
+rules:
+  - apiGroups: ["stoa.cab-i.com"]
+    resources: ["tools", "toolsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["stoa.cab-i.com"]
+    resources: ["tools/status", "toolsets/status"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: stoa-mcp-gateway-tools
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: stoa-mcp-gateway-tools
+subjects:
+  - kind: ServiceAccount
+    name: stoa-mcp-gateway
+    namespace: stoa-system
+EOF
+
+# Ensure MCP Gateway deployment uses the service account
+kubectl patch deployment mcp-gateway -n stoa-system \
+  --type='json' \
+  -p='[{"op": "add", "path": "/spec/template/spec/serviceAccountName", "value": "stoa-mcp-gateway"}]'
+```
+
 ## Deployment
 
 ### Deploy All Tools
@@ -41,7 +89,7 @@ kubectl apply -f deploy/demo-tools/notifications-send.yaml
 ### Verify Deployment
 
 ```bash
-# List all tools
+# List all tools in Kubernetes
 kubectl get tools -A
 
 # List team-alpha tools
@@ -53,6 +101,27 @@ kubectl get tools -n team-beta
 # Describe a specific tool
 kubectl describe tool crm-search -n team-alpha
 ```
+
+### Verify Tools in MCP Gateway API
+
+```bash
+# Port-forward to MCP Gateway
+kubectl port-forward deployment/mcp-gateway -n stoa-system 8080:8080 &
+
+# List all registered tools (should include K8s-based tools)
+curl -s http://localhost:8080/mcp/v1/tools | jq '.tools[] | {name, tenant_id, description}'
+
+# Expected output includes:
+# - team_alpha_crm_search
+# - team_alpha_billing_invoice
+# - team_beta_inventory_lookup
+# - team_beta_notifications_send
+
+# Kill port-forward
+pkill -f "port-forward.*mcp-gateway"
+```
+
+**Note:** Tool names in the MCP API follow the pattern `{namespace}_{tool_name}` (e.g., `team_alpha_crm_search`).
 
 ## Testing Multi-Tenant Isolation
 
@@ -68,19 +137,19 @@ TOKEN=$(curl -s -X POST "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid
 
 # List available tools (should see only team-alpha tools)
 curl -H "Authorization: Bearer $TOKEN" \
-  https://mcp.stoa.cab-i.com/tools
+  https://mcp.stoa.cab-i.com/mcp/v1/tools
 
-# Use crm-search (should work)
+# Invoke crm-search (should work)
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"query": "ACME"}' \
-  https://mcp.stoa.cab-i.com/tools/crm-search/invoke
+  -d '{"name": "team_alpha_crm_search", "arguments": {"query": "ACME"}}' \
+  https://mcp.stoa.cab-i.com/mcp/v1/tools/call
 
 # Try inventory-lookup (should be denied - team-beta only)
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"sku": "WIDGET-PRO-500"}' \
-  https://mcp.stoa.cab-i.com/tools/inventory-lookup/invoke
+  -d '{"name": "team_beta_inventory_lookup", "arguments": {"sku": "WIDGET-PRO-500"}}' \
+  https://mcp.stoa.cab-i.com/mcp/v1/tools/call
 # Expected: 403 Forbidden
 ```
 
@@ -94,17 +163,17 @@ TOKEN=$(curl -s -X POST "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid
   -d "username=beta-user" \
   -d "password=demo" | jq -r .access_token)
 
-# Use inventory-lookup (should work)
+# Invoke inventory-lookup (should work)
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"sku": "WIDGET-PRO-500"}' \
-  https://mcp.stoa.cab-i.com/tools/inventory-lookup/invoke
+  -d '{"name": "team_beta_inventory_lookup", "arguments": {"sku": "WIDGET-PRO-500"}}' \
+  https://mcp.stoa.cab-i.com/mcp/v1/tools/call
 
 # Try crm-search (should be denied - team-alpha only)
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"query": "ACME"}' \
-  https://mcp.stoa.cab-i.com/tools/crm-search/invoke
+  -d '{"name": "team_alpha_crm_search", "arguments": {"query": "ACME"}}' \
+  https://mcp.stoa.cab-i.com/mcp/v1/tools/call
 # Expected: 403 Forbidden
 ```
 

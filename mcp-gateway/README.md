@@ -115,6 +115,20 @@ docker-compose up -d
 docker-compose logs -f mcp-gateway
 ```
 
+### Build and Deploy Docker Image
+
+```bash
+# Build for amd64 (for Kubernetes deployment)
+docker build --platform linux/amd64 -t mcp-gateway:latest .
+
+# Push to ECR
+aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin <account>.dkr.ecr.eu-west-1.amazonaws.com
+docker tag mcp-gateway:latest <account>.dkr.ecr.eu-west-1.amazonaws.com/apim/mcp-gateway:latest
+docker push <account>.dkr.ecr.eu-west-1.amazonaws.com/apim/mcp-gateway:latest
+```
+
+**Note:** The Docker image includes `kubernetes-asyncio` for K8s CRD watching. The Dockerfile installs `.[k8s]` extras.
+
 ## Endpoints
 
 ### Health Endpoints
@@ -176,6 +190,48 @@ mcp-gateway/
 ```
 
 ## Kubernetes CRDs
+
+### RBAC Requirements
+
+When running in Kubernetes with `K8S_WATCHER_ENABLED=true`, the MCP Gateway needs RBAC permissions to watch Tool and ToolSet CRDs:
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stoa-mcp-gateway
+  namespace: stoa-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: stoa-mcp-gateway-tools
+rules:
+  - apiGroups: ["stoa.cab-i.com"]
+    resources: ["tools", "toolsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["stoa.cab-i.com"]
+    resources: ["tools/status", "toolsets/status"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: stoa-mcp-gateway-tools
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: stoa-mcp-gateway-tools
+subjects:
+  - kind: ServiceAccount
+    name: stoa-mcp-gateway
+    namespace: stoa-system
+```
+
+The Helm chart (`charts/stoa-platform/templates/mcp-gateway-rbac.yaml`) creates these resources automatically when `mcpGateway.k8s.enabled=true`.
 
 ### Tool CRD
 
@@ -244,6 +300,7 @@ mypy src
 ## Related Documentation
 
 - [STOA Platform](../README.md)
+- [Demo MCP Tools](../deploy/demo-tools/README.md) - Multi-tenant isolation demo
 - [MCP Specification](https://modelcontextprotocol.io/)
 - [CHANGELOG](../CHANGELOG.md)
 

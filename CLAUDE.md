@@ -23,6 +23,12 @@ STOA Platform v2 - Multi-tenant API Management with:
 - `kubectl get` - Read-only operations
 - `git status/log` - Git read operations
 
+### Docker Build Requirements
+- **ALWAYS build multi-arch images** for both AMD64 and ARM64
+- EKS runs on AMD64 (linux/amd64), local Mac uses ARM64
+- Use `docker buildx build --platform linux/amd64,linux/arm64` for all image builds
+- Example: `docker buildx build --platform linux/amd64,linux/arm64 -t <image> --push .`
+
 ## Architecture
 
 ### Components

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useTool, useToolSchema, useSubscribeToTool } from '../../hooks/useTools';
 import { SubscribeToToolModal } from '../../components/tools/SubscribeToToolModal';
+import { ApiKeyModal } from '../../components/subscriptions/ApiKeyModal';
 import { config } from '../../config';
 
 type ToolStatus = 'active' | 'deprecated' | 'beta';
@@ -43,6 +44,11 @@ export function ToolDetail() {
   const [isSubscribeModalOpen, setIsSubscribeModalOpen] = useState(false);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
   const [showSchema, setShowSchema] = useState(false);
+  const [apiKeyModalData, setApiKeyModalData] = useState<{
+    isOpen: boolean;
+    apiKey: string;
+    toolId: string;
+  }>({ isOpen: false, apiKey: '', toolId: '' });
 
   const {
     data: tool,
@@ -62,9 +68,14 @@ export function ToolDetail() {
   const handleSubscribe = async (data: { toolId: string; plan: 'free' | 'basic' | 'premium' }) => {
     setSubscribeError(null);
     try {
-      await subscribeMutation.mutateAsync(data);
+      const result = await subscribeMutation.mutateAsync(data);
       setIsSubscribeModalOpen(false);
-      // Show success or navigate to subscriptions
+      // Show API Key modal with the one-time key
+      setApiKeyModalData({
+        isOpen: true,
+        apiKey: result.api_key,
+        toolId: data.toolId,
+      });
     } catch (err) {
       setSubscribeError((err as Error)?.message || 'Failed to subscribe to tool');
     }
@@ -339,6 +350,15 @@ console.log(response);`}
           error={subscribeError}
         />
       )}
+
+      {/* API Key Modal - shown after successful subscription */}
+      <ApiKeyModal
+        isOpen={apiKeyModalData.isOpen}
+        onClose={() => setApiKeyModalData({ isOpen: false, apiKey: '', toolId: '' })}
+        apiKey={apiKeyModalData.apiKey}
+        toolId={apiKeyModalData.toolId}
+        toolName={tool?.displayName || tool?.name}
+      />
     </div>
   );
 }

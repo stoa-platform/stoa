@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { config } from '../config';
 import type {
   MCPTool,
@@ -18,6 +18,7 @@ const MCP_GATEWAY_URL = config.services.mcpGateway.url;
  */
 class MCPGatewayService {
   private client: AxiosInstance;
+  private authToken: string | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -26,13 +27,27 @@ class MCPGatewayService {
         'Content-Type': 'application/json',
       },
     });
+
+    // Use request interceptor to ensure token is always attached
+    this.client.interceptors.request.use(
+      (config: InternalAxiosRequestConfig) => {
+        if (this.authToken) {
+          config.headers.Authorization = `Bearer ${this.authToken}`;
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
   }
 
   setAuthToken(token: string) {
+    this.authToken = token;
+    // Also set defaults for backwards compatibility
     this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }
 
   clearAuthToken() {
+    this.authToken = null;
     delete this.client.defaults.headers.common['Authorization'];
   }
 

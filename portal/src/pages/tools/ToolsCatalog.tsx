@@ -4,7 +4,7 @@
  * Browse and discover MCP Tools with search and category filtering.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search,
@@ -17,7 +17,7 @@ import {
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
-import { useTools, useToolCategories } from '../../hooks/useTools';
+import { useTools, useToolCategories, useToolCategoriesWithCounts } from '../../hooks/useTools';
 import type { MCPTool } from '../../types';
 
 type ToolStatus = 'active' | 'deprecated' | 'beta';
@@ -35,6 +35,17 @@ const statusConfig: Record<ToolStatus, {
 export function ToolsCatalog() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // Debounce search query for API calls
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce the search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const {
     data: toolsData,
@@ -43,21 +54,22 @@ export function ToolsCatalog() {
     error,
     refetch,
   } = useTools({
-    tag: selectedCategory !== 'All' ? selectedCategory : undefined,
+    category: selectedCategory !== 'All' ? selectedCategory : undefined,
+    tags: selectedTags.length > 0 ? selectedTags.join(',') : undefined,
+    search: debouncedSearch || undefined,
   });
 
   const { data: categories } = useToolCategories();
+  const { data: categoriesWithCounts } = useToolCategoriesWithCounts();
 
-  // Filter by search query client-side (MCP Gateway may not support server-side search)
-  const allTools = toolsData?.tools || [];
-  const tools = searchQuery
-    ? allTools.filter((tool: MCPTool) =>
-        tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tool.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tool.displayName?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : allTools;
+  const tools = toolsData?.tools || [];
   const allCategories = ['All', ...(categories || [])];
+
+  // Get tag counts from categories for display
+  const getCategoryCount = (categoryName: string) => {
+    if (categoryName === 'All') return toolsData?.total_count || tools.length;
+    return categoriesWithCounts?.categories.find(c => c.name === categoryName)?.count || 0;
+  };
 
   return (
     <div className="space-y-6">
@@ -100,12 +112,62 @@ export function ToolsCatalog() {
           >
             {allCategories.map((cat) => (
               <option key={cat} value={cat}>
-                {cat}
+                {cat} {getCategoryCount(cat) > 0 && `(${getCategoryCount(cat)})`}
               </option>
             ))}
           </select>
         </div>
       </div>
+
+      {/* Active Filters / Tags */}
+      {(selectedTags.length > 0 || selectedCategory !== 'All' || searchQuery) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-gray-500">Active filters:</span>
+          {selectedCategory !== 'All' && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm">
+              Category: {selectedCategory}
+              <button
+                onClick={() => setSelectedCategory('All')}
+                className="hover:text-primary-900 ml-1"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {selectedTags.map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm cursor-pointer hover:bg-blue-200"
+              onClick={() => setSelectedTags(selectedTags.filter(t => t !== tag))}
+            >
+              <Tag className="h-3 w-3" />
+              {tag}
+              <span className="ml-1">×</span>
+            </span>
+          ))}
+          {searchQuery && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+              Search: "{searchQuery}"
+              <button
+                onClick={() => setSearchQuery('')}
+                className="hover:text-gray-900 ml-1"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setSelectedCategory('All');
+              setSelectedTags([]);
+            }}
+            className="text-sm text-gray-500 hover:text-gray-700 underline"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
 
       {/* Loading state */}
       {isLoading && (
@@ -185,10 +247,46 @@ export function ToolsCatalog() {
                     )}
                   </div>
 
+                  {/* Tags */}
+                  {tool.tags && tool.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-3">
+                      {tool.tags.slice(0, 3).map((toolTag: string) => (
+                        <button
+                          key={toolTag}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!selectedTags.includes(toolTag)) {
+                              setSelectedTags([...selectedTags, toolTag]);
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full transition-colors ${
+                            selectedTags.includes(toolTag)
+                              ? 'bg-blue-200 text-blue-800'
+                              : 'bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700'
+                          }`}
+                        >
+                          <Tag className="h-3 w-3" />
+                          {toolTag}
+                        </button>
+                      ))}
+                      {tool.tags.length > 3 && (
+                        <span className="text-xs text-gray-400">+{tool.tags.length - 3}</span>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                    {(tool.category || (tool.tags && tool.tags.length > 0)) ? (
-                      <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                        {tool.category || tool.tags?.[0]}
+                    {tool.category ? (
+                      <span
+                        className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded cursor-pointer hover:bg-primary-100 hover:text-primary-700"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedCategory(tool.category!);
+                        }}
+                      >
+                        {tool.category}
                       </span>
                     ) : (
                       <span />
@@ -213,15 +311,16 @@ export function ToolsCatalog() {
           </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">No Tools Found</h2>
           <p className="text-gray-500 max-w-md mx-auto mb-6">
-            {searchQuery || selectedCategory !== 'All'
-              ? 'No tools match your current filters. Try adjusting your search or category.'
+            {searchQuery || selectedCategory !== 'All' || selectedTags.length > 0
+              ? 'No tools match your current filters. Try adjusting your search, category, or tags.'
               : 'No MCP tools are currently available. Check back later.'}
           </p>
-          {(searchQuery || selectedCategory !== 'All') && (
+          {(searchQuery || selectedCategory !== 'All' || selectedTags.length > 0) && (
             <button
               onClick={() => {
                 setSearchQuery('');
                 setSelectedCategory('All');
+                setSelectedTags([]);
               }}
               className="text-primary-600 hover:text-primary-700 font-medium"
             >

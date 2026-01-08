@@ -13,6 +13,7 @@ from .mcp import (
     TextContent,
     ImageContent,
     ResourceContent,
+    ToolCategory,
     # Resource models
     Resource,
     ResourceReference,
@@ -23,6 +24,8 @@ from .mcp import (
     GetPromptResult,
     # Response models
     ListToolsResponse,
+    ListCategoriesResponse,
+    ListTagsResponse,
     ListResourcesResponse,
     ListPromptsResponse,
     InvokeToolResponse,
@@ -48,6 +51,7 @@ __all__ = [
     "TextContent",
     "ImageContent",
     "ResourceContent",
+    "ToolCategory",
     # Resource models
     "Resource",
     "ResourceReference",
@@ -58,6 +62,8 @@ __all__ = [
     "GetPromptResult",
     # Response models
     "ListToolsResponse",
+    "ListCategoriesResponse",
+    "ListTagsResponse",
     "ListResourcesResponse",
     "ListPromptsResponse",
     "InvokeToolResponse",

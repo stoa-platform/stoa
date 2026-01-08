@@ -18,6 +18,9 @@ from ..models import (
     ToolResult,
     TextContent,
     ListToolsResponse,
+    ListCategoriesResponse,
+    ListTagsResponse,
+    ToolCategory,
 )
 
 logger = structlog.get_logger(__name__)
@@ -199,7 +202,303 @@ class ToolRegistry:
             )
         )
 
+        # Register demo tools with categories
+        await self._register_demo_tools()
+
         logger.info("Registered builtin tools", count=len(self._tools))
+
+    async def _register_demo_tools(self) -> None:
+        """Register demo tools with categories for CAB-311."""
+        # Sales category tools
+        self.register(
+            Tool(
+                name="crm_search",
+                description="Search customer records in the CRM database by name, email, or account ID",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "query": {
+                            "type": "string",
+                            "description": "Search query (name, email, or account ID)",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum results to return",
+                            "default": 10,
+                        },
+                    },
+                    required=["query"],
+                ),
+                category="Sales",
+                tags=["crm", "customer", "search"],
+            )
+        )
+
+        self.register(
+            Tool(
+                name="sales_pipeline",
+                description="Get current sales pipeline status and opportunities",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "stage": {
+                            "type": "string",
+                            "description": "Filter by pipeline stage",
+                            "enum": ["prospect", "qualified", "proposal", "negotiation", "closed"],
+                        },
+                        "min_value": {
+                            "type": "number",
+                            "description": "Minimum deal value",
+                        },
+                    },
+                    required=[],
+                ),
+                category="Sales",
+                tags=["crm", "pipeline", "opportunities"],
+            )
+        )
+
+        self.register(
+            Tool(
+                name="lead_scoring",
+                description="Calculate lead score based on engagement and profile data",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "lead_id": {
+                            "type": "string",
+                            "description": "Lead identifier",
+                        },
+                    },
+                    required=["lead_id"],
+                ),
+                category="Sales",
+                tags=["crm", "leads", "scoring"],
+            )
+        )
+
+        # Finance category tools
+        self.register(
+            Tool(
+                name="billing_invoice",
+                description="Create, retrieve, or update billing invoices",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "action": {
+                            "type": "string",
+                            "description": "Action to perform",
+                            "enum": ["create", "get", "list", "update"],
+                        },
+                        "invoice_id": {
+                            "type": "string",
+                            "description": "Invoice ID (for get/update)",
+                        },
+                        "customer_id": {
+                            "type": "string",
+                            "description": "Customer ID (for create/list)",
+                        },
+                    },
+                    required=["action"],
+                ),
+                category="Finance",
+                tags=["billing", "invoice", "accounting"],
+            )
+        )
+
+        self.register(
+            Tool(
+                name="expense_report",
+                description="Submit or review expense reports",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "action": {
+                            "type": "string",
+                            "description": "Action to perform",
+                            "enum": ["submit", "approve", "reject", "list"],
+                        },
+                        "report_id": {
+                            "type": "string",
+                            "description": "Expense report ID",
+                        },
+                    },
+                    required=["action"],
+                ),
+                category="Finance",
+                tags=["expense", "finance", "reporting"],
+            )
+        )
+
+        self.register(
+            Tool(
+                name="revenue_analytics",
+                description="Get revenue analytics and financial metrics",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "period": {
+                            "type": "string",
+                            "description": "Time period",
+                            "enum": ["daily", "weekly", "monthly", "quarterly", "yearly"],
+                        },
+                        "metric": {
+                            "type": "string",
+                            "description": "Metric to retrieve",
+                            "enum": ["revenue", "mrr", "arr", "churn"],
+                        },
+                    },
+                    required=["period"],
+                ),
+                category="Finance",
+                tags=["analytics", "revenue", "metrics"],
+            )
+        )
+
+        # Operations category tools
+        self.register(
+            Tool(
+                name="inventory_lookup",
+                description="Check inventory levels and stock availability",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "product_id": {
+                            "type": "string",
+                            "description": "Product identifier",
+                        },
+                        "warehouse": {
+                            "type": "string",
+                            "description": "Warehouse location",
+                        },
+                    },
+                    required=["product_id"],
+                ),
+                category="Operations",
+                tags=["inventory", "warehouse", "stock"],
+            )
+        )
+
+        self.register(
+            Tool(
+                name="order_tracking",
+                description="Track order status and shipment information",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "order_id": {
+                            "type": "string",
+                            "description": "Order identifier",
+                        },
+                    },
+                    required=["order_id"],
+                ),
+                category="Operations",
+                tags=["orders", "shipping", "tracking"],
+            )
+        )
+
+        self.register(
+            Tool(
+                name="supply_chain_status",
+                description="Get supply chain status and supplier information",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "supplier_id": {
+                            "type": "string",
+                            "description": "Supplier identifier",
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "Product category",
+                        },
+                    },
+                    required=[],
+                ),
+                category="Operations",
+                tags=["supply-chain", "suppliers", "logistics"],
+            )
+        )
+
+        # Communications category tools
+        self.register(
+            Tool(
+                name="notifications_send",
+                description="Send notifications via email, SMS, or push",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "channel": {
+                            "type": "string",
+                            "description": "Notification channel",
+                            "enum": ["email", "sms", "push", "slack"],
+                        },
+                        "recipient": {
+                            "type": "string",
+                            "description": "Recipient identifier or address",
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Message content",
+                        },
+                        "template_id": {
+                            "type": "string",
+                            "description": "Optional template ID",
+                        },
+                    },
+                    required=["channel", "recipient", "message"],
+                ),
+                category="Communications",
+                tags=["notifications", "email", "messaging"],
+            )
+        )
+
+        self.register(
+            Tool(
+                name="email_templates",
+                description="Manage email templates for communications",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "action": {
+                            "type": "string",
+                            "description": "Action to perform",
+                            "enum": ["list", "get", "preview"],
+                        },
+                        "template_id": {
+                            "type": "string",
+                            "description": "Template identifier",
+                        },
+                        "variables": {
+                            "type": "object",
+                            "description": "Template variables for preview",
+                        },
+                    },
+                    required=["action"],
+                ),
+                category="Communications",
+                tags=["email", "templates", "marketing"],
+            )
+        )
+
+        self.register(
+            Tool(
+                name="chat_integration",
+                description="Send messages to team chat platforms (Slack, Teams)",
+                input_schema=ToolInputSchema(
+                    properties={
+                        "platform": {
+                            "type": "string",
+                            "description": "Chat platform",
+                            "enum": ["slack", "teams", "discord"],
+                        },
+                        "channel": {
+                            "type": "string",
+                            "description": "Channel or conversation ID",
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Message to send",
+                        },
+                    },
+                    required=["platform", "channel", "message"],
+                ),
+                category="Communications",
+                tags=["chat", "slack", "teams", "messaging"],
+            )
+        )
+
+        logger.info("Registered demo tools with categories", count=12)
 
     def register(self, tool: Tool) -> None:
         """Register a tool."""
@@ -224,19 +523,48 @@ class ToolRegistry:
         self,
         tenant_id: str | None = None,
         tag: str | None = None,
+        tags: list[str] | None = None,
+        category: str | None = None,
+        search: str | None = None,
         cursor: str | None = None,
         limit: int = 100,
     ) -> ListToolsResponse:
-        """List all registered tools with optional filtering."""
+        """List all registered tools with optional filtering.
+
+        Args:
+            tenant_id: Filter by tenant ID
+            tag: Filter by single tag (legacy parameter)
+            tags: Filter by multiple tags (AND logic)
+            category: Filter by category
+            search: Search in name and description
+            cursor: Pagination cursor
+            limit: Maximum results to return
+        """
         tools = list(self._tools.values())
 
         # Filter by tenant
         if tenant_id:
             tools = [t for t in tools if t.tenant_id == tenant_id or t.tenant_id is None]
 
-        # Filter by tag
+        # Filter by single tag (legacy)
         if tag:
             tools = [t for t in tools if tag in t.tags]
+
+        # Filter by multiple tags (AND logic - all tags must match)
+        if tags:
+            tools = [t for t in tools if all(tg in t.tags for tg in tags)]
+
+        # Filter by category
+        if category:
+            tools = [t for t in tools if t.category and t.category.lower() == category.lower()]
+
+        # Search in name and description
+        if search:
+            search_lower = search.lower()
+            tools = [
+                t for t in tools
+                if search_lower in t.name.lower() or search_lower in t.description.lower()
+            ]
 
         # Pagination (simple offset-based for now)
         start_idx = 0
@@ -254,6 +582,35 @@ class ToolRegistry:
             tools=paginated,
             next_cursor=next_cursor,
             total_count=len(tools),
+        )
+
+    def list_categories(self) -> ListCategoriesResponse:
+        """List all unique categories with tool counts."""
+        category_counts: dict[str, int] = {}
+
+        for tool in self._tools.values():
+            if tool.category:
+                cat = tool.category
+                category_counts[cat] = category_counts.get(cat, 0) + 1
+
+        categories = [
+            ToolCategory(name=name, count=count)
+            for name, count in sorted(category_counts.items())
+        ]
+
+        return ListCategoriesResponse(categories=categories)
+
+    def list_tags(self) -> ListTagsResponse:
+        """List all unique tags with counts."""
+        tag_counts: dict[str, int] = {}
+
+        for tool in self._tools.values():
+            for tag in tool.tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        return ListTagsResponse(
+            tags=sorted(tag_counts.keys()),
+            tag_counts=tag_counts,
         )
 
     async def invoke(

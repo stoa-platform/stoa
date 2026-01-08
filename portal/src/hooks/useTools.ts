@@ -6,7 +6,14 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toolsService, ListToolsParams, ListToolsResponse } from '../services/tools';
+import {
+  toolsService,
+  ListToolsParams,
+  ListToolsResponse,
+  ListCategoriesResponse,
+  ListTagsResponse,
+  ToolCategory,
+} from '../services/tools';
 import { subscriptionsService } from '../services/subscriptions';
 import type { MCPTool, MCPToolInvocation, MCPServerInfo, MCPSubscription } from '../types';
 
@@ -52,10 +59,10 @@ export function useToolsByTag(tag: string | undefined) {
 }
 
 /**
- * Hook to get all available tags (categories)
+ * Hook to get all available tags with counts
  */
 export function useToolTags() {
-  return useQuery<string[]>({
+  return useQuery<ListTagsResponse>({
     queryKey: ['tools', 'tags'],
     queryFn: () => toolsService.getTags(),
     staleTime: 5 * 60 * 1000, // 5 minutes - tags don't change often
@@ -63,10 +70,58 @@ export function useToolTags() {
 }
 
 /**
- * Alias for useToolTags - for backward compatibility with pages using "categories"
+ * Hook to get all available categories with tool counts
+ * Returns just the category names for dropdown/select components
  */
 export function useToolCategories() {
-  return useToolTags();
+  return useQuery<string[]>({
+    queryKey: ['tools', 'categories'],
+    queryFn: async () => {
+      const response = await toolsService.getCategories();
+      return response.categories.map((c: ToolCategory) => c.name);
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes - categories don't change often
+  });
+}
+
+/**
+ * Hook to get all categories with counts
+ * Returns full category data with counts for display
+ */
+export function useToolCategoriesWithCounts() {
+  return useQuery<ListCategoriesResponse>({
+    queryKey: ['tools', 'categories', 'full'],
+    queryFn: () => toolsService.getCategories(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to search tools by name and description
+ *
+ * @param query - Search query string
+ */
+export function useSearchTools(query: string | undefined) {
+  return useQuery<MCPTool[]>({
+    queryKey: ['tools', 'search', query],
+    queryFn: () => toolsService.searchTools(query!),
+    enabled: !!query && query.length >= 2, // Only search with 2+ characters
+    staleTime: 30 * 1000, // 30 seconds
+  });
+}
+
+/**
+ * Hook to get tools by category
+ *
+ * @param category - Category name (Sales, Finance, Operations, Communications)
+ */
+export function useToolsByCategory(category: string | undefined) {
+  return useQuery<MCPTool[]>({
+    queryKey: ['tools', 'category', category],
+    queryFn: () => toolsService.getByCategory(category!),
+    enabled: !!category,
+    staleTime: 60 * 1000, // 1 minute
+  });
 }
 
 /**

@@ -88,12 +88,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
+    console.log('[AuthContext] useEffect triggered, oidc.user:', !!oidc.user);
     if (oidc.user) {
       setUser(extractUserFromToken(oidc.user));
       // Set the access token for API calls
       if (oidc.user.access_token) {
+        console.log('[AuthContext] Setting auth token');
         apiService.setAuthToken(oidc.user.access_token);
         setIsReady(true); // Token is now set
+      } else {
+        console.warn('[AuthContext] oidc.user exists but no access_token');
       }
     } else {
       setUser(null);

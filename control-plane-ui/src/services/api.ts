@@ -26,8 +26,12 @@ class ApiService {
     // Use request interceptor to ensure token is always attached
     this.client.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
+        console.log('[ApiService] Interceptor called, authToken exists:', !!this.authToken);
         if (this.authToken) {
           config.headers.Authorization = `Bearer ${this.authToken}`;
+          console.log('[ApiService] Authorization header set');
+        } else {
+          console.warn('[ApiService] No auth token available for request to:', config.url);
         }
         return config;
       },
@@ -36,6 +40,7 @@ class ApiService {
   }
 
   setAuthToken(token: string) {
+    console.log('[ApiService] setAuthToken called');
     this.authToken = token;
     // Also set defaults for backwards compatibility
     this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;

@@ -1,0 +1,192 @@
+---
+# Playbook: Configure OAuth Scope Mappings in webMethods Gateway
+# Creates scope mappings linking OAuth scopes to APIs with correct audience
+#
+# IMPORTANT: The audience field MUST match the 'aud' claim in JWT tokens
+# For Keycloak tokens from control-plane-ui client: aud = ["control-plane-api", "account"]
+#
+# Usage:
+#   ansible-playbook configure-scope-mappings.yaml
+#
+# Variables:
+#   - gateway_url: Gateway admin URL
+#   - api_id: The API ID to associate with scopes
+#   - audience: JWT audience (must match token's aud claim)
+
+- name: Configure OAuth Scope Mappings
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../vars/secrets.yaml
+
+  vars:
+    gateway_url: "http://localhost:5555"
+    auth_server_name: "KeycloakOIDC"
+
+    # IMPORTANT: This must match the 'aud' claim in JWT tokens
+    # Keycloak tokens have: aud: ["control-plane-api", "account"]
+    audience: "control-plane-api"
+
+    # Control-Plane-API ID
+    api_id: "7ffc2f4d-74c7-4336-b264-cd2d6770458e"
+
+    # OAuth scopes to create mappings for
+    oauth_scopes:
+      - name: "openid"
+        description: "OpenID Connect scope"
+      - name: "profile"
+        description: "User profile information"
+      - name: "email"
+        description: "User email address"
+
+  tasks:
+    - name: Display configuration
+      debug:
+        msg: |
+          ========================================
+          Configuring OAuth Scope Mappings
+          ========================================
+          Auth Server: {{ auth_server_name }}
+          Audience: {{ audience }}
+          API ID: {{ api_id }}
+          Scopes: {{ oauth_scopes | map(attribute='name') | list }}
+          ========================================
+
+    # =========================================================================
+    # Get existing scopes
+    # =========================================================================
+    - name: Get existing scopes
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/scopes"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_scopes
+
+    - name: Display existing scopes
+      debug:
+        msg: "Existing scopes: {{ existing_scopes.json.scopes | default([]) | map(attribute='scopeName') | list }}"
+
+    # =========================================================================
+    # Create or Update scope mappings
+    # =========================================================================
+    - name: Create/Update scope mapping for {{ item.name }}
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/scopes"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          scopeName: "{{ auth_server_name }}:{{ item.name }}"
+          scopeDescription: "{{ item.description }}"
+          audience: "{{ audience }}"
+          apiScopes:
+            - "{{ api_id }}"
+          requiredAuthScopes:
+            - authServerAlias: "{{ auth_server_name }}"
+              scopeName: "{{ item.name }}"
+        status_code: [200, 201, 409]
+      loop: "{{ oauth_scopes }}"
+      register: scope_results
+      # 409 = already exists, which is fine
+
+    - name: Display scope creation results
+      debug:
+        msg: "Scope {{ item.item.name }}: {{ 'CREATED' if item.status == 201 else ('EXISTS' if item.status == 409 else 'UPDATED') }}"
+      loop: "{{ scope_results.results }}"
+      when: scope_results.results is defined
+
+    # =========================================================================
+    # Update existing scopes with correct audience (if they exist with wrong audience)
+    # =========================================================================
+    - name: Get updated scopes list
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/scopes"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: final_scopes
+
+    - name: Find scopes with wrong audience
+      set_fact:
+        scopes_to_update: "{{ final_scopes.json.scopes | default([]) | selectattr('audience', 'ne', audience) | list }}"
+
+    - name: Update scope with correct audience
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/scopes/{{ item.id }}"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          scope:
+            id: "{{ item.id }}"
+            scopeName: "{{ item.scopeName }}"
+            scopeDescription: "{{ item.scopeDescription }}"
+            audience: "{{ audience }}"
+            apiScopes: "{{ item.apiScopes }}"
+            requiredAuthScopes: "{{ item.requiredAuthScopes }}"
+        status_code: [200, 204]
+      loop: "{{ scopes_to_update }}"
+      when: scopes_to_update | length > 0
+      register: update_results
+
+    - name: Display update results
+      debug:
+        msg: "Updated scope {{ item.item.scopeName }} with audience: {{ audience }}"
+      loop: "{{ update_results.results | default([]) }}"
+      when:
+        - update_results.results is defined
+        - item.changed | default(false)
+
+    # =========================================================================
+    # Summary
+    # =========================================================================
+    - name: Get final scopes
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/scopes"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: final_check
+
+    - name: Summary
+      debug:
+        msg: |
+          ========================================
+          Scope Mapping Configuration Complete
+          ========================================
+          {% for scope in final_check.json.scopes | default([]) %}
+          - {{ scope.scopeName }}
+            Audience: {{ scope.audience }}
+            APIs: {{ scope.apiScopes | length }} associated
+          {% endfor %}
+          ========================================

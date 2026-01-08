@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2026-01-08) - Prometheus Alerting Rules (CAB-310)
+
+> **Related Ticket**: CAB-310 - Observability Alerting Rules Prometheus
+
+- **Alerting Rules** (`deploy/prometheus/alerting-rules.yaml`)
+  - PrometheusRule CRD with 8 rule groups and 24 alerts
+
+- **Alert Categories**
+  - **MCP Gateway** (4 alerts): HighErrorRate, HighLatency, Down, ToolInvocationErrors
+  - **Control-Plane API** (3 alerts): HighErrorRate, HighLatency, Down
+  - **Database** (3 alerts): Down, HighConnections, SlowQueries
+  - **Kubernetes** (4 alerts): PodNotReady, PodCrashLooping, PodHighMemory, PodHighCPU
+  - **Disk** (3 alerts): DiskSpaceHigh, DiskSpaceCritical, PVCSpaceHigh
+  - **Keycloak** (2 alerts): Down, HighLoginFailures
+  - **Redpanda** (2 alerts): Down, ConsumerLag
+  - **SLO** (3 alerts): ErrorBudgetLow, ErrorBudgetExhausted, SLOAvailabilityBreach
+
+- **Features**
+  - Severity labels (warning/critical)
+  - Component labels for filtering
+  - Runbook URLs for incident response
+  - Human-readable annotations with template variables
+
 ### Added (2026-01-07) - MCP Gateway Traceability Dashboard (CAB-282)
 
 > **Related Ticket**: CAB-282 - Dashboard Grafana MCP Traceability

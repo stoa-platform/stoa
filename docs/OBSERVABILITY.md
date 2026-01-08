@@ -214,17 +214,69 @@ Pre-computed SLO metrics (defined in `prometheus-rules.yaml`):
 
 ## Grafana Dashboards
 
-Dashboards are located in `docker/observability/grafana/dashboards/`:
+### Dashboard Locations
 
-| Dashboard | File | Description |
-|-----------|------|-------------|
-| Platform Overview | `platform-overview.json` | High-level platform health |
-| Control-Plane API | `control-plane-api.json` | API metrics detail |
-| MCP Gateway | `mcp-gateway.json` | Gateway metrics detail |
-| SLO Dashboard | `slo-dashboard.json` | SLO compliance tracking |
-| Logs Explorer | `logs-explorer.json` | Log search and analysis |
+| Location | Purpose |
+|----------|---------|
+| `deploy/grafana/dashboards/` | Production dashboards (deployed via ConfigMaps) |
+| `docker/observability/grafana/dashboards/` | Development/local dashboards |
 
-### Importing Dashboards
+### Deployed Dashboards
+
+Dashboards are automatically loaded by Grafana via sidecar ConfigMaps:
+
+| Dashboard | ConfigMap | Description |
+|-----------|-----------|-------------|
+| MCP Gateway Traceability | `grafana-dashboard-mcp-gateway` | Real-time MCP logs, tenant metrics, tool invocations |
+| SLO Dashboard | `grafana-dashboard-slo` | SLO compliance, error budget, latency percentiles |
+
+### MCP Gateway Traceability Dashboard (CAB-282)
+
+**File**: `deploy/grafana/dashboards/mcp-gateway-traceability.json`
+
+Panels:
+- Real-time MCP logs (Loki)
+- Calls by Tenant (bar chart)
+- Latency P95 by Tool (time series)
+- Error Rate / Success Rate (stat)
+- Total Calls Today (stat)
+- Calls by Tool (pie chart)
+- Request Rate by Status (stacked)
+- Top 10 Tools by Invocations (table)
+
+Template Variables:
+- `$tenant` - Filter by tenant ID
+- `$tool` - Filter by tool name
+- `$search` - Full-text log search
+
+### SLO Dashboard
+
+**File**: `docker/observability/grafana/dashboards/slo-dashboard.json`
+
+Panels:
+- Availability gauge (target: 99.9%)
+- Latency P95 gauge (target: <500ms)
+- Error Rate gauge (target: <0.1%)
+- Error Budget remaining
+- Availability over time with SLO line
+- Latency percentiles (p50, p95, p99)
+- Component availability/latency/error rates
+- Active Alerts panel
+
+### Deploying Dashboards
+
+```bash
+# Deploy MCP Gateway dashboard
+kubectl apply -f deploy/grafana/dashboards/mcp-gateway-configmap.yaml
+
+# Deploy SLO dashboard (via ConfigMap)
+kubectl create configmap grafana-dashboard-slo \
+  --from-file=slo-dashboard.json=docker/observability/grafana/dashboards/slo-dashboard.json \
+  -n stoa-monitoring
+kubectl label configmap grafana-dashboard-slo -n stoa-monitoring grafana_dashboard=1
+```
+
+### Importing Dashboards Manually
 
 1. Open Grafana at https://grafana.stoa.cab-i.com
 2. Go to **Dashboards** > **Import**
@@ -290,21 +342,113 @@ Example queries for Grafana:
 
 ## Alerting
 
-### SLO Alerts (defined in `prometheus-rules.yaml`)
+### Alerting Rules (CAB-310)
+
+**File**: `deploy/prometheus/alerting-rules.yaml`
+
+The STOA platform uses PrometheusRule CRDs for alerting. All rules are deployed to `stoa-monitoring` namespace.
+
+### Alert Categories
+
+#### MCP Gateway Alerts (`stoa.mcp-gateway.rules`)
 
 | Alert | Condition | Severity |
 |-------|-----------|----------|
-| SLOAvailabilityBreach | Availability < 99.9% for 5m | Critical |
-| SLOAvailabilityWarning | Availability < 99.5% for 10m | Warning |
-| SLOLatencyP95Breach | p95 > 500ms for 5m | Warning |
-| SLOLatencyP99Breach | p99 > 1000ms for 5m | Warning |
-| SLOErrorRateBreach | Error rate > 0.1% for 5m | Critical |
-| ErrorBudgetLow | Budget < 20% for 15m | Warning |
-| ErrorBudgetExhausted | Budget < 5% for 5m | Critical |
+| MCPGatewayHighErrorRate | Error rate > 5% for 5m | Warning |
+| MCPGatewayHighLatency | P95 latency > 2s for 5m | Warning |
+| MCPGatewayDown | Gateway unreachable for 1m | Critical |
+| MCPGatewayToolInvocationErrors | Tool errors > 0.1/s for 5m | Warning |
+
+#### Control-Plane API Alerts (`stoa.control-plane-api.rules`)
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| ControlPlaneAPIHighErrorRate | 5xx rate > 5% for 5m | Warning |
+| ControlPlaneAPIHighLatency | P95 latency > 2s for 5m | Warning |
+| ControlPlaneAPIDown | API unreachable for 1m | Critical |
+
+#### Database Alerts (`stoa.database.rules`)
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| DatabaseDown | PostgreSQL down for 1m | Critical |
+| DatabaseHighConnections | Connection usage > 80% for 5m | Warning |
+| DatabaseSlowQueries | Slow queries detected for 10m | Warning |
+
+#### Kubernetes Alerts (`stoa.kubernetes.rules`)
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| PodNotReady | Pod not ready for 5m | Critical |
+| PodCrashLooping | >3 restarts in 15m | Critical |
+| PodHighMemory | Memory usage > 90% for 5m | Warning |
+| PodHighCPU | CPU usage > 90% for 5m | Warning |
+
+#### Disk Space Alerts (`stoa.disk.rules`)
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| DiskSpaceHigh | Disk usage > 80% for 5m | Warning |
+| DiskSpaceCritical | Disk usage > 90% for 5m | Critical |
+| PVCSpaceHigh | PVC usage > 80% for 5m | Warning |
+
+#### Keycloak Alerts (`stoa.keycloak.rules`)
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| KeycloakDown | Keycloak unreachable for 1m | Critical |
+| KeycloakHighLoginFailures | Login failure rate > 10% for 5m | Warning |
+
+#### Redpanda Alerts (`stoa.redpanda.rules`)
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| RedpandaDown | Redpanda unreachable for 1m | Critical |
+| RedpandaConsumerLag | Consumer lag > 10000 for 5m | Warning |
+
+#### SLO Alerts (`stoa.slo.rules`)
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| ErrorBudgetLow | Budget remaining < 20% | Warning |
+| ErrorBudgetExhausted | Budget remaining < 5% | Critical |
+| SLOAvailabilityBreach | Availability < 99.9% for 10m | Critical |
+
+### Deploying Alerting Rules
+
+```bash
+# Deploy alerting rules
+kubectl apply -f deploy/prometheus/alerting-rules.yaml
+
+# Verify rules are loaded
+kubectl get prometheusrule -n stoa-monitoring stoa-alerts
+
+# Check rules in Prometheus
+kubectl exec -n stoa-monitoring prometheus-kube-prometheus-stack-prometheus-0 -c prometheus -- \
+  wget -qO- 'http://localhost:9090/api/v1/rules?type=alert' | jq '.data.groups[].name'
+```
+
+### Viewing Alerts
+
+#### Prometheus UI
+```bash
+kubectl port-forward -n stoa-monitoring svc/prometheus-operated 9090:9090
+# Open http://localhost:9090/alerts
+```
+
+#### Alertmanager UI
+```bash
+kubectl port-forward -n stoa-monitoring svc/alertmanager-operated 9093:9093
+# Open http://localhost:9093
+```
+
+#### Grafana
+- Navigate to **Alerting** > **Alert rules** in the left sidebar
+- Or view the **Active Alerts** panel in the SLO Dashboard
 
 ### Configuring AlertManager
 
-To enable alerting:
+To configure alert notifications:
 
 1. Update `values.yaml`:
 ```yaml
@@ -313,7 +457,28 @@ monitoring:
     enabled: true
 ```
 
-2. Configure AlertManager in `alertmanager-config.yaml` with your Slack/PagerDuty/email settings.
+2. Configure AlertManager receivers in `alertmanager-config.yaml`:
+```yaml
+global:
+  slack_api_url: 'https://hooks.slack.com/services/xxx'
+
+route:
+  receiver: 'slack-notifications'
+  group_by: ['alertname', 'severity']
+  routes:
+    - match:
+        severity: critical
+      receiver: 'pagerduty-critical'
+
+receivers:
+  - name: 'slack-notifications'
+    slack_configs:
+      - channel: '#stoa-alerts'
+        send_resolved: true
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - service_key: '<pagerduty-key>'
+```
 
 ## Troubleshooting
 
@@ -388,3 +553,15 @@ observability:
 - [SLO/SLA Documentation](SLO-SLA.md)
 - [Architecture Overview](ARCHITECTURE-PRESENTATION.md)
 - [Runbooks](runbooks/)
+- [Demo MCP Tools](../deploy/demo-tools/README.md)
+- [Demo Tenants](../deploy/demo-tenants/README.md)
+
+## Files Reference
+
+| File | Description |
+|------|-------------|
+| `deploy/prometheus/alerting-rules.yaml` | PrometheusRule CRD (CAB-310) |
+| `deploy/grafana/dashboards/mcp-gateway-traceability.json` | MCP Gateway dashboard (CAB-282) |
+| `deploy/grafana/dashboards/mcp-gateway-configmap.yaml` | Dashboard ConfigMap |
+| `docker/observability/grafana/dashboards/slo-dashboard.json` | SLO Dashboard |
+| `charts/stoa-platform/values.yaml` | Helm chart observability config |

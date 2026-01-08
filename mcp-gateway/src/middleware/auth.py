@@ -46,6 +46,7 @@ class TokenClaims(BaseModel):
     aud: str | list[str] | None = None  # Audience
     exp: int | None = None  # Expiration
     iat: int | None = None  # Issued at
+    acr: str | None = None  # Authentication Context Class Reference (for step-up auth/TOTP)
 
     @property
     def subject(self) -> str:

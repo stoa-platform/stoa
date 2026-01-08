@@ -29,6 +29,11 @@ from .mcp import (
     ReadResourceResponse,
     ErrorResponse,
 )
+from .subscription import (
+    Base,
+    SubscriptionStatus,
+    SubscriptionModel,
+)
 
 __all__ = [
     # Enums
@@ -58,4 +63,8 @@ __all__ = [
     "InvokeToolResponse",
     "ReadResourceResponse",
     "ErrorResponse",
+    # Subscription models
+    "Base",
+    "SubscriptionStatus",
+    "SubscriptionModel",
 ]

@@ -33,6 +33,17 @@ export interface CreateSubscriptionResponse {
   api_key: string; // ⚠️ Shown only ONCE!
 }
 
+export interface RevealKeyResponse {
+  api_key: string;
+  expires_in: number; // Visibility window in seconds
+}
+
+export interface ToggleTotpResponse {
+  subscription_id: string;
+  totp_required: boolean;
+  message: string;
+}
+
 // ============ Service ============
 
 export const subscriptionsService = {
@@ -105,6 +116,34 @@ export const subscriptionsService = {
   getMySubscriptions: async (): Promise<MCPSubscription[]> => {
     const response = await subscriptionsService.listSubscriptions();
     return response.subscriptions;
+  },
+
+  /**
+   * Reveal API key (requires TOTP if enabled)
+   * POST /mcp/v1/subscriptions/{id}/reveal-key
+   *
+   * ⚠️ Requires 2FA authentication if TOTP is enabled for the subscription.
+   * Key is shown with a visibility timer (default 30 seconds).
+   */
+  revealApiKey: async (id: string, totpCode?: string): Promise<RevealKeyResponse> => {
+    const response = await mcpClient.post<RevealKeyResponse>(
+      `/mcp/v1/subscriptions/${id}/reveal-key`,
+      totpCode ? { totp_code: totpCode } : {}
+    );
+    return response.data;
+  },
+
+  /**
+   * Toggle TOTP requirement for key reveal
+   * PATCH /mcp/v1/subscriptions/{id}/totp?enabled={true|false}
+   */
+  toggleTotpRequirement: async (id: string, enabled: boolean): Promise<ToggleTotpResponse> => {
+    const response = await mcpClient.patch<ToggleTotpResponse>(
+      `/mcp/v1/subscriptions/${id}/totp`,
+      null,
+      { params: { enabled } }
+    );
+    return response.data;
   },
 };
 

@@ -118,9 +118,79 @@ stoa_sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 ### Security
 
 - API keys are **hashed with SHA-256** before storage
-- Only the **prefix** (first 8 chars) is stored for display
-- Full key is shown **only once** at creation time
-- Keys cannot be recovered - must regenerate if lost
+- Only the **prefix** (first 12 chars) is stored for display
+- Full key is stored encrypted in **HashiCorp Vault** for secure retrieval
+- Keys can be revealed later using the **Reveal Key** feature
+- Optional **2FA/TOTP protection** for revealing stored keys
+
+## Vault Secure Storage (MCP Gateway)
+
+As of the Secure API Key Management feature, API keys for MCP subscriptions are:
+
+1. **Stored encrypted in Vault** at `secret/data/subscriptions/{subscription_id}`
+2. **Retrievable via reveal-key endpoint** with optional 2FA protection
+3. **Shown with 30-second visibility window** for security
+
+### Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Developer Portal│────>│   MCP Gateway   │────>│ HashiCorp Vault │
+│    (React)      │     │   (FastAPI)     │     │ (KV v2 Secrets) │
+└─────────────────┘     └────────┬────────┘     └─────────────────┘
+                                 │
+                                 │ (hash only)
+                                 ▼
+                        ┌─────────────────┐
+                        │   PostgreSQL    │
+                        │ (mcp_subscriptions)│
+                        └─────────────────┘
+```
+
+### Reveal Key Flow
+
+1. User clicks "Reveal Key" in Portal
+2. If TOTP required, user enters 6-digit code
+3. Portal calls `POST /mcp/v1/subscriptions/{id}/reveal-key`
+4. MCP Gateway validates token ACR claim (if TOTP required)
+5. MCP Gateway retrieves key from Vault
+6. Key shown for 30 seconds with countdown timer
+7. Key auto-hides after timer expires
+
+### Enabling 2FA Protection
+
+Users can enable TOTP protection per subscription:
+
+```bash
+# Enable TOTP requirement
+curl -X PATCH "https://mcp.stoa.cab-i.com/mcp/v1/subscriptions/{id}/totp?enabled=true" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Disable TOTP requirement
+curl -X PATCH "https://mcp.stoa.cab-i.com/mcp/v1/subscriptions/{id}/totp?enabled=false" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Reveal Key Endpoint
+
+```bash
+# Reveal API key (no TOTP)
+curl -X POST "https://mcp.stoa.cab-i.com/mcp/v1/subscriptions/{id}/reveal-key" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response
+{
+  "api_key": "stoa_sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+  "expires_in": 30
+}
+```
+
+### Security Considerations
+
+- Vault access uses Kubernetes authentication in-cluster
+- All key retrievals are logged for audit trail
+- Token must have TOTP ACR claim if subscription has TOTP enabled
+- Step-up authentication via Keycloak for sensitive operations
 
 ## Database Schema
 

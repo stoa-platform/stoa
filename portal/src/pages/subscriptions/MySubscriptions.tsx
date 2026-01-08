@@ -22,8 +22,11 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Eye,
+  Shield,
 } from 'lucide-react';
-import { useSubscriptions, useRevokeSubscription } from '../../hooks/useSubscriptions';
+import { useSubscriptions, useRevokeSubscription, useToggleTotpRequirement } from '../../hooks/useSubscriptions';
+import { RevealKeyModal } from '../../components/subscriptions/RevealKeyModal';
 import type { MCPSubscription } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'expired' | 'revoked';
@@ -43,6 +46,7 @@ export function MySubscriptions() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revealModalSubscription, setRevealModalSubscription] = useState<MCPSubscription | null>(null);
 
   const {
     data: subscriptionsData,
@@ -53,6 +57,7 @@ export function MySubscriptions() {
   } = useSubscriptions();
 
   const revokeMutation = useRevokeSubscription();
+  const toggleTotpMutation = useToggleTotpRequirement();
 
   const handleRevokeSubscription = async (subscriptionId: string) => {
     if (confirm('Are you sure you want to revoke this subscription? Your API key will be invalidated immediately.')) {
@@ -307,7 +312,14 @@ export function MySubscriptions() {
                     {subscription.tool_id}
                   </h3>
 
-                  <div className="text-sm text-gray-500 space-y-1">
+                  {/* API Key prefix */}
+                  {subscription.api_key_prefix && (
+                    <div className="mt-2 font-mono text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded inline-block">
+                      {subscription.api_key_prefix}...
+                    </div>
+                  )}
+
+                  <div className="text-sm text-gray-500 space-y-1 mt-2">
                     <p>Created: {new Date(subscription.created_at).toLocaleDateString()}</p>
                     {subscription.expires_at && (
                       <p>Expires: {new Date(subscription.expires_at).toLocaleDateString()}</p>
@@ -320,22 +332,55 @@ export function MySubscriptions() {
                     )}
                   </div>
 
+                  {/* 2FA indicator */}
+                  {subscription.totp_required && (
+                    <div className="mt-2 flex items-center gap-1 text-xs text-primary-600">
+                      <Shield className="h-3 w-3" />
+                      2FA Protected
+                    </div>
+                  )}
+
                   {subscription.status === 'active' && (
-                    <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                      {/* Reveal Key button */}
                       <button
-                        onClick={() => handleRevokeSubscription(subscription.id)}
-                        disabled={revokingId === subscription.id}
-                        className="text-sm text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
+                        onClick={() => setRevealModalSubscription(subscription)}
+                        className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
                       >
-                        {revokingId === subscription.id ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Revoking...
-                          </span>
-                        ) : (
-                          'Revoke'
-                        )}
+                        <Eye className="h-3 w-3" />
+                        Reveal Key
                       </button>
+
+                      <div className="flex items-center gap-3">
+                        {/* Toggle 2FA */}
+                        <button
+                          onClick={() => toggleTotpMutation.mutate({
+                            id: subscription.id,
+                            enabled: !subscription.totp_required
+                          })}
+                          disabled={toggleTotpMutation.isPending}
+                          className="text-sm text-gray-500 hover:text-gray-700 font-medium disabled:opacity-50"
+                          title={subscription.totp_required ? 'Disable 2FA' : 'Enable 2FA'}
+                        >
+                          <Shield className={`h-4 w-4 ${subscription.totp_required ? 'text-primary-600' : ''}`} />
+                        </button>
+
+                        {/* Revoke button */}
+                        <button
+                          onClick={() => handleRevokeSubscription(subscription.id)}
+                          disabled={revokingId === subscription.id}
+                          className="text-sm text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
+                        >
+                          {revokingId === subscription.id ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Revoking...
+                            </span>
+                          ) : (
+                            'Revoke'
+                          )}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -343,6 +388,15 @@ export function MySubscriptions() {
             })}
           </div>
         </>
+      )}
+
+      {/* Reveal Key Modal */}
+      {revealModalSubscription && (
+        <RevealKeyModal
+          subscription={revealModalSubscription}
+          isOpen={true}
+          onClose={() => setRevealModalSubscription(null)}
+        />
       )}
     </div>
   );

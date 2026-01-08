@@ -1,0 +1,119 @@
+{
+  "$schema": "https://raw.githubusercontent.com/keycloak/keycloak/main/js/libs/keycloak-admin-client/src/defs/realmRepresentation.json",
+  "_comment": "TOTP/2FA Configuration for STOA Realm - CAB-XXX Secure API Key Management",
+
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA256",
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyDigits": 6,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyPeriod": 30,
+  "otpPolicyCodeReusable": false,
+
+  "otpSupportedApplications": [
+    "Google Authenticator",
+    "Microsoft Authenticator",
+    "Authy",
+    "1Password",
+    "FreeOTP"
+  ],
+
+  "requiredActions": [
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 10,
+      "config": {}
+    }
+  ],
+
+  "authenticationFlows": [
+    {
+      "alias": "step-up-totp",
+      "description": "Step-up authentication requiring TOTP for sensitive operations",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "flowAlias": "step-up-totp-forms",
+          "userSetupAllowed": false,
+          "autheticatorFlow": true
+        }
+      ]
+    },
+    {
+      "alias": "step-up-totp-forms",
+      "description": "Username, password, and OTP verification",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        }
+      ]
+    }
+  ],
+
+  "authenticatorConfig": [
+    {
+      "alias": "totp-config",
+      "config": {
+        "otpHashAlgorithm": "HmacSHA256",
+        "otpPeriod": "30",
+        "otpDigits": "6"
+      }
+    }
+  ],
+
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"totp_enabled\",\"displayName\":\"TOTP Enabled\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]},\"multivalued\":false}]}"
+          ]
+        }
+      }
+    ]
+  },
+
+  "_instructions": {
+    "import": "Use Keycloak Admin CLI or API to import this configuration",
+    "backup_codes": "Backup codes are managed via the setup-keycloak-totp.sh script",
+    "acr_values": {
+      "0": "No authentication",
+      "1": "Password only",
+      "2": "Password + TOTP (step-up)"
+    }
+  }
+}

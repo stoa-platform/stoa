@@ -255,6 +255,109 @@
         msg: "Control-Plane-API ID: {{ cpi_api_id | default('FAILED') }}"
 
     # =========================================================================
+    # STEP 3b: Configure Control-Plane-API Outbound Auth (JWT Passthrough)
+    # =========================================================================
+    # Control-Plane-API requires JWT passthrough to backend for authentication
+    - name: Create Control-Plane-API Outbound Auth policy action
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policyActions"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policyAction:
+            names:
+              - value: "Outbound Auth - Transport (Control-Plane-API)"
+                locale: "en"
+            templateKey: "outboundTransportAuthentication"
+            parameters:
+              - templateKey: "transportSecurity"
+                parameters:
+                  - templateKey: "authType"
+                    values:
+                      - "JWT"
+                  - templateKey: "authMode"
+                    values:
+                      - "INCOMING_JWT"
+            active: true
+        status_code: [200, 201]
+      when: cpi_api_id is defined
+      register: cpi_outbound_auth_action
+
+    - name: Set Control-Plane-API outbound auth policy action ID
+      set_fact:
+        cpi_outbound_auth_action_id: "{{ cpi_outbound_auth_action.json.policyAction.id }}"
+      when: cpi_outbound_auth_action is defined and cpi_outbound_auth_action.json is defined
+
+    - name: Get Control-Plane-API policy ID
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ cpi_api_id }}"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      when: cpi_api_id is defined
+      register: cpi_api_details
+
+    - name: Extract Control-Plane-API policy ID
+      set_fact:
+        cpi_policy_id: "{{ cpi_api_details.json.apiResponse.api.policies[0] }}"
+      when:
+        - cpi_api_details is defined
+        - cpi_api_details.json.apiResponse.api.policies is defined
+        - cpi_api_details.json.apiResponse.api.policies | length > 0
+
+    - name: Get Control-Plane-API policy enforcements
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policyActionEnforcements/{{ cpi_policy_id }}"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      when: cpi_policy_id is defined
+      register: cpi_policy_enforcements
+
+    - name: Add outbound auth to Control-Plane-API routing stage
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policyActionEnforcements/{{ cpi_policy_id }}"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policyEnforcements:
+            policyEnforcements: "{{ (cpi_policy_enforcements.json.policyEnforcements.policyEnforcements | default([])) | union([{'stageKey': 'routing', 'enforcements': [{'enforcementObjectId': cpi_outbound_auth_action_id, 'order': '1'}]}]) }}"
+        status_code: [200, 204]
+      when:
+        - cpi_policy_id is defined
+        - cpi_outbound_auth_action_id is defined
+      register: cpi_policy_update
+      ignore_errors: true
+
+    - name: Display Control-Plane-API outbound auth status
+      debug:
+        msg: "Control-Plane-API Outbound Auth (JWT passthrough) configured: {{ cpi_outbound_auth_action_id | default('N/A') }}"
+
+    # =========================================================================
     # STEP 4: Import Gateway-Admin API
     # =========================================================================
     - name: Check if Gateway-Admin-API exists

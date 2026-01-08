@@ -194,6 +194,103 @@
       register: api_activate_oidc
 
     # ========================================
+    # Configure Outbound Auth - JWT Passthrough (OIDC mode)
+    # ========================================
+    - name: Create Outbound Auth policy action via OIDC proxy
+      uri:
+        url: "{{ gw_proxy_url }}/policyActions"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          policyAction:
+            names:
+              - value: "Outbound Auth - Transport"
+                locale: "en"
+            templateKey: "outboundTransportAuthentication"
+            parameters:
+              - templateKey: "transportSecurity"
+                parameters:
+                  - templateKey: "authType"
+                    values:
+                      - "JWT"
+                  - templateKey: "authMode"
+                    values:
+                      - "INCOMING_JWT"
+            active: true
+        status_code: [200, 201]
+        validate_certs: false
+      when:
+        - use_oidc_mode
+        - access_token is defined
+        - imported_api_id is defined
+      register: outbound_auth_oidc
+
+    - name: Get outbound auth ID (OIDC mode)
+      set_fact:
+        outbound_auth_id_oidc: "{{ outbound_auth_oidc.json.policyAction.id }}"
+      when:
+        - outbound_auth_oidc is defined
+        - outbound_auth_oidc.json is defined
+        - outbound_auth_oidc.json.policyAction is defined
+
+    - name: Get API details via OIDC proxy
+      uri:
+        url: "{{ gw_proxy_url }}/apis/{{ imported_api_id }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+        status_code: [200]
+        validate_certs: false
+      when:
+        - use_oidc_mode
+        - access_token is defined
+        - imported_api_id is defined
+        - outbound_auth_id_oidc is defined
+      register: api_details_oidc
+
+    - name: Get API policy ID (OIDC mode)
+      set_fact:
+        api_policy_id_oidc: "{{ api_details_oidc.json.apiResponse.api.policies[0] }}"
+      when:
+        - api_details_oidc is defined
+        - api_details_oidc.json.apiResponse.api.policies is defined
+        - api_details_oidc.json.apiResponse.api.policies | length > 0
+
+    - name: Get policy enforcements via OIDC proxy
+      uri:
+        url: "{{ gw_proxy_url }}/policyActionEnforcements/{{ api_policy_id_oidc }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+        status_code: [200]
+        validate_certs: false
+      when:
+        - api_policy_id_oidc is defined
+      register: policy_enforcements_oidc
+
+    - name: Add outbound auth to routing stage via OIDC proxy
+      uri:
+        url: "{{ gw_proxy_url }}/policyActionEnforcements/{{ api_policy_id_oidc }}"
+        method: PUT
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          policyEnforcements:
+            policyEnforcements: "{{ (policy_enforcements_oidc.json.policyEnforcements.policyEnforcements | default([])) | union([{'stageKey': 'routing', 'enforcements': [{'enforcementObjectId': outbound_auth_id_oidc, 'order': '1'}]}]) }}"
+        status_code: [200, 204]
+        validate_certs: false
+      when:
+        - api_policy_id_oidc is defined
+        - outbound_auth_id_oidc is defined
+      register: policy_update_oidc
+      ignore_errors: true
+
+    # ========================================
     # Basic Auth Fallback Mode
     # ========================================
     - name: Check Gateway health via Basic Auth
@@ -266,6 +363,119 @@
         - api_import_basic is defined
         - api_import_basic.json.apiResponse.api.id is defined
       register: api_activate_basic
+
+    # ========================================
+    # Configure Outbound Auth - JWT Passthrough (Basic Auth mode)
+    # ========================================
+    - name: Get imported API ID (Basic Auth mode)
+      set_fact:
+        imported_api_id_basic: "{{ api_import_basic.json.apiResponse.api.id }}"
+      when:
+        - not use_oidc_mode or (access_token is not defined)
+        - api_import_basic is defined
+        - api_import_basic.json.apiResponse.api.id is defined
+
+    - name: Create Outbound Auth policy action via Basic Auth
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/policyActions"
+        method: POST
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policyAction:
+            names:
+              - value: "Outbound Auth - Transport"
+                locale: "en"
+            templateKey: "outboundTransportAuthentication"
+            parameters:
+              - templateKey: "transportSecurity"
+                parameters:
+                  - templateKey: "authType"
+                    values:
+                      - "JWT"
+                  - templateKey: "authMode"
+                    values:
+                      - "INCOMING_JWT"
+            active: true
+        status_code: [200, 201]
+      when:
+        - not use_oidc_mode or (access_token is not defined)
+        - imported_api_id_basic is defined
+      register: outbound_auth_basic
+
+    - name: Get outbound auth ID (Basic Auth mode)
+      set_fact:
+        outbound_auth_id_basic: "{{ outbound_auth_basic.json.policyAction.id }}"
+      when:
+        - outbound_auth_basic is defined
+        - outbound_auth_basic.json is defined
+        - outbound_auth_basic.json.policyAction is defined
+
+    - name: Get API details via Basic Auth
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/apis/{{ imported_api_id_basic }}"
+        method: GET
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      when:
+        - imported_api_id_basic is defined
+        - outbound_auth_id_basic is defined
+      register: api_details_basic
+
+    - name: Get API policy ID (Basic Auth mode)
+      set_fact:
+        api_policy_id_basic: "{{ api_details_basic.json.apiResponse.api.policies[0] }}"
+      when:
+        - api_details_basic is defined
+        - api_details_basic.json.apiResponse.api.policies is defined
+        - api_details_basic.json.apiResponse.api.policies | length > 0
+
+    - name: Get policy enforcements via Basic Auth
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/policyActionEnforcements/{{ api_policy_id_basic }}"
+        method: GET
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      when: api_policy_id_basic is defined
+      register: policy_enforcements_basic
+
+    - name: Add outbound auth to routing stage via Basic Auth
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/policyActionEnforcements/{{ api_policy_id_basic }}"
+        method: PUT
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policyEnforcements:
+            policyEnforcements: "{{ (policy_enforcements_basic.json.policyEnforcements.policyEnforcements | default([])) | union([{'stageKey': 'routing', 'enforcements': [{'enforcementObjectId': outbound_auth_id_basic, 'order': '1'}]}]) }}"
+        status_code: [200, 204]
+      when:
+        - api_policy_id_basic is defined
+        - outbound_auth_id_basic is defined
+      register: policy_update_basic
+      ignore_errors: true
 
     # ========================================
     # Common tasks

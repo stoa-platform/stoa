@@ -1,0 +1,209 @@
+---
+# Playbook: Fix Control-Plane-UI OIDC Configuration
+# Corrects the client_id in the OIDC strategy to match Keycloak client
+#
+# Problem: The strategy OIDC-ControlPlaneApp has client_id=stoa-console
+#          but Keycloak tokens have azp=control-plane-ui
+#
+# Solution: Update the strategy to use control-plane-ui
+#
+# Usage:
+#   ansible-playbook fix-control-plane-ui-oidc.yaml
+#
+# This is a one-time fix playbook. After running, the bootstrap-platform.yaml
+# should be used for future deployments.
+
+- name: Fix Control-Plane-UI OIDC Configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../vars/secrets.yaml
+
+  vars:
+    gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
+
+    # Correct values - must match Keycloak client configuration
+    correct_client_id: "control-plane-ui"
+    correct_audience: "account"
+
+    # Strategy to update
+    strategy_name: "OIDC-ControlPlaneApp"
+
+    # Application to update
+    app_name: "ControlPlaneApp"
+
+  tasks:
+    - name: Display fix info
+      debug:
+        msg: |
+          ========================================
+          Fixing OIDC Configuration
+          ========================================
+          Strategy: {{ strategy_name }}
+          Correct Client ID: {{ correct_client_id }}
+          Correct Audience: {{ correct_audience }}
+          ========================================
+
+    # =========================================================================
+    # STEP 1: Get existing strategy
+    # =========================================================================
+    - name: Get all strategies
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/strategies"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: strategies_list
+
+    - name: Find target strategy
+      set_fact:
+        target_strategy: "{{ strategies_list.json.strategies | selectattr('name', 'equalto', strategy_name) | list | first | default(none) }}"
+
+    - name: Display current strategy
+      debug:
+        msg: |
+          Current Strategy Configuration:
+            Name: {{ target_strategy.name }}
+            ID: {{ target_strategy.id }}
+            Client ID: {{ target_strategy.clientId | default('N/A') }}
+            Audience: {{ target_strategy.audience | default('N/A') }}
+      when: target_strategy is not none
+
+    - name: Fail if strategy not found
+      fail:
+        msg: "Strategy '{{ strategy_name }}' not found in Gateway"
+      when: target_strategy is none
+
+    # =========================================================================
+    # STEP 2: Update strategy with correct client_id
+    # =========================================================================
+    - name: Update strategy with correct client_id
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/strategies/{{ target_strategy.id }}"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          id: "{{ target_strategy.id }}"
+          name: "{{ target_strategy.name }}"
+          description: "{{ target_strategy.description | default('OpenID Connect authentication with Keycloak for Control-Plane-API') }}"
+          type: "{{ target_strategy.type | default('OAUTH2') }}"
+          authServerAlias: "{{ target_strategy.authServerAlias | default('KeycloakOIDC') }}"
+          clientId: "{{ correct_client_id }}"
+          audience: "{{ correct_audience }}"
+        status_code: [200, 204]
+      register: strategy_update
+
+    - name: Display strategy update result
+      debug:
+        msg: "Strategy '{{ strategy_name }}' updated: clientId={{ correct_client_id }}, audience={{ correct_audience }}"
+
+    # =========================================================================
+    # STEP 3: Get and update application identifiers
+    # =========================================================================
+    - name: Get all applications
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: applications_list
+
+    - name: Find target application
+      set_fact:
+        target_app: "{{ applications_list.json.applications | selectattr('name', 'equalto', app_name) | list | first | default(none) }}"
+
+    - name: Display current application
+      debug:
+        msg: |
+          Current Application Configuration:
+            Name: {{ target_app.name }}
+            ID: {{ target_app.id }}
+            Identifiers: {{ target_app.identifiers | default([]) }}
+      when: target_app is not none
+
+    - name: Update application identifiers
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications/{{ target_app.id }}"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "{{ target_app.name }}"
+          description: "{{ target_app.description | default('Control Plane UI Application') }}"
+          contactEmails: "{{ target_app.contactEmails | default(['admin@cab-i.com']) }}"
+          authStrategyIds: "{{ target_app.authStrategyIds | default([]) }}"
+          identifiers:
+            - key: "openIdClaims"
+              name: "azp"
+              value:
+                - "{{ correct_client_id }}"
+        status_code: [200, 204]
+      when: target_app is not none
+      register: app_update
+
+    - name: Display application update result
+      debug:
+        msg: "Application '{{ app_name }}' updated with identifier: azp={{ correct_client_id }}"
+      when: target_app is not none
+
+    # =========================================================================
+    # STEP 4: Verify the fix
+    # =========================================================================
+    - name: Get updated strategy
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/strategies/{{ target_strategy.id }}"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: updated_strategy
+
+    - name: Summary
+      debug:
+        msg: |
+          ========================================
+          OIDC Configuration Fixed
+          ========================================
+
+          Strategy: {{ strategy_name }}
+            Client ID: {{ updated_strategy.json.strategy.clientId }}
+            Audience: {{ updated_strategy.json.strategy.audience }}
+
+          Application: {{ app_name }}
+            Identifier: azp = {{ correct_client_id }}
+
+          ========================================
+          NEXT STEPS:
+          1. Clear browser cache (Cmd+Shift+R)
+          2. Login to https://console.stoa.cab-i.com
+          3. Verify API calls work (no 401 errors)
+          ========================================

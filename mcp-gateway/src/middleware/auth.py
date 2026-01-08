@@ -31,7 +31,7 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 class TokenClaims(BaseModel):
     """Validated token claims."""
 
-    sub: str  # Subject (user ID)
+    sub: str | None = None  # Subject (user ID) - may be missing for service accounts
     email: str | None = None
     preferred_username: str | None = None
     name: str | None = None
@@ -46,6 +46,11 @@ class TokenClaims(BaseModel):
     aud: str | list[str] | None = None  # Audience
     exp: int | None = None  # Expiration
     iat: int | None = None  # Issued at
+
+    @property
+    def subject(self) -> str:
+        """Get the subject identifier (user ID or client ID)."""
+        return self.sub or self.client_id or self.azp or "unknown"
 
     @property
     def roles(self) -> list[str]:
@@ -279,7 +284,7 @@ async def get_current_user(
         claims = await authenticator.validate_token(bearer.credentials)
         logger.debug(
             "User authenticated via Bearer token",
-            sub=claims.sub,
+            sub=claims.subject,
             username=claims.preferred_username,
         )
         return claims
@@ -331,7 +336,7 @@ def require_role(role: str):
         if not user.has_role(role):
             logger.warning(
                 "Access denied - missing role",
-                user=user.sub,
+                user=user.subject,
                 required_role=role,
                 user_roles=user.roles,
             )
@@ -359,7 +364,7 @@ def require_scope(scope: str):
         if not user.has_scope(scope):
             logger.warning(
                 "Access denied - missing scope",
-                user=user.sub,
+                user=user.subject,
                 required_scope=scope,
                 user_scopes=user.scope,
             )

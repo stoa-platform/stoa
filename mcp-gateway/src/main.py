@@ -18,7 +18,7 @@ from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
 from .config import get_settings
-from .handlers import mcp_router
+from .handlers import mcp_router, subscriptions_router
 from .middleware import MetricsMiddleware
 from .services import get_tool_registry, shutdown_tool_registry
 from .k8s import get_tool_watcher, shutdown_tool_watcher
@@ -147,6 +147,9 @@ def create_app() -> FastAPI:
 
     # Register MCP router
     app.include_router(mcp_router)
+
+    # Register subscriptions router
+    app.include_router(subscriptions_router)
 
     return app
 

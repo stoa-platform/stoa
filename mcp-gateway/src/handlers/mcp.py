@@ -75,7 +75,7 @@ async def list_tools(
     logger.info(
         "Listed tools",
         count=len(result.tools),
-        user=user.sub if user else "anonymous",
+        user=user.subject if user else "anonymous",
     )
 
     return result
@@ -165,7 +165,7 @@ async def invoke_tool(
     # Check user permissions via OPA policy
     opa = await get_opa_client()
     user_claims = {
-        "sub": user.sub,
+        "sub": user.subject,
         "email": user.email,
         "realm_access": {"roles": user.roles},
         "tenant_id": getattr(user, "tenant_id", None),
@@ -182,7 +182,7 @@ async def invoke_tool(
         logger.warning(
             "Tool access denied by policy",
             tool_name=tool_name,
-            user=user.sub,
+            user=user.subject,
             reason=reason,
         )
         # Emit metering event for unauthorized access
@@ -207,7 +207,7 @@ async def invoke_tool(
     logger.info(
         "Invoking tool",
         tool_name=tool_name,
-        user=user.sub,
+        user=user.subject,
         request_id=invocation.request_id,
     )
 
@@ -272,7 +272,7 @@ async def _emit_metering_event(
 
         event = MeteringEvent.from_tool_invocation(
             tenant=tenant,
-            user_id=user.sub,
+            user_id=user.subject,
             tool=tool_name,
             latency_ms=latency_ms,
             status=status,

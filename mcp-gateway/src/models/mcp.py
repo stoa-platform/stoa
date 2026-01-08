@@ -74,6 +74,7 @@ class Tool(BaseModel):
     tenant_id: str | None = Field(None, description="Owning tenant ID")
     endpoint: str | None = Field(None, description="Backend API endpoint")
     method: str = Field("POST", description="HTTP method for backend call")
+    category: str | None = Field(None, description="Tool category (Sales, Finance, Operations, Communications)")
     tags: list[str] = Field(default_factory=list, description="Categorization tags")
     version: str = Field("1.0.0", description="Tool version")
 
@@ -231,6 +232,28 @@ class ListToolsResponse(BaseModel):
     tools: list[Tool] = Field(default_factory=list)
     next_cursor: str | None = Field(None, alias="nextCursor")
     total_count: int = Field(0)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ToolCategory(BaseModel):
+    """Tool category with count."""
+
+    name: str = Field(..., description="Category name")
+    count: int = Field(0, description="Number of tools in this category")
+
+
+class ListCategoriesResponse(BaseModel):
+    """Response for listing tool categories."""
+
+    categories: list[ToolCategory] = Field(default_factory=list)
+
+
+class ListTagsResponse(BaseModel):
+    """Response for listing tool tags."""
+
+    tags: list[str] = Field(default_factory=list)
+    tag_counts: dict[str, int] = Field(default_factory=dict, alias="tagCounts")
 
     model_config = ConfigDict(populate_by_name=True)
 

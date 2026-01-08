@@ -13,6 +13,9 @@ import type { MCPTool, MCPToolInvocation, MCPServerInfo } from '../types';
 
 export interface ListToolsParams {
   tag?: string;
+  tags?: string;  // Comma-separated list of tags
+  category?: string;  // Filter by category (Sales, Finance, Operations, Communications)
+  search?: string;  // Search in name and description
   tenant_id?: string;
   cursor?: string;
   limit?: number;
@@ -21,6 +24,21 @@ export interface ListToolsParams {
 export interface ListToolsResponse {
   tools: MCPTool[];
   cursor?: string;
+  total_count?: number;
+}
+
+export interface ToolCategory {
+  name: string;
+  count: number;
+}
+
+export interface ListCategoriesResponse {
+  categories: ToolCategory[];
+}
+
+export interface ListTagsResponse {
+  tags: string[];
+  tagCounts: Record<string, number>;
 }
 
 /**
@@ -63,12 +81,47 @@ export const toolsService = {
   },
 
   /**
-   * Get all available tags (categories)
+   * Get all available tags with counts
    * GET /mcp/v1/tools/tags
    */
-  async getTags(): Promise<string[]> {
-    const response = await mcpClient.get<{ tags: string[] }>('/mcp/v1/tools/tags');
-    return response.data.tags;
+  async getTags(): Promise<ListTagsResponse> {
+    const response = await mcpClient.get<ListTagsResponse>('/mcp/v1/tools/tags');
+    return response.data;
+  },
+
+  /**
+   * Get all available categories with tool counts
+   * GET /mcp/v1/tools/categories
+   */
+  async getCategories(): Promise<ListCategoriesResponse> {
+    const response = await mcpClient.get<ListCategoriesResponse>('/mcp/v1/tools/categories');
+    return response.data;
+  },
+
+  /**
+   * Search tools by name and description
+   * GET /mcp/v1/tools?search={query}
+   *
+   * @param query - Search query string
+   */
+  async searchTools(query: string): Promise<MCPTool[]> {
+    const response = await mcpClient.get<ListToolsResponse>('/mcp/v1/tools', {
+      params: { search: query, limit: 100 },
+    });
+    return response.data.tools;
+  },
+
+  /**
+   * Get tools by category
+   * GET /mcp/v1/tools?category={category}
+   *
+   * @param category - Category name (Sales, Finance, Operations, Communications)
+   */
+  async getByCategory(category: string): Promise<MCPTool[]> {
+    const response = await mcpClient.get<ListToolsResponse>('/mcp/v1/tools', {
+      params: { category, limit: 100 },
+    });
+    return response.data.tools;
   },
 
   /**

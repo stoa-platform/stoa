@@ -20,6 +20,8 @@ from ..models import (
     ListToolsResponse,
     ListResourcesResponse,
     ListPromptsResponse,
+    ListCategoriesResponse,
+    ListTagsResponse,
     InvokeToolResponse,
     ErrorResponse,
     Resource,
@@ -47,7 +49,10 @@ router = APIRouter(prefix="/mcp/v1", tags=["MCP"])
 )
 async def list_tools(
     tenant_id: str | None = Query(None, description="Filter by tenant ID"),
-    tag: str | None = Query(None, description="Filter by tag"),
+    tag: str | None = Query(None, description="Filter by single tag (legacy)"),
+    tags: str | None = Query(None, description="Filter by multiple tags (comma-separated)"),
+    category: str | None = Query(None, description="Filter by category (Sales, Finance, Operations, Communications)"),
+    search: str | None = Query(None, description="Search in tool name and description"),
     cursor: str | None = Query(None, description="Pagination cursor"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum results to return"),
     user: TokenClaims | None = Depends(get_optional_user),
@@ -55,7 +60,12 @@ async def list_tools(
     """List all available MCP tools.
 
     Tools are mapped from registered APIs in the STOA platform.
-    Results can be filtered by tenant and tags.
+    Results can be filtered by tenant, category, tags, and search query.
+
+    Examples:
+    - GET /mcp/v1/tools?category=sales
+    - GET /mcp/v1/tools?tags=crm,finance
+    - GET /mcp/v1/tools?search=customer
     """
     registry = await get_tool_registry()
 
@@ -65,9 +75,15 @@ async def list_tools(
         # TODO: Validate user has access to requested tenant
         pass
 
+    # Parse comma-separated tags
+    tags_list = [t.strip() for t in tags.split(",")] if tags else None
+
     result = registry.list_tools(
         tenant_id=effective_tenant,
         tag=tag,
+        tags=tags_list,
+        category=category,
+        search=search,
         cursor=cursor,
         limit=limit,
     )
@@ -75,6 +91,31 @@ async def list_tools(
     logger.info(
         "Listed tools",
         count=len(result.tools),
+        category=category,
+        tags=tags,
+        search=search,
+        user=user.subject if user else "anonymous",
+    )
+
+    return result
+
+
+@router.get(
+    "/tools/categories",
+    response_model=ListCategoriesResponse,
+    summary="List all tool categories",
+    description="Returns a list of all unique categories with tool counts.",
+)
+async def list_tool_categories(
+    user: TokenClaims | None = Depends(get_optional_user),
+) -> ListCategoriesResponse:
+    """List all unique categories from registered tools."""
+    registry = await get_tool_registry()
+    result = registry.list_categories()
+
+    logger.info(
+        "Listed categories",
+        count=len(result.categories),
         user=user.subject if user else "anonymous",
     )
 
@@ -83,23 +124,24 @@ async def list_tools(
 
 @router.get(
     "/tools/tags",
+    response_model=ListTagsResponse,
     summary="Get all unique tags",
-    description="Returns a list of all unique tags used by tools.",
+    description="Returns a list of all unique tags used by tools with counts.",
 )
 async def get_tool_tags(
     user: TokenClaims | None = Depends(get_optional_user),
-) -> dict[str, list[str]]:
-    """Get all unique tags from registered tools."""
+) -> ListTagsResponse:
+    """Get all unique tags from registered tools with counts."""
     registry = await get_tool_registry()
+    result = registry.list_tags()
 
-    # Collect all unique tags
-    all_tags: set[str] = set()
-    result = registry.list_tools(limit=1000)
-    for tool in result.tools:
-        if tool.tags:
-            all_tags.update(tool.tags)
+    logger.info(
+        "Listed tags",
+        count=len(result.tags),
+        user=user.subject if user else "anonymous",
+    )
 
-    return {"tags": sorted(all_tags)}
+    return result
 
 
 @router.get(

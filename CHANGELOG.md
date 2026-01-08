@@ -8,6 +8,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2026-01-08) - Portal Integration Subscription API (CAB-292)
+
+> **Related Ticket**: CAB-292 - Portal Integration Subscription API
+
+- **API Key Modal Component** (`portal/src/components/subscriptions/ApiKeyModal.tsx`)
+  - Displays API key after successful tool subscription
+  - "Key shown only once" warning with acknowledgment checkbox
+  - Copy to clipboard functionality
+  - Download claude_desktop_config.json configuration
+  - Usage example with curl command
+  - Must acknowledge before closing modal
+
+- **Subscribe Hook Integration** (`portal/src/hooks/useTools.ts`)
+  - `useSubscribeToTool` hook now calls MCP subscription service
+  - Returns subscription data and one-time API key
+  - Invalidates subscriptions cache on success
+
+- **Tool Detail Page Enhancement** (`portal/src/pages/tools/ToolDetail.tsx`)
+  - Wired Subscribe button to MCP subscription API
+  - Shows ApiKeyModal after successful subscription
+  - Integrated with SubscribeToToolModal for plan selection
+
+- **Existing Components Verified**
+  - `SubscribeToToolModal` - Plan selection (free/basic/premium)
+  - `MySubscriptions` page - List, filter, revoke subscriptions
+  - `subscriptionsService` - MCP Gateway API client
+  - `useSubscriptions`, `useRevokeSubscription` hooks
+
+### Added (2026-01-08) - Demo Validation Script (CAB-295)
+
+> **Related Ticket**: CAB-295 - Script de validation demo (Smoke Test)
+
+- **Validation Script** (`scripts/validate-demo.sh`)
+  - Comprehensive smoke test for all demo components
+  - 8 validation categories with colored output
+
+- **Checks Performed**
+  - **Services**: Control-Plane API, MCP Gateway, Portal, Console health
+  - **Observability**: Grafana, Prometheus availability
+  - **Authentication**: Keycloak OIDC, token acquisition, auth flow (401/200)
+  - **Database**: PostgreSQL readiness
+  - **MCP Gateway**: List tools, invoke tool, metrics endpoint
+  - **Demo Data**: Tools, Tenants, Subscriptions CRDs
+  - **Dashboards**: Grafana dashboard ConfigMaps
+  - **Alerting**: PrometheusRule deployment
+  - **Pod Status**: Key pod health in stoa-system
+
+- **Features**
+  - `--local` mode for kubectl port-forward testing
+  - `--verbose` mode for detailed output
+  - Exit code 0/1 for CI integration
+  - Colored pass/fail/skip output
+
 ### Added (2026-01-08) - Prometheus Alerting Rules (CAB-310)
 
 > **Related Ticket**: CAB-310 - Observability Alerting Rules Prometheus

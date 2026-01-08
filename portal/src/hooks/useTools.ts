@@ -5,9 +5,10 @@
  * These hooks enable both human users and AI agents to discover and invoke tools.
  */
 
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toolsService, ListToolsParams, ListToolsResponse } from '../services/tools';
-import type { MCPTool, MCPToolInvocation, MCPServerInfo } from '../types';
+import { subscriptionsService } from '../services/subscriptions';
+import type { MCPTool, MCPToolInvocation, MCPServerInfo, MCPSubscription } from '../types';
 
 /**
  * Hook to list MCP tools from MCP Gateway
@@ -82,14 +83,29 @@ export function useToolSchema(name: string | undefined) {
 }
 
 /**
- * Hook to subscribe to a tool (placeholder - uses subscriptions service)
+ * Hook to subscribe to a tool
+ * Returns the subscription AND the API key (shown only once!)
+ *
+ * Reference: Linear CAB-292
  */
 export function useSubscribeToTool() {
-  return useMutation<unknown, Error, { toolId: string; plan: 'free' | 'basic' | 'premium' }>({
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { subscription: MCPSubscription; api_key: string },
+    Error,
+    { toolId: string; plan: 'free' | 'basic' | 'premium' }
+  >({
     mutationFn: async ({ toolId, plan }) => {
-      // TODO: Implement with subscriptions service when portal endpoints are available
-      console.log('Subscribing to tool:', toolId, 'with plan:', plan);
-      throw new Error('Tool subscriptions not yet implemented. Please check back later.');
+      const response = await subscriptionsService.createSubscription({
+        tool_id: toolId,
+        plan,
+      });
+      return response;
+    },
+    onSuccess: () => {
+      // Invalidate subscriptions list to show new subscription
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
     },
   });
 }

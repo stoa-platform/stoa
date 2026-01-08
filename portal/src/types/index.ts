@@ -97,10 +97,13 @@ export interface MCPSubscription {
   user_id: string;
   tool_id: string;
   status: 'active' | 'expired' | 'revoked';
+  plan: string;
   created_at: string;
   expires_at: string | null;
   last_used_at?: string;
   usage_count?: number;
+  api_key_prefix?: string;  // First 12 chars for display (e.g., "stoa_sk_XXXX")
+  totp_required?: boolean;  // Whether 2FA is required to reveal the API key
 }
 
 export interface MCPSubscriptionCreate {

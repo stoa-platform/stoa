@@ -1,0 +1,98 @@
+{{- if .Values.mcpGateway.vault.enabled }}
+---
+# Vault Policy for MCP Gateway API Key Storage
+# Reference: CAB-XXX - Secure API Key Management with Vault & 2FA
+#
+# This policy allows the MCP Gateway to:
+# - Store API keys at secret/data/subscriptions/*
+# - Retrieve API keys for authorized users
+# - Delete API keys when subscriptions are revoked
+# - Optionally use transit engine for additional encryption
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-gateway-vault-policy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mcp-gateway
+    app.kubernetes.io/component: vault-policy
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+data:
+  mcp-gateway-policy.hcl: |
+    # API Key Storage - KV v2 Secrets Engine
+    # Path: secret/data/subscriptions/{subscription_id}
+
+    # Create and update API keys
+    path "secret/data/subscriptions/*" {
+      capabilities = ["create", "update", "read"]
+    }
+
+    # Read API keys (for reveal-key endpoint)
+    path "secret/data/subscriptions/+" {
+      capabilities = ["read"]
+    }
+
+    # Delete API keys (when subscription revoked)
+    path "secret/metadata/subscriptions/*" {
+      capabilities = ["delete"]
+    }
+
+    # List subscriptions (for admin purposes)
+    path "secret/metadata/subscriptions" {
+      capabilities = ["list"]
+    }
+
+    # Optional: Transit engine for additional encryption
+    # Uncomment if using transit encryption
+    #
+    # path "transit/encrypt/api-keys" {
+    #   capabilities = ["update"]
+    # }
+    #
+    # path "transit/decrypt/api-keys" {
+    #   capabilities = ["update"]
+    # }
+
+---
+# Kubernetes Auth Role for MCP Gateway
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-gateway-vault-auth-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mcp-gateway
+    app.kubernetes.io/component: vault-auth
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+  annotations:
+    # This ConfigMap documents the required Vault configuration
+    # Actual Vault setup is done via vault CLI or Terraform
+    vault.hashicorp.com/role: mcp-gateway
+data:
+  vault-auth-setup.sh: |
+    #!/bin/bash
+    # Run this script to configure Vault for MCP Gateway
+    # Prerequisites: Vault CLI authenticated with admin privileges
+
+    # Enable Kubernetes auth if not already enabled
+    vault auth enable kubernetes 2>/dev/null || true
+
+    # Configure Kubernetes auth
+    vault write auth/kubernetes/config \
+      kubernetes_host="https://$KUBERNETES_PORT_443_TCP_ADDR:443" \
+      token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+      kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+    # Create policy from ConfigMap
+    vault policy write mcp-gateway /tmp/mcp-gateway-policy.hcl
+
+    # Create Kubernetes auth role
+    vault write auth/kubernetes/role/mcp-gateway \
+      bound_service_account_names=mcp-gateway \
+      bound_service_account_namespaces={{ .Release.Namespace }} \
+      policies=mcp-gateway \
+      ttl=1h
+
+    echo "Vault configuration for MCP Gateway complete!"
+{{- end }}

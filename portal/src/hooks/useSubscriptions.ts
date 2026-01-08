@@ -13,6 +13,8 @@ import {
   ListSubscriptionsParams,
   SubscriptionsListResponse,
   CreateSubscriptionResponse,
+  RevealKeyResponse,
+  ToggleTotpResponse,
 } from '../services/subscriptions';
 import type { MCPSubscription, MCPSubscriptionCreate, MCPSubscriptionConfig, APISubscription } from '../types';
 
@@ -104,6 +106,34 @@ export function useSubscriptionConfig(id: string | undefined) {
     queryFn: () => subscriptionsService.getConfigExport(id!),
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes - config doesn't change often
+  });
+}
+
+/**
+ * Hook to reveal API key (requires 2FA if enabled)
+ *
+ * ⚠️ If TOTP is required but token doesn't have TOTP ACR, returns 403.
+ * The UI should handle step-up authentication flow.
+ */
+export function useRevealApiKey() {
+  return useMutation<RevealKeyResponse, Error, { id: string; totpCode?: string }>({
+    mutationFn: ({ id, totpCode }) => subscriptionsService.revealApiKey(id, totpCode),
+  });
+}
+
+/**
+ * Hook to toggle TOTP requirement for key reveal
+ */
+export function useToggleTotpRequirement() {
+  const queryClient = useQueryClient();
+
+  return useMutation<ToggleTotpResponse, Error, { id: string; enabled: boolean }>({
+    mutationFn: ({ id, enabled }) => subscriptionsService.toggleTotpRequirement(id, enabled),
+    onSuccess: (_, { id }) => {
+      // Invalidate subscriptions to reflect new totp_required status
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['subscription', id] });
+    },
   });
 }
 

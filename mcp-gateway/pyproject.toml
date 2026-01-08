@@ -37,6 +37,11 @@ dependencies = [
     "opentelemetry-sdk>=1.22.0",
     "opentelemetry-instrumentation-fastapi>=0.43b0",
     "aiokafka>=0.10.0",
+    # Vault & Database (CAB-XXX: Secure API Key Management)
+    "hvac>=2.1.0",
+    "asyncpg>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "alembic>=1.13.0",
 ]
 
 [project.optional-dependencies]

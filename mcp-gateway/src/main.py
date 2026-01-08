@@ -20,7 +20,7 @@ from starlette.responses import Response
 from .config import get_settings
 from .handlers import mcp_router, subscriptions_router
 from .middleware import MetricsMiddleware
-from .services import get_tool_registry, shutdown_tool_registry
+from .services import get_tool_registry, shutdown_tool_registry, init_database, shutdown_database
 from .k8s import get_tool_watcher, shutdown_tool_watcher
 
 # Configure structured logging
@@ -60,6 +60,13 @@ async def lifespan(app: FastAPI):
 
     # Startup
     app_state["started_at"] = datetime.now(timezone.utc)
+
+    # Initialize database
+    try:
+        await init_database()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.warning("Database initialization failed, using in-memory storage", error=str(e))
 
     # Initialize tool registry
     registry = await get_tool_registry()
@@ -113,6 +120,9 @@ async def lifespan(app: FastAPI):
 
     # Cleanup tool registry
     await shutdown_tool_registry()
+
+    # Cleanup database
+    await shutdown_database()
 
 
 def create_app() -> FastAPI:

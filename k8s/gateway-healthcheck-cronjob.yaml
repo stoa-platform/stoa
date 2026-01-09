@@ -10,7 +10,8 @@ metadata:
     app: gateway-healthcheck
     component: monitoring
 spec:
-  schedule: "*/5 * * * *"
+  # Run every 2 minutes for trial version with metering shutdown
+  schedule: "*/2 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

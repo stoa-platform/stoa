@@ -9,6 +9,8 @@ export interface User {
   name: string;
   tenant_id?: string;
   organization?: string;
+  roles?: string[];
+  is_admin?: boolean;
 }
 
 // MCP Tool types (aligned with MCP Gateway response format)

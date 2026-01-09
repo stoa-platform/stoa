@@ -16,7 +16,7 @@ import {
   RevealKeyResponse,
   ToggleTotpResponse,
 } from '../services/subscriptions';
-import type { MCPSubscription, MCPSubscriptionCreate, MCPSubscriptionConfig, APISubscription } from '../types';
+import type { MCPSubscription, MCPSubscriptionCreate, MCPSubscriptionConfig, APISubscription, KeyRotationResponse } from '../types';
 
 /**
  * Hook to list user's MCP subscriptions
@@ -134,6 +134,40 @@ export function useToggleTotpRequirement() {
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['subscription', id] });
     },
+  });
+}
+
+// ============ Key Rotation Hooks (CAB-314) ============
+
+/**
+ * Hook to rotate API key with grace period
+ *
+ * Returns the new API key (shown only once!) and grace period info.
+ * The old key remains valid for the grace period.
+ */
+export function useRotateApiKey() {
+  const queryClient = useQueryClient();
+
+  return useMutation<KeyRotationResponse, Error, { id: string; gracePeriodHours?: number }>({
+    mutationFn: ({ id, gracePeriodHours }) =>
+      subscriptionsService.rotateApiKey(id, gracePeriodHours ? { grace_period_hours: gracePeriodHours } : undefined),
+    onSuccess: (_, { id }) => {
+      // Invalidate subscriptions to reflect new key prefix
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['subscription', id] });
+    },
+  });
+}
+
+/**
+ * Hook to get subscription with rotation info
+ */
+export function useSubscriptionRotationInfo(id: string | undefined) {
+  return useQuery<MCPSubscription>({
+    queryKey: ['subscription', id, 'rotation-info'],
+    queryFn: () => subscriptionsService.getRotationInfo(id!),
+    enabled: !!id,
+    staleTime: 30 * 1000, // 30 seconds
   });
 }
 

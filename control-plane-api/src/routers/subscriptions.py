@@ -19,7 +19,11 @@ from ..schemas.subscription import (
     SubscriptionRevoke,
     SubscriptionStatusEnum,
     APIKeyResponse,
+    KeyRotationRequest,
+    KeyRotationResponse,
+    SubscriptionWithRotationInfo,
 )
+from ..services.email import email_service
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +195,130 @@ async def cancel_subscription(
     )
 
     logger.info(f"Subscription {subscription_id} cancelled by subscriber {user.email}")
+
+
+# ============== Key Rotation Endpoint (CAB-314) ==============
+
+@router.post("/{subscription_id}/rotate-key", response_model=KeyRotationResponse)
+async def rotate_api_key(
+    subscription_id: UUID,
+    request: KeyRotationRequest = KeyRotationRequest(),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Rotate the API key for a subscription with grace period.
+
+    The old key remains valid for the specified grace period (default 24 hours).
+    During the grace period, both old and new keys are accepted.
+    After the grace period expires, only the new key is valid.
+
+    Returns the new API key (shown only once!) and grace period information.
+    An email notification is sent to the subscriber with the new key.
+    """
+    repo = SubscriptionRepository(db)
+    subscription = await repo.get_by_id(subscription_id)
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    # Check access: subscriber owns this subscription or is tenant admin
+    if subscription.subscriber_id != user.id and not _has_tenant_access(user, subscription.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Can only rotate active subscriptions
+    if subscription.status != SubscriptionStatus.ACTIVE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot rotate key for subscription in {subscription.status.value} status"
+        )
+
+    # Check if there's already an active grace period
+    from datetime import datetime
+    if subscription.previous_key_expires_at and subscription.previous_key_expires_at > datetime.utcnow():
+        raise HTTPException(
+            status_code=400,
+            detail=f"A key rotation is already in progress. Previous key expires at {subscription.previous_key_expires_at.isoformat()}. Wait for the grace period to end before rotating again."
+        )
+
+    # Generate new API key
+    new_api_key, new_api_key_hash, new_api_key_prefix = APIKeyService.generate_key()
+
+    try:
+        # Perform key rotation with grace period
+        subscription = await repo.rotate_key(
+            subscription=subscription,
+            new_api_key_hash=new_api_key_hash,
+            new_api_key_prefix=new_api_key_prefix,
+            grace_period_hours=request.grace_period_hours
+        )
+
+        logger.info(
+            f"API key rotated for subscription {subscription_id} by {user.email}. "
+            f"Grace period: {request.grace_period_hours}h, expires at: {subscription.previous_key_expires_at}"
+        )
+
+        # Send email notification (async, don't wait)
+        try:
+            await email_service.send_key_rotation_notification(
+                to_email=subscription.subscriber_email,
+                subscription_id=str(subscription_id),
+                api_name=subscription.api_name,
+                application_name=subscription.application_name,
+                new_api_key=new_api_key,
+                old_key_expires_at=subscription.previous_key_expires_at,
+                grace_period_hours=request.grace_period_hours
+            )
+        except Exception as e:
+            # Log but don't fail the rotation if email fails
+            logger.warning(f"Failed to send key rotation email: {e}")
+
+        return KeyRotationResponse(
+            subscription_id=subscription.id,
+            new_api_key=new_api_key,
+            new_api_key_prefix=new_api_key_prefix,
+            old_key_expires_at=subscription.previous_key_expires_at,
+            grace_period_hours=request.grace_period_hours,
+            rotation_count=subscription.rotation_count
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to rotate API key for subscription {subscription_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to rotate API key")
+
+
+@router.get("/{subscription_id}/rotation-info", response_model=SubscriptionWithRotationInfo)
+async def get_subscription_rotation_info(
+    subscription_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get subscription details with key rotation information.
+
+    Includes grace period status if a key rotation is in progress.
+    """
+    repo = SubscriptionRepository(db)
+    subscription = await repo.get_by_id(subscription_id)
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    # Check access
+    if subscription.subscriber_id != user.id and not _has_tenant_access(user, subscription.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Check if there's an active grace period
+    from datetime import datetime
+    has_active_grace_period = (
+        subscription.previous_key_expires_at is not None
+        and subscription.previous_key_expires_at > datetime.utcnow()
+    )
+
+    response = SubscriptionWithRotationInfo.model_validate(subscription)
+    response.has_active_grace_period = has_active_grace_period
+
+    return response
 
 
 # ============== Admin Endpoints (Control Plane) ==============
@@ -435,6 +563,8 @@ async def validate_api_key(
 
     This is an internal endpoint for the API Gateway to validate
     incoming API keys and get subscription details.
+
+    Supports grace period: during key rotation, both old and new keys are valid.
     """
     # Validate format
     if not APIKeyService.validate_format(api_key):
@@ -444,7 +574,20 @@ async def validate_api_key(
     api_key_hash = APIKeyService.hash_key(api_key)
 
     repo = SubscriptionRepository(db)
+
+    # Try to find by current key first
     subscription = await repo.get_by_api_key_hash(api_key_hash)
+    is_previous_key = False
+
+    # If not found, check if it's a previous key during grace period (CAB-314)
+    if not subscription:
+        subscription = await repo.get_by_previous_key_hash(api_key_hash)
+        if subscription:
+            is_previous_key = True
+            logger.info(
+                f"Using previous API key during grace period for subscription {subscription.id}. "
+                f"Expires at: {subscription.previous_key_expires_at}"
+            )
 
     if not subscription:
         raise HTTPException(status_code=401, detail="API key not found")
@@ -456,13 +599,15 @@ async def validate_api_key(
             detail=f"Subscription is {subscription.status.value}"
         )
 
-    # Check expiration
-    if subscription.expires_at:
-        from datetime import datetime
-        if datetime.utcnow() > subscription.expires_at:
-            raise HTTPException(status_code=403, detail="Subscription expired")
+    # Check subscription expiration
+    from datetime import datetime
+    now = datetime.utcnow()
 
-    return {
+    if subscription.expires_at and now > subscription.expires_at:
+        raise HTTPException(status_code=403, detail="Subscription expired")
+
+    # Build response with grace period info
+    response = {
         "valid": True,
         "subscription_id": str(subscription.id),
         "application_id": subscription.application_id,
@@ -474,3 +619,11 @@ async def validate_api_key(
         "plan_id": subscription.plan_id,
         "plan_name": subscription.plan_name,
     }
+
+    # Add grace period warning if using old key
+    if is_previous_key:
+        response["warning"] = "Using deprecated API key during grace period"
+        response["key_expires_at"] = subscription.previous_key_expires_at.isoformat()
+        response["using_previous_key"] = True
+
+    return response

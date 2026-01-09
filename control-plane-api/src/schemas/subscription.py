@@ -132,3 +132,68 @@ class SubscriptionStats(BaseModel):
     by_status: dict[str, int]
     by_tenant: dict[str, int]
     recent_24h: int
+
+
+# ============== Key Rotation Schemas (CAB-314) ==============
+
+class KeyRotationRequest(BaseModel):
+    """Schema for requesting API key rotation"""
+    grace_period_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,  # Max 7 days
+        description="Number of hours the old key remains valid (1-168)"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "grace_period_hours": 24
+            }
+        }
+    )
+
+
+class KeyRotationResponse(BaseModel):
+    """Schema for key rotation response"""
+    subscription_id: UUID
+    new_api_key: str = Field(..., description="New API key - shown only once!")
+    new_api_key_prefix: str = Field(..., description="New key prefix for reference")
+    old_key_expires_at: datetime = Field(..., description="When the old key becomes invalid")
+    grace_period_hours: int = Field(..., description="Grace period duration in hours")
+    rotation_count: int = Field(..., description="Total number of rotations for this subscription")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "subscription_id": "550e8400-e29b-41d4-a716-446655440000",
+                "new_api_key": "stoa_sk_newkey1234efgh5678ijkl9012mnop3456",
+                "new_api_key_prefix": "stoa_sk_",
+                "old_key_expires_at": "2026-01-10T16:00:00Z",
+                "grace_period_hours": 24,
+                "rotation_count": 1
+            }
+        }
+    )
+
+
+class SubscriptionWithRotationInfo(SubscriptionResponse):
+    """Extended subscription response with rotation info"""
+    previous_key_expires_at: Optional[datetime] = Field(
+        None,
+        description="If set, old key is still valid until this time"
+    )
+    last_rotated_at: Optional[datetime] = Field(
+        None,
+        description="When the key was last rotated"
+    )
+    rotation_count: int = Field(
+        default=0,
+        description="Number of times the key has been rotated"
+    )
+    has_active_grace_period: bool = Field(
+        default=False,
+        description="True if old key is still valid during grace period"
+    )
+
+    model_config = ConfigDict(from_attributes=True)

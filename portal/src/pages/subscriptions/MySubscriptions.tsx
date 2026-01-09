@@ -25,8 +25,9 @@ import {
   Eye,
   Shield,
 } from 'lucide-react';
-import { useSubscriptions, useRevokeSubscription, useToggleTotpRequirement } from '../../hooks/useSubscriptions';
+import { useSubscriptions, useRevokeSubscription, useToggleTotpRequirement, useRotateApiKey } from '../../hooks/useSubscriptions';
 import { RevealKeyModal } from '../../components/subscriptions/RevealKeyModal';
+import { RotateKeyModal } from '../../components/subscriptions/RotateKeyModal';
 import type { MCPSubscription } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'expired' | 'revoked';
@@ -47,6 +48,7 @@ export function MySubscriptions() {
   const [searchQuery, setSearchQuery] = useState('');
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revealModalSubscription, setRevealModalSubscription] = useState<MCPSubscription | null>(null);
+  const [rotateModalSubscription, setRotateModalSubscription] = useState<MCPSubscription | null>(null);
 
   const {
     data: subscriptionsData,
@@ -58,6 +60,7 @@ export function MySubscriptions() {
 
   const revokeMutation = useRevokeSubscription();
   const toggleTotpMutation = useToggleTotpRequirement();
+  const rotateKeyMutation = useRotateApiKey();
 
   const handleRevokeSubscription = async (subscriptionId: string) => {
     if (confirm('Are you sure you want to revoke this subscription? Your API key will be invalidated immediately.')) {
@@ -340,18 +343,41 @@ export function MySubscriptions() {
                     </div>
                   )}
 
-                  {subscription.status === 'active' && (
-                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                      {/* Reveal Key button */}
-                      <button
-                        onClick={() => setRevealModalSubscription(subscription)}
-                        className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
-                      >
-                        <Eye className="h-3 w-3" />
-                        Reveal Key
-                      </button>
+                  {/* Grace period indicator (CAB-314) */}
+                  {subscription.has_active_grace_period && subscription.previous_key_expires_at && (
+                    <div className="mt-2 flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                      <Clock className="h-3 w-3" />
+                      Grace period until {new Date(subscription.previous_key_expires_at).toLocaleString()}
+                    </div>
+                  )}
 
-                      <div className="flex items-center gap-3">
+                  {subscription.status === 'active' && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+                      {/* Action buttons row 1 */}
+                      <div className="flex items-center justify-between">
+                        {/* Reveal Key button */}
+                        <button
+                          onClick={() => setRevealModalSubscription(subscription)}
+                          className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
+                        >
+                          <Eye className="h-3 w-3" />
+                          Reveal Key
+                        </button>
+
+                        {/* Rotate Key button (CAB-314) */}
+                        <button
+                          onClick={() => setRotateModalSubscription(subscription)}
+                          disabled={subscription.has_active_grace_period}
+                          className="inline-flex items-center gap-1 text-sm text-amber-600 hover:text-amber-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={subscription.has_active_grace_period ? 'Wait for grace period to end' : 'Rotate API key with grace period'}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Rotate Key
+                        </button>
+                      </div>
+
+                      {/* Action buttons row 2 */}
+                      <div className="flex items-center justify-between">
                         {/* Toggle 2FA */}
                         <button
                           onClick={() => toggleTotpMutation.mutate({
@@ -359,10 +385,11 @@ export function MySubscriptions() {
                             enabled: !subscription.totp_required
                           })}
                           disabled={toggleTotpMutation.isPending}
-                          className="text-sm text-gray-500 hover:text-gray-700 font-medium disabled:opacity-50"
+                          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 font-medium disabled:opacity-50"
                           title={subscription.totp_required ? 'Disable 2FA' : 'Enable 2FA'}
                         >
-                          <Shield className={`h-4 w-4 ${subscription.totp_required ? 'text-primary-600' : ''}`} />
+                          <Shield className={`h-3 w-3 ${subscription.totp_required ? 'text-primary-600' : ''}`} />
+                          {subscription.totp_required ? '2FA On' : '2FA Off'}
                         </button>
 
                         {/* Revoke button */}
@@ -396,6 +423,23 @@ export function MySubscriptions() {
           subscription={revealModalSubscription}
           isOpen={true}
           onClose={() => setRevealModalSubscription(null)}
+        />
+      )}
+
+      {/* Rotate Key Modal (CAB-314) */}
+      {rotateModalSubscription && (
+        <RotateKeyModal
+          subscription={rotateModalSubscription}
+          isOpen={true}
+          onClose={() => setRotateModalSubscription(null)}
+          onRotate={async (gracePeriodHours) => {
+            const result = await rotateKeyMutation.mutateAsync({
+              id: rotateModalSubscription.id,
+              gracePeriodHours,
+            });
+            return result;
+          }}
+          isRotating={rotateKeyMutation.isPending}
         />
       )}
     </div>

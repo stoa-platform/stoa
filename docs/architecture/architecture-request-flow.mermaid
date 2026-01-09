@@ -1,0 +1,38 @@
+---
+title: STOA MCP Request Flow
+---
+sequenceDiagram
+    autonumber
+    participant AI as 🤖 AI Agent
+    participant GW as 🚀 MCP Gateway
+    participant Redis as ⚡ Redis Cache
+    participant KC as 🔐 Keycloak
+    participant API as ⚙️ Control Plane
+    participant PG as 🐘 PostgreSQL
+    participant MCP as 🔧 MCP Server
+    participant Prom as 📊 Prometheus
+
+    Note over AI,Prom: Tool Invocation Flow
+
+    AI->>GW: POST /mcp/tools/invoke<br/>API-Key: sk-xxx
+    
+    GW->>Redis: Check rate limit<br/>tenant:team-alpha
+    Redis-->>GW: ✅ Under limit
+    
+    GW->>KC: Validate API Key
+    KC-->>GW: ✅ Valid + Scopes
+    
+    GW->>API: GET /v1/subscriptions/validate<br/>tool_id + tenant_id
+    API->>PG: SELECT subscription
+    PG-->>API: ✅ Active subscription
+    API-->>GW: ✅ Authorized
+
+    GW->>MCP: Forward tool request
+    MCP-->>GW: Tool response
+
+    GW->>Prom: Record metrics<br/>tool, tenant, latency
+    GW->>Redis: Increment usage counter
+
+    GW-->>AI: Tool response + metadata
+
+    Note over AI,Prom: All calls traced in Loki

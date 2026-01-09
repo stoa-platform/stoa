@@ -24,6 +24,12 @@ from ..schemas.subscription import (
     SubscriptionWithRotationInfo,
 )
 from ..services.email import email_service
+from ..services.webhook_service import (
+    emit_subscription_created,
+    emit_subscription_approved,
+    emit_subscription_revoked,
+    emit_subscription_key_rotated,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +101,13 @@ async def create_subscription(
             f"Created subscription {subscription.id} for app={request.application_name} "
             f"api={request.api_name} user={user.email}"
         )
+
+        # Emit webhook event (CAB-315)
+        try:
+            await emit_subscription_created(db, subscription)
+        except Exception as e:
+            logger.warning(f"Failed to emit subscription.created webhook: {e}")
+
     except Exception as e:
         logger.error(f"Failed to create subscription: {e}")
         raise HTTPException(status_code=500, detail="Failed to create subscription")
@@ -273,6 +286,12 @@ async def rotate_api_key(
             # Log but don't fail the rotation if email fails
             logger.warning(f"Failed to send key rotation email: {e}")
 
+        # Emit webhook event (CAB-315)
+        try:
+            await emit_subscription_key_rotated(db, subscription, request.grace_period_hours)
+        except Exception as e:
+            logger.warning(f"Failed to emit subscription.key_rotated webhook: {e}")
+
         return KeyRotationResponse(
             subscription_id=subscription.id,
             new_api_key=new_api_key,
@@ -435,6 +454,12 @@ async def approve_subscription(
         f"for app={subscription.application_name} api={subscription.api_name}"
     )
 
+    # Emit webhook event (CAB-315)
+    try:
+        await emit_subscription_approved(db, subscription)
+    except Exception as e:
+        logger.warning(f"Failed to emit subscription.approved webhook: {e}")
+
     return SubscriptionResponse.model_validate(subscription)
 
 
@@ -473,6 +498,12 @@ async def revoke_subscription(
         f"Subscription {subscription_id} revoked by {user.email} "
         f"reason={request.reason}"
     )
+
+    # Emit webhook event (CAB-315)
+    try:
+        await emit_subscription_revoked(db, subscription)
+    except Exception as e:
+        logger.warning(f"Failed to emit subscription.revoked webhook: {e}")
 
     return SubscriptionResponse.model_validate(subscription)
 

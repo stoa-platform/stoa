@@ -52,7 +52,11 @@ const statusConfig: Record<string, { label: string; color: string; icon: typeof 
 
 export function WebhooksPage() {
   const { user } = useAuth();
-  const tenantId = user?.tenant_id || '';
+  const [selectedTenantId, setSelectedTenantId] = useState<string>('');
+
+  // Use user's tenant_id if available, otherwise allow admin to select
+  const tenantId = user?.tenant_id || selectedTenantId;
+  const isAdmin = user?.is_admin || user?.roles?.includes('cpi-admin');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<TenantWebhook | null>(null);
@@ -128,6 +132,39 @@ export function WebhooksPage() {
     }
   };
 
+  // If no tenant_id and user is admin, show tenant selector
+  if (!tenantId && isAdmin) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Webhook className="h-8 w-8 text-primary-600" />
+            <h2 className="text-xl font-semibold text-gray-900">Webhook Management</h2>
+          </div>
+          <p className="text-gray-600 mb-4">
+            As a platform administrator, enter the tenant ID to manage webhooks for:
+          </p>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={selectedTenantId}
+              onChange={(e) => setSelectedTenantId(e.target.value)}
+              placeholder="Enter tenant ID (e.g., acme, team-alpha)"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <button
+              onClick={() => {}}
+              disabled={!selectedTenantId}
+              className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50"
+            >
+              Load Webhooks
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!tenantId) {
     return (
       <div className="max-w-4xl mx-auto p-6">
@@ -136,6 +173,7 @@ export function WebhooksPage() {
           <h3 className="text-lg font-medium text-yellow-800">Tenant Required</h3>
           <p className="text-yellow-700 mt-2">
             You need to be associated with a tenant to manage webhooks.
+            Contact your administrator to be assigned to a tenant.
           </p>
         </div>
       </div>

@@ -22,16 +22,27 @@ function extractUserFromToken(oidcUser: any): User | null {
   // Extract tenant_id and organization from token if available
   let tenantId: string | undefined;
   let organization: string | undefined;
+  let roles: string[] = [];
 
   if (oidcUser.access_token) {
     try {
       const payload = JSON.parse(atob(oidcUser.access_token.split('.')[1]));
-      tenantId = payload.tenant_id;
-      organization = payload.organization;
+      // Try multiple possible claim locations for tenant_id
+      tenantId = payload.tenant_id
+        || payload.tenantId
+        || payload['tenant-id']
+        || payload.resource_access?.['control-plane-api']?.tenant_id;
+      organization = payload.organization || payload.org;
+
+      // Extract roles from realm_access
+      roles = payload.realm_access?.roles || [];
     } catch (e) {
       console.warn('Failed to decode access_token', e);
     }
   }
+
+  // For cpi-admin users without tenant_id, use a default tenant for testing
+  const isCpiAdmin = roles.includes('cpi-admin');
 
   return {
     id: profile.sub,
@@ -39,6 +50,8 @@ function extractUserFromToken(oidcUser: any): User | null {
     name: profile.name || profile.preferred_username || '',
     tenant_id: tenantId || profile.tenant_id,
     organization: organization || profile.organization,
+    roles, // Include roles in user object
+    is_admin: isCpiAdmin,
   };
 }
 

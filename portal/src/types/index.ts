@@ -62,6 +62,8 @@ export interface MCPPropertySchema {
   maxLength?: number;
   pattern?: string;
   items?: MCPPropertySchema;
+  properties?: Record<string, MCPPropertySchema>;  // For nested objects
+  required?: string[];                             // For nested object required fields
 }
 
 // MCP Tool invocation result

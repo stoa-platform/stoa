@@ -11,6 +11,8 @@ import type {
   MCPSubscription,
   MCPSubscriptionCreate,
   MCPSubscriptionConfig,
+  KeyRotationRequest,
+  KeyRotationResponse,
 } from '../types';
 
 // ============ Types ============
@@ -143,6 +145,36 @@ export const subscriptionsService = {
       null,
       { params: { enabled } }
     );
+    return response.data;
+  },
+
+  // ============ Key Rotation (CAB-314) ============
+
+  /**
+   * Rotate API key with grace period
+   * POST /mcp/v1/subscriptions/{id}/rotate-key
+   *
+   * The old key remains valid for the grace period (default 24h).
+   * After the grace period, only the new key is accepted.
+   *
+   * ⚠️ The new API key is returned only ONCE! Store/display immediately.
+   */
+  rotateApiKey: async (id: string, request?: KeyRotationRequest): Promise<KeyRotationResponse> => {
+    const response = await mcpClient.post<KeyRotationResponse>(
+      `/mcp/v1/subscriptions/${id}/rotate-key`,
+      request || { grace_period_hours: 24 }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get subscription with rotation info
+   * GET /mcp/v1/subscriptions/{id}/rotation-info
+   *
+   * Returns subscription details with grace period status.
+   */
+  getRotationInfo: async (id: string): Promise<MCPSubscription> => {
+    const response = await mcpClient.get<MCPSubscription>(`/mcp/v1/subscriptions/${id}/rotation-info`);
     return response.data;
   },
 };

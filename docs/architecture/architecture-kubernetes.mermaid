@@ -1,0 +1,67 @@
+---
+title: STOA Kubernetes Deployment
+---
+flowchart TB
+    subgraph K8s["☸️ Kubernetes Cluster"]
+        subgraph NS["stoa-system namespace"]
+            subgraph Ingress["Ingress Layer"]
+                ING["nginx-ingress<br/>+ cert-manager"]
+            end
+            
+            subgraph Apps["Application Pods"]
+                CP["control-plane-api<br/>2 replicas"]
+                GW["mcp-gateway<br/>2 replicas"]
+                Portal["portal-ui<br/>1 replica"]
+                Console["console-ui<br/>1 replica"]
+            end
+            
+            subgraph Auth["Auth Pods"]
+                KC["keycloak<br/>1 replica"]
+                Vault["vault<br/>1 replica"]
+            end
+            
+            subgraph Data["StatefulSets"]
+                PG["postgresql-0<br/>PVC: 20Gi"]
+                Redis["redis-0<br/>PVC: 1Gi"]
+            end
+            
+            subgraph Obs["Observability"]
+                Prom["prometheus<br/>+ alertmanager"]
+                Graf["grafana"]
+                Loki["loki<br/>+ promtail"]
+            end
+        end
+    end
+    
+    subgraph External["External"]
+        Users["👥 Users"]
+        DNS["☁️ Cloudflare DNS"]
+        MCP["🔧 MCP Servers"]
+    end
+    
+    Users --> DNS
+    DNS --> ING
+    ING --> Portal
+    ING --> Console
+    ING --> GW
+    ING --> KC
+    ING --> Graf
+    
+    Portal --> CP
+    Console --> CP
+    CP --> PG
+    CP --> Redis
+    CP --> KC
+    CP --> Vault
+    
+    GW --> CP
+    GW --> Redis
+    GW --> KC
+    GW --> MCP
+    
+    CP --> Prom
+    GW --> Prom
+    Prom --> Graf
+    CP -.-> Loki
+    GW -.-> Loki
+    Loki --> Graf

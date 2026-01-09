@@ -1,0 +1,106 @@
+---
+title: STOA Platform Architecture
+---
+flowchart TB
+    subgraph Users["👥 Users"]
+        Dev["🧑‍💻 Developers"]
+        Admin["👨‍💼 Platform Admins"]
+        AI["🤖 AI Agents"]
+    end
+
+    subgraph Edge["🌐 Edge Layer"]
+        LB["Load Balancer<br/>nginx-ingress"]
+    end
+
+    subgraph STOA["🏛️ STOA Platform"]
+        subgraph Frontend["Frontend"]
+            Portal["📱 Developer Portal<br/>React + TypeScript"]
+            Console["🖥️ Admin Console<br/>React + TypeScript"]
+        end
+
+        subgraph Core["Core Services"]
+            API["⚙️ Control Plane API<br/>Python FastAPI"]
+            Gateway["🚀 MCP Gateway<br/>Rust + Tokio"]
+        end
+
+        subgraph Auth["🔐 Security"]
+            KC["Keycloak<br/>OIDC/OAuth2"]
+            Vault["HashiCorp Vault<br/>Secrets"]
+        end
+    end
+
+    subgraph Data["💾 Data Layer"]
+        PG["🐘 PostgreSQL<br/>Primary DB"]
+        Redis["⚡ Redis<br/>Cache + Sessions"]
+    end
+
+    subgraph Observability["📊 Observability"]
+        Prom["Prometheus<br/>Metrics"]
+        Graf["Grafana<br/>Dashboards"]
+        Loki["Loki<br/>Logs"]
+    end
+
+    subgraph Backend["🔧 MCP Servers"]
+        MCP1["CRM Tools"]
+        MCP2["Billing Tools"]
+        MCP3["Custom Tools"]
+    end
+
+    %% User flows
+    Dev --> LB
+    Admin --> LB
+    AI --> LB
+
+    %% Edge to Frontend
+    LB --> Portal
+    LB --> Console
+    LB --> Gateway
+
+    %% Frontend to Core
+    Portal --> API
+    Console --> API
+
+    %% Core connections
+    API --> Gateway
+    API --> PG
+    API --> Redis
+    Gateway --> Redis
+
+    %% Auth
+    Portal --> KC
+    Console --> KC
+    API --> KC
+    API --> Vault
+    Gateway --> KC
+
+    %% Gateway to MCP
+    Gateway --> MCP1
+    Gateway --> MCP2
+    Gateway --> MCP3
+
+    %% Observability
+    API --> Prom
+    Gateway --> Prom
+    Prom --> Graf
+    API --> Loki
+    Gateway --> Loki
+    Loki --> Graf
+
+    %% Styling
+    classDef users fill:#e1f5fe,stroke:#01579b
+    classDef edge fill:#fff3e0,stroke:#e65100
+    classDef frontend fill:#f3e5f5,stroke:#7b1fa2
+    classDef core fill:#e8f5e9,stroke:#2e7d32
+    classDef auth fill:#ffebee,stroke:#c62828
+    classDef data fill:#fff8e1,stroke:#f57f17
+    classDef obs fill:#e0f2f1,stroke:#00695c
+    classDef backend fill:#fce4ec,stroke:#880e4f
+
+    class Dev,Admin,AI users
+    class LB edge
+    class Portal,Console frontend
+    class API,Gateway core
+    class KC,Vault auth
+    class PG,Redis data
+    class Prom,Graf,Loki obs
+    class MCP1,MCP2,MCP3 backend

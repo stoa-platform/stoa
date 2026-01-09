@@ -1,0 +1,32 @@
+# ArgoCD OIDC Configuration Defaults
+---
+# Keycloak Configuration
+keycloak_url: "https://auth.{{ base_domain }}"
+keycloak_realm: "stoa"
+keycloak_admin_user: "admin"
+keycloak_admin_password: "{{ lookup('env', 'KEYCLOAK_ADMIN_PASSWORD') | default('demo', true) }}"
+
+# ArgoCD Configuration
+argocd_namespace: "argocd"
+argocd_url: "https://argocd.{{ base_domain }}"
+argocd_client_id: "argocd"
+
+# OIDC Scopes
+argocd_oidc_scopes:
+  - openid
+  - profile
+  - email
+  - roles
+
+# Keycloak Groups for RBAC
+argocd_groups:
+  - name: argocd-admins
+    role: admin
+  - name: argocd-readonly
+    role: readonly
+
+# RBAC Policy
+argocd_rbac_default_policy: "role:readonly"
+
+# Users to add to admin group (by email or username)
+argocd_admin_users: []

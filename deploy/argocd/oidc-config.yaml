@@ -1,0 +1,79 @@
+# ArgoCD OIDC Configuration for Keycloak SSO
+# This is applied via Ansible playbook or kubectl patch
+# Reference: https://argo-cd.readthedocs.io/en/stable/operator-manual/user-management/keycloak/
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # ArgoCD URL - MUST match ingress hostname
+  url: https://argocd.stoa.cab-i.com
+
+  # OIDC Configuration for Keycloak
+  oidc.config: |
+    name: Keycloak
+    issuer: https://auth.stoa.cab-i.com/realms/stoa
+    clientID: argocd
+    clientSecret: $oidc.keycloak.clientSecret
+    requestedScopes:
+      - openid
+      - profile
+      - email
+      - roles
+    logoutURL: https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/logout?client_id=argocd&post_logout_redirect_uri=https://argocd.stoa.cab-i.com
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-rbac-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Default policy for users without specific group membership
+  policy.default: role:readonly
+
+  # Scopes to use for RBAC (groups claim from Keycloak)
+  scopes: "[groups, email]"
+
+  # RBAC Policy
+  policy.csv: |
+    # ArgoCD RBAC Policy for Keycloak SSO
+    # ===================================
+
+    # Admin role - full access to all resources
+    p, role:admin, applications, *, */*, allow
+    p, role:admin, clusters, *, *, allow
+    p, role:admin, repositories, *, *, allow
+    p, role:admin, accounts, *, *, allow
+    p, role:admin, certificates, *, *, allow
+    p, role:admin, gpgkeys, *, *, allow
+    p, role:admin, logs, *, *, allow
+    p, role:admin, exec, create, */*, allow
+    p, role:admin, projects, *, *, allow
+
+    # Readonly role - view-only access
+    p, role:readonly, applications, get, */*, allow
+    p, role:readonly, clusters, get, *, allow
+    p, role:readonly, repositories, get, *, allow
+    p, role:readonly, projects, get, *, allow
+    p, role:readonly, logs, get, */*, allow
+
+    # DevOps role - deploy and sync applications
+    p, role:devops, applications, get, */*, allow
+    p, role:devops, applications, sync, */*, allow
+    p, role:devops, applications, action/*, */*, allow
+    p, role:devops, logs, get, */*, allow
+    p, role:devops, repositories, get, *, allow
+    p, role:devops, projects, get, *, allow
+
+    # Group to role mappings (Keycloak groups)
+    g, argocd-admins, role:admin
+    g, argocd-devops, role:devops
+    g, argocd-readonly, role:readonly

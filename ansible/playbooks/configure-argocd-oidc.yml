@@ -1,0 +1,58 @@
+# Playbook: Configure ArgoCD OIDC with Keycloak
+# Usage: ansible-playbook ansible/playbooks/configure-argocd-oidc.yml -e "base_domain=stoa.cab-i.com"
+---
+- name: Configure ArgoCD OIDC Authentication with Keycloak
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+
+  vars:
+    base_domain: "{{ lookup('env', 'BASE_DOMAIN') | default('stoa.cab-i.com', true) }}"
+
+  pre_tasks:
+    - name: Verify required environment variables
+      assert:
+        that:
+          - base_domain is defined
+          - base_domain | length > 0
+        fail_msg: "BASE_DOMAIN must be set"
+
+    - name: Verify kubectl connectivity
+      command: kubectl cluster-info
+      changed_when: false
+      register: kubectl_check
+
+    - name: Display target cluster
+      debug:
+        msg: "Configuring ArgoCD OIDC on cluster: {{ kubectl_check.stdout_lines[0] | default('Unknown') }}"
+
+  roles:
+    - role: argocd-oidc
+      vars:
+        argocd_admin_users:
+          - admin@cab-i.com
+          - e2e-admin
+
+  post_tasks:
+    - name: Verify ArgoCD OIDC configuration
+      uri:
+        url: "https://argocd.{{ base_domain }}"
+        method: GET
+        validate_certs: yes
+        status_code: [200, 302]
+      register: argocd_check
+
+    - name: Configuration status
+      debug:
+        msg: |
+          ArgoCD OIDC SSO Configuration Complete!
+
+          Test SSO Login:
+          1. Go to https://argocd.{{ base_domain }}
+          2. Click "Login via Keycloak"
+          3. Login with your Keycloak credentials
+
+          RBAC:
+          - Users in 'argocd-admins' group -> Full admin access
+          - Users in 'argocd-readonly' group -> Read-only access
+          - Default (no group) -> Read-only access

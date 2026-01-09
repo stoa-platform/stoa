@@ -1,0 +1,235 @@
+# ArgoCD OIDC Configuration Tasks
+---
+- name: Get Keycloak admin token
+  uri:
+    url: "{{ keycloak_url }}/realms/master/protocol/openid-connect/token"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      username: "{{ keycloak_admin_user }}"
+      password: "{{ keycloak_admin_password }}"
+      grant_type: password
+      client_id: admin-cli
+    validate_certs: yes
+  register: keycloak_token
+  no_log: true
+
+- name: Check if ArgoCD client exists
+  uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId={{ argocd_client_id }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ keycloak_token.json.access_token }}"
+    validate_certs: yes
+  register: existing_client
+
+- name: Create ArgoCD OIDC client in Keycloak
+  uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token.json.access_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      clientId: "{{ argocd_client_id }}"
+      name: "ArgoCD"
+      description: "ArgoCD GitOps Platform SSO"
+      enabled: true
+      protocol: openid-connect
+      publicClient: false
+      standardFlowEnabled: true
+      directAccessGrantsEnabled: false
+      redirectUris:
+        - "{{ argocd_url }}/auth/callback"
+      webOrigins:
+        - "{{ argocd_url }}"
+      attributes:
+        pkce.code.challenge.method: S256
+      defaultClientScopes:
+        - openid
+        - profile
+        - email
+        - roles
+    status_code: [201, 409]
+    validate_certs: yes
+  when: existing_client.json | length == 0
+  register: client_created
+
+- name: Get ArgoCD client ID
+  uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId={{ argocd_client_id }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ keycloak_token.json.access_token }}"
+    validate_certs: yes
+  register: argocd_client_info
+
+- name: Set ArgoCD client UUID
+  set_fact:
+    argocd_client_uuid: "{{ argocd_client_info.json[0].id }}"
+
+- name: Get ArgoCD client secret
+  uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients/{{ argocd_client_uuid }}/client-secret"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ keycloak_token.json.access_token }}"
+    validate_certs: yes
+  register: client_secret
+  no_log: true
+
+- name: Add groups mapper to ArgoCD client
+  uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients/{{ argocd_client_uuid }}/protocol-mappers/models"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token.json.access_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      name: groups
+      protocol: openid-connect
+      protocolMapper: oidc-group-membership-mapper
+      config:
+        full.path: "false"
+        id.token.claim: "true"
+        access.token.claim: "true"
+        claim.name: groups
+        userinfo.token.claim: "true"
+    status_code: [201, 409]
+    validate_certs: yes
+
+- name: Create Keycloak groups for ArgoCD RBAC
+  uri:
+    url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/groups"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ keycloak_token.json.access_token }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+    status_code: [201, 409]
+    validate_certs: yes
+  loop: "{{ argocd_groups }}"
+
+- name: Update ArgoCD ConfigMap with OIDC configuration
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+        namespace: "{{ argocd_namespace }}"
+      data:
+        url: "{{ argocd_url }}"
+        oidc.config: |
+          name: Keycloak
+          issuer: {{ keycloak_url }}/realms/{{ keycloak_realm }}
+          clientID: {{ argocd_client_id }}
+          clientSecret: $oidc.keycloak.clientSecret
+          requestedScopes:
+            {% for scope in argocd_oidc_scopes %}
+            - {{ scope }}
+            {% endfor %}
+          logoutURL: {{ keycloak_url }}/realms/{{ keycloak_realm }}/protocol/openid-connect/logout?client_id={{ argocd_client_id }}&post_logout_redirect_uri={{ argocd_url }}
+
+- name: Update ArgoCD secret with OIDC client secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: argocd-secret
+        namespace: "{{ argocd_namespace }}"
+      stringData:
+        oidc.keycloak.clientSecret: "{{ client_secret.json.value }}"
+  no_log: true
+
+- name: Generate RBAC policy CSV
+  set_fact:
+    rbac_policy: |
+      # ArgoCD RBAC Policy for Keycloak SSO
+      # Admin role - full access
+      p, role:admin, applications, *, */*, allow
+      p, role:admin, clusters, *, *, allow
+      p, role:admin, repositories, *, *, allow
+      p, role:admin, accounts, *, *, allow
+      p, role:admin, certificates, *, *, allow
+      p, role:admin, gpgkeys, *, *, allow
+      p, role:admin, logs, *, *, allow
+      p, role:admin, exec, create, */*, allow
+      p, role:admin, projects, *, *, allow
+
+      # Readonly role - view only
+      p, role:readonly, applications, get, */*, allow
+      p, role:readonly, clusters, get, *, allow
+      p, role:readonly, repositories, get, *, allow
+      p, role:readonly, projects, get, *, allow
+      p, role:readonly, logs, get, */*, allow
+
+      # Group to role mappings
+      {% for group in argocd_groups %}
+      g, {{ group.name }}, role:{{ group.role }}
+      {% endfor %}
+
+- name: Update ArgoCD RBAC ConfigMap
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-rbac-cm
+        namespace: "{{ argocd_namespace }}"
+      data:
+        policy.default: "{{ argocd_rbac_default_policy }}"
+        scopes: "[groups, email]"
+        policy.csv: "{{ rbac_policy }}"
+
+- name: Restart ArgoCD server to apply OIDC configuration
+  kubernetes.core.k8s:
+    state: present
+    api_version: apps/v1
+    kind: Deployment
+    name: argocd-server
+    namespace: "{{ argocd_namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ ansible_date_time.iso8601 }}"
+
+- name: Wait for ArgoCD server to be ready
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: argocd-server
+    namespace: "{{ argocd_namespace }}"
+  register: argocd_deployment
+  until: argocd_deployment.resources[0].status.readyReplicas | default(0) == argocd_deployment.resources[0].spec.replicas
+  retries: 30
+  delay: 10
+
+- name: Display configuration summary
+  debug:
+    msg: |
+      ArgoCD OIDC Configuration Complete!
+
+      ArgoCD URL: {{ argocd_url }}
+      Keycloak Realm: {{ keycloak_realm }}
+      Client ID: {{ argocd_client_id }}
+
+      Groups created:
+      {% for group in argocd_groups %}
+        - {{ group.name }} -> role:{{ group.role }}
+      {% endfor %}
+
+      Default policy: {{ argocd_rbac_default_policy }}
+
+      To add users to admin group, use Keycloak Admin Console:
+      {{ keycloak_url }}/admin/{{ keycloak_realm }}/console/#/groups

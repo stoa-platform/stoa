@@ -1,5 +1,5 @@
 """Subscription SQLAlchemy model for API subscriptions"""
-from sqlalchemy import Column, String, DateTime, Enum as SQLEnum, Text, Index
+from sqlalchemy import Column, String, DateTime, Enum as SQLEnum, Text, Index, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
@@ -43,6 +43,12 @@ class Subscription(Base):
     # API Key (hashed for security)
     api_key_hash = Column(String(512), nullable=False, unique=True)
     api_key_prefix = Column(String(10), nullable=False)  # First 8 chars for display
+
+    # Key rotation with grace period (CAB-314)
+    previous_api_key_hash = Column(String(512), nullable=True, index=True)  # Old key during grace period
+    previous_key_expires_at = Column(DateTime, nullable=True)  # When old key becomes invalid
+    last_rotated_at = Column(DateTime, nullable=True)  # Last rotation timestamp
+    rotation_count = Column(Integer, nullable=False, default=0)  # Number of rotations
 
     # Status
     status = Column(

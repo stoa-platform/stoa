@@ -104,6 +104,25 @@ export interface MCPSubscription {
   usage_count?: number;
   api_key_prefix?: string;  // First 12 chars for display (e.g., "stoa_sk_XXXX")
   totp_required?: boolean;  // Whether 2FA is required to reveal the API key
+  // Key rotation fields (CAB-314)
+  previous_key_expires_at?: string | null;  // Grace period expiry
+  last_rotated_at?: string | null;          // Last rotation timestamp
+  rotation_count?: number;                   // Number of rotations
+  has_active_grace_period?: boolean;        // True if grace period is active
+}
+
+// Key Rotation types (CAB-314)
+export interface KeyRotationRequest {
+  grace_period_hours?: number;  // Default: 24, range: 1-168
+}
+
+export interface KeyRotationResponse {
+  subscription_id: string;
+  new_api_key: string;           // Shown only ONCE!
+  new_api_key_prefix: string;
+  old_key_expires_at: string;    // ISO datetime
+  grace_period_hours: number;
+  rotation_count: number;
 }
 
 export interface MCPSubscriptionCreate {

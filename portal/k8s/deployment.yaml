@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: stoa-portal
-          image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-portal:latest
+          image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/stoa-portal:latest
           imagePullPolicy: Always
           ports:
             - name: http

@@ -255,3 +255,80 @@ class SubscriptionRepository:
         """Delete a subscription (hard delete - use with caution)"""
         await self.session.delete(subscription)
         await self.session.flush()
+
+    async def rotate_key(
+        self,
+        subscription: Subscription,
+        new_api_key_hash: str,
+        new_api_key_prefix: str,
+        grace_period_hours: int = 24
+    ) -> Subscription:
+        """
+        Rotate API key with grace period support.
+
+        The old key is stored and remains valid for the specified grace period.
+        After the grace period expires, only the new key is valid.
+        """
+        now = datetime.utcnow()
+
+        # Store the current key as previous (for grace period)
+        subscription.previous_api_key_hash = subscription.api_key_hash
+        subscription.previous_key_expires_at = now + timedelta(hours=grace_period_hours)
+
+        # Set the new key
+        subscription.api_key_hash = new_api_key_hash
+        subscription.api_key_prefix = new_api_key_prefix
+
+        # Update rotation metadata
+        subscription.last_rotated_at = now
+        subscription.rotation_count = (subscription.rotation_count or 0) + 1
+        subscription.updated_at = now
+
+        await self.session.flush()
+        await self.session.refresh(subscription)
+        return subscription
+
+    async def get_by_previous_key_hash(
+        self,
+        api_key_hash: str
+    ) -> Optional[Subscription]:
+        """
+        Get subscription by previous API key hash (for grace period validation).
+
+        Only returns subscriptions where the previous key is still within grace period.
+        """
+        now = datetime.utcnow()
+        result = await self.session.execute(
+            select(Subscription).where(
+                and_(
+                    Subscription.previous_api_key_hash == api_key_hash,
+                    Subscription.previous_key_expires_at > now
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def cleanup_expired_previous_keys(self) -> int:
+        """
+        Clean up expired previous keys (remove grace period data after expiry).
+
+        Returns the number of subscriptions cleaned up.
+        """
+        from sqlalchemy import update
+
+        now = datetime.utcnow()
+        result = await self.session.execute(
+            update(Subscription)
+            .where(
+                and_(
+                    Subscription.previous_key_expires_at.isnot(None),
+                    Subscription.previous_key_expires_at < now
+                )
+            )
+            .values(
+                previous_api_key_hash=None,
+                previous_key_expires_at=None
+            )
+        )
+        await self.session.flush()
+        return result.rowcount

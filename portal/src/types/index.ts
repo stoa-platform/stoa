@@ -305,3 +305,72 @@ export interface ApiError {
   code?: string;
   details?: Record<string, unknown>;
 }
+
+// ============ Webhook Types (CAB-315) ============
+
+export type WebhookEventType =
+  | 'subscription.created'
+  | 'subscription.approved'
+  | 'subscription.revoked'
+  | 'subscription.key_rotated'
+  | 'subscription.expired'
+  | '*';
+
+export type WebhookDeliveryStatus = 'pending' | 'success' | 'failed' | 'retrying';
+
+export interface TenantWebhook {
+  id: string;
+  tenant_id: string;
+  name: string;
+  url: string;
+  events: WebhookEventType[];
+  has_secret: boolean;
+  headers?: Record<string, string>;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface WebhookCreate {
+  name: string;
+  url: string;
+  events: WebhookEventType[];
+  secret?: string;
+  headers?: Record<string, string>;
+}
+
+export interface WebhookUpdate {
+  name?: string;
+  url?: string;
+  events?: WebhookEventType[];
+  secret?: string;
+  headers?: Record<string, string>;
+  enabled?: boolean;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  subscription_id?: string;
+  event_type: string;
+  payload: Record<string, unknown>;
+  status: WebhookDeliveryStatus;
+  attempt_count: number;
+  max_attempts: number;
+  response_status_code?: number;
+  response_body?: string;
+  error_message?: string;
+  created_at: string;
+  last_attempt_at?: string;
+  next_retry_at?: string;
+  delivered_at?: string;
+}
+
+export interface WebhookTestResponse {
+  success: boolean;
+  status_code?: number;
+  response_body?: string;
+  error?: string;
+  signature_header?: string;
+}

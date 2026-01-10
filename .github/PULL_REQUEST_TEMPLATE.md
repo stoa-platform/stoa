@@ -1,28 +1,25 @@
 ## Description
 
-<!-- Describe your changes in detail -->
+<!-- Describe your changes in a few sentences -->
 
 ## Type of Change
 
-<!-- Mark with an `x` all that apply -->
-
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to change)
-- [ ] Documentation update
-- [ ] Refactoring (no functional changes)
-- [ ] CI/CD changes
-- [ ] Other (please describe):
+- [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
+- [ ] ✨ New feature (non-breaking change that adds functionality)
+- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to change)
+- [ ] 📚 Documentation update
+- [ ] 🔧 Refactoring (no functional changes)
+- [ ] 🧪 Tests (adding or updating tests)
 
 ## Related Issues
 
-<!-- Link to any related issues using #issue_number -->
+<!-- Link related issues using "Closes #123" or "Fixes #123" -->
 
 Closes #
 
 ## How Has This Been Tested?
 
-<!-- Describe the tests you ran to verify your changes -->
+<!-- Describe how you tested your changes -->
 
 - [ ] Unit tests
 - [ ] Integration tests
@@ -30,15 +27,13 @@ Closes #
 
 ## Checklist
 
-<!-- Mark with an `x` all that apply -->
-
-- [ ] My code follows the project's style guidelines
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
+- [ ] My code follows the project's code style
+- [ ] I have performed a self-review of my code
+- [ ] I have commented my code where necessary
+- [ ] I have updated the documentation accordingly
 - [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
+- [ ] I have added tests that prove my fix/feature works
+- [ ] New and existing tests pass locally
 
 ## Screenshots (if applicable)
 
@@ -46,4 +41,4 @@ Closes #
 
 ## Additional Notes
 
-<!-- Add any additional notes for reviewers -->
+<!-- Any additional information reviewers should know -->

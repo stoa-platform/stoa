@@ -1,11 +1,14 @@
 blank_issues_enabled: false
+
 contact_links:
-  - name: Discord Community
+  - name: 💬 Discord Community
     url: https://discord.gg/j8tHSSes
-    about: Join our Discord for questions and discussions
-  - name: Documentation
-    url: https://docs.gostoa.dev
-    about: Check the documentation for guides and API reference
-  - name: GitHub Discussions
-    url: https://github.com/stoa-platform/stoa/discussions
-    about: Ask questions and share ideas
+    about: Join our Discord for real-time help and discussions
+    
+  - name: 📖 Documentation
+    url: https://stoaplatform.github.io/stoa-docs/
+    about: Check our documentation for guides and references
+    
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/stoaplatform/stoa/security/advisories/new
+    about: Report security vulnerabilities privately (do NOT open a public issue)

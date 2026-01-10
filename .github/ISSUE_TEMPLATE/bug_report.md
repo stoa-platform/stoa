@@ -1,60 +1,66 @@
 ---
-name: Bug Report
+name: 🐛 Bug Report
 about: Report a bug to help us improve STOA
-title: '[BUG] '
-labels: bug, triage
+title: '[Bug] '
+labels: ['type:bug', 'status:triage']
 assignees: ''
 ---
 
-## Bug Description
+## Describe the Bug
 
-<!-- A clear and concise description of what the bug is -->
+A clear and concise description of what the bug is.
 
-## Steps to Reproduce
+## To Reproduce
 
-1. Go to '...'
-2. Run command '...'
+Steps to reproduce the behavior:
+
+1. Configure '...'
+2. Send request to '...'
 3. See error
 
 ## Expected Behavior
 
-<!-- What you expected to happen -->
+A clear and concise description of what you expected to happen.
 
 ## Actual Behavior
 
-<!-- What actually happened -->
-
-## Screenshots
-
-<!-- If applicable, add screenshots to help explain your problem -->
+What actually happened instead.
 
 ## Environment
 
-- **OS**: [e.g., macOS 14.0, Ubuntu 22.04, Windows 11]
-- **STOA Version**: [e.g., v0.1.0]
-- **Go Version**: [e.g., 1.22.0]
-- **Docker Version** (if applicable): [e.g., 24.0.0]
-
-## Configuration
-
-<!-- If relevant, include your stoa.yaml configuration (remove sensitive data) -->
-
-```yaml
-# Your configuration here
-```
+- **STOA Version**: [e.g. 0.1.0]
+- **Deployment**: [e.g. Docker, Kubernetes, Local]
+- **OS**: [e.g. Ubuntu 24.04, macOS 15]
+- **Kubernetes Version** (if applicable): [e.g. 1.29]
 
 ## Logs
 
-<!-- If applicable, include relevant log output -->
+<details>
+<summary>Relevant log output</summary>
 
 ```
-# Paste logs here
+Paste logs here
 ```
+
+</details>
+
+## Configuration
+
+<details>
+<summary>Relevant configuration (sanitized)</summary>
+
+```yaml
+# Paste relevant config here (remove secrets!)
+```
+
+</details>
 
 ## Additional Context
 
-<!-- Add any other context about the problem here -->
+Add any other context about the problem here (screenshots, related issues, etc.).
 
-## Possible Solution
+## Checklist
 
-<!-- If you have suggestions on a fix for the bug -->
+- [ ] I have searched existing issues to ensure this bug hasn't been reported
+- [ ] I have removed any sensitive information from logs and configs
+- [ ] I am using a supported version of STOA

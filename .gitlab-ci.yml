@@ -8,7 +8,7 @@ stages:
 
 variables:
   AWX_HOST: "https://awx.stoa.cab-i.com"
-  AWX_JOB_TEMPLATE_ID: "42"  # TODO: Replace with actual ID
+  AWX_JOB_TEMPLATE_ID: "19"  # Template: "STOA - Reconcile webMethods Gateway"
 
 # Validate webMethods YAML files
 validate-webmethods:

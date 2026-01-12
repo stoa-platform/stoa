@@ -10,9 +10,8 @@ metadata:
     app.kubernetes.io/component: gitops-hook
 data:
   # AWX Job Template ID for webMethods reconciliation
-  # Find via: AWX UI -> Templates -> [Template Name] -> ID in URL
-  # Or via API: GET /api/v2/job_templates/?name=STOA+-+Reconcile+webMethods+Gateway
-  webmethods-job-template-id: "42"  # TODO: Replace with actual ID
+  # Template: "STOA - Reconcile webMethods Gateway"
+  webmethods-job-template-id: "19"
 
 ---
 # STOA Environment Configuration

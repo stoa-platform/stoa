@@ -8,6 +8,7 @@ import { APICatalog, APIDetail, APITestingSandbox } from './pages/apis';
 import { MyApplications, ApplicationDetail } from './pages/apps';
 import { ProfilePage } from './pages/profile/Profile';
 import { WebhooksPage } from './pages/webhooks/WebhooksPage';
+import { UsagePage } from './pages/usage';
 import { config } from './config';
 
 // Loading screen
@@ -93,6 +94,8 @@ function AppContent() {
           <Route path="/apps" element={<MyApplications />} />
           <Route path="/apps/:id" element={<ApplicationDetail />} />
           <Route path="/profile" element={<ProfilePage />} />
+          {/* Usage Dashboard */}
+          <Route path="/usage" element={<UsagePage />} />
           {/* Tenant Admin Routes */}
           <Route path="/webhooks" element={<WebhooksPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

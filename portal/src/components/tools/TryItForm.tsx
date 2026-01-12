@@ -43,6 +43,7 @@ interface FormFieldProps {
 
 function FormField({ name, property, value, onChange, isRequired, error }: FormFieldProps) {
   const [showDescription, setShowDescription] = useState(false);
+  const [jsonError, setJsonError] = useState<string | null>(null);
 
   const handleChange = useCallback((newValue: unknown) => {
     onChange(newValue);
@@ -250,7 +251,6 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
   // Object - render as JSON textarea
   if (property.type === 'object') {
     const jsonValue = value ? JSON.stringify(value, null, 2) : '';
-    const [jsonError, setJsonError] = useState<string | null>(null);
 
     return (
       <div className="space-y-1">

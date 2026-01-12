@@ -1,0 +1,111 @@
+{
+  "index_patterns": ["audit-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index": {
+        "lifecycle": {
+          "name": "audit-policy",
+          "rollover_alias": "audit"
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date"
+        },
+        "event_id": {
+          "type": "keyword"
+        },
+        "event_type": {
+          "type": "keyword"
+        },
+        "event_category": {
+          "type": "keyword"
+        },
+        "severity": {
+          "type": "keyword"
+        },
+        "actor": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "email": { "type": "keyword" },
+            "name": { "type": "text", "fields": { "keyword": { "type": "keyword" } } },
+            "type": { "type": "keyword" },
+            "ip_address": { "type": "ip" },
+            "user_agent": { "type": "text" }
+          }
+        },
+        "tenant_id": {
+          "type": "keyword"
+        },
+        "resource": {
+          "properties": {
+            "type": { "type": "keyword" },
+            "id": { "type": "keyword" },
+            "name": { "type": "text", "fields": { "keyword": { "type": "keyword" } } }
+          }
+        },
+        "action": {
+          "type": "keyword"
+        },
+        "outcome": {
+          "type": "keyword"
+        },
+        "details": {
+          "type": "object",
+          "enabled": true
+        },
+        "changes": {
+          "properties": {
+            "before": { "type": "object", "enabled": false },
+            "after": { "type": "object", "enabled": false },
+            "fields_changed": { "type": "keyword" }
+          }
+        },
+        "request": {
+          "properties": {
+            "method": { "type": "keyword" },
+            "path": { "type": "keyword" },
+            "query_params": { "type": "object", "enabled": false },
+            "body_hash": { "type": "keyword" }
+          }
+        },
+        "response": {
+          "properties": {
+            "status_code": { "type": "integer" },
+            "latency_ms": { "type": "float" }
+          }
+        },
+        "correlation_id": {
+          "type": "keyword"
+        },
+        "session_id": {
+          "type": "keyword"
+        },
+        "source": {
+          "properties": {
+            "service": { "type": "keyword" },
+            "version": { "type": "keyword" },
+            "environment": { "type": "keyword" }
+          }
+        },
+        "tags": {
+          "type": "keyword"
+        },
+        "retention_until": {
+          "type": "date"
+        }
+      }
+    }
+  },
+  "priority": 100,
+  "version": 1,
+  "_meta": {
+    "description": "STOA Platform - Audit Trail Index (1 year retention)",
+    "managed_by": "stoa-audit-service",
+    "retention_days": 365
+  }
+}

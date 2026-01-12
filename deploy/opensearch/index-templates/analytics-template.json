@@ -1,0 +1,111 @@
+{
+  "index_patterns": ["analytics-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index": {
+        "lifecycle": {
+          "name": "analytics-policy",
+          "rollover_alias": "analytics"
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date"
+        },
+        "event_type": {
+          "type": "keyword"
+        },
+        "tenant_id": {
+          "type": "keyword"
+        },
+        "tool": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "name": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "version": { "type": "keyword" }
+          }
+        },
+        "api": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "name": { "type": "keyword" },
+            "version": { "type": "keyword" }
+          }
+        },
+        "subscription": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "plan": { "type": "keyword" }
+          }
+        },
+        "user": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "email": { "type": "keyword" }
+          }
+        },
+        "application": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "name": { "type": "keyword" }
+          }
+        },
+        "metrics": {
+          "properties": {
+            "call_count": { "type": "long" },
+            "success_count": { "type": "long" },
+            "error_count": { "type": "long" },
+            "latency_ms": { "type": "float" },
+            "latency_p50_ms": { "type": "float" },
+            "latency_p95_ms": { "type": "float" },
+            "latency_p99_ms": { "type": "float" },
+            "request_size_bytes": { "type": "long" },
+            "response_size_bytes": { "type": "long" },
+            "tokens_used": { "type": "long" },
+            "cost_usd": { "type": "float" }
+          }
+        },
+        "errors": {
+          "properties": {
+            "code": { "type": "keyword" },
+            "message": { "type": "text" },
+            "count": { "type": "long" }
+          }
+        },
+        "geo": {
+          "properties": {
+            "country": { "type": "keyword" },
+            "region": { "type": "keyword" },
+            "city": { "type": "keyword" },
+            "location": { "type": "geo_point" }
+          }
+        },
+        "period": {
+          "properties": {
+            "type": { "type": "keyword" },
+            "start": { "type": "date" },
+            "end": { "type": "date" }
+          }
+        },
+        "aggregation_level": {
+          "type": "keyword"
+        },
+        "tags": {
+          "type": "keyword"
+        }
+      }
+    }
+  },
+  "priority": 100,
+  "version": 1,
+  "_meta": {
+    "description": "STOA Platform - Usage Analytics Index (90 days retention)",
+    "managed_by": "stoa-analytics-service",
+    "retention_days": 90
+  }
+}

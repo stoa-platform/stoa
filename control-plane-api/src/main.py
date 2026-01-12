@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from .config import settings
 from .logging_config import configure_logging, get_logger
 from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates
+from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .middleware.metrics import MetricsMiddleware, get_metrics
 from .services.gateway_service import gateway_service
@@ -59,6 +60,13 @@ async def lifespan(app: FastAPI):
         logger.info("Gateway connected", oidc_proxy=settings.GATEWAY_USE_OIDC_PROXY)
     except Exception as e:
         logger.warning("Failed to connect Gateway", error=str(e))
+
+    # Initialize OpenSearch (CAB-307)
+    try:
+        await setup_opensearch(app)
+        logger.info("OpenSearch connected")
+    except Exception as e:
+        logger.warning("Failed to connect OpenSearch", error=str(e))
 
     # Start deployment worker in background
     if ENABLE_WORKER:
@@ -139,6 +147,7 @@ app = FastAPI(
         {"name": "Subscriptions", "description": "API subscription and API key management"},
         {"name": "Tenant Webhooks", "description": "Webhook notifications for subscription events (CAB-315)"},
         {"name": "certificates", "description": "Certificate validation for mTLS subscriptions (CAB-313)"},
+        {"name": "Search", "description": "Full-text search across tools and APIs (CAB-307)"},
     ],
     contact={
         "name": "CAB Ingenierie",
@@ -161,6 +170,9 @@ app.add_middleware(
 # Prometheus metrics middleware
 app.add_middleware(MetricsMiddleware)
 
+# Audit middleware (CAB-307) - logs all API requests to OpenSearch
+# Note: AuditMiddleware is added dynamically via setup_opensearch()
+
 # Routers
 app.include_router(tenants.router)
 app.include_router(apis.router)
@@ -174,6 +186,7 @@ app.include_router(gateway.router)
 app.include_router(subscriptions.router)
 app.include_router(tenant_webhooks.router)
 app.include_router(certificates.router)
+app.include_router(search_router, prefix="/v1/search", tags=["Search"])
 
 @app.get("/health")
 async def health():

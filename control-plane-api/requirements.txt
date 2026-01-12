@@ -22,3 +22,5 @@ alembic==1.13.1
 psycopg2-binary==2.9.9
 # Certificate validation (CAB-313)
 cryptography>=42.0.0
+# OpenSearch integration (CAB-307)
+opensearch-py[async]>=2.4.0

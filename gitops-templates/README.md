@@ -1,6 +1,6 @@
 # GitOps Templates
 
-This folder contains **templates and models** for initializing the GitLab repository `stoa-gitops`.
+This folder contains **templates and models** for initializing a GitLab GitOps repository.
 
 ## Architecture
 
@@ -28,11 +28,6 @@ This folder contains **templates and models** for initializing the GitLab reposi
 │  │  _defaults.yaml        <- Global variables              │   │
 │  │  environments/         <- Config per environment        │   │
 │  │  tenants/              <- Tenant data                   │   │
-│  │  webmethods/           <- webMethods Gateway GitOps     │   │
-│  │  │   ├── apis/         <- API definitions               │   │
-│  │  │   ├── policies/     <- Policy definitions            │   │
-│  │  │   └── aliases/      <- Backend endpoints             │   │
-│  │  ansible/playbooks/    <- AWX playbooks                 │   │
 │  │  argocd/               <- ArgoCD configurations         │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
@@ -73,23 +68,10 @@ gitops-templates/
 │   ├── dev/config.yaml
 │   ├── staging/config.yaml
 │   └── prod/config.yaml
-├── argocd/                      # ArgoCD configurations
-│   ├── chart/                   # Helm chart for ApplicationSets
-│   ├── appsets/                 # Legacy ApplicationSets
-│   └── projects/                # AppProjects
-├── webmethods/                  # webMethods Gateway GitOps
-│   ├── README.md                # webMethods documentation
-│   ├── schema/api-schema.json   # JSON Schema for validation
-│   ├── apis/                    # API definition templates
-│   ├── policies/                # Policy templates
-│   ├── aliases/                 # Backend endpoint templates
-│   └── scripts/                 # Validation scripts
-└── ansible/                     # AWX playbooks
-    └── reconcile-webmethods/    # webMethods reconciliation
-        ├── README.md
-        ├── reconcile-webmethods.yml
-        ├── awx-job-template.yml
-        └── tasks/               # Task files
+└── argocd/                      # ArgoCD configurations
+    ├── chart/                   # Helm chart for ApplicationSets
+    ├── appsets/                 # Legacy ApplicationSets
+    └── projects/                # AppProjects
 ```
 
 ### Centralized Configuration (`_defaults.yaml`)
@@ -123,38 +105,6 @@ variables:
 - `dev/config.yaml` - DEV variables (relaxed, debug)
 - `staging/config.yaml` - STAGING variables (moderate)
 - `prod/config.yaml` - PROD variables (strict, alerting)
-
-### webMethods GitOps (`webmethods/`)
-
-Templates for declarative webMethods Gateway configuration:
-- **apis/**: API definition templates
-- **policies/**: JWT validation, rate limiting, etc.
-- **aliases/**: Backend endpoints per environment
-- **scripts/**: CI validation script
-
-See [webmethods/README.md](webmethods/README.md) for details.
-
-### Ansible Playbooks (`ansible/`)
-
-AWX-compatible playbooks for automation:
-
-#### reconcile-webmethods
-Automatically synchronizes APIs from Git to webMethods Gateway:
-- Load APIs/policies/aliases from `webmethods/`
-- Fetch current state from Gateway
-- Compute diff and apply changes (create/update/delete)
-- Send notifications (Slack/Discord)
-
-See [ansible/reconcile-webmethods/README.md](ansible/reconcile-webmethods/README.md) for details.
-
-**Usage:**
-```bash
-# Local execution
-ansible-playbook ansible/reconcile-webmethods/reconcile-webmethods.yml -e "env=dev"
-
-# Dry-run mode
-ansible-playbook ansible/reconcile-webmethods/reconcile-webmethods.yml -e "env=prod" --check
-```
 
 ### ArgoCD Helm Chart (`argocd/chart/`)
 
@@ -190,8 +140,7 @@ Use the Helm chart `argocd/chart/` instead.
 # Or manually:
 cp _defaults.yaml <gitlab-repo>/
 cp -r environments/ <gitlab-repo>/
-cp -r webmethods/ <gitlab-repo>/
-cp -r ansible/ <gitlab-repo>/
+cp -r argocd/ <gitlab-repo>/
 mkdir -p <gitlab-repo>/tenants
 ```
 

@@ -73,7 +73,7 @@ def _delivery_to_response(delivery) -> WebhookDeliveryResponse:
 # ============ Event Types Info ============
 
 @router.get("/events", response_model=EventTypesResponse)
-async def list_event_types():
+async def list_event_types(tenant_id: str):
     """
     List all available webhook event types with descriptions and payload examples.
     """

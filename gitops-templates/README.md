@@ -77,13 +77,19 @@ gitops-templates/
 │   ├── chart/                   # Helm chart for ApplicationSets
 │   ├── appsets/                 # Legacy ApplicationSets
 │   └── projects/                # AppProjects
-└── webmethods/                  # webMethods Gateway GitOps
-    ├── README.md                # webMethods documentation
-    ├── schema/api-schema.json   # JSON Schema for validation
-    ├── apis/                    # API definition templates
-    ├── policies/                # Policy templates
-    ├── aliases/                 # Backend endpoint templates
-    └── scripts/                 # Validation scripts
+├── webmethods/                  # webMethods Gateway GitOps
+│   ├── README.md                # webMethods documentation
+│   ├── schema/api-schema.json   # JSON Schema for validation
+│   ├── apis/                    # API definition templates
+│   ├── policies/                # Policy templates
+│   ├── aliases/                 # Backend endpoint templates
+│   └── scripts/                 # Validation scripts
+└── ansible/                     # AWX playbooks
+    └── reconcile-webmethods/    # webMethods reconciliation
+        ├── README.md
+        ├── reconcile-webmethods.yml
+        ├── awx-job-template.yml
+        └── tasks/               # Task files
 ```
 
 ### Centralized Configuration (`_defaults.yaml`)
@@ -128,6 +134,28 @@ Templates for declarative webMethods Gateway configuration:
 
 See [webmethods/README.md](webmethods/README.md) for details.
 
+### Ansible Playbooks (`ansible/`)
+
+AWX-compatible playbooks for automation:
+
+#### reconcile-webmethods
+Automatically synchronizes APIs from Git to webMethods Gateway:
+- Load APIs/policies/aliases from `webmethods/`
+- Fetch current state from Gateway
+- Compute diff and apply changes (create/update/delete)
+- Send notifications (Slack/Discord)
+
+See [ansible/reconcile-webmethods/README.md](ansible/reconcile-webmethods/README.md) for details.
+
+**Usage:**
+```bash
+# Local execution
+ansible-playbook ansible/reconcile-webmethods/reconcile-webmethods.yml -e "env=dev"
+
+# Dry-run mode
+ansible-playbook ansible/reconcile-webmethods/reconcile-webmethods.yml -e "env=prod" --check
+```
+
 ### ArgoCD Helm Chart (`argocd/chart/`)
 
 Helm chart to deploy ApplicationSets:
@@ -163,6 +191,7 @@ Use the Helm chart `argocd/chart/` instead.
 cp _defaults.yaml <gitlab-repo>/
 cp -r environments/ <gitlab-repo>/
 cp -r webmethods/ <gitlab-repo>/
+cp -r ansible/ <gitlab-repo>/
 mkdir -p <gitlab-repo>/tenants
 ```
 

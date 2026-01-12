@@ -9,11 +9,14 @@ import { useState, useEffect } from 'react';
 import { Activity, CheckCircle, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
 import { StatCard, CallsTable, UsageChart, TopTools, SubscriptionsList } from '../../components/usage';
 import { usageService, formatLatency } from '../../services/usage';
+import { useAuth } from '../../contexts/AuthContext';
 import type { UsageSummary, UsageCallsResponse, ActiveSubscription } from '../../types';
 
 type Period = 'today' | 'week' | 'month';
 
 export function UsagePage() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [callsResponse, setCallsResponse] = useState<UsageCallsResponse | null>(null);
   const [subscriptions, setSubscriptions] = useState<ActiveSubscription[]>([]);
@@ -65,8 +68,11 @@ export function UsagePage() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    // Only fetch data when authenticated and auth is not loading
+    if (isAuthenticated && !authLoading) {
+      fetchData();
+    }
+  }, [isAuthenticated, authLoading]);
 
   // Get stats for selected period
   const getPeriodStats = () => {

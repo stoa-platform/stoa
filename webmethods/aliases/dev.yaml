@@ -1,0 +1,42 @@
+apiVersion: stoa.io/v1
+kind: WebMethodsAliases
+metadata:
+  environment: dev
+  description: "Backend endpoints pour environnement DEV"
+
+aliases:
+  # CRM Backend
+  crm-backend:
+    url: http://crm-service.stoa-dev.svc.cluster.local:8080
+    timeout: 30s
+    retries: 3
+    healthCheck:
+      path: /health
+      interval: 30s
+      
+  # Billing Backend
+  billing-backend:
+    url: http://billing-service.stoa-dev.svc.cluster.local:8080
+    timeout: 60s
+    retries: 2
+    healthCheck:
+      path: /health
+      interval: 30s
+      
+  # Inventory Backend
+  inventory-backend:
+    url: http://inventory-service.stoa-dev.svc.cluster.local:8080
+    timeout: 30s
+    retries: 3
+    healthCheck:
+      path: /health
+      interval: 30s
+      
+  # Notifications Backend
+  notifications-backend:
+    url: http://notifications-service.stoa-dev.svc.cluster.local:8080
+    timeout: 15s
+    retries: 5
+    healthCheck:
+      path: /health
+      interval: 30s

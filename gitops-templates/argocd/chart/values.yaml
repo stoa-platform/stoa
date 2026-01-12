@@ -1,0 +1,71 @@
+# =============================================================================
+# ArgoCD ApplicationSets Values
+# Centralized configuration for all ArgoCD resources
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# ArgoCD Configuration
+# -----------------------------------------------------------------------------
+argocd:
+  namespace: argocd
+
+# -----------------------------------------------------------------------------
+# GitLab GitOps Repository
+# -----------------------------------------------------------------------------
+gitlab:
+  url: https://gitlab.com
+  projectPath: cab6961310/stoa-gitops
+  repoUrl: https://gitlab.com/cab6961310/stoa-gitops.git
+  branch: main
+  # Secret name containing GitLab credentials (created separately)
+  secretName: stoa-gitops-repo
+
+# -----------------------------------------------------------------------------
+# Kubernetes Configuration
+# -----------------------------------------------------------------------------
+kubernetes:
+  clusterUrl: https://kubernetes.default.svc
+  namespacePrefix: stoa
+
+# -----------------------------------------------------------------------------
+# Base Domain
+# -----------------------------------------------------------------------------
+domain:
+  base: stoa.cab-i.com
+
+# -----------------------------------------------------------------------------
+# Environments
+# -----------------------------------------------------------------------------
+environments:
+  - name: dev
+    cluster: https://kubernetes.default.svc
+    namespace_suffix: dev
+    auto_sync: true
+
+  - name: staging
+    cluster: https://kubernetes.default.svc
+    namespace_suffix: staging
+    auto_sync: true
+
+  - name: prod
+    cluster: https://kubernetes.default.svc
+    namespace_suffix: prod
+    auto_sync: false  # Production requires manual sync
+
+# -----------------------------------------------------------------------------
+# Sync Policy
+# -----------------------------------------------------------------------------
+syncPolicy:
+  retry:
+    limit: 3
+    backoff:
+      duration: 5s
+      factor: 2
+      maxDuration: 3m
+
+# -----------------------------------------------------------------------------
+# Labels
+# -----------------------------------------------------------------------------
+labels:
+  app.kubernetes.io/part-of: stoa-platform
+  app.kubernetes.io/managed-by: argocd

@@ -1,0 +1,50 @@
+# ApplicationSet for Tenant APIs
+# Automatically creates ArgoCD Applications for each tenant's APIs
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: tenant-apis
+  namespace: {{ .Values.argocd.namespace | default "argocd" }}
+  labels:
+    app.kubernetes.io/name: tenant-apis
+    app.kubernetes.io/component: applicationset
+    {{- include "argocd-appsets.labels" . | nindent 4 }}
+spec:
+  generators:
+    - git:
+        repoURL: {{ include "argocd-appsets.gitlabRepoUrl" . }}
+        revision: {{ .Values.gitlab.branch | default "main" }}
+        directories:
+          - path: tenants/*/apis/*
+
+  template:
+    metadata:
+      name: '{{`{{path[1]}}-{{path[3]}}`}}'
+      labels:
+        tenant: '{{`{{path[1]}}`}}'
+        type: api
+        app.kubernetes.io/managed-by: argocd
+    spec:
+      project: '{{`{{path[1]}}`}}'
+      source:
+        repoURL: {{ include "argocd-appsets.gitlabRepoUrl" . }}
+        targetRevision: {{ .Values.gitlab.branch | default "main" }}
+        path: '{{`{{path}}`}}'
+        plugin:
+          name: variable-resolver
+      destination:
+        server: {{ .Values.kubernetes.clusterUrl | default "https://kubernetes.default.svc" }}
+        namespace: '{{ include "argocd-appsets.namespace" . }}-{{`{{path[1]}}`}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - PruneLast=true
+        retry:
+          limit: {{ .Values.syncPolicy.retry.limit | default 3 }}
+          backoff:
+            duration: {{ .Values.syncPolicy.retry.backoff.duration | default "5s" }}
+            factor: {{ .Values.syncPolicy.retry.backoff.factor | default 2 }}
+            maxDuration: {{ .Values.syncPolicy.retry.backoff.maxDuration | default "3m" }}

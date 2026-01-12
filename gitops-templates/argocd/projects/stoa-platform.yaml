@@ -1,0 +1,96 @@
+# ArgoCD AppProject for STOA Platform
+# Defines access control and allowed resources
+#
+# Variables:
+#   - ${GITLAB_REPO_URL}: GitLab repository URL
+#   - ${K8S_CLUSTER_URL}: Kubernetes API server URL
+#   - ${K8S_NAMESPACE_PREFIX}: Namespace prefix (default: stoa)
+#
+# NOTE: This file is a template. Use chart/templates/project-platform.yaml
+#       for Helm-based deployment with variable substitution.
+#
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: stoa-platform
+  namespace: ${ARGOCD_NAMESPACE:argocd}
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/managed-by: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: STOA Platform GitOps Project
+
+  # Source repositories
+  sourceRepos:
+    - '${GITLAB_REPO_URL:https://gitlab.com/cab6961310/stoa-gitops.git}'
+
+  # Destination clusters and namespaces
+  destinations:
+    - namespace: stoa-system
+      server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+    - namespace: '${K8S_NAMESPACE_PREFIX:stoa}-*'
+      server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+
+  # Allowed cluster-scoped resources
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: networking.k8s.io
+      kind: Ingress
+
+  # Allowed namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: ''
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: batch
+      kind: Job
+    - group: batch
+      kind: CronJob
+
+  # Role definitions
+  roles:
+    - name: admin
+      description: Full access to STOA Platform project
+      policies:
+        - p, proj:stoa-platform:admin, applications, *, stoa-platform/*, allow
+        - p, proj:stoa-platform:admin, repositories, *, stoa-platform/*, allow
+      groups:
+        - cpi-admin
+
+    - name: deployer
+      description: Can sync and manage applications
+      policies:
+        - p, proj:stoa-platform:deployer, applications, get, stoa-platform/*, allow
+        - p, proj:stoa-platform:deployer, applications, sync, stoa-platform/*, allow
+        - p, proj:stoa-platform:deployer, applications, action/*, stoa-platform/*, allow
+      groups:
+        - devops
+        - tenant-admin
+
+    - name: viewer
+      description: Read-only access
+      policies:
+        - p, proj:stoa-platform:viewer, applications, get, stoa-platform/*, allow
+      groups:
+        - viewer
+
+  # Sync windows - production deployments only during business hours
+  syncWindows:
+    - kind: deny
+      schedule: '0 0 * * 0'  # Deny on Sundays
+      duration: 24h
+      applications:
+        - '*-prod'
+      manualSync: true

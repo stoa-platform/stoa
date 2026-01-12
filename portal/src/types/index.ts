@@ -378,3 +378,76 @@ export interface WebhookTestResponse {
   error?: string;
   signature_header?: string;
 }
+
+// ============ Usage Dashboard Types (CAB-280) ============
+
+export type UsageCallStatus = 'success' | 'error' | 'timeout';
+
+export interface UsagePeriodStats {
+  period: string;
+  total_calls: number;
+  success_count: number;
+  error_count: number;
+  success_rate: number;
+  avg_latency_ms: number;
+}
+
+export interface ToolUsageStat {
+  tool_id: string;
+  tool_name: string;
+  call_count: number;
+  success_rate: number;
+  avg_latency_ms: number;
+}
+
+export interface DailyCallStat {
+  date: string;
+  calls: number;
+}
+
+export interface UsageSummary {
+  tenant_id: string;
+  user_id: string;
+  today: UsagePeriodStats;
+  this_week: UsagePeriodStats;
+  this_month: UsagePeriodStats;
+  top_tools: ToolUsageStat[];
+  daily_calls: DailyCallStat[];
+}
+
+export interface UsageCall {
+  id: string;
+  timestamp: string;
+  tool_id: string;
+  tool_name: string;
+  status: UsageCallStatus;
+  latency_ms: number;
+  error_message?: string | null;
+}
+
+export interface UsageCallsResponse {
+  calls: UsageCall[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface UsageCallsParams {
+  limit?: number;
+  offset?: number;
+  status?: UsageCallStatus;
+  tool_id?: string;
+  from_date?: string;
+  to_date?: string;
+}
+
+export interface ActiveSubscription {
+  id: string;
+  tool_id: string;
+  tool_name: string;
+  tool_description?: string | null;
+  status: string;
+  created_at: string;
+  last_used_at?: string | null;
+  call_count_total: number;
+}

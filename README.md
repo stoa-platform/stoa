@@ -23,10 +23,13 @@ stoa-gitops/
 │   ├── policies/              # Policy definitions
 │   ├── aliases/               # Backend endpoints per environment
 │   └── schema/                # JSON Schema for validation
+├── ansible/                   # AWX playbooks
+│   └── reconcile-webmethods/  # webMethods reconciliation
+│       ├── reconcile-webmethods.yml
+│       ├── awx-job-template.yml
+│       └── tasks/
 ├── mcp-gateway/               # MCP Gateway configurations
 ├── stoa-portal/               # Developer Portal configurations
-├── ansible/                   # AWX playbooks
-│   └── playbooks/
 └── scripts/                   # CI/CD scripts
     └── validate-webmethods.py
 ```
@@ -41,10 +44,30 @@ stoa-gitops/
 ### webMethods Reconciliation Flow
 1. Git Push (PR merge)
 2. ArgoCD PostSync hook
-3. AWX executes reconcile playbook
+3. AWX executes `ansible/reconcile-webmethods/reconcile-webmethods.yml`
 4. webMethods Gateway updated
 
 ## Components
+
+### Ansible Playbooks (`ansible/`)
+
+#### reconcile-webmethods
+Automatically synchronizes APIs from Git to webMethods Gateway:
+- Load APIs/policies/aliases from `webmethods/`
+- Fetch current state from Gateway
+- Compute diff and apply changes (create/update/delete)
+- Send notifications
+
+See [ansible/reconcile-webmethods/README.md](ansible/reconcile-webmethods/README.md) for details.
+
+**Usage:**
+```bash
+# Local execution
+ansible-playbook ansible/reconcile-webmethods/reconcile-webmethods.yml -e "env=dev"
+
+# Via AWX
+# Import job template from awx-job-template.yml
+```
 
 ### webMethods GitOps (`webmethods/`)
 Declarative API definitions for webMethods Gateway:

@@ -1,0 +1,90 @@
+# ArgoCD AppProject Template for Tenants
+# Each tenant gets their own project with isolated access
+#
+# Variables (resolved by Variable Resolver):
+#   - ${TENANT_ID}: Unique tenant identifier
+#   - ${TENANT_DISPLAY_NAME}: Human-readable tenant name
+#   - ${GITLAB_REPO_URL}: GitLab repository URL (default: from _defaults.yaml)
+#   - ${K8S_CLUSTER_URL}: Kubernetes API server URL
+#   - ${K8S_NAMESPACE_PREFIX}: Namespace prefix (default: stoa)
+#   - ${ARGOCD_NAMESPACE}: ArgoCD namespace (default: argocd)
+#
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: '${TENANT_ID}'
+  namespace: ${ARGOCD_NAMESPACE:argocd}
+  labels:
+    tenant: '${TENANT_ID}'
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/managed-by: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: 'APIM Tenant: ${TENANT_DISPLAY_NAME:${TENANT_ID}}'
+
+  # Source repositories - tenant can only access GitOps repo
+  sourceRepos:
+    - '${GITLAB_REPO_URL:https://gitlab.com/cab6961310/stoa-gitops.git}'
+
+  # Destination - tenant can only deploy to their namespaces
+  destinations:
+    - namespace: '${K8S_NAMESPACE_PREFIX:stoa}-${TENANT_ID}'
+      server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+    - namespace: '${K8S_NAMESPACE_PREFIX:stoa}-${TENANT_ID}-dev'
+      server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+    - namespace: '${K8S_NAMESPACE_PREFIX:stoa}-${TENANT_ID}-staging'
+      server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+    - namespace: '${K8S_NAMESPACE_PREFIX:stoa}-${TENANT_ID}-prod'
+      server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+
+  # Limited cluster-scoped resources
+  clusterResourceWhitelist: []
+
+  # Allowed namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: networking.k8s.io
+      kind: Ingress
+
+  # Deny Secrets by default (use SealedSecrets or ExternalSecrets)
+  namespaceResourceBlacklist:
+    - group: ''
+      kind: Secret
+
+  # Role definitions for tenant
+  roles:
+    - name: admin
+      description: 'Tenant admin for ${TENANT_ID}'
+      policies:
+        - 'p, proj:${TENANT_ID}:admin, applications, *, ${TENANT_ID}/*, allow'
+      groups:
+        - '/tenants/${TENANT_ID}/tenant-admin'
+
+    - name: deployer
+      description: 'Deployer for ${TENANT_ID}'
+      policies:
+        - 'p, proj:${TENANT_ID}:deployer, applications, get, ${TENANT_ID}/*, allow'
+        - 'p, proj:${TENANT_ID}:deployer, applications, sync, ${TENANT_ID}/*, allow'
+      groups:
+        - '/tenants/${TENANT_ID}/devops'
+
+    - name: viewer
+      description: 'Viewer for ${TENANT_ID}'
+      policies:
+        - 'p, proj:${TENANT_ID}:viewer, applications, get, ${TENANT_ID}/*, allow'
+      groups:
+        - '/tenants/${TENANT_ID}/viewer'
+
+  # Orphaned resources monitoring
+  orphanedResources:
+    warn: true
+    ignore:
+      - group: ''
+        kind: ConfigMap
+        name: kube-root-ca.crt

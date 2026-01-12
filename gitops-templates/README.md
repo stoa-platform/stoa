@@ -1,78 +1,101 @@
 # GitOps Templates
 
-Ce dossier contient les **templates et modèles** pour initialiser le repository GitLab `stoa-gitops`.
+This folder contains **templates and models** for initializing the GitLab repository `stoa-gitops`.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│              GitHub: stoa (Development Repository)          │
-│                   Infrastructure + Code Source                   │
+│              GitHub: stoa (Development Repository)              │
+│                   Application Source Code                        │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  control-plane-api/ ← Code source FastAPI               │   │
-│  │  control-plane-ui/  ← Code source React                 │   │
-│  │  ansible/           ← Playbooks Ansible (référence)     │   │
-│  │  terraform/         ← Infrastructure AWS                │   │
-│  │  gitops-templates/  ← Templates pour GitLab             │   │
-│  │  charts/            ← Helm charts                       │   │
+│  │  control-plane-api/ <- FastAPI source code              │   │
+│  │  control-plane-ui/  <- React source code                │   │
+│  │  portal/            <- Developer Portal (React + Vite)  │   │
+│  │  mcp-gateway/       <- MCP Gateway source code          │   │
+│  │  gitops-templates/  <- Templates for GitLab             │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
-│  ⚠️ Ce repo sert UNIQUEMENT au développement et déploiement    │
-│     initial. Une fois déployé, tout fonctionne via GitLab.     │
+│  Note: Infrastructure code is in a separate repo (stoa-infra)  │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ Initialisation (une seule fois)
-                              ▼
+                             │
+                             │ Initialization (one-time)
+                             v
 ┌─────────────────────────────────────────────────────────────────┐
 │         GitLab: stoa-gitops (Source of Truth - Runtime)         │
 │                                                                 │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  ansible/playbooks/  ← Playbooks exécutés par AWX       │   │
-│  │  _defaults.yaml      ← Variables globales               │   │
-│  │  environments/       ← Config par environnement         │   │
-│  │  tenants/            ← Données des tenants              │   │
-│  │  ├── stoa/           ← Tenant admin (platform)          │   │
-│  │  │   ├── tenant.yaml                                    │   │
-│  │  │   ├── apis/control-plane/                            │   │
-│  │  │   └── iam/users.yaml (APIMAdmin)                     │   │
-│  │  ├── acme/           ← Tenant client                    │   │
-│  │  └── ...                                                │   │
+│  │  _defaults.yaml        <- Global variables              │   │
+│  │  environments/         <- Config per environment        │   │
+│  │  tenants/              <- Tenant data                   │   │
+│  │  webmethods/           <- webMethods Gateway GitOps     │   │
+│  │  │   ├── apis/         <- API definitions               │   │
+│  │  │   ├── policies/     <- Policy definitions            │   │
+│  │  │   └── aliases/      <- Backend endpoints             │   │
+│  │  ansible/playbooks/    <- AWX playbooks                 │   │
+│  │  argocd/               <- ArgoCD configurations         │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
-│  ✅ Toutes les opérations runtime passent par ce repo          │
+│  All runtime operations go through this repo                    │
 └─────────────────────────────────────────────────────────────────┘
-         │              │                    │
-         ▼              ▼                    ▼
-   Control Plane   AWX Automation       ArgoCD (GitOps)
-   - Webhooks      - provision-tenant   - Sync K8s
-   - CRUD tenants  - register-api       - Auto-deploy
-   - Events Kafka  - sync-gateway       - Rollback
+        │              │                    │
+        v              v                    v
+  Control Plane   AWX Automation       ArgoCD (GitOps)
+  - Webhooks      - provision-tenant   - Sync K8s
+  - CRUD tenants  - register-api       - Auto-deploy
+  - Events Kafka  - sync-gateway       - Rollback
 ```
 
-## Séparation des responsabilités
+## Separation of Concerns
 
-| Composant | Source | Rôle |
+| Component | Source | Role |
 |-----------|--------|------|
-| **GitHub (stoa)** | Code source | Développement, CI/CD, images Docker |
-| **GitLab (stoa-gitops)** | Données runtime | Tenants, APIs, users, playbooks AWX |
-| **ArgoCD** | GitLab | Sync K8s depuis GitLab |
-| **AWX** | GitLab | Exécute playbooks depuis GitLab |
-| **Control Plane API** | GitLab | Lit/écrit tenants dans GitLab |
+| **GitHub (stoa)** | Source code | Development, CI/CD, Docker images |
+| **GitHub (stoa-infra)** | Infrastructure | Terraform, Ansible, Helm charts |
+| **GitLab (stoa-gitops)** | Runtime data | Tenants, APIs, users, AWX playbooks |
+| **ArgoCD** | GitLab | K8s sync from GitLab |
+| **AWX** | GitLab | Execute playbooks from GitLab |
+| **Control Plane API** | GitLab | Read/write tenants in GitLab |
 
-## Contenu
+## Contents
 
-### Configuration centralisée (`_defaults.yaml`)
+### Structure
 
-Fichier central contenant toutes les variables globales:
+```
+gitops-templates/
+├── README.md                    # This file
+├── _defaults.yaml               # Global variables template
+├── templates/                   # Resource templates
+│   ├── api-template.yaml
+│   ├── application-template.yaml
+│   └── tenant-template.yaml
+├── environments/                # Environment configs
+│   ├── dev/config.yaml
+│   ├── staging/config.yaml
+│   └── prod/config.yaml
+├── argocd/                      # ArgoCD configurations
+│   ├── chart/                   # Helm chart for ApplicationSets
+│   ├── appsets/                 # Legacy ApplicationSets
+│   └── projects/                # AppProjects
+└── webmethods/                  # webMethods Gateway GitOps
+    ├── README.md                # webMethods documentation
+    ├── schema/api-schema.json   # JSON Schema for validation
+    ├── apis/                    # API definition templates
+    ├── policies/                # Policy templates
+    ├── aliases/                 # Backend endpoint templates
+    └── scripts/                 # Validation scripts
+```
+
+### Centralized Configuration (`_defaults.yaml`)
+
+Central file containing all global variables:
 
 ```yaml
 infrastructure:
   GITLAB_URL: "https://gitlab.com"
-  GITLAB_PROJECT_PATH: "cab6961310/stoa-gitops"
-  GITLAB_REPO_URL: "https://gitlab.com/cab6961310/stoa-gitops.git"
-  K8S_CLUSTER_URL: "https://kubernetes.default.svc"
+  GITLAB_PROJECT_PATH: "${YOUR_ORG}/stoa-gitops"
   K8S_NAMESPACE_PREFIX: "stoa"
-  BASE_DOMAIN: "stoa.cab-i.com"
+  BASE_DOMAIN: "${YOUR_DOMAIN}"
 
 services:
   GATEWAY_URL: "https://gateway.${BASE_DOMAIN}"
@@ -86,81 +109,92 @@ variables:
 ```
 
 ### Templates (`templates/`)
-- `api-template.yaml` - Modèle pour nouvelles APIs avec `${VAR:default}`
-- `application-template.yaml` - Modèle pour applications OAuth2
-- `tenant-template.yaml` - Modèle pour nouveaux tenants avec RBAC
+- `api-template.yaml` - Template for new APIs with `${VAR:default}`
+- `application-template.yaml` - Template for OAuth2 applications
+- `tenant-template.yaml` - Template for new tenants with RBAC
 
-### Configurations environnements (`environments/`)
-- `dev/config.yaml` - Variables DEV (relaxées, debug)
-- `staging/config.yaml` - Variables STAGING (modérées)
-- `prod/config.yaml` - Variables PROD (strictes, alerting)
+### Environment Configurations (`environments/`)
+- `dev/config.yaml` - DEV variables (relaxed, debug)
+- `staging/config.yaml` - STAGING variables (moderate)
+- `prod/config.yaml` - PROD variables (strict, alerting)
+
+### webMethods GitOps (`webmethods/`)
+
+Templates for declarative webMethods Gateway configuration:
+- **apis/**: API definition templates
+- **policies/**: JWT validation, rate limiting, etc.
+- **aliases/**: Backend endpoints per environment
+- **scripts/**: CI validation script
+
+See [webmethods/README.md](webmethods/README.md) for details.
 
 ### ArgoCD Helm Chart (`argocd/chart/`)
 
-Chart Helm pour déployer les ApplicationSets:
+Helm chart to deploy ApplicationSets:
 
 ```bash
 # Installation
 helm install argocd-appsets ./argocd/chart -n argocd
 
-# Avec valeurs personnalisées
+# With custom values
 helm install argocd-appsets ./argocd/chart -n argocd \
   --set gitlab.repoUrl=https://gitlab.com/myorg/stoa-gitops.git \
   --set domain.base=mycompany.com
 ```
 
-**Fichiers du chart:**
-- `chart/values.yaml` - Configuration centralisée
-- `chart/templates/appset-tenant-apis.yaml` - ApplicationSet pour APIs
-- `chart/templates/appset-environments.yaml` - ApplicationSet pour envs
+**Chart files:**
+- `chart/values.yaml` - Centralized configuration
+- `chart/templates/appset-tenant-apis.yaml` - ApplicationSet for APIs
+- `chart/templates/appset-environments.yaml` - ApplicationSet for envs
 - `chart/templates/project-platform.yaml` - AppProject platform
 
 ### ArgoCD Legacy (`argocd/appsets/`, `argocd/projects/`)
 
-⚠️ **DEPRECATED** - Conservés pour référence uniquement.
-Utilisez le chart Helm `argocd/chart/` à la place.
+**DEPRECATED** - Kept for reference only.
+Use the Helm chart `argocd/chart/` instead.
 
-## Initialisation du repo GitLab
+## GitLab Repository Initialization
 
 ```bash
-# Script automatisé
+# Automated script
 ./scripts/init-gitlab-gitops.sh
 
-# Ou manuellement:
+# Or manually:
 cp _defaults.yaml <gitlab-repo>/
 cp -r environments/ <gitlab-repo>/
+cp -r webmethods/ <gitlab-repo>/
 mkdir -p <gitlab-repo>/tenants
 ```
 
-## Variables supportées
+## Supported Variables
 
-### Syntaxe
+### Syntax
 
 ```yaml
-# Variable requise (erreur si non définie)
+# Required variable (error if undefined)
 backend_url: ${BACKEND_URL}
 
-# Variable avec valeur par défaut
+# Variable with default value
 timeout: ${BACKEND_TIMEOUT:30}
 
-# Référence Vault (résolu au runtime)
+# Vault reference (resolved at runtime)
 secret: vault:secret/data/path#key
 
-# Variable imbriquée
-url: "https://gateway.${BASE_DOMAIN:stoa.cab-i.com}"
+# Nested variable
+url: "https://gateway.${BASE_DOMAIN:example.com}"
 ```
 
-### Ordre de résolution
+### Resolution Order
 
-1. `_defaults.yaml` - Variables globales
-2. `environments/{env}/config.yaml` - Override par environnement
-3. `tenants/{tenant}/environments/{env}.yaml` - Override par tenant
-4. Valeurs inline `${VAR:default}` - Fallback
+1. `_defaults.yaml` - Global variables
+2. `environments/{env}/config.yaml` - Environment override
+3. `tenants/{tenant}/environments/{env}.yaml` - Tenant override
+4. Inline values `${VAR:default}` - Fallback
 
-## Le Control Plane API
+## Control Plane API
 
-Le Control Plane API n'accède **qu'à GitLab**:
-- Lecture/écriture des tenants via `git_service.py`
-- Réception des webhooks GitLab (push, MR)
-- Résolution des variables via `variable_resolver.py`
-- Aucun accès à ce repo GitHub
+The Control Plane API only accesses **GitLab**:
+- Read/write tenants via `git_service.py`
+- Receive GitLab webhooks (push, MR)
+- Resolve variables via `variable_resolver.py`
+- No access to this GitHub repo

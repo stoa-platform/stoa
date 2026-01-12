@@ -1,0 +1,61 @@
+apiVersion: stoa.io/v1
+kind: WebMethodsAPI
+metadata:
+  name: ${API_NAME}
+  version: "1.0.0"
+  description: "${API_DESCRIPTION}"
+  tags:
+    - ${API_TAG_1}
+    - ${API_TAG_2}
+
+spec:
+  type: REST
+  basePath: /api/${API_NAME}/v1
+
+  # Backend routing (resolved via aliases/{env}.yaml)
+  backend:
+    alias: ${BACKEND_ALIAS}
+    pathPrefix: /api
+
+  # Policies applied (execution order)
+  policies:
+    - jwt-validation
+    - rate-limit-standard
+    - logging-standard
+
+  # Authentication configuration
+  auth:
+    type: oauth2
+    required: true
+    scopes:
+      - ${API_NAME}:read
+      - ${API_NAME}:write
+
+  # Authorized applications (empty = all registered apps)
+  applications: []
+
+  # CORS configuration
+  cors:
+    enabled: true
+    allowOrigins:
+      - "https://console.${BASE_DOMAIN}"
+      - "https://portal.${BASE_DOMAIN}"
+    allowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+    allowHeaders:
+      - Authorization
+      - Content-Type
+      - X-Request-ID
+
+  # Exposed resources/endpoints
+  resources:
+    - path: /items
+      methods: [GET, POST]
+      description: "List and create items"
+
+    - path: /items/{id}
+      methods: [GET, PUT, DELETE]
+      description: "CRUD on a specific item"

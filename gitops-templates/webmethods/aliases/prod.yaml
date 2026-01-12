@@ -1,0 +1,24 @@
+apiVersion: stoa.io/v1
+kind: WebMethodsAliases
+metadata:
+  environment: prod
+  description: "Backend endpoints for PRODUCTION environment"
+
+aliases:
+  # Example backend service
+  example-backend:
+    url: http://example-service.${K8S_NAMESPACE}.svc.cluster.local:8080
+    timeout: 60s
+    retries: 5
+    healthCheck:
+      path: /health
+      interval: 15s
+
+  # Add your backend services here
+  # service-name:
+  #   url: http://service.${K8S_NAMESPACE}.svc.cluster.local:PORT
+  #   timeout: 60s
+  #   retries: 5
+  #   healthCheck:
+  #     path: /health
+  #     interval: 15s

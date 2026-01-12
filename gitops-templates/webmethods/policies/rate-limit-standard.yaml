@@ -1,0 +1,32 @@
+apiVersion: stoa.io/v1
+kind: WebMethodsPolicy
+metadata:
+  name: rate-limit-standard
+  description: "Standard rate limiting - 100 requests per minute"
+
+spec:
+  type: rate-limit
+  config:
+    # Maximum requests allowed
+    limit: ${RATE_LIMIT_REQUESTS:100}
+
+    # Time window
+    interval: ${RATE_LIMIT_INTERVAL:60s}
+
+    # Rate limit key (per client)
+    key: client_id
+
+    # Action when limit exceeded
+    action: reject  # reject | queue
+
+    # HTTP status code when rejected
+    rejectStatusCode: 429
+
+    # Response headers
+    headers:
+      X-RateLimit-Limit: "${limit}"
+      X-RateLimit-Remaining: "${remaining}"
+      X-RateLimit-Reset: "${reset}"
+
+    # Burst allowance (optional)
+    burst: ${RATE_LIMIT_BURST:10}

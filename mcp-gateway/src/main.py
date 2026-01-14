@@ -5,13 +5,14 @@ Exposes APIs as MCP Tools for LLM consumption.
 """
 
 import asyncio
+import ipaddress
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
 import structlog
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
@@ -167,15 +168,46 @@ def create_app() -> FastAPI:
     return app
 
 
+def _is_internal_request(request: Request) -> bool:
+    """Check if request comes from internal network (K8s cluster).
+
+    Allows requests from:
+    - 10.0.0.0/8 (K8s pod network)
+    - 172.16.0.0/12 (K8s service network)
+    - 192.168.0.0/16 (Private networks)
+    - 127.0.0.0/8 (Localhost)
+    """
+    # Get client IP from X-Real-IP or X-Forwarded-For (behind ingress)
+    client_ip = request.headers.get("X-Real-IP") or \
+                request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or \
+                request.client.host if request.client else "0.0.0.0"
+
+    try:
+        ip = ipaddress.ip_address(client_ip)
+        internal_networks = [
+            ipaddress.ip_network("10.0.0.0/8"),
+            ipaddress.ip_network("172.16.0.0/12"),
+            ipaddress.ip_network("192.168.0.0/16"),
+            ipaddress.ip_network("127.0.0.0/8"),
+        ]
+        return any(ip in network for network in internal_networks)
+    except ValueError:
+        return False
+
+
 def register_routes(app: FastAPI) -> None:
     """Register all application routes."""
 
     @app.get("/health", tags=["Health"])
-    async def health_check() -> dict[str, Any]:
-        """Health check endpoint for load balancers.
+    async def health_check(request: Request) -> dict[str, Any]:
+        """Health check endpoint for Kubernetes probes.
 
+        Only accessible from internal cluster network.
         Returns basic health status. Always returns 200 if the service is running.
         """
+        if not _is_internal_request(request):
+            raise HTTPException(status_code=403, detail="Forbidden - internal only")
+
         settings = get_settings()
         return {
             "status": "healthy",
@@ -185,12 +217,16 @@ def register_routes(app: FastAPI) -> None:
         }
 
     @app.get("/ready", tags=["Health"])
-    async def readiness_check() -> JSONResponse:
+    async def readiness_check(request: Request) -> JSONResponse:
         """Readiness check endpoint for Kubernetes.
 
+        Only accessible from internal cluster network.
         Returns 200 if the service is ready to accept traffic.
         Returns 503 if dependencies are not available.
         """
+        if not _is_internal_request(request):
+            raise HTTPException(status_code=403, detail="Forbidden - internal only")
+
         settings = get_settings()
 
         checks: dict[str, Any] = {
@@ -202,8 +238,6 @@ def register_routes(app: FastAPI) -> None:
             },
         }
 
-        # TODO: Add dependency checks (Keycloak, Control Plane API, etc.)
-
         is_ready = all(checks["checks"].values())
         checks["status"] = "ready" if is_ready else "not_ready"
 
@@ -213,16 +247,26 @@ def register_routes(app: FastAPI) -> None:
         )
 
     @app.get("/live", tags=["Health"])
-    async def liveness_check() -> dict[str, str]:
+    async def liveness_check(request: Request) -> dict[str, str]:
         """Liveness check endpoint for Kubernetes.
 
+        Only accessible from internal cluster network.
         Simple check that the process is running.
         """
+        if not _is_internal_request(request):
+            raise HTTPException(status_code=403, detail="Forbidden - internal only")
+
         return {"status": "alive"}
 
     @app.get("/metrics", tags=["Observability"])
-    async def metrics() -> Response:
-        """Prometheus metrics endpoint."""
+    async def metrics(request: Request) -> Response:
+        """Prometheus metrics endpoint.
+
+        Only accessible from internal cluster network.
+        """
+        if not _is_internal_request(request):
+            raise HTTPException(status_code=403, detail="Forbidden - internal only")
+
         return Response(
             content=generate_latest(),
             media_type=CONTENT_TYPE_LATEST,
@@ -236,12 +280,10 @@ def register_routes(app: FastAPI) -> None:
             "service": "stoa-mcp-gateway",
             "description": "Model Context Protocol Gateway for AI-Native API Management",
             "version": settings.app_version,
-            "environment": settings.environment,
-            "docs": "/docs" if settings.debug else "Disabled in production",
-            "links": {
-                "health": "/health",
-                "ready": "/ready",
-                "metrics": "/metrics",
+            "mcp": {
+                "tools": "/mcp/v1/tools",
+                "sse": "/mcp/sse",
+                "docs": "https://modelcontextprotocol.io",
             },
         }
 

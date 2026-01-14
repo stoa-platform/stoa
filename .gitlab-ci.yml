@@ -1,437 +1,174 @@
-# STOA Platform - GitLab CI/CD Pipeline
-# CAB-313: Lint, Test, Security Scan, Build, Deploy
+# stoa-gitops GitLab CI/CD Pipeline
 #
-# Pipeline stages:
-#   1. lint     - Code quality and formatting
-#   2. test     - Unit tests with coverage
-#   3. security - Vulnerability scanning
-#   4. build    - Docker image build
-#   5. deploy   - Deploy to environments
+# Triggers AWX reconciliation when webmethods/ configs change
 
 stages:
-  - lint
-  - test
-  - security
-  - build
-  - deploy
+  - validate
+  - reconcile
 
 variables:
-  # Docker
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: "/certs"
+  AWX_HOST: "https://awx.stoa.cab-i.com"
+  AWX_JOB_TEMPLATE_ID: "19"  # Template: "STOA - Reconcile webMethods Gateway"
 
-  # Python
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  PYTHONDONTWRITEBYTECODE: "1"
-
-  # Node
-  NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
-
-  # AWS ECR
-  AWS_REGION: eu-west-1
-  ECR_REGISTRY: "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-
-  # Coverage thresholds
-  PYTHON_COVERAGE_THRESHOLD: "70"
-  NODE_COVERAGE_THRESHOLD: "60"
-
-# Cache configurations
-.python-cache: &python-cache
-  cache:
-    key: python-${CI_COMMIT_REF_SLUG}
-    paths:
-      - .cache/pip
-      - .venv/
-    policy: pull-push
-
-.node-cache: &node-cache
-  cache:
-    key: node-${CI_COMMIT_REF_SLUG}
-    paths:
-      - .cache/npm
-      - portal/node_modules/
-      - control-plane-ui/node_modules/
-    policy: pull-push
-
-# =============================================================================
-# TEMPLATES
-# =============================================================================
-
-.python-base:
+# Validate webMethods YAML files
+validate-webmethods:
+  stage: validate
   image: python:3.11-slim
-  <<: *python-cache
   before_script:
-    - cd control-plane-api
-    - pip install --upgrade pip
-    - pip install -r requirements.txt -r requirements-dev.txt
-
-.node-base:
-  image: node:20-alpine
-  <<: *node-cache
-  before_script:
-    - cd portal
-    - npm ci --prefer-offline
-
-.docker-base:
-  image: docker:24-dind
-  services:
-    - docker:24-dind
-  before_script:
-    - apk add --no-cache aws-cli
-    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-
-# =============================================================================
-# LINT STAGE
-# =============================================================================
-
-# --- Control Plane API (Python) ---
-
-lint:python:ruff:
-  extends: .python-base
-  stage: lint
+    - pip install pyyaml jsonschema --quiet
   script:
-    - ruff check src/ --output-format=gitlab > ruff-report.json || true
-    - ruff check src/ --fix --diff
-  artifacts:
-    reports:
-      codequality: control-plane-api/ruff-report.json
-    when: always
+    - |
+      echo "Validating webMethods YAML files..."
+      python -c "
+      import yaml
+      import sys
+      from pathlib import Path
+
+      errors = []
+      for f in Path('webmethods').rglob('*.yaml'):
+          try:
+              with open(f) as fh:
+                  yaml.safe_load(fh)
+              print(f'  OK: {f}')
+          except Exception as e:
+              errors.append(f'{f}: {e}')
+              print(f'  FAIL: {f}')
+
+      if errors:
+          print(f'\n{len(errors)} validation error(s)')
+          sys.exit(1)
+      print('\nAll files valid')
+      "
   rules:
     - changes:
-        - control-plane-api/**/*.py
+        - webmethods/**/*
+      when: always
+    - when: never
+  tags:
+    - docker
 
-lint:python:black:
-  extends: .python-base
-  stage: lint
-  script:
-    - black --check --diff src/
-  rules:
-    - changes:
-        - control-plane-api/**/*.py
-
-lint:python:isort:
-  extends: .python-base
-  stage: lint
-  script:
-    - isort --check-only --diff src/
-  rules:
-    - changes:
-        - control-plane-api/**/*.py
-
-lint:python:mypy:
-  extends: .python-base
-  stage: lint
-  script:
-    - mypy src/ --ignore-missing-imports || true
-  allow_failure: true
-  rules:
-    - changes:
-        - control-plane-api/**/*.py
-
-# --- Portal (TypeScript) ---
-
-lint:portal:eslint:
-  extends: .node-base
-  stage: lint
-  script:
-    - npm run lint -- --format gitlab > eslint-report.json || true
-    - npm run lint
-  artifacts:
-    reports:
-      codequality: portal/eslint-report.json
-    when: always
-  rules:
-    - changes:
-        - portal/**/*.{ts,tsx}
-
-lint:portal:prettier:
-  extends: .node-base
-  stage: lint
-  script:
-    - npx prettier --check "src/**/*.{ts,tsx,css,json}"
-  rules:
-    - changes:
-        - portal/**/*.{ts,tsx,css,json}
-
-lint:portal:typescript:
-  extends: .node-base
-  stage: lint
-  script:
-    - npx tsc --noEmit
-  rules:
-    - changes:
-        - portal/**/*.{ts,tsx}
-
-# --- MCP Gateway (Python) ---
-
-lint:mcp-gateway:
-  image: python:3.11-slim
-  stage: lint
-  before_script:
-    - cd mcp-gateway
-    - pip install -e ".[dev]"
-  script:
-    - ruff check src/
-    - black --check src/
-  rules:
-    - changes:
-        - mcp-gateway/**/*.py
-
-# =============================================================================
-# TEST STAGE
-# =============================================================================
-
-test:python:
-  extends: .python-base
-  stage: test
-  services:
-    - postgres:15-alpine
+# Trigger AWX reconciliation - DEV
+trigger-awx-dev:
+  stage: reconcile
+  image: curlimages/curl:8.5.0
   variables:
-    POSTGRES_DB: test_stoa
-    POSTGRES_USER: test
-    POSTGRES_PASSWORD: test
-    DATABASE_URL: "postgresql+asyncpg://test:test@postgres:5432/test_stoa"
+    STOA_ENV: "dev"
   script:
-    - pytest tests/ -v --cov=src --cov-report=xml --cov-report=html --cov-report=term --cov-fail-under=$PYTHON_COVERAGE_THRESHOLD --junitxml=junit.xml
-  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
-  artifacts:
-    reports:
-      junit: control-plane-api/junit.xml
-      coverage_report:
-        coverage_format: cobertura
-        path: control-plane-api/coverage.xml
-    paths:
-      - control-plane-api/htmlcov/
-    when: always
+    - |
+      echo "Triggering AWX Job Template for webMethods reconciliation..."
+      echo "   Branch: ${CI_COMMIT_BRANCH}"
+      echo "   Environment: ${STOA_ENV}"
+      echo "   Commit: ${CI_COMMIT_SHORT_SHA}"
+
+      RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+        "${AWX_HOST}/api/v2/job_templates/${AWX_JOB_TEMPLATE_ID}/launch/" \
+        -H "Authorization: Bearer ${AWX_API_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"extra_vars\": {
+            \"env\": \"${STOA_ENV}\",
+            \"delete_orphans\": true,
+            \"git_commit\": \"${CI_COMMIT_SHA}\",
+            \"git_ref\": \"${CI_COMMIT_REF_NAME}\"
+          }
+        }")
+
+      HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+      BODY=$(echo "$RESPONSE" | sed '$d')
+
+      if [ "$HTTP_CODE" -eq 201 ]; then
+        JOB_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+        echo "AWX Job launched successfully!"
+        echo "   Job ID: ${JOB_ID}"
+        echo "   Monitor at: ${AWX_HOST}/#/jobs/playbook/${JOB_ID}"
+      else
+        echo "Failed to launch AWX Job"
+        echo "   HTTP Code: ${HTTP_CODE}"
+        echo "   Response: ${BODY}"
+        exit 1
+      fi
   rules:
-    - changes:
-        - control-plane-api/**/*.py
-
-test:portal:
-  extends: .node-base
-  stage: test
-  script:
-    - npm run test:coverage -- --reporter=junit --outputFile=junit.xml
-  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
-  artifacts:
-    reports:
-      junit: portal/junit.xml
-      coverage_report:
-        coverage_format: cobertura
-        path: portal/coverage/cobertura-coverage.xml
-    paths:
-      - portal/coverage/
-    when: always
-  rules:
-    - changes:
-        - portal/**/*.{ts,tsx}
-
-test:mcp-gateway:
-  image: python:3.11-slim
-  stage: test
-  before_script:
-    - cd mcp-gateway
-    - pip install -e ".[dev,test]"
-  script:
-    - pytest tests/ -v --cov=src --cov-report=xml --cov-report=term --junitxml=junit.xml
-  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
-  artifacts:
-    reports:
-      junit: mcp-gateway/junit.xml
-      coverage_report:
-        coverage_format: cobertura
-        path: mcp-gateway/coverage.xml
-    when: always
-  rules:
-    - changes:
-        - mcp-gateway/**/*.py
-
-# =============================================================================
-# SECURITY STAGE
-# =============================================================================
-
-security:python:bandit:
-  extends: .python-base
-  stage: security
-  script:
-    - bandit -r src/ -f json -o bandit-report.json || true
-    - bandit -r src/ -ll
-  artifacts:
-    paths:
-      - control-plane-api/bandit-report.json
-    when: always
-  rules:
-    - changes:
-        - control-plane-api/**/*.py
-
-security:python:safety:
-  extends: .python-base
-  stage: security
-  script:
-    - safety check --full-report -r requirements.txt || true
-  allow_failure: true
-  rules:
-    - changes:
-        - control-plane-api/requirements*.txt
-
-security:python:pip-audit:
-  extends: .python-base
-  stage: security
-  script:
-    - pip-audit --strict --desc on || true
-  allow_failure: true
-  rules:
-    - changes:
-        - control-plane-api/requirements*.txt
-
-security:portal:npm-audit:
-  extends: .node-base
-  stage: security
-  script:
-    - npm audit --audit-level=high || true
-  allow_failure: true
-  rules:
-    - changes:
-        - portal/package*.json
-
-security:trivy:
-  image: aquasec/trivy:latest
-  stage: security
-  script:
-    - trivy fs --severity HIGH,CRITICAL --exit-code 0 --format json -o trivy-report.json .
-    - trivy fs --severity CRITICAL --exit-code 1 .
-  artifacts:
-    paths:
-      - trivy-report.json
-    when: always
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-
-# =============================================================================
-# BUILD STAGE
-# =============================================================================
-
-build:control-plane-api:
-  extends: .docker-base
-  stage: build
-  script:
-    - docker buildx create --use
-    - docker buildx build
-      --platform linux/amd64,linux/arm64
-      --tag $ECR_REGISTRY/stoa/control-plane-api:$CI_COMMIT_SHA
-      --tag $ECR_REGISTRY/stoa/control-plane-api:$CI_COMMIT_REF_SLUG
-      --push
-      ./control-plane-api
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
-    - changes:
-        - control-plane-api/**/*
-
-build:portal:
-  extends: .docker-base
-  stage: build
-  script:
-    - docker buildx create --use
-    - docker buildx build
-      --platform linux/amd64,linux/arm64
-      --tag $ECR_REGISTRY/stoa/portal:$CI_COMMIT_SHA
-      --tag $ECR_REGISTRY/stoa/portal:$CI_COMMIT_REF_SLUG
-      --build-arg VITE_API_URL=$VITE_API_URL
-      --build-arg VITE_MCP_GATEWAY_URL=$VITE_MCP_GATEWAY_URL
-      --build-arg VITE_KEYCLOAK_URL=$VITE_KEYCLOAK_URL
-      --push
-      ./portal
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
-    - changes:
-        - portal/**/*
-
-build:mcp-gateway:
-  extends: .docker-base
-  stage: build
-  script:
-    - docker buildx create --use
-    - docker buildx build
-      --platform linux/amd64,linux/arm64
-      --tag $ECR_REGISTRY/stoa/mcp-gateway:$CI_COMMIT_SHA
-      --tag $ECR_REGISTRY/stoa/mcp-gateway:$CI_COMMIT_REF_SLUG
-      --push
-      ./mcp-gateway
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
-    - changes:
-        - mcp-gateway/**/*
-
-# =============================================================================
-# DEPLOY STAGE
-# =============================================================================
-
-.deploy-base:
-  image: alpine/k8s:1.28.4
-  stage: deploy
-  before_script:
-    - aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
-
-deploy:dev:
-  extends: .deploy-base
-  environment:
-    name: development
-    url: https://console.dev.stoa.cab-i.com
-  variables:
-    EKS_CLUSTER_NAME: stoa-dev
-  script:
-    - helm upgrade --install stoa-platform ./charts/stoa-platform
-      --namespace stoa-system
-      --set controlPlaneApi.image.tag=$CI_COMMIT_SHA
-      --set portal.image.tag=$CI_COMMIT_SHA
-      --set mcpGateway.image.tag=$CI_COMMIT_SHA
-      --values ./charts/stoa-platform/values-dev.yaml
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
-
-deploy:staging:
-  extends: .deploy-base
-  environment:
-    name: staging
-    url: https://console.staging.stoa.cab-i.com
-  variables:
-    EKS_CLUSTER_NAME: stoa-staging
-  script:
-    - helm upgrade --install stoa-platform ./charts/stoa-platform
-      --namespace stoa-system
-      --set controlPlaneApi.image.tag=$CI_COMMIT_SHA
-      --set portal.image.tag=$CI_COMMIT_SHA
-      --set mcpGateway.image.tag=$CI_COMMIT_SHA
-      --values ./charts/stoa-platform/values-staging.yaml
-  rules:
-    - if: $CI_COMMIT_TAG
-      when: manual
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      changes:
+        - webmethods/**/*
+      when: on_success
   needs:
-    - build:control-plane-api
-    - build:portal
-    - build:mcp-gateway
+    - validate-webmethods
+  tags:
+    - docker
 
-deploy:prod:
-  extends: .deploy-base
-  environment:
-    name: production
-    url: https://console.stoa.cab-i.com
+# Trigger AWX reconciliation - STAGING
+trigger-awx-staging:
+  stage: reconcile
+  image: curlimages/curl:8.5.0
   variables:
-    EKS_CLUSTER_NAME: stoa-prod
+    STOA_ENV: "staging"
   script:
-    - helm upgrade --install stoa-platform ./charts/stoa-platform
-      --namespace stoa-system
-      --set controlPlaneApi.image.tag=$CI_COMMIT_TAG
-      --set portal.image.tag=$CI_COMMIT_TAG
-      --set mcpGateway.image.tag=$CI_COMMIT_TAG
-      --values ./charts/stoa-platform/values-prod.yaml
+    - |
+      echo "Triggering AWX Job Template for webMethods reconciliation..."
+      echo "   Branch: ${CI_COMMIT_BRANCH}"
+      echo "   Environment: ${STOA_ENV}"
+
+      RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+        "${AWX_HOST}/api/v2/job_templates/${AWX_JOB_TEMPLATE_ID}/launch/" \
+        -H "Authorization: Bearer ${AWX_API_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{\"extra_vars\": {\"env\": \"${STOA_ENV}\", \"delete_orphans\": true}}")
+
+      HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+      BODY=$(echo "$RESPONSE" | sed '$d')
+
+      if [ "$HTTP_CODE" -eq 201 ]; then
+        JOB_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+        echo "AWX Job launched: ${JOB_ID}"
+      else
+        echo "Failed: ${HTTP_CODE}"
+        exit 1
+      fi
   rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
-      when: manual
+    - if: '$CI_COMMIT_BRANCH == "staging"'
+      changes:
+        - webmethods/**/*
+      when: on_success
   needs:
-    - deploy:staging
+    - validate-webmethods
+  tags:
+    - docker
+
+# Trigger AWX reconciliation - PROD
+trigger-awx-prod:
+  stage: reconcile
+  image: curlimages/curl:8.5.0
+  variables:
+    STOA_ENV: "prod"
+  script:
+    - |
+      echo "Triggering AWX Job Template for webMethods reconciliation..."
+      echo "   Branch: ${CI_COMMIT_BRANCH}"
+      echo "   Environment: ${STOA_ENV}"
+
+      RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+        "${AWX_HOST}/api/v2/job_templates/${AWX_JOB_TEMPLATE_ID}/launch/" \
+        -H "Authorization: Bearer ${AWX_API_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{\"extra_vars\": {\"env\": \"${STOA_ENV}\", \"delete_orphans\": true}}")
+
+      HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+      BODY=$(echo "$RESPONSE" | sed '$d')
+
+      if [ "$HTTP_CODE" -eq 201 ]; then
+        JOB_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+        echo "AWX Job launched: ${JOB_ID}"
+      else
+        echo "Failed: ${HTTP_CODE}"
+        exit 1
+      fi
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - webmethods/**/*
+      when: on_success
+  needs:
+    - validate-webmethods
+  tags:
+    - docker

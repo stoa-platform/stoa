@@ -1,0 +1,39 @@
+---
+# webMethods GitOps Application (triggers PostSync hook)
+# This application syncs webMethods configs and triggers AWX reconciliation
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stoa-webmethods-gitops
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: stoa-webmethods-gitops
+    app.kubernetes.io/part-of: stoa-platform
+  annotations:
+    # Notifications on sync
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: stoa-alerts
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: stoa-alerts
+spec:
+  project: stoa-platform
+
+  source:
+    repoURL: https://gitlab.com/cab6961310/stoa-gitops.git
+    targetRevision: main
+    path: webmethods
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stoa-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

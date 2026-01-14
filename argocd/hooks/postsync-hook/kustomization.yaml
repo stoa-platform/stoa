@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: stoa-system
+
+resources:
+  - config-and-rbac.yaml
+  - reconcile-webmethods-job.yaml
+
+# Secret must be created separately (contains sensitive data)
+# kubectl create secret generic awx-credentials \
+#   --from-literal=host=https://awx.stoa.cab-i.com \
+#   --from-literal=token=YOUR_AWX_TOKEN \
+#   -n stoa-system
+
+commonLabels:
+  app.kubernetes.io/part-of: stoa
+  app.kubernetes.io/managed-by: argocd

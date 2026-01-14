@@ -12,14 +12,14 @@ on:
     branches:
       - main
     paths:
-      - 'portal/**'
+      - 'stoa-portal/**'
       - '.github/workflows/stoa-portal-ci.yml'
 
   pull_request:
     branches:
       - main
     paths:
-      - 'portal/**'
+      - 'stoa-portal/**'
       - '.github/workflows/stoa-portal-ci.yml'
 
   workflow_dispatch:
@@ -36,9 +36,8 @@ on:
 
 env:
   NODE_VERSION: '20'
-  AWS_REGION: eu-west-1
-  ECR_REGISTRY: 848853684735.dkr.ecr.eu-west-1.amazonaws.com
-  ECR_REPOSITORY: apim/stoa-portal
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/stoa-portal
 
 jobs:
   # ==========================================================================
@@ -59,33 +58,33 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: portal/package-lock.json
+          cache-dependency-path: stoa-portal/package-lock.json
 
       - name: Install dependencies
-        working-directory: portal
+        working-directory: stoa-portal
         run: npm ci
 
       - name: Run linter
-        working-directory: portal
+        working-directory: stoa-portal
         run: npm run lint
 
       - name: Run tests
-        working-directory: portal
+        working-directory: stoa-portal
         run: npm run test
 
       - name: Build
-        working-directory: portal
+        working-directory: stoa-portal
         run: npm run build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: stoa-portal-dist
-          path: portal/dist
+          path: stoa-portal/dist
           retention-days: 7
 
   # ==========================================================================
-  # Build Docker Image and Push to ECR
+  # Build Docker Image
   # ==========================================================================
   docker:
     name: Build Docker Image
@@ -94,10 +93,11 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
-      id-token: write
+      packages: write
 
     outputs:
-      image_tag: ${{ steps.build.outputs.image_tag }}
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout repository
@@ -111,7 +111,7 @@ jobs:
 
           case "$ENV" in
             dev)
-              echo "BASE_DOMAIN=stoa.cab-i.com" >> $GITHUB_OUTPUT
+              echo "BASE_DOMAIN=dev.stoa.cab-i.com" >> $GITHUB_OUTPUT
               ;;
             staging)
               echo "BASE_DOMAIN=staging.stoa.cab-i.com" >> $GITHUB_OUTPUT
@@ -121,30 +121,34 @@ jobs:
               ;;
           esac
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=${{ steps.env.outputs.ENVIRONMENT }}-
+            type=raw,value=${{ steps.env.outputs.ENVIRONMENT }}-latest
+            type=raw,value=latest,enable=${{ steps.env.outputs.ENVIRONMENT == 'prod' }}
 
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: portal
+          context: stoa-portal
           push: true
-          tags: |
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.env.outputs.ENVIRONMENT }}-${{ github.sha }}
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.env.outputs.ENVIRONMENT }}-latest
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -157,10 +161,6 @@ jobs:
             VITE_API_URL=https://apis.${{ steps.env.outputs.BASE_DOMAIN }}/gateway/Control-Plane-API/2.0
             VITE_CONSOLE_URL=https://console.${{ steps.env.outputs.BASE_DOMAIN }}
 
-      - name: Output image tag
-        run: |
-          echo "image_tag=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.env.outputs.ENVIRONMENT }}-latest" >> $GITHUB_OUTPUT
-
   # ==========================================================================
   # Deploy to Kubernetes
   # ==========================================================================
@@ -171,7 +171,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
-      url: https://portal.stoa.cab-i.com
+      url: https://portal.${{ needs.docker.outputs.image_tag && 'stoa.cab-i.com' || 'dev.stoa.cab-i.com' }}
 
     steps:
       - name: Checkout repository
@@ -182,22 +182,18 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: eu-west-3
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name apim-dev-cluster --region ${{ env.AWS_REGION }}
-
-      - name: Apply Kubernetes manifests
-        run: |
-          # Apply all k8s manifests
-          kubectl apply -f portal/k8s/
-
-      - name: Update deployment image
-        run: |
           ENV="${{ github.event.inputs.environment || 'dev' }}"
+          aws eks update-kubeconfig --name stoa-${ENV}-cluster --region eu-west-3
+
+      - name: Deploy to Kubernetes
+        run: |
+          # Update image tag in deployment
           kubectl set image deployment/stoa-portal \
-            stoa-portal=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${ENV}-latest \
+            stoa-portal=${{ needs.docker.outputs.image_tag }} \
             -n stoa-system
 
           # Wait for rollout
@@ -208,19 +204,8 @@ jobs:
           kubectl get pods -n stoa-system -l app=stoa-portal
           kubectl get ingress -n stoa-system stoa-portal
 
-      - name: Security check - Portal requires authentication
-        run: |
-          echo "=== Security Check - Portal should redirect to login ==="
-          sleep 10
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L https://portal.stoa.cab-i.com/ || echo "000")
-          echo "HTTP Status Code: $HTTP_CODE"
-          # Portal redirects to Keycloak login, expect 200 from login page
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
-            echo "Portal is accessible and likely redirecting to login"
-          fi
-
   # ==========================================================================
-  # Notify (Optional - only if SLACK_WEBHOOK_URL is configured)
+  # Notify
   # ==========================================================================
   notify:
     name: Notify
@@ -231,7 +216,6 @@ jobs:
     steps:
       - name: Send Slack notification
         uses: slackapi/slack-github-action@v1.24.0
-        continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:

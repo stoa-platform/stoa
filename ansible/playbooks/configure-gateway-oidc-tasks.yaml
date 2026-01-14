@@ -1,0 +1,709 @@
+---
+# Tasks file: Configure OIDC Application for API in webMethods Gateway
+# This file is meant to be included via include_tasks from register-api-gateway.yaml
+#
+# Required variables (passed from parent playbook):
+#   - oidc_api_id: API ID to associate with the application
+#   - oidc_app_name: Application name in Gateway
+#   - oidc_client_id: Keycloak client ID
+#   - oidc_tenant_id: Tenant identifier for scope naming
+#   - oidc_api_name: API name for scope naming
+#   - oidc_api_version: API version for scope naming
+#
+# Optional variables:
+#   - gateway_url: Gateway admin URL (inherited from parent)
+#   - gateway_user: Gateway admin user (inherited from parent)
+#   - gateway_password: Gateway admin password (inherited from parent)
+#   - keycloak_url: Keycloak base URL (inherited from parent)
+#   - keycloak_realm: Keycloak realm (inherited from parent)
+#   - auth_server_name: Name for the auth server alias (default: KeycloakOIDC)
+#   - oidc_audience: Expected audience in JWT (default: control-plane-api)
+#   - backend_auth_type: Backend authentication type (default: INCOMING_JWT)
+#                        Options: INCOMING_JWT, INCOMING_OAUTH_TOKEN, HTTP_BASIC, NONE
+#   - backend_auth_alias: Alias name for basic auth credentials (required if backend_auth_type is HTTP_BASIC)
+#
+# Scope Naming Pattern: {AuthServer}:{Tenant}:{ApiName}:{Version}:{ScopeName}
+# Example: KeycloakOIDC:tenant1:MyAPI:1.0:openid
+
+# =========================================================================
+# STEP 1: Check if External Auth Server exists
+# =========================================================================
+- name: Check if External Auth Server exists
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/alias"
+    method: GET
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Accept: "application/json"
+    status_code: [200]
+  register: alias_list_oidc
+
+- name: Find existing auth server
+  set_fact:
+    existing_auth_server_oidc: "{{ alias_list_oidc.json.alias | selectattr('name', 'equalto', auth_server_name | default('KeycloakOIDC')) | list | first | default(none) }}"
+  when: alias_list_oidc.json.alias is defined
+
+- name: Set auth server ID if exists
+  set_fact:
+    auth_server_id_oidc: "{{ existing_auth_server_oidc.id }}"
+  when: existing_auth_server_oidc is defined and existing_auth_server_oidc is not none
+
+# =========================================================================
+# STEP 2: Create External Authorization Server (if not exists)
+# =========================================================================
+- name: Create External Authorization Server
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/alias"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      name: "{{ auth_server_name | default('KeycloakOIDC') }}"
+      description: "Keycloak OIDC Provider for STOA Platform"
+      type: "authServerAlias"
+      authServerType: "EXTERNAL"
+      localIntrospectionConfig:
+        issuer: "{{ keycloak_url }}/realms/{{ keycloak_realm }}"
+        jwksuri: "{{ keycloak_url }}/realms/{{ keycloak_realm }}/protocol/openid-connect/certs"
+      metadata:
+        authorizeURL: "{{ keycloak_url }}/realms/{{ keycloak_realm }}/protocol/openid-connect/auth"
+        accessTokenURL: "{{ keycloak_url }}/realms/{{ keycloak_realm }}/protocol/openid-connect/token"
+        refreshTokenURL: "{{ keycloak_url }}/realms/{{ keycloak_realm }}/protocol/openid-connect/token"
+      scopes:
+        - name: "openid"
+          description: "OpenID Connect scope"
+        - name: "profile"
+          description: "User profile information"
+        - name: "email"
+          description: "User email address"
+        - name: "roles"
+          description: "User roles"
+        - name: "offline_access"
+          description: "Offline access token"
+      supportedGrantTypes:
+        - "authorization_code"
+        - "client_credentials"
+        - "refresh_token"
+      tokenGeneratorConfig:
+        accessTokenExpInterval: 3600
+        authCodeExpInterval: 600
+    status_code: [200, 201]
+  register: auth_server_result_oidc
+  when: auth_server_id_oidc is not defined
+
+- name: Set auth server ID from creation
+  set_fact:
+    auth_server_id_oidc: "{{ auth_server_result_oidc.json.alias.id }}"
+  when: auth_server_result_oidc is defined and auth_server_result_oidc.json is defined
+
+- name: Display auth server status
+  debug:
+    msg: "External Authorization Server '{{ auth_server_name | default('KeycloakOIDC') }}' ID: {{ auth_server_id_oidc | default('existing') }}"
+
+# =========================================================================
+# STEP 3: Check/Create OAuth2 Strategy
+# =========================================================================
+- name: Check existing strategies
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/strategies"
+    method: GET
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Accept: "application/json"
+    status_code: [200]
+  register: strategies_list_oidc
+
+- name: Find existing strategy for this app
+  set_fact:
+    existing_strategy_oidc: "{{ strategies_list_oidc.json.strategies | selectattr('name', 'equalto', 'OIDC-' + oidc_app_name) | list | first | default(none) }}"
+  when: strategies_list_oidc.json.strategies is defined
+
+- name: Set strategy ID if exists
+  set_fact:
+    strategy_id_oidc: "{{ existing_strategy_oidc.id }}"
+  when: existing_strategy_oidc is defined and existing_strategy_oidc is not none
+
+- name: Create OAuth2 Strategy
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/strategies"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      name: "OIDC-{{ oidc_app_name }}"
+      description: "OpenID Connect authentication with Keycloak for {{ oidc_app_name }}"
+      type: "OAUTH2"
+      authServerAlias: "{{ auth_server_name | default('KeycloakOIDC') }}"
+      clientId: "{{ oidc_client_id }}"
+      audience: "{{ oidc_audience | default('account') }}"
+    status_code: [200, 201]
+  register: strategy_result_oidc
+  when: strategy_id_oidc is not defined
+
+- name: Set strategy ID from creation
+  set_fact:
+    strategy_id_oidc: "{{ strategy_result_oidc.json.strategy.id }}"
+  when: strategy_result_oidc is defined and strategy_result_oidc.json is defined
+
+- name: Display strategy status
+  debug:
+    msg: "OAuth2 Strategy 'OIDC-{{ oidc_app_name }}' ID: {{ strategy_id_oidc | default('existing') }}"
+
+# =========================================================================
+# STEP 4: Check/Create Application
+# =========================================================================
+- name: Check existing applications
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/applications"
+    method: GET
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Accept: "application/json"
+    status_code: [200]
+  register: applications_list_oidc
+
+- name: Find existing application
+  set_fact:
+    existing_app_oidc: "{{ applications_list_oidc.json.applications | selectattr('name', 'equalto', oidc_app_name) | list | first | default(none) }}"
+  when: applications_list_oidc.json.applications is defined
+
+- name: Set application ID if exists
+  set_fact:
+    app_id_oidc: "{{ existing_app_oidc.id }}"
+  when: existing_app_oidc is defined and existing_app_oidc is not none
+
+- name: Create Application
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/applications"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      name: "{{ oidc_app_name }}"
+      description: "Application {{ oidc_app_name }} for OIDC authentication"
+      contactEmails:
+        - "admin@cab-i.com"
+    status_code: [200, 201]
+  register: app_result_oidc
+  when: app_id_oidc is not defined
+
+- name: Set application ID from creation
+  set_fact:
+    app_id_oidc: "{{ app_result_oidc.json.id }}"
+  when: app_result_oidc is defined and app_result_oidc.json is defined
+
+- name: Display application status
+  debug:
+    msg: "Application '{{ oidc_app_name }}' ID: {{ app_id_oidc | default('existing') }}"
+
+# =========================================================================
+# STEP 5: Associate Strategy and Identifiers to Application
+# =========================================================================
+- name: Update Application with Strategy and Identifiers
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/applications/{{ app_id_oidc }}"
+    method: PUT
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      name: "{{ oidc_app_name }}"
+      description: "Application {{ oidc_app_name }} for OIDC authentication"
+      contactEmails:
+        - "admin@cab-i.com"
+      authStrategyIds:
+        - "{{ strategy_id_oidc }}"
+      identifiers:
+        - key: "openIdClaims"
+          name: "azp"
+          value:
+            - "{{ oidc_client_id }}"
+    status_code: [200, 204]
+  when: app_id_oidc is defined and strategy_id_oidc is defined
+
+- name: Display application update result
+  debug:
+    msg: "Application '{{ oidc_app_name }}' updated with strategy and identifiers"
+
+# =========================================================================
+# STEP 6: Associate API to Application
+# =========================================================================
+- name: Associate API to Application
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/applications/{{ app_id_oidc }}/apis"
+    method: PUT
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      - "{{ oidc_api_id }}"
+    status_code: [200, 204]
+  when:
+    - app_id_oidc is defined
+    - oidc_api_id is defined
+    - oidc_api_id | length > 0
+  register: api_association_oidc
+
+- name: Display API association result
+  debug:
+    msg: "API {{ oidc_api_id }} associated with application {{ oidc_app_name }}"
+  when: oidc_api_id is defined and oidc_api_id | length > 0
+
+# =========================================================================
+# STEP 7: Create OAuth Scope Mappings for API
+# Naming Pattern: {AuthServer}:{Tenant}:{ApiName}:{Version}:{ScopeName}
+# =========================================================================
+- name: Set scope naming prefix
+  set_fact:
+    scope_prefix: "{{ auth_server_name | default('KeycloakOIDC') }}:{{ oidc_tenant_id | default('default') }}:{{ oidc_api_name | default('API') }}:{{ oidc_api_version | default('1.0') }}"
+
+- name: Display scope naming pattern
+  debug:
+    msg: "Using scope naming pattern: {{ scope_prefix }}:{scopeName}"
+
+- name: Create OAuth scope mapping - openid
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/scopes"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      scopeName: "{{ scope_prefix }}:openid"
+      scopeDescription: "OpenID Connect scope for {{ oidc_api_name | default('API') }} v{{ oidc_api_version | default('1.0') }} - Tenant {{ oidc_tenant_id | default('default') }}"
+      audience: "{{ oidc_audience | default('control-plane-api') }}"
+      apiScopes:
+        - "{{ oidc_api_id }}"
+      requiredAuthScopes:
+        - authServerAlias: "{{ auth_server_name | default('KeycloakOIDC') }}"
+          scopeName: "openid"
+    status_code: [200, 201, 409]
+  when: oidc_api_id is defined and oidc_api_id | length > 0
+  ignore_errors: true
+
+- name: Create OAuth scope mapping - profile
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/scopes"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      scopeName: "{{ scope_prefix }}:profile"
+      scopeDescription: "Profile scope for {{ oidc_api_name | default('API') }} v{{ oidc_api_version | default('1.0') }} - Tenant {{ oidc_tenant_id | default('default') }}"
+      audience: "{{ oidc_audience | default('control-plane-api') }}"
+      apiScopes:
+        - "{{ oidc_api_id }}"
+      requiredAuthScopes:
+        - authServerAlias: "{{ auth_server_name | default('KeycloakOIDC') }}"
+          scopeName: "profile"
+    status_code: [200, 201, 409]
+  when: oidc_api_id is defined and oidc_api_id | length > 0
+  ignore_errors: true
+
+- name: Create OAuth scope mapping - email
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/scopes"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      scopeName: "{{ scope_prefix }}:email"
+      scopeDescription: "Email scope for {{ oidc_api_name | default('API') }} v{{ oidc_api_version | default('1.0') }} - Tenant {{ oidc_tenant_id | default('default') }}"
+      audience: "{{ oidc_audience | default('control-plane-api') }}"
+      apiScopes:
+        - "{{ oidc_api_id }}"
+      requiredAuthScopes:
+        - authServerAlias: "{{ auth_server_name | default('KeycloakOIDC') }}"
+          scopeName: "email"
+    status_code: [200, 201, 409]
+  when: oidc_api_id is defined and oidc_api_id | length > 0
+  ignore_errors: true
+
+- name: Create OAuth scope mapping - roles
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/scopes"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      scopeName: "{{ scope_prefix }}:roles"
+      scopeDescription: "Roles scope for {{ oidc_api_name | default('API') }} v{{ oidc_api_version | default('1.0') }} - Tenant {{ oidc_tenant_id | default('default') }}"
+      audience: "{{ oidc_audience | default('control-plane-api') }}"
+      apiScopes:
+        - "{{ oidc_api_id }}"
+      requiredAuthScopes:
+        - authServerAlias: "{{ auth_server_name | default('KeycloakOIDC') }}"
+          scopeName: "roles"
+    status_code: [200, 201, 409]
+  when: oidc_api_id is defined and oidc_api_id | length > 0
+  ignore_errors: true
+
+- name: Display scope mappings result
+  debug:
+    msg: "OAuth scope mappings created for API {{ oidc_api_id }} with pattern {{ scope_prefix }}:{scopeName}"
+  when: oidc_api_id is defined and oidc_api_id | length > 0
+
+# =========================================================================
+# STEP 8: Create Identify & Authorize Policy Action
+# =========================================================================
+- name: Create Identify & Authorize Policy Action
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policyActions"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      policyAction:
+        names:
+          - value: "Identify & Authorize OIDC - {{ oidc_app_name }}"
+            locale: "en"
+        templateKey: "evaluatePolicy"
+        parameters:
+          - templateKey: "logicalConnector"
+            values:
+              - "OR"
+          - templateKey: "allowAnonymous"
+            values:
+              - "false"
+          - templateKey: "IdentificationRule"
+            parameters:
+              - templateKey: "applicationLookup"
+                values:
+                  - "strict"
+              - templateKey: "identificationType"
+                values:
+                  - "openIdClaims"
+        active: true
+    status_code: [200, 201]
+  register: iam_policy_action_oidc
+  when: oidc_api_id is defined and oidc_api_id | length > 0
+
+- name: Set IAM Policy Action ID
+  set_fact:
+    iam_policy_action_id_oidc: "{{ iam_policy_action_oidc.json.policyAction.id }}"
+  when: iam_policy_action_oidc is defined and iam_policy_action_oidc.json is defined
+
+- name: Display IAM Policy Action result
+  debug:
+    msg: "IAM Policy Action created with ID: {{ iam_policy_action_id_oidc | default('N/A') }}"
+
+# =========================================================================
+# STEP 9: Create Outbound Auth - Transport Policy Action
+# Passes authentication to the backend (JWT, OAuth token, or Basic Auth)
+# =========================================================================
+- name: Create Outbound Auth - Transport Policy Action (JWT passthrough)
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policyActions"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      policyAction:
+        names:
+          - value: "Outbound Auth - {{ oidc_app_name }}"
+            locale: "en"
+        templateKey: "outboundTransportAuthentication"
+        parameters:
+          - templateKey: "transportSecurity"
+            parameters:
+              - templateKey: "authType"
+                values:
+                  - "JWT"
+              - templateKey: "authMode"
+                values:
+                  - "INCOMING_JWT"
+        active: true
+    status_code: [200, 201]
+  register: outbound_auth_action_oidc
+  when:
+    - oidc_api_id is defined
+    - oidc_api_id | length > 0
+    - (backend_auth_type | default('INCOMING_JWT')) == 'INCOMING_JWT'
+
+- name: Create Outbound Auth - Transport Policy Action (OAuth token passthrough)
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policyActions"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      policyAction:
+        names:
+          - value: "Outbound Auth - {{ oidc_app_name }}"
+            locale: "en"
+        templateKey: "outboundTransportAuthentication"
+        parameters:
+          - templateKey: "transportSecurity"
+            parameters:
+              - templateKey: "authType"
+                values:
+                  - "OAUTH2"
+              - templateKey: "authMode"
+                values:
+                  - "INCOMING_OAUTH_TOKEN"
+        active: true
+    status_code: [200, 201]
+  register: outbound_auth_action_oauth
+  when:
+    - oidc_api_id is defined
+    - oidc_api_id | length > 0
+    - (backend_auth_type | default('INCOMING_JWT')) == 'INCOMING_OAUTH_TOKEN'
+
+- name: Create Outbound Auth - Transport Policy Action (Basic Auth via alias)
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policyActions"
+    method: POST
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      policyAction:
+        names:
+          - value: "Outbound Auth - {{ oidc_app_name }}"
+            locale: "en"
+        templateKey: "outboundTransportAuthentication"
+        parameters:
+          - templateKey: "transportSecurity"
+            parameters:
+              - templateKey: "authType"
+                values:
+                  - "ALIAS"
+              - templateKey: "authMode"
+                values:
+                  - "NEW"
+              - templateKey: "alias"
+                values:
+                  - "${{{ backend_auth_alias }}}"
+        active: true
+    status_code: [200, 201]
+  register: outbound_auth_action_basic
+  when:
+    - oidc_api_id is defined
+    - oidc_api_id | length > 0
+    - (backend_auth_type | default('INCOMING_JWT')) == 'HTTP_BASIC'
+    - backend_auth_alias is defined
+
+- name: Set Outbound Auth Policy Action ID (JWT)
+  set_fact:
+    outbound_auth_action_id_oidc: "{{ outbound_auth_action_oidc.json.policyAction.id }}"
+  when: outbound_auth_action_oidc is defined and outbound_auth_action_oidc.json is defined
+
+- name: Set Outbound Auth Policy Action ID (OAuth)
+  set_fact:
+    outbound_auth_action_id_oidc: "{{ outbound_auth_action_oauth.json.policyAction.id }}"
+  when: outbound_auth_action_oauth is defined and outbound_auth_action_oauth.json is defined
+
+- name: Set Outbound Auth Policy Action ID (Basic)
+  set_fact:
+    outbound_auth_action_id_oidc: "{{ outbound_auth_action_basic.json.policyAction.id }}"
+  when: outbound_auth_action_basic is defined and outbound_auth_action_basic.json is defined
+
+- name: Display Outbound Auth Policy Action result
+  debug:
+    msg: "Outbound Auth Policy Action created with ID: {{ outbound_auth_action_id_oidc | default('N/A - backend_auth_type is NONE or not configured') }}"
+
+# =========================================================================
+# STEP 10: Get API's Policy and Update with IAM and Outbound Auth stages
+# =========================================================================
+- name: Get API details to find policy ID
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/apis/{{ oidc_api_id }}"
+    method: GET
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Accept: "application/json"
+    status_code: [200]
+  register: api_details_oidc
+  when: oidc_api_id is defined and oidc_api_id | length > 0
+
+- name: Set API policy ID
+  set_fact:
+    api_policy_id_oidc: "{{ api_details_oidc.json.apiResponse.api.policies[0] }}"
+  when:
+    - api_details_oidc is defined
+    - api_details_oidc.json.apiResponse.api.policies is defined
+    - api_details_oidc.json.apiResponse.api.policies | length > 0
+
+- name: Get current policy configuration
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policies/{{ api_policy_id_oidc }}"
+    method: GET
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Accept: "application/json"
+    status_code: [200]
+  register: current_policy_oidc
+  when: api_policy_id_oidc is defined
+
+- name: Extract routing action ID from current policy
+  set_fact:
+    routing_action_id_oidc: "{{ (current_policy_oidc.json.policy.policyEnforcements | selectattr('stageKey', 'equalto', 'routing') | list | first).enforcements[0].enforcementObjectId }}"
+  when:
+    - current_policy_oidc is defined
+    - current_policy_oidc.json.policy.policyEnforcements is defined
+  ignore_errors: true
+
+- name: Extract transport action ID from current policy
+  set_fact:
+    transport_action_id_oidc: "{{ (current_policy_oidc.json.policy.policyEnforcements | selectattr('stageKey', 'equalto', 'transport') | list | first).enforcements[0].enforcementObjectId }}"
+  when:
+    - current_policy_oidc is defined
+    - current_policy_oidc.json.policy.policyEnforcements is defined
+  ignore_errors: true
+
+- name: Update API Policy with IAM and Outbound Auth stages
+  uri:
+    url: "{{ gateway_url }}/rest/apigateway/policies/{{ api_policy_id_oidc }}"
+    method: PUT
+    user: "{{ gateway_user }}"
+    password: "{{ gateway_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body_format: json
+    body:
+      policy:
+        id: "{{ api_policy_id_oidc }}"
+        names:
+          - value: "{{ current_policy_oidc.json.policy.names[0].value | default('API Policy') }}"
+            locale: "English"
+        descriptions:
+          - value: "Policy with OIDC authentication and JWT passthrough to backend"
+            locale: "English"
+        scope:
+          scopeConditions: []
+        policyEnforcements:
+          - enforcements:
+              - enforcementObjectId: "{{ iam_policy_action_id_oidc }}"
+                order: "0"
+            stageKey: "IAM"
+          - enforcements: "{{ [{'enforcementObjectId': routing_action_id_oidc, 'order': '0'}] + ([{'enforcementObjectId': outbound_auth_action_id_oidc, 'order': '1'}] if outbound_auth_action_id_oidc is defined else []) }}"
+            stageKey: "routing"
+          - enforcements:
+              - enforcementObjectId: "{{ transport_action_id_oidc }}"
+                order: "0"
+            stageKey: "transport"
+        policyScope: "SERVICE"
+        active: true
+    status_code: [200, 204]
+  when:
+    - api_policy_id_oidc is defined
+    - iam_policy_action_id_oidc is defined
+    - routing_action_id_oidc is defined
+    - transport_action_id_oidc is defined
+  register: policy_update_oidc
+
+- name: Display policy update result
+  debug:
+    msg: "API Policy {{ api_policy_id_oidc }} updated with IAM stage and Outbound Auth ({{ backend_auth_type | default('INCOMING_JWT') }})"
+  when: policy_update_oidc is defined
+
+# =========================================================================
+# SUMMARY
+# =========================================================================
+- name: OIDC Configuration summary
+  debug:
+    msg: |
+      ========================================
+      OIDC Configuration Complete for {{ oidc_app_name }}
+      ----------------------------------------
+      Auth Server: {{ auth_server_name | default('KeycloakOIDC') }}
+      Strategy: OIDC-{{ oidc_app_name }} ({{ strategy_id_oidc | default('new') }})
+      Application: {{ oidc_app_name }} ({{ app_id_oidc | default('new') }})
+      API Associated: {{ oidc_api_id | default('none') }}
+      IAM Policy Action: {{ iam_policy_action_id_oidc | default('created') }}
+      Outbound Auth: {{ backend_auth_type | default('INCOMING_JWT') }}
+      Outbound Auth Action: {{ outbound_auth_action_id_oidc | default('N/A') }}
+      Policy Updated: {{ api_policy_id_oidc | default('N/A') }}
+      ========================================

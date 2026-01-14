@@ -1,0 +1,69 @@
+---
+# tasks/create-single-api.yml
+# Create a single API on webMethods Gateway
+
+- name: "Get Git definition for {{ api_name_to_create }}"
+  ansible.builtin.set_fact:
+    api_def: "{{ git_apis | selectattr('metadata.name', 'equalto', api_name_to_create) | first }}"
+
+- name: "Resolve backend alias"
+  ansible.builtin.set_fact:
+    backend_url: "{{ git_aliases.aliases[api_def.spec.backend.alias].url }}"
+  when: 
+    - git_aliases is defined
+    - api_def.spec.backend.alias is defined
+    - api_def.spec.backend.alias in git_aliases.aliases
+
+- name: "Set default backend URL if alias not found"
+  ansible.builtin.set_fact:
+    backend_url: "http://localhost:8080"
+  when: backend_url is not defined
+
+- name: "Build API payload for {{ api_name_to_create }}"
+  ansible.builtin.set_fact:
+    api_payload:
+      apiName: "{{ api_def.metadata.name }}"
+      apiVersion: "{{ api_def.metadata.version | default('1.0.0') }}"
+      apiDescription: "{{ api_def.metadata.description | default('') }}"
+      type: "{{ api_def.spec.type | default('REST') }}"
+      nativeEndpoint:
+        - uri: "{{ backend_url }}{{ api_def.spec.backend.pathPrefix | default('') }}"
+          connectionTimeout: 30
+          readTimeout: 30
+      gatewayEndpoint:
+        - uri: "{{ api_def.spec.basePath }}"
+      maturityState: "Beta"
+      isActive: true
+      tags: "{{ api_def.metadata.tags | default([]) }}"
+
+- name: "➕ Create API {{ api_name_to_create }} on Gateway"
+  ansible.builtin.uri:
+    url: "{{ wm_gateway_url }}/rest/apigateway/apis"
+    method: POST
+    user: "{{ wm_admin_user }}"
+    password: "{{ wm_admin_password }}"
+    force_basic_auth: true
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body: "{{ api_payload | to_json }}"
+    body_format: json
+    status_code: [200, 201]
+    timeout: 60
+  register: create_result
+  when: not dry_run
+
+- name: "Store created API ID"
+  ansible.builtin.set_fact:
+    created_api_id: "{{ create_result.json.apiResponse.id }}"
+  when: 
+    - not dry_run
+    - create_result is succeeded
+
+- name: "Record created API"
+  ansible.builtin.set_fact:
+    apis_created: "{{ apis_created + [api_name_to_create] }}"
+
+- name: "Log creation {{ api_name_to_create }}"
+  ansible.builtin.debug:
+    msg: "✅ API {{ api_name_to_create }} created{{ ' (dry-run)' if dry_run else '' }}"

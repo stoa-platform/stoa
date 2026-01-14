@@ -95,7 +95,6 @@ class HTTPLoggingMiddleware(BaseHTTPMiddleware):
     async def _log_request(self, request: Request, request_id: str) -> None:
         """Log incoming request details."""
         log_data = {
-            "event": "http_request_start",
             "request_id": request_id,
             "method": request.method,
             "path": request.url.path,
@@ -121,10 +120,10 @@ class HTTPLoggingMiddleware(BaseHTTPMiddleware):
                 pass
 
         if settings.LOG_DEBUG_HTTP_REQUESTS:
-            logger.debug("Incoming HTTP request", **log_data)
+            logger.debug("http_request_start", **log_data)
         else:
             logger.info(
-                "HTTP request",
+                "http_request",
                 method=request.method,
                 path=request.url.path,
                 client_ip=log_data["client_ip"],
@@ -138,7 +137,6 @@ class HTTPLoggingMiddleware(BaseHTTPMiddleware):
         is_error = response.status_code >= 400
 
         log_data = {
-            "event": "http_request_complete",
             "request_id": request_id,
             "method": request.method,
             "path": request.url.path,
@@ -154,6 +152,9 @@ class HTTPLoggingMiddleware(BaseHTTPMiddleware):
             log_data["response_headers"] = self._sanitize_headers(dict(response.headers))
 
         # Choose log level based on status and duration
+        # Remove 'event' key if present to avoid conflict with structlog's positional event
+        log_data.pop("event", None)
+
         if is_error and response.status_code >= 500:
             logger.error("HTTP request completed with server error", **log_data)
         elif is_error:

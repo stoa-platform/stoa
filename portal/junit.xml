@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="16" failures="0" errors="0" time="0.634">
+    <testsuite name="src/App.test.tsx" timestamp="2026-01-14T07:31:17.122Z" hostname="Mac-Studio-de-Christophe-2.local" tests="1" failures="0" errors="0" skipped="0" time="0.001">
+        <testcase classname="src/App.test.tsx" name="STOA Portal &gt; should pass a basic test" time="0.001">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/services/certificateValidator.test.ts" timestamp="2026-01-14T07:31:17.122Z" hostname="Mac-Studio-de-Christophe-2.local" tests="15" failures="0" errors="0" skipped="0" time="0.019">
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; validateCertificate &gt; should return valid result for valid certificate" time="0.001">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; validateCertificate &gt; should return invalid result for invalid certificate" time="0">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; validateCertificate &gt; should handle network errors gracefully" time="0.001">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; validateCertificate &gt; should handle API errors with detail message" time="0">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; validateSubscriptionRequest &gt; should validate subscription without certificate" time="0">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; validateSubscriptionRequest &gt; should validate subscription with valid certificate" time="0">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; validateSubscriptionRequest &gt; should fail subscription with invalid certificate" time="0.001">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; validateSubscriptionRequest &gt; should include warnings from certificate validation" time="0">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; formatCertificateDate &gt; should format date correctly" time="0.015">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; getCertificateStatusColor &gt; should return red for expired certificate" time="0">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; getCertificateStatusColor &gt; should return amber for soon-to-expire certificate" time="0">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; getCertificateStatusColor &gt; should return green for valid certificate" time="0">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; getCertificateStatusIcon &gt; should return error for expired" time="0">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; getCertificateStatusIcon &gt; should return warning for expires soon" time="0">
+        </testcase>
+        <testcase classname="src/services/certificateValidator.test.ts" name="certificateValidator &gt; getCertificateStatusIcon &gt; should return success for valid" time="0">
+        </testcase>
+    </testsuite>
+</testsuites>

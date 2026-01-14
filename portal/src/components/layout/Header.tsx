@@ -18,8 +18,9 @@ export function Header({ onMenuClick }: HeaderProps) {
           <button
             onClick={onMenuClick}
             className="lg:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
+            aria-label="Open menu"
           >
-            <Menu className="h-6 w-6" />
+            <Menu className="h-6 w-6" aria-hidden="true" />
           </button>
 
           <Link to="/" className="flex items-center gap-3">
@@ -48,21 +49,29 @@ export function Header({ onMenuClick }: HeaderProps) {
             className="hidden sm:flex items-center gap-1 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
           >
             <span>Console</span>
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink className="h-3 w-3" aria-hidden="true" />
+            <span className="sr-only">(opens in new tab)</span>
           </a>
 
           {/* Notifications */}
-          <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md relative">
-            <Bell className="h-5 w-5" />
+          <button
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md relative"
+            aria-label="Notifications"
+          >
+            <Bell className="h-5 w-5" aria-hidden="true" />
             {/* Notification badge */}
             {/* <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span> */}
           </button>
 
           {/* User menu */}
           <div className="relative group">
-            <button className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-md">
+            <button
+              className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-md"
+              aria-label="User menu"
+              aria-haspopup="true"
+            >
               <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                <User className="h-4 w-4 text-primary-600" />
+                <User className="h-4 w-4 text-primary-600" aria-hidden="true" />
               </div>
               <span className="hidden sm:block text-sm font-medium text-gray-700">
                 {user?.name || 'User'}
@@ -80,14 +89,14 @@ export function Header({ onMenuClick }: HeaderProps) {
                   to="/profile"
                   className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                 >
-                  <User className="h-4 w-4" />
+                  <User className="h-4 w-4" aria-hidden="true" />
                   My Profile
                 </Link>
                 <button
                   onClick={logout}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
                   Sign out
                 </button>
               </div>

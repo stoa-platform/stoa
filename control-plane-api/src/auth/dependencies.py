@@ -45,7 +45,7 @@ async def get_current_user(
         )
 
         # Manually verify audience - accept tokens from both UI and API clients
-        valid_audiences = {settings.KEYCLOAK_CLIENT_ID, "control-plane-ui", "account"}
+        valid_audiences = {settings.KEYCLOAK_CLIENT_ID, "control-plane-ui", "stoa-portal", "account"}
         token_aud = payload.get("aud", [])
         if isinstance(token_aud, str):
             token_aud = [token_aud]

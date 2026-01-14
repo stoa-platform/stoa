@@ -3,9 +3,21 @@
  *
  * Service for managing MCP Server subscriptions with role-based visibility.
  * Servers are grouped collections of tools with unified subscription management.
+ *
+ * IMPORTANT: This service calls the Control-Plane API via WebMethods Gateway.
+ * The Control-Plane API persists subscriptions in PostgreSQL.
+ * The MCP Gateway only handles tool invocation with API key validation.
+ *
+ * API Endpoints (Control-Plane API):
+ * - GET /v1/mcp/servers - List visible servers
+ * - GET /v1/mcp/servers/{id} - Get server details
+ * - GET /v1/mcp/subscriptions - List user's subscriptions
+ * - POST /v1/mcp/subscriptions - Create subscription
+ * - DELETE /v1/mcp/subscriptions/{id} - Cancel subscription
+ * - POST /v1/mcp/subscriptions/{id}/rotate-key - Rotate API key
  */
 
-import { mcpClient } from './mcpClient';
+import { apiClient } from './api';
 import type {
   MCPServer,
   MCPServerSubscription,
@@ -13,6 +25,29 @@ import type {
   MCPServerSubscriptionWithKey,
   User,
 } from '../types';
+
+// Response types from Control-Plane API
+interface MCPServerListResponse {
+  servers: MCPServer[];
+  total_count: number;
+}
+
+interface MCPSubscriptionListResponse {
+  items: MCPServerSubscription[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+interface MCPKeyRotationResponse {
+  subscription_id: string;
+  new_api_key: string;
+  new_api_key_prefix: string;
+  old_key_expires_at: string;
+  grace_period_hours: number;
+  rotation_count: number;
+}
 
 /**
  * Check if a user can see a server based on visibility rules
@@ -50,16 +85,16 @@ export function filterServersByRole(servers: MCPServer[], user: User | null): MC
 
 /**
  * Get all MCP Servers the user can see
- * GET /servers
+ * GET /v1/mcp/servers
  */
 async function getServers(): Promise<MCPServer[]> {
-  const response = await mcpClient.get<{ servers: MCPServer[] }>('/servers');
+  const response = await apiClient.get<MCPServerListResponse>('/v1/mcp/servers');
   return response.data.servers;
 }
 
 /**
  * Get servers filtered by user's roles (client-side filtering)
- * Backend should also filter, but this provides double protection
+ * Backend already filters, but this provides double protection
  */
 async function getVisibleServers(user: User | null): Promise<MCPServer[]> {
   const servers = await getServers();
@@ -68,69 +103,70 @@ async function getVisibleServers(user: User | null): Promise<MCPServer[]> {
 
 /**
  * Get a specific server by ID
- * GET /servers/{id}
+ * GET /v1/mcp/servers/{id}
  */
 async function getServer(serverId: string): Promise<MCPServer> {
-  const response = await mcpClient.get<MCPServer>(`/servers/${serverId}`);
+  const response = await apiClient.get<MCPServer>(`/v1/mcp/servers/${serverId}`);
   return response.data;
 }
 
 /**
  * Get user's server subscriptions
- * GET /servers/subscriptions
+ * GET /v1/mcp/subscriptions
  */
 async function getMyServerSubscriptions(): Promise<MCPServerSubscription[]> {
-  const response = await mcpClient.get<{ subscriptions: MCPServerSubscription[] }>('/servers/subscriptions');
-  return response.data.subscriptions;
+  const response = await apiClient.get<MCPSubscriptionListResponse>('/v1/mcp/subscriptions');
+  return response.data.items;
 }
 
 /**
  * Get a specific server subscription
- * GET /servers/subscriptions/{id}
+ * GET /v1/mcp/subscriptions/{id}
  */
 async function getServerSubscription(subscriptionId: string): Promise<MCPServerSubscription> {
-  const response = await mcpClient.get<MCPServerSubscription>(`/servers/subscriptions/${subscriptionId}`);
+  const response = await apiClient.get<MCPServerSubscription>(`/v1/mcp/subscriptions/${subscriptionId}`);
   return response.data;
 }
 
 /**
  * Subscribe to a server with selected tools
- * POST /servers/subscriptions
+ * POST /v1/mcp/subscriptions
  */
 async function subscribeToServer(
   request: MCPServerSubscriptionCreate
 ): Promise<MCPServerSubscriptionWithKey> {
-  const response = await mcpClient.post<MCPServerSubscriptionWithKey>('/servers/subscriptions', request);
+  const response = await apiClient.post<MCPServerSubscriptionWithKey>('/v1/mcp/subscriptions', request);
   return response.data;
 }
 
 /**
  * Update tool access within a subscription
- * PATCH /servers/subscriptions/{id}/tools
+ * PATCH /v1/mcp/subscriptions/{id}/tools
+ * Note: This endpoint may be added later for per-tool access management
  */
 async function updateToolAccess(
   subscriptionId: string,
   toolIds: string[],
   action: 'enable' | 'disable' | 'request'
 ): Promise<MCPServerSubscription> {
-  const response = await mcpClient.patch<MCPServerSubscription>(
-    `/servers/subscriptions/${subscriptionId}/tools`,
+  const response = await apiClient.patch<MCPServerSubscription>(
+    `/v1/mcp/subscriptions/${subscriptionId}/tools`,
     { tool_ids: toolIds, action }
   );
   return response.data;
 }
 
 /**
- * Revoke a server subscription
- * DELETE /servers/subscriptions/{id}
+ * Cancel a server subscription
+ * DELETE /v1/mcp/subscriptions/{id}
  */
 async function revokeServerSubscription(subscriptionId: string): Promise<void> {
-  await mcpClient.delete(`/servers/subscriptions/${subscriptionId}`);
+  await apiClient.delete(`/v1/mcp/subscriptions/${subscriptionId}`);
 }
 
 /**
  * Rotate API key for a server subscription
- * POST /servers/subscriptions/{id}/rotate-key
+ * POST /v1/mcp/subscriptions/{id}/rotate-key
  */
 async function rotateServerKey(
   subscriptionId: string,
@@ -139,10 +175,14 @@ async function rotateServerKey(
   new_api_key: string;
   old_key_expires_at: string;
 }> {
-  const response = await mcpClient.post(`/servers/subscriptions/${subscriptionId}/rotate-key`, {
-    grace_period_hours: gracePeriodHours,
-  });
-  return response.data;
+  const response = await apiClient.post<MCPKeyRotationResponse>(
+    `/v1/mcp/subscriptions/${subscriptionId}/rotate-key`,
+    { grace_period_hours: gracePeriodHours }
+  );
+  return {
+    new_api_key: response.data.new_api_key,
+    old_key_expires_at: response.data.old_key_expires_at,
+  };
 }
 
 /**

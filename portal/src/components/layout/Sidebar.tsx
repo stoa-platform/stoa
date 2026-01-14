@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Wrench, CreditCard, BookOpen, User, X, AppWindow, Webhook, BarChart3, Shield, Server } from 'lucide-react';
+import { Home, CreditCard, BookOpen, User, X, AppWindow, Webhook, BarChart3, Shield, Server } from 'lucide-react';
 import { config } from '../../config';
 
 interface SidebarProps {
@@ -10,7 +10,6 @@ interface SidebarProps {
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
   { name: 'MCP Servers', href: '/servers', icon: Server, enabled: config.features.enableMCPTools },
-  { name: 'MCP Tools', href: '/tools', icon: Wrench, enabled: config.features.enableMCPTools },
   { name: 'API Catalog', href: '/apis', icon: BookOpen, enabled: config.features.enableAPICatalog },
   { name: 'My Apps', href: '/apps', icon: AppWindow, enabled: config.features.enableAPICatalog },
   { name: 'My Subscriptions', href: '/subscriptions', icon: CreditCard, enabled: config.features.enableSubscriptions },

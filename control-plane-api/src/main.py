@@ -13,6 +13,8 @@ from contextlib import asynccontextmanager
 from .config import settings
 from .logging_config import configure_logging, get_logger
 from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health
+from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
+from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .middleware.metrics import MetricsMiddleware, get_metrics
@@ -153,6 +155,11 @@ app = FastAPI(
         {"name": "Usage", "description": "Usage dashboard for API consumers (CAB-280)"},
         {"name": "Dashboard", "description": "Home dashboard stats and activity (CAB-299)"},
         {"name": "Service Accounts", "description": "OAuth2 Service Accounts for MCP access (CAB-296)"},
+        {"name": "MCP Servers", "description": "Browse and discover MCP servers"},
+        {"name": "MCP Subscriptions", "description": "Subscribe to MCP servers and manage API keys"},
+        {"name": "MCP Validation", "description": "API key validation for MCP Gateway (internal)"},
+        {"name": "MCP Admin - Subscriptions", "description": "Admin approval workflow for MCP subscriptions"},
+        {"name": "MCP Admin - Servers", "description": "MCP server management (admin)"},
     ],
     contact={
         "name": "CAB Ingenierie",
@@ -196,6 +203,13 @@ app.include_router(usage.router)
 app.include_router(usage.dashboard_router)
 app.include_router(service_accounts.router)
 app.include_router(health.router)
+
+# MCP Server Subscription routers
+app.include_router(mcp_servers_router)
+app.include_router(mcp_subscriptions_router)
+app.include_router(mcp_validation_router)
+app.include_router(mcp_admin_subscriptions_router)
+app.include_router(mcp_admin_servers_router)
 
 
 # Legacy health endpoint - redirect to new /health/live

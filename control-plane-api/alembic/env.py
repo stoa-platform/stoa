@@ -17,6 +17,7 @@ from src.database import Base
 
 # Import all models to register them with Base.metadata
 from src.models.subscription import Subscription
+from src.models.mcp_subscription import MCPServer, MCPServerTool, MCPServerSubscription, MCPToolAccess
 
 # this is the Alembic Config object
 config = context.config

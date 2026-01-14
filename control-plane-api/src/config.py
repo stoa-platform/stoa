@@ -6,6 +6,7 @@ For Kubernetes deployments, set these in ConfigMaps/Secrets.
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from typing import List
+import json
 import os
 
 # Base domain - used to construct default URLs
@@ -69,9 +70,61 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
-    # Logging
+    # Logging - Basic Configuration
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"  # json, text
+    LOG_COMPONENTS: str = "{}"  # JSON dict of component:level overrides
+
+    # Logging - HTTP Debug
+    LOG_DEBUG_HTTP_REQUESTS: bool = False
+    LOG_DEBUG_HTTP_RESPONSES: bool = False
+    LOG_DEBUG_HTTP_HEADERS: bool = False
+    LOG_DEBUG_HTTP_BODY: bool = False
+
+    # Logging - SSL Debug
+    LOG_DEBUG_SSL_HANDSHAKE: bool = False
+    LOG_DEBUG_SSL_CERTIFICATES: bool = False
+
+    # Logging - Kafka Debug
+    LOG_DEBUG_KAFKA_MESSAGES: bool = False
+    LOG_DEBUG_KAFKA_CONSUMER: bool = False
+    LOG_DEBUG_KAFKA_PRODUCER: bool = False
+
+    # Logging - SQL Debug
+    LOG_DEBUG_SQL_QUERIES: bool = False
+    LOG_DEBUG_SQL_RESULTS: bool = False
+    LOG_DEBUG_SQL_TRANSACTIONS: bool = False
+
+    # Logging - Auth Debug
+    LOG_DEBUG_AUTH_TOKENS: bool = False
+    LOG_DEBUG_AUTH_HEADERS: bool = False
+    LOG_DEBUG_AUTH_PAYLOAD: bool = False
+
+    # Logging - External Services Debug
+    LOG_DEBUG_AWX_API: bool = False
+    LOG_DEBUG_GITLAB_API: bool = False
+    LOG_DEBUG_KEYCLOAK_API: bool = False
+    LOG_DEBUG_GATEWAY_API: bool = False
+
+    # Logging - Tracing
+    LOG_TRACE_ENABLED: bool = False
+    LOG_TRACE_SAMPLE_RATE: float = 0.1
+    LOG_TRACE_EXPORT_ENDPOINT: str = ""
+
+    # Logging - Context
+    LOG_CONTEXT_TENANT_ID: bool = True
+    LOG_CONTEXT_USER_ID: bool = True
+    LOG_CONTEXT_REQUEST_ID: bool = True
+    LOG_CONTEXT_TRACE_ID: bool = True
+
+    # Logging - Filtering
+    LOG_EXCLUDE_PATHS: str = '["/health", "/healthz", "/ready", "/metrics"]'
+    LOG_SLOW_REQUEST_THRESHOLD_MS: int = 1000
+    LOG_ACCESS_SAMPLE_RATE: float = 1.0
+
+    # Logging - Masking
+    LOG_MASKING_ENABLED: bool = True
+    LOG_MASKING_PATTERNS: str = '["password", "secret", "token", "api_key", "authorization"]'
 
     # Database (PostgreSQL)
     DATABASE_URL: str = "postgresql+asyncpg://stoa:stoa@localhost:5432/stoa"
@@ -89,6 +142,30 @@ class Settings(BaseSettings):
         if isinstance(self.CORS_ORIGINS, list):
             return self.CORS_ORIGINS
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
+    @property
+    def log_components_dict(self) -> dict:
+        """Return LOG_COMPONENTS as a dict"""
+        try:
+            return json.loads(self.LOG_COMPONENTS)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @property
+    def log_exclude_paths_list(self) -> List[str]:
+        """Return LOG_EXCLUDE_PATHS as a list"""
+        try:
+            return json.loads(self.LOG_EXCLUDE_PATHS)
+        except (json.JSONDecodeError, TypeError):
+            return ["/health", "/healthz", "/ready", "/metrics"]
+
+    @property
+    def log_masking_patterns_list(self) -> List[str]:
+        """Return LOG_MASKING_PATTERNS as a list"""
+        try:
+            return json.loads(self.LOG_MASKING_PATTERNS)
+        except (json.JSONDecodeError, TypeError):
+            return ["password", "secret", "token", "api_key", "authorization"]
 
     class Config:
         env_file = ".env"

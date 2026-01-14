@@ -1,5 +1,6 @@
 # Promtail Configuration for STOA Platform
 # CAB-281: Log Shipping to Loki
+# CAB-330: Enhanced label extraction for centralized logging
 #
 # Promtail is an agent that ships local logs to a Loki instance.
 
@@ -49,25 +50,49 @@ scrape_configs:
       - source_labels: ['__meta_docker_container_id']
         target_label: container_id
     pipeline_stages:
-      # Parse JSON logs
+      # Parse JSON logs (structlog format)
       - json:
           expressions:
             level: level
-            message: message
+            message: event
+            msg: msg
             timestamp: timestamp
             logger: logger
+            logger_name: logger_name
+            # Request context (CAB-330)
             request_id: request_id
+            trace_id: trace_id
+            span_id: span_id
             tenant_id: tenant_id
             user_id: user_id
+            # HTTP fields
             endpoint: endpoint
+            path: path
             method: method
             status_code: status_code
             duration_ms: duration_ms
+            client_ip: client_ip
+            # Application context
+            component: component
+            environment: environment
+            version: version
+            # Error fields
+            error: error
+            error_type: error_type
+            # Service fields
+            service_name: service_name
+            tool_name: tool_name
+      # Normalize message field
+      - template:
+          source: message
+          template: '{{ if .message }}{{ .message }}{{ else if .event }}{{ .event }}{{ else }}{{ .msg }}{{ end }}'
       # Extract log level as label
       - labels:
           level:
           logger:
           tenant_id:
+          component:
+          environment:
       # Set timestamp from log
       - timestamp:
           source: timestamp
@@ -117,26 +142,43 @@ scrape_configs:
     pipeline_stages:
       # Docker/CRI log format parsing
       - cri: {}
-      # Parse JSON logs from applications
+      # Parse JSON logs from applications (structlog format)
       - json:
           expressions:
             level: level
-            message: message
+            message: event
             msg: msg
             timestamp: timestamp
             time: time
             logger: logger
+            logger_name: logger_name
+            # Request context (CAB-330)
             request_id: request_id
             trace_id: trace_id
             span_id: span_id
             tenant_id: tenant_id
             user_id: user_id
+            # HTTP fields
             endpoint: endpoint
+            path: path
             method: method
             status_code: status_code
             duration_ms: duration_ms
-            tool_name: tool_name
+            client_ip: client_ip
+            slow_request: slow_request
+            # Application context
+            component: component
+            environment: environment
+            version: version
+            # Error fields
             error: error
+            error_type: error_type
+            # Service fields
+            service_name: service_name
+            tool_name: tool_name
+            # Auth fields (CAB-330)
+            payload_keys: payload_keys
+            has_sub: has_sub
       # Normalize log level
       - template:
           source: level
@@ -147,10 +189,11 @@ scrape_configs:
           logger:
           tenant_id:
           component:
-      # Handle structlog format (message vs msg)
+          environment:
+      # Handle structlog format (event vs message vs msg)
       - template:
           source: message
-          template: '{{ if .message }}{{ .message }}{{ else }}{{ .msg }}{{ end }}'
+          template: '{{ if .message }}{{ .message }}{{ else if .event }}{{ .event }}{{ else }}{{ .msg }}{{ end }}'
       # Parse timestamp
       - timestamp:
           source: timestamp

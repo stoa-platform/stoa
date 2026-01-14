@@ -9,9 +9,11 @@ from .rate_limit import (
     limit_subscription,
     limit_anonymous,
 )
+from .http_logging import HTTPLoggingMiddleware
 
 __all__ = [
     "MetricsMiddleware",
+    "HTTPLoggingMiddleware",
     "limiter",
     "rate_limit_exceeded_handler",
     "limit_authenticated",

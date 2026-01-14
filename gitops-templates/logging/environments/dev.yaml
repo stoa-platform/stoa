@@ -1,0 +1,80 @@
+# STOA Platform - Development Environment Logging
+# Full debug logging enabled for troubleshooting
+
+logging:
+  level: DEBUG
+  format: text  # More readable in local terminal
+
+  components:
+    root: DEBUG
+    uvicorn: INFO
+    uvicorn.access: INFO
+    httpx: DEBUG
+    httpcore: DEBUG
+    aiokafka: INFO
+    sqlalchemy: INFO
+    sqlalchemy.engine: DEBUG  # Show SQL queries
+
+    # STOA application - full debug
+    src: DEBUG
+    src.routers: DEBUG
+    src.services: DEBUG
+    src.auth: DEBUG
+    src.middleware: DEBUG
+    src.models: DEBUG
+
+    # MCP Gateway - full debug
+    mcp_gateway: DEBUG
+    mcp_gateway.tools: DEBUG
+    mcp_gateway.opa: DEBUG
+    mcp_gateway.metering: DEBUG
+
+  debug:
+    # HTTP - enabled
+    http_requests: true
+    http_responses: true
+    http_headers: true
+    http_body: true
+
+    # SSL - enabled for debugging certificate issues
+    ssl_handshake: true
+    ssl_certificates: true
+
+    # Kafka - enabled
+    kafka_messages: true
+    kafka_consumer: true
+    kafka_producer: true
+
+    # Database - enabled
+    sql_queries: true
+    sql_results: true
+    sql_transactions: true
+
+    # Auth - enabled (dev only!)
+    auth_tokens: true
+    auth_headers: true
+    auth_payload: true
+
+    # External services - enabled
+    awx_api: true
+    gitlab_api: true
+    keycloak_api: true
+    gateway_api: true
+
+  tracing:
+    enabled: true
+    sample_rate: 1.0           # 100% in dev
+    propagate_context: true
+    export_endpoint: "tempo:4317"
+
+  filtering:
+    exclude_paths:
+      - /health
+      - /healthz
+      - /ready
+      - /metrics
+    slow_request_threshold_ms: 500
+    access_log_sample_rate: 1.0
+
+  masking:
+    enabled: false  # Disable masking in dev for full visibility

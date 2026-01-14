@@ -77,36 +77,36 @@ async function getServer(serverId: string): Promise<MCPServer> {
 
 /**
  * Get user's server subscriptions
- * GET /server-subscriptions
+ * GET /servers/subscriptions
  */
 async function getMyServerSubscriptions(): Promise<MCPServerSubscription[]> {
-  const response = await mcpClient.get<{ subscriptions: MCPServerSubscription[] }>('/server-subscriptions');
+  const response = await mcpClient.get<{ subscriptions: MCPServerSubscription[] }>('/servers/subscriptions');
   return response.data.subscriptions;
 }
 
 /**
  * Get a specific server subscription
- * GET /server-subscriptions/{id}
+ * GET /servers/subscriptions/{id}
  */
 async function getServerSubscription(subscriptionId: string): Promise<MCPServerSubscription> {
-  const response = await mcpClient.get<MCPServerSubscription>(`/server-subscriptions/${subscriptionId}`);
+  const response = await mcpClient.get<MCPServerSubscription>(`/servers/subscriptions/${subscriptionId}`);
   return response.data;
 }
 
 /**
  * Subscribe to a server with selected tools
- * POST /server-subscriptions
+ * POST /servers/subscriptions
  */
 async function subscribeToServer(
   request: MCPServerSubscriptionCreate
 ): Promise<MCPServerSubscriptionWithKey> {
-  const response = await mcpClient.post<MCPServerSubscriptionWithKey>('/server-subscriptions', request);
+  const response = await mcpClient.post<MCPServerSubscriptionWithKey>('/servers/subscriptions', request);
   return response.data;
 }
 
 /**
  * Update tool access within a subscription
- * PATCH /server-subscriptions/{id}/tools
+ * PATCH /servers/subscriptions/{id}/tools
  */
 async function updateToolAccess(
   subscriptionId: string,
@@ -114,7 +114,7 @@ async function updateToolAccess(
   action: 'enable' | 'disable' | 'request'
 ): Promise<MCPServerSubscription> {
   const response = await mcpClient.patch<MCPServerSubscription>(
-    `/server-subscriptions/${subscriptionId}/tools`,
+    `/servers/subscriptions/${subscriptionId}/tools`,
     { tool_ids: toolIds, action }
   );
   return response.data;
@@ -122,15 +122,15 @@ async function updateToolAccess(
 
 /**
  * Revoke a server subscription
- * DELETE /server-subscriptions/{id}
+ * DELETE /servers/subscriptions/{id}
  */
 async function revokeServerSubscription(subscriptionId: string): Promise<void> {
-  await mcpClient.delete(`/server-subscriptions/${subscriptionId}`);
+  await mcpClient.delete(`/servers/subscriptions/${subscriptionId}`);
 }
 
 /**
  * Rotate API key for a server subscription
- * POST /server-subscriptions/{id}/rotate-key
+ * POST /servers/subscriptions/{id}/rotate-key
  */
 async function rotateServerKey(
   subscriptionId: string,
@@ -139,7 +139,7 @@ async function rotateServerKey(
   new_api_key: string;
   old_key_expires_at: string;
 }> {
-  const response = await mcpClient.post(`/server-subscriptions/${subscriptionId}/rotate-key`, {
+  const response = await mcpClient.post(`/servers/subscriptions/${subscriptionId}/rotate-key`, {
     grace_period_hours: gracePeriodHours,
   });
   return response.data;

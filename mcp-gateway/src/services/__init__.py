@@ -20,6 +20,11 @@ from .database import (
     get_db_session,
     get_session,
 )
+from .api_key import (
+    validate_api_key,
+    hash_api_key,
+    verify_api_key_hash,
+)
 
 __all__ = [
     "ToolRegistry",
@@ -34,4 +39,7 @@ __all__ = [
     "shutdown_database",
     "get_db_session",
     "get_session",
+    "validate_api_key",
+    "hash_api_key",
+    "verify_api_key_hash",
 ]

@@ -4,6 +4,7 @@ Provides endpoints for:
 - Listing MCP servers filtered by user roles
 - Server subscription management
 - Per-tool access control within subscriptions
+- Vault integration for secure API key storage
 """
 
 import uuid
@@ -32,6 +33,7 @@ from ..models.server import (
     ListServerSubscriptionsResponse,
 )
 from ..middleware.auth import get_current_user, TokenClaims
+from ..services.vault_client import get_vault_client
 
 # Alias for clarity
 User = TokenClaims
@@ -346,6 +348,31 @@ async def subscribe_to_server(
     # Store subscription
     _subscriptions[subscription_id] = subscription
 
+    # Store API key in Vault (async, best-effort)
+    try:
+        vault_client = get_vault_client()
+        await vault_client.store_api_key(
+            subscription_id=subscription_id,
+            api_key=api_key,
+            metadata={
+                "user_id": user.subject,
+                "server_id": server.id,
+                "tenant_id": "default",
+                "created_at": now.isoformat(),
+            },
+        )
+        logger.info(
+            "API key stored in Vault",
+            subscription_id=subscription_id,
+        )
+    except Exception as e:
+        # Vault storage is best-effort - subscription still works
+        logger.warning(
+            "Failed to store API key in Vault (continuing without)",
+            subscription_id=subscription_id,
+            error=str(e),
+        )
+
     logger.info(
         "Server subscription created",
         subscription_id=subscription_id,
@@ -481,6 +508,79 @@ async def revoke_server_subscription(
     return {"message": "Subscription revoked", "subscription_id": subscription_id}
 
 
+@router.get("/subscriptions/{subscription_id}/reveal-key")
+async def reveal_api_key(
+    subscription_id: str,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Reveal the API key for a subscription.
+
+    This endpoint requires 2FA (TOTP) verification for security.
+    The token must have been issued with step-up authentication (acr >= 2).
+
+    Returns:
+        The full API key from Vault
+    """
+    subscription = _subscriptions.get(subscription_id)
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    if subscription.user_id != user.subject:
+        raise HTTPException(status_code=403, detail="Not authorized to view this key")
+
+    # Check for 2FA/step-up authentication
+    # acr (Authentication Context Class Reference) indicates authentication strength
+    # Level 0 = password only, Level 1 = password + something, Level 2+ = multi-factor
+    acr = user.acr
+    if acr is None or (isinstance(acr, str) and int(acr) < 1):
+        logger.warning(
+            "API key reveal attempted without 2FA",
+            subscription_id=subscription_id,
+            user_id=user.subject,
+            acr=acr,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="2FA verification required to reveal API key. Please re-authenticate with TOTP.",
+            headers={"X-Requires-Step-Up": "true"},
+        )
+
+    # Retrieve API key from Vault
+    try:
+        vault_client = get_vault_client()
+        api_key = await vault_client.retrieve_api_key(subscription_id)
+
+        if not api_key:
+            raise HTTPException(
+                status_code=404,
+                detail="API key not found in vault. Please regenerate the key.",
+            )
+
+        logger.info(
+            "API key revealed",
+            subscription_id=subscription_id,
+            user_id=user.subject,
+        )
+
+        return {
+            "api_key": api_key,
+            "api_key_prefix": subscription.api_key_prefix,
+            "message": "This is your API key. Store it securely - it cannot be retrieved again.",
+        }
+
+    except Exception as e:
+        logger.error(
+            "Failed to retrieve API key from Vault",
+            subscription_id=subscription_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve API key. Please try again or regenerate the key.",
+        )
+
+
 @router.post("/subscriptions/{subscription_id}/rotate-key")
 async def rotate_server_key(
     subscription_id: str,
@@ -488,6 +588,8 @@ async def rotate_server_key(
     user: User = Depends(get_current_user),
 ) -> dict:
     """Rotate the API key for a server subscription.
+
+    This endpoint requires 2FA (TOTP) verification for security.
 
     Args:
         grace_period_hours: Hours before the old key expires (1-168, default 24)
@@ -503,6 +605,20 @@ async def rotate_server_key(
     if subscription.user_id != user.subject:
         raise HTTPException(status_code=403, detail="Not authorized to rotate this key")
 
+    # Check for 2FA/step-up authentication for key rotation
+    acr = user.acr
+    if acr is None or (isinstance(acr, str) and int(acr) < 1):
+        logger.warning(
+            "API key rotation attempted without 2FA",
+            subscription_id=subscription_id,
+            user_id=user.subject,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="2FA verification required to rotate API key. Please re-authenticate with TOTP.",
+            headers={"X-Requires-Step-Up": "true"},
+        )
+
     # Generate new key
     api_key, key_prefix, key_hash = generate_api_key()
 
@@ -514,6 +630,21 @@ async def rotate_server_key(
     subscription.api_key_prefix = key_prefix
     subscription.last_rotated_at = datetime.now(timezone.utc)
     subscription.has_active_grace_period = True
+
+    # Store new key in Vault
+    try:
+        vault_client = get_vault_client()
+        await vault_client.rotate_api_key(subscription_id, api_key)
+        logger.info(
+            "Rotated API key stored in Vault",
+            subscription_id=subscription_id,
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to store rotated API key in Vault",
+            subscription_id=subscription_id,
+            error=str(e),
+        )
 
     logger.info(
         "Server subscription key rotated",

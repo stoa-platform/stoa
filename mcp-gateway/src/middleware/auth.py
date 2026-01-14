@@ -420,13 +420,21 @@ async def get_current_user(
         )
         return claims
 
-    # Try API Key
+    # Try API Key (stoa_sk_* format)
     if api_key:
-        # TODO: Implement API key validation against Control Plane API
-        # For now, reject API keys
+        if api_key.startswith("stoa_sk_"):
+            from ..services.api_key import validate_api_key
+            claims = await validate_api_key(api_key)
+            if claims:
+                logger.debug(
+                    "User authenticated via API Key",
+                    key_prefix=api_key[:16],
+                    sub=claims.subject,
+                )
+                return claims
         raise HTTPException(
             status_code=401,
-            detail="API Key authentication not yet implemented",
+            detail="Invalid API key",
         )
 
     # No authentication provided

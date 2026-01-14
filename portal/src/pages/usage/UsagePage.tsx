@@ -15,7 +15,7 @@ import type { UsageSummary, UsageCallsResponse, ActiveSubscription } from '../..
 type Period = 'today' | 'week' | 'month';
 
 export function UsagePage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, accessToken } = useAuth();
 
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [callsResponse, setCallsResponse] = useState<UsageCallsResponse | null>(null);
@@ -68,11 +68,11 @@ export function UsagePage() {
   };
 
   useEffect(() => {
-    // Only fetch data when authenticated and auth is not loading
-    if (isAuthenticated && !authLoading) {
+    // Only fetch data when authenticated, auth is not loading, and token is available
+    if (isAuthenticated && !authLoading && accessToken) {
       fetchData();
     }
-  }, [isAuthenticated, authLoading]);
+  }, [isAuthenticated, authLoading, accessToken]);
 
   // Get stats for selected period
   const getPeriodStats = () => {

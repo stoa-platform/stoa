@@ -227,7 +227,14 @@ def register_routes(app: FastAPI) -> None:
         Only accessible from internal cluster network.
         Returns basic health status. Always returns 200 if the service is running.
         """
+        # Debug logging
+        xff = request.headers.get("X-Forwarded-For", "")
+        xri = request.headers.get("X-Real-IP", "")
+        client = request.client.host if request.client else "unknown"
+        logger.debug("Health check", xff=xff, xri=xri, client=client)
+
         if not _is_internal_request(request):
+            logger.warning("Blocked external health check", xff=xff, xri=xri, client=client)
             raise HTTPException(status_code=403, detail="Forbidden - internal only")
 
         settings = get_settings()

@@ -17,7 +17,6 @@ import {
   Globe,
   ArrowRight,
   Wrench,
-  Loader2,
   AlertCircle,
   RefreshCw,
   Shield,
@@ -26,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { mcpServersService, MOCK_SERVERS } from '../../services/mcpServers';
+import { ServerCardSkeletonGrid } from '../../components/skeletons';
 import type { MCPServer, MCPServerSubscription } from '../../types';
 
 type ServerCategory = 'all' | 'platform' | 'tenant' | 'public';
@@ -241,12 +241,7 @@ export function MCPServersPage() {
       </div>
 
       {/* Loading State */}
-      {isLoading && (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <Loader2 className="h-8 w-8 text-primary-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Loading servers...</p>
-        </div>
-      )}
+      {isLoading && <ServerCardSkeletonGrid count={6} />}
 
       {/* Error State */}
       {error && (

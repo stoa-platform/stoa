@@ -12,7 +12,6 @@ import { Link } from 'react-router-dom';
 import {
   TrendingUp,
   AlertCircle,
-  Loader2,
   RefreshCw,
   Search,
   Filter,
@@ -33,6 +32,7 @@ import { RotateKeyModal } from '../../components/subscriptions/RotateKeyModal';
 import { ExportConfigModal } from '../../components/subscriptions/ExportConfigModal';
 import { mcpServersService } from '../../services/mcpServers';
 import { useAuth } from '../../contexts/AuthContext';
+import { StatCardWithIconSkeleton, ServerCardSkeletonGrid } from '../../components/skeletons';
 import type { MCPSubscription, MCPServerSubscription } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'expired' | 'revoked' | 'pending' | 'suspended';
@@ -184,57 +184,49 @@ export function MySubscriptions() {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary-50 rounded-lg">
-              <Key className="h-5 w-5 text-primary-600" />
-            </div>
-            <div>
-              {isLoading ? (
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              ) : (
-                <>
+        {isLoading ? (
+          <>
+            <StatCardWithIconSkeleton />
+            <StatCardWithIconSkeleton />
+            <StatCardWithIconSkeleton />
+          </>
+        ) : (
+          <>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary-50 rounded-lg">
+                  <Key className="h-5 w-5 text-primary-600" />
+                </div>
+                <div>
                   <p className="text-2xl font-bold text-gray-900">{totalActiveCount}</p>
                   <p className="text-sm text-gray-500">Active Subscriptions</p>
-                </>
-              )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Server className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              {isLoading ? (
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              ) : (
-                <>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-50 rounded-lg">
+                  <Server className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
                   <p className="text-2xl font-bold text-gray-900">{activeServerCount}</p>
                   <p className="text-sm text-gray-500">Server Subscriptions</p>
-                </>
-              )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-50 rounded-lg">
-              <TrendingUp className="h-5 w-5 text-green-600" />
-            </div>
-            <div>
-              {isLoading ? (
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              ) : (
-                <>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-50 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
                   <p className="text-2xl font-bold text-gray-900">{totalUsage.toLocaleString()}</p>
                   <p className="text-sm text-gray-500">Total API Calls</p>
-                </>
-              )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Tabs */}
@@ -311,10 +303,7 @@ export function MySubscriptions() {
       {activeTab === 'servers' && (
         <>
           {serverSubsLoading && (
-            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-              <Loader2 className="h-8 w-8 text-primary-600 animate-spin mx-auto mb-4" />
-              <p className="text-gray-500">Loading server subscriptions...</p>
-            </div>
+            <ServerCardSkeletonGrid count={4} columns={2} />
           )}
 
           {serverSubsError && (
@@ -428,10 +417,7 @@ export function MySubscriptions() {
       {activeTab === 'tools' && (
         <>
           {toolSubsLoading && (
-            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-              <Loader2 className="h-8 w-8 text-primary-600 animate-spin mx-auto mb-4" />
-              <p className="text-gray-500">Loading tool subscriptions...</p>
-            </div>
+            <ServerCardSkeletonGrid count={6} columns={3} />
           )}
 
           {toolSubsError && (

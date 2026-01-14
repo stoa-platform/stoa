@@ -24,3 +24,5 @@ psycopg2-binary==2.9.9
 cryptography>=42.0.0
 # OpenSearch integration (CAB-307)
 opensearch-py[async]>=2.4.0
+# Rate limiting (CAB-298)
+slowapi==0.1.9

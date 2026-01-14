@@ -44,6 +44,7 @@ from ..schemas.mcp_subscription import (
     MCPSubscriptionWithKeyResponse,
     MCPSubscriptionListResponse,
     MCPSubscriptionStatusEnum,
+    MCPToolAccessStatusEnum,
     MCPToolAccessResponse,
     MCPKeyRotationRequest,
     MCPKeyRotationResponse,
@@ -98,11 +99,20 @@ def _convert_server_to_response(server: MCPServer) -> MCPServerResponse:
     )
 
 
-@servers_router.get("", response_model=MCPServerListResponse)
+@servers_router.get(
+    "",
+    response_model=MCPServerListResponse,
+    summary="List MCP servers",
+    description="List available MCP servers visible to the current user based on roles and tenant.",
+    responses={
+        200: {"description": "List of MCP servers with pagination"},
+        401: {"description": "Not authenticated"},
+    },
+)
 async def list_servers(
-    category: Optional[MCPServerCategoryEnum] = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    category: Optional[MCPServerCategoryEnum] = Query(None, description="Filter by server category"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -131,7 +141,17 @@ async def list_servers(
     )
 
 
-@servers_router.get("/{server_id}", response_model=MCPServerResponse)
+@servers_router.get(
+    "/{server_id}",
+    response_model=MCPServerResponse,
+    summary="Get MCP server",
+    description="Get detailed information about a specific MCP server including its tools.",
+    responses={
+        200: {"description": "Server details with tools list"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "Server not found"},
+    },
+)
 async def get_server(
     server_id: UUID,
     user: User = Depends(get_current_user),
@@ -207,7 +227,20 @@ def _convert_subscription_to_response(
     )
 
 
-@subscriptions_router.post("", response_model=MCPSubscriptionWithKeyResponse, status_code=201)
+@subscriptions_router.post(
+    "",
+    response_model=MCPSubscriptionWithKeyResponse,
+    status_code=201,
+    summary="Subscribe to a server",
+    description="Create a subscription to an MCP server. Returns an API key (shown only once!).",
+    responses={
+        201: {"description": "Subscription created successfully"},
+        400: {"description": "Server not available for subscriptions"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "Server not found"},
+        409: {"description": "Already subscribed to this server"},
+    },
+)
 async def create_subscription(
     request: MCPSubscriptionCreate,
     user: User = Depends(get_current_user),
@@ -221,7 +254,7 @@ async def create_subscription(
     - If auto-approve enabled for user's role: status will be ACTIVE
     - Otherwise: status will be ACTIVE immediately
 
-    Returns the API key (shown only once!).
+    **Important**: The API key is shown only once! Store it securely.
     """
     server_repo = MCPServerRepository(db)
     sub_repo = MCPSubscriptionRepository(db)
@@ -335,11 +368,20 @@ async def create_subscription(
         )
 
 
-@subscriptions_router.get("", response_model=MCPSubscriptionListResponse)
+@subscriptions_router.get(
+    "",
+    response_model=MCPSubscriptionListResponse,
+    summary="List my subscriptions",
+    description="List all MCP server subscriptions for the current user.",
+    responses={
+        200: {"description": "List of subscriptions with pagination"},
+        401: {"description": "Not authenticated"},
+    },
+)
 async def list_my_subscriptions(
-    status: Optional[MCPSubscriptionStatusEnum] = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    status: Optional[MCPSubscriptionStatusEnum] = Query(None, description="Filter by subscription status"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -367,7 +409,18 @@ async def list_my_subscriptions(
     )
 
 
-@subscriptions_router.get("/{subscription_id}", response_model=MCPSubscriptionResponse)
+@subscriptions_router.get(
+    "/{subscription_id}",
+    response_model=MCPSubscriptionResponse,
+    summary="Get subscription details",
+    description="Get detailed information about a specific subscription including tool access.",
+    responses={
+        200: {"description": "Subscription details"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Access denied (not owner)"},
+        404: {"description": "Subscription not found"},
+    },
+)
 async def get_subscription(
     subscription_id: UUID,
     user: User = Depends(get_current_user),
@@ -387,7 +440,19 @@ async def get_subscription(
     return _convert_subscription_to_response(subscription)
 
 
-@subscriptions_router.delete("/{subscription_id}", status_code=204)
+@subscriptions_router.delete(
+    "/{subscription_id}",
+    status_code=204,
+    summary="Cancel subscription",
+    description="Cancel a pending or active subscription. This is a subscriber action.",
+    responses={
+        204: {"description": "Subscription cancelled successfully"},
+        400: {"description": "Cannot cancel subscription in current status"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Access denied (not owner)"},
+        404: {"description": "Subscription not found"},
+    },
+)
 async def cancel_subscription(
     subscription_id: UUID,
     user: User = Depends(get_current_user),
@@ -423,7 +488,19 @@ async def cancel_subscription(
     logger.info(f"MCP subscription {subscription_id} cancelled by subscriber {user.email}")
 
 
-@subscriptions_router.post("/{subscription_id}/rotate-key", response_model=MCPKeyRotationResponse)
+@subscriptions_router.post(
+    "/{subscription_id}/rotate-key",
+    response_model=MCPKeyRotationResponse,
+    summary="Rotate API key",
+    description="Rotate the API key for a subscription. The old key remains valid during a grace period.",
+    responses={
+        200: {"description": "New API key generated with grace period"},
+        400: {"description": "Cannot rotate key (wrong status or rotation already in progress)"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Access denied (not owner)"},
+        404: {"description": "Subscription not found"},
+    },
+)
 async def rotate_api_key(
     subscription_id: UUID,
     request: MCPKeyRotationRequest = MCPKeyRotationRequest(),
@@ -434,7 +511,8 @@ async def rotate_api_key(
     Rotate the API key for a subscription with grace period.
 
     The old key remains valid for the specified grace period (default 24 hours).
-    Returns the new API key (shown only once!).
+
+    **Important**: The new API key is shown only once! Store it securely.
     """
     repo = MCPSubscriptionRepository(db)
     subscription = await repo.get_by_id(subscription_id)
@@ -495,7 +573,17 @@ async def rotate_api_key(
 validation_router = APIRouter(prefix="/v1/mcp/validate", tags=["MCP Validation"])
 
 
-@validation_router.post("/api-key")
+@validation_router.post(
+    "/api-key",
+    summary="Validate API key",
+    description="Internal endpoint for MCP Gateway to validate API keys and get subscription details.",
+    responses={
+        200: {"description": "API key is valid, returns subscription info"},
+        401: {"description": "Invalid API key format or key not found"},
+        403: {"description": "Subscription is not active or has expired"},
+    },
+    include_in_schema=False,  # Internal endpoint
+)
 async def validate_api_key(
     api_key: str,
     db: AsyncSession = Depends(get_db),

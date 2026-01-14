@@ -22,11 +22,18 @@ from ..schemas.usage import (
     DailyCallStat,
     ActiveSubscription,
     CallStatus,
+    DashboardStats,
+    DashboardActivityResponse,
+    RecentActivityItem,
+    ActivityType,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/usage", tags=["Usage"])
+
+# Also create dashboard router
+dashboard_router = APIRouter(prefix="/v1/dashboard", tags=["Dashboard"])
 
 
 # ============================================================
@@ -219,3 +226,106 @@ async def get_my_active_subscriptions(
             call_count_total=412
         ),
     ]
+
+
+# ============================================================
+# Dashboard Endpoints (CAB-299)
+# ============================================================
+
+@dashboard_router.get("/stats", response_model=DashboardStats)
+async def get_dashboard_stats(
+    current_user: User = Depends(get_current_user)
+) -> DashboardStats:
+    """
+    Retourne les statistiques agrégées pour la home page du Portal.
+
+    Inclut:
+    - Nombre de tools disponibles
+    - Nombre de subscriptions actives
+    - Nombre d'appels API cette semaine
+    - Tendances (% change)
+    """
+    user_id = current_user.id
+    tenant_id = current_user.tenant_id or "default"
+
+    logger.info(f"Fetching dashboard stats for user={user_id} tenant={tenant_id}")
+
+    # TODO: Remplacer par vraies queries DB/MCP Gateway
+    # Pour le MVP, retourner des données simulées
+
+    return DashboardStats(
+        tools_available=12,
+        active_subscriptions=4,
+        api_calls_this_week=842,
+        tools_trend=8.5,
+        subscriptions_trend=25.0,
+        calls_trend=12.3
+    )
+
+
+@dashboard_router.get("/activity", response_model=DashboardActivityResponse)
+async def get_dashboard_activity(
+    limit: int = Query(default=5, ge=1, le=20, description="Number of activities to return"),
+    current_user: User = Depends(get_current_user)
+) -> DashboardActivityResponse:
+    """
+    Retourne l'activité récente pour la home page du Portal.
+    """
+    user_id = current_user.id
+
+    logger.info(f"Fetching dashboard activity for user={user_id} limit={limit}")
+
+    now = datetime.utcnow()
+
+    # TODO: Remplacer par vraies queries DB
+    # Pour le MVP, retourner des données simulées
+
+    mock_activity = [
+        RecentActivityItem(
+            id="act-001",
+            type=ActivityType.SUBSCRIPTION_CREATED,
+            title="Subscribed to CRM Search",
+            description="New subscription created",
+            tool_id="crm-search",
+            tool_name="CRM Customer Search",
+            timestamp=now - timedelta(hours=2)
+        ),
+        RecentActivityItem(
+            id="act-002",
+            type=ActivityType.API_CALL,
+            title="API call to Billing Invoice",
+            description="Completed in 145ms",
+            tool_id="billing-invoice",
+            tool_name="Billing Invoice Generator",
+            timestamp=now - timedelta(hours=5)
+        ),
+        RecentActivityItem(
+            id="act-003",
+            type=ActivityType.SUBSCRIPTION_APPROVED,
+            title="Subscription approved",
+            description="Inventory Check access granted",
+            tool_id="inventory-check",
+            tool_name="Inventory Availability",
+            timestamp=now - timedelta(days=1)
+        ),
+        RecentActivityItem(
+            id="act-004",
+            type=ActivityType.KEY_ROTATED,
+            title="API key rotated",
+            description="CRM Search key rotated with 24h grace period",
+            tool_id="crm-search",
+            tool_name="CRM Customer Search",
+            timestamp=now - timedelta(days=2)
+        ),
+        RecentActivityItem(
+            id="act-005",
+            type=ActivityType.API_CALL,
+            title="API call to Notification Send",
+            description="Email notification sent",
+            tool_id="notification-send",
+            tool_name="Send Notification",
+            timestamp=now - timedelta(days=3)
+        ),
+    ]
+
+    return DashboardActivityResponse(activity=mock_activity[:limit])

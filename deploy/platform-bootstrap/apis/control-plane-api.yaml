@@ -1,0 +1,251 @@
+# Control-Plane API - Gateway Configuration
+# This API is the core of the STOA platform, consumed by Portal and Console
+apiVersion: stoa.io/v1
+kind: WebMethodsAPI
+metadata:
+  name: Control-Plane-API
+  version: "2.0"
+  description: "STOA Control-Plane API - Multi-tenant API Management"
+  tags:
+    - platform
+    - core
+    - management
+
+spec:
+  type: REST
+  basePath: /gateway/Control-Plane-API/2.0
+
+  # Backend routing to the Control-Plane API service
+  backend:
+    url: https://api.${BASE_DOMAIN}
+    healthCheck:
+      path: /health/ready
+      interval: 30
+
+  # Authentication - OAuth2 via Keycloak
+  auth:
+    type: oauth2
+    required: true
+    issuer: https://auth.${BASE_DOMAIN}/realms/stoa
+    audience: control-plane-api
+    scopes:
+      - stoa:read
+      - stoa:write
+      - stoa:admin
+
+  # Policies applied in order
+  policies:
+    - jwt-validation
+    - rate-limit-standard
+    - cors-platform
+    - logging-standard
+
+  # CORS configuration for Portal and Console
+  cors:
+    enabled: true
+    allowOrigins:
+      - https://console.${BASE_DOMAIN}
+      - https://portal.${BASE_DOMAIN}
+      - http://localhost:3000
+      - http://localhost:5173
+    allowMethods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+    allowHeaders:
+      - Authorization
+      - Content-Type
+      - X-Request-ID
+      - X-Tenant-ID
+    exposeHeaders:
+      - X-Request-ID
+      - X-RateLimit-Remaining
+    maxAge: 3600
+
+  # Rate limiting
+  rateLimit:
+    requests: 1000
+    window: 60
+    by: token
+
+  # API Resources grouped by domain
+  resources:
+    # Health endpoints (public)
+    - path: /health/*
+      methods: [GET]
+      auth: false
+      description: "Health check endpoints"
+
+    # Root info (public)
+    - path: /
+      methods: [GET]
+      auth: false
+      description: "API information"
+
+    # Tenant Management
+    - path: /v1/tenants
+      methods: [GET, POST]
+      scopes: [stoa:read, stoa:admin]
+      description: "List and create tenants"
+
+    - path: /v1/tenants/{tenant_id}
+      methods: [GET, PUT, DELETE]
+      scopes: [stoa:read, stoa:write, stoa:admin]
+      description: "Tenant CRUD operations"
+
+    - path: /v1/tenants/{tenant_id}/apis
+      methods: [GET, POST]
+      scopes: [stoa:read, stoa:write]
+      description: "Tenant API management"
+
+    - path: /v1/tenants/{tenant_id}/apis/{api_id}
+      methods: [GET, PUT, DELETE]
+      scopes: [stoa:read, stoa:write]
+      description: "Tenant API CRUD"
+
+    - path: /v1/tenants/{tenant_id}/applications
+      methods: [GET, POST]
+      scopes: [stoa:read, stoa:write]
+      description: "Tenant application management"
+
+    - path: /v1/tenants/{tenant_id}/applications/{app_id}
+      methods: [GET, PUT, DELETE]
+      scopes: [stoa:read, stoa:write]
+      description: "Tenant application CRUD"
+
+    - path: /v1/tenants/{tenant_id}/applications/{app_id}/*
+      methods: [POST]
+      scopes: [stoa:write]
+      description: "Application actions (subscribe, regenerate)"
+
+    - path: /v1/tenants/{tenant_id}/deployments
+      methods: [GET, POST]
+      scopes: [stoa:read, stoa:write]
+      description: "Deployment management"
+
+    - path: /v1/tenants/{tenant_id}/deployments/*
+      methods: [GET, POST]
+      scopes: [stoa:read, stoa:write]
+      description: "Deployment operations"
+
+    - path: /v1/tenants/{tenant_id}/git/*
+      methods: [GET, POST, PUT]
+      scopes: [stoa:read, stoa:write]
+      description: "Git operations"
+
+    - path: /v1/tenants/{tenant_id}/webhooks
+      methods: [GET, POST]
+      scopes: [stoa:read, stoa:write]
+      description: "Webhook management"
+
+    - path: /v1/tenants/{tenant_id}/webhooks/*
+      methods: [GET, PUT, DELETE, POST]
+      scopes: [stoa:read, stoa:write]
+      description: "Webhook operations"
+
+    # Subscriptions
+    - path: /v1/subscriptions
+      methods: [GET, POST]
+      scopes: [stoa:read, stoa:write]
+      description: "Subscription management"
+
+    - path: /v1/subscriptions/my
+      methods: [GET]
+      scopes: [stoa:read]
+      description: "Current user subscriptions"
+
+    - path: /v1/subscriptions/tenant/*
+      methods: [GET]
+      scopes: [stoa:read, stoa:admin]
+      description: "Tenant subscriptions"
+
+    - path: /v1/subscriptions/validate-key
+      methods: [POST]
+      scopes: [stoa:read]
+      description: "Validate API key"
+
+    - path: /v1/subscriptions/{subscription_id}
+      methods: [GET, DELETE]
+      scopes: [stoa:read, stoa:write]
+      description: "Subscription CRUD"
+
+    - path: /v1/subscriptions/{subscription_id}/*
+      methods: [POST]
+      scopes: [stoa:write, stoa:admin]
+      description: "Subscription actions (approve, revoke, rotate)"
+
+    # Service Accounts (for MCP)
+    - path: /v1/service-accounts
+      methods: [GET, POST]
+      scopes: [stoa:read, stoa:write]
+      description: "Service account management"
+
+    - path: /v1/service-accounts/{account_id}
+      methods: [GET, DELETE]
+      scopes: [stoa:read, stoa:write]
+      description: "Service account CRUD"
+
+    - path: /v1/service-accounts/{account_id}/regenerate-secret
+      methods: [POST]
+      scopes: [stoa:write]
+      description: "Regenerate service account secret"
+
+    # Gateway Management
+    - path: /v1/gateway/*
+      methods: [GET, POST, PUT, DELETE]
+      scopes: [stoa:read, stoa:write, stoa:admin]
+      description: "Gateway administration"
+
+    # Search
+    - path: /v1/search/*
+      methods: [GET, POST]
+      scopes: [stoa:read]
+      description: "Search operations"
+
+    # Dashboard & Analytics
+    - path: /v1/dashboard/*
+      methods: [GET]
+      scopes: [stoa:read]
+      description: "Dashboard data"
+
+    - path: /v1/usage/*
+      methods: [GET]
+      scopes: [stoa:read]
+      description: "Usage statistics"
+
+    # Traces
+    - path: /v1/traces
+      methods: [GET]
+      scopes: [stoa:read]
+      description: "Pipeline traces"
+
+    - path: /v1/traces/*
+      methods: [GET]
+      scopes: [stoa:read]
+      description: "Trace details"
+
+    # Events
+    - path: /v1/events/*
+      methods: [GET, POST]
+      scopes: [stoa:read, stoa:write]
+      description: "Event streaming"
+
+    # Certificates
+    - path: /v1/certificates/*
+      methods: [GET, POST]
+      scopes: [stoa:write, stoa:admin]
+      description: "Certificate management"
+
+    # Webhooks (GitLab)
+    - path: /webhooks/gitlab
+      methods: [POST]
+      auth: false
+      description: "GitLab webhook receiver"
+
+    - path: /webhooks/gitlab/health
+      methods: [GET]
+      auth: false
+      description: "Webhook health check"

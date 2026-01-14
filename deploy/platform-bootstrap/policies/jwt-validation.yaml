@@ -1,0 +1,57 @@
+# JWT Validation Policy
+# Validates OAuth2/OIDC tokens from Keycloak
+apiVersion: stoa.io/v1
+kind: Policy
+metadata:
+  name: jwt-validation
+  description: "Validates JWT tokens from Keycloak OIDC"
+  tags:
+    - security
+    - authentication
+
+spec:
+  type: jwt-validation
+  order: 10
+
+  config:
+    # Keycloak OIDC configuration
+    issuer: https://auth.${BASE_DOMAIN}/realms/stoa
+    audience:
+      - control-plane-api
+      - account
+
+    # JWKS endpoint for key validation
+    jwksUri: https://auth.${BASE_DOMAIN}/realms/stoa/protocol/openid-connect/certs
+    jwksCacheTime: 3600
+
+    # Token validation rules
+    validation:
+      validateIssuer: true
+      validateAudience: true
+      validateExpiry: true
+      clockSkew: 30  # seconds
+
+    # Claims to extract and forward
+    claims:
+      - name: sub
+        header: X-User-ID
+      - name: email
+        header: X-User-Email
+      - name: tenant_id
+        header: X-Tenant-ID
+      - name: roles
+        header: X-User-Roles
+      - name: preferred_username
+        header: X-Username
+
+    # Error responses
+    errors:
+      missingToken:
+        status: 401
+        message: "Authorization header required"
+      invalidToken:
+        status: 401
+        message: "Invalid or expired token"
+      insufficientScope:
+        status: 403
+        message: "Insufficient permissions"

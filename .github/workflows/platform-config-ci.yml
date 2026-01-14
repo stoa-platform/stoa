@@ -1,0 +1,360 @@
+# Platform Configuration CI/CD
+# Validates and deploys platform bootstrap configs (APIs, Applications, Scopes, Policies)
+# Triggered on changes to deploy/platform-bootstrap/ or gitops-templates/webmethods/
+
+name: Platform Config CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/platform-bootstrap/**'
+      - 'gitops-templates/webmethods/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'deploy/platform-bootstrap/**'
+      - 'gitops-templates/webmethods/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      dry_run:
+        description: 'Dry run (validate only)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  BASE_DOMAIN: stoa.cab-i.com
+  GITLAB_PROJECT: stoa-platform/stoa-gitops
+
+jobs:
+  # ============================================
+  # Stage 1: Validate Configuration
+  # ============================================
+  validate:
+    name: Validate Configs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install yamllint jsonschema pyyaml
+
+      - name: Lint YAML files
+        run: |
+          echo "=== Linting platform-bootstrap configs ==="
+          yamllint -d relaxed deploy/platform-bootstrap/
+
+          echo "=== Linting webmethods templates ==="
+          yamllint -d relaxed gitops-templates/webmethods/ || true
+
+      - name: Validate API configurations
+        run: |
+          python scripts/validate-platform-config.py --dir deploy/platform-bootstrap
+
+      - name: Check for required fields
+        run: |
+          echo "=== Checking API configs ==="
+          for f in deploy/platform-bootstrap/apis/*.yaml; do
+            echo "Checking $f..."
+            # Check required fields exist
+            grep -q "apiVersion:" "$f" || (echo "Missing apiVersion in $f" && exit 1)
+            grep -q "metadata:" "$f" || (echo "Missing metadata in $f" && exit 1)
+            grep -q "spec:" "$f" || (echo "Missing spec in $f" && exit 1)
+          done
+
+          echo "=== Checking Application configs ==="
+          for f in deploy/platform-bootstrap/applications/*.yaml; do
+            echo "Checking $f..."
+            grep -q "oauth2:" "$f" || (echo "Missing oauth2 in $f" && exit 1)
+          done
+
+          echo "All configs valid!"
+
+      - name: Variable substitution test
+        run: |
+          echo "=== Testing variable substitution ==="
+          # Ensure all ${VAR} have defaults or are defined
+          grep -rh '\${[A-Z_]*}' deploy/platform-bootstrap/ | \
+            grep -v '\${[A-Z_]*:' | \
+            grep -v '\${[A-Z_]*:-' | \
+            sort -u > /tmp/undefined_vars.txt || true
+
+          if [ -s /tmp/undefined_vars.txt ]; then
+            echo "WARNING: Variables without defaults found:"
+            cat /tmp/undefined_vars.txt
+            echo ""
+            echo "These must be defined in _defaults.yaml or environment config"
+          fi
+
+  # ============================================
+  # Stage 2: Sync to GitLab (main branch only)
+  # ============================================
+  sync-gitlab:
+    name: Sync to GitLab
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "STOA CI/CD"
+          git config --global user.email "ci@stoa.cab-i.com"
+
+      - name: Clone GitLab repository
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          git clone https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git /tmp/stoa-gitops
+
+      - name: Sync platform configs to GitLab
+        run: |
+          echo "=== Syncing platform-bootstrap to GitLab ==="
+
+          # Create directories if not exist
+          mkdir -p /tmp/stoa-gitops/webmethods/apis
+          mkdir -p /tmp/stoa-gitops/webmethods/policies
+          mkdir -p /tmp/stoa-gitops/platform/applications
+          mkdir -p /tmp/stoa-gitops/platform/scopes
+
+          # Copy API configs
+          cp deploy/platform-bootstrap/apis/*.yaml /tmp/stoa-gitops/webmethods/apis/
+
+          # Copy policies
+          cp deploy/platform-bootstrap/policies/*.yaml /tmp/stoa-gitops/webmethods/policies/
+
+          # Copy applications
+          cp deploy/platform-bootstrap/applications/*.yaml /tmp/stoa-gitops/platform/applications/
+
+          # Copy scopes
+          cp deploy/platform-bootstrap/scopes/*.yaml /tmp/stoa-gitops/platform/scopes/
+
+          # Also sync webmethods templates if changed
+          if [ -d gitops-templates/webmethods/apis ]; then
+            cp gitops-templates/webmethods/apis/*.yaml /tmp/stoa-gitops/webmethods/apis/ 2>/dev/null || true
+          fi
+          if [ -d gitops-templates/webmethods/policies ]; then
+            cp gitops-templates/webmethods/policies/*.yaml /tmp/stoa-gitops/webmethods/policies/ 2>/dev/null || true
+          fi
+
+      - name: Commit and push to GitLab
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          cd /tmp/stoa-gitops
+
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "sync: platform configs from GitHub
+
+          Source: ${{ github.repository }}@${{ github.sha }}
+          Workflow: ${{ github.workflow }}
+          Run: ${{ github.run_id }}"
+
+            git push origin main
+            echo "GITLAB_PUSHED=true" >> $GITHUB_ENV
+          fi
+
+      - name: Output sync result
+        run: |
+          if [ "$GITLAB_PUSHED" = "true" ]; then
+            echo "✅ Configs synced to GitLab successfully"
+            echo "GitLab will trigger ArgoCD/AWX for deployment"
+          else
+            echo "ℹ️ No changes to sync"
+          fi
+
+  # ============================================
+  # Stage 3: Trigger Gateway Reconciliation
+  # ============================================
+  reconcile-gateway:
+    name: Reconcile Gateway
+    needs: sync-gitlab
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger AWX reconciliation job
+        env:
+          AWX_URL: ${{ secrets.AWX_URL }}
+          AWX_TOKEN: ${{ secrets.AWX_TOKEN }}
+        run: |
+          echo "=== Triggering Gateway Reconciliation ==="
+
+          # Trigger AWX job template
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${AWX_URL}/api/v2/job_templates/reconcile-webmethods/launch/" \
+            -H "Authorization: Bearer ${AWX_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "extra_vars": {
+                "env": "dev",
+                "source": "github-ci",
+                "commit": "${{ github.sha }}"
+              }
+            }')
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+
+          if [ "$HTTP_CODE" = "201" ]; then
+            JOB_ID=$(echo "$BODY" | jq -r '.id')
+            echo "✅ AWX job triggered: $JOB_ID"
+            echo "JOB_ID=$JOB_ID" >> $GITHUB_ENV
+          else
+            echo "⚠️ AWX trigger failed (HTTP $HTTP_CODE), will retry via ArgoCD"
+            echo "$BODY"
+          fi
+
+      - name: Wait for reconciliation (optional)
+        if: env.JOB_ID != ''
+        env:
+          AWX_URL: ${{ secrets.AWX_URL }}
+          AWX_TOKEN: ${{ secrets.AWX_TOKEN }}
+        run: |
+          echo "=== Waiting for reconciliation to complete ==="
+          MAX_WAIT=300
+          ELAPSED=0
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            STATUS=$(curl -s \
+              "${AWX_URL}/api/v2/jobs/${JOB_ID}/" \
+              -H "Authorization: Bearer ${AWX_TOKEN}" | jq -r '.status')
+
+            echo "Job status: $STATUS (${ELAPSED}s)"
+
+            case "$STATUS" in
+              successful)
+                echo "✅ Gateway reconciliation successful"
+                exit 0
+                ;;
+              failed|error|canceled)
+                echo "❌ Gateway reconciliation failed"
+                exit 1
+                ;;
+            esac
+
+            sleep 10
+            ELAPSED=$((ELAPSED + 10))
+          done
+
+          echo "⚠️ Timeout waiting for reconciliation"
+
+  # ============================================
+  # Stage 4: Verify Deployment
+  # ============================================
+  verify:
+    name: Verify Deployment
+    needs: reconcile-gateway
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Gateway sync
+        run: sleep 30
+
+      - name: Verify Control-Plane-API on Gateway
+        run: |
+          echo "=== Verifying Control-Plane-API on Gateway ==="
+
+          # Check API is accessible via Gateway
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://apis.${BASE_DOMAIN}/gateway/Control-Plane-API/2.0/" \
+            -H "Accept: application/json")
+
+          echo "Gateway API response: HTTP $HTTP_CODE"
+
+          # 401 is expected (auth required), 404 means not deployed
+          if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
+            echo "✅ Control-Plane-API is deployed on Gateway (auth required)"
+          elif [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Control-Plane-API is deployed on Gateway"
+          elif [ "$HTTP_CODE" = "404" ]; then
+            echo "❌ Control-Plane-API not found on Gateway"
+            exit 1
+          else
+            echo "⚠️ Unexpected response: HTTP $HTTP_CODE"
+          fi
+
+      - name: Verify health endpoints
+        run: |
+          echo "=== Verifying backend health ==="
+
+          # Direct API health
+          curl -s "https://api.${BASE_DOMAIN}/health/ready" | jq .
+
+          # MCP Gateway health (internal only, should 403)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://mcp.${BASE_DOMAIN}/health")
+          echo "MCP Gateway health (should be 403): $HTTP_CODE"
+
+  # ============================================
+  # Stage 5: Notify
+  # ============================================
+  notify:
+    name: Send Notifications
+    needs: [validate, sync-gitlab, reconcile-gateway, verify]
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine status
+        run: |
+          if [ "${{ needs.verify.result }}" = "success" ]; then
+            echo "STATUS=success" >> $GITHUB_ENV
+            echo "MESSAGE=✅ Platform configs deployed successfully" >> $GITHUB_ENV
+          elif [ "${{ needs.validate.result }}" = "failure" ]; then
+            echo "STATUS=failure" >> $GITHUB_ENV
+            echo "MESSAGE=❌ Config validation failed" >> $GITHUB_ENV
+          else
+            echo "STATUS=warning" >> $GITHUB_ENV
+            echo "MESSAGE=⚠️ Deployment completed with warnings" >> $GITHUB_ENV
+          fi
+
+      - name: Send Slack notification
+        if: env.STATUS != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK" ]; then
+            curl -s -X POST "$SLACK_WEBHOOK" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"text\": \"$MESSAGE\",
+                \"blocks\": [
+                  {
+                    \"type\": \"section\",
+                    \"text\": {
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"*Platform Config CI/CD*\n$MESSAGE\"
+                    }
+                  },
+                  {
+                    \"type\": \"context\",
+                    \"elements\": [
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"Commit: <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|${GITHUB_SHA:0:7}> | <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>\"
+                      }
+                    ]
+                  }
+                ]
+              }"
+          fi

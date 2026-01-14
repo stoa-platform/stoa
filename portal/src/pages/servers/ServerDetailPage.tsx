@@ -24,7 +24,10 @@ import {
   Settings,
   Users,
   Globe,
+  Download,
+  Terminal,
 } from 'lucide-react';
+import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
 import { mcpServersService, MOCK_SERVERS } from '../../services/mcpServers';
 import type { MCPServer, MCPServerSubscription } from '../../types';
@@ -41,6 +44,7 @@ export function ServerDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedConfig, setCopiedConfig] = useState<string | null>(null);
 
   // Load server and subscription
   useEffect(() => {
@@ -143,6 +147,45 @@ export function ServerDetailPage() {
     await navigator.clipboard.writeText(newApiKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Copy config to clipboard
+  const copyConfig = async (configType: string, content: string) => {
+    await navigator.clipboard.writeText(content);
+    setCopiedConfig(configType);
+    setTimeout(() => setCopiedConfig(null), 2000);
+  };
+
+  // Generate Claude.ai MCP config (SSE transport for web)
+  const generateClaudeConfig = (apiKey: string) => {
+    const mcpUrl = config.mcp.baseUrl;
+    return {
+      mcpServers: {
+        'stoa-platform': {
+          url: `${mcpUrl}/mcp/sse`,
+          transport: 'sse',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+          },
+        },
+      },
+    };
+  };
+
+  // Generate Claude Desktop config (stdio transport)
+  const generateDesktopConfig = (apiKey: string) => {
+    const mcpUrl = config.mcp.baseUrl;
+    return {
+      mcpServers: {
+        'stoa-platform': {
+          command: 'npx',
+          args: ['-y', '@anthropic-ai/mcp-proxy', mcpUrl + '/mcp/sse'],
+          env: {
+            'STOA_API_KEY': apiKey,
+          },
+        },
+      },
+    };
   };
 
   // Get category icon
@@ -280,26 +323,89 @@ export function ServerDetailPage() {
         </div>
       </div>
 
-      {/* New API Key Alert */}
+      {/* New API Key Alert with Claude.ai Configuration */}
       {newApiKey && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-          <div className="flex items-start gap-3">
-            <Key className="h-5 w-5 text-green-600 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="font-medium text-green-800">Subscription Created!</h3>
-              <p className="text-sm text-green-600 mt-1">
-                Save your API key now. It will only be shown once.
-              </p>
-              <div className="mt-3 flex items-center gap-2">
-                <code className="flex-1 px-3 py-2 bg-white border border-green-200 rounded font-mono text-sm">
-                  {newApiKey}
-                </code>
-                <button
-                  onClick={copyApiKey}
-                  className="p-2 bg-green-100 hover:bg-green-200 rounded text-green-700 transition-colors"
-                >
-                  {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-                </button>
+        <div className="space-y-4">
+          {/* API Key Section */}
+          <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+            <div className="flex items-start gap-3">
+              <Key className="h-5 w-5 text-green-600 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-medium text-green-800">Subscription Created!</h3>
+                <p className="text-sm text-green-600 mt-1">
+                  Save your API key now. It will only be shown once.
+                </p>
+                <div className="mt-3 flex items-center gap-2">
+                  <code className="flex-1 px-3 py-2 bg-white border border-green-200 rounded font-mono text-sm break-all">
+                    {newApiKey}
+                  </code>
+                  <button
+                    onClick={copyApiKey}
+                    className="p-2 bg-green-100 hover:bg-green-200 rounded text-green-700 transition-colors"
+                    title="Copy API key"
+                  >
+                    {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Claude.ai Configuration Section */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <div className="flex items-start gap-3">
+              <Terminal className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-medium text-blue-800">Configure with Claude.ai</h3>
+                <p className="text-sm text-blue-600 mt-1">
+                  Add this MCP Server to Claude.ai to use the tools directly in your conversations.
+                </p>
+
+                {/* Claude.ai Web Config (Recommended) */}
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Globe className="h-4 w-4" />
+                      Claude.ai (Web) - Recommended
+                    </span>
+                    <button
+                      onClick={() => copyConfig('claude', JSON.stringify(generateClaudeConfig(newApiKey), null, 2))}
+                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                    >
+                      {copiedConfig === 'claude' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      {copiedConfig === 'claude' ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                  <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto">
+                    {JSON.stringify(generateClaudeConfig(newApiKey), null, 2)}
+                  </pre>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Go to <a href="https://claude.ai/settings/mcp" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">claude.ai/settings/mcp</a> and add this configuration.
+                  </p>
+                </div>
+
+                {/* Claude Desktop Config */}
+                <div className="mt-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                      <Download className="h-4 w-4" />
+                      Claude Desktop App
+                    </span>
+                    <button
+                      onClick={() => copyConfig('desktop', JSON.stringify(generateDesktopConfig(newApiKey), null, 2))}
+                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                    >
+                      {copiedConfig === 'desktop' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      {copiedConfig === 'desktop' ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                  <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto">
+                    {JSON.stringify(generateDesktopConfig(newApiKey), null, 2)}
+                  </pre>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Add to <code className="bg-gray-100 px-1 rounded">~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS)
+                  </p>
+                </div>
               </div>
             </div>
           </div>

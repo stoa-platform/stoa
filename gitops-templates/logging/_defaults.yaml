@@ -1,0 +1,117 @@
+# STOA Platform - Default Logging Configuration
+# This file defines the default logging levels and options for all environments
+# Environment-specific overrides are in ./environments/{dev,staging,prod}.yaml
+
+logging:
+  # Global log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: INFO
+
+  # Output format: json (for Loki) or text (for local dev)
+  format: json
+
+  # Per-component log levels (override global level)
+  components:
+    # Python standard loggers
+    root: INFO
+    uvicorn: WARNING
+    uvicorn.access: WARNING
+    uvicorn.error: WARNING
+    httpx: WARNING
+    httpcore: WARNING
+    aiokafka: WARNING
+    sqlalchemy: WARNING
+    sqlalchemy.engine: WARNING
+    asyncio: WARNING
+
+    # STOA application loggers
+    src: INFO
+    src.routers: INFO
+    src.services: INFO
+    src.auth: INFO
+    src.middleware: INFO
+    src.models: WARNING
+
+    # MCP Gateway loggers
+    mcp_gateway: INFO
+    mcp_gateway.tools: INFO
+    mcp_gateway.opa: INFO
+    mcp_gateway.metering: INFO
+
+  # Advanced debug options (all disabled by default)
+  debug:
+    # HTTP client debugging
+    http_requests: false       # Log all outgoing HTTP requests
+    http_responses: false      # Log all HTTP responses
+    http_headers: false        # Include headers in HTTP logs (sanitized)
+    http_body: false           # Include request/response bodies (truncated)
+
+    # SSL/TLS debugging
+    ssl_handshake: false       # Log SSL handshake details
+    ssl_certificates: false    # Log certificate chain info
+
+    # Kafka debugging
+    kafka_messages: false      # Log Kafka message metadata
+    kafka_consumer: false      # Log consumer group operations
+    kafka_producer: false      # Log producer operations
+
+    # Database debugging
+    sql_queries: false         # Log SQL queries
+    sql_results: false         # Log query results (truncated)
+    sql_transactions: false    # Log transaction boundaries
+
+    # Authentication debugging
+    auth_tokens: false         # Log token validation (SENSITIVE - use with caution)
+    auth_headers: false        # Log auth headers (SENSITIVE)
+    auth_payload: false        # Log decoded JWT payload keys (not values)
+
+    # External services debugging
+    awx_api: false             # Log AWX API calls
+    gitlab_api: false          # Log GitLab API calls
+    keycloak_api: false        # Log Keycloak API calls
+    gateway_api: false         # Log API Gateway calls
+
+  # Distributed tracing configuration
+  tracing:
+    enabled: false
+    sample_rate: 0.1           # 10% of requests (0.0 to 1.0)
+    propagate_context: true    # Propagate trace context in headers
+    export_endpoint: ""        # OTLP endpoint (e.g., tempo:4317)
+
+  # Automatic context binding
+  context:
+    include_tenant_id: true    # Add tenant_id to all logs
+    include_user_id: true      # Add user_id to all logs
+    include_request_id: true   # Add request_id to all logs
+    include_trace_id: true     # Add trace_id when tracing enabled
+    include_span_id: true      # Add span_id when tracing enabled
+    include_environment: true  # Add environment name
+    include_version: true      # Add application version
+
+  # Log filtering and sampling
+  filtering:
+    # Endpoints to exclude from access logs (health checks, metrics)
+    exclude_paths:
+      - /health
+      - /healthz
+      - /ready
+      - /metrics
+      - /favicon.ico
+
+    # Minimum duration (ms) to log slow requests
+    slow_request_threshold_ms: 1000
+
+    # Sample rate for high-volume logs (1.0 = log all)
+    access_log_sample_rate: 1.0
+
+  # Sensitive data masking
+  masking:
+    enabled: true
+    patterns:
+      - "password"
+      - "secret"
+      - "token"
+      - "api_key"
+      - "apikey"
+      - "authorization"
+      - "credential"
+    mask_value: "[REDACTED]"

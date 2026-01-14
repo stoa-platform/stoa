@@ -21,6 +21,7 @@ from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .middleware.metrics import MetricsMiddleware, get_metrics
 from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
+from .middleware.http_logging import HTTPLoggingMiddleware
 from .services.gateway_service import gateway_service
 from .workers.deployment_worker import deployment_worker
 
@@ -216,6 +217,9 @@ app.add_middleware(
 
 # Prometheus metrics middleware
 app.add_middleware(MetricsMiddleware)
+
+# HTTP request/response logging middleware (CAB-330)
+app.add_middleware(HTTPLoggingMiddleware)
 
 # Audit middleware (CAB-307) - logs all API requests to OpenSearch
 # Note: AuditMiddleware is added dynamically via setup_opensearch()

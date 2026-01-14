@@ -627,6 +627,17 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
    | `CORS_ORIGINS` | Allowed CORS origins | `https://devops.{domain}` |
    | `LOG_LEVEL` | Log level | `INFO` |
 
+   **Centralized Logging (CAB-330)** - GitOps log level configuration:
+   | Variable | Description | Default |
+   |----------|-------------|---------|
+   | `LOG_LEVEL` | Global log level | `INFO` |
+   | `LOG_FORMAT` | Output format (json/text) | `json` |
+   | `LOG_DEBUG_AUTH_PAYLOAD` | Debug JWT payload (for 401 errors) | `false` |
+   | `LOG_DEBUG_HTTP_REQUESTS` | Debug HTTP requests | `false` |
+   | `LOG_TRACE_ENABLED` | Enable distributed tracing | `false` |
+
+   See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md#centralized-logging-configuration-cab-330) for full configuration.
+
 8. **PKCE Authentication** ✅ (Dec 21, 2024)
    - Keycloak 25+ requires PKCE for public clients
    - `oidc-client-ts` configuration with `response_type: 'code'` and `pkce_method: 'S256'`

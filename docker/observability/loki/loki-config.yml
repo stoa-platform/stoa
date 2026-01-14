@@ -1,5 +1,6 @@
 # Loki Configuration for STOA Platform
 # CAB-281: Log Aggregation with Loki
+# CAB-330: Enhanced alerting rules
 #
 # Loki is a horizontally-scalable, highly-available, multi-tenant log aggregation
 # system inspired by Prometheus.

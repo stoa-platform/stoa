@@ -172,38 +172,35 @@ def _is_internal_request(request: Request) -> bool:
     """Check if request comes from internal network (K8s cluster).
 
     Detection strategy:
-    1. If X-Forwarded-For header exists, request came through ingress (external)
-    2. If no forwarded headers, check direct client IP for internal networks
+    Kubernetes probes access the pod directly via the service,
+    while external requests go through the ingress (ALB -> nginx -> pod).
 
-    Internal networks:
+    We detect external requests by checking if the request went through
+    the ingress, which sets the X-Request-ID header (nginx adds this).
+
+    Internal networks (for direct connections):
     - 10.0.0.0/8 (K8s pod network)
     - 172.16.0.0/12 (K8s service network)
     - 192.168.0.0/16 (Private networks)
     - 127.0.0.0/8 (Localhost)
     """
-    # If request has X-Forwarded-For, it came through ingress (external)
-    # K8s probes hit the pod directly and don't have this header
-    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
-    real_ip = request.headers.get("X-Real-IP", "").strip()
-
-    if forwarded_for or real_ip:
-        # Request came through ingress - check if original IP is internal
-        # Extract the original client IP (first in chain)
-        original_ip = real_ip or forwarded_for.split(",")[0].strip()
-        try:
-            ip = ipaddress.ip_address(original_ip)
-            internal_networks = [
-                ipaddress.ip_network("10.0.0.0/8"),
-                ipaddress.ip_network("172.16.0.0/12"),
-                ipaddress.ip_network("192.168.0.0/16"),
-                ipaddress.ip_network("127.0.0.0/8"),
-            ]
-            return any(ip in network for network in internal_networks)
-        except ValueError:
-            return False
-
-    # No forwarded headers - direct connection, check client IP
+    # Check direct client IP
     client_ip = request.client.host if request.client else "0.0.0.0"
+
+    # Check if request came through ingress by looking for typical ingress headers
+    # X-Request-ID is added by nginx-ingress for all requests
+    has_request_id = bool(request.headers.get("X-Request-ID", "").strip())
+    # X-Forwarded headers are added by ALB/nginx for external requests
+    has_forwarded = bool(request.headers.get("X-Forwarded-For", "").strip())
+    has_forwarded_proto = bool(request.headers.get("X-Forwarded-Proto", "").strip())
+
+    # If request has typical ingress headers, it's likely external
+    # unless the original IP is also internal (rare case)
+    if has_request_id or has_forwarded or has_forwarded_proto:
+        # Request likely came through ingress - assume external
+        return False
+
+    # No ingress headers - direct connection from within cluster
     try:
         ip = ipaddress.ip_address(client_ip)
         internal_networks = [
@@ -227,14 +224,10 @@ def register_routes(app: FastAPI) -> None:
         Only accessible from internal cluster network.
         Returns basic health status. Always returns 200 if the service is running.
         """
-        # Debug logging - always log at INFO for debugging
-        xff = request.headers.get("X-Forwarded-For", "")
-        xri = request.headers.get("X-Real-IP", "")
-        client = request.client.host if request.client else "unknown"
-        logger.info("Health check request", xff=xff, xri=xri, client=client)
-
         if not _is_internal_request(request):
-            logger.warning("Blocked external health check", xff=xff, xri=xri, client=client)
+            # Only log blocked requests (K8s probes happen frequently)
+            client = request.client.host if request.client else "unknown"
+            logger.warning("Blocked external health check request", client_ip=client)
             raise HTTPException(status_code=403, detail="Forbidden - internal only")
 
         settings = get_settings()

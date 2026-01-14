@@ -88,11 +88,25 @@ async def get_current_user(
             )
             raise JWTError(f"Invalid audience: {token_aud}")
 
-        user_id = payload.get("sub")
         email = payload.get("email", "")
         username = payload.get("preferred_username", "")
         roles = payload.get("realm_access", {}).get("roles", [])
         tenant_id = payload.get("tenant_id")
+
+        # Get user ID from 'sub' claim, with fallback to email or username
+        # Some Keycloak configurations may not include 'sub' in certain token types
+        user_id = payload.get("sub")
+        if not user_id:
+            # Fallback: use email or preferred_username as user identifier
+            user_id = email or username
+            if user_id:
+                logger.warning(
+                    "JWT token missing 'sub' claim, using fallback identifier",
+                    fallback_id=user_id,
+                    payload_keys=list(payload.keys()),
+                    typ=payload.get("typ"),
+                    azp=payload.get("azp"),
+                )
 
         # Log authentication result
         logger.info(
@@ -109,7 +123,7 @@ async def get_current_user(
 
         if not user_id:
             logger.error(
-                "JWT token missing user ID (sub claim)",
+                "JWT token missing user ID - no 'sub', email, or preferred_username",
                 payload_keys=list(payload.keys()),
                 typ=payload.get("typ"),
                 azp=payload.get("azp"),

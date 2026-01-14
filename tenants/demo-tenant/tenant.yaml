@@ -1,0 +1,12 @@
+# Tenant Configuration
+id: demo-tenant
+name: Demo Tenant
+display_name: Demo Tenant
+created_at: "2024-01-01T00:00:00Z"
+status: active
+settings:
+  max_apis: 100
+  max_applications: 50
+  environments:
+    - dev
+    - staging

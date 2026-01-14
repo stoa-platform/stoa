@@ -33,6 +33,14 @@ class MCPServerCategory(str, enum.Enum):
     PUBLIC = "public"       # Publicly available APIs
 
 
+class MCPServerSyncStatus(str, enum.Enum):
+    """GitOps sync status of an MCP Server."""
+    SYNCED = "synced"       # Successfully synced from GitLab
+    PENDING = "pending"     # Sync pending
+    ERROR = "error"         # Sync failed with error
+    ORPHAN = "orphan"       # Exists in DB but not in GitLab
+
+
 class MCPServerStatus(str, enum.Enum):
     """Status of an MCP Server."""
     ACTIVE = "active"
@@ -97,6 +105,17 @@ class MCPServer(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # GitOps tracking
+    git_path = Column(String(500), nullable=True, index=True)  # Path in GitLab repo
+    git_commit_sha = Column(String(64), nullable=True)         # Last synced commit SHA
+    last_synced_at = Column(DateTime, nullable=True)           # Last successful sync time
+    sync_status = Column(
+        SQLEnum(MCPServerSyncStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+        index=True
+    )
+    sync_error = Column(Text, nullable=True)  # Error message if sync failed
+
     # Relationships
     tools = relationship("MCPServerTool", back_populates="server", cascade="all, delete-orphan")
     subscriptions = relationship("MCPServerSubscription", back_populates="server")
@@ -130,6 +149,12 @@ class MCPServerTool(Base):
     input_schema = Column(JSON, nullable=True)
     enabled = Column(Boolean, nullable=False, default=True)
     requires_approval = Column(Boolean, nullable=False, default=False)
+
+    # Tool endpoint configuration (from GitOps)
+    endpoint = Column(String(500), nullable=True)
+    method = Column(String(10), nullable=True, default="POST")
+    timeout = Column(String(20), nullable=True, default="30s")
+    rate_limit = Column(Integer, nullable=True, default=60)
 
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

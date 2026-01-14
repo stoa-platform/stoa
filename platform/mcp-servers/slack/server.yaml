@@ -1,0 +1,230 @@
+# Slack MCP Server
+# Slack integration for team communication and collaboration
+
+apiVersion: stoa.cab-i.com/v1
+kind: MCPServer
+metadata:
+  name: slack
+  tenant: _platform
+  version: "1.0.0"
+  labels:
+    managed-by: gitops
+    environment: prod
+
+spec:
+  displayName: Slack
+  description: |
+    Slack integration for AI-powered team communication.
+    Send messages, search conversations, and manage channels.
+  icon: https://cdn.worldvectorlogo.com/logos/slack-new-logo.svg
+  category: public
+  status: active
+  documentationUrl: https://api.slack.com/methods
+
+  visibility:
+    public: true
+
+  subscription:
+    requiresApproval: true
+    autoApproveRoles:
+      - cpi-admin
+    defaultPlan: free
+
+  tools:
+    - name: send-message
+      displayName: Send Message
+      description: Send a message to a Slack channel or user
+      endpoint: /chat.postMessage
+      method: POST
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          channel:
+            type: string
+            description: Channel ID or name (e.g., "#general" or "C1234567890")
+          text:
+            type: string
+            description: Message text (supports Slack markdown)
+          thread_ts:
+            type: string
+            description: Thread timestamp to reply to (optional)
+          unfurl_links:
+            type: boolean
+            description: Unfurl links in message
+            default: true
+        required:
+          - channel
+          - text
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 60
+
+    - name: search-messages
+      displayName: Search Messages
+      description: Search for messages across Slack workspace
+      endpoint: /search.messages
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          query:
+            type: string
+            description: Search query (supports Slack search modifiers)
+          count:
+            type: integer
+            description: Number of results
+            default: 20
+          sort:
+            type: string
+            description: Sort by (score, timestamp)
+            default: score
+        required:
+          - query
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 30
+
+    - name: list-channels
+      displayName: List Channels
+      description: List all channels in the workspace
+      endpoint: /conversations.list
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          types:
+            type: string
+            description: Channel types (public_channel, private_channel, mpim, im)
+            default: "public_channel,private_channel"
+          limit:
+            type: integer
+            description: Maximum number of results
+            default: 100
+        required: []
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 30
+
+    - name: get-channel-history
+      displayName: Get Channel History
+      description: Get recent messages from a channel
+      endpoint: /conversations.history
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          channel:
+            type: string
+            description: Channel ID
+          limit:
+            type: integer
+            description: Number of messages to return
+            default: 100
+          oldest:
+            type: string
+            description: Start of time range (Unix timestamp)
+          latest:
+            type: string
+            description: End of time range (Unix timestamp)
+        required:
+          - channel
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 60
+
+    - name: get-user-info
+      displayName: Get User Info
+      description: Get information about a Slack user
+      endpoint: /users.info
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          user:
+            type: string
+            description: User ID
+        required:
+          - user
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 60
+
+    - name: list-users
+      displayName: List Users
+      description: List all users in the workspace
+      endpoint: /users.list
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          limit:
+            type: integer
+            description: Maximum number of results
+            default: 200
+        required: []
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 20
+
+    - name: add-reaction
+      displayName: Add Reaction
+      description: Add an emoji reaction to a message
+      endpoint: /reactions.add
+      method: POST
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          channel:
+            type: string
+            description: Channel containing the message
+          timestamp:
+            type: string
+            description: Timestamp of the message
+          name:
+            type: string
+            description: Emoji name (without colons)
+        required:
+          - channel
+          - timestamp
+          - name
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 60
+
+    - name: create-channel
+      displayName: Create Channel
+      description: Create a new Slack channel
+      endpoint: /conversations.create
+      method: POST
+      enabled: true
+      requiresApproval: true
+      inputSchema:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Channel name (lowercase, no spaces)
+          is_private:
+            type: boolean
+            description: Create as private channel
+            default: false
+        required:
+          - name
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 10
+
+  backend:
+    baseUrl: https://slack.com/api
+    auth:
+      type: api-key
+      secretRef: vault:secret/data/integrations/slack#bot_token
+    timeout: 30s
+    retries: 3

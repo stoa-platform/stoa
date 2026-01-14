@@ -32,7 +32,7 @@ export function APICatalog() {
     category: category || undefined,
     page,
     pageSize,
-    status: 'published', // Only show published APIs in the catalog
+    // Don't filter by status - show all APIs (draft, published, deprecated)
   });
 
   // Fetch available categories

@@ -68,6 +68,13 @@ class MCPSession:
             "serverInfo": {
                 "name": "stoa-mcp-gateway",
                 "version": settings.app_version,
+                "icons": [
+                    {
+                        "src": "https://raw.githubusercontent.com/stoa-platform/stoa/main/docs/assets/logo.svg",
+                        "mimeType": "image/svg+xml",
+                        "sizes": ["any"],
+                    },
+                ],
             },
         })
 

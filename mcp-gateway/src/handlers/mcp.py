@@ -461,6 +461,13 @@ async def server_info() -> dict[str, Any]:
             "prompts": True,
             "sampling": False,  # Not yet implemented
         },
+        "icons": [
+            {
+                "src": "https://raw.githubusercontent.com/stoa-platform/stoa/main/docs/assets/logo.svg",
+                "mimeType": "image/svg+xml",
+                "sizes": ["any"],
+            },
+        ],
         "instructions": (
             "STOA MCP Gateway exposes APIs as MCP tools. "
             "Use /mcp/v1/tools to discover available tools."

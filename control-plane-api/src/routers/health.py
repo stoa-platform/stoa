@@ -30,8 +30,8 @@ def _check_gitlab_connected() -> bool:
 
 
 def _check_keycloak_connected() -> bool:
-    """Check if Keycloak client is connected."""
-    return keycloak_service.keycloak_service._keycloak_openid is not None
+    """Check if Keycloak admin client is connected."""
+    return keycloak_service.keycloak_service._admin is not None
 
 
 def _check_awx_connected() -> bool:
@@ -40,8 +40,13 @@ def _check_awx_connected() -> bool:
 
 
 def _check_gateway_connected() -> bool:
-    """Check if Gateway client is connected."""
-    return gateway_service._session is not None
+    """Check if Gateway is configured (proxy mode or client)."""
+    # In OIDC proxy mode, no persistent client is created
+    # Gateway is "connected" if using proxy mode or has a client
+    from ..config import settings
+    if settings.GATEWAY_USE_OIDC_PROXY:
+        return True  # Proxy mode is always available
+    return gateway_service._client is not None
 
 
 class HealthCheck(BaseModel):

@@ -7,12 +7,13 @@ from sqlalchemy import pool
 from alembic import context
 
 import sys
+import os
 from pathlib import Path
 
 # Add the parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config import settings
+# Import Base from database - this no longer creates async engine at import time
 from src.database import Base
 
 # Import all models to register them with Base.metadata
@@ -22,8 +23,20 @@ from src.models.mcp_subscription import MCPServer, MCPServerTool, MCPServerSubsc
 # this is the Alembic Config object
 config = context.config
 
-# Set the database URL from settings
-config.set_main_option("sqlalchemy.url", settings.database_url_sync)
+
+def get_database_url():
+    """Get sync database URL for migrations"""
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        # Convert async URL to sync URL
+        return database_url.replace("+asyncpg", "").replace("postgresql+asyncpg", "postgresql")
+    # Fallback to config
+    from src.config import settings
+    return settings.database_url_sync
+
+
+# Set the database URL
+config.set_main_option("sqlalchemy.url", get_database_url())
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:

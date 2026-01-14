@@ -99,7 +99,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_http_requests_total[5m]))",
+          "expr": "sum(rate(stoa_mcp_gateway_http_requests_total[5m]))",
           "legendFormat": "RPS",
           "range": true,
           "refId": "A"
@@ -170,7 +170,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(stoa_mcp_http_requests_total[5m])) * 100",
+          "expr": "sum(rate(stoa_mcp_gateway_http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(stoa_mcp_gateway_http_requests_total[5m])) * 100",
           "legendFormat": "Error Rate",
           "range": true,
           "refId": "A"
@@ -239,7 +239,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "range": true,
           "refId": "A"
@@ -300,7 +300,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_mcp_tool_invocations_total[5m]))",
+          "expr": "sum(rate(stoa_mcp_gateway_mcp_tool_invocations_total[5m]))",
           "legendFormat": "Tools/sec",
           "range": true,
           "refId": "A"
@@ -361,7 +361,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "stoa_mcp_mcp_tools_registered",
+          "expr": "stoa_mcp_gateway_mcp_tools_registered",
           "legendFormat": "Tools",
           "range": true,
           "refId": "A"
@@ -432,7 +432,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_auth_requests_total{status=\"success\"}[5m])) / sum(rate(stoa_mcp_auth_requests_total[5m])) * 100",
+          "expr": "sum(rate(stoa_mcp_gateway_auth_requests_total{status=\"success\"}[5m])) / sum(rate(stoa_mcp_gateway_auth_requests_total[5m])) * 100",
           "legendFormat": "Auth Success",
           "range": true,
           "refId": "A"
@@ -537,7 +537,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (endpoint) (rate(stoa_mcp_http_requests_total[5m]))",
+          "expr": "sum by (endpoint) (rate(stoa_mcp_gateway_http_requests_total[5m]))",
           "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
@@ -683,7 +683,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(stoa_mcp_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.50, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "range": true,
           "refId": "A"
@@ -694,7 +694,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "range": true,
           "refId": "B"
@@ -705,7 +705,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(stoa_mcp_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "range": true,
           "refId": "C"
@@ -810,7 +810,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (tool_name) (rate(stoa_mcp_mcp_tool_invocations_total[5m]))",
+          "expr": "sum by (tool_name) (rate(stoa_mcp_gateway_mcp_tool_invocations_total[5m]))",
           "legendFormat": "{{tool_name}}",
           "range": true,
           "refId": "A"
@@ -933,7 +933,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (status) (rate(stoa_mcp_mcp_tool_invocations_total[5m]))",
+          "expr": "sum by (status) (rate(stoa_mcp_gateway_mcp_tool_invocations_total[5m]))",
           "legendFormat": "{{status}}",
           "range": true,
           "refId": "A"
@@ -1025,7 +1025,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (tool_name, le) (rate(stoa_mcp_mcp_tool_invocation_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (tool_name, le) (rate(stoa_mcp_gateway_mcp_tool_invocation_duration_seconds_bucket[5m])))",
           "legendFormat": "{{tool_name}}",
           "range": true,
           "refId": "A"
@@ -1161,7 +1161,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (status) (rate(stoa_mcp_auth_requests_total[5m]))",
+          "expr": "sum by (status) (rate(stoa_mcp_gateway_auth_requests_total[5m]))",
           "legendFormat": "{{status}}",
           "range": true,
           "refId": "A"
@@ -1253,7 +1253,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (reason) (rate(stoa_mcp_auth_requests_total{status=\"failure\"}[5m]))",
+          "expr": "sum by (reason) (rate(stoa_mcp_gateway_auth_requests_total{status=\"failure\"}[5m]))",
           "legendFormat": "{{reason}}",
           "range": true,
           "refId": "A"
@@ -1358,7 +1358,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (backend) (rate(stoa_mcp_backend_requests_total[5m]))",
+          "expr": "sum by (backend) (rate(stoa_mcp_gateway_backend_requests_total[5m]))",
           "legendFormat": "{{backend}}",
           "range": true,
           "refId": "A"
@@ -1450,7 +1450,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (backend, le) (rate(stoa_mcp_backend_request_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (backend, le) (rate(stoa_mcp_gateway_backend_request_duration_seconds_bucket[5m])))",
           "legendFormat": "{{backend}}",
           "range": true,
           "refId": "A"

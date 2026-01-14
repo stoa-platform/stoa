@@ -220,17 +220,78 @@ def _is_internal_request(request: Request) -> bool:
 def register_routes(app: FastAPI) -> None:
     """Register all application routes."""
 
-    @app.get("/health", tags=["Health"])
-    async def health_check(request: Request) -> dict[str, Any]:
-        """Health check endpoint for Kubernetes probes.
+    # K8s-standard health endpoints (CAB-308)
+    @app.get("/health/live", tags=["Health"])
+    async def health_live(request: Request) -> dict[str, Any]:
+        """Liveness probe - process is alive (CAB-308).
 
+        K8s will restart the pod if this fails.
         Only accessible from internal cluster network.
-        Returns basic health status. Always returns 200 if the service is running.
         """
         if not _is_internal_request(request):
-            # Only log blocked requests (K8s probes happen frequently)
+            raise HTTPException(status_code=403, detail="Forbidden - internal only")
+
+        settings = get_settings()
+        return {
+            "status": "healthy",
+            "version": settings.app_version,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @app.get("/health/ready", tags=["Health"])
+    async def health_ready(request: Request) -> JSONResponse:
+        """Readiness probe - ready to accept traffic (CAB-308).
+
+        K8s will remove pod from service if this fails.
+        Only accessible from internal cluster network.
+        """
+        if not _is_internal_request(request):
+            raise HTTPException(status_code=403, detail="Forbidden - internal only")
+
+        settings = get_settings()
+
+        checks: dict[str, Any] = {
+            "app_ready": app_state["ready"],
+        }
+
+        is_ready = all(checks.values())
+
+        response = {
+            "status": "healthy" if is_ready else "unhealthy",
+            "version": settings.app_version,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "checks": checks,
+        }
+
+        return JSONResponse(
+            content=response,
+            status_code=200 if is_ready else 503,
+        )
+
+    @app.get("/health/startup", tags=["Health"])
+    async def health_startup(request: Request) -> dict[str, Any]:
+        """Startup probe - initial boot complete (CAB-308).
+
+        K8s uses this during pod startup.
+        Only accessible from internal cluster network.
+        """
+        if not _is_internal_request(request):
+            raise HTTPException(status_code=403, detail="Forbidden - internal only")
+
+        settings = get_settings()
+        return {
+            "status": "healthy",
+            "version": settings.app_version,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # Legacy endpoints (backward compatibility)
+    @app.get("/health", tags=["Health"], include_in_schema=False)
+    async def health_check(request: Request) -> dict[str, Any]:
+        """Legacy health check endpoint (deprecated, use /health/live)."""
+        if not _is_internal_request(request):
             client = request.client.host if request.client else "unknown"
-            logger.warning("Blocked external health check request", client_ip=client)
+            logger.info("Blocked external health check request", client_ip=client)
             raise HTTPException(status_code=403, detail="Forbidden - internal only")
 
         settings = get_settings()
@@ -241,14 +302,9 @@ def register_routes(app: FastAPI) -> None:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-    @app.get("/ready", tags=["Health"])
+    @app.get("/ready", tags=["Health"], include_in_schema=False)
     async def readiness_check(request: Request) -> JSONResponse:
-        """Readiness check endpoint for Kubernetes.
-
-        Only accessible from internal cluster network.
-        Returns 200 if the service is ready to accept traffic.
-        Returns 503 if dependencies are not available.
-        """
+        """Legacy readiness endpoint (deprecated, use /health/ready)."""
         if not _is_internal_request(request):
             raise HTTPException(status_code=403, detail="Forbidden - internal only")
 
@@ -271,13 +327,9 @@ def register_routes(app: FastAPI) -> None:
             status_code=200 if is_ready else 503,
         )
 
-    @app.get("/live", tags=["Health"])
+    @app.get("/live", tags=["Health"], include_in_schema=False)
     async def liveness_check(request: Request) -> dict[str, str]:
-        """Liveness check endpoint for Kubernetes.
-
-        Only accessible from internal cluster network.
-        Simple check that the process is running.
-        """
+        """Legacy liveness endpoint (deprecated, use /health/live)."""
         if not _is_internal_request(request):
             raise HTTPException(status_code=403, detail="Forbidden - internal only")
 

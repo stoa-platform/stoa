@@ -124,6 +124,10 @@ export function SubscribeModal({
       <div
         className="fixed inset-0 bg-black/50 transition-opacity"
         onClick={handleClose}
+        onKeyDown={(e) => e.key === 'Escape' && handleClose()}
+        role="button"
+        aria-label="Close modal"
+        tabIndex={0}
       />
 
       {/* Modal */}
@@ -202,10 +206,11 @@ export function SubscribeModal({
               </div>
 
               {/* Select Plan */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Select Plan <span className="text-red-500">*</span>
-                </label>
+              <div role="radiogroup" aria-labelledby="plan-label">
+                <span id="plan-label" className="block text-sm font-medium text-gray-700 mb-3">
+                  Select Plan <span className="text-red-500" aria-hidden="true">*</span>
+                  <span className="sr-only">(required)</span>
+                </span>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {(Object.keys(plans) as SubscriptionPlan[]).map((planKey) => {
                     const plan = plans[planKey];

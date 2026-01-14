@@ -32,11 +32,12 @@ export function EnvironmentSelector({
 
   return (
     <div className="relative">
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+      <label htmlFor="environment-select" className="block text-sm font-medium text-gray-700 mb-1">
         Target Environment
       </label>
       <div className="relative">
         <select
+          id="environment-select"
           value={selectedEnvironment?.id || ''}
           onChange={(e) => {
             const env = environments.find((env) => env.id === e.target.value);

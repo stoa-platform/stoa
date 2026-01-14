@@ -438,6 +438,10 @@ export function ServerDetailPage() {
                   !subscription ? 'cursor-pointer hover:bg-gray-50' : ''
                 }`}
                 onClick={() => !subscription && toggleTool(tool.id)}
+                onKeyDown={(e) => e.key === 'Enter' && !subscription && toggleTool(tool.id)}
+                role={!subscription ? 'button' : undefined}
+                tabIndex={!subscription ? 0 : undefined}
+                aria-pressed={!subscription ? isSelected : undefined}
               >
                 {/* Selection Checkbox (only when not subscribed) */}
                 {!subscription && (

@@ -101,22 +101,53 @@ async def lifespan(app: FastAPI):
     await gateway_service.disconnect()
 
 API_DESCRIPTION = """
-## STOA Control-Plane API
+## STOA Platform API
 
-Multi-tenant API Management Control Plane with GitOps integration.
+**The Cilium of API Management** — AI-Native API Gateway for modern enterprises.
 
-### Features
+### Key Features
 
-- **Multi-tenant Management**: Create and manage isolated API tenants
-- **API Lifecycle**: Full CRUD operations for APIs with versioning
-- **GitOps Integration**: Automatic sync with GitLab repositories
-- **Event-Driven Architecture**: Kafka/Redpanda message bus for async operations
-- **Pipeline Monitoring**: End-to-end tracing of deployments
-- **RBAC**: Role-based access control via Keycloak
+- **MCP Server Subscriptions** — Subscribe to AI tools and manage API keys
+- **Tools Catalog** — Browse and discover MCP tools with role-based visibility
+- **Usage Tracking** — Monitor your API consumption in real-time
+- **Multi-tenant Management** — Create and manage isolated API tenants
+- **GitOps Integration** — Automatic sync with GitLab repositories
+- **Event-Driven Architecture** — Kafka/Redpanda message bus for async operations
+- **Pipeline Monitoring** — End-to-end tracing of deployments
+- **RBAC** — Role-based access control via Keycloak
+
+### Quick Start
+
+1. **Get a token** from Keycloak (`POST /realms/stoa/protocol/openid-connect/token`)
+2. **Browse MCP servers** (`GET /v1/mcp/servers`)
+3. **Subscribe to a server** (`POST /v1/mcp/subscriptions`)
+4. **Use your API key** with MCP Gateway (`https://mcp.stoa.cab-i.com`)
+
+### Authentication
+
+All endpoints require a valid JWT token from Keycloak (realm: `stoa`).
+Include the token in the `Authorization: Bearer <token>` header.
+
+```
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Environments
+
+| Environment | Base URL |
+|-------------|----------|
+| Production | `https://api.stoa.cab-i.com` |
+| Via Gateway | `https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0` |
 
 ### Changelog
 
-#### v2.0.0 (Current)
+#### v2.1.0 (Current)
+- Added MCP Server Subscriptions with admin approval workflow
+- Added API key rotation with grace period support
+- Added Dashboard home page stats (`/v1/dashboard`)
+- Added Service Accounts for M2M authentication
+
+#### v2.0.0
 - Added Pipeline Tracing (`/v1/traces`) for end-to-end monitoring
 - Added GitLab Webhook integration (`/webhooks/gitlab`)
 - Added Kafka integration for event-driven deployments
@@ -124,13 +155,6 @@ Multi-tenant API Management Control Plane with GitOps integration.
 
 #### v1.0.0
 - Initial release with tenant, API, and application management
-- Basic deployment endpoints
-- Git operations (commits, merge requests)
-
-### Authentication
-
-All endpoints require a valid JWT token from Keycloak (realm: `stoa`).
-Include the token in the `Authorization: Bearer <token>` header.
 """
 
 app = FastAPI(
@@ -162,12 +186,16 @@ app = FastAPI(
         {"name": "MCP Admin - Servers", "description": "MCP server management (admin)"},
     ],
     contact={
-        "name": "CAB Ingenierie",
-        "email": "admin@cab-i.com",
+        "name": "CAB Ingénierie",
+        "url": "https://stoa.cab-i.com",
+        "email": "support@cab-i.com",
     },
     license_info={
-        "name": "Proprietary",
+        "name": "Apache 2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0",
     },
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # CORS

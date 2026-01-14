@@ -9,6 +9,7 @@ import { MyApplications, ApplicationDetail } from './pages/apps';
 import { ProfilePage } from './pages/profile/Profile';
 import { WebhooksPage } from './pages/webhooks/WebhooksPage';
 import { UsagePage } from './pages/usage';
+import { ServiceAccountsPage } from './pages/service-accounts/ServiceAccountsPage';
 import { config } from './config';
 
 // Loading screen
@@ -96,6 +97,8 @@ function AppContent() {
           <Route path="/profile" element={<ProfilePage />} />
           {/* Usage Dashboard */}
           <Route path="/usage" element={<UsagePage />} />
+          {/* Service Accounts for MCP */}
+          <Route path="/service-accounts" element={<ServiceAccountsPage />} />
           {/* Tenant Admin Routes */}
           <Route path="/webhooks" element={<WebhooksPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -255,6 +255,162 @@ class KeycloakService:
         secret_data = self._admin.generate_client_secrets(client_uuid)
         return secret_data.get("value")
 
+    # Service Account operations (for MCP access)
+    async def create_service_account(
+        self,
+        user_id: str,
+        user_email: str,
+        tenant_id: str,
+        name: str,
+        description: str = "",
+        roles: list[str] | None = None,
+    ) -> dict:
+        """
+        Create a Service Account (OAuth2 client) for a user's MCP access.
+
+        The service account inherits the user's roles and tenant isolation.
+        This enables RBAC-based MCP tool access.
+
+        Args:
+            user_id: Keycloak user ID
+            user_email: User email for naming
+            tenant_id: User's tenant ID
+            name: Service account name (e.g., "claude-desktop")
+            description: Optional description
+            roles: Optional list of roles (defaults to user's roles)
+
+        Returns:
+            dict with client_id, client_secret, and id
+        """
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        # Generate unique client ID
+        safe_name = name.lower().replace(" ", "-").replace("_", "-")
+        safe_email = user_email.split("@")[0].lower().replace(".", "-")
+        client_id = f"sa-{tenant_id}-{safe_email}-{safe_name}"
+
+        # Ensure client_id is unique by adding suffix if needed
+        existing = await self.get_client(client_id)
+        if existing:
+            import uuid
+            client_id = f"{client_id}-{uuid.uuid4().hex[:6]}"
+
+        client_data = {
+            "clientId": client_id,
+            "name": f"Service Account: {name}",
+            "description": description or f"MCP Service Account for {user_email}",
+            "enabled": True,
+            "protocol": "openid-connect",
+            "publicClient": False,
+            "serviceAccountsEnabled": True,  # Enable client credentials flow
+            "authorizationServicesEnabled": False,
+            "standardFlowEnabled": False,  # Disable authorization code flow
+            "directAccessGrantsEnabled": False,  # Disable password grant
+            "implicitFlowEnabled": False,
+            "redirectUris": [],
+            "webOrigins": [],
+            "attributes": {
+                "tenant_id": tenant_id,
+                "owner_user_id": user_id,
+                "owner_email": user_email,
+                "service_account_type": "mcp",
+            },
+        }
+
+        # Create client
+        self._admin.create_client(client_data)
+
+        # Get the created client
+        client = await self.get_client(client_id)
+        if not client:
+            raise RuntimeError("Failed to create service account client")
+
+        client_uuid = client["id"]
+
+        # Get service account user for this client
+        sa_user = self._admin.get_client_service_account_user(client_uuid)
+        sa_user_id = sa_user["id"]
+
+        # Assign roles to service account
+        if roles:
+            for role_name in roles:
+                try:
+                    await self.assign_role(sa_user_id, role_name)
+                except Exception as e:
+                    logger.warning(f"Failed to assign role {role_name}: {e}")
+        else:
+            # Copy roles from the owner user
+            user = await self.get_user(user_id)
+            if user:
+                user_roles = self._admin.get_realm_roles_of_user(user_id)
+                for role in user_roles:
+                    if role["name"] not in ["default-roles-stoa", "offline_access", "uma_authorization"]:
+                        try:
+                            self._admin.assign_realm_roles(sa_user_id, [role])
+                        except Exception as e:
+                            logger.warning(f"Failed to copy role {role['name']}: {e}")
+
+        # Set tenant_id attribute on service account user
+        self._admin.update_user(sa_user_id, {
+            "attributes": {
+                "tenant_id": [tenant_id],
+                "owner_user_id": [user_id],
+            }
+        })
+
+        # Get client secret
+        secret_data = self._admin.get_client_secrets(client_uuid)
+
+        logger.info(f"Created service account {client_id} for user {user_email}")
+
+        return {
+            "client_id": client_id,
+            "client_secret": secret_data.get("value"),
+            "id": client_uuid,
+            "name": name,
+        }
+
+    async def list_user_service_accounts(self, user_id: str) -> list[dict]:
+        """List all service accounts owned by a user"""
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        clients = self._admin.get_clients()
+        user_accounts = []
+
+        for client in clients:
+            attrs = client.get("attributes", {})
+            if attrs.get("owner_user_id") == user_id and attrs.get("service_account_type") == "mcp":
+                user_accounts.append({
+                    "id": client["id"],
+                    "client_id": client["clientId"],
+                    "name": client.get("name", "").replace("Service Account: ", ""),
+                    "description": client.get("description", ""),
+                    "enabled": client.get("enabled", False),
+                    "created": client.get("attributes", {}).get("created_at"),
+                })
+
+        return user_accounts
+
+    async def delete_service_account(self, client_uuid: str, user_id: str) -> bool:
+        """Delete a service account (only if owned by user)"""
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        # Verify ownership
+        client = self._admin.get_client(client_uuid)
+        if not client:
+            raise ValueError("Service account not found")
+
+        owner = client.get("attributes", {}).get("owner_user_id")
+        if owner != user_id:
+            raise PermissionError("Not authorized to delete this service account")
+
+        self._admin.delete_client(client_uuid)
+        logger.info(f"Deleted service account {client_uuid}")
+        return True
+
     # Tenant setup
     async def setup_tenant_group(self, tenant_id: str, tenant_name: str) -> str:
         """Create a Keycloak group for the tenant"""

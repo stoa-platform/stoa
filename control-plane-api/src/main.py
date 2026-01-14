@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from .config import settings
 from .logging_config import configure_logging, get_logger
-from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage
+from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .middleware.metrics import MetricsMiddleware, get_metrics
@@ -149,6 +149,7 @@ app = FastAPI(
         {"name": "certificates", "description": "Certificate validation for mTLS subscriptions (CAB-313)"},
         {"name": "Search", "description": "Full-text search across tools and APIs (CAB-307)"},
         {"name": "Usage", "description": "Usage dashboard for API consumers (CAB-280)"},
+        {"name": "Service Accounts", "description": "OAuth2 Service Accounts for MCP access (CAB-296)"},
     ],
     contact={
         "name": "CAB Ingenierie",
@@ -189,6 +190,7 @@ app.include_router(tenant_webhooks.router)
 app.include_router(certificates.router)
 app.include_router(search_router, prefix="/v1/search", tags=["Search"])
 app.include_router(usage.router)
+app.include_router(service_accounts.router)
 
 @app.get("/health")
 async def health():

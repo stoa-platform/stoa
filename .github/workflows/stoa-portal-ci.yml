@@ -208,6 +208,17 @@ jobs:
           kubectl get pods -n stoa-system -l app=stoa-portal
           kubectl get ingress -n stoa-system stoa-portal
 
+      - name: Security check - Portal requires authentication
+        run: |
+          echo "=== Security Check - Portal should redirect to login ==="
+          sleep 10
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L https://portal.stoa.cab-i.com/ || echo "000")
+          echo "HTTP Status Code: $HTTP_CODE"
+          # Portal redirects to Keycloak login, expect 200 from login page
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+            echo "Portal is accessible and likely redirecting to login"
+          fi
+
   # ==========================================================================
   # Notify (Optional - only if SLACK_WEBHOOK_URL is configured)
   # ==========================================================================

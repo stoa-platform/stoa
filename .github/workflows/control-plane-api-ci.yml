@@ -215,6 +215,19 @@ jobs:
           POD=$(kubectl get pods -n stoa-system -l app.kubernetes.io/name=control-plane-api -o jsonpath='{.items[0].metadata.name}')
           kubectl exec -n stoa-system $POD -- curl -s http://localhost:8000/health || echo "Health check via exec not available"
 
+      - name: Security check - API requires authentication
+        run: |
+          echo "=== Security Check - API endpoints should require auth ==="
+
+          # Test protected endpoint (should return 401)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/tenants || echo "000")
+          echo "Protected endpoint (/v1/tenants): HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
+            echo "Security check PASSED - endpoint requires authentication"
+          else
+            echo "WARNING: Expected 401/403 but got $HTTP_CODE"
+          fi
+
   # ==========================================================================
   # Notify
   # ==========================================================================

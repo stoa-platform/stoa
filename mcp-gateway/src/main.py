@@ -14,7 +14,8 @@ import structlog
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
@@ -167,6 +168,19 @@ def create_app() -> FastAPI:
 
     # Register servers router for server-based subscriptions
     app.include_router(servers_router)
+
+    # Serve favicon
+    @app.get("/favicon.ico", include_in_schema=False)
+    @app.get("/favicon.svg", include_in_schema=False)
+    async def favicon():
+        """Serve STOA favicon."""
+        import os
+        static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+        favicon_path = os.path.join(static_dir, "favicon.svg")
+        if os.path.exists(favicon_path):
+            return FileResponse(favicon_path, media_type="image/svg+xml")
+        # Return empty response if file not found
+        return Response(status_code=204)
 
     return app
 

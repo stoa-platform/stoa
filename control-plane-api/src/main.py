@@ -6,6 +6,8 @@ import asyncio
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from starlette.responses import Response
 from contextlib import asynccontextmanager
 
 from .config import settings
@@ -215,3 +217,14 @@ async def root():
 async def metrics():
     """Prometheus metrics endpoint."""
     return get_metrics()
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/favicon.svg", include_in_schema=False)
+async def favicon():
+    """Serve STOA favicon."""
+    static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+    favicon_path = os.path.join(static_dir, "favicon.svg")
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path, media_type="image/svg+xml")
+    return Response(status_code=204)

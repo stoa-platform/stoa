@@ -1,0 +1,124 @@
+# STOA Platform Helm Values
+# Default configuration for Kubernetes deployment
+
+# Global settings
+global:
+  environment: dev
+  baseDomain: stoa.cab-i.com
+
+# Logging configuration
+# These values are injected from gitops-templates/logging/*.yaml
+logging:
+  # Global log level
+  level: INFO
+  # Output format: json or text
+  format: json
+
+  # Per-component log levels
+  components:
+    root: INFO
+    uvicorn: WARNING
+    httpx: WARNING
+    aiokafka: WARNING
+    sqlalchemy: WARNING
+    src: INFO
+    src.routers: INFO
+    src.services: INFO
+    src.auth: INFO
+    mcp_gateway: INFO
+
+  # Debug options
+  debug:
+    http_requests: false
+    http_responses: false
+    http_headers: false
+    http_body: false
+    ssl_handshake: false
+    ssl_certificates: false
+    kafka_messages: false
+    kafka_consumer: false
+    kafka_producer: false
+    sql_queries: false
+    sql_results: false
+    sql_transactions: false
+    auth_tokens: false
+    auth_headers: false
+    auth_payload: false
+    awx_api: false
+    gitlab_api: false
+    keycloak_api: false
+    gateway_api: false
+
+  # Tracing configuration
+  tracing:
+    enabled: false
+    sample_rate: "0.1"
+    export_endpoint: "tempo:4317"
+
+  # Context binding
+  context:
+    include_tenant_id: true
+    include_user_id: true
+    include_request_id: true
+    include_trace_id: true
+
+  # Filtering
+  filtering:
+    exclude_paths:
+      - /health
+      - /healthz
+      - /ready
+      - /metrics
+    slow_request_threshold_ms: 1000
+    access_log_sample_rate: "1.0"
+
+  # Masking
+  masking:
+    enabled: true
+    patterns:
+      - password
+      - secret
+      - token
+      - api_key
+      - authorization
+
+# Control Plane API
+controlPlaneApi:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: control-plane-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# MCP Gateway
+mcpGateway:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: mcp-gateway
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# Portal
+portal:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: portal
+    tag: latest
+    pullPolicy: IfNotPresent

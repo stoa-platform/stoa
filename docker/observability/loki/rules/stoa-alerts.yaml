@@ -1,0 +1,220 @@
+# STOA Platform Alerting Rules for Loki
+# CAB-330: Centralized logging alerting
+#
+# These rules are evaluated by Loki Ruler and send alerts to Alertmanager
+
+groups:
+  # ============================================================================
+  # Error Rate Alerts
+  # ============================================================================
+  - name: stoa-error-rates
+    interval: 1m
+    rules:
+      # High error rate in Control-Plane API
+      - alert: HighAPIErrorRate
+        expr: |
+          sum(rate({component="control-plane-api", level="error"} [5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: control-plane-api
+        annotations:
+          summary: "High error rate in Control-Plane API"
+          description: "Error rate is {{ $value | printf \"%.2f\" }} errors/sec over the last 5 minutes"
+          runbook_url: "https://docs.stoa.cab-i.com/runbooks/high-error-rate"
+
+      # Critical error rate (server errors)
+      - alert: CriticalAPIErrorRate
+        expr: |
+          sum(rate({component="control-plane-api"} |= "status_code" | json | status_code >= 500 [5m])) > 1
+        for: 2m
+        labels:
+          severity: critical
+          service: control-plane-api
+        annotations:
+          summary: "Critical error rate - 5xx errors detected"
+          description: "Server error rate is {{ $value | printf \"%.2f\" }} errors/sec"
+
+      # MCP Gateway errors
+      - alert: MCPGatewayErrors
+        expr: |
+          sum(rate({component="mcp-gateway", level="error"} [5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: mcp-gateway
+        annotations:
+          summary: "Errors detected in MCP Gateway"
+          description: "Error rate is {{ $value | printf \"%.2f\" }} errors/sec"
+
+  # ============================================================================
+  # Authentication Alerts
+  # ============================================================================
+  - name: stoa-auth-alerts
+    interval: 1m
+    rules:
+      # High rate of authentication failures
+      - alert: HighAuthFailureRate
+        expr: |
+          sum(rate({component="control-plane-api"} |~ "401|Invalid token|JWT validation failed" [5m])) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+          service: auth
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Auth failures: {{ $value | printf \"%.2f\" }}/sec. Check for expired tokens or misconfigured clients."
+
+      # Missing user ID in tokens (specific 401 error)
+      - alert: MissingUserIDTokens
+        expr: |
+          sum(rate({component="control-plane-api"} |= "missing user ID" [5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: auth
+        annotations:
+          summary: "Tokens with missing user ID detected"
+          description: "Rate: {{ $value | printf \"%.2f\" }}/sec. This may indicate client credentials tokens being used incorrectly."
+
+      # Keycloak connection failures
+      - alert: KeycloakConnectionFailure
+        expr: |
+          sum(rate({component="control-plane-api"} |= "Failed to fetch Keycloak public key" [5m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: keycloak
+        annotations:
+          summary: "Cannot connect to Keycloak"
+          description: "Control-Plane API cannot fetch Keycloak public key. All authentications will fail."
+
+  # ============================================================================
+  # Performance Alerts
+  # ============================================================================
+  - name: stoa-performance-alerts
+    interval: 1m
+    rules:
+      # Slow requests detected
+      - alert: SlowRequests
+        expr: |
+          sum(rate({component="control-plane-api"} |= "slow_request" [5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: control-plane-api
+        annotations:
+          summary: "Slow requests detected"
+          description: "Rate of slow requests: {{ $value | printf \"%.2f\" }}/sec"
+
+      # Very slow requests (potential timeout)
+      - alert: VerySlowRequests
+        expr: |
+          avg(rate({component="control-plane-api"} | json | duration_ms > 5000 [5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: control-plane-api
+        annotations:
+          summary: "Very slow requests detected (>5s)"
+          description: "Requests taking over 5 seconds detected. Check for database or external service issues."
+
+  # ============================================================================
+  # External Service Alerts
+  # ============================================================================
+  - name: stoa-external-services
+    interval: 1m
+    rules:
+      # AWX connection issues
+      - alert: AWXConnectionError
+        expr: |
+          sum(rate({component="control-plane-api"} |~ "AWX|awx" |= "error" [5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: awx
+        annotations:
+          summary: "AWX connection errors"
+          description: "Errors communicating with AWX automation platform"
+
+      # GitLab connection issues
+      - alert: GitLabConnectionError
+        expr: |
+          sum(rate({component="control-plane-api"} |~ "GitLab|gitlab" |= "error" [5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: gitlab
+        annotations:
+          summary: "GitLab connection errors"
+          description: "Errors communicating with GitLab"
+
+      # Kafka connection issues
+      - alert: KafkaConnectionError
+        expr: |
+          sum(rate({component="control-plane-api"} |~ "Kafka|kafka|aiokafka" |= "error" [5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: kafka
+        annotations:
+          summary: "Kafka connection errors"
+          description: "Errors communicating with Kafka/Redpanda"
+
+      # API Gateway connection issues
+      - alert: GatewayConnectionError
+        expr: |
+          sum(rate({component="control-plane-api"} |~ "Gateway|gateway" |= "error" [5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "API Gateway connection errors"
+          description: "Errors communicating with API Gateway"
+
+  # ============================================================================
+  # Tenant-specific Alerts
+  # ============================================================================
+  - name: stoa-tenant-alerts
+    interval: 1m
+    rules:
+      # High error rate for a specific tenant
+      - alert: TenantHighErrorRate
+        expr: |
+          sum by (tenant_id) (rate({component="control-plane-api", level="error"} | json | tenant_id != "" [5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate for tenant {{ $labels.tenant_id }}"
+          description: "Error rate: {{ $value | printf \"%.2f\" }}/sec for tenant {{ $labels.tenant_id }}"
+
+  # ============================================================================
+  # Log Volume Alerts
+  # ============================================================================
+  - name: stoa-log-volume
+    interval: 5m
+    rules:
+      # Unusual log volume (potential log flood)
+      - alert: HighLogVolume
+        expr: |
+          sum(rate({component=~"control-plane-api|mcp-gateway"} [5m])) > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually high log volume"
+          description: "Log rate: {{ $value | printf \"%.0f\" }} logs/sec. Check for debug logging left enabled or log flooding."
+
+      # No logs (service might be down)
+      - alert: NoLogs
+        expr: |
+          sum(rate({component="control-plane-api"} [5m])) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: control-plane-api
+        annotations:
+          summary: "No logs from Control-Plane API"
+          description: "No logs received for 5 minutes. Service might be down."

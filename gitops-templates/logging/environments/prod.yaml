@@ -1,0 +1,82 @@
+# STOA Platform - Production Environment Logging
+# Minimal logging for performance, errors and warnings only
+
+logging:
+  level: WARNING
+  format: json
+
+  components:
+    root: WARNING
+    uvicorn: WARNING
+    uvicorn.access: WARNING  # Keep access logs for audit
+    uvicorn.error: ERROR
+    httpx: WARNING
+    httpcore: WARNING
+    aiokafka: WARNING
+    sqlalchemy: WARNING
+    sqlalchemy.engine: WARNING
+
+    # STOA application - INFO for key routes
+    src: WARNING
+    src.routers: INFO         # Keep API request logs
+    src.services: WARNING
+    src.auth: WARNING
+    src.middleware: INFO      # Keep request timing
+    src.models: WARNING
+
+    # MCP Gateway
+    mcp_gateway: WARNING
+    mcp_gateway.tools: INFO   # Keep tool invocation logs
+    mcp_gateway.opa: WARNING
+    mcp_gateway.metering: WARNING
+
+  debug:
+    # All debug options disabled in production
+    http_requests: false
+    http_responses: false
+    http_headers: false
+    http_body: false
+    ssl_handshake: false
+    ssl_certificates: false
+    kafka_messages: false
+    kafka_consumer: false
+    kafka_producer: false
+    sql_queries: false
+    sql_results: false
+    sql_transactions: false
+    auth_tokens: false
+    auth_headers: false
+    auth_payload: false
+    awx_api: false
+    gitlab_api: false
+    keycloak_api: false
+    gateway_api: false
+
+  tracing:
+    enabled: true
+    sample_rate: 0.01          # 1% in production
+    propagate_context: true
+    export_endpoint: "tempo:4317"
+
+  filtering:
+    exclude_paths:
+      - /health
+      - /healthz
+      - /ready
+      - /metrics
+      - /favicon.ico
+    slow_request_threshold_ms: 2000
+    access_log_sample_rate: 0.1  # Sample 10% of access logs
+
+  masking:
+    enabled: true
+    patterns:
+      - "password"
+      - "secret"
+      - "token"
+      - "api_key"
+      - "apikey"
+      - "authorization"
+      - "credential"
+      - "bearer"
+      - "session"

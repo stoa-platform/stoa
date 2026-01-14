@@ -518,6 +518,93 @@ kubectl logs -n stoa-system -l app.kubernetes.io/component=promtail
 2. Add Loki data source:
    - URL: `http://stoa-platform-loki.stoa-system:3100`
 
+## Centralized Logging Configuration (CAB-330)
+
+### GitOps Log Level Configuration
+
+Log levels are configured via GitOps YAML files in `gitops-templates/logging/`:
+
+| File | Description |
+|------|-------------|
+| `_defaults.yaml` | Default log levels for all environments |
+| `environments/dev.yaml` | Development (DEBUG, all debug options enabled) |
+| `environments/staging.yaml` | Staging (INFO, auth debug enabled) |
+| `environments/prod.yaml` | Production (WARNING, minimal logging) |
+
+### Environment Variables
+
+The logging configuration is injected via ConfigMap. Key variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_LEVEL` | `INFO` | Global log level |
+| `LOG_FORMAT` | `json` | Output format (json/text) |
+| `LOG_COMPONENTS` | `{}` | Per-component log levels (JSON) |
+| `LOG_DEBUG_AUTH_PAYLOAD` | `false` | Log JWT payload structure (for 401 debugging) |
+| `LOG_DEBUG_HTTP_REQUESTS` | `false` | Log all HTTP requests |
+| `LOG_DEBUG_HTTP_RESPONSES` | `false` | Log all HTTP responses |
+| `LOG_DEBUG_KAFKA_MESSAGES` | `false` | Log Kafka message metadata |
+| `LOG_DEBUG_SQL_QUERIES` | `false` | Log SQL queries |
+| `LOG_TRACE_ENABLED` | `false` | Enable distributed tracing |
+| `LOG_TRACE_SAMPLE_RATE` | `0.1` | Tracing sample rate (0.0-1.0) |
+
+### Enabling Debug Logging
+
+To enable auth debug logging for troubleshooting 401 errors:
+
+```bash
+# Local development
+LOG_DEBUG_AUTH_PAYLOAD=true LOG_DEBUG_HTTP_REQUESTS=true uvicorn src.main:app --reload
+
+# Kubernetes (update ConfigMap)
+kubectl patch configmap stoa-logging-config -n stoa-system \
+  --type merge -p '{"data":{"LOG_DEBUG_AUTH_PAYLOAD":"true"}}'
+```
+
+### LogQL Queries for Troubleshooting
+
+```logql
+# 401 errors with JWT payload details
+{component="control-plane-api"} |= "401" | json
+
+# Tokens missing sub claim
+{component="control-plane-api"} |= "missing user ID" | json | line_format "{{.payload_keys}}"
+
+# All auth errors
+{component="control-plane-api"} |~ "JWT validation failed|Invalid token|401"
+
+# Slow requests
+{component="control-plane-api"} |= "slow_request" | json | duration_ms > 1000
+
+# Errors by tenant
+sum by (tenant_id) (count_over_time({component="control-plane-api"} | json | level="error" [5m]))
+
+# Service connection errors
+{component="control-plane-api"} |~ "Keycloak|AWX|GitLab|Kafka|Gateway" |= "error"
+```
+
+### Alerting Rules (Loki)
+
+Loki alerting rules are defined in `docker/observability/loki/rules/stoa-alerts.yaml`:
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| HighAPIErrorRate | Error rate > 0.5/s for 5m | Warning |
+| CriticalAPIErrorRate | 5xx rate > 1/s for 2m | Critical |
+| HighAuthFailureRate | 401 rate > 0.5/s for 3m | Warning |
+| MissingUserIDTokens | "missing user ID" errors > 0.1/s | Warning |
+| KeycloakConnectionFailure | Keycloak fetch failures | Critical |
+| SlowRequests | Slow request rate > 0.1/s | Warning |
+
+### Grafana Dashboards (CAB-330)
+
+New dashboards for error tracking and service health:
+
+| Dashboard | File | Description |
+|-----------|------|-------------|
+| Error Tracking | `docker/observability/grafana/dashboards/error-tracking.json` | Errors by component, 401 tracking, top errors |
+| Service Health | `docker/observability/grafana/dashboards/service-health.json` | External service status, latency, connection logs |
+
 ## Configuration Reference
 
 ### Helm Values (charts/stoa-platform/values.yaml)

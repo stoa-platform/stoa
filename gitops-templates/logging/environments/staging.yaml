@@ -1,0 +1,81 @@
+# STOA Platform - Staging Environment Logging
+# Balanced logging for pre-production testing
+
+logging:
+  level: INFO
+  format: json
+
+  components:
+    root: INFO
+    uvicorn: WARNING
+    uvicorn.access: INFO
+    httpx: WARNING
+    httpcore: WARNING
+    aiokafka: WARNING
+    sqlalchemy: WARNING
+    sqlalchemy.engine: WARNING
+
+    # STOA application
+    src: INFO
+    src.routers: INFO
+    src.services: INFO
+    src.auth: INFO
+    src.middleware: INFO
+    src.models: WARNING
+
+    # MCP Gateway
+    mcp_gateway: INFO
+    mcp_gateway.tools: INFO
+    mcp_gateway.opa: INFO
+    mcp_gateway.metering: INFO
+
+  debug:
+    # HTTP - partial (requests only)
+    http_requests: true
+    http_responses: false
+    http_headers: false
+    http_body: false
+
+    # SSL - disabled
+    ssl_handshake: false
+    ssl_certificates: false
+
+    # Kafka - disabled
+    kafka_messages: false
+    kafka_consumer: false
+    kafka_producer: false
+
+    # Database - disabled
+    sql_queries: false
+    sql_results: false
+    sql_transactions: false
+
+    # Auth - partial (payload keys only)
+    auth_tokens: false
+    auth_headers: false
+    auth_payload: true  # For debugging 401 errors
+
+    # External services - disabled
+    awx_api: false
+    gitlab_api: false
+    keycloak_api: false
+    gateway_api: false
+
+  tracing:
+    enabled: true
+    sample_rate: 0.5           # 50% in staging
+    propagate_context: true
+    export_endpoint: "tempo:4317"
+
+  filtering:
+    exclude_paths:
+      - /health
+      - /healthz
+      - /ready
+      - /metrics
+      - /favicon.ico
+    slow_request_threshold_ms: 1000
+    access_log_sample_rate: 1.0
+
+  masking:
+    enabled: true

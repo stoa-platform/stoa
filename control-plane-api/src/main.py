@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from .config import settings
 from .logging_config import configure_logging, get_logger
-from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts
+from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .middleware.metrics import MetricsMiddleware, get_metrics
@@ -193,9 +193,13 @@ app.include_router(search_router, prefix="/v1/search", tags=["Search"])
 app.include_router(usage.router)
 app.include_router(usage.dashboard_router)
 app.include_router(service_accounts.router)
+app.include_router(health.router)
 
-@app.get("/health")
-async def health():
+
+# Legacy health endpoint - redirect to new /health/live
+@app.get("/health", include_in_schema=False)
+async def health_legacy():
+    """Legacy health endpoint for backward compatibility."""
     return {"status": "healthy", "version": settings.VERSION}
 
 @app.get("/")

@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { HomePage } from './pages/Home';
-import { ToolsCatalog, ToolDetail } from './pages/tools';
 import { MCPServersPage, ServerDetailPage } from './pages/servers';
 import { MySubscriptions } from './pages/subscriptions/MySubscriptions';
 import { APICatalog, APIDetail, APITestingSandbox } from './pages/apis';
@@ -87,9 +86,9 @@ function AppContent() {
           {/* MCP Servers (grouped tools with role-based visibility) */}
           <Route path="/servers" element={<MCPServersPage />} />
           <Route path="/servers/:serverId" element={<ServerDetailPage />} />
-          {/* MCP Tools Routes (legacy - individual tools) */}
-          <Route path="/tools" element={<ToolsCatalog />} />
-          <Route path="/tools/:id" element={<ToolDetail />} />
+          {/* Redirect legacy /tools to /servers */}
+          <Route path="/tools" element={<Navigate to="/servers" replace />} />
+          <Route path="/tools/:id" element={<Navigate to="/servers" replace />} />
           <Route path="/subscriptions" element={<MySubscriptions />} />
           {/* API Consumer Routes */}
           <Route path="/apis" element={<APICatalog />} />

@@ -51,12 +51,15 @@ export function CredentialsViewer({
     <div className="space-y-4">
       {/* Client ID */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <span id="client-id-label" className="block text-sm font-medium text-gray-700 mb-1">
           Client ID
-        </label>
+        </span>
         <div className="flex items-center gap-2">
-          <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg font-mono text-sm">
-            <Key className="h-4 w-4 text-gray-400" />
+          <div
+            className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg font-mono text-sm"
+            aria-labelledby="client-id-label"
+          >
+            <Key className="h-4 w-4 text-gray-400" aria-hidden="true" />
             <span className="flex-1 truncate">{clientId}</span>
           </div>
           <button
@@ -75,9 +78,9 @@ export function CredentialsViewer({
 
       {/* Client Secret */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <span id="client-secret-label" className="block text-sm font-medium text-gray-700 mb-1">
           Client Secret
-        </label>
+        </span>
         {displaySecret ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2">

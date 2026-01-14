@@ -74,6 +74,10 @@ export function CreateAppModal({
       <div
         className="fixed inset-0 bg-black/50 transition-opacity"
         onClick={handleClose}
+        onKeyDown={(e) => e.key === 'Escape' && handleClose()}
+        role="button"
+        aria-label="Close modal"
+        tabIndex={0}
       />
 
       {/* Modal */}
@@ -139,13 +143,14 @@ export function CreateAppModal({
 
               {/* Callback URLs */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="callback-url-0" className="block text-sm font-medium text-gray-700 mb-1">
                   Callback URLs (OAuth Redirect URIs)
                 </label>
                 <div className="space-y-2">
                   {callbackUrls.map((url, index) => (
                     <div key={index} className="flex gap-2">
                       <input
+                        id={`callback-url-${index}`}
                         type="url"
                         value={url}
                         onChange={(e) => handleCallbackUrlChange(index, e.target.value)}

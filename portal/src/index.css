@@ -37,6 +37,31 @@ body {
   background: #94a3b8;
 }
 
+/* Accessibility: Focus visible styles (CAB-327) */
+@layer base {
+  /* Ensure focus-visible ring is visible on all interactive elements */
+  :focus-visible {
+    outline: 2px solid #0d9488; /* primary-600 */
+    outline-offset: 2px;
+  }
+
+  /* Remove default focus outline when using mouse */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* High contrast focus for buttons and links */
+  a:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid #0d9488;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Skip link styles are already in SkipLink component */
+}
+
 /* Utility classes for portal */
 @layer utilities {
   .text-balance {

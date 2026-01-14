@@ -4,8 +4,10 @@ Validates JWT tokens from Keycloak and extracts user claims.
 Supports multiple authentication schemes:
 - Bearer token in Authorization header
 - API Key in X-API-Key header (for M2M)
+- OAuth2 Client Credentials (client_id/client_secret via Basic Auth)
 """
 
+import base64
 import time
 from dataclasses import dataclass
 from functools import lru_cache
@@ -14,7 +16,7 @@ from typing import Annotated, Any
 import httpx
 import structlog
 from fastapi import Depends, HTTPException, Request, Security
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, APIKeyHeader
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, APIKeyHeader, HTTPBasic, HTTPBasicCredentials
 from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError
 from pydantic import BaseModel
@@ -26,6 +28,7 @@ logger = structlog.get_logger(__name__)
 # Security schemes
 bearer_scheme = HTTPBearer(auto_error=False)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+basic_scheme = HTTPBasic(auto_error=False)
 
 
 class TokenClaims(BaseModel):
@@ -221,10 +224,121 @@ class OIDCAuthenticator:
                 detail="Invalid token",
             )
 
+    async def exchange_client_credentials(
+        self, client_id: str, client_secret: str
+    ) -> TokenClaims:
+        """Exchange client credentials for access token and return claims.
+
+        Uses OAuth2 Client Credentials flow against Keycloak.
+
+        Args:
+            client_id: OAuth2 client ID
+            client_secret: OAuth2 client secret
+
+        Returns:
+            TokenClaims with validated claims
+
+        Raises:
+            HTTPException: If credentials are invalid
+        """
+        settings = get_settings()
+        token_endpoint = settings.keycloak_token_endpoint
+
+        try:
+            client = await self._get_http_client()
+            response = await client.post(
+                token_endpoint,
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            if response.status_code == 401:
+                logger.warning(
+                    "Client credentials authentication failed",
+                    client_id=client_id,
+                )
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid client credentials",
+                )
+
+            response.raise_for_status()
+            token_data = response.json()
+
+            access_token = token_data.get("access_token")
+            if not access_token:
+                raise HTTPException(
+                    status_code=500,
+                    detail="No access token in response",
+                )
+
+            # Validate the returned token
+            claims = await self.validate_token(access_token)
+            logger.info(
+                "Client authenticated via credentials",
+                client_id=client_id,
+                subject=claims.subject,
+            )
+            return claims
+
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                "Client credentials exchange failed",
+                client_id=client_id,
+                status_code=e.response.status_code,
+            )
+            raise HTTPException(
+                status_code=401,
+                detail="Client credentials authentication failed",
+            )
+        except httpx.HTTPError as e:
+            logger.error(
+                "Keycloak token endpoint error",
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Authentication service unavailable",
+            )
+
     async def close(self) -> None:
         """Close HTTP client."""
         if self._http_client:
             await self._http_client.aclose()
+
+
+# Token cache for client credentials (avoid repeated token exchanges)
+_client_token_cache: dict[str, tuple[TokenClaims, float]] = {}
+CLIENT_TOKEN_CACHE_TTL = 300  # 5 minutes
+
+
+async def get_cached_client_token(
+    authenticator: "OIDCAuthenticator",
+    client_id: str,
+    client_secret: str,
+) -> TokenClaims:
+    """Get cached token for client credentials or exchange new one."""
+    cache_key = f"{client_id}:{client_secret[:8]}"  # Use prefix of secret for key
+
+    # Check cache
+    if cache_key in _client_token_cache:
+        claims, cached_at = _client_token_cache[cache_key]
+        if time.time() - cached_at < CLIENT_TOKEN_CACHE_TTL:
+            # Check if token is not expired
+            if claims.exp and claims.exp > time.time():
+                return claims
+
+    # Exchange credentials for new token
+    claims = await authenticator.exchange_client_credentials(client_id, client_secret)
+
+    # Cache the token
+    _client_token_cache[cache_key] = (claims, time.time())
+
+    return claims
 
 
 # Global authenticator instance
@@ -247,17 +361,20 @@ async def get_current_user(
     request: Request,
     bearer: Annotated[HTTPAuthorizationCredentials | None, Security(bearer_scheme)] = None,
     api_key: Annotated[str | None, Security(api_key_header)] = None,
+    basic: Annotated[HTTPBasicCredentials | None, Security(basic_scheme)] = None,
 ) -> TokenClaims:
     """Dependency to get the current authenticated user.
 
     Supports:
-    - Bearer token authentication
+    - Bearer token authentication (JWT)
+    - Basic Auth with OAuth2 client credentials (client_id:client_secret)
     - API Key authentication (for M2M)
 
     Args:
         request: FastAPI request
         bearer: Bearer token from Authorization header
         api_key: API key from X-API-Key header
+        basic: Basic auth credentials (client_id:client_secret)
 
     Returns:
         TokenClaims with user information
@@ -290,6 +407,19 @@ async def get_current_user(
         )
         return claims
 
+    # Try Basic Auth (OAuth2 Client Credentials)
+    if basic and basic.username and basic.password:
+        authenticator = get_authenticator()
+        claims = await get_cached_client_token(
+            authenticator, basic.username, basic.password
+        )
+        logger.debug(
+            "User authenticated via Client Credentials",
+            client_id=basic.username,
+            sub=claims.subject,
+        )
+        return claims
+
     # Try API Key
     if api_key:
         # TODO: Implement API key validation against Control Plane API
@@ -303,23 +433,33 @@ async def get_current_user(
     raise HTTPException(
         status_code=401,
         detail="Not authenticated",
-        headers={"WWW-Authenticate": "Bearer"},
+        headers={"WWW-Authenticate": 'Bearer, Basic realm="STOA MCP Gateway"'},
     )
 
 
 async def get_optional_user(
     request: Request,
     bearer: Annotated[HTTPAuthorizationCredentials | None, Security(bearer_scheme)] = None,
+    basic: Annotated[HTTPBasicCredentials | None, Security(basic_scheme)] = None,
 ) -> TokenClaims | None:
     """Dependency for optional authentication.
 
-    Returns None if no token provided, raises if token is invalid.
+    Returns None if no credentials provided, raises if credentials are invalid.
+    Supports Bearer token and Basic Auth (client credentials).
     """
-    if not bearer or not bearer.credentials:
-        return None
-
     authenticator = get_authenticator()
-    return await authenticator.validate_token(bearer.credentials)
+
+    # Try Bearer token
+    if bearer and bearer.credentials:
+        return await authenticator.validate_token(bearer.credentials)
+
+    # Try Basic Auth (client credentials)
+    if basic and basic.username and basic.password:
+        return await get_cached_client_token(
+            authenticator, basic.username, basic.password
+        )
+
+    return None
 
 
 def require_role(role: str):

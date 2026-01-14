@@ -17,6 +17,7 @@ from .logging_config import configure_logging, get_logger
 from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
+from .routers import portal, mcp_gitops
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .middleware.metrics import MetricsMiddleware, get_metrics
@@ -188,6 +189,8 @@ app = FastAPI(
         {"name": "MCP Validation", "description": "API key validation for MCP Gateway (internal)"},
         {"name": "MCP Admin - Subscriptions", "description": "Admin approval workflow for MCP subscriptions"},
         {"name": "MCP Admin - Servers", "description": "MCP server management (admin)"},
+        {"name": "Portal", "description": "Developer Portal API catalog and MCP server browsing"},
+        {"name": "MCP GitOps", "description": "GitOps synchronization for MCP servers"},
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -219,7 +222,8 @@ app.add_middleware(
 app.add_middleware(MetricsMiddleware)
 
 # HTTP request/response logging middleware (CAB-330)
-app.add_middleware(HTTPLoggingMiddleware)
+if settings.LOG_HTTP_MIDDLEWARE_ENABLED:
+    app.add_middleware(HTTPLoggingMiddleware)
 
 # Audit middleware (CAB-307) - logs all API requests to OpenSearch
 # Note: AuditMiddleware is added dynamically via setup_opensearch()
@@ -249,6 +253,10 @@ app.include_router(mcp_subscriptions_router)
 app.include_router(mcp_validation_router)
 app.include_router(mcp_admin_subscriptions_router)
 app.include_router(mcp_admin_servers_router)
+
+# Portal and GitOps routers
+app.include_router(portal.router)
+app.include_router(mcp_gitops.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

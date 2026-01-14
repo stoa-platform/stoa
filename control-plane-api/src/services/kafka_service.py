@@ -21,6 +21,11 @@ class Topics:
     TENANT_EVENTS = "tenant-events"     # Tenant lifecycle events
     AUDIT_LOG = "audit-log"             # Audit trail
 
+    # MCP GitOps events
+    MCP_SERVER_EVENTS = "mcp-server-events"     # MCP server catalog changes
+    MCP_SYNC_REQUESTS = "mcp-sync-requests"     # Manual sync trigger requests
+    MCP_SYNC_RESULTS = "mcp-sync-results"       # Sync completion results
+
 class KafkaService:
     """Service for Kafka/Redpanda message handling"""
 

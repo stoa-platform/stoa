@@ -1,0 +1,28 @@
+apiVersion: stoa.cab-i.com/v1
+kind: API
+metadata:
+  name: billing-api
+  version: "3.0.0"
+  labels:
+    managed-by: gitops
+
+spec:
+  displayName: Billing & Invoicing API
+  description: Generate invoices, process payments, manage subscriptions and billing cycles
+  status: published
+  category: integration
+  tags:
+    - rest
+    - internal
+    - billing
+    - payments
+
+  backend:
+    url: https://billing.acme-corp.internal/api/v3
+
+  deployments:
+    dev: true
+    staging: true
+
+  documentation:
+    openapi: openapi.yaml

@@ -1,0 +1,28 @@
+apiVersion: stoa.cab-i.com/v1
+kind: API
+metadata:
+  name: crm-api
+  version: "2.5.0"
+  labels:
+    managed-by: gitops
+
+spec:
+  displayName: CRM Integration API
+  description: Customer relationship management - contacts, leads, opportunities, and accounts
+  status: published
+  category: integration
+  tags:
+    - rest
+    - external
+    - crm
+    - salesforce
+
+  backend:
+    url: https://crm.acme-corp.com/api/v2
+
+  deployments:
+    dev: true
+    staging: true
+
+  documentation:
+    openapi: openapi.yaml

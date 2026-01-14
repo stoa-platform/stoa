@@ -24,18 +24,34 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create enums
+    # Create enums with IF NOT EXISTS to be idempotent
     op.execute("""
-        CREATE TYPE mcpservercategory AS ENUM ('platform', 'tenant', 'public')
+        DO $$ BEGIN
+            CREATE TYPE mcpservercategory AS ENUM ('platform', 'tenant', 'public');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
     """)
     op.execute("""
-        CREATE TYPE mcpserverstatus AS ENUM ('active', 'maintenance', 'deprecated')
+        DO $$ BEGIN
+            CREATE TYPE mcpserverstatus AS ENUM ('active', 'maintenance', 'deprecated');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
     """)
     op.execute("""
-        CREATE TYPE mcpsubscriptionstatus AS ENUM ('pending', 'active', 'suspended', 'revoked', 'expired')
+        DO $$ BEGIN
+            CREATE TYPE mcpsubscriptionstatus AS ENUM ('pending', 'active', 'suspended', 'revoked', 'expired');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
     """)
     op.execute("""
-        CREATE TYPE mcptoolaccessstatus AS ENUM ('enabled', 'disabled', 'pending_approval')
+        DO $$ BEGIN
+            CREATE TYPE mcptoolaccessstatus AS ENUM ('enabled', 'disabled', 'pending_approval');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
     """)
 
     # Create mcp_servers table
@@ -46,12 +62,12 @@ def upgrade() -> None:
         sa.Column('display_name', sa.String(255), nullable=False),
         sa.Column('description', sa.Text(), nullable=False),
         sa.Column('icon', sa.String(500), nullable=True),
-        sa.Column('category', sa.Enum('platform', 'tenant', 'public', name='mcpservercategory'), nullable=False),
+        sa.Column('category', postgresql.ENUM('platform', 'tenant', 'public', name='mcpservercategory', create_type=False), nullable=False),
         sa.Column('tenant_id', sa.String(255), nullable=True),
         sa.Column('visibility', postgresql.JSON(), nullable=False),
         sa.Column('requires_approval', sa.Boolean(), nullable=False, default=False),
         sa.Column('auto_approve_roles', postgresql.JSON(), nullable=True),
-        sa.Column('status', sa.Enum('active', 'maintenance', 'deprecated', name='mcpserverstatus'), nullable=False),
+        sa.Column('status', postgresql.ENUM('active', 'maintenance', 'deprecated', name='mcpserverstatus', create_type=False), nullable=False),
         sa.Column('version', sa.String(50), nullable=True),
         sa.Column('documentation_url', sa.String(500), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False),
@@ -97,7 +113,7 @@ def upgrade() -> None:
         sa.Column('previous_key_expires_at', sa.DateTime(), nullable=True),
         sa.Column('last_rotated_at', sa.DateTime(), nullable=True),
         sa.Column('rotation_count', sa.Integer(), nullable=False, default=0),
-        sa.Column('status', sa.Enum('pending', 'active', 'suspended', 'revoked', 'expired', name='mcpsubscriptionstatus'), nullable=False),
+        sa.Column('status', postgresql.ENUM('pending', 'active', 'suspended', 'revoked', 'expired', name='mcpsubscriptionstatus', create_type=False), nullable=False),
         sa.Column('status_reason', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.Column('updated_at', sa.DateTime(), nullable=False),
@@ -127,7 +143,7 @@ def upgrade() -> None:
         sa.Column('subscription_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('tool_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('tool_name', sa.String(255), nullable=False),
-        sa.Column('status', sa.Enum('enabled', 'disabled', 'pending_approval', name='mcptoolaccessstatus'), nullable=False),
+        sa.Column('status', postgresql.ENUM('enabled', 'disabled', 'pending_approval', name='mcptoolaccessstatus', create_type=False), nullable=False),
         sa.Column('granted_at', sa.DateTime(), nullable=True),
         sa.Column('granted_by', sa.String(255), nullable=True),
         sa.Column('usage_count', sa.Integer(), nullable=False, default=0),

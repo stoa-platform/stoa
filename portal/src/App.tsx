@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ErrorBoundary } from './components/common';
+import { ErrorBoundary, SkipLink } from './components/common';
 import { HomePage } from './pages/Home';
 import { MCPServersPage, ServerDetailPage } from './pages/servers';
 import { MySubscriptions } from './pages/subscriptions/MySubscriptions';
@@ -124,6 +124,7 @@ function App() {
         // trackError(error, { componentStack: errorInfo.componentStack });
       }}
     >
+      <SkipLink />
       <AuthProvider>
         <AppContent />
       </AuthProvider>

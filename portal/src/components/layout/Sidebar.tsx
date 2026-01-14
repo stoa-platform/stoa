@@ -27,6 +27,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div
           className="fixed inset-0 bg-gray-600 bg-opacity-50 z-40 lg:hidden"
           onClick={onClose}
+          aria-hidden="true"
         />
       )}
 
@@ -45,9 +46,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <span className="text-lg font-semibold text-gray-900">Menu</span>
           <button
             onClick={onClose}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            aria-label="Close menu"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -66,7 +68,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 }`
               }
             >
-              <item.icon className="h-5 w-5" />
+              <item.icon className="h-5 w-5" aria-hidden="true" />
               {item.name}
             </NavLink>
           ))}
@@ -80,9 +82,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-xs text-primary-600 hover:text-primary-700 mb-2 transition-colors"
           >
-            <BookOpen className="h-3.5 w-3.5" />
+            <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
             API Documentation
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink className="h-3 w-3" aria-hidden="true" />
+            <span className="sr-only">(opens in new tab)</span>
           </a>
           <div className="text-xs text-gray-500">
             <p>STOA Developer Portal</p>

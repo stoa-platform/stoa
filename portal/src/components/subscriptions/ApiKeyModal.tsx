@@ -87,6 +87,10 @@ export function ApiKeyModal({
       <div
         className="fixed inset-0 bg-black/50 transition-opacity"
         onClick={handleClose}
+        onKeyDown={(e) => e.key === 'Escape' && handleClose()}
+        role="button"
+        aria-label="Close modal"
+        tabIndex={0}
       />
 
       {/* Modal */}
@@ -136,9 +140,9 @@ export function ApiKeyModal({
 
             {/* API Key Display */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <span id="api-key-label" className="block text-sm font-medium text-gray-700 mb-2">
                 Your API Key
-              </label>
+              </span>
               <div className="relative">
                 <div className="flex items-center gap-2">
                   <div className="flex-1 flex items-center gap-2 px-4 py-3 bg-gray-900 rounded-lg">
@@ -191,9 +195,9 @@ export function ApiKeyModal({
 
             {/* Usage Example */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <span className="block text-sm font-medium text-gray-700 mb-2">
                 Usage Example
-              </label>
+              </span>
               <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
                 <pre className="text-sm text-gray-100 font-mono whitespace-pre-wrap">
 {`# Use with Claude Desktop

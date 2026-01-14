@@ -5,6 +5,12 @@ Provides endpoints for:
 - /v1/mcp/subscriptions - Manage user's server subscriptions
 
 Reference: PLAN-MCP-SUBSCRIPTIONS.md
+
+Rate limits (CAB-298):
+- List servers/subscriptions: 100/minute
+- Create subscription: 30/minute
+- Rotate key: 10/minute
+- Validate API key (internal): 1000/minute
 """
 import logging
 import math
@@ -13,10 +19,11 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user, User
+from ..middleware.rate_limit import limiter
 from ..database import get_db
 from ..models.mcp_subscription import (
     MCPServer,
@@ -107,9 +114,12 @@ def _convert_server_to_response(server: MCPServer) -> MCPServerResponse:
     responses={
         200: {"description": "List of MCP servers with pagination"},
         401: {"description": "Not authenticated"},
+        429: {"description": "Rate limit exceeded"},
     },
 )
+@limiter.limit("100/minute")
 async def list_servers(
+    request: Request,
     category: Optional[MCPServerCategoryEnum] = Query(None, description="Filter by server category"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
@@ -150,9 +160,12 @@ async def list_servers(
         200: {"description": "Server details with tools list"},
         401: {"description": "Not authenticated"},
         404: {"description": "Server not found"},
+        429: {"description": "Rate limit exceeded"},
     },
 )
+@limiter.limit("100/minute")
 async def get_server(
+    request: Request,
     server_id: UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -239,10 +252,13 @@ def _convert_subscription_to_response(
         401: {"description": "Not authenticated"},
         404: {"description": "Server not found"},
         409: {"description": "Already subscribed to this server"},
+        429: {"description": "Rate limit exceeded"},
     },
 )
+@limiter.limit("30/minute")
 async def create_subscription(
-    request: MCPSubscriptionCreate,
+    request: Request,
+    body: MCPSubscriptionCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -261,7 +277,7 @@ async def create_subscription(
     tool_repo = MCPToolAccessRepository(db)
 
     # Get server
-    server = await server_repo.get_by_id(request.server_id)
+    server = await server_repo.get_by_id(body.server_id)
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
 
@@ -269,7 +285,7 @@ async def create_subscription(
         raise HTTPException(status_code=400, detail="Server is not available for subscriptions")
 
     # Check for existing subscription
-    existing = await sub_repo.get_by_subscriber_and_server(user.id, request.server_id)
+    existing = await sub_repo.get_by_subscriber_and_server(user.id, body.server_id)
     if existing:
         raise HTTPException(
             status_code=409,
@@ -298,7 +314,7 @@ async def create_subscription(
         subscriber_id=user.id,
         subscriber_email=user.email,
         tenant_id=user.tenant_id or "default",
-        plan=request.plan,
+        plan=body.plan,
         api_key_hash=api_key_hash,
         api_key_prefix=api_key_prefix,
         status=initial_status,
@@ -308,7 +324,7 @@ async def create_subscription(
         subscription = await sub_repo.create(subscription)
 
         # Create tool access records
-        requested_tool_ids = set(request.requested_tools) if request.requested_tools else None
+        requested_tool_ids = set(body.requested_tools) if body.requested_tools else None
         tool_accesses = []
 
         for tool in server.tools:
@@ -376,9 +392,12 @@ async def create_subscription(
     responses={
         200: {"description": "List of subscriptions with pagination"},
         401: {"description": "Not authenticated"},
+        429: {"description": "Rate limit exceeded"},
     },
 )
+@limiter.limit("100/minute")
 async def list_my_subscriptions(
+    request: Request,
     status: Optional[MCPSubscriptionStatusEnum] = Query(None, description="Filter by subscription status"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
@@ -419,9 +438,12 @@ async def list_my_subscriptions(
         401: {"description": "Not authenticated"},
         403: {"description": "Access denied (not owner)"},
         404: {"description": "Subscription not found"},
+        429: {"description": "Rate limit exceeded"},
     },
 )
+@limiter.limit("100/minute")
 async def get_subscription(
+    request: Request,
     subscription_id: UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -451,9 +473,12 @@ async def get_subscription(
         401: {"description": "Not authenticated"},
         403: {"description": "Access denied (not owner)"},
         404: {"description": "Subscription not found"},
+        429: {"description": "Rate limit exceeded"},
     },
 )
+@limiter.limit("30/minute")
 async def cancel_subscription(
+    request: Request,
     subscription_id: UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -499,11 +524,14 @@ async def cancel_subscription(
         401: {"description": "Not authenticated"},
         403: {"description": "Access denied (not owner)"},
         404: {"description": "Subscription not found"},
+        429: {"description": "Rate limit exceeded"},
     },
 )
+@limiter.limit("10/minute")
 async def rotate_api_key(
+    request: Request,
     subscription_id: UUID,
-    request: MCPKeyRotationRequest = MCPKeyRotationRequest(),
+    body: MCPKeyRotationRequest = MCPKeyRotationRequest(),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -546,12 +574,12 @@ async def rotate_api_key(
             subscription=subscription,
             new_api_key_hash=new_api_key_hash,
             new_api_key_prefix=new_api_key_prefix,
-            grace_period_hours=request.grace_period_hours,
+            grace_period_hours=body.grace_period_hours,
         )
 
         logger.info(
             f"API key rotated for MCP subscription {subscription_id} by {user.email}. "
-            f"Grace period: {request.grace_period_hours}h"
+            f"Grace period: {body.grace_period_hours}h"
         )
 
         return MCPKeyRotationResponse(
@@ -559,7 +587,7 @@ async def rotate_api_key(
             new_api_key=new_api_key,
             new_api_key_prefix=new_api_key_prefix,
             old_key_expires_at=subscription.previous_key_expires_at,
-            grace_period_hours=request.grace_period_hours,
+            grace_period_hours=body.grace_period_hours,
             rotation_count=subscription.rotation_count,
         )
 
@@ -581,10 +609,13 @@ validation_router = APIRouter(prefix="/v1/mcp/validate", tags=["MCP Validation"]
         200: {"description": "API key is valid, returns subscription info"},
         401: {"description": "Invalid API key format or key not found"},
         403: {"description": "Subscription is not active or has expired"},
+        429: {"description": "Rate limit exceeded"},
     },
     include_in_schema=False,  # Internal endpoint
 )
+@limiter.limit("1000/minute")  # High limit for internal gateway calls
 async def validate_api_key(
+    request: Request,
     api_key: str,
     db: AsyncSession = Depends(get_db),
 ):

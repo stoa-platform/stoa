@@ -10,6 +10,8 @@ from fastapi.responses import FileResponse
 from starlette.responses import Response
 from contextlib import asynccontextmanager
 
+from slowapi.errors import RateLimitExceeded
+
 from .config import settings
 from .logging_config import configure_logging, get_logger
 from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health
@@ -18,6 +20,7 @@ from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscript
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .middleware.metrics import MetricsMiddleware, get_metrics
+from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from .services.gateway_service import gateway_service
 from .workers.deployment_worker import deployment_worker
 
@@ -197,6 +200,10 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Rate limiting (CAB-298)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # CORS
 app.add_middleware(

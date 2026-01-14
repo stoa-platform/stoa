@@ -1,0 +1,54 @@
+# Platform Bootstrap Kustomization
+# Deploy platform APIs, applications, and policies
+#
+# Usage:
+#   kubectl apply -k deploy/platform-bootstrap/
+#
+# Or with environment overlay:
+#   kubectl apply -k deploy/platform-bootstrap/overlays/dev/
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: stoa-platform-bootstrap
+
+# Common labels
+commonLabels:
+  app.kubernetes.io/part-of: stoa-platform
+  app.kubernetes.io/managed-by: kustomize
+  stoa.io/component: bootstrap
+
+# Resources to deploy
+resources: []
+# Note: YAML configs are not K8s resources
+# They are synced to GitLab and applied to Gateway via AWX
+# This kustomization is for reference/structure only
+
+# ConfigMaps from files (optional - for debugging)
+configMapGenerator:
+  - name: platform-api-configs
+    files:
+      - apis/control-plane-api.yaml
+
+  - name: platform-application-configs
+    files:
+      - applications/stoa-portal.yaml
+      - applications/control-plane-ui.yaml
+      - applications/mcp-gateway.yaml
+
+  - name: platform-policy-configs
+    files:
+      - policies/jwt-validation.yaml
+      - policies/rate-limit-standard.yaml
+      - policies/cors-platform.yaml
+      - policies/logging-standard.yaml
+
+  - name: platform-scope-configs
+    files:
+      - scopes/stoa-scopes.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    stoa.io/config-type: platform-bootstrap

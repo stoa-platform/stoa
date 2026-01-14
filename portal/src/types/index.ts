@@ -486,3 +486,104 @@ export interface DashboardData {
   stats: DashboardStats;
   recent_activity: RecentActivityItem[];
 }
+
+// ============ MCP Server Types (CAB-xxx - Server-based Subscriptions) ============
+
+/**
+ * Visibility configuration for MCP Servers
+ * Controls which roles can see and subscribe to a server
+ */
+export interface MCPServerVisibility {
+  roles?: string[];           // Required roles to see this server (e.g., ['cpi-admin', 'tenant-admin'])
+  excludeRoles?: string[];    // Roles that cannot see this server
+  public?: boolean;           // If true, visible to all authenticated users
+}
+
+/**
+ * MCP Server represents a collection of related tools
+ * Examples: "STOA Platform", "CRM APIs", "Billing Services"
+ */
+export interface MCPServer {
+  id: string;
+  name: string;                    // Unique identifier (e.g., "stoa-platform")
+  displayName: string;             // Human-friendly name
+  description: string;
+  icon?: string;                   // Icon name or URL
+  category: 'platform' | 'tenant' | 'public';  // Server category
+  tenant_id?: string;              // Owning tenant (for tenant servers)
+  visibility: MCPServerVisibility;
+  tools: MCPServerTool[];          // Tools in this server
+  status: 'active' | 'maintenance' | 'deprecated';
+  version?: string;
+  documentation_url?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Tool within an MCP Server (lighter than full MCPTool)
+ */
+export interface MCPServerTool {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string;
+  inputSchema?: MCPInputSchema;
+  enabled: boolean;                // Whether this tool is enabled in the server
+  requires_approval?: boolean;     // Admin approval needed for this tool
+}
+
+/**
+ * Server subscription - subscribes to an entire server, with per-tool access control
+ */
+export interface MCPServerSubscription {
+  id: string;
+  server_id: string;
+  server: MCPServer;
+  tenant_id: string;
+  user_id: string;
+  status: 'pending' | 'active' | 'suspended' | 'revoked';
+  plan: 'free' | 'basic' | 'premium';
+
+  // Per-tool access within the subscription
+  tool_access: MCPToolAccess[];
+
+  // API key for this server subscription
+  api_key_prefix?: string;
+  totp_required?: boolean;
+
+  // Key rotation
+  last_rotated_at?: string | null;
+  has_active_grace_period?: boolean;
+
+  created_at: string;
+  expires_at?: string | null;
+  last_used_at?: string;
+}
+
+/**
+ * Per-tool access control within a server subscription
+ */
+export interface MCPToolAccess {
+  tool_id: string;
+  tool_name: string;
+  status: 'enabled' | 'disabled' | 'pending_approval';
+  granted_at?: string;
+  granted_by?: string;  // Admin who approved
+}
+
+/**
+ * Request to create a server subscription
+ */
+export interface MCPServerSubscriptionCreate {
+  server_id: string;
+  plan?: 'free' | 'basic' | 'premium';
+  requested_tools: string[];   // Tool IDs to request access to
+}
+
+/**
+ * Server subscription with full API key (shown only on creation)
+ */
+export interface MCPServerSubscriptionWithKey extends MCPServerSubscription {
+  api_key: string;  // Full key, shown only once!
+}

@@ -3,6 +3,7 @@ import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { HomePage } from './pages/Home';
 import { ToolsCatalog, ToolDetail } from './pages/tools';
+import { MCPServersPage, ServerDetailPage } from './pages/servers';
 import { MySubscriptions } from './pages/subscriptions/MySubscriptions';
 import { APICatalog, APIDetail, APITestingSandbox } from './pages/apis';
 import { MyApplications, ApplicationDetail } from './pages/apps';
@@ -83,7 +84,10 @@ function AppContent() {
       <Layout>
         <Routes>
           <Route path="/" element={<HomePage />} />
-          {/* MCP Tools Routes */}
+          {/* MCP Servers (grouped tools with role-based visibility) */}
+          <Route path="/servers" element={<MCPServersPage />} />
+          <Route path="/servers/:serverId" element={<ServerDetailPage />} />
+          {/* MCP Tools Routes (legacy - individual tools) */}
           <Route path="/tools" element={<ToolsCatalog />} />
           <Route path="/tools/:id" element={<ToolDetail />} />
           <Route path="/subscriptions" element={<MySubscriptions />} />

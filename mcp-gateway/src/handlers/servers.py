@@ -234,29 +234,9 @@ async def list_servers(
     )
 
 
-@router.get("/{server_id}", response_model=MCPServer)
-async def get_server(
-    server_id: str,
-    user: User = Depends(get_current_user),
-) -> MCPServer:
-    """Get a specific MCP server by ID.
-
-    Returns 403 if the user doesn't have permission to view this server.
-    """
-    # Find server
-    server = next((s for s in MOCK_SERVERS if s.id == server_id), None)
-
-    if not server:
-        raise HTTPException(status_code=404, detail="Server not found")
-
-    # Check visibility
-    if not can_user_see_server(server, user):
-        raise HTTPException(status_code=403, detail="You do not have permission to view this server")
-
-    return server
-
-
 # ============ Server Subscriptions ============
+# NOTE: Static routes (/subscriptions) MUST be defined BEFORE dynamic routes (/{server_id})
+# otherwise FastAPI will match /subscriptions as a server_id parameter.
 
 @router.get("/subscriptions", response_model=ListServerSubscriptionsResponse)
 async def list_my_server_subscriptions(
@@ -658,3 +638,29 @@ async def rotate_server_key(
         "old_key_expires_at": old_key_expires.isoformat(),
         "grace_period_hours": grace_period_hours,
     }
+
+
+# ============ Dynamic Server Routes ============
+# NOTE: Routes with path parameters MUST be defined AFTER static routes
+# to prevent FastAPI from matching /subscriptions as a {server_id}.
+
+@router.get("/{server_id}", response_model=MCPServer)
+async def get_server(
+    server_id: str,
+    user: User = Depends(get_current_user),
+) -> MCPServer:
+    """Get a specific MCP server by ID.
+
+    Returns 403 if the user doesn't have permission to view this server.
+    """
+    # Find server
+    server = next((s for s in MOCK_SERVERS if s.id == server_id), None)
+
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    # Check visibility
+    if not can_user_see_server(server, user):
+        raise HTTPException(status_code=403, detail="You do not have permission to view this server")
+
+    return server

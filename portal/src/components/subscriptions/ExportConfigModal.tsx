@@ -2,7 +2,7 @@
  * Export Config Modal (CAB-296)
  *
  * Allows users to export MCP configuration for Claude Desktop / Cursor.
- * User enters their API key to generate a ready-to-use config.
+ * Supports both API Key and OAuth2 (client credentials) authentication.
  */
 
 import { useState } from 'react';
@@ -14,6 +14,8 @@ import {
   AlertCircle,
   FileJson,
   Terminal,
+  Key,
+  Shield,
 } from 'lucide-react';
 import type { MCPSubscription } from '../../types';
 
@@ -23,12 +25,21 @@ interface ExportConfigModalProps {
   onClose: () => void;
 }
 
+type AuthMethod = 'apiKey' | 'oauth2';
+
+// STOA logo URL for Claude Desktop display
+const STOA_LOGO_URL = 'https://raw.githubusercontent.com/stoa-platform/stoa/main/docs/assets/logo.svg';
+const MCP_GATEWAY_URL = 'https://mcp.stoa.cab-i.com';
+
 export function ExportConfigModal({
   subscription,
   isOpen,
   onClose,
 }: ExportConfigModalProps) {
+  const [authMethod, setAuthMethod] = useState<AuthMethod>('oauth2');
   const [apiKey, setApiKey] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
   const [copied, setCopied] = useState(false);
 
   // Generate slug from tool_id
@@ -37,19 +48,53 @@ export function ExportConfigModal({
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9-]/g, '');
 
-  // Build MCP config with the entered API key
-  const config = apiKey.trim()
-    ? {
+  const serverName = `stoa-${toolSlug}`;
+
+  // Build MCP config based on auth method
+  const buildConfig = () => {
+    if (authMethod === 'apiKey' && apiKey.trim()) {
+      // API Key auth - uses Bearer token directly
+      return {
         mcpServers: {
-          [`stoa-${toolSlug}`]: {
-            url: `https://mcp.stoa.cab-i.com/tools/${toolSlug}`,
+          [serverName]: {
+            url: `${MCP_GATEWAY_URL}/mcp/sse`,
+            transport: 'sse',
             headers: {
               Authorization: `Bearer ${apiKey}`,
             },
+            metadata: {
+              icon: STOA_LOGO_URL,
+              title: `STOA - ${subscription.tool_id}`,
+            },
           },
         },
-      }
-    : null;
+      };
+    }
+
+    if (authMethod === 'oauth2' && clientId.trim() && clientSecret.trim()) {
+      // OAuth2 Client Credentials - uses Basic Auth
+      // Note: Claude Desktop may need the bridge for this to work
+      return {
+        mcpServers: {
+          [serverName]: {
+            url: `${MCP_GATEWAY_URL}/mcp/sse`,
+            transport: 'sse',
+            headers: {
+              Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+            },
+            metadata: {
+              icon: STOA_LOGO_URL,
+              title: `STOA - ${subscription.tool_id}`,
+            },
+          },
+        },
+      };
+    }
+
+    return null;
+  };
+
+  const config = buildConfig();
 
   const handleDownload = () => {
     if (!config) return;
@@ -81,10 +126,16 @@ export function ExportConfigModal({
 
   const handleClose = () => {
     setApiKey('');
+    setClientId('');
+    setClientSecret('');
     onClose();
   };
 
   if (!isOpen) return null;
+
+  const isValid = authMethod === 'apiKey'
+    ? apiKey.trim().length > 0
+    : clientId.trim().length > 0 && clientSecret.trim().length > 0;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -124,37 +175,126 @@ export function ExportConfigModal({
           <div className="px-6 py-4 space-y-4">
             {/* Tool Info */}
             <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm text-gray-600">
-                <span className="font-medium">Tool:</span> {subscription.tool_id}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">
-                <span className="font-medium">Key Prefix:</span>{' '}
-                <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">
-                  {subscription.api_key_prefix}...
-                </code>
-              </p>
+              <div className="flex items-center gap-3">
+                <img
+                  src={STOA_LOGO_URL}
+                  alt="STOA"
+                  className="h-8 w-8"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <div>
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium">Tool:</span> {subscription.tool_id}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    <span className="font-medium">Key Prefix:</span>{' '}
+                    <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">
+                      {subscription.api_key_prefix}...
+                    </code>
+                  </p>
+                </div>
+              </div>
             </div>
 
-            {/* API Key Input */}
+            {/* Auth Method Selection */}
             <div>
-              <label
-                htmlFor="apiKey"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Enter your API Key
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Authentication Method
               </label>
-              <input
-                id="apiKey"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="stoa_sk_..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Enter your API key to generate a ready-to-use config file.
-              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setAuthMethod('oauth2')}
+                  className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
+                    authMethod === 'oauth2'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <Shield className="h-4 w-4" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium">OAuth2</p>
+                    <p className="text-xs opacity-70">Client Credentials</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setAuthMethod('apiKey')}
+                  className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
+                    authMethod === 'apiKey'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <Key className="h-4 w-4" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium">API Key</p>
+                    <p className="text-xs opacity-70">Bearer Token</p>
+                  </div>
+                </button>
+              </div>
             </div>
+
+            {/* Auth Inputs */}
+            {authMethod === 'apiKey' ? (
+              <div>
+                <label
+                  htmlFor="apiKey"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  API Key
+                </label>
+                <input
+                  id="apiKey"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="stoa_sk_..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Use "Reveal Key" first if you don't have your API key.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label
+                    htmlFor="clientId"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Client ID
+                  </label>
+                  <input
+                    id="clientId"
+                    type="text"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    placeholder="stoa-mcp-client"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="clientSecret"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Client Secret
+                  </label>
+                  <input
+                    id="clientSecret"
+                    type="password"
+                    value={clientSecret}
+                    onChange={(e) => setClientSecret(e.target.value)}
+                    placeholder="your-client-secret"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
+                  />
+                </div>
+                <p className="text-xs text-gray-500">
+                  Get your OAuth2 credentials from Keycloak admin or your team lead.
+                </p>
+              </div>
+            )}
 
             {/* Config Preview */}
             {config && (
@@ -184,7 +324,7 @@ export function ExportConfigModal({
                 How to use
               </h4>
               <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
-                <li>Enter your API key above</li>
+                <li>Fill in your credentials above</li>
                 <li>Download or copy the config</li>
                 <li>
                   Merge into your{' '}
@@ -196,11 +336,13 @@ export function ExportConfigModal({
               </ol>
             </div>
 
-            {!apiKey.trim() && (
+            {!isValid && (
               <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-amber-700">
-                  Use "Reveal Key" first if you don't have your API key saved.
+                  {authMethod === 'apiKey'
+                    ? 'Use "Reveal Key" first if you don\'t have your API key saved.'
+                    : 'Contact your admin to get OAuth2 client credentials.'}
                 </p>
               </div>
             )}

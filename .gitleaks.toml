@@ -1,0 +1,48 @@
+# Gitleaks configuration for STOA Platform
+# Excludes false positives from documentation and example code
+
+title = "STOA Gitleaks Config"
+
+[extend]
+useDefault = true
+
+# Allow paths containing documentation and examples
+[allowlist]
+description = "Allowlist for false positives"
+
+paths = [
+  '''docs/.*\.md''',
+  '''.*SUBSCRIPTIONS\.md''',
+  '''.*README\.md''',
+  '''.*\.example''',
+  '''tests/.*'''
+]
+
+regexes = [
+  # Example API keys used in documentation (stoa_ prefix with placeholder)
+  '''stoa_[a-zA-Z]+_[a-zA-Z0-9]{8,}_example''',
+  # Generic placeholder patterns
+  '''your[_-]?api[_-]?key''',
+  '''example[_-]?key''',
+  '''test[_-]?key''',
+  '''placeholder''',
+  '''xxxxxxxx''',
+  '''REDACTED''',
+]
+
+# Specific commits to ignore (false positives in schema examples)
+commits = [
+  "c3b53982772666b3cd95ae38004dc57f14c7e977",
+  "9bfdc8d235b1ad553cb333423fa7ce57fe74d8be",
+]
+
+# Rules to modify or disable
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key - customized for STOA"
+regex = '''(?i)["']?api[_-]?key["']?\s*[:=]\s*["']([a-zA-Z0-9_\-]{32,})["']'''
+allowlist = { regexes = [
+  '''stoa_[a-z]+_[a-zA-Z0-9]{32}''',  # Allow STOA format keys in examples
+  '''new_api_key.*example''',
+  '''api_key.*example''',
+]}

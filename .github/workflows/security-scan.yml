@@ -149,11 +149,12 @@ jobs:
       security-events: write
 
     strategy:
+      fail-fast: false
       matrix:
         image:
           - control-plane-api
           - mcp-gateway
-          - control-plane-ui
+          - portal
 
     steps:
       - name: Checkout repository
@@ -302,6 +303,7 @@ jobs:
 
       - name: Send Slack notification
         if: always()
+        continue-on-error: true
         uses: slackapi/slack-github-action@v1.24.0
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -339,3 +341,17 @@ jobs:
                 }
               ]
             }
+
+      - name: Print summary
+        if: always()
+        run: |
+          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ZAP Scan | ${{ needs.zap-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trivy Scan | ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Scan | ${{ needs.dependency-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Scan | ${{ needs.secret-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Overall Status:** ${{ steps.results.outputs.status }}" >> $GITHUB_STEP_SUMMARY

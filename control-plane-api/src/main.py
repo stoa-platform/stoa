@@ -149,6 +149,7 @@ app = FastAPI(
         {"name": "certificates", "description": "Certificate validation for mTLS subscriptions (CAB-313)"},
         {"name": "Search", "description": "Full-text search across tools and APIs (CAB-307)"},
         {"name": "Usage", "description": "Usage dashboard for API consumers (CAB-280)"},
+        {"name": "Dashboard", "description": "Home dashboard stats and activity (CAB-299)"},
         {"name": "Service Accounts", "description": "OAuth2 Service Accounts for MCP access (CAB-296)"},
     ],
     contact={
@@ -190,6 +191,7 @@ app.include_router(tenant_webhooks.router)
 app.include_router(certificates.router)
 app.include_router(search_router, prefix="/v1/search", tags=["Search"])
 app.include_router(usage.router)
+app.include_router(usage.dashboard_router)
 app.include_router(service_accounts.router)
 
 @app.get("/health")

@@ -191,3 +191,67 @@ class ActiveSubscription(BaseModel):
             }
         }
     )
+
+
+# ============ Dashboard Types (CAB-299) ============
+
+class ActivityType(str, Enum):
+    """Type of activity for the dashboard"""
+    SUBSCRIPTION_CREATED = "subscription.created"
+    SUBSCRIPTION_APPROVED = "subscription.approved"
+    SUBSCRIPTION_REVOKED = "subscription.revoked"
+    API_CALL = "api.call"
+    KEY_ROTATED = "key.rotated"
+
+
+class DashboardStats(BaseModel):
+    """Dashboard statistics for home page"""
+    tools_available: int = Field(..., ge=0, description="Number of tools available")
+    active_subscriptions: int = Field(..., ge=0, description="Number of active subscriptions")
+    api_calls_this_week: int = Field(..., ge=0, description="API calls this week")
+    tools_trend: Optional[float] = Field(None, description="Tools trend percentage")
+    subscriptions_trend: Optional[float] = Field(None, description="Subscriptions trend percentage")
+    calls_trend: Optional[float] = Field(None, description="Calls trend percentage")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "tools_available": 12,
+                "active_subscriptions": 4,
+                "api_calls_this_week": 842,
+                "tools_trend": 8.5,
+                "subscriptions_trend": 25.0,
+                "calls_trend": 12.3
+            }
+        }
+    )
+
+
+class RecentActivityItem(BaseModel):
+    """A recent activity item for the dashboard"""
+    id: str = Field(..., description="Activity identifier")
+    type: ActivityType = Field(..., description="Type of activity")
+    title: str = Field(..., description="Activity title")
+    description: Optional[str] = Field(None, description="Activity description")
+    tool_id: Optional[str] = Field(None, description="Related tool ID")
+    tool_name: Optional[str] = Field(None, description="Related tool name")
+    timestamp: datetime = Field(..., description="When the activity occurred")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "act-001",
+                "type": "subscription.created",
+                "title": "Subscribed to CRM Search",
+                "description": "New subscription created",
+                "tool_id": "crm-search",
+                "tool_name": "CRM Customer Search",
+                "timestamp": "2026-01-12T10:00:00Z"
+            }
+        }
+    )
+
+
+class DashboardActivityResponse(BaseModel):
+    """Response for dashboard activity endpoint"""
+    activity: List[RecentActivityItem] = Field(..., description="List of recent activities")

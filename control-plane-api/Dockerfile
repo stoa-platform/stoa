@@ -15,6 +15,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY src/ ./src/
 
+# Copy alembic configuration and migrations
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
+
 # Environment variables with defaults
 # Override at runtime via docker run -e or Kubernetes ConfigMap/Secrets
 

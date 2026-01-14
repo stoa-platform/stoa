@@ -171,17 +171,39 @@ def create_app() -> FastAPI:
 def _is_internal_request(request: Request) -> bool:
     """Check if request comes from internal network (K8s cluster).
 
-    Allows requests from:
+    Detection strategy:
+    1. If X-Forwarded-For header exists, request came through ingress (external)
+    2. If no forwarded headers, check direct client IP for internal networks
+
+    Internal networks:
     - 10.0.0.0/8 (K8s pod network)
     - 172.16.0.0/12 (K8s service network)
     - 192.168.0.0/16 (Private networks)
     - 127.0.0.0/8 (Localhost)
     """
-    # Get client IP from X-Real-IP or X-Forwarded-For (behind ingress)
-    client_ip = request.headers.get("X-Real-IP") or \
-                request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or \
-                request.client.host if request.client else "0.0.0.0"
+    # If request has X-Forwarded-For, it came through ingress (external)
+    # K8s probes hit the pod directly and don't have this header
+    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
+    real_ip = request.headers.get("X-Real-IP", "").strip()
 
+    if forwarded_for or real_ip:
+        # Request came through ingress - check if original IP is internal
+        # Extract the original client IP (first in chain)
+        original_ip = real_ip or forwarded_for.split(",")[0].strip()
+        try:
+            ip = ipaddress.ip_address(original_ip)
+            internal_networks = [
+                ipaddress.ip_network("10.0.0.0/8"),
+                ipaddress.ip_network("172.16.0.0/12"),
+                ipaddress.ip_network("192.168.0.0/16"),
+                ipaddress.ip_network("127.0.0.0/8"),
+            ]
+            return any(ip in network for network in internal_networks)
+        except ValueError:
+            return False
+
+    # No forwarded headers - direct connection, check client IP
+    client_ip = request.client.host if request.client else "0.0.0.0"
     try:
         ip = ipaddress.ip_address(client_ip)
         internal_networks = [

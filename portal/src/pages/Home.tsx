@@ -16,13 +16,14 @@ import {
 import type { DashboardStats as DashboardStatsType, RecentActivityItem } from '../types';
 
 export function HomePage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, accessToken } = useAuth();
   const [stats, setStats] = useState<DashboardStatsType | null>(null);
   const [activity, setActivity] = useState<RecentActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    // Wait for both authentication AND token to be available
+    if (!isAuthenticated || !accessToken) return;
 
     async function loadDashboard() {
       setIsLoading(true);
@@ -38,7 +39,7 @@ export function HomePage() {
     }
 
     loadDashboard();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, accessToken]);
 
   return (
     <div className="space-y-8">

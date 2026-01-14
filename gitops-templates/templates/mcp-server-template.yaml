@@ -1,0 +1,104 @@
+# MCP Server Template Schema
+# Template for defining MCP Servers in GitOps repository
+# Location: platform/mcp-servers/{server-name}/server.yaml
+#        or tenants/{tenant-id}/mcp-servers/{server-name}/server.yaml
+#
+# Variables use ${VAR:default} syntax, resolved by variable_resolver.py
+
+apiVersion: stoa.cab-i.com/v1
+kind: MCPServer
+metadata:
+  # Unique identifier for the server (lowercase, alphanumeric, hyphens)
+  name: ${SERVER_NAME}
+  # Tenant ID or "_platform" for global platform servers
+  tenant: ${TENANT_ID:_platform}
+  # Semantic version of this server definition
+  version: ${SERVER_VERSION:1.0.0}
+  labels:
+    managed-by: gitops
+    environment: ${ENVIRONMENT:prod}
+
+spec:
+  # Human-readable display name
+  displayName: ${SERVER_DISPLAY_NAME}
+  # Detailed description (supports markdown)
+  description: ${SERVER_DESCRIPTION}
+  # Icon URL (optional, displayed in portal catalog)
+  icon: ${SERVER_ICON:}
+  # Category for catalog organization
+  # - platform: Core STOA platform services
+  # - tenant: Tenant-specific services
+  # - public: Third-party integrations (Confluence, Jira, etc.)
+  category: ${CATEGORY:public}
+  # Server status
+  # - active: Available in catalog
+  # - maintenance: Temporarily unavailable
+  # - deprecated: Marked for removal
+  status: ${STATUS:active}
+  # Documentation URL (optional)
+  documentationUrl: ${DOC_URL:}
+
+  # Visibility controls who can see this server in the catalog
+  visibility:
+    # If true, visible to all authenticated users
+    public: ${PUBLIC:true}
+    # Required roles to see this server (if not public)
+    roles: ${REQUIRED_ROLES:[]}
+    # Roles explicitly excluded from seeing this server
+    excludeRoles: ${EXCLUDE_ROLES:[]}
+
+  # Subscription settings
+  subscription:
+    # If true, subscriptions require admin approval
+    requiresApproval: ${REQUIRES_APPROVAL:false}
+    # Roles that are auto-approved on subscription request
+    autoApproveRoles: ${AUTO_APPROVE_ROLES:[]}
+    # Default subscription plan
+    defaultPlan: ${DEFAULT_PLAN:free}
+
+  # Tools exposed by this MCP server
+  tools:
+    - # Unique tool identifier within this server
+      name: ${TOOL_NAME}
+      # Human-readable display name
+      displayName: ${TOOL_DISPLAY_NAME}
+      # Tool description (supports markdown)
+      description: ${TOOL_DESCRIPTION}
+      # Backend endpoint (relative to server base URL or absolute)
+      endpoint: ${TOOL_ENDPOINT}
+      # HTTP method
+      method: ${TOOL_METHOD:POST}
+      # If false, tool is hidden from subscribers
+      enabled: ${TOOL_ENABLED:true}
+      # If true, tool requires separate approval
+      requiresApproval: ${TOOL_REQUIRES_APPROVAL:false}
+      # JSON Schema for input validation
+      inputSchema:
+        type: object
+        properties: {}
+        required: []
+      # Request timeout
+      timeout: ${TOOL_TIMEOUT:30s}
+      # Rate limiting per subscriber
+      rateLimit:
+        requestsPerMinute: ${TOOL_RATE_LIMIT:60}
+        burst: ${TOOL_BURST:10}
+
+  # Optional reference to underlying API (for gateway routing)
+  apiRef:
+    name: ${API_REF_NAME:}
+    version: ${API_REF_VERSION:}
+
+  # Backend configuration
+  backend:
+    # Base URL for all tools (unless overridden per-tool)
+    baseUrl: ${BACKEND_BASE_URL:}
+    # Authentication to backend
+    auth:
+      # Type: none, api-key, oauth2, mtls
+      type: ${BACKEND_AUTH_TYPE:none}
+      # Secret reference (Vault path)
+      secretRef: ${BACKEND_SECRET_REF:}
+    # Connection settings
+    timeout: ${BACKEND_TIMEOUT:30s}
+    retries: ${BACKEND_RETRIES:3}

@@ -1,0 +1,13 @@
+# Tenant Configuration
+id: acme-corp
+name: ACME Corporation
+display_name: ACME Corporation
+created_at: "2024-03-15T00:00:00Z"
+status: active
+settings:
+  max_apis: 200
+  max_applications: 100
+  environments:
+    - dev
+    - staging
+    - prod

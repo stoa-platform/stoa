@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     LOG_FORMAT: str = "json"  # json, text
     LOG_COMPONENTS: str = "{}"  # JSON dict of component:level overrides
 
+    # Logging - Middleware Enable/Disable
+    LOG_HTTP_MIDDLEWARE_ENABLED: bool = True  # Set to False to disable HTTP logging middleware
+
     # Logging - HTTP Debug
     LOG_DEBUG_HTTP_REQUESTS: bool = False
     LOG_DEBUG_HTTP_RESPONSES: bool = False

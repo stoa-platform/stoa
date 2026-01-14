@@ -178,22 +178,39 @@ async def handle_push_event_traced(payload: dict, trace: PipelineTrace) -> dict:
     step_analyze.start()
 
     affected_apis = set()
+    affected_mcp_servers = set()  # (tenant_id, server_name, scope)
+
     for commit in commits:
         for file_path in commit.get("added", []) + commit.get("modified", []):
             parts = file_path.split("/")
+
+            # Detect API changes: tenants/{tenant_id}/apis/{api_name}/...
             if len(parts) >= 4 and parts[0] == "tenants" and parts[2] == "apis":
                 tenant_id = parts[1]
                 api_name = parts[3]
                 affected_apis.add((tenant_id, api_name))
 
+            # Detect MCP server changes (tenant): tenants/{tenant_id}/mcp-servers/{server}/...
+            elif len(parts) >= 5 and parts[0] == "tenants" and parts[2] == "mcp-servers":
+                tenant_id = parts[1]
+                server_name = parts[3]
+                affected_mcp_servers.add((tenant_id, server_name, "tenant"))
+
+            # Detect MCP server changes (platform): platform/mcp-servers/{server}/...
+            elif len(parts) >= 4 and parts[0] == "platform" and parts[1] == "mcp-servers":
+                server_name = parts[2]
+                affected_mcp_servers.add(("_platform", server_name, "platform"))
+
     step_analyze.complete({
         "files_analyzed": sum(len(c.get("added", []) + c.get("modified", [])) for c in commits),
         "apis_affected": len(affected_apis),
         "apis": [f"{t}/{a}" for t, a in affected_apis],
+        "mcp_servers_affected": len(affected_mcp_servers),
+        "mcp_servers": [f"{s}/{n}" for t, n, s in affected_mcp_servers],
     })
 
-    if not affected_apis:
-        return {"action": "skipped", "reason": "No API changes detected"}
+    if not affected_apis and not affected_mcp_servers:
+        return {"action": "skipped", "reason": "No API or MCP server changes detected"}
 
     # Update trace with first affected API
     if affected_apis:
@@ -247,10 +264,52 @@ async def handle_push_event_traced(payload: dict, trace: PipelineTrace) -> dict:
     step_awx.status = TraceStatus.PENDING
     step_awx.details = {"note": "Awaiting deployment worker"}
 
+    # Step: Publish MCP server events
+    mcp_events_published = []
+    if affected_mcp_servers:
+        step_mcp = trace.add_step("mcp_server_sync")
+        step_mcp.start()
+
+        try:
+            for tenant_id, server_name, scope in affected_mcp_servers:
+                event_id = await kafka_service.publish(
+                    topic=Topics.MCP_SERVER_EVENTS,
+                    event_type="mcp-server-updated",
+                    tenant_id=tenant_id,
+                    payload={
+                        "server_name": server_name,
+                        "scope": scope,
+                        "trigger": "gitlab-push",
+                        "commit_sha": payload.get("after"),
+                        "requested_by": user_name,
+                        "trace_id": trace.id,
+                    },
+                    user_id=user_name
+                )
+                mcp_events_published.append({
+                    "event_id": event_id,
+                    "tenant_id": tenant_id,
+                    "server_name": server_name,
+                    "scope": scope,
+                })
+
+            step_mcp.complete({
+                "topic": Topics.MCP_SERVER_EVENTS,
+                "events_count": len(mcp_events_published),
+                "events": mcp_events_published,
+            })
+
+        except Exception as e:
+            step_mcp.fail(str(e))
+            logger.error(f"Failed to publish MCP server events: {e}")
+            # Don't raise - MCP sync failure shouldn't block API deployments
+
     return {
         "action": "deployed",
         "apis_count": len(affected_apis),
         "events_published": len(events_published),
+        "mcp_servers_count": len(affected_mcp_servers),
+        "mcp_events_published": len(mcp_events_published),
     }
 
 

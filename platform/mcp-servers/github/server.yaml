@@ -1,0 +1,290 @@
+# GitHub MCP Server
+# GitHub integration for repository and code management
+
+apiVersion: stoa.cab-i.com/v1
+kind: MCPServer
+metadata:
+  name: github
+  tenant: _platform
+  version: "1.0.0"
+  labels:
+    managed-by: gitops
+    environment: prod
+
+spec:
+  displayName: GitHub
+  description: |
+    GitHub integration for AI-powered repository management.
+    Search code, manage issues, pull requests, and repositories.
+  icon: https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png
+  category: public
+  status: active
+  documentationUrl: https://docs.github.com/en/rest
+
+  visibility:
+    public: true
+
+  subscription:
+    requiresApproval: true
+    autoApproveRoles:
+      - cpi-admin
+    defaultPlan: free
+
+  tools:
+    - name: search-code
+      displayName: Search Code
+      description: Search for code across GitHub repositories
+      endpoint: /search/code
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          q:
+            type: string
+            description: Search query (e.g., "addClass in:file language:js repo:owner/repo")
+          per_page:
+            type: integer
+            description: Results per page
+            default: 30
+          page:
+            type: integer
+            description: Page number
+            default: 1
+        required:
+          - q
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 30
+
+    - name: search-repositories
+      displayName: Search Repositories
+      description: Search for GitHub repositories
+      endpoint: /search/repositories
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          q:
+            type: string
+            description: Search query (e.g., "kubernetes language:go stars:>1000")
+          sort:
+            type: string
+            description: Sort by (stars, forks, updated)
+            default: stars
+          order:
+            type: string
+            description: Sort order (asc, desc)
+            default: desc
+          per_page:
+            type: integer
+            description: Results per page
+            default: 30
+        required:
+          - q
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 30
+
+    - name: get-repository
+      displayName: Get Repository
+      description: Get detailed information about a repository
+      endpoint: /repos/{owner}/{repo}
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          owner:
+            type: string
+            description: Repository owner
+          repo:
+            type: string
+            description: Repository name
+        required:
+          - owner
+          - repo
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 60
+
+    - name: list-issues
+      displayName: List Issues
+      description: List issues for a repository
+      endpoint: /repos/{owner}/{repo}/issues
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          owner:
+            type: string
+            description: Repository owner
+          repo:
+            type: string
+            description: Repository name
+          state:
+            type: string
+            description: Issue state (open, closed, all)
+            default: open
+          labels:
+            type: string
+            description: Comma-separated list of labels
+          per_page:
+            type: integer
+            description: Results per page
+            default: 30
+        required:
+          - owner
+          - repo
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 60
+
+    - name: create-issue
+      displayName: Create Issue
+      description: Create a new issue in a repository
+      endpoint: /repos/{owner}/{repo}/issues
+      method: POST
+      enabled: true
+      requiresApproval: false
+      inputSchema:
+        type: object
+        properties:
+          owner:
+            type: string
+            description: Repository owner
+          repo:
+            type: string
+            description: Repository name
+          title:
+            type: string
+            description: Issue title
+          body:
+            type: string
+            description: Issue body (supports markdown)
+          labels:
+            type: array
+            description: Labels to add
+            items:
+              type: string
+          assignees:
+            type: array
+            description: Usernames to assign
+            items:
+              type: string
+        required:
+          - owner
+          - repo
+          - title
+      timeout: 60s
+      rateLimit:
+        requestsPerMinute: 20
+
+    - name: list-pull-requests
+      displayName: List Pull Requests
+      description: List pull requests for a repository
+      endpoint: /repos/{owner}/{repo}/pulls
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          owner:
+            type: string
+            description: Repository owner
+          repo:
+            type: string
+            description: Repository name
+          state:
+            type: string
+            description: PR state (open, closed, all)
+            default: open
+          per_page:
+            type: integer
+            description: Results per page
+            default: 30
+        required:
+          - owner
+          - repo
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 60
+
+    - name: get-file-contents
+      displayName: Get File Contents
+      description: Get the contents of a file from a repository
+      endpoint: /repos/{owner}/{repo}/contents/{path}
+      method: GET
+      enabled: true
+      inputSchema:
+        type: object
+        properties:
+          owner:
+            type: string
+            description: Repository owner
+          repo:
+            type: string
+            description: Repository name
+          path:
+            type: string
+            description: Path to the file
+          ref:
+            type: string
+            description: Branch, tag, or commit SHA
+            default: main
+        required:
+          - owner
+          - repo
+          - path
+      timeout: 30s
+      rateLimit:
+        requestsPerMinute: 60
+
+    - name: create-pull-request
+      displayName: Create Pull Request
+      description: Create a new pull request
+      endpoint: /repos/{owner}/{repo}/pulls
+      method: POST
+      enabled: true
+      requiresApproval: true
+      inputSchema:
+        type: object
+        properties:
+          owner:
+            type: string
+            description: Repository owner
+          repo:
+            type: string
+            description: Repository name
+          title:
+            type: string
+            description: PR title
+          body:
+            type: string
+            description: PR description
+          head:
+            type: string
+            description: Source branch
+          base:
+            type: string
+            description: Target branch
+            default: main
+        required:
+          - owner
+          - repo
+          - title
+          - head
+          - base
+      timeout: 60s
+      rateLimit:
+        requestsPerMinute: 10
+
+  backend:
+    baseUrl: https://api.github.com
+    auth:
+      type: api-key
+      secretRef: vault:secret/data/integrations/github#token
+    timeout: 30s
+    retries: 3

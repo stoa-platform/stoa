@@ -71,7 +71,7 @@ class MCPServer(Base):
 
     # Categorization
     category = Column(
-        SQLEnum(MCPServerCategory),
+        SQLEnum(MCPServerCategory, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MCPServerCategory.PUBLIC
     )
@@ -86,7 +86,7 @@ class MCPServer(Base):
 
     # Status
     status = Column(
-        SQLEnum(MCPServerStatus),
+        SQLEnum(MCPServerStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MCPServerStatus.ACTIVE
     )
@@ -180,7 +180,7 @@ class MCPServerSubscription(Base):
 
     # Status and approval
     status = Column(
-        SQLEnum(MCPSubscriptionStatus),
+        SQLEnum(MCPSubscriptionStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MCPSubscriptionStatus.PENDING
     )
@@ -232,7 +232,7 @@ class MCPToolAccess(Base):
 
     # Access status
     status = Column(
-        SQLEnum(MCPToolAccessStatus),
+        SQLEnum(MCPToolAccessStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MCPToolAccessStatus.ENABLED
     )

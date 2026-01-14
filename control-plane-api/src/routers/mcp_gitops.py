@@ -14,7 +14,7 @@ from datetime import datetime
 from ..auth.dependencies import get_current_user, User
 from ..services.git_service import git_service
 from ..services.mcp_sync_service import MCPSyncService, SyncResult
-from ..database import get_async_db
+from ..database import get_db as get_async_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)

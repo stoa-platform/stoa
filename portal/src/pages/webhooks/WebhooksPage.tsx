@@ -491,7 +491,14 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div
+        className="fixed inset-0 bg-black/50"
+        onClick={onClose}
+        onKeyDown={(e) => e.key === 'Escape' && onClose()}
+        role="button"
+        aria-label="Close modal"
+        tabIndex={0}
+      />
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full">
           <div className="p-6 border-b border-gray-200">
@@ -508,10 +515,11 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="webhook-name" className="block text-sm font-medium text-gray-700 mb-2">
                 Name
               </label>
               <input
+                id="webhook-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -521,10 +529,11 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="webhook-url" className="block text-sm font-medium text-gray-700 mb-2">
                 Webhook URL
               </label>
               <input
+                id="webhook-url"
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
@@ -534,13 +543,14 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="webhook-secret" className="block text-sm font-medium text-gray-700 mb-2">
                 Secret (optional)
                 <span className="text-gray-400 font-normal ml-2">
                   For HMAC signature verification
                 </span>
               </label>
               <input
+                id="webhook-secret"
                 type="password"
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
@@ -550,10 +560,10 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <span className="block text-sm font-medium text-gray-700 mb-3">
                 Events
-              </label>
-              <div className="space-y-2">
+              </span>
+              <div className="space-y-2" role="group" aria-label="Webhook events">
                 {WEBHOOK_EVENTS.map((eventType) => (
                   <label
                     key={eventType.value}
@@ -568,6 +578,7 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
                       onChange={() => toggleEvent(eventType.value)}
                       disabled={eventType.value !== '*' && events.includes('*')}
                       className="mt-0.5 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                      aria-label={eventType.label}
                     />
                     <div>
                       <div className="font-medium text-gray-900">{eventType.label}</div>
@@ -624,7 +635,14 @@ function DeliveriesModal({ tenantId, webhookId, onClose }: DeliveriesModalProps)
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div
+        className="fixed inset-0 bg-black/50"
+        onClick={onClose}
+        onKeyDown={(e) => e.key === 'Escape' && onClose()}
+        role="button"
+        aria-label="Close modal"
+        tabIndex={0}
+      />
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
           <div className="p-6 border-b border-gray-200 flex items-center justify-between">
@@ -633,12 +651,14 @@ function DeliveriesModal({ tenantId, webhookId, onClose }: DeliveriesModalProps)
               <button
                 onClick={() => refetch()}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                aria-label="Refresh"
               >
-                <RefreshCw className="h-5 w-5" />
+                <RefreshCw className="h-5 w-5" aria-hidden="true" />
               </button>
               <button
                 onClick={onClose}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                aria-label="Close"
               >
                 &times;
               </button>
@@ -691,10 +711,14 @@ function DeliveryRow({ delivery, onRetry, isRetrying }: DeliveryRowProps) {
       <div
         className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50"
         onClick={() => setExpanded(!expanded)}
+        onKeyDown={(e) => e.key === 'Enter' && setExpanded(!expanded)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
       >
         <div className="flex items-center gap-4">
           <span className={`p-1.5 rounded-full ${status.color}`}>
-            <StatusIcon className="h-4 w-4" />
+            <StatusIcon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div>
             <div className="font-medium text-gray-900">{delivery.event_type}</div>
@@ -731,19 +755,19 @@ function DeliveryRow({ delivery, onRetry, isRetrying }: DeliveryRowProps) {
         <div className="border-t border-gray-200 p-4 bg-gray-50 space-y-4">
           {delivery.error_message && (
             <div>
-              <label className="text-xs font-medium text-gray-500 uppercase">Error</label>
+              <span className="text-xs font-medium text-gray-500 uppercase">Error</span>
               <div className="mt-1 text-sm text-red-600">{delivery.error_message}</div>
             </div>
           )}
           <div>
-            <label className="text-xs font-medium text-gray-500 uppercase">Payload</label>
+            <span className="text-xs font-medium text-gray-500 uppercase">Payload</span>
             <pre className="mt-1 text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">
               {JSON.stringify(delivery.payload, null, 2)}
             </pre>
           </div>
           {delivery.response_body && (
             <div>
-              <label className="text-xs font-medium text-gray-500 uppercase">Response</label>
+              <span className="text-xs font-medium text-gray-500 uppercase">Response</span>
               <pre className="mt-1 text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto max-h-40">
                 {delivery.response_body}
               </pre>

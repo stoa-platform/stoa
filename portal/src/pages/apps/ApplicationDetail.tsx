@@ -367,6 +367,10 @@ export function ApplicationDetail() {
           <div
             className="fixed inset-0 bg-black/50"
             onClick={() => setShowDeleteConfirm(false)}
+            onKeyDown={(e) => e.key === 'Escape' && setShowDeleteConfirm(false)}
+            role="button"
+            aria-label="Close modal"
+            tabIndex={0}
           />
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">

@@ -129,6 +129,10 @@ export function RotateKeyModal({
       <div
         className="fixed inset-0 bg-black/50 transition-opacity"
         onClick={step === 'confirm' ? handleClose : undefined}
+        onKeyDown={(e) => e.key === 'Escape' && step === 'confirm' && handleClose()}
+        role="button"
+        aria-label="Close modal"
+        tabIndex={step === 'confirm' ? 0 : -1}
       />
 
       {/* Modal */}
@@ -183,12 +187,13 @@ export function RotateKeyModal({
 
                 {/* Grace period selection */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="grace-period-select" className="block text-sm font-medium text-gray-700 mb-2">
                     Grace Period Duration
                   </label>
                   <div className="flex items-center gap-3">
-                    <Clock className="h-5 w-5 text-gray-400" />
+                    <Clock className="h-5 w-5 text-gray-400" aria-hidden="true" />
                     <select
+                      id="grace-period-select"
                       value={gracePeriodHours}
                       onChange={(e) => setGracePeriodHours(parseInt(e.target.value))}
                       className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -268,9 +273,9 @@ export function RotateKeyModal({
                 {/* New API Key Display */}
                 {rotationResult && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <span className="block text-sm font-medium text-gray-700 mb-2">
                       Your New API Key
-                    </label>
+                    </span>
                     <div className="relative">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 flex items-center gap-2 px-4 py-3 bg-gray-900 rounded-lg">

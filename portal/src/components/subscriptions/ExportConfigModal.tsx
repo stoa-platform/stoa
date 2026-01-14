@@ -146,6 +146,10 @@ export function ExportConfigModal({
         <div
           className="fixed inset-0 bg-black/50 transition-opacity"
           onClick={handleClose}
+          onKeyDown={(e) => e.key === 'Escape' && handleClose()}
+          role="button"
+          aria-label="Close modal"
+          tabIndex={0}
         />
 
         {/* Modal */}
@@ -201,10 +205,10 @@ export function ExportConfigModal({
             </div>
 
             {/* Auth Method Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div role="radiogroup" aria-labelledby="auth-method-label">
+              <span id="auth-method-label" className="block text-sm font-medium text-gray-700 mb-2">
                 Authentication Method
-              </label>
+              </span>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setAuthMethod('oauth2')}
@@ -319,9 +323,9 @@ export function ExportConfigModal({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <span className="block text-sm font-medium text-gray-700 mb-1">
                     Configuration Preview
-                  </label>
+                  </span>
                   <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto max-h-48">
                     {JSON.stringify(config, null, 2)}
                   </pre>

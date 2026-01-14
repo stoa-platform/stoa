@@ -81,6 +81,10 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
           depth > 0 ? 'ml-4' : ''
         }`}
         onClick={() => (hasChildren || hasArrayItems) && setIsExpanded(!isExpanded)}
+        onKeyDown={(e) => e.key === 'Enter' && (hasChildren || hasArrayItems) && setIsExpanded(!isExpanded)}
+        role={hasChildren || hasArrayItems ? 'button' : undefined}
+        tabIndex={hasChildren || hasArrayItems ? 0 : undefined}
+        aria-expanded={hasChildren || hasArrayItems ? isExpanded : undefined}
       >
         {/* Expand/Collapse Icon */}
         <div className="w-4 h-4 mt-0.5 flex-shrink-0">

@@ -124,6 +124,10 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
+        onKeyDown={(e) => e.key === 'Escape' && onClose()}
+        role="button"
+        aria-label="Close modal"
+        tabIndex={0}
       />
 
       {/* Modal */}
@@ -168,11 +172,12 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
           {/* TOTP input (if required) */}
           {(needsTotp || subscription.totp_required) && !apiKey && (
             <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Shield className="h-4 w-4 text-primary-500" />
+              <label htmlFor="totp-input" className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <Shield className="h-4 w-4 text-primary-500" aria-hidden="true" />
                 2FA Verification Required
               </label>
               <input
+                id="totp-input"
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -185,6 +190,7 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
                   setError(null);
                 }}
                 className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
               />
               <p className="text-xs text-gray-500">

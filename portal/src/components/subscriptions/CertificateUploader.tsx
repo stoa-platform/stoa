@@ -197,6 +197,10 @@ export function CertificateUploader({
           onDragLeave={handleDragLeave}
           onPaste={handlePaste}
           onClick={handleClick}
+          onKeyDown={(e) => e.key === 'Enter' && handleClick()}
+          role="button"
+          tabIndex={0}
+          aria-label="Upload certificate file. Drag and drop, paste, or click to select file"
           className={`
             relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
             transition-colors duration-200

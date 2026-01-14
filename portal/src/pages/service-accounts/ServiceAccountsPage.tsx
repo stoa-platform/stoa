@@ -336,16 +336,25 @@ function CreateServiceAccountModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div
+        className="fixed inset-0 bg-black/50"
+        onClick={onClose}
+        onKeyDown={(e) => e.key === 'Escape' && onClose()}
+        role="button"
+        aria-label="Close modal"
+        tabIndex={0}
+      />
       <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Create Service Account</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Name <span className="text-red-500">*</span>
+            <label htmlFor="sa-name" className="block text-sm font-medium text-gray-700 mb-1">
+              Name <span className="text-red-500" aria-hidden="true">*</span>
+              <span className="sr-only">(required)</span>
             </label>
             <input
+              id="sa-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -356,10 +365,11 @@ function CreateServiceAccountModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="sa-description" className="block text-sm font-medium text-gray-700 mb-1">
               Description
             </label>
             <input
+              id="sa-description"
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -454,11 +464,18 @@ function NewAccountCreatedModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div
+        className="fixed inset-0 bg-black/50"
+        onClick={onClose}
+        onKeyDown={(e) => e.key === 'Escape' && onClose()}
+        role="button"
+        aria-label="Close modal"
+        tabIndex={0}
+      />
       <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-green-100 rounded-full">
-            <Check className="h-6 w-6 text-green-600" />
+            <Check className="h-6 w-6 text-green-600" aria-hidden="true" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Service Account Created!</h2>
@@ -468,7 +485,7 @@ function NewAccountCreatedModal({
 
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+            <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" aria-hidden="true" />
             <p className="text-sm text-amber-800">
               <strong>Important:</strong> Save these credentials now. The client secret will not be shown again.
             </p>
@@ -477,22 +494,23 @@ function NewAccountCreatedModal({
 
         <div className="space-y-3 mb-6">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Client ID</label>
-            <code className="block w-full p-2 bg-gray-100 rounded text-sm font-mono break-all">
+            <span id="sa-client-id-label" className="block text-xs font-medium text-gray-500 mb-1">Client ID</span>
+            <code className="block w-full p-2 bg-gray-100 rounded text-sm font-mono break-all" aria-labelledby="sa-client-id-label">
               {account.client_id}
             </code>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Client Secret</label>
+            <span id="sa-client-secret-label" className="block text-xs font-medium text-gray-500 mb-1">Client Secret</span>
             <div className="flex items-center gap-2">
-              <code className="flex-1 p-2 bg-gray-100 rounded text-sm font-mono break-all">
+              <code className="flex-1 p-2 bg-gray-100 rounded text-sm font-mono break-all" aria-labelledby="sa-client-secret-label">
                 {showSecret ? account.client_secret : '••••••••••••••••••••••••••••••••'}
               </code>
               <button
                 onClick={() => setShowSecret(!showSecret)}
                 className="p-2 text-gray-500 hover:text-gray-700"
+                aria-label={showSecret ? 'Hide client secret' : 'Show client secret'}
               >
-                {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showSecret ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
               </button>
             </div>
           </div>
@@ -540,7 +558,14 @@ function DeleteConfirmModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50" onClick={onCancel} />
+      <div
+        className="fixed inset-0 bg-black/50"
+        onClick={onCancel}
+        onKeyDown={(e) => e.key === 'Escape' && onCancel()}
+        role="button"
+        aria-label="Close modal"
+        tabIndex={0}
+      />
       <div className="relative bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-red-100 rounded-full">

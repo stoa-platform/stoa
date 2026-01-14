@@ -135,15 +135,17 @@ export function ToolsCatalog() {
             </span>
           )}
           {selectedTags.map((tag) => (
-            <span
+            <button
               key={tag}
+              type="button"
               className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm cursor-pointer hover:bg-blue-200"
               onClick={() => setSelectedTags(selectedTags.filter(t => t !== tag))}
+              aria-label={`Remove ${tag} filter`}
             >
-              <Tag className="h-3 w-3" />
+              <Tag className="h-3 w-3" aria-hidden="true" />
               {tag}
-              <span className="ml-1">×</span>
-            </span>
+              <span className="ml-1" aria-hidden="true">×</span>
+            </button>
           ))}
           {searchQuery && (
             <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
@@ -278,16 +280,18 @@ export function ToolsCatalog() {
 
                   <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
                     {tool.category ? (
-                      <span
+                      <button
+                        type="button"
                         className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded cursor-pointer hover:bg-primary-100 hover:text-primary-700"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           setSelectedCategory(tool.category!);
                         }}
+                        aria-label={`Filter by ${tool.category} category`}
                       >
                         {tool.category}
-                      </span>
+                      </button>
                     ) : (
                       <span />
                     )}

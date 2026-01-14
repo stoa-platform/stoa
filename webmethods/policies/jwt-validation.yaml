@@ -1,0 +1,52 @@
+apiVersion: stoa.io/v1
+kind: WebMethodsPolicy
+metadata:
+  name: jwt-validation
+  description: "Validation des tokens JWT via Keycloak OIDC"
+
+spec:
+  type: jwt-validation
+  config:
+    # OIDC Discovery endpoint (Keycloak)
+    issuer: "${KEYCLOAK_ISSUER_URL}"
+    
+    # JWKS endpoint pour validation des signatures
+    jwksUri: "${KEYCLOAK_ISSUER_URL}/protocol/openid-connect/certs"
+    
+    # Audiences acceptées
+    audiences:
+      - stoa-api
+      - stoa-portal
+    
+    # Algorithmes acceptés
+    algorithms:
+      - RS256
+      - RS384
+      - RS512
+    
+    # Claims requis
+    requiredClaims:
+      - sub
+      - iat
+      - exp
+    
+    # Extraction du token
+    tokenLocation: header
+    tokenHeader: Authorization
+    tokenPrefix: "Bearer "
+    
+    # Cache JWKS (performance)
+    jwksCacheTtl: 3600s
+    
+    # Propagation des claims vers le backend
+    propagateClaims:
+      - sub
+      - email
+      - preferred_username
+      - realm_access
+    
+    # Headers ajoutés vers backend
+    forwardHeaders:
+      X-User-Id: "${claims.sub}"
+      X-User-Email: "${claims.email}"
+      X-User-Roles: "${claims.realm_access.roles}"

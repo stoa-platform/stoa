@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensearch-sync-config
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: opensearch-sync
+data:
+  POSTGRES_HOST: "control-plane-db.stoa-system.svc.cluster.local"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "stoa"
+  OPENSEARCH_HOST: "https://opensearch-cluster-master.logging.svc.cluster.local:9200"
+  OPENSEARCH_VERIFY_CERTS: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensearch-sync-code
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: opensearch-sync
+data:
+  sync_service.py: |
+    import asyncio, json, logging, os, sys
+    from datetime import datetime, timezone
+    import asyncpg
+    from opensearchpy import AsyncOpenSearch, helpers
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    logger = logging.getLogger("sync")
+
+    class SyncService:
+        def __init__(self):
+            self.pg_pool = None
+            self.os_client = None
+
+        async def connect(self):
+            self.pg_pool = await asyncpg.create_pool(
+                host=os.environ.get("POSTGRES_HOST"),
+                port=int(os.environ.get("POSTGRES_PORT", "5432")),
+                database=os.environ.get("POSTGRES_DB", "stoa"),
+                user=os.environ.get("POSTGRES_USER"),
+                password=os.environ.get("POSTGRES_PASSWORD"),
+                min_size=2, max_size=10)
+            logger.info("PostgreSQL connected")
+
+            self.os_client = AsyncOpenSearch(
+                hosts=[os.environ.get("OPENSEARCH_HOST")],
+                http_auth=(os.environ.get("OPENSEARCH_USER"), os.environ.get("OPENSEARCH_PASSWORD")),
+                verify_certs=False, ssl_show_warn=False)
+            info = await self.os_client.info()
+            logger.info(f"OpenSearch connected: {info['cluster_name']}")
+
+        async def disconnect(self):
+            if self.pg_pool: await self.pg_pool.close()
+            if self.os_client: await self.os_client.close()
+
+        async def fetch_tools(self):
+            async with self.pg_pool.acquire() as conn:
+                rows = await conn.fetch("SELECT * FROM tools ORDER BY updated_at DESC LIMIT 1000")
+                return [dict(r) for r in rows]
+
+        async def index_tools(self, tools):
+            if not tools: return 0
+            actions = []
+            for t in tools:
+                actions.append({"_index": "tools", "_id": str(t["id"]), "_source": {
+                    "id": str(t["id"]), "name": t["name"], "description": t.get("description"),
+                    "category": t.get("category"), "tags": t.get("tags") or [],
+                    "tenant_id": str(t["tenant_id"]), "visibility": t.get("visibility", "private"),
+                    "indexed_at": datetime.now(timezone.utc).isoformat()}})
+            success, _ = await helpers.async_bulk(self.os_client, actions, raise_on_error=False)
+            return success
+
+        async def full_sync(self):
+            tools = await self.fetch_tools()
+            count = await self.index_tools(tools)
+            await self.os_client.indices.refresh(index="tools")
+            logger.info(f"Synced {count} tools")
+            return count
+
+        async def realtime(self):
+            async with self.pg_pool.acquire() as conn:
+                await conn.add_listener("tool_changes", self._notify)
+                logger.info("Listening tool_changes...")
+                while True: await asyncio.sleep(1)
+
+        async def _notify(self, conn, pid, channel, payload):
+            try:
+                data = json.loads(payload)
+                logger.info(f"Event: {data}")
+                tools = await self.fetch_tools()
+                await self.index_tools(tools[:1])
+            except Exception as e:
+                logger.error(f"Error: {e}")
+
+        async def health(self):
+            try:
+                async with self.pg_pool.acquire() as c: await c.fetchval("SELECT 1")
+                await self.os_client.cluster.health()
+                return True
+            except: return False
+
+    async def main():
+        mode = sys.argv[2] if len(sys.argv) > 2 else "realtime"
+        svc = SyncService()
+        try:
+            await svc.connect()
+            if mode == "full": print(json.dumps({"synced": await svc.full_sync()}))
+            elif mode == "health": sys.exit(0 if await svc.health() else 1)
+            else:
+                await svc.full_sync()
+                await svc.realtime()
+        finally: await svc.disconnect()
+
+    if __name__ == "__main__": asyncio.run(main())
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensearch-sync
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: opensearch-sync
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opensearch-sync
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opensearch-sync
+    spec:
+      serviceAccountName: stoa-sync-service
+      initContainers:
+        - name: install-deps
+          image: python:3.12-slim
+          command: ["/bin/sh", "-c", "pip install --target=/deps asyncpg 'opensearch-py[async]' --quiet && cp /code/sync_service.py /deps/"]
+          volumeMounts:
+            - name: deps
+              mountPath: /deps
+            - name: code
+              mountPath: /code
+      containers:
+        - name: sync
+          image: python:3.12-slim
+          command: ["python", "/deps/sync_service.py", "--mode", "realtime"]
+          envFrom:
+            - configMapRef:
+                name: opensearch-sync-config
+          env:
+            - name: PYTHONPATH
+              value: "/deps"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: password
+            - name: OPENSEARCH_USER
+              valueFrom:
+                secretKeyRef:
+                  name: opensearch-credentials
+                  key: username
+            - name: OPENSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opensearch-credentials
+                  key: password
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: deps
+              mountPath: /deps
+      volumes:
+        - name: deps
+          emptyDir: {}
+        - name: code
+          configMap:
+            name: opensearch-sync-code
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stoa-sync-service
+  namespace: stoa-system

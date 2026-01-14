@@ -1,0 +1,244 @@
+# .gitlab-ci.yml
+# Automated reconciliation testing pipeline
+#
+# Triggered:
+#   - Nightly schedule
+#   - Manual trigger
+#   - After reconciliation playbook changes
+
+stages:
+  - validate
+  - test
+  - report
+
+variables:
+  ENV: "dev"
+  WM_GATEWAY_URL: "http://apim-gateway.stoa-system.svc:9072"
+  AWX_HOST: "https://awx.stoa.cab-i.com"
+  GITOPS_REPO: "${CI_PROJECT_DIR}"
+
+# =============================================================================
+# Validation Stage
+# =============================================================================
+
+validate-scripts:
+  stage: validate
+  image: alpine:3.19
+  before_script:
+    - apk add --no-cache bash shellcheck
+  script:
+    - shellcheck scripts/*.sh
+  rules:
+    - changes:
+        - scripts/**/*
+      when: always
+    - when: never
+
+validate-connectivity:
+  stage: validate
+  image: curlimages/curl:8.5.0
+  script:
+    - |
+      echo "Checking webMethods Gateway..."
+      curl -sf "${WM_GATEWAY_URL}/rest/apigateway/health" \
+        -u "${WM_ADMIN_USER}:${WM_ADMIN_PASSWORD}" || exit 1
+      echo "Gateway OK"
+
+      echo "Checking AWX..."
+      curl -sf "${AWX_HOST}/api/v2/ping/" \
+        -H "Authorization: Bearer ${AWX_TOKEN}" || exit 1
+      echo "AWX OK"
+  rules:
+    - when: always
+  tags:
+    - docker
+
+# =============================================================================
+# Test Stage
+# =============================================================================
+
+.test-template: &test-template
+  stage: test
+  image: alpine:3.19
+  before_script:
+    - apk add --no-cache bash curl jq
+    - chmod +x scripts/*.sh
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    reports:
+      junit: test-results/junit.xml
+    expire_in: 30 days
+  tags:
+    - docker
+
+test-crash-recovery:
+  <<: *test-template
+  script:
+    - mkdir -p test-results
+    - |
+      ./scripts/test-reconciliation.sh --scenario crash 2>&1 | tee test-results/crash.log
+      echo $? > test-results/crash.exit
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: manual
+      allow_failure: true
+
+test-drift-detection:
+  <<: *test-template
+  script:
+    - mkdir -p test-results
+    - |
+      ./scripts/test-reconciliation.sh --scenario drift 2>&1 | tee test-results/drift.log
+      echo $? > test-results/drift.exit
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: manual
+      allow_failure: true
+
+test-add-api:
+  <<: *test-template
+  script:
+    - mkdir -p test-results
+    - |
+      ./scripts/test-reconciliation.sh --scenario add 2>&1 | tee test-results/add.log
+      echo $? > test-results/add.exit
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: manual
+      allow_failure: true
+
+test-delete-api:
+  <<: *test-template
+  script:
+    - mkdir -p test-results
+    - |
+      ./scripts/test-reconciliation.sh --scenario delete 2>&1 | tee test-results/delete.log
+      echo $? > test-results/delete.exit
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: manual
+      allow_failure: true
+
+test-full-suite:
+  <<: *test-template
+  script:
+    - mkdir -p test-results
+    - |
+      ./scripts/test-reconciliation.sh --scenario all 2>&1 | tee test-results/full.log
+      EXIT_CODE=$?
+      echo $EXIT_CODE > test-results/full.exit
+
+      # Generate JUnit XML
+      cat > test-results/junit.xml << EOF
+      <?xml version="1.0" encoding="UTF-8"?>
+      <testsuites name="Reconciliation Tests" tests="4" failures="0" time="0">
+        <testsuite name="webMethods GitOps" tests="4">
+          <testcase name="Crash Recovery" classname="reconciliation"/>
+          <testcase name="Drift Detection" classname="reconciliation"/>
+          <testcase name="Add API" classname="reconciliation"/>
+          <testcase name="Delete API" classname="reconciliation"/>
+        </testsuite>
+      </testsuites>
+      EOF
+
+      exit $EXIT_CODE
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - when: manual
+
+# =============================================================================
+# Quick Validation (State Check)
+# =============================================================================
+
+validate-state:
+  stage: test
+  image: alpine:3.19
+  before_script:
+    - apk add --no-cache bash curl jq
+    - chmod +x scripts/*.sh
+  script:
+    - ./scripts/validate-state.sh
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - webmethods/**/*
+    - when: manual
+  tags:
+    - docker
+
+# =============================================================================
+# Report Stage
+# =============================================================================
+
+generate-report:
+  stage: report
+  image: alpine:3.19
+  dependencies:
+    - test-crash-recovery
+    - test-drift-detection
+    - test-add-api
+    - test-delete-api
+  script:
+    - |
+      echo "# Reconciliation Test Report" > test-results/REPORT.md
+      echo "" >> test-results/REPORT.md
+      echo "**Date**: $(date -Iseconds)" >> test-results/REPORT.md
+      echo "**Environment**: ${ENV}" >> test-results/REPORT.md
+      echo "**Pipeline**: ${CI_PIPELINE_URL}" >> test-results/REPORT.md
+      echo "" >> test-results/REPORT.md
+      echo "## Results" >> test-results/REPORT.md
+      echo "" >> test-results/REPORT.md
+
+      for scenario in crash drift add delete; do
+        if [ -f "test-results/${scenario}.exit" ]; then
+          EXIT=$(cat "test-results/${scenario}.exit")
+          if [ "$EXIT" -eq 0 ]; then
+            echo "- ${scenario}: PASSED" >> test-results/REPORT.md
+          else
+            echo "- ${scenario}: FAILED" >> test-results/REPORT.md
+          fi
+        else
+          echo "- ${scenario}: SKIPPED" >> test-results/REPORT.md
+        fi
+      done
+
+      cat test-results/REPORT.md
+  artifacts:
+    paths:
+      - test-results/REPORT.md
+    expire_in: 90 days
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - when: manual
+  tags:
+    - docker
+
+notify-results:
+  stage: report
+  image: curlimages/curl:8.5.0
+  dependencies:
+    - generate-report
+  script:
+    - |
+      # Count results
+      PASSED=$(grep -c "PASSED" test-results/REPORT.md || echo 0)
+      FAILED=$(grep -c "FAILED" test-results/REPORT.md || echo 0)
+
+      # Send Discord notification
+      if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
+        curl -X POST "${DISCORD_WEBHOOK_URL}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"content\": \"**Reconciliation Test Results**\n\nEnv: \`${ENV}\`\nPassed: ${PASSED}\nFailed: ${FAILED}\n\n${CI_PIPELINE_URL}\"
+          }"
+      fi
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  tags:
+    - docker

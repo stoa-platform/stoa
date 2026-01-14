@@ -1,0 +1,112 @@
+---
+# Configure AWX OIDC Authentication with Keycloak
+#
+# This playbook configures AWX to use Keycloak for OIDC authentication.
+# Prerequisites:
+#   - AWX must be running
+#   - Keycloak must be running with 'stoa' realm
+#   - 'awx' client must exist in Keycloak
+#
+# Usage:
+#   ansible-playbook configure-awx-oidc.yml -e "keycloak_client_secret=<secret>"
+#
+- name: Configure AWX OIDC with Keycloak
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    awx_host: "https://awx.stoa.cab-i.com"
+    keycloak_url: "https://auth.stoa.cab-i.com"
+    keycloak_realm: "stoa"
+    keycloak_client_id: "awx"
+    # keycloak_client_secret: must be provided as extra var
+
+  tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - keycloak_client_secret is defined
+          - keycloak_client_secret | length > 0
+        fail_msg: "keycloak_client_secret must be provided"
+
+    - name: Get AWX admin token
+      ansible.builtin.uri:
+        url: "{{ awx_host }}/api/v2/tokens/"
+        method: POST
+        user: admin
+        password: "{{ awx_admin_password | default('demo') }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          description: "OIDC Configuration Token"
+          scope: "write"
+        status_code: 201
+        validate_certs: false
+      register: awx_token_result
+
+    - name: Set AWX token
+      ansible.builtin.set_fact:
+        awx_token: "{{ awx_token_result.json.token }}"
+
+    - name: Configure OIDC settings
+      ansible.builtin.uri:
+        url: "{{ awx_host }}/api/v2/settings/oidc/"
+        method: PATCH
+        headers:
+          Authorization: "Bearer {{ awx_token }}"
+        body_format: json
+        body:
+          SOCIAL_AUTH_OIDC_OIDC_ENDPOINT: "{{ keycloak_url }}/realms/{{ keycloak_realm }}"
+          SOCIAL_AUTH_OIDC_KEY: "{{ keycloak_client_id }}"
+          SOCIAL_AUTH_OIDC_SECRET: "{{ keycloak_client_secret }}"
+          SOCIAL_AUTH_OIDC_VERIFY_SSL: true
+        status_code: 200
+        validate_certs: false
+      register: oidc_config_result
+
+    - name: Configure OIDC user mapping
+      ansible.builtin.uri:
+        url: "{{ awx_host }}/api/v2/settings/authentication/"
+        method: PATCH
+        headers:
+          Authorization: "Bearer {{ awx_token }}"
+        body_format: json
+        body:
+          # Map Keycloak groups to AWX teams
+          SOCIAL_AUTH_ORGANIZATION_MAP:
+            Default:
+              admins: "stoa:admin"
+              users: true
+          SOCIAL_AUTH_TEAM_MAP:
+            Admins:
+              organization: "Default"
+              users: "stoa:admin"
+              remove: true
+            DevOps:
+              organization: "Default"
+              users: "stoa:write"
+              remove: true
+            Viewers:
+              organization: "Default"
+              users: "stoa:read"
+              remove: true
+        status_code: 200
+        validate_certs: false
+      register: auth_config_result
+
+    - name: Display configuration status
+      ansible.builtin.debug:
+        msg: |
+          AWX OIDC Configuration Complete!
+
+          OIDC Endpoint: {{ keycloak_url }}/realms/{{ keycloak_realm }}
+          Client ID: {{ keycloak_client_id }}
+
+          Users can now login via:
+          {{ awx_host }}/sso/login/oidc/
+
+          Group Mappings:
+          - stoa:admin -> Admins team
+          - stoa:write -> DevOps team
+          - stoa:read  -> Viewers team

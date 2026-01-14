@@ -1,0 +1,18 @@
+---
+# Ansible Inventory for STOA Platform
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+  vars:
+    # Gateway configuration
+    gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
+    gateway_user: "Administrator"
+
+    # Control Plane API
+    control_plane_url: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+
+    # Kafka configuration
+    kafka_bootstrap: "redpanda.stoa-system.svc.cluster.local:9092"

@@ -1,0 +1,56 @@
+# ApplicationSet for Tenant APIs
+# ⚠️ DEPRECATED: Use chart/templates/appset-tenant-apis.yaml instead
+#
+# This file is kept for reference. Deploy using Helm:
+#   helm install argocd-appsets ./chart -n argocd
+#
+# Variables are now centralized in chart/values.yaml:
+#   - gitlab.repoUrl
+#   - gitlab.branch
+#   - kubernetes.clusterUrl
+#   - kubernetes.namespacePrefix
+#
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: tenant-apis
+  namespace: ${ARGOCD_NAMESPACE:argocd}
+spec:
+  generators:
+    - git:
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}
+        revision: ${GITLAB_BRANCH:main}
+        directories:
+          - path: tenants/*/apis/*
+
+  template:
+    metadata:
+      name: '{{path[1]}}-{{path[3]}}'
+      labels:
+        tenant: '{{path[1]}}'
+        type: api
+        app.kubernetes.io/managed-by: argocd
+    spec:
+      project: '{{path[1]}}'
+      source:
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}
+        targetRevision: ${GITLAB_BRANCH:main}
+        path: '{{path}}'
+        plugin:
+          name: variable-resolver
+      destination:
+        server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+        namespace: '${K8S_NAMESPACE_PREFIX:stoa}-{{path[1]}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - PruneLast=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m

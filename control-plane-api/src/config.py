@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     KEYCLOAK_CLIENT_SECRET: str = ""
     KEYCLOAK_VERIFY_SSL: bool = True
 
+    # Keycloak Admin API (for Service Account management)
+    # Uses a dedicated admin client with realm-management roles
+    KEYCLOAK_ADMIN_CLIENT_ID: str = "admin-cli"
+    KEYCLOAK_ADMIN_CLIENT_SECRET: str = ""
+
     # GitLab Integration (stoa-gitops repository)
     GITLAB_URL: str = "https://gitlab.com"
     GITLAB_TOKEN: str = ""

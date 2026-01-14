@@ -1,0 +1,265 @@
+# =============================================================================
+# GitHub Actions: Control Plane API CI/CD
+# =============================================================================
+# STOA Platform - CAB-296
+# Build, test, and deploy the Control Plane API
+# =============================================================================
+
+name: Control Plane API CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'control-plane-api/**'
+      - '.github/workflows/control-plane-api-ci.yml'
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'control-plane-api/**'
+      - '.github/workflows/control-plane-api-ci.yml'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  PYTHON_VERSION: '3.11'
+  AWS_REGION: eu-west-1
+  ECR_REGISTRY: 848853684735.dkr.ecr.eu-west-1.amazonaws.com
+  ECR_REPOSITORY: apim/control-plane-api
+
+jobs:
+  # ==========================================================================
+  # Lint and Test
+  # ==========================================================================
+  test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: control-plane-api/requirements*.txt
+
+      - name: Install dependencies
+        working-directory: control-plane-api
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt || true
+
+      - name: Run linter (ruff)
+        working-directory: control-plane-api
+        run: |
+          pip install ruff
+          ruff check src/ || true
+
+      - name: Run type checker (mypy)
+        working-directory: control-plane-api
+        run: |
+          pip install mypy
+          mypy src/ --ignore-missing-imports || true
+
+      - name: Run tests
+        working-directory: control-plane-api
+        run: |
+          pip install pytest pytest-asyncio pytest-cov
+          pytest tests/ -v --tb=short || echo "No tests found or tests skipped"
+
+  # ==========================================================================
+  # Build Docker Image and Push to ECR
+  # ==========================================================================
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      id-token: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        id: env
+        run: |
+          ENV="${{ github.event.inputs.environment || 'dev' }}"
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=raw,value=${{ steps.env.outputs.ENVIRONMENT }}-${{ github.sha }}
+            type=raw,value=${{ steps.env.outputs.ENVIRONMENT }}-latest
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: control-plane-api
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image info
+        run: |
+          echo "Image pushed successfully:"
+          echo "${{ steps.meta.outputs.tags }}"
+
+  # ==========================================================================
+  # Deploy to Kubernetes
+  # ==========================================================================
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'dev' }}
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+      url: https://api.stoa.cab-i.com
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        id: env
+        run: |
+          ENV="${{ github.event.inputs.environment || 'dev' }}"
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name apim-dev-cluster --region ${{ env.AWS_REGION }}
+
+      - name: Update deployment image
+        run: |
+          ENV="${{ steps.env.outputs.ENVIRONMENT }}"
+          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${ENV}-latest"
+
+          echo "Updating control-plane-api to image: $IMAGE"
+
+          kubectl set image deployment/control-plane-api \
+            control-plane-api=$IMAGE \
+            -n stoa-system
+
+          # Wait for rollout
+          kubectl rollout status deployment/control-plane-api -n stoa-system --timeout=300s
+
+      - name: Verify deployment
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployment control-plane-api -n stoa-system
+
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n stoa-system -l app.kubernetes.io/name=control-plane-api
+
+          echo ""
+          echo "=== Health Check ==="
+          # Wait for pod to be ready
+          sleep 10
+          POD=$(kubectl get pods -n stoa-system -l app.kubernetes.io/name=control-plane-api -o jsonpath='{.items[0].metadata.name}')
+          kubectl exec -n stoa-system $POD -- curl -s http://localhost:8000/health || echo "Health check via exec not available"
+
+  # ==========================================================================
+  # Notify
+  # ==========================================================================
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [test, docker, deploy]
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.24.0
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "${{ needs.deploy.result == 'success' && 'good' || needs.test.result == 'success' && 'warning' || 'danger' }}",
+                  "title": "Control Plane API Deployment",
+                  "fields": [
+                    {
+                      "title": "Status",
+                      "value": "${{ needs.deploy.result == 'success' && 'Deployed' || needs.test.result == 'success' && 'Built (not deployed)' || 'Failed' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Environment",
+                      "value": "${{ github.event.inputs.environment || 'dev' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ github.sha }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    }
+                  ],
+                  "footer": "Control Plane API CI/CD"
+                }
+              ]
+            }

@@ -75,7 +75,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Footer info */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
           <a
-            href={`${config.api.controlPlaneUrl}/docs`}
+            href={`https://api.${config.baseDomain}/docs`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-xs text-primary-600 hover:text-primary-700 mb-2 transition-colors"

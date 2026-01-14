@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ErrorBoundary } from './components/common';
 import { HomePage } from './pages/Home';
 import { MCPServersPage, ServerDetailPage } from './pages/servers';
 import { MySubscriptions } from './pages/subscriptions/MySubscriptions';
@@ -113,9 +114,20 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        // Log to console in development
+        console.error('[App] Unhandled error:', error.message);
+        console.error('[App] Component stack:', errorInfo.componentStack);
+
+        // TODO: Send to error tracking service
+        // trackError(error, { componentStack: errorInfo.componentStack });
+      }}
+    >
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

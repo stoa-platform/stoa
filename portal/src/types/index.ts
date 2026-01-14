@@ -451,3 +451,38 @@ export interface ActiveSubscription {
   last_used_at?: string | null;
   call_count_total: number;
 }
+
+// ============ Dashboard Types (CAB-299) ============
+
+export type ActivityType =
+  | 'subscription.created'
+  | 'subscription.approved'
+  | 'subscription.revoked'
+  | 'api.call'
+  | 'key.rotated';
+
+export interface DashboardStats {
+  tools_available: number;
+  active_subscriptions: number;
+  api_calls_this_week: number;
+  // Optional trends
+  tools_trend?: number;        // % change
+  subscriptions_trend?: number;
+  calls_trend?: number;
+}
+
+export interface RecentActivityItem {
+  id: string;
+  type: ActivityType;
+  title: string;
+  description?: string;
+  tool_id?: string;
+  tool_name?: string;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DashboardData {
+  stats: DashboardStats;
+  recent_activity: RecentActivityItem[];
+}

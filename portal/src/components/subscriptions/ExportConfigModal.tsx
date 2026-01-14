@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   X,
   Download,
@@ -16,6 +17,7 @@ import {
   Terminal,
   Key,
   Shield,
+  ExternalLink,
 } from 'lucide-react';
 import type { MCPSubscription } from '../../types';
 
@@ -290,9 +292,19 @@ export function ExportConfigModal({
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
                   />
                 </div>
-                <p className="text-xs text-gray-500">
-                  Get your OAuth2 credentials from Keycloak admin or your team lead.
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500">
+                    Create service accounts in your profile.
+                  </p>
+                  <Link
+                    to="/service-accounts"
+                    onClick={handleClose}
+                    className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium"
+                  >
+                    Manage Service Accounts
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                </div>
               </div>
             )}
 
@@ -339,11 +351,23 @@ export function ExportConfigModal({
             {!isValid && (
               <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-amber-700">
-                  {authMethod === 'apiKey'
-                    ? 'Use "Reveal Key" first if you don\'t have your API key saved.'
-                    : 'Contact your admin to get OAuth2 client credentials.'}
-                </p>
+                <div className="text-sm text-amber-700">
+                  {authMethod === 'apiKey' ? (
+                    <p>Use "Reveal Key" first if you don't have your API key saved.</p>
+                  ) : (
+                    <p>
+                      Don't have credentials?{' '}
+                      <Link
+                        to="/service-accounts"
+                        onClick={handleClose}
+                        className="text-amber-800 underline hover:no-underline font-medium"
+                      >
+                        Create a Service Account
+                      </Link>{' '}
+                      to get your client_id and client_secret.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

@@ -24,10 +24,12 @@ import {
   XCircle,
   Eye,
   Shield,
+  Download,
 } from 'lucide-react';
 import { useSubscriptions, useRevokeSubscription, useToggleTotpRequirement, useRotateApiKey } from '../../hooks/useSubscriptions';
 import { RevealKeyModal } from '../../components/subscriptions/RevealKeyModal';
 import { RotateKeyModal } from '../../components/subscriptions/RotateKeyModal';
+import { ExportConfigModal } from '../../components/subscriptions/ExportConfigModal';
 import type { MCPSubscription } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'expired' | 'revoked';
@@ -49,6 +51,7 @@ export function MySubscriptions() {
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revealModalSubscription, setRevealModalSubscription] = useState<MCPSubscription | null>(null);
   const [rotateModalSubscription, setRotateModalSubscription] = useState<MCPSubscription | null>(null);
+  const [exportModalSubscription, setExportModalSubscription] = useState<MCPSubscription | null>(null);
 
   const {
     data: subscriptionsData,
@@ -364,6 +367,16 @@ export function MySubscriptions() {
                           Reveal Key
                         </button>
 
+                        {/* Export Config button (CAB-296) */}
+                        <button
+                          onClick={() => setExportModalSubscription(subscription)}
+                          className="inline-flex items-center gap-1 text-sm text-green-600 hover:text-green-700 font-medium"
+                          title="Export config for Claude Desktop / Cursor"
+                        >
+                          <Download className="h-3 w-3" />
+                          Export Config
+                        </button>
+
                         {/* Rotate Key button (CAB-314) */}
                         <button
                           onClick={() => setRotateModalSubscription(subscription)}
@@ -440,6 +453,15 @@ export function MySubscriptions() {
             return result;
           }}
           isRotating={rotateKeyMutation.isPending}
+        />
+      )}
+
+      {/* Export Config Modal (CAB-296) */}
+      {exportModalSubscription && (
+        <ExportConfigModal
+          subscription={exportModalSubscription}
+          isOpen={true}
+          onClose={() => setExportModalSubscription(null)}
         />
       )}
     </div>

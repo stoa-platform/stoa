@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from ..auth.dependencies import get_current_user, User
 from ..services.git_service import git_service
-from ..database import get_async_db
+from ..database import get_db as get_async_db
 from ..models.mcp_subscription import MCPServer, MCPServerStatus
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select

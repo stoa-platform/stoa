@@ -12,29 +12,36 @@ class APIKeyService:
     KEY_LENGTH = 32  # 32 hex chars = 128 bits of entropy
 
     @classmethod
-    def generate_key(cls) -> Tuple[str, str, str]:
+    def generate_key(cls, prefix: str = None) -> Tuple[str, str, str]:
         """
         Generate a new API key.
+
+        Args:
+            prefix: Optional custom prefix (default: stoa_sk_)
+                    Use "stoa_mcp_" for MCP server subscriptions
 
         Returns:
             Tuple of (full_key, key_hash, key_prefix)
             - full_key: The complete API key to give to the user (shown once)
             - key_hash: SHA-256 hash to store in database
-            - key_prefix: First 8 characters for display/reference
+            - key_prefix: First 12 characters for display/reference
         """
+        # Use custom prefix or default
+        key_prefix_str = prefix or cls.KEY_PREFIX
+
         # Generate random hex string
         random_part = secrets.token_hex(cls.KEY_LENGTH // 2)
 
         # Build the full key
-        full_key = f"{cls.KEY_PREFIX}{random_part}"
+        full_key = f"{key_prefix_str}{random_part}"
 
         # Hash for storage
         key_hash = cls.hash_key(full_key)
 
-        # Prefix for reference (first 8 chars of the key)
-        key_prefix = full_key[:8]
+        # Prefix for reference (first 12 chars of the key)
+        display_prefix = full_key[:12]
 
-        return full_key, key_hash, key_prefix
+        return full_key, key_hash, display_prefix
 
     @classmethod
     def hash_key(cls, api_key: str) -> str:

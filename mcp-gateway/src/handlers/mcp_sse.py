@@ -12,7 +12,7 @@ import structlog
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 
-from ..middleware.auth import TokenClaims, get_current_user, get_optional_user
+from ..middleware.auth import TokenClaims, get_current_user
 from ..services import get_tool_registry
 from ..config import get_settings
 
@@ -147,7 +147,7 @@ _sessions: dict[str, MCPSession] = {}
 @router.get("/sse")
 async def mcp_sse_endpoint(
     request: Request,
-    user: TokenClaims | None = Depends(get_optional_user),
+    user: TokenClaims = Depends(get_current_user),
 ) -> StreamingResponse:
     """
     MCP Server-Sent Events endpoint.
@@ -161,7 +161,7 @@ async def mcp_sse_endpoint(
     session = MCPSession(session_id, user)
     _sessions[session_id] = session
 
-    logger.info("MCP SSE session started", session_id=session_id, user=user.subject if user else "anonymous")
+    logger.info("MCP SSE session started", session_id=session_id, user=user.subject)
 
     async def event_stream() -> AsyncGenerator[str, None]:
         """Generate SSE events."""
@@ -200,7 +200,7 @@ async def mcp_sse_endpoint(
 @router.post("/message")
 async def mcp_message_endpoint(
     request: Request,
-    user: TokenClaims | None = Depends(get_optional_user),
+    user: TokenClaims = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
     Handle MCP JSON-RPC messages.
@@ -231,7 +231,7 @@ async def mcp_message_endpoint(
 @router.post("/")
 async def mcp_jsonrpc_endpoint(
     request: Request,
-    user: TokenClaims | None = Depends(get_optional_user),
+    user: TokenClaims = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
     Direct JSON-RPC endpoint for MCP.

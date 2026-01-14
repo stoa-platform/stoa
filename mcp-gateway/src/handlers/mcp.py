@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 
 from ..config import get_settings
 from ..metering import MeteringEvent, MeteringStatus, get_metering_producer
-from ..middleware.auth import TokenClaims, get_current_user, get_optional_user
+from ..middleware.auth import TokenClaims, get_current_user
 from ..models import (
     Tool,
     ToolInvocation,
@@ -55,7 +55,7 @@ async def list_tools(
     search: str | None = Query(None, description="Search in tool name and description"),
     cursor: str | None = Query(None, description="Pagination cursor"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum results to return"),
-    user: TokenClaims | None = Depends(get_optional_user),
+    user: TokenClaims = Depends(get_current_user),
 ) -> ListToolsResponse:
     """List all available MCP tools.
 
@@ -94,7 +94,7 @@ async def list_tools(
         category=category,
         tags=tags,
         search=search,
-        user=user.subject if user else "anonymous",
+        user=user.subject,
     )
 
     return result
@@ -107,7 +107,7 @@ async def list_tools(
     description="Returns a list of all unique categories with tool counts.",
 )
 async def list_tool_categories(
-    user: TokenClaims | None = Depends(get_optional_user),
+    user: TokenClaims = Depends(get_current_user),
 ) -> ListCategoriesResponse:
     """List all unique categories from registered tools."""
     registry = await get_tool_registry()
@@ -116,7 +116,7 @@ async def list_tool_categories(
     logger.info(
         "Listed categories",
         count=len(result.categories),
-        user=user.subject if user else "anonymous",
+        user=user.subject,
     )
 
     return result
@@ -129,7 +129,7 @@ async def list_tool_categories(
     description="Returns a list of all unique tags used by tools with counts.",
 )
 async def get_tool_tags(
-    user: TokenClaims | None = Depends(get_optional_user),
+    user: TokenClaims = Depends(get_current_user),
 ) -> ListTagsResponse:
     """Get all unique tags from registered tools with counts."""
     registry = await get_tool_registry()
@@ -138,7 +138,7 @@ async def get_tool_tags(
     logger.info(
         "Listed tags",
         count=len(result.tags),
-        user=user.subject if user else "anonymous",
+        user=user.subject,
     )
 
     return result
@@ -155,7 +155,7 @@ async def get_tool_tags(
 )
 async def get_tool(
     tool_name: str,
-    user: TokenClaims | None = Depends(get_optional_user),
+    user: TokenClaims = Depends(get_current_user),
 ) -> Tool:
     """Get details of a specific tool."""
     registry = await get_tool_registry()
@@ -354,7 +354,7 @@ async def list_resources(
     tenant_id: str | None = Query(None, description="Filter by tenant ID"),
     cursor: str | None = Query(None, description="Pagination cursor"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum results to return"),
-    user: TokenClaims | None = Depends(get_optional_user),
+    user: TokenClaims = Depends(get_current_user),
 ) -> ListResourcesResponse:
     """List all available MCP resources.
 
@@ -404,7 +404,7 @@ async def read_resource(
 async def list_prompts(
     cursor: str | None = Query(None, description="Pagination cursor"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum results to return"),
-    user: TokenClaims | None = Depends(get_optional_user),
+    user: TokenClaims = Depends(get_current_user),
 ) -> ListPromptsResponse:
     """List all available MCP prompts.
 
@@ -427,7 +427,7 @@ async def list_prompts(
 )
 async def get_prompt(
     prompt_name: str,
-    user: TokenClaims | None = Depends(get_optional_user),
+    user: TokenClaims = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Get a prompt template."""
     # TODO: Implement prompt retrieval

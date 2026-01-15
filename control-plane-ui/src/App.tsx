@@ -7,6 +7,7 @@ import { APIs } from './pages/APIs';
 import { Applications } from './pages/Applications';
 import { Deployments } from './pages/Deployments';
 import { ToolCatalog, ToolDetail, MySubscriptions, UsageDashboard } from './pages/AITools';
+import { ErrorSnapshots } from './pages/ErrorSnapshots';
 import { config, quickLinks } from './config';
 
 function Dashboard() {
@@ -228,6 +229,7 @@ function ProtectedRoutes() {
         <Route path="/deployments" element={<Deployments />} />
         <Route path="/git" element={<Git />} />
         <Route path="/monitoring" element={<Monitoring />} />
+        <Route path="/mcp/errors" element={<ErrorSnapshots />} />
       </Routes>
     </Layout>
   );

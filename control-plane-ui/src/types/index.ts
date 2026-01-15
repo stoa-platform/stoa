@@ -283,3 +283,182 @@ export interface ToolSubscriptionCreate {
   toolName: string;
   usageLimit?: number;
 }
+
+// MCP Error Snapshot types (Phase 4)
+export type MCPErrorType =
+  | 'server_timeout'
+  | 'server_unavailable'
+  | 'server_rate_limited'
+  | 'server_auth_failure'
+  | 'server_internal_error'
+  | 'tool_not_found'
+  | 'tool_execution_error'
+  | 'tool_validation_error'
+  | 'tool_timeout'
+  | 'llm_context_exceeded'
+  | 'llm_content_filtered'
+  | 'llm_quota_exceeded'
+  | 'llm_rate_limited'
+  | 'llm_invalid_request'
+  | 'policy_denied'
+  | 'policy_error'
+  | 'unknown';
+
+export type SnapshotResolutionStatus = 'unresolved' | 'investigating' | 'resolved' | 'ignored';
+
+export interface MCPServerContext {
+  name: string;
+  url?: string;
+  version?: string;
+  tools_available: string[];
+  health_at_error?: string;
+  latency_p99_ms?: number;
+  error_rate_percent?: number;
+}
+
+export interface ToolInvocation {
+  tool_name: string;
+  input_params?: Record<string, unknown>;
+  input_params_masked?: string[];
+  started_at?: string;
+  duration_ms?: number;
+  error_type?: string;
+  error_message?: string;
+  error_retryable?: boolean;
+  backend_status_code?: number;
+  backend_response_preview?: string;
+}
+
+export interface LLMContext {
+  provider: string;
+  model: string;
+  tokens_input: number;
+  tokens_output: number;
+  estimated_cost_usd: number;
+  latency_ms: number;
+  error_code?: string;
+  prompt_length?: number;
+  prompt_hash?: string;
+}
+
+export interface RetryContext {
+  attempts: number;
+  max_attempts: number;
+  strategy: string;
+  delays_ms?: number[];
+  fallback_attempted: boolean;
+  fallback_server?: string;
+  fallback_result?: string;
+}
+
+export interface RequestContext {
+  method: string;
+  path: string;
+  query_params?: Record<string, string>;
+  headers?: Record<string, string>;
+  client_ip?: string;
+  user_agent?: string;
+}
+
+export interface UserContext {
+  user_id?: string;
+  tenant_id?: string;
+  client_id?: string;
+  roles?: string[];
+  scopes?: string[];
+}
+
+export interface MCPErrorSnapshotSummary {
+  id: string;
+  timestamp: string;
+  error_type: MCPErrorType;
+  error_message: string;
+  response_status: number;
+  mcp_server_name?: string;
+  tool_name?: string;
+  total_cost_usd: number;
+  tokens_wasted: number;
+  resolution_status: SnapshotResolutionStatus;
+}
+
+export interface MCPErrorSnapshot {
+  id: string;
+  timestamp: string;
+  error_type: MCPErrorType;
+  error_message: string;
+  error_code?: string;
+  response_status: number;
+  request_method?: string;
+  request_path?: string;
+  user_id?: string;
+  tenant_id?: string;
+  mcp_server_name?: string;
+  tool_name?: string;
+  llm_provider?: string;
+  llm_model?: string;
+  llm_tokens_input?: number;
+  llm_tokens_output?: number;
+  total_cost_usd: number;
+  tokens_wasted: number;
+  retry_attempts: number;
+  retry_max_attempts: number;
+  trace_id?: string;
+  conversation_id?: string;
+  resolution_status: SnapshotResolutionStatus;
+  resolution_notes?: string;
+  resolved_at?: string;
+  resolved_by?: string;
+  snapshot: {
+    request?: RequestContext;
+    user?: UserContext;
+    mcp_server?: MCPServerContext;
+    tool_invocation?: ToolInvocation;
+    llm_context?: LLMContext;
+    retry_context?: RetryContext;
+    masked_fields?: string[];
+    [key: string]: unknown;
+  };
+}
+
+export interface MCPErrorSnapshotStats {
+  total: number;
+  by_error_type: Record<string, number>;
+  by_status: Record<number, number>;
+  by_server: Record<string, number>;
+  total_cost_usd: number;
+  total_tokens_wasted: number;
+  avg_cost_usd: number;
+  resolution_stats: {
+    unresolved: number;
+    investigating: number;
+    resolved: number;
+    ignored: number;
+  };
+}
+
+export interface MCPErrorSnapshotFilters {
+  error_types?: MCPErrorType[];
+  status_codes?: number[];
+  server_names?: string[];
+  tool_names?: string[];
+  resolution_status?: SnapshotResolutionStatus[];
+  start_date?: string;
+  end_date?: string;
+  min_cost_usd?: number;
+  search?: string;
+}
+
+export interface MCPErrorSnapshotListResponse {
+  snapshots: MCPErrorSnapshotSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_next: boolean;
+}
+
+export interface SnapshotFiltersResponse {
+  error_types: string[];
+  servers: string[];
+  tools: string[];
+  resolution_statuses: string[];
+}

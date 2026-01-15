@@ -51,6 +51,27 @@ class ApiService {
     delete this.client.defaults.headers.common['Authorization'];
   }
 
+  // Generic HTTP methods for proxy services
+  async get<T = any>(url: string, config?: { params?: Record<string, any> }): Promise<{ data: T }> {
+    return this.client.get<T>(url, config);
+  }
+
+  async post<T = any>(url: string, data?: any): Promise<{ data: T }> {
+    return this.client.post<T>(url, data);
+  }
+
+  async put<T = any>(url: string, data?: any): Promise<{ data: T }> {
+    return this.client.put<T>(url, data);
+  }
+
+  async patch<T = any>(url: string, data?: any): Promise<{ data: T }> {
+    return this.client.patch<T>(url, data);
+  }
+
+  async delete<T = any>(url: string): Promise<{ data: T }> {
+    return this.client.delete<T>(url);
+  }
+
   // Tenants
   async getTenants(): Promise<Tenant[]> {
     const { data } = await this.client.get('/v1/tenants');

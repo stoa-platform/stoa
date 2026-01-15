@@ -182,57 +182,5 @@ networkPolicy:
   # Allow inter-service communication within stoa-system
   allowIntraNamespace: true
 
-# Error Snapshots / Flight Recorder (CAB-397)
-errorSnapshots:
-  enabled: true
-  # Capture configuration
-  captureOn4xx: false
-  captureOn5xx: true
-  captureOnTimeout: true
-  timeoutThresholdMs: 30000
-  # Storage configuration (MinIO)
-  storage:
-    type: minio
-    endpoint: minio.stoa-system:9000
-    bucket: error-snapshots
-    useSSL: false
-    # Credentials from secret
-    existingSecret: error-snapshots-minio
-    accessKeyKey: access-key
-    secretKeyKey: secret-key
-  # Retention
-  retentionDays: 30
-  # Performance
-  maxBodySize: 10000
-  asyncCapture: true
-
-# Kafka Bridge - HTTP to Kafka relay for gateway error snapshots (CAB-485)
-kafkaBridge:
-  enabled: true
-  replicaCount: 2
-  image:
-    repository: 848853684735.dkr.ecr.eu-west-3.amazonaws.com/stoa/kafka-bridge
-    tag: "1.0.0"
-    pullPolicy: IfNotPresent
-  resources:
-    limits:
-      cpu: 200m
-      memory: 256Mi
-    requests:
-      cpu: 50m
-      memory: 128Mi
-  securityContext:
-    runAsUser: 1000
-    runAsGroup: 1000
-  # Kafka configuration
-  kafka:
-    bootstrapServers: redpanda.stoa-system:9092
-    topic: stoa.errors.snapshots
-    # SASL credentials from secret (optional)
-    existingSecret: ""
-    usernameKey: username
-    passwordKey: password
-  # Service configuration
-  service:
-    type: ClusterIP
-    port: 8080
+# NOTE: Error Snapshots (CAB-397) and Kafka Bridge (CAB-485) configuration
+# is managed in stoa-infra repo: charts/stoa-platform/values.yaml

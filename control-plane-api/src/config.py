@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     GATEWAY_ADMIN_PROXY_URL: str = f"https://apis.{_BASE_DOMAIN}/gateway/Gateway-Admin-API/1.0"
     GATEWAY_USE_OIDC_PROXY: bool = True  # Set to False to use Basic Auth directly
 
+    # MCP Gateway URL (for tools proxy)
+    MCP_GATEWAY_URL: str = f"https://mcp.{_BASE_DOMAIN}"
+
     # CORS - comma-separated list of allowed origins
     CORS_ORIGINS: str = f"https://console.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
 

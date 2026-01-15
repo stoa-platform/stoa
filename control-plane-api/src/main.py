@@ -17,7 +17,7 @@ from .logging_config import configure_logging, get_logger
 from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
-from .routers import portal, mcp_gitops
+from .routers import portal, mcp_gitops, mcp_proxy
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service
 from .middleware.metrics import MetricsMiddleware, get_metrics
@@ -25,6 +25,7 @@ from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from .middleware.http_logging import HTTPLoggingMiddleware
 from .services.gateway_service import gateway_service
 from .workers.deployment_worker import deployment_worker
+from .features.error_snapshots import add_error_snapshot_middleware, connect_error_snapshots
 
 # Configure structured logging (CAB-281)
 configure_logging()
@@ -84,6 +85,15 @@ async def lifespan(app: FastAPI):
             logger.info("Deployment worker started")
         except Exception as e:
             logger.warning("Failed to start deployment worker", error=str(e))
+
+    # Connect error snapshots storage (CAB-397)
+    # Note: Middleware is added at module level after app creation
+    try:
+        snapshot_service = await connect_error_snapshots()
+        if snapshot_service:
+            logger.info("Error snapshots connected")
+    except Exception as e:
+        logger.warning("Failed to connect error snapshots", error=str(e))
 
     yield
 
@@ -191,6 +201,7 @@ app = FastAPI(
         {"name": "MCP Admin - Servers", "description": "MCP server management (admin)"},
         {"name": "Portal", "description": "Developer Portal API catalog and MCP server browsing"},
         {"name": "MCP GitOps", "description": "GitOps synchronization for MCP servers"},
+        {"name": "MCP Tools", "description": "MCP tools discovery and invocation (proxy to MCP Gateway)"},
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -257,6 +268,9 @@ app.include_router(mcp_admin_servers_router)
 # Portal and GitOps routers
 app.include_router(portal.router)
 app.include_router(mcp_gitops.router)
+
+# MCP Tools proxy router (proxies to MCP Gateway)
+app.include_router(mcp_proxy.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

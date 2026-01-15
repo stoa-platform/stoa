@@ -82,6 +82,19 @@ logging:
       - api_key
       - authorization
 
+# Security Context defaults (CAB-356)
+securityContext:
+  pod:
+    runAsNonRoot: true
+    fsGroup: 1000
+  container:
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
 # Control Plane API
 controlPlaneApi:
   enabled: true
@@ -97,6 +110,9 @@ controlPlaneApi:
     requests:
       cpu: 100m
       memory: 256Mi
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
 
 # MCP Gateway
 mcpGateway:
@@ -113,12 +129,110 @@ mcpGateway:
     requests:
       cpu: 100m
       memory: 256Mi
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
 
 # Portal
 portal:
   enabled: true
-  replicaCount: 1
+  replicaCount: 2
   image:
     repository: portal
     tag: latest
     pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  securityContext:
+    runAsUser: 101
+    runAsGroup: 101
+
+# Console (Control Plane UI)
+console:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: control-plane-ui
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  securityContext:
+    runAsUser: 101
+    runAsGroup: 101
+
+# Network Security (CAB-356)
+networkPolicy:
+  enabled: false  # Enable when CNI supports NetworkPolicy (e.g., Calico, Cilium)
+  # Default deny all ingress except from allowed sources
+  defaultDeny: true
+  # Allow ingress from nginx-ingress controller
+  allowIngressController: true
+  ingressControllerNamespace: ingress-nginx
+  # Allow inter-service communication within stoa-system
+  allowIntraNamespace: true
+
+# Error Snapshots / Flight Recorder (CAB-397)
+errorSnapshots:
+  enabled: true
+  # Capture configuration
+  captureOn4xx: false
+  captureOn5xx: true
+  captureOnTimeout: true
+  timeoutThresholdMs: 30000
+  # Storage configuration (MinIO)
+  storage:
+    type: minio
+    endpoint: minio.stoa-system:9000
+    bucket: error-snapshots
+    useSSL: false
+    # Credentials from secret
+    existingSecret: error-snapshots-minio
+    accessKeyKey: access-key
+    secretKeyKey: secret-key
+  # Retention
+  retentionDays: 30
+  # Performance
+  maxBodySize: 10000
+  asyncCapture: true
+
+# Kafka Bridge - HTTP to Kafka relay for gateway error snapshots (CAB-485)
+kafkaBridge:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: 848853684735.dkr.ecr.eu-west-3.amazonaws.com/stoa/kafka-bridge
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+  # Kafka configuration
+  kafka:
+    bootstrapServers: redpanda.stoa-system:9092
+    topic: stoa.errors.snapshots
+    # SASL credentials from secret (optional)
+    existingSecret: ""
+    usernameKey: username
+    passwordKey: password
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080

@@ -25,6 +25,7 @@ from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from .middleware.http_logging import HTTPLoggingMiddleware
 from .services.gateway_service import gateway_service
 from .workers.deployment_worker import deployment_worker
+from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .features.error_snapshots import add_error_snapshot_middleware, connect_error_snapshots
 
 # Configure structured logging (CAB-281)
@@ -33,6 +34,7 @@ logger = get_logger(__name__)
 
 # Flag to control worker startup (can be disabled for dev/testing)
 ENABLE_WORKER = os.getenv("ENABLE_DEPLOYMENT_WORKER", "true").lower() == "true"
+ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -95,6 +97,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Failed to connect error snapshots", error=str(e))
 
+    # Start error snapshot consumer for gateway snapshots (CAB-485)
+    snapshot_consumer_task = None
+    if ENABLE_SNAPSHOT_CONSUMER:
+        try:
+            snapshot_consumer_task = asyncio.create_task(error_snapshot_consumer.start())
+            logger.info("Error snapshot consumer started")
+        except Exception as e:
+            logger.warning("Failed to start error snapshot consumer", error=str(e))
+
     yield
 
     # Shutdown
@@ -106,6 +117,15 @@ async def lifespan(app: FastAPI):
         worker_task.cancel()
         try:
             await worker_task
+        except asyncio.CancelledError:
+            pass
+
+    # Stop error snapshot consumer
+    if ENABLE_SNAPSHOT_CONSUMER and snapshot_consumer_task:
+        await error_snapshot_consumer.stop()
+        snapshot_consumer_task.cancel()
+        try:
+            await snapshot_consumer_task
         except asyncio.CancelledError:
             pass
 
@@ -235,6 +255,10 @@ app.add_middleware(MetricsMiddleware)
 # HTTP request/response logging middleware (CAB-330)
 if settings.LOG_HTTP_MIDDLEWARE_ENABLED:
     app.add_middleware(HTTPLoggingMiddleware)
+
+# Error Snapshots middleware (CAB-397) - captures request/response on errors
+# Must be added before app startup, connects to storage in lifespan
+add_error_snapshot_middleware(app)
 
 # Audit middleware (CAB-307) - logs all API requests to OpenSearch
 # Note: AuditMiddleware is added dynamically via setup_opensearch()

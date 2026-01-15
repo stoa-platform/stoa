@@ -24,8 +24,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .subscription import Base
 
 
-class ResolutionStatus(enum.Enum):
-    """Resolution status values."""
+class ResolutionStatus(str, enum.Enum):
+    """Resolution status values.
+
+    Inherits from str to ensure PostgreSQL receives lowercase values.
+    """
     UNRESOLVED = "unresolved"
     INVESTIGATING = "investigating"
     RESOLVED = "resolved"
@@ -89,7 +92,7 @@ class ErrorSnapshotModel(Base):
 
     # Resolution workflow
     resolution_status: Mapped[ResolutionStatus] = mapped_column(
-        Enum(ResolutionStatus),
+        Enum(ResolutionStatus, values_callable=lambda x: [e.value for e in x], name="resolutionstatus", create_type=False),
         nullable=False,
         default=ResolutionStatus.UNRESOLVED,
         index=True,

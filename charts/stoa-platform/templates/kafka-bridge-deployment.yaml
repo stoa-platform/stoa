@@ -1,0 +1,90 @@
+{{- if .Values.kafkaBridge.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stoa-platform.fullname" . }}-kafka-bridge
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka-bridge
+spec:
+  replicas: {{ .Values.kafkaBridge.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "stoa-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: kafka-bridge
+  template:
+    metadata:
+      labels:
+        {{- include "stoa-platform.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: kafka-bridge
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: {{ .Values.securityContext.pod.runAsNonRoot }}
+        fsGroup: {{ .Values.securityContext.pod.fsGroup }}
+      containers:
+        - name: kafka-bridge
+          image: "{{ .Values.kafkaBridge.image.repository }}:{{ .Values.kafkaBridge.image.tag }}"
+          imagePullPolicy: {{ .Values.kafkaBridge.image.pullPolicy }}
+          securityContext:
+            runAsUser: {{ .Values.kafkaBridge.securityContext.runAsUser }}
+            runAsGroup: {{ .Values.kafkaBridge.securityContext.runAsGroup }}
+            runAsNonRoot: {{ .Values.securityContext.container.runAsNonRoot }}
+            allowPrivilegeEscalation: {{ .Values.securityContext.container.allowPrivilegeEscalation }}
+            readOnlyRootFilesystem: {{ .Values.securityContext.container.readOnlyRootFilesystem }}
+            capabilities:
+              drop:
+                {{- toYaml .Values.securityContext.container.capabilities.drop | nindent 16 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.kafkaBridge.kafka.bootstrapServers | quote }}
+            - name: KAFKA_TOPIC
+              value: {{ .Values.kafkaBridge.kafka.topic | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.logging.level | quote }}
+            {{- if .Values.kafkaBridge.kafka.existingSecret }}
+            - name: KAFKA_SASL_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.kafkaBridge.kafka.existingSecret }}
+                  key: {{ .Values.kafkaBridge.kafka.usernameKey }}
+            - name: KAFKA_SASL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.kafkaBridge.kafka.existingSecret }}
+                  key: {{ .Values.kafkaBridge.kafka.passwordKey }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.kafkaBridge.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

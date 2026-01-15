@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useAuth as useOidcAuth, hasAuthParams } from 'react-oidc-context';
 import type { User } from '../types';
 import { apiService } from '../services/api';
+import { mcpGatewayService } from '../services/mcpGatewayApi';
 
 interface AuthContextType {
   user: User | null;
@@ -95,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (oidc.user.access_token) {
         console.log('[AuthContext] Setting auth token');
         apiService.setAuthToken(oidc.user.access_token);
+        mcpGatewayService.setAuthToken(oidc.user.access_token);
         setIsReady(true); // Token is now set
       } else {
         console.warn('[AuthContext] oidc.user exists but no access_token');
@@ -102,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setUser(null);
       apiService.clearAuthToken();
+      mcpGatewayService.clearAuthToken();
       setIsReady(false);
     }
   }, [oidc.user]);

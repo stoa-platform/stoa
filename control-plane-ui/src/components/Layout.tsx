@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Activity,
   Wrench,
+  AlertTriangle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -29,6 +30,7 @@ const navigation = [
   { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
   { name: 'Git', href: '/git', icon: GitBranch, permission: 'apis:read' },
   { name: 'Monitoring', href: '/monitoring', icon: Activity, permission: 'apis:read' },
+  { name: 'Error Snapshots', href: '/mcp/errors', icon: AlertTriangle, permission: 'apis:read' },
 ];
 
 export function Layout({ children }: LayoutProps) {

@@ -60,3 +60,4 @@ control-plane-api/venv/
 tmp/
 temp/
 *.tmp
+portal/node_modules/node_modules_CLAUDE_OFF/

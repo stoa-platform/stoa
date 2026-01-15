@@ -110,14 +110,10 @@ jobs:
           ENV="${{ github.event.inputs.environment || 'dev' }}"
           echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
 
+          # Use stoa.cab-i.com as default since we only have one cluster
+          # Future: add separate dev/staging clusters with proper DNS
           case "$ENV" in
-            dev)
-              echo "BASE_DOMAIN=dev.stoa.cab-i.com" >> $GITHUB_OUTPUT
-              ;;
-            staging)
-              echo "BASE_DOMAIN=staging.stoa.cab-i.com" >> $GITHUB_OUTPUT
-              ;;
-            prod)
+            dev|staging|prod)
               echo "BASE_DOMAIN=stoa.cab-i.com" >> $GITHUB_OUTPUT
               ;;
           esac

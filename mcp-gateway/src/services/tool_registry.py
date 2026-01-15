@@ -664,12 +664,26 @@ class ToolRegistry:
             return result
 
         except Exception as e:
+            latency_ms = int((time.time() - start_time) * 1000)
             logger.exception("Tool invocation failed", tool_name=tool.name, error=str(e))
+
+            # Capture error snapshot (Phase 3)
+            try:
+                from ..features.error_snapshots import capture_tool_error
+                await capture_tool_error(
+                    tool_name=tool.name,
+                    input_params=invocation.arguments,
+                    error=e,
+                    duration_ms=latency_ms,
+                )
+            except Exception as snapshot_error:
+                logger.warning("Failed to capture tool error snapshot", error=str(snapshot_error))
+
             return ToolResult(
                 content=[TextContent(text=f"Tool invocation failed: {str(e)}")],
                 is_error=True,
                 request_id=invocation.request_id,
-                latency_ms=int((time.time() - start_time) * 1000),
+                latency_ms=latency_ms,
             )
 
     async def _invoke_builtin(

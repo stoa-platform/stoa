@@ -24,6 +24,11 @@ from .handlers import mcp_router, subscriptions_router, mcp_sse_router, servers_
 from .middleware import MetricsMiddleware
 from .services import get_tool_registry, shutdown_tool_registry, init_database, shutdown_database
 from .k8s import get_tool_watcher, shutdown_tool_watcher
+from .features.error_snapshots import (
+    MCPErrorSnapshotMiddleware,
+    get_mcp_snapshot_settings,
+)
+from .features.error_snapshots.publisher import setup_snapshot_publisher, shutdown_snapshot_publisher
 
 # Configure structured logging
 structlog.configure(
@@ -73,6 +78,15 @@ async def lifespan(app: FastAPI):
     # Initialize tool registry
     registry = await get_tool_registry()
 
+    # Initialize MCP error snapshot publisher (Phase 3)
+    snapshot_settings = get_mcp_snapshot_settings()
+    if snapshot_settings.enabled:
+        try:
+            await setup_snapshot_publisher()
+            logger.info("MCP error snapshot publisher initialized")
+        except Exception as e:
+            logger.warning("MCP error snapshot publisher failed to start", error=str(e))
+
     # Initialize K8s watcher and connect to registry
     if settings.k8s_watcher_enabled:
         # Get watcher without starting (to set callbacks first)
@@ -117,6 +131,9 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down STOA MCP Gateway")
     app_state["ready"] = False
 
+    # Cleanup MCP error snapshot publisher
+    await shutdown_snapshot_publisher()
+
     # Cleanup K8s watcher
     await shutdown_tool_watcher()
 
@@ -140,6 +157,12 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.debug else None,
         lifespan=lifespan,
     )
+
+    # MCP Error Snapshot middleware (captures errors for debugging)
+    snapshot_settings = get_mcp_snapshot_settings()
+    if snapshot_settings.enabled:
+        app.add_middleware(MCPErrorSnapshotMiddleware)
+        logger.info("MCP error snapshot middleware enabled")
 
     # Metrics middleware (must be added first to capture all requests)
     if settings.enable_metrics:

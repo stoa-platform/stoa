@@ -8,7 +8,7 @@ from sqlalchemy import String, Text, Integer, DateTime, Enum, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ..services.database import Base
+from ..database import Base
 
 
 class TraceStatusDB(str, enum.Enum):

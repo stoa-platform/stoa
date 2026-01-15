@@ -7,13 +7,12 @@ import {
   Layers,
   AppWindow,
   Rocket,
-  GitBranch,
   LogOut,
   User,
   ChevronDown,
-  Activity,
   Wrench,
   AlertTriangle,
+  Activity,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -28,8 +27,7 @@ const navigation = [
   { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read' },
   { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
   { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
-  { name: 'Git', href: '/git', icon: GitBranch, permission: 'apis:read' },
-  { name: 'Monitoring', href: '/monitoring', icon: Activity, permission: 'apis:read' },
+  { name: 'API Monitoring', href: '/monitoring', icon: Activity, permission: 'apis:read' },
   { name: 'Error Snapshots', href: '/mcp/errors', icon: AlertTriangle, permission: 'apis:read' },
 ];
 

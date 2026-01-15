@@ -1,10 +1,406 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { config } from '../config';
-import type { Deployment, Tenant, API } from '../types';
+import type { Deployment, Tenant, API, TraceSummary, PipelineTrace, TraceStats, TraceStep, TraceStatus } from '../types';
+import {
+  Activity,
+  GitCommit,
+  User,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  ChevronRight,
+  ChevronDown,
+  GitBranch,
+  Package,
+  Radio,
+  Zap,
+  FileCode,
+  Rocket,
+  ExternalLink,
+  Settings,
+} from 'lucide-react';
+import { clsx } from 'clsx';
 
-export function Deployments() {
+// =============================================================================
+// TAB COMPONENTS
+// =============================================================================
+
+type TabId = 'pipelines' | 'history' | 'config';
+
+interface Tab {
+  id: TabId;
+  name: string;
+  icon: typeof Activity;
+  description: string;
+}
+
+const tabs: Tab[] = [
+  { id: 'pipelines', name: 'Pipeline Traces', icon: Activity, description: 'GitLab → Kafka → AWX traces' },
+  { id: 'history', name: 'Deployment History', icon: Rocket, description: 'API deployment records' },
+  { id: 'config', name: 'GitLab Config', icon: Settings, description: 'GitOps configuration' },
+];
+
+// =============================================================================
+// PIPELINE TRACES TAB (ex-Monitoring)
+// =============================================================================
+
+const statusConfig: Record<TraceStatus, { icon: typeof CheckCircle2; color: string; bg: string }> = {
+  pending: { icon: Clock, color: 'text-gray-500', bg: 'bg-gray-100' },
+  in_progress: { icon: Loader2, color: 'text-blue-500', bg: 'bg-blue-100' },
+  success: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-100' },
+  failed: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-100' },
+  skipped: { icon: AlertCircle, color: 'text-yellow-500', bg: 'bg-yellow-100' },
+};
+
+const stepNames: Record<string, { label: string; icon: typeof Activity }> = {
+  webhook_received: { label: 'Webhook Received', icon: Radio },
+  token_verification: { label: 'Token Verification', icon: CheckCircle2 },
+  event_processing: { label: 'Event Processing', icon: Zap },
+  analyze_changes: { label: 'Analyze Changes', icon: FileCode },
+  kafka_publish: { label: 'Kafka Publish', icon: Package },
+  awx_trigger: { label: 'AWX Trigger', icon: Activity },
+};
+
+function formatDuration(ms?: number): string {
+  if (!ms) return '-';
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function formatTime(isoString?: string): string {
+  if (!isoString) return '-';
+  const date = new Date(isoString);
+  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function StatsCard({ title, value, subtitle, icon: Icon, color }: {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon: typeof Activity;
+  color: string;
+}) {
+  return (
+    <div className="rounded-lg bg-white p-6 shadow-sm border border-gray-100">
+      <div className="flex items-center gap-4">
+        <div className={clsx('rounded-lg p-3', color)}>
+          <Icon className="h-6 w-6 text-white" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-500">{title}</p>
+          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StepTimeline({ steps }: { steps: TraceStep[] }) {
+  return (
+    <div className="space-y-3">
+      {steps.map((step, index) => {
+        const cfg = statusConfig[step.status];
+        const StepIcon = cfg.icon;
+        const stepInfo = stepNames[step.name] || { label: step.name, icon: Activity };
+        const StepTypeIcon = stepInfo.icon;
+
+        return (
+          <div key={index} className="relative">
+            {index < steps.length - 1 && (
+              <div className="absolute left-4 top-8 h-full w-0.5 bg-gray-200" />
+            )}
+            <div className={clsx('flex items-start gap-3 rounded-lg p-3', cfg.bg)}>
+              <div className={clsx('rounded-full p-1', cfg.bg)}>
+                <StepIcon className={clsx('h-5 w-5', cfg.color, step.status === 'in_progress' && 'animate-spin')} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <StepTypeIcon className="h-4 w-4 text-gray-400" />
+                  <span className="font-medium text-gray-900">{stepInfo.label}</span>
+                  {step.duration_ms && (
+                    <span className="text-xs text-gray-500">({formatDuration(step.duration_ms)})</span>
+                  )}
+                </div>
+                {step.details && (
+                  <div className="mt-2 text-xs text-gray-600 font-mono bg-white/50 rounded p-2">
+                    {Object.entries(step.details).map(([key, value]) => (
+                      <div key={key} className="flex gap-2">
+                        <span className="text-gray-400">{key}:</span>
+                        <span className="truncate">
+                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {step.error && (
+                  <div className="mt-2 text-xs text-red-600 bg-red-50 rounded p-2">
+                    {step.error}
+                  </div>
+                )}
+              </div>
+              {step.started_at && (
+                <div className="text-xs text-gray-400 text-right">
+                  {formatTime(step.started_at)}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TraceRow({ trace, isExpanded, onToggle }: {
+  trace: TraceSummary;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const [details, setDetails] = useState<PipelineTrace | null>(null);
+  const [loading, setLoading] = useState(false);
+  const cfg = statusConfig[trace.status];
+  const StatusIcon = cfg.icon;
+
+  useEffect(() => {
+    if (isExpanded && !details) {
+      setLoading(true);
+      apiService.getTrace(trace.id)
+        .then(setDetails)
+        .finally(() => setLoading(false));
+    }
+  }, [isExpanded, trace.id, details]);
+
+  return (
+    <div className="border-b border-gray-100 last:border-0">
+      <div
+        className="flex items-center gap-4 p-4 hover:bg-gray-50 cursor-pointer"
+        onClick={onToggle}
+      >
+        <button className="text-gray-400">
+          {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+        </button>
+        <div className={clsx('rounded-full p-1.5', cfg.bg)}>
+          <StatusIcon className={clsx('h-4 w-4', cfg.color, trace.status === 'in_progress' && 'animate-spin')} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <GitBranch className="h-4 w-4 text-gray-400" />
+            <span className="font-medium text-gray-900">{trace.trigger_type}</span>
+            {trace.api_name && (
+              <>
+                <span className="text-gray-400">→</span>
+                <span className="text-blue-600">{trace.api_name}</span>
+              </>
+            )}
+          </div>
+          {trace.git_commit_message && (
+            <p className="text-sm text-gray-500 truncate mt-1">{trace.git_commit_message}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <User className="h-4 w-4" />
+          <span>{trace.git_author || 'unknown'}</span>
+        </div>
+        {trace.git_commit_sha && (
+          <div className="flex items-center gap-1 text-sm text-gray-400 font-mono">
+            <GitCommit className="h-4 w-4" />
+            <span>{trace.git_commit_sha}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-1 text-sm text-gray-500 w-20 justify-end">
+          <Clock className="h-4 w-4" />
+          <span>{formatDuration(trace.total_duration_ms)}</span>
+        </div>
+        <div className="flex items-center gap-1 text-sm w-16">
+          <span className="text-green-600">{trace.steps_completed}</span>
+          <span className="text-gray-400">/</span>
+          <span className="text-gray-600">{trace.steps_count}</span>
+          {trace.steps_failed > 0 && (
+            <span className="text-red-500 ml-1">({trace.steps_failed})</span>
+          )}
+        </div>
+        <div className="text-sm text-gray-400 w-24 text-right">
+          {formatTime(trace.created_at)}
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="bg-gray-50 p-4 border-t border-gray-100">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+            </div>
+          ) : details ? (
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-900">Git Information</h4>
+                <div className="bg-white rounded-lg p-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Project:</span>
+                    <span className="font-mono">{details.git_project || '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Branch:</span>
+                    <span className="font-mono">{details.git_branch || '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Author:</span>
+                    <span>{details.git_author} {details.git_author_email && `<${details.git_author_email}>`}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Commit:</span>
+                    <span className="font-mono">{details.git_commit_sha || '-'}</span>
+                  </div>
+                  {details.git_files_changed && details.git_files_changed.length > 0 && (
+                    <div>
+                      <span className="text-gray-500">Files changed:</span>
+                      <ul className="mt-1 text-xs font-mono text-gray-600 max-h-32 overflow-auto">
+                        {details.git_files_changed.map((file, i) => (
+                          <li key={i} className="truncate">{file}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                {details.error_summary && (
+                  <div className="bg-red-50 rounded-lg p-4">
+                    <h5 className="font-medium text-red-800 mb-2">Error</h5>
+                    <p className="text-sm text-red-600">{details.error_summary}</p>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-900">Pipeline Steps</h4>
+                <StepTimeline steps={details.steps} />
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-gray-500 py-4">Failed to load details</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PipelineTracesTab() {
+  const { isReady } = useAuth();
+  const [traces, setTraces] = useState<TraceSummary[]>([]);
+  const [stats, setStats] = useState<TraceStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [tracesData, statsData] = await Promise.all([
+        apiService.getTraces(50),
+        apiService.getTraceStats(),
+      ]);
+      setTraces(tracesData.traces);
+      setStats(statsData);
+    } catch (error) {
+      console.error('Failed to load monitoring data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isReady) return;
+    loadData();
+    if (autoRefresh) {
+      const interval = setInterval(loadData, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [loadData, autoRefresh, isReady]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <p className="text-gray-500">End-to-end tracing of GitLab → Kafka → AWX pipeline</p>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            Auto-refresh (5s)
+          </label>
+          <button
+            onClick={loadData}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {stats && (
+        <div className="grid grid-cols-4 gap-4">
+          <StatsCard title="Total Pipelines" value={stats.total} icon={Activity} color="bg-blue-500" />
+          <StatsCard
+            title="Success Rate"
+            value={`${stats.success_rate}%`}
+            subtitle={`${stats.by_status?.success || 0} successful`}
+            icon={CheckCircle2}
+            color="bg-green-500"
+          />
+          <StatsCard title="Failed" value={stats.by_status?.failed || 0} icon={XCircle} color="bg-red-500" />
+          <StatsCard title="Avg Duration" value={formatDuration(stats.avg_duration_ms)} icon={Clock} color="bg-purple-500" />
+        </div>
+      )}
+
+      <div className="rounded-lg bg-white shadow-sm border border-gray-100">
+        <div className="border-b border-gray-100 px-4 py-3">
+          <h2 className="font-medium text-gray-900">Recent Pipeline Executions</h2>
+        </div>
+        {traces.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+            <Activity className="h-12 w-12 mb-4 text-gray-300" />
+            <p>No pipeline traces yet</p>
+            <p className="text-sm">Push to GitLab to trigger a pipeline</p>
+          </div>
+        ) : (
+          <div>
+            {traces.map((trace) => (
+              <TraceRow
+                key={trace.id}
+                trace={trace}
+                isExpanded={expandedId === trace.id}
+                onToggle={() => setExpandedId(expandedId === trace.id ? null : trace.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// DEPLOYMENT HISTORY TAB (ex-Deployments)
+// =============================================================================
+
+function DeploymentHistoryTab() {
   const { isReady } = useAuth();
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -15,9 +411,7 @@ export function Deployments() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isReady) {
-      loadTenants();
-    }
+    if (isReady) loadTenants();
   }, [isReady]);
 
   useEffect(() => {
@@ -37,9 +431,7 @@ export function Deployments() {
     try {
       const data = await apiService.getTenants();
       setTenants(data);
-      if (data.length > 0) {
-        setSelectedTenant(data[0].id);
-      }
+      if (data.length > 0) setSelectedTenant(data[0].id);
       setLoading(false);
     } catch (err: any) {
       setError(err.message || 'Failed to load tenants');
@@ -88,35 +480,6 @@ export function Deployments() {
     rolled_back: 'bg-gray-100 text-gray-800',
   };
 
-  const statusIcons: Record<string, JSX.Element> = {
-    pending: (
-      <svg className="w-4 h-4 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-      </svg>
-    ),
-    in_progress: (
-      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-    ),
-    success: (
-      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-      </svg>
-    ),
-    failed: (
-      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-      </svg>
-    ),
-    rolled_back: (
-      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-      </svg>
-    ),
-  };
-
   if (loading && tenants.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -127,15 +490,8 @@ export function Deployments() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Deployments</h1>
-          <p className="text-gray-500 mt-1">View deployment history and status</p>
-        </div>
-      </div>
-
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
         <div className="flex flex-wrap gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tenant</label>
@@ -180,16 +536,14 @@ export function Deployments() {
       )}
 
       {/* Deployments List */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
           </div>
         ) : deployments.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
+            <Rocket className="mx-auto h-12 w-12 text-gray-400" />
             <p className="mt-2">No deployments found</p>
             <p className="text-sm text-gray-400">Deploy an API to see it here</p>
           </div>
@@ -225,7 +579,6 @@ export function Deployments() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${statusColors[deployment.status]}`}>
-                      {statusIcons[deployment.status]}
                       {deployment.status.replace('_', ' ')}
                     </span>
                     {deployment.error_message && (
@@ -268,33 +621,160 @@ export function Deployments() {
           </table>
         )}
       </div>
+    </div>
+  );
+}
 
-      {/* Legend */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-gray-700 mb-2">Status Legend</h4>
-        <div className="flex flex-wrap gap-4 text-sm">
-          <span className="inline-flex items-center gap-1">
-            <span className={`px-2 py-0.5 rounded-full ${statusColors.pending}`}>pending</span>
-            <span className="text-gray-500">- Waiting to start</span>
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className={`px-2 py-0.5 rounded-full ${statusColors.in_progress}`}>in progress</span>
-            <span className="text-gray-500">- Currently deploying</span>
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className={`px-2 py-0.5 rounded-full ${statusColors.success}`}>success</span>
-            <span className="text-gray-500">- Deployed successfully</span>
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className={`px-2 py-0.5 rounded-full ${statusColors.failed}`}>failed</span>
-            <span className="text-gray-500">- Deployment failed</span>
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className={`px-2 py-0.5 rounded-full ${statusColors.rolled_back}`}>rolled back</span>
-            <span className="text-gray-500">- Reverted to previous version</span>
-          </span>
+// =============================================================================
+// GITLAB CONFIG TAB (ex-Git page)
+// =============================================================================
+
+function GitLabConfigTab() {
+  return (
+    <div className="space-y-6">
+      {/* GitOps Overview */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">GitOps Integration</h3>
+        <p className="text-gray-600 mb-4">
+          API definitions are managed through Git. When you commit changes to the repository,
+          webhooks automatically trigger the deployment pipeline.
+        </p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm">
+          <div className="text-gray-500 mb-2"># Pipeline flow</div>
+          <div className="text-blue-600">GitLab Push</div>
+          <div className="text-gray-400 ml-4">↓ webhook</div>
+          <div className="text-green-600 ml-4">Control-Plane-API</div>
+          <div className="text-gray-400 ml-8">↓ publish event</div>
+          <div className="text-purple-600 ml-8">Kafka (deploy-requests)</div>
+          <div className="text-gray-400 ml-12">↓ consume</div>
+          <div className="text-orange-600 ml-12">AWX Job Template</div>
+          <div className="text-gray-400 ml-16">↓ deploy</div>
+          <div className="text-green-600 ml-16">webMethods Gateway</div>
+        </div>
+      </div>
+
+      {/* Repository Structure */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Repository Structure</h3>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm">
+          <pre className="text-gray-700">{`stoa-api-definitions/
+├── tenants/
+│   ├── tenant-acme/
+│   │   ├── apis/
+│   │   │   ├── customer-api/
+│   │   │   │   ├── openapi.yaml
+│   │   │   │   └── config.yaml
+│   │   │   └── order-api/
+│   │   │       └── openapi.yaml
+│   │   └── mcp-servers/
+│   │       └── acme-tools/
+│   │           └── config.yaml
+│   └── tenant-globex/
+│       └── apis/
+│           └── inventory-api/
+│               └── openapi.yaml
+└── platform/
+    └── mcp-servers/
+        └── shared-tools/
+            └── config.yaml`}</pre>
+        </div>
+      </div>
+
+      {/* External Links */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">External Resources</h3>
+        <div className="flex flex-wrap gap-4">
+          <a
+            href={config.services.gitlab.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+          >
+            <GitBranch className="h-5 w-5" />
+            GitLab Repository
+            <ExternalLink className="h-4 w-4" />
+          </a>
+          <a
+            href={config.services.awx.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            <Activity className="h-5 w-5" />
+            AWX Dashboard
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        </div>
+      </div>
+
+      {/* Webhook Status */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Webhook Configuration</h3>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div>
+              <p className="font-medium text-gray-900">GitLab Webhook</p>
+              <p className="text-sm text-gray-500">Receives push and merge request events</p>
+            </div>
+            <span className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+              <CheckCircle2 className="h-4 w-4" />
+              Active
+            </span>
+          </div>
+          <div className="text-sm text-gray-500">
+            <p><strong>Endpoint:</strong> <code className="bg-gray-100 px-2 py-0.5 rounded">{config.api.baseUrl}/webhooks/gitlab</code></p>
+            <p className="mt-1"><strong>Supported Events:</strong> Push Hook, Merge Request Hook, Tag Push Hook</p>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+// =============================================================================
+// MAIN DEPLOYMENTS PAGE
+// =============================================================================
+
+export function Deployments() {
+  const [activeTab, setActiveTab] = useState<TabId>('pipelines');
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Deployments</h1>
+        <p className="text-gray-500 mt-1">GitOps pipeline monitoring and deployment history</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="flex gap-8">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={clsx(
+                'flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+                activeTab === tab.id
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              )}
+            >
+              <tab.icon className="h-5 w-5" />
+              {tab.name}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      <div>
+        {activeTab === 'pipelines' && <PipelineTracesTab />}
+        {activeTab === 'history' && <DeploymentHistoryTab />}
+        {activeTab === 'config' && <GitLabConfigTab />}
+      </div>
+    </div>
+  );
+}
+
+export default Deployments;

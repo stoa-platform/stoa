@@ -13,6 +13,7 @@ import type {
   ContractListResponse,
   BindingsListResponse,
   EnableBindingResponse,
+  DisableBindingResponse,
   ProtocolType,
 } from '../types';
 
@@ -112,7 +113,7 @@ export function useEnableBinding(contractId: string) {
 
   return useMutation<EnableBindingResponse, Error, ProtocolType>({
     mutationFn: (protocol) => contractsService.enableBinding(contractId, protocol),
-    onSuccess: (data) => {
+    onSuccess: () => {
       // Invalidate bindings cache to refresh the list
       queryClient.invalidateQueries({ queryKey: ['bindings', contractId] });
       queryClient.invalidateQueries({ queryKey: ['contract', contractId] });
@@ -126,7 +127,7 @@ export function useEnableBinding(contractId: string) {
 export function useDisableBinding(contractId: string) {
   const queryClient = useQueryClient();
 
-  return useMutation<void, Error, ProtocolType>({
+  return useMutation<DisableBindingResponse, Error, ProtocolType>({
     mutationFn: (protocol) => contractsService.disableBinding(contractId, protocol),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bindings', contractId] });

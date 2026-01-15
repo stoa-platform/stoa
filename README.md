@@ -2,6 +2,14 @@
 
 Multi-tenant API Management Platform with Control-Plane UI, GitOps and Event-Driven Architecture.
 
+## Related Repositories
+
+| Repository | Purpose | URL |
+|------------|---------|-----|
+| **stoa** (this repo) | Application source code | [github.com/PotoMitan/stoa](https://github.com/PotoMitan/stoa) |
+| **stoa-infra** | Infrastructure & Helm charts | [github.com/PotoMitan/stoa-infra](https://github.com/PotoMitan/stoa-infra) |
+| **stoa-gitops** | Runtime configuration & GitOps | [github.com/PotoMitan/stoa-gitops](https://github.com/PotoMitan/stoa-gitops) |
+
 ## Architecture
 
 ```

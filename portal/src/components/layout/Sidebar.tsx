@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, CreditCard, BookOpen, User, X, AppWindow, Webhook, BarChart3, Shield, Server, ExternalLink } from 'lucide-react';
+import { Home, CreditCard, BookOpen, User, X, AppWindow, Webhook, BarChart3, Shield, Wrench, ExternalLink } from 'lucide-react';
 import { config } from '../../config';
 
 interface SidebarProps {
@@ -9,11 +9,14 @@ interface SidebarProps {
 
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
-  { name: 'MCP Servers', href: '/servers', icon: Server, enabled: config.features.enableMCPTools },
+  // Consumer Catalogs - Main features
   { name: 'API Catalog', href: '/apis', icon: BookOpen, enabled: config.features.enableAPICatalog },
+  { name: 'AI Tools', href: '/servers', icon: Wrench, enabled: config.features.enableMCPTools },
+  // Consumer Resources
   { name: 'My Apps', href: '/apps', icon: AppWindow, enabled: config.features.enableAPICatalog },
   { name: 'My Subscriptions', href: '/subscriptions', icon: CreditCard, enabled: config.features.enableSubscriptions },
   { name: 'Service Accounts', href: '/service-accounts', icon: Shield, enabled: config.features.enableMCPTools },
+  // Analytics & Settings
   { name: 'Usage', href: '/usage', icon: BarChart3, enabled: config.features.enableSubscriptions },
   { name: 'Webhooks', href: '/webhooks', icon: Webhook, enabled: config.features.enableSubscriptions },
   { name: 'Profile', href: '/profile', icon: User },

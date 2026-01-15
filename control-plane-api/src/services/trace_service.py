@@ -1,7 +1,7 @@
 """Service for managing pipeline traces in PostgreSQL."""
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from sqlalchemy import select, func, desc
@@ -65,7 +65,7 @@ class TraceService:
         step = {
             "name": name,
             "status": status,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "completed_at": None,
             "duration_ms": duration_ms,
             "details": details,
@@ -92,7 +92,7 @@ class TraceService:
         for step in steps:
             if step["name"] == step_name:
                 step["status"] = status
-                step["completed_at"] = datetime.utcnow().isoformat()
+                step["completed_at"] = datetime.now(timezone.utc).isoformat()
                 if duration_ms:
                     step["duration_ms"] = duration_ms
                 if details:
@@ -112,7 +112,7 @@ class TraceService:
     ) -> PipelineTraceDB:
         """Mark trace as completed."""
         trace.status = status
-        trace.completed_at = datetime.utcnow()
+        trace.completed_at = datetime.now(timezone.utc)
         if trace.created_at:
             trace.total_duration_ms = int(
                 (trace.completed_at - trace.created_at).total_seconds() * 1000

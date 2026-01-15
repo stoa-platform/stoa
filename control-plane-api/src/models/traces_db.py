@@ -1,7 +1,7 @@
 """SQLAlchemy models for pipeline traces (PostgreSQL persistence)"""
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from sqlalchemy import String, Text, Integer, DateTime, Enum, Index
@@ -49,7 +49,7 @@ class PipelineTraceDB(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow
+        default=lambda: datetime.now(timezone.utc)
     )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     total_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

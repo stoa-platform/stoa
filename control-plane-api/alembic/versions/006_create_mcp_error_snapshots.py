@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers
 revision = '006_mcp_snapshots'
-down_revision = '005_add_gitops_tracking'
+down_revision = '005'
 branch_labels = None
 depends_on = None
 

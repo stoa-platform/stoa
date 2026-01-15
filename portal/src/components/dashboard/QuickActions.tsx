@@ -27,9 +27,17 @@ interface QuickAction {
 
 const actions: QuickAction[] = [
   {
-    title: 'Browse Tools',
-    description: 'Discover AI-powered MCP tools',
-    href: '/tools',
+    title: 'API Catalog',
+    description: 'Browse available APIs',
+    href: '/apis',
+    icon: BookOpen,
+    color: 'from-indigo-500 to-indigo-600',
+    enabled: config.features.enableAPICatalog,
+  },
+  {
+    title: 'AI Tools',
+    description: 'Discover AI-powered tools',
+    href: '/servers',
     icon: Wrench,
     color: 'from-primary-500 to-primary-600',
     enabled: config.features.enableMCPTools,
@@ -44,19 +52,11 @@ const actions: QuickAction[] = [
   },
   {
     title: 'My Subscriptions',
-    description: 'Manage your tool subscriptions',
+    description: 'Manage your subscriptions',
     href: '/subscriptions',
     icon: CreditCard,
     color: 'from-emerald-500 to-emerald-600',
     enabled: config.features.enableSubscriptions,
-  },
-  {
-    title: 'Documentation',
-    description: 'Read the developer docs',
-    href: config.services.docs.url,
-    icon: BookOpen,
-    color: 'from-purple-500 to-purple-600',
-    external: true,
   },
 ];
 

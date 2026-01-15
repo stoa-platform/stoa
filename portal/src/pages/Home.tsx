@@ -12,6 +12,8 @@ import {
   DashboardStats,
   QuickActions,
   RecentActivity,
+  FeaturedAPIs,
+  FeaturedAITools,
 } from '../components/dashboard';
 import type { DashboardStats as DashboardStatsType, RecentActivityItem } from '../types';
 
@@ -51,6 +53,12 @@ export function HomePage() {
 
       {/* Quick Actions */}
       <QuickActions />
+
+      {/* Featured Catalogs - API and AI Tools */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <FeaturedAPIs />
+        <FeaturedAITools />
+      </div>
 
       {/* Recent Activity */}
       <RecentActivity activity={activity} isLoading={isLoading} />

@@ -76,7 +76,7 @@ export function ToolsCatalog() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">MCP Tools Catalog</h1>
+          <h1 className="text-2xl font-bold text-gray-900">AI Tools Catalog</h1>
           <p className="text-gray-500 mt-1">
             Discover and subscribe to AI-powered tools
           </p>

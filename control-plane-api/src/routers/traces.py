@@ -7,7 +7,7 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..services.database import get_db
+from ..database import get_db
 from ..services.trace_service import TraceService
 from ..models.traces_db import TraceStatusDB
 

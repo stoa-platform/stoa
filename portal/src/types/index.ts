@@ -694,3 +694,37 @@ export interface ContractListResponse {
   page: number;
   page_size: number;
 }
+
+// ============ Publish Contract Response Types (CAB-560) ============
+
+/**
+ * Status of an auto-generated binding after contract publication
+ */
+export type BindingStatus = 'created' | 'available' | 'disabled';
+
+/**
+ * Generated binding info returned after contract publication
+ */
+export interface GeneratedBinding {
+  protocol: ProtocolType;
+  status: BindingStatus;
+  endpoint?: string;
+  playground_url?: string;
+  tool_name?: string;           // For MCP
+  operations?: string[];        // For GraphQL
+  auto_generated?: boolean;     // True for auto-enabled bindings (e.g., MCP)
+}
+
+/**
+ * Enriched response after publishing/creating a contract
+ * Shows all auto-generated bindings for the "wow" effect
+ */
+export interface PublishContractResponse {
+  id: string;
+  name: string;
+  version: string;
+  status: ContractStatus;
+  bindings_generated: GeneratedBinding[];
+  created_at: string;
+  updated_at: string;
+}

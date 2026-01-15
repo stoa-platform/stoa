@@ -15,6 +15,7 @@ import type {
   EnableBindingResponse,
   DisableBindingResponse,
   ProtocolType,
+  PublishContractResponse,
 } from '../types';
 
 // ============ Contract Hooks ============
@@ -56,6 +57,41 @@ export function useCreateContract() {
     mutationFn: (data) => contractsService.createContract(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contracts'] });
+    },
+  });
+}
+
+/**
+ * Hook to publish a contract with enriched response
+ *
+ * Returns all auto-generated bindings for the "wow" effect modal.
+ * Use this when you want to show users what STOA auto-generated
+ * (REST, MCP, GraphQL endpoints) from their contract.
+ *
+ * @example
+ * ```tsx
+ * const publishContract = usePublishContract({
+ *   onSuccess: (data) => {
+ *     setPublishedContract(data);
+ *     setShowSuccessModal(true);
+ *   },
+ * });
+ * ```
+ */
+export function usePublishContract(options?: {
+  onSuccess?: (data: PublishContractResponse) => void;
+  onError?: (error: Error) => void;
+}) {
+  const queryClient = useQueryClient();
+
+  return useMutation<PublishContractResponse, Error, ContractCreate>({
+    mutationFn: (data) => contractsService.publishContract(data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+      options?.onSuccess?.(data);
+    },
+    onError: (error) => {
+      options?.onError?.(error);
     },
   });
 }

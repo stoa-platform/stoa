@@ -7,6 +7,7 @@ import { MCPServersPage, ServerDetailPage } from './pages/servers';
 import { MySubscriptions } from './pages/subscriptions/MySubscriptions';
 import { APICatalog, APIDetail, APITestingSandbox } from './pages/apis';
 import { MyApplications, ApplicationDetail } from './pages/apps';
+import { ContractListPage, ContractDetailPage, CreateContractPage } from './pages/contracts';
 import { ProfilePage } from './pages/profile/Profile';
 import { WebhooksPage } from './pages/webhooks/WebhooksPage';
 import { UsagePage } from './pages/usage';
@@ -98,6 +99,10 @@ function AppContent() {
           {/* Consumer Applications */}
           <Route path="/apps" element={<MyApplications />} />
           <Route path="/apps/:id" element={<ApplicationDetail />} />
+          {/* Universal API Contracts (UAC) */}
+          <Route path="/contracts" element={<ContractListPage />} />
+          <Route path="/contracts/new" element={<CreateContractPage />} />
+          <Route path="/contracts/:id" element={<ContractDetailPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           {/* Usage Dashboard */}
           <Route path="/usage" element={<UsagePage />} />

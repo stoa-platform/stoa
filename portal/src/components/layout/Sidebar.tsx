@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, CreditCard, BookOpen, User, X, AppWindow, Webhook, BarChart3, Shield, Wrench, ExternalLink } from 'lucide-react';
+import { Home, CreditCard, BookOpen, User, X, AppWindow, Webhook, BarChart3, Shield, Wrench, ExternalLink, FileCode2 } from 'lucide-react';
 import { config } from '../../config';
 
 interface SidebarProps {
@@ -12,6 +12,8 @@ const navigation = [
   // Consumer Catalogs - Main features
   { name: 'API Catalog', href: '/apis', icon: BookOpen, enabled: config.features.enableAPICatalog },
   { name: 'AI Tools', href: '/servers', icon: Wrench, enabled: config.features.enableMCPTools },
+  // Universal API Contracts (UAC)
+  { name: 'Contracts', href: '/contracts', icon: FileCode2 },
   // Consumer Resources
   { name: 'My Apps', href: '/apps', icon: AppWindow, enabled: config.features.enableAPICatalog },
   { name: 'My Subscriptions', href: '/subscriptions', icon: CreditCard, enabled: config.features.enableSubscriptions },

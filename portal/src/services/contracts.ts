@@ -14,6 +14,7 @@ import {
   EnableBindingResponse,
   DisableBindingResponse,
   ProtocolType,
+  PublishContractResponse,
 } from '../types';
 
 export const contractsService = {
@@ -39,9 +40,25 @@ export const contractsService = {
 
   /**
    * Create a new contract
+   * Returns basic contract info
    */
   async createContract(data: ContractCreate): Promise<Contract> {
     const response = await apiClient.post<Contract>('/v1/contracts', data);
+    return response.data;
+  },
+
+  /**
+   * Create and publish a contract with enriched response
+   * Returns the contract with all auto-generated bindings for the "wow" effect
+   *
+   * This is the preferred method when you want to show the user
+   * what bindings were auto-generated (REST, MCP, GraphQL, etc.)
+   */
+  async publishContract(data: ContractCreate): Promise<PublishContractResponse> {
+    const response = await apiClient.post<PublishContractResponse>(
+      '/v1/contracts',
+      { ...data, status: 'published' }
+    );
     return response.data;
   },
 

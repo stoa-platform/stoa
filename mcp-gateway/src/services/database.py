@@ -83,10 +83,8 @@ async def init_database() -> None:
         autoflush=False,
     )
 
-    # Create tables if they don't exist
-    async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
+    # Note: Tables are created via Alembic migrations, not here
+    # This avoids conflicts with existing tables that have different schemas
     logger.info("Database initialized successfully")
 
 

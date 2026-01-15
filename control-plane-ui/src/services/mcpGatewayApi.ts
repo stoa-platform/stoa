@@ -1,5 +1,18 @@
-import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
-import { config } from '../config';
+/**
+ * MCP Tools API Service
+ *
+ * Client for accessing MCP tools via the Control-Plane-API.
+ * Routes through webMethods Gateway for OIDC authentication.
+ *
+ * Flow: Console UI → webMethods Gateway → Control-Plane-API → MCP Gateway
+ *
+ * This approach ensures:
+ * - Consistent authentication via webMethods Gateway
+ * - Single API entry point for the Console UI
+ * - Centralized logging and monitoring
+ */
+
+import { apiService } from './api';
 import type {
   MCPTool,
   ListToolsResponse,
@@ -8,55 +21,20 @@ import type {
   ToolSubscriptionCreate,
 } from '../types';
 
-const MCP_GATEWAY_URL = config.services.mcpGateway.url;
-
 /**
- * MCP Gateway API Service
+ * MCP Tools Service
  *
- * Client for interacting with the STOA MCP Gateway.
- * Provides access to AI tools catalog, subscriptions, and usage metrics.
+ * Provides access to AI tools catalog via Control-Plane-API proxy.
+ * All calls go through webMethods Gateway with OIDC authentication.
  */
-class MCPGatewayService {
-  private client: AxiosInstance;
-  private authToken: string | null = null;
-
-  constructor() {
-    this.client = axios.create({
-      baseURL: MCP_GATEWAY_URL,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    // Use request interceptor to ensure token is always attached
-    this.client.interceptors.request.use(
-      (config: InternalAxiosRequestConfig) => {
-        if (this.authToken) {
-          config.headers.Authorization = `Bearer ${this.authToken}`;
-        }
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
-  }
-
-  setAuthToken(token: string) {
-    this.authToken = token;
-    // Also set defaults for backwards compatibility
-    this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-  }
-
-  clearAuthToken() {
-    this.authToken = null;
-    delete this.client.defaults.headers.common['Authorization'];
-  }
-
+class MCPToolsService {
   // ==========================================================================
-  // Tools Catalog
+  // Tools Catalog (via Control-Plane-API proxy to MCP Gateway)
   // ==========================================================================
 
   /**
    * List all available tools with optional filtering.
+   * Endpoint: GET /v1/mcp/tools
    */
   async getTools(params?: {
     tenant?: string;
@@ -65,9 +43,9 @@ class MCPGatewayService {
     cursor?: string;
     limit?: number;
   }): Promise<ListToolsResponse> {
-    const { data } = await this.client.get('/mcp/v1/tools', {
+    const { data } = await apiService.get('/v1/mcp/tools', {
       params: {
-        tenant: params?.tenant,
+        tenant_id: params?.tenant,
         tag: params?.tag,
         search: params?.search,
         cursor: params?.cursor,
@@ -79,66 +57,82 @@ class MCPGatewayService {
 
   /**
    * Get a specific tool by name.
+   * Endpoint: GET /v1/mcp/tools/{name}
    */
   async getTool(toolName: string): Promise<MCPTool> {
-    const { data } = await this.client.get(`/mcp/v1/tools/${toolName}`);
+    const { data } = await apiService.get(`/v1/mcp/tools/${encodeURIComponent(toolName)}`);
     return data;
   }
 
   /**
    * Get the input schema for a tool.
+   * Endpoint: GET /v1/mcp/tools/{name}/schema
    */
   async getToolSchema(toolName: string): Promise<{
     name: string;
     inputSchema: MCPTool['inputSchema'];
   }> {
-    const { data } = await this.client.get(`/mcp/v1/tools/${toolName}/schema`);
+    const { data } = await apiService.get(`/v1/mcp/tools/${encodeURIComponent(toolName)}/schema`);
     return data;
   }
 
   /**
    * Get all unique tags from tools.
+   * Endpoint: GET /v1/mcp/tools/tags
    */
   async getToolTags(): Promise<string[]> {
-    const { data } = await this.client.get('/mcp/v1/tools/tags');
+    const { data } = await apiService.get('/v1/mcp/tools/tags');
     return data.tags || [];
   }
 
+  /**
+   * Get all tool categories with counts.
+   * Endpoint: GET /v1/mcp/tools/categories
+   */
+  async getToolCategories(): Promise<{ categories: Array<{ name: string; count: number }> }> {
+    const { data } = await apiService.get('/v1/mcp/tools/categories');
+    return data;
+  }
+
   // ==========================================================================
-  // Subscriptions
+  // Subscriptions (via Control-Plane-API - already uses this path)
   // ==========================================================================
 
   /**
-   * Get user's tool subscriptions.
+   * Get user's MCP server subscriptions.
+   * Endpoint: GET /v1/mcp/subscriptions
    */
   async getMySubscriptions(): Promise<ToolSubscription[]> {
-    const { data } = await this.client.get('/mcp/v1/subscriptions');
-    return data.subscriptions || [];
+    const { data } = await apiService.get('/v1/mcp/subscriptions');
+    return data.items || [];
   }
 
   /**
-   * Subscribe to a tool.
+   * Subscribe to an MCP server.
+   * Endpoint: POST /v1/mcp/subscriptions
    */
   async subscribeTool(subscription: ToolSubscriptionCreate): Promise<ToolSubscription> {
-    const { data } = await this.client.post('/mcp/v1/subscriptions', subscription);
+    const { data } = await apiService.post('/v1/mcp/subscriptions', subscription);
     return data;
   }
 
   /**
-   * Unsubscribe from a tool.
+   * Cancel a subscription.
+   * Endpoint: DELETE /v1/mcp/subscriptions/{id}
    */
   async unsubscribeTool(subscriptionId: string): Promise<void> {
-    await this.client.delete(`/mcp/v1/subscriptions/${subscriptionId}`);
+    await apiService.delete(`/v1/mcp/subscriptions/${subscriptionId}`);
   }
 
   /**
    * Update subscription settings.
+   * Endpoint: PATCH /v1/mcp/subscriptions/{id}
    */
   async updateSubscription(
     subscriptionId: string,
     update: Partial<ToolSubscriptionCreate>
   ): Promise<ToolSubscription> {
-    const { data } = await this.client.patch(`/mcp/v1/subscriptions/${subscriptionId}`, update);
+    const { data } = await apiService.patch(`/v1/mcp/subscriptions/${subscriptionId}`, update);
     return data;
   }
 
@@ -148,13 +142,14 @@ class MCPGatewayService {
 
   /**
    * Get usage summary for the current user.
+   * Endpoint: GET /v1/usage/me (from usage router)
    */
   async getMyUsage(params?: {
     period?: 'day' | 'week' | 'month';
     startDate?: string;
     endDate?: string;
   }): Promise<ToolUsageSummary> {
-    const { data } = await this.client.get('/mcp/v1/usage/me', { params });
+    const { data } = await apiService.get('/v1/usage/me', { params });
     return data;
   }
 
@@ -169,7 +164,7 @@ class MCPGatewayService {
       endDate?: string;
     }
   ): Promise<ToolUsageSummary> {
-    const { data } = await this.client.get(`/mcp/v1/usage/tools/${toolName}`, { params });
+    const { data } = await apiService.get(`/v1/usage/tools/${encodeURIComponent(toolName)}`, { params });
     return data;
   }
 
@@ -189,7 +184,7 @@ class MCPGatewayService {
       costUnits: number;
     }>;
   }> {
-    const { data } = await this.client.get('/mcp/v1/usage/history', { params });
+    const { data } = await apiService.get('/v1/usage/history', { params });
     return data;
   }
 
@@ -198,29 +193,26 @@ class MCPGatewayService {
   // ==========================================================================
 
   /**
-   * Get MCP server information.
+   * Get Control-Plane-API health.
    */
-  async getServerInfo(): Promise<{
-    name: string;
-    version: string;
-    protocolVersion: string;
-    capabilities: {
-      tools: boolean;
-      resources: boolean;
-      prompts: boolean;
-    };
-  }> {
-    const { data } = await this.client.get('/mcp/v1/');
+  async healthCheck(): Promise<{ status: 'healthy' | 'degraded' | 'unhealthy' }> {
+    const { data } = await apiService.get('/health');
     return data;
   }
 
-  /**
-   * Health check.
-   */
-  async healthCheck(): Promise<{ status: 'healthy' | 'degraded' | 'unhealthy' }> {
-    const { data } = await this.client.get('/health');
-    return data;
+  // ==========================================================================
+  // Legacy methods for backwards compatibility
+  // These are no-ops since auth is handled by apiService
+  // ==========================================================================
+
+  setAuthToken(_token: string) {
+    // No-op: auth token is managed by apiService
+  }
+
+  clearAuthToken() {
+    // No-op: auth token is managed by apiService
   }
 }
 
-export const mcpGatewayService = new MCPGatewayService();
+// Export singleton instance
+export const mcpGatewayService = new MCPToolsService();

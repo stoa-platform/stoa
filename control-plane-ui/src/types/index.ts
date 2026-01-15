@@ -462,3 +462,69 @@ export interface SnapshotFiltersResponse {
   tools: string[];
   resolution_statuses: string[];
 }
+
+// =============================================================================
+// API Transaction Monitoring types (E2E Tracing)
+// =============================================================================
+
+export type TransactionStatus = 'success' | 'error' | 'timeout' | 'pending';
+
+export interface TransactionSpan {
+  name: string;
+  service: string;
+  status: TransactionStatus;
+  started_at: string;
+  duration_ms: number;
+  error?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface APITransaction {
+  id: string;
+  trace_id: string;
+  api_name: string;
+  tenant_id: string;
+  method: string;
+  path: string;
+  status_code: number;
+  status: TransactionStatus;
+  client_ip?: string;
+  user_id?: string;
+  started_at: string;
+  total_duration_ms: number;
+  spans: TransactionSpan[];
+  request_headers?: Record<string, string>;
+  response_headers?: Record<string, string>;
+  error_message?: string;
+}
+
+export interface APITransactionSummary {
+  id: string;
+  trace_id: string;
+  api_name: string;
+  method: string;
+  path: string;
+  status_code: number;
+  status: TransactionStatus;
+  started_at: string;
+  total_duration_ms: number;
+  spans_count: number;
+}
+
+export interface APITransactionStats {
+  total_requests: number;
+  success_count: number;
+  error_count: number;
+  timeout_count: number;
+  avg_latency_ms: number;
+  p95_latency_ms: number;
+  p99_latency_ms: number;
+  requests_per_minute: number;
+  by_api: Record<string, {
+    total: number;
+    success: number;
+    errors: number;
+    avg_latency_ms: number;
+  }>;
+  by_status_code: Record<number, number>;
+}

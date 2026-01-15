@@ -1,14 +1,14 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
-import { Monitoring } from './pages/Monitoring';
 import { Tenants } from './pages/Tenants';
 import { APIs } from './pages/APIs';
 import { Applications } from './pages/Applications';
 import { Deployments } from './pages/Deployments';
+import { APIMonitoring } from './pages/APIMonitoring';
 import { ToolCatalog, ToolDetail, MySubscriptions, UsageDashboard } from './pages/AITools';
 import { ErrorSnapshots } from './pages/ErrorSnapshots';
-import { config, quickLinks } from './config';
+import { quickLinks } from './config';
 
 function Dashboard() {
   const { user } = useAuth();
@@ -119,7 +119,7 @@ function Dashboard() {
             </li>
             <li className="flex gap-2">
               <span className="font-bold text-blue-600">4.</span>
-              <span>Monitor deployments in the <a href="/monitoring" className="text-blue-600 hover:underline">Monitoring</a> page</span>
+              <span>Monitor deployments in the <a href="/deployments" className="text-blue-600 hover:underline">Deployments</a> page</span>
             </li>
           </ol>
         </div>
@@ -160,46 +160,6 @@ function QuickActionCard({ title, description, href, icon, color }: QuickActionC
   );
 }
 
-function Git() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Git</h1>
-        <p className="text-gray-500 mt-1">View Git commits and merge requests</p>
-      </div>
-
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex gap-3">
-          <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div>
-            <h4 className="text-sm font-medium text-blue-800">GitOps Integration</h4>
-            <p className="text-sm text-blue-700 mt-1">
-              Git operations are managed via the GitOps repository.
-              Commits and merge requests are automatically processed via webhooks.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">External Links</h3>
-        <ul className="space-y-3">
-          <li>
-            <a href={config.services.gitlab.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:text-blue-800">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-              GitLab Repository
-            </a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  );
-}
-
 function ProtectedRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -227,8 +187,7 @@ function ProtectedRoutes() {
         <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
         <Route path="/applications" element={<Applications />} />
         <Route path="/deployments" element={<Deployments />} />
-        <Route path="/git" element={<Git />} />
-        <Route path="/monitoring" element={<Monitoring />} />
+        <Route path="/monitoring" element={<APIMonitoring />} />
         <Route path="/mcp/errors" element={<ErrorSnapshots />} />
       </Routes>
     </Layout>

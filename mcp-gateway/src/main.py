@@ -27,6 +27,7 @@ from .k8s import get_tool_watcher, shutdown_tool_watcher
 from .features.error_snapshots import (
     MCPErrorSnapshotMiddleware,
     get_mcp_snapshot_settings,
+    snapshots_router,
 )
 from .features.error_snapshots.publisher import setup_snapshot_publisher, shutdown_snapshot_publisher
 
@@ -191,6 +192,12 @@ def create_app() -> FastAPI:
 
     # Register servers router for server-based subscriptions
     app.include_router(servers_router)
+
+    # Register error snapshots router (Phase 4)
+    snapshot_settings = get_mcp_snapshot_settings()
+    if snapshot_settings.enabled:
+        app.include_router(snapshots_router)
+        logger.info("Error snapshots API enabled")
 
     # Serve favicon
     @app.get("/favicon.ico", include_in_schema=False)

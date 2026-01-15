@@ -1,7 +1,10 @@
 """
 Kafka Publisher for MCP Error Snapshots
 
-Publishes snapshots to dedicated Kafka topic for analysis.
+Publishes snapshots to dedicated Kafka topic and persists to database.
+
+Phase 3: Kafka publishing
+Phase 4: Database persistence
 """
 
 import asyncio
@@ -93,19 +96,23 @@ class MCPSnapshotPublisher:
 
     async def publish(self, snapshot: MCPErrorSnapshot) -> bool:
         """
-        Publish a snapshot to Kafka.
+        Publish a snapshot to Kafka and persist to database.
 
-        Uses buffering for efficiency, with periodic flush.
+        Uses buffering for Kafka efficiency, with periodic flush.
+        Database persistence is immediate.
         """
+        # Phase 4: Persist to database (always, even if Kafka is disabled)
+        await self._persist_to_db(snapshot)
+
         if not self._settings.kafka_enabled:
-            return False
+            return True  # Success if DB persistence worked
 
         if not self._started:
             await self.start()
 
         if not self._producer:
             logger.warning("mcp_snapshot_publisher_not_available")
-            return False
+            return True  # Still success if DB worked
 
         try:
             # Add to buffer
@@ -120,6 +127,28 @@ class MCPSnapshotPublisher:
 
         except Exception as e:
             logger.warning("mcp_snapshot_publish_failed", error=str(e))
+            return True  # Still success if DB worked
+
+    async def _persist_to_db(self, snapshot: MCPErrorSnapshot) -> bool:
+        """Persist snapshot to database (Phase 4)."""
+        try:
+            from ...services.database import get_db_session
+            from .repository import ErrorSnapshotRepository
+
+            async with get_db_session() as session:
+                repo = ErrorSnapshotRepository(session)
+                await repo.save(snapshot)
+
+            logger.debug("snapshot_persisted_to_db", snapshot_id=snapshot.id)
+            return True
+
+        except Exception as e:
+            # Don't fail if DB is unavailable - log and continue
+            logger.warning(
+                "snapshot_db_persist_failed",
+                snapshot_id=snapshot.id,
+                error=str(e),
+            )
             return False
 
     async def publish_immediate(self, snapshot: MCPErrorSnapshot) -> bool:

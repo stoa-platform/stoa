@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user for security
+RUN groupadd -r stoa && useradd -r -g stoa -d /app stoa
+
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -18,6 +21,9 @@ COPY src/ ./src/
 # Copy alembic configuration and migrations
 COPY alembic.ini ./
 COPY alembic/ ./alembic/
+
+# Set ownership to non-root user
+RUN chown -R stoa:stoa /app
 
 # Environment variables with defaults
 # Override at runtime via docker run -e or Kubernetes ConfigMap/Secrets
@@ -69,6 +75,9 @@ ENV RATE_LIMIT_REQUESTS=100 \
 
 # Expose port
 EXPOSE 8000
+
+# Switch to non-root user
+USER stoa
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

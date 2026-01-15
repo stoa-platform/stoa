@@ -587,3 +587,110 @@ export interface MCPServerSubscriptionCreate {
 export interface MCPServerSubscriptionWithKey extends MCPServerSubscription {
   api_key: string;  // Full key, shown only once!
 }
+
+// ============ UAC Contract & Protocol Binding Types ============
+
+/**
+ * Supported protocol types for UAC bindings
+ */
+export type ProtocolType = 'rest' | 'graphql' | 'grpc' | 'mcp' | 'kafka';
+
+/**
+ * Contract lifecycle status
+ */
+export type ContractStatus = 'draft' | 'published' | 'deprecated';
+
+/**
+ * Protocol binding for a contract
+ * Represents whether a protocol (REST, MCP, etc.) is enabled for a contract
+ */
+export interface ProtocolBinding {
+  protocol: ProtocolType;
+  enabled: boolean;
+  endpoint?: string;
+  playground_url?: string;
+  tool_name?: string;           // For MCP
+  operations?: string[];        // For GraphQL
+  proto_file_url?: string;      // For gRPC
+  topic_name?: string;          // For Kafka
+  traffic_24h?: number;         // Request count in last 24 hours
+  generated_at?: string;
+  generation_error?: string;
+}
+
+/**
+ * Universal API Contract
+ * A contract defines an API once and can expose it via multiple protocols
+ */
+export interface Contract {
+  id: string;
+  tenant_id: string;
+  name: string;
+  display_name?: string;
+  description?: string;
+  version: string;
+  status: ContractStatus;
+  openapi_spec_url?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  bindings: ProtocolBinding[];
+}
+
+/**
+ * Response for listing bindings
+ */
+export interface BindingsListResponse {
+  contract_id: string;
+  contract_name: string;
+  bindings: ProtocolBinding[];
+}
+
+/**
+ * Request to enable a protocol binding
+ */
+export interface EnableBindingRequest {
+  protocol: ProtocolType;
+}
+
+/**
+ * Response after enabling a protocol binding
+ */
+export interface EnableBindingResponse {
+  protocol: ProtocolType;
+  endpoint: string;
+  playground_url?: string;
+  tool_name?: string;
+  status: 'active';
+  generated_at: string;
+}
+
+/**
+ * Response after disabling a protocol binding
+ */
+export interface DisableBindingResponse {
+  protocol: ProtocolType;
+  status: 'disabled';
+  disabled_at: string;
+}
+
+/**
+ * Request to create a new contract
+ */
+export interface ContractCreate {
+  name: string;
+  display_name?: string;
+  description?: string;
+  version?: string;
+  openapi_spec_url?: string;
+}
+
+/**
+ * Paginated list of contracts
+ */
+export interface ContractListResponse {
+  items: Contract[];
+  total: number;
+  page: number;
+  page_size: number;
+}

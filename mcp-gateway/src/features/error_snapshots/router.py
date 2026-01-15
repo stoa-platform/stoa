@@ -274,3 +274,15 @@ async def generate_replay(
         curl_command=curl_command,
         warning=warning,
     )
+
+
+@router.post("/test/trigger-error")
+async def trigger_test_error():
+    """
+    Test endpoint to trigger a 500 error for snapshot capture testing.
+
+    This endpoint intentionally raises an exception to test the
+    error snapshot middleware capture functionality.
+    """
+    logger.info("test_error_triggered", endpoint="/test/trigger-error")
+    raise RuntimeError("Test error for snapshot capture demonstration")

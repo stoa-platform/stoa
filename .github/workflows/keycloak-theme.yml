@@ -56,16 +56,17 @@ jobs:
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:25.0-stoa
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          # Disable cache to ensure theme changes are always picked up
+          no-cache: true
 
       - name: Update Keycloak deployment
         run: |
           aws eks update-kubeconfig --name apim-dev-cluster --region ${{ env.AWS_REGION }}
 
-          # Update image
+          # Update image with SHA tag to force pull
           kubectl set image deployment/keycloak \
-            keycloak=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:25.0-stoa \
+            keycloak=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }} \
             -n stoa-system
 
           # Force restart to pick up new image

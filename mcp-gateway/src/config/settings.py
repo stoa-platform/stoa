@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     keycloak_client_id: str = "stoa-mcp-gateway"
     keycloak_client_secret: str = ""
     keycloak_verify_ssl: bool = True
+    keycloak_admin_password: str = ""  # Admin password for DCR client patching
 
     # Control Plane API
     control_plane_api_url: str = ""

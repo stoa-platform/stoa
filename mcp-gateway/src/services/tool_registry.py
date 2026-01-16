@@ -811,12 +811,12 @@ class ToolRegistry:
                     url = f"https://api.{settings.base_domain}/health"
                     expected_codes = [200]
                 elif svc == "gateway":
-                    # Kong Gateway Manager - root returns 302 redirect when healthy
+                    # webMethods API Gateway - root returns 302 redirect to /apigatewayui when healthy
                     url = f"https://gateway.{settings.base_domain}/"
                     expected_codes = [200, 302]
                 elif svc == "auth":
-                    # Keycloak - check realm endpoint which is publicly accessible
-                    url = f"https://auth.{settings.base_domain}/realms/stoa"
+                    # Keycloak - use OIDC discovery endpoint (always publicly accessible)
+                    url = f"https://auth.{settings.base_domain}/realms/{settings.keycloak_realm}/.well-known/openid-configuration"
                     expected_codes = [200]
                 else:
                     continue

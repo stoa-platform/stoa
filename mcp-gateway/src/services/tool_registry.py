@@ -809,17 +809,22 @@ class ToolRegistry:
             try:
                 if svc == "api":
                     url = f"https://api.{settings.base_domain}/health"
+                    expected_codes = [200]
                 elif svc == "gateway":
-                    url = f"https://gateway.{settings.base_domain}/health"
+                    # Kong Gateway Manager - root returns 302 redirect when healthy
+                    url = f"https://gateway.{settings.base_domain}/"
+                    expected_codes = [200, 302]
                 elif svc == "auth":
-                    url = f"https://auth.{settings.base_domain}/health"
+                    # Keycloak - check realm endpoint which is publicly accessible
+                    url = f"https://auth.{settings.base_domain}/realms/stoa"
+                    expected_codes = [200]
                 else:
                     continue
 
                 if self._http_client:
-                    response = await self._http_client.get(url, timeout=5.0)
+                    response = await self._http_client.get(url, timeout=5.0, follow_redirects=False)
                     health["services"][svc] = {
-                        "status": "healthy" if response.status_code == 200 else "unhealthy",
+                        "status": "healthy" if response.status_code in expected_codes else "unhealthy",
                         "status_code": response.status_code,
                     }
                 else:

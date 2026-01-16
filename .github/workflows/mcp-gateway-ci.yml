@@ -192,6 +192,9 @@ jobs:
             mcp-gateway=$IMAGE \
             -n stoa-system
 
+          # Force rollout restart to pull the latest image (even if tag unchanged)
+          kubectl rollout restart deployment/mcp-gateway -n stoa-system
+
           # Wait for rollout
           kubectl rollout status deployment/mcp-gateway -n stoa-system --timeout=300s
 

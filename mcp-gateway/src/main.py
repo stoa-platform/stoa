@@ -408,6 +408,64 @@ def register_routes(app: FastAPI) -> None:
             },
         }
 
+    # OAuth Authorization Server Metadata (RFC 8414) for Claude.ai integration
+    @app.get("/.well-known/oauth-authorization-server", tags=["OAuth"])
+    async def oauth_authorization_server_metadata() -> dict[str, Any]:
+        """OAuth 2.0 Authorization Server Metadata (RFC 8414).
+
+        Required by Claude.ai for OAuth integration with remote MCP servers.
+        Proxies metadata from Keycloak authorization server.
+        """
+        settings = get_settings()
+        keycloak_issuer = settings.keycloak_issuer
+
+        return {
+            "issuer": keycloak_issuer,
+            "authorization_endpoint": f"{keycloak_issuer}/protocol/openid-connect/auth",
+            "token_endpoint": f"{keycloak_issuer}/protocol/openid-connect/token",
+            "userinfo_endpoint": f"{keycloak_issuer}/protocol/openid-connect/userinfo",
+            "jwks_uri": f"{keycloak_issuer}/protocol/openid-connect/certs",
+            "registration_endpoint": f"{keycloak_issuer}/clients-registrations/openid-connect",
+            "scopes_supported": ["openid", "profile", "email", "offline_access"],
+            "response_types_supported": ["code", "token", "id_token", "code token", "code id_token", "token id_token", "code token id_token"],
+            "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials", "password"],
+            "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "private_key_jwt"],
+            "code_challenge_methods_supported": ["S256", "plain"],
+            "introspection_endpoint": f"{keycloak_issuer}/protocol/openid-connect/token/introspect",
+            "revocation_endpoint": f"{keycloak_issuer}/protocol/openid-connect/revoke",
+            "end_session_endpoint": f"{keycloak_issuer}/protocol/openid-connect/logout",
+        }
+
+    @app.get("/.well-known/openid-configuration", tags=["OAuth"])
+    async def openid_configuration() -> dict[str, Any]:
+        """OpenID Connect Discovery (RFC 8414).
+
+        Proxies OpenID configuration from Keycloak.
+        """
+        settings = get_settings()
+        keycloak_issuer = settings.keycloak_issuer
+
+        return {
+            "issuer": keycloak_issuer,
+            "authorization_endpoint": f"{keycloak_issuer}/protocol/openid-connect/auth",
+            "token_endpoint": f"{keycloak_issuer}/protocol/openid-connect/token",
+            "userinfo_endpoint": f"{keycloak_issuer}/protocol/openid-connect/userinfo",
+            "jwks_uri": f"{keycloak_issuer}/protocol/openid-connect/certs",
+            "end_session_endpoint": f"{keycloak_issuer}/protocol/openid-connect/logout",
+            "check_session_iframe": f"{keycloak_issuer}/protocol/openid-connect/login-status-iframe.html",
+            "introspection_endpoint": f"{keycloak_issuer}/protocol/openid-connect/token/introspect",
+            "revocation_endpoint": f"{keycloak_issuer}/protocol/openid-connect/revoke",
+            "registration_endpoint": f"{keycloak_issuer}/clients-registrations/openid-connect",
+            "scopes_supported": ["openid", "profile", "email", "offline_access", "address", "phone"],
+            "response_types_supported": ["code", "token", "id_token", "code token", "code id_token", "token id_token", "code token id_token"],
+            "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials", "password", "urn:ietf:params:oauth:grant-type:device_code"],
+            "subject_types_supported": ["public", "pairwise"],
+            "id_token_signing_alg_values_supported": ["RS256", "ES256"],
+            "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "private_key_jwt"],
+            "code_challenge_methods_supported": ["S256", "plain"],
+            "claims_supported": ["sub", "iss", "aud", "exp", "iat", "name", "email", "preferred_username", "given_name", "family_name"],
+        }
+
 
 
 # Create the application instance

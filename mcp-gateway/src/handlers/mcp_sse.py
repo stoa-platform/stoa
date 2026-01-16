@@ -243,7 +243,9 @@ async def mcp_sse_post_endpoint(
     msg_id = body.get("id")
 
     # Debug logging to stdout
-    print(f"[MCP] Received: method={method}, id={msg_id}", flush=True)
+    accept_header = request.headers.get("Accept", "")
+    content_type = request.headers.get("Content-Type", "")
+    print(f"[MCP] Received: method={method}, id={msg_id}, Accept={accept_header}, CT={content_type}", flush=True)
     if method == "tools/call":
         print(f"[MCP] Tool call params: {body.get('params')}", flush=True)
 

@@ -89,9 +89,10 @@ async def proxy_to_mcp(
         # Handle MCP Gateway errors
         if response.status_code >= 400:
             logger.warning(
-                f"MCP Gateway returned {response.status_code}",
-                path=path,
-                user=user.email,
+                "MCP Gateway returned %d for path=%s user=%s",
+                response.status_code,
+                path,
+                user.email,
             )
             # Pass through the error from MCP Gateway
             try:
@@ -103,7 +104,7 @@ async def proxy_to_mcp(
         return response.json()
 
     except httpx.HTTPError as e:
-        logger.error(f"MCP Gateway request failed: {e}", path=path)
+        logger.error("MCP Gateway request failed: %s for path=%s", str(e), path)
         raise HTTPException(status_code=503, detail="MCP Gateway unavailable")
 
 

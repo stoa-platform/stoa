@@ -1,16 +1,21 @@
 """MCP SSE Transport Handler.
 
-Implements Server-Sent Events transport for the Model Context Protocol.
-This enables direct integration with Claude Desktop and other MCP clients.
+Implements the Streamable HTTP Transport for the Model Context Protocol.
+This enables direct integration with Claude.ai, Claude Desktop and other MCP clients.
+
+Supports both:
+- GET /mcp/sse: Legacy SSE connection (Claude Desktop)
+- POST /mcp/sse: Streamable HTTP Transport (Claude.ai) - MCP spec 2025-03-26
 """
 
+import asyncio
 import json
 import uuid
 from typing import Any, AsyncGenerator
 
 import structlog
-from fastapi import APIRouter, Depends, Request, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import StreamingResponse, JSONResponse
 
 from ..middleware.auth import TokenClaims, get_current_user
 from ..services import get_tool_registry
@@ -28,6 +33,7 @@ class MCPSession:
         self.session_id = session_id
         self.user = user
         self.initialized = False
+        self.message_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
     async def handle_message(self, message: dict[str, Any]) -> dict[str, Any] | None:
         """Handle incoming JSON-RPC message and return response."""
@@ -49,6 +55,10 @@ class MCPSession:
                 return await self._handle_call_tool(msg_id, params)
             elif method == "ping":
                 return self._make_response(msg_id, {})
+            elif method == "notifications/cancelled":
+                # Handle cancellation notification
+                logger.info("Request cancelled", params=params)
+                return None
             else:
                 return self._make_error(msg_id, -32601, f"Method not found: {method}")
         except Exception as e:
@@ -58,6 +68,17 @@ class MCPSession:
     async def _handle_initialize(self, msg_id: Any, params: dict) -> dict:
         """Handle initialize request."""
         settings = get_settings()
+        client_info = params.get("clientInfo", {})
+        protocol_version = params.get("protocolVersion", "2024-11-05")
+
+        logger.info(
+            "MCP initialize",
+            client_name=client_info.get("name"),
+            client_version=client_info.get("version"),
+            protocol_version=protocol_version,
+            session=self.session_id,
+        )
+
         return self._make_response(msg_id, {
             "protocolVersion": "2024-11-05",
             "capabilities": {
@@ -68,13 +89,6 @@ class MCPSession:
             "serverInfo": {
                 "name": "stoa-mcp-gateway",
                 "version": settings.app_version,
-                "icons": [
-                    {
-                        "src": "https://raw.githubusercontent.com/stoa-platform/stoa/main/docs/assets/logo.svg",
-                        "mimeType": "image/svg+xml",
-                        "sizes": ["any"],
-                    },
-                ],
             },
         })
 
@@ -148,33 +162,131 @@ class MCPSession:
         }
 
 
-# Active sessions
+# Active sessions by session ID
 _sessions: dict[str, MCPSession] = {}
 
 
+def _get_session_id_from_request(request: Request) -> str | None:
+    """Extract session ID from request headers."""
+    return request.headers.get("Mcp-Session-Id") or request.headers.get("X-MCP-Session-Id")
+
+
+@router.post("/sse")
+async def mcp_sse_post_endpoint(
+    request: Request,
+    user: TokenClaims = Depends(get_current_user),
+) -> Response:
+    """
+    MCP Streamable HTTP Transport endpoint (POST).
+
+    This implements the MCP 2025-03-26 Streamable HTTP Transport spec.
+    Claude.ai uses this to send JSON-RPC messages and receive SSE responses.
+
+    Flow:
+    1. Client POSTs JSON-RPC message (e.g., initialize)
+    2. Server responds with SSE stream containing the response
+    3. Session ID is returned in Mcp-Session-Id header
+    """
+    # Get or create session
+    session_id = _get_session_id_from_request(request)
+
+    if session_id and session_id in _sessions:
+        session = _sessions[session_id]
+        logger.info("Resuming MCP session", session_id=session_id)
+    else:
+        session_id = str(uuid.uuid4())
+        session = MCPSession(session_id, user)
+        _sessions[session_id] = session
+        logger.info("Created new MCP session", session_id=session_id, user=user.subject)
+
+    # Parse the JSON-RPC message
+    try:
+        body = await request.json()
+    except json.JSONDecodeError as e:
+        logger.error("Invalid JSON in request", error=str(e))
+        return JSONResponse(
+            content={"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}},
+            status_code=400,
+        )
+
+    logger.info(
+        "MCP POST request",
+        method=body.get("method"),
+        msg_id=body.get("id"),
+        session_id=session_id,
+    )
+
+    # Handle the message
+    response = await session.handle_message(body)
+
+    # Check if client wants SSE response
+    accept_header = request.headers.get("Accept", "")
+    wants_sse = "text/event-stream" in accept_header
+
+    if wants_sse and response is not None:
+        # Return SSE stream with the response
+        async def sse_response_stream() -> AsyncGenerator[str, None]:
+            """Generate SSE events for the response."""
+            # Send the JSON-RPC response as an SSE event
+            yield f"event: message\ndata: {json.dumps(response)}\n\n"
+
+        return StreamingResponse(
+            sse_response_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "Mcp-Session-Id": session_id,
+            },
+        )
+    else:
+        # Return plain JSON response
+        if response is None:
+            # For notifications (no response expected), return 202 Accepted
+            return Response(
+                status_code=202,
+                headers={"Mcp-Session-Id": session_id},
+            )
+
+        return JSONResponse(
+            content=response,
+            headers={"Mcp-Session-Id": session_id},
+        )
+
+
 @router.get("/sse")
-async def mcp_sse_endpoint(
+async def mcp_sse_get_endpoint(
     request: Request,
     user: TokenClaims = Depends(get_current_user),
 ) -> StreamingResponse:
     """
-    MCP Server-Sent Events endpoint.
+    MCP Server-Sent Events endpoint (GET).
 
-    This endpoint establishes an SSE connection for the MCP protocol.
-    Claude Desktop and other MCP clients connect here.
+    This is the legacy SSE endpoint for Claude Desktop and similar clients.
+    Establishes a persistent SSE connection for bidirectional communication.
 
     The client sends messages via POST to /mcp/message with the session ID.
     """
-    session_id = str(uuid.uuid4())
-    session = MCPSession(session_id, user)
-    _sessions[session_id] = session
+    # Check for existing session
+    session_id = _get_session_id_from_request(request)
 
-    logger.info("MCP SSE session started", session_id=session_id, user=user.subject)
+    if session_id and session_id in _sessions:
+        session = _sessions[session_id]
+        logger.info("Resuming MCP SSE session", session_id=session_id)
+    else:
+        session_id = str(uuid.uuid4())
+        session = MCPSession(session_id, user)
+        _sessions[session_id] = session
+        logger.info("MCP SSE session started", session_id=session_id, user=user.subject)
 
     async def event_stream() -> AsyncGenerator[str, None]:
         """Generate SSE events."""
-        # Send session ID as first event
-        yield f"event: session\ndata: {json.dumps({'session_id': session_id})}\n\n"
+        # Send endpoint event first (per MCP spec)
+        # This tells the client where to POST messages
+        settings = get_settings()
+        endpoint_url = f"https://mcp.{settings.base_domain}/mcp/sse"
+        yield f"event: endpoint\ndata: {endpoint_url}\n\n"
 
         # Keep connection alive
         try:
@@ -183,11 +295,17 @@ async def mcp_sse_endpoint(
                 if await request.is_disconnected():
                     break
 
-                # Send keepalive ping every 30 seconds
-                yield f"event: ping\ndata: {json.dumps({'type': 'ping'})}\n\n"
+                # Check for queued messages to send
+                try:
+                    message = session.message_queue.get_nowait()
+                    yield f"event: message\ndata: {json.dumps(message)}\n\n"
+                except asyncio.QueueEmpty:
+                    pass
 
-                # Wait before next ping
-                import asyncio
+                # Send keepalive ping every 30 seconds
+                yield ": keepalive\n\n"
+
+                # Wait before next iteration
                 await asyncio.sleep(30)
         finally:
             # Cleanup session
@@ -201,25 +319,49 @@ async def mcp_sse_endpoint(
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "Mcp-Session-Id": session_id,
         },
     )
+
+
+@router.delete("/sse")
+async def mcp_sse_delete_endpoint(
+    request: Request,
+    user: TokenClaims = Depends(get_current_user),
+) -> Response:
+    """
+    Close MCP session endpoint (DELETE).
+
+    Per MCP spec, clients can explicitly close sessions via DELETE.
+    """
+    session_id = _get_session_id_from_request(request)
+
+    if session_id and session_id in _sessions:
+        _sessions.pop(session_id, None)
+        logger.info("MCP session closed via DELETE", session_id=session_id)
+        return Response(status_code=204)
+    else:
+        return Response(status_code=404)
 
 
 @router.post("/message")
 async def mcp_message_endpoint(
     request: Request,
     user: TokenClaims = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> Response:
     """
-    Handle MCP JSON-RPC messages.
+    Handle MCP JSON-RPC messages (legacy endpoint).
 
     Clients send messages here and receive responses.
-    For SSE mode, include session_id in the request.
+    For SSE mode, include session_id in the Mcp-Session-Id header.
     """
     body = await request.json()
 
     # Get or create session
-    session_id = body.pop("_session_id", None) or str(uuid.uuid4())
+    session_id = _get_session_id_from_request(request) or body.pop("_session_id", None)
+
+    if not session_id:
+        session_id = str(uuid.uuid4())
 
     if session_id in _sessions:
         session = _sessions[session_id]
@@ -231,16 +373,22 @@ async def mcp_message_endpoint(
     response = await session.handle_message(body)
 
     if response is None:
-        return {"jsonrpc": "2.0", "result": "ok"}
+        return Response(
+            status_code=202,
+            headers={"Mcp-Session-Id": session_id},
+        )
 
-    return response
+    return JSONResponse(
+        content=response,
+        headers={"Mcp-Session-Id": session_id},
+    )
 
 
 @router.post("/")
 async def mcp_jsonrpc_endpoint(
     request: Request,
     user: TokenClaims = Depends(get_current_user),
-) -> dict[str, Any]:
+) -> Response:
     """
     Direct JSON-RPC endpoint for MCP.
 
@@ -248,11 +396,12 @@ async def mcp_jsonrpc_endpoint(
     Each request is independent (no session state).
     """
     body = await request.json()
-    session = MCPSession(str(uuid.uuid4()), user)
+    session_id = _get_session_id_from_request(request) or str(uuid.uuid4())
+    session = MCPSession(session_id, user)
 
     response = await session.handle_message(body)
 
     if response is None:
-        return {"jsonrpc": "2.0", "result": "ok"}
+        return Response(status_code=202)
 
-    return response
+    return JSONResponse(content=response)

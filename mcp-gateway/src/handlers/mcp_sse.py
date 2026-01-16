@@ -150,7 +150,14 @@ class MCPSession:
             if self.user and hasattr(self.user, 'raw_token'):
                 user_token = self.user.raw_token
 
+            logger.info("Invoking tool", tool=tool_name, arguments=arguments)
             result = await registry.invoke(invocation, user_token=user_token)
+            logger.info(
+                "Tool invocation completed",
+                tool=tool_name,
+                is_error=result.is_error,
+                content_count=len(result.content) if result.content else 0,
+            )
 
             # Format content from ToolResult
             content = []
@@ -165,7 +172,14 @@ class MCPSession:
                 "isError": result.is_error,
             })
         except Exception as e:
-            logger.error("Tool invocation failed", tool=tool_name, error=str(e))
+            import traceback
+            logger.error(
+                "Tool invocation failed",
+                tool=tool_name,
+                error=str(e),
+                error_type=type(e).__name__,
+                traceback=traceback.format_exc(),
+            )
             return self._make_response(msg_id, {
                 "content": [{"type": "text", "text": f"Error: {str(e)}"}],
                 "isError": True,
@@ -235,15 +249,39 @@ async def mcp_sse_post_endpoint(
             status_code=400,
         )
 
+    method = body.get("method")
+    msg_id = body.get("id")
+
     logger.info(
         "MCP POST request",
-        method=body.get("method"),
-        msg_id=body.get("id"),
+        method=method,
+        msg_id=msg_id,
         session_id=session_id,
     )
 
     # Handle the message
-    response = await session.handle_message(body)
+    try:
+        response = await session.handle_message(body)
+        logger.info(
+            "MCP message handled",
+            method=method,
+            msg_id=msg_id,
+            has_response=response is not None,
+            is_error=response.get("error") if response else None,
+        )
+    except Exception as e:
+        logger.error(
+            "MCP message handling failed",
+            method=method,
+            msg_id=msg_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        response = {
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "error": {"code": -32603, "message": str(e)},
+        }
 
     # Check if client wants SSE response
     accept_header = request.headers.get("Accept", "")

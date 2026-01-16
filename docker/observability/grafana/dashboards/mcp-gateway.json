@@ -99,7 +99,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_gateway_http_requests_total[5m]))",
+          "expr": "sum(rate(stoa_mcp_gateway_http_requests_total{namespace=\"stoa-system\"}[5m]))",
           "legendFormat": "RPS",
           "range": true,
           "refId": "A"
@@ -170,7 +170,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_gateway_http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(stoa_mcp_gateway_http_requests_total[5m])) * 100",
+          "expr": "sum(rate(stoa_mcp_gateway_http_requests_total{namespace=\"stoa-system\", status_code=~\"5..\"}[5m])) / sum(rate(stoa_mcp_gateway_http_requests_total{namespace=\"stoa-system\"}[5m])) * 100",
           "legendFormat": "Error Rate",
           "range": true,
           "refId": "A"
@@ -239,7 +239,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace=\"stoa-system\"}[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "range": true,
           "refId": "A"
@@ -253,11 +253,11 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Tool invocations per second",
+      "description": "Active concurrent requests",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
           "mappings": [],
           "thresholds": {
@@ -266,10 +266,18 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 100
               }
             ]
           },
-          "unit": "reqps"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -300,13 +308,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_gateway_mcp_tool_invocations_total[5m]))",
-          "legendFormat": "Tools/sec",
+          "expr": "sum(stoa_mcp_gateway_http_requests_in_progress{namespace=\"stoa-system\"})",
+          "legendFormat": "In Progress",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Tool Invocations",
+      "title": "Active Requests",
       "type": "stat"
     },
     {
@@ -361,7 +369,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "stoa_mcp_gateway_mcp_tools_registered",
+          "expr": "max(stoa_mcp_gateway_mcp_tools_registered{namespace=\"stoa-system\"})",
           "legendFormat": "Tools",
           "range": true,
           "refId": "A"
@@ -375,33 +383,31 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Authentication success rate",
+      "description": "Auth token validation P95 latency",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "mappings": [],
-          "max": 100,
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "green",
                 "value": null
               },
               {
                 "color": "yellow",
-                "value": 95
+                "value": 100
               },
               {
-                "color": "green",
-                "value": 99
+                "color": "red",
+                "value": 200
               }
             ]
           },
-          "unit": "percent"
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -432,13 +438,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(stoa_mcp_gateway_auth_requests_total{status=\"success\"}[5m])) / sum(rate(stoa_mcp_gateway_auth_requests_total[5m])) * 100",
-          "legendFormat": "Auth Success",
+          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_auth_token_validation_duration_seconds_bucket{namespace=\"stoa-system\"}[5m])) by (le)) * 1000",
+          "legendFormat": "Auth P95",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Auth Success Rate",
+      "title": "Auth Latency P95",
       "type": "stat"
     },
     {
@@ -537,7 +543,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (endpoint) (rate(stoa_mcp_gateway_http_requests_total[5m]))",
+          "expr": "sum by (endpoint) (rate(stoa_mcp_gateway_http_requests_total{namespace=\"stoa-system\"}[5m]))",
           "legendFormat": "{{endpoint}}",
           "range": true,
           "refId": "A"
@@ -683,7 +689,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.50, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace=\"stoa-system\"}[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "range": true,
           "refId": "A"
@@ -694,7 +700,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace=\"stoa-system\"}[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "range": true,
           "refId": "B"
@@ -705,7 +711,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace=\"stoa-system\"}[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "range": true,
           "refId": "C"
@@ -724,7 +730,7 @@
       },
       "id": 102,
       "panels": [],
-      "title": "MCP Tool Invocations",
+      "title": "Resource Usage",
       "type": "row"
     },
     {
@@ -732,7 +738,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Tool invocations by tool name",
+      "description": "CPU usage by pod",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -779,7 +785,7 @@
               }
             ]
           },
-          "unit": "reqps"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -792,7 +798,7 @@
       "id": 20,
       "options": {
         "legend": {
-          "calcs": ["mean", "sum"],
+          "calcs": ["mean", "max"],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true
@@ -810,13 +816,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (tool_name) (rate(stoa_mcp_gateway_mcp_tool_invocations_total[5m]))",
-          "legendFormat": "{{tool_name}}",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"stoa-system\", pod=~\"mcp-gateway.*\", container!=\"POD\", container!=\"\"}[5m])) by (pod) * 100",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Tool Invocations by Tool",
+      "title": "CPU Usage by Pod",
       "type": "timeseries"
     },
     {
@@ -824,7 +830,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Tool invocation success vs error rate",
+      "description": "Memory usage by pod",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -855,7 +861,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "normal"
+              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -871,40 +877,9 @@
               }
             ]
           },
-          "unit": "reqps"
+          "unit": "bytes"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "success"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "error"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -915,9 +890,9 @@
       "id": 21,
       "options": {
         "legend": {
-          "calcs": ["mean", "sum"],
+          "calcs": ["mean", "max"],
           "displayMode": "table",
-          "placement": "bottom",
+          "placement": "right",
           "showLegend": true
         },
         "tooltip": {
@@ -933,13 +908,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (status) (rate(stoa_mcp_gateway_mcp_tool_invocations_total[5m]))",
-          "legendFormat": "{{status}}",
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"stoa-system\", pod=~\"mcp-gateway.*\", container!=\"POD\", container!=\"\"}) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Tool Invocations by Status",
+      "title": "Memory Usage by Pod",
       "type": "timeseries"
     },
     {
@@ -947,7 +922,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Tool invocation duration by tool",
+      "description": "Network receive/transmit by pod",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -994,7 +969,7 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "Bps"
         },
         "overrides": []
       },
@@ -1025,13 +1000,24 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (tool_name, le) (rate(stoa_mcp_gateway_mcp_tool_invocation_duration_seconds_bucket[5m])))",
-          "legendFormat": "{{tool_name}}",
+          "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"stoa-system\", pod=~\"mcp-gateway.*\"}[5m])) by (pod)",
+          "legendFormat": "{{pod}} - Receive",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"stoa-system\", pod=~\"mcp-gateway.*\"}[5m])) by (pod)",
+          "legendFormat": "{{pod}} - Transmit",
+          "range": true,
+          "refId": "B"
         }
       ],
-      "title": "Tool Invocation Duration P95 by Tool",
+      "title": "Network I/O",
       "type": "timeseries"
     },
     {
@@ -1044,7 +1030,7 @@
       },
       "id": 103,
       "panels": [],
-      "title": "Authentication",
+      "title": "Request Status Distribution",
       "type": "row"
     },
     {
@@ -1052,7 +1038,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Authentication attempts by status",
+      "description": "HTTP requests by status code",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1161,13 +1147,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (status) (rate(stoa_mcp_gateway_auth_requests_total[5m]))",
-          "legendFormat": "{{status}}",
+          "expr": "sum by (status_code) (rate(stoa_mcp_gateway_http_requests_total{namespace=\"stoa-system\"}[5m]))",
+          "legendFormat": "{{status_code}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Auth Requests by Status",
+      "title": "Requests by Status Code",
       "type": "timeseries"
     },
     {
@@ -1175,7 +1161,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Authentication failures by reason",
+      "description": "Requests by HTTP method",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1253,13 +1239,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (reason) (rate(stoa_mcp_gateway_auth_requests_total{status=\"failure\"}[5m]))",
-          "legendFormat": "{{reason}}",
+          "expr": "sum by (method) (rate(stoa_mcp_gateway_http_requests_total{namespace=\"stoa-system\"}[5m]))",
+          "legendFormat": "{{method}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Auth Failures by Reason",
+      "title": "Requests by Method",
       "type": "timeseries"
     },
     {
@@ -1272,7 +1258,7 @@
       },
       "id": 104,
       "panels": [],
-      "title": "Backend Requests",
+      "title": "Pod Health",
       "type": "row"
     },
     {
@@ -1280,7 +1266,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Backend API requests by backend service",
+      "description": "Pod container restarts",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1358,13 +1344,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (backend) (rate(stoa_mcp_gateway_backend_requests_total[5m]))",
-          "legendFormat": "{{backend}}",
+          "expr": "increase(kube_pod_container_status_restarts_total{namespace=\"stoa-system\", pod=~\"mcp-gateway.*\"}[1h])",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Backend Requests by Service",
+      "title": "Container Restarts (Last Hour)",
       "type": "timeseries"
     },
     {
@@ -1372,7 +1358,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Backend request latency P95 by backend service",
+      "description": "Pod ready status",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1450,13 +1436,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (backend, le) (rate(stoa_mcp_gateway_backend_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "{{backend}}",
+          "expr": "kube_pod_container_status_ready{namespace=\"stoa-system\", pod=~\"mcp-gateway.*\"}",
+          "legendFormat": "{{pod}} - {{container}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Backend Latency P95 by Service",
+      "title": "Pod Ready Status",
       "type": "timeseries"
     }
   ],

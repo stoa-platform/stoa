@@ -21,7 +21,7 @@ from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
 from .config import get_settings
-from .handlers import mcp_router, subscriptions_router, mcp_sse_router, servers_router
+from .handlers import mcp_router, subscriptions_router, mcp_sse_router, sse_alias_router, servers_router
 from .middleware import MetricsMiddleware
 from .services import get_tool_registry, shutdown_tool_registry, init_database, shutdown_database
 from .k8s import get_tool_watcher, shutdown_tool_watcher
@@ -193,6 +193,9 @@ def create_app() -> FastAPI:
 
     # Register servers router for server-based subscriptions
     app.include_router(servers_router)
+
+    # Register SSE alias router for /sse endpoint (Phase 2)
+    app.include_router(sse_alias_router)
 
     # Register error snapshots router (Phase 4)
     snapshot_settings = get_mcp_snapshot_settings()
@@ -409,6 +412,130 @@ def register_routes(app: FastAPI) -> None:
             },
         }
 
+    # ============================================
+    # PUBLIC HEALTH/STATUS ENDPOINTS (Phase 2)
+    # These are public alternatives to the internal-only /health endpoints
+    # ============================================
+
+    @app.get("/healthz", tags=["Health"])
+    async def healthz_public() -> dict[str, Any]:
+        """Public health endpoint.
+
+        Unlike /health (internal-only for K8s probes), this is accessible externally.
+        """
+        settings = get_settings()
+        return {
+            "status": "healthy",
+            "service": "stoa-mcp-gateway",
+            "version": settings.app_version,
+        }
+
+    @app.get("/status", tags=["Health"])
+    async def status_public() -> dict[str, Any]:
+        """Public detailed status endpoint."""
+        settings = get_settings()
+        return {
+            "status": "healthy" if app_state["ready"] else "starting",
+            "service": "stoa-mcp-gateway",
+            "version": settings.app_version,
+            "environment": settings.environment,
+            "started_at": app_state["started_at"].isoformat() if app_state["started_at"] else None,
+        }
+
+    @app.get("/api/health", tags=["Health"])
+    async def api_health() -> dict[str, Any]:
+        """API health endpoint (public)."""
+        return await healthz_public()
+
+    @app.get("/api/status", tags=["Health"])
+    async def api_status() -> dict[str, Any]:
+        """API status endpoint (public)."""
+        return await status_public()
+
+    # ============================================
+    # API DISCOVERY ENDPOINTS (Phase 2)
+    # ============================================
+
+    @app.get("/api", tags=["Info"])
+    async def api_info() -> dict[str, Any]:
+        """API root information."""
+        settings = get_settings()
+        return {
+            "service": "stoa-mcp-gateway",
+            "version": settings.app_version,
+            "api_version": "v1",
+            "endpoints": {
+                "tools": "/api/tools",
+                "info": "/api/info",
+                "health": "/api/health",
+                "status": "/api/status",
+                "apis": "/api/apis",
+            },
+        }
+
+    @app.get("/api/v1", tags=["Info"])
+    async def api_v1_info() -> dict[str, Any]:
+        """API v1 information."""
+        return await api_info()
+
+    @app.get("/api/info", tags=["Info"])
+    async def api_info_detailed() -> dict[str, Any]:
+        """STOA MCP Gateway detailed info."""
+        settings = get_settings()
+        registry = await get_tool_registry()
+        result = registry.list_tools(limit=1000)
+        return {
+            "service": "stoa-mcp-gateway",
+            "version": settings.app_version,
+            "environment": settings.environment,
+            "tools_count": len(result.tools),
+            "mcp": {
+                "protocol_version": "2025-11-25",
+                "transport": "Streamable HTTP (SSE)",
+                "endpoints": {
+                    "sse": "/mcp/sse",
+                    "tools": "/tools",
+                },
+            },
+        }
+
+    @app.get("/api/apis", tags=["Info"])
+    async def api_apis() -> dict[str, Any]:
+        """List available STOA APIs."""
+        settings = get_settings()
+        return {
+            "apis": [
+                {"name": "MCP Gateway", "url": f"https://mcp.{settings.base_domain}", "description": "AI-Native API access via MCP"},
+                {"name": "Control Plane API", "url": f"https://api.{settings.base_domain}", "description": "Platform management API"},
+                {"name": "Developer Portal", "url": f"https://portal.{settings.base_domain}", "description": "API documentation and testing"},
+                {"name": "API Gateway Runtime", "url": f"https://apis.{settings.base_domain}", "description": "Runtime API gateway"},
+            ],
+        }
+
+    @app.get("/api/tools", tags=["MCP REST"])
+    async def api_tools() -> dict[str, Any]:
+        """List MCP tools (alias for /tools)."""
+        return await list_tools_rest()
+
+    # ============================================
+    # OPENAPI/DOCS ENDPOINTS (Phase 2)
+    # Enable OpenAPI spec access even when debug=False
+    # ============================================
+
+    @app.get("/openapi.json", tags=["Docs"], include_in_schema=False)
+    async def openapi_json() -> dict[str, Any]:
+        """OpenAPI specification."""
+        return app.openapi()
+
+    @app.get("/api/openapi.json", tags=["Docs"], include_in_schema=False)
+    async def api_openapi_json() -> dict[str, Any]:
+        """OpenAPI specification (alias)."""
+        return app.openapi()
+
+    # ============================================
+    # MCP REST ENDPOINTS (existing)
+    # ============================================
+
     # Claude.ai REST endpoints for MCP tools (hybrid mode)
     @app.get("/tools", tags=["MCP REST"])
     async def list_tools_rest() -> dict[str, Any]:
@@ -456,7 +583,7 @@ def register_routes(app: FastAPI) -> None:
         print(f"[MCP REST] POST /tools/{tool_name} called with args: {arguments}", flush=True)
 
         registry = await get_tool_registry()
-        tool = registry.get_tool(tool_name)
+        tool = registry.get(tool_name)
 
         if not tool:
             return JSONResponse(

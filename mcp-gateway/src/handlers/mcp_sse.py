@@ -467,3 +467,38 @@ async def mcp_jsonrpc_endpoint(
         return Response(status_code=202)
 
     return JSONResponse(content=response)
+
+
+# ============================================
+# SSE ALIAS ROUTER (Phase 2)
+# Provides /sse as alias for /mcp/sse
+# ============================================
+
+sse_alias_router = APIRouter(tags=["MCP SSE"])
+
+
+@sse_alias_router.get("/sse")
+async def sse_get_alias(
+    request: Request,
+    user: TokenClaims | None = Depends(get_optional_user),
+) -> StreamingResponse:
+    """Alias for /mcp/sse (GET) - Legacy SSE endpoint."""
+    return await mcp_sse_get_endpoint(request, user)
+
+
+@sse_alias_router.post("/sse")
+async def sse_post_alias(
+    request: Request,
+    user: TokenClaims | None = Depends(get_optional_user),
+) -> Response:
+    """Alias for /mcp/sse (POST) - Streamable HTTP Transport."""
+    return await mcp_sse_post_endpoint(request, user)
+
+
+@sse_alias_router.delete("/sse")
+async def sse_delete_alias(
+    request: Request,
+    user: TokenClaims | None = Depends(get_optional_user),
+) -> Response:
+    """Alias for /mcp/sse (DELETE) - Close session."""
+    return await mcp_sse_delete_endpoint(request, user)

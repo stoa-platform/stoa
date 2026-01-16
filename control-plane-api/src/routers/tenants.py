@@ -42,6 +42,11 @@ class TenantResponse(BaseModel):
 
 def _tenant_from_yaml(tenant_data: dict, api_count: int = 0, app_count: int = 0) -> TenantResponse:
     """Convert GitLab YAML data to Tenant response"""
+    # Convert created_at to string if it's a datetime
+    created_at = tenant_data.get("created_at")
+    if created_at and not isinstance(created_at, str):
+        created_at = str(created_at)
+
     return TenantResponse(
         id=tenant_data.get("id", tenant_data.get("name", "")),
         name=tenant_data.get("name", ""),
@@ -51,7 +56,7 @@ def _tenant_from_yaml(tenant_data: dict, api_count: int = 0, app_count: int = 0)
         status=tenant_data.get("status", "active"),
         api_count=api_count,
         application_count=app_count,
-        created_at=tenant_data.get("created_at"),
+        created_at=created_at,
     )
 
 

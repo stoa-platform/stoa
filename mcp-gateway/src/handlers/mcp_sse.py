@@ -137,6 +137,7 @@ class MCPSession:
             return self._make_error(msg_id, -32602, f"Tool not found: {tool_name}")
 
         # Execute tool
+        print(f"[MCP] _handle_call_tool: {tool_name} with args {arguments}", flush=True)
         try:
             # Create ToolInvocation object for the registry
             invocation = ToolInvocation(
@@ -150,14 +151,9 @@ class MCPSession:
             if self.user and hasattr(self.user, 'raw_token'):
                 user_token = self.user.raw_token
 
-            logger.info("Invoking tool", tool=tool_name, arguments=arguments)
+            print(f"[MCP] Invoking registry.invoke() for {tool_name}", flush=True)
             result = await registry.invoke(invocation, user_token=user_token)
-            logger.info(
-                "Tool invocation completed",
-                tool=tool_name,
-                is_error=result.is_error,
-                content_count=len(result.content) if result.content else 0,
-            )
+            print(f"[MCP] Tool result: is_error={result.is_error}, content_len={len(result.content)}", flush=True)
 
             # Format content from ToolResult
             content = []
@@ -167,19 +163,16 @@ class MCPSession:
                 else:
                     content.append({"type": "text", "text": str(item)})
 
-            return self._make_response(msg_id, {
+            response = self._make_response(msg_id, {
                 "content": content,
                 "isError": result.is_error,
             })
+            print(f"[MCP] Response: {json.dumps(response)[:500]}", flush=True)
+            return response
         except Exception as e:
             import traceback
-            logger.error(
-                "Tool invocation failed",
-                tool=tool_name,
-                error=str(e),
-                error_type=type(e).__name__,
-                traceback=traceback.format_exc(),
-            )
+            print(f"[MCP] ERROR: {type(e).__name__}: {e}", flush=True)
+            print(f"[MCP] Traceback: {traceback.format_exc()}", flush=True)
             return self._make_response(msg_id, {
                 "content": [{"type": "text", "text": f"Error: {str(e)}"}],
                 "isError": True,
@@ -251,6 +244,11 @@ async def mcp_sse_post_endpoint(
 
     method = body.get("method")
     msg_id = body.get("id")
+
+    # Debug logging to stdout
+    print(f"[MCP] Received: method={method}, id={msg_id}", flush=True)
+    if method == "tools/call":
+        print(f"[MCP] Tool call params: {body.get('params')}", flush=True)
 
     logger.info(
         "MCP POST request",

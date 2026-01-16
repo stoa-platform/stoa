@@ -32,8 +32,8 @@ class TenantResponse(BaseModel):
     id: str
     name: str
     display_name: str
-    description: str
-    owner_email: str
+    description: str = ""
+    owner_email: str = ""
     status: str = "active"
     api_count: int = 0
     application_count: int = 0

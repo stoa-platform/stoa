@@ -203,16 +203,21 @@ def create_app() -> FastAPI:
         app.include_router(snapshots_router)
         logger.info("Error snapshots API enabled")
 
-    # Serve favicon
+    # Serve favicon - try multiple paths for Docker and local dev
     @app.get("/favicon.ico", include_in_schema=False)
     @app.get("/favicon.svg", include_in_schema=False)
     async def favicon():
         """Serve STOA favicon."""
         import os
-        static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
-        favicon_path = os.path.join(static_dir, "favicon.svg")
-        if os.path.exists(favicon_path):
-            return FileResponse(favicon_path, media_type="image/svg+xml")
+        # Try multiple paths: Docker (/app/static), relative from src
+        possible_paths = [
+            "/app/static/favicon.svg",  # Docker container path
+            os.path.join(os.path.dirname(__file__), "..", "static", "favicon.svg"),  # Local dev
+            os.path.join(os.getcwd(), "static", "favicon.svg"),  # CWD based
+        ]
+        for favicon_path in possible_paths:
+            if os.path.exists(favicon_path):
+                return FileResponse(favicon_path, media_type="image/svg+xml")
         # Return empty response if file not found
         return Response(status_code=204)
 

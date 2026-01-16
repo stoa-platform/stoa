@@ -87,7 +87,7 @@ class MCPSession:
                 "version": settings.app_version,
                 "icons": [
                     {
-                        "url": f"https://portal.{settings.base_domain}/favicon.svg",
+                        "url": f"https://mcp.{settings.base_domain}/favicon.svg",
                         "mimeType": "image/svg+xml",
                     },
                 ],

@@ -72,15 +72,9 @@ class MCPSession:
         client_info = params.get("clientInfo", {})
         protocol_version = params.get("protocolVersion", "2024-11-05")
 
-        logger.info(
-            "MCP initialize",
-            client_name=client_info.get("name"),
-            client_version=client_info.get("version"),
-            protocol_version=protocol_version,
-            session=self.session_id,
-        )
+        print(f"[MCP] _handle_initialize: client={client_info}, protocol={protocol_version}", flush=True)
 
-        return self._make_response(msg_id, {
+        response = self._make_response(msg_id, {
             "protocolVersion": "2024-11-05",
             "capabilities": {
                 "tools": {"listChanged": True},
@@ -98,6 +92,8 @@ class MCPSession:
                 ],
             },
         })
+        print(f"[MCP] Initialize response: {json.dumps(response)[:300]}", flush=True)
+        return response
 
     async def _handle_list_tools(self, msg_id: Any, params: dict) -> dict:
         """Handle tools/list request."""

@@ -466,6 +466,27 @@ def register_routes(app: FastAPI) -> None:
             "claims_supported": ["sub", "iss", "aud", "exp", "iat", "name", "email", "preferred_username", "given_name", "family_name"],
         }
 
+    # OAuth Protected Resource Metadata (RFC 9449) for Claude.ai MCP integration
+    @app.get("/.well-known/oauth-protected-resource", tags=["OAuth"])
+    @app.get("/.well-known/oauth-protected-resource/{path:path}", tags=["OAuth"])
+    async def oauth_protected_resource_metadata(path: str = "") -> dict[str, Any]:
+        """OAuth 2.0 Protected Resource Metadata (RFC 9449).
+
+        Required by Claude.ai for MCP OAuth integration.
+        Points to the authorization server metadata.
+        """
+        settings = get_settings()
+        keycloak_issuer = settings.keycloak_issuer
+        mcp_gateway_url = f"https://mcp.{settings.base_domain}"
+
+        return {
+            "resource": mcp_gateway_url,
+            "authorization_servers": [keycloak_issuer],
+            "scopes_supported": ["openid", "profile", "email"],
+            "bearer_methods_supported": ["header"],
+            "resource_documentation": "https://docs.stoa.cab-i.com/mcp",
+        }
+
 
 
 # Create the application instance

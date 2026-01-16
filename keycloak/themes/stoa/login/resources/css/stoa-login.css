@@ -1,514 +1,495 @@
 /* STOA Platform - Keycloak Login Theme
    Aligned with gostoa.dev design system
+   Version 2.1 - Complete styling
    ================================================ */
 
 /* CSS Variables - STOA Design Tokens */
 :root {
-  /* Colors */
-  --stoa-bg-primary: #0a0a0a;
-  --stoa-bg-secondary: #111111;
-  --stoa-bg-card: #18181b;
-  --stoa-bg-input: #27272a;
-  --stoa-border: #3f3f46;
-  --stoa-border-focus: #a855f7;
-  
-  /* Brand gradient */
-  --stoa-gradient: linear-gradient(135deg, #a855f7 0%, #6366f1 50%, #8b5cf6 100%);
-  --stoa-purple: #a855f7;
-  --stoa-purple-hover: #9333ea;
-  --stoa-indigo: #6366f1;
-  
-  /* Text */
-  --stoa-text-primary: #fafafa;
-  --stoa-text-secondary: #a1a1aa;
-  --stoa-text-muted: #71717a;
-  
-  /* Spacing */
-  --stoa-radius: 12px;
-  --stoa-radius-lg: 16px;
-  
-  /* Shadows */
-  --stoa-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  --stoa-glow: 0 0 60px rgba(168, 85, 247, 0.15);
+    --stoa-bg-primary: #0a0a0a;
+    --stoa-bg-secondary: #111111;
+    --stoa-bg-card: #18181b;
+    --stoa-bg-input: #27272a;
+    --stoa-border: #3f3f46;
+    --stoa-border-focus: #a855f7;
+    --stoa-gradient: linear-gradient(135deg, #a855f7 0%, #6366f1 50%, #8b5cf6 100%);
+    --stoa-purple: #a855f7;
+    --stoa-purple-hover: #9333ea;
+    --stoa-indigo: #6366f1;
+    --stoa-text-primary: #fafafa;
+    --stoa-text-secondary: #a1a1aa;
+    --stoa-text-muted: #71717a;
+    --stoa-radius: 12px;
+    --stoa-radius-lg: 16px;
+    --stoa-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    --stoa-glow: 0 0 60px rgba(168, 85, 247, 0.15);
 }
 
 /* Reset & Base */
 * {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
 html, body {
-  height: 100%;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--stoa-bg-primary);
-  color: var(--stoa-text-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    height: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--stoa-bg-primary);
+    color: var(--stoa-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-/* Background Pattern */
+/* Body with flex centering and gradient background */
 body {
-  background-image: 
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(168, 85, 247, 0.15), transparent),
-    radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.08), transparent),
-    linear-gradient(to bottom, var(--stoa-bg-primary), var(--stoa-bg-secondary));
-  background-attachment: fixed;
-  min-height: 100vh;
+    background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(168, 85, 247, 0.15), transparent),
+        radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.08), transparent),
+        linear-gradient(to bottom, var(--stoa-bg-primary), var(--stoa-bg-secondary));
+    background-attachment: fixed;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
 }
 
-/* Hide Keycloak default elements */
+/* Hide ALL Keycloak default elements */
 #kc-header,
 #kc-header-wrapper,
 .kc-logo-text,
 #kc-locale,
+.login-pf-brand,
 .pf-c-login__footer,
-.pf-c-login__main-footer-band {
-  display: none !important;
+.pf-c-login__main-footer-band,
+.pf-c-brand,
+#kc-page-title {
+    display: none !important;
 }
 
-/* Main Container */
-.login-pf,
-#kc-content,
-#kc-content-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 20px;
-}
-
-#kc-form-wrapper,
-.pf-c-login__main {
-  background: transparent;
+/* Login Container */
+.login-container {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 /* Login Card */
-#kc-form,
-.card-pf,
-.pf-c-card {
-  width: 100%;
-  max-width: 420px;
-  background: var(--stoa-bg-card);
-  border: 1px solid var(--stoa-border);
-  border-radius: var(--stoa-radius-lg);
-  box-shadow: var(--stoa-shadow), var(--stoa-glow);
-  overflow: hidden;
+.login-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--stoa-bg-card);
+    border: 1px solid var(--stoa-border);
+    border-radius: var(--stoa-radius-lg);
+    box-shadow: var(--stoa-shadow), var(--stoa-glow);
+    overflow: hidden;
 }
 
-/* Header Section */
-#kc-header-wrapper,
-.pf-c-login__main-header,
-.login-pf-page-header {
-  background: var(--stoa-gradient);
-  padding: 40px 32px;
-  text-align: center;
+/* STOA Header - Gradient top section */
+.stoa-header {
+    background: var(--stoa-gradient);
+    padding: 40px 32px;
+    text-align: center;
+}
+
+/* Open Source Badge */
+.stoa-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 20px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stoa-badge::before {
+    content: '◆';
+    font-size: 8px;
+    color: #22c55e;
 }
 
 /* Logo */
 .stoa-logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 8px;
 }
 
 .stoa-logo svg {
-  width: 40px;
-  height: 40px;
+    width: 40px;
+    height: 40px;
 }
 
 .stoa-logo-text {
-  font-size: 28px;
-  font-weight: 700;
-  color: white;
-  letter-spacing: -0.5px;
+    font-size: 28px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: -0.5px;
 }
 
 .stoa-tagline {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: 400;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 400;
 }
 
-/* Form Body */
-#kc-form-login,
-.pf-c-login__main-body {
-  padding: 32px;
+/* Login Content - Form area */
+.login-content {
+    padding: 32px;
 }
 
 /* Form Groups */
-.form-group,
-.pf-c-form__group {
-  margin-bottom: 20px;
+.form-group {
+    margin-bottom: 20px;
 }
 
 /* Labels */
-label,
-.pf-c-form__label,
-.pf-c-form__label-text {
-  display: block;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--stoa-text-secondary);
-  margin-bottom: 8px;
+label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--stoa-text-secondary);
+    margin-bottom: 8px;
 }
 
 /* Inputs */
 input[type="text"],
 input[type="password"],
-input[type="email"],
-.pf-c-form-control {
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 15px;
-  color: var(--stoa-text-primary);
-  background: var(--stoa-bg-input);
-  border: 1px solid var(--stoa-border);
-  border-radius: var(--stoa-radius);
-  outline: none;
-  transition: all 0.2s ease;
+input[type="email"] {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 15px;
+    color: var(--stoa-text-primary);
+    background: var(--stoa-bg-input);
+    border: 1px solid var(--stoa-border);
+    border-radius: var(--stoa-radius);
+    outline: none;
+    transition: all 0.2s ease;
+    font-family: inherit;
 }
 
 input[type="text"]:focus,
 input[type="password"]:focus,
-input[type="email"]:focus,
-.pf-c-form-control:focus {
-  border-color: var(--stoa-purple);
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+input[type="email"]:focus {
+    border-color: var(--stoa-purple);
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
 }
 
 input::placeholder {
-  color: var(--stoa-text-muted);
+    color: var(--stoa-text-muted);
 }
 
-/* Password visibility toggle */
-.pf-c-input-group {
-  position: relative;
+/* Password Wrapper */
+.password-wrapper {
+    position: relative;
 }
 
-.pf-c-button.pf-m-control {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: transparent;
-  border: none;
-  color: var(--stoa-text-muted);
-  cursor: pointer;
-  padding: 4px;
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--stoa-text-muted);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.pf-c-button.pf-m-control:hover {
-  color: var(--stoa-text-secondary);
+.password-toggle:hover {
+    color: var(--stoa-text-secondary);
 }
 
-/* Remember me & Forgot password */
-.checkbox,
+/* Form Options - Remember me & Forgot password */
 #kc-form-options {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    font-size: 14px;
 }
 
-.checkbox label,
-#kc-form-options label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--stoa-text-secondary);
-  cursor: pointer;
-  margin-bottom: 0;
+.checkbox {
+    margin: 0;
+}
+
+.checkbox label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--stoa-text-secondary);
+    cursor: pointer;
+    margin-bottom: 0;
+    font-weight: normal;
 }
 
 input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--stoa-purple);
-  cursor: pointer;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--stoa-purple);
+    cursor: pointer;
 }
 
-#kc-form-options a,
-.forgot-password {
-  color: var(--stoa-purple);
-  text-decoration: none;
-  font-weight: 500;
-  transition: color 0.2s;
+.forgot-password,
+#kc-form-options a {
+    color: var(--stoa-purple);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
 }
 
-#kc-form-options a:hover,
-.forgot-password:hover {
-  color: var(--stoa-purple-hover);
-  text-decoration: underline;
+.forgot-password:hover,
+#kc-form-options a:hover {
+    color: var(--stoa-purple-hover);
+    text-decoration: underline;
 }
 
 /* Submit Button */
 #kc-login,
 input[type="submit"],
-button[type="submit"],
-.pf-c-button.pf-m-primary {
-  width: 100%;
-  padding: 14px 24px;
-  font-size: 15px;
-  font-weight: 600;
-  color: white;
-  background: var(--stoa-gradient);
-  border: none;
-  border-radius: var(--stoa-radius);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-  overflow: hidden;
+button[type="submit"] {
+    width: 100%;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+    background: var(--stoa-gradient);
+    border: none;
+    border-radius: var(--stoa-radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
 }
 
 #kc-login:hover,
 input[type="submit"]:hover,
-button[type="submit"]:hover,
-.pf-c-button.pf-m-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 30px -10px rgba(168, 85, 247, 0.5);
+button[type="submit"]:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 30px -10px rgba(168, 85, 247, 0.5);
 }
 
 #kc-login:active,
 input[type="submit"]:active,
 button[type="submit"]:active {
-  transform: translateY(0);
+    transform: translateY(0);
 }
 
-/* Social Login / Identity Providers */
+/* Social Providers */
 #kc-social-providers {
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid var(--stoa-border);
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--stoa-border);
 }
 
-#kc-social-providers h4,
-.pf-c-login__main-footer-links-title {
-  font-size: 13px;
-  color: var(--stoa-text-muted);
-  text-align: center;
-  margin-bottom: 16px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+#kc-social-providers h4 {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    color: var(--stoa-text-muted);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: normal;
+}
+
+#kc-social-providers h4::before,
+#kc-social-providers h4::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--stoa-border);
+}
+
+#kc-social-providers ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    gap: 12px;
+}
+
+#kc-social-providers li {
+    flex: 1;
 }
 
 .social-link-style,
-#social-providers a {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px;
-  margin-bottom: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--stoa-text-primary);
-  background: var(--stoa-bg-input);
-  border: 1px solid var(--stoa-border);
-  border-radius: var(--stoa-radius);
-  text-decoration: none;
-  transition: all 0.2s;
+#kc-social-providers a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--stoa-text-primary);
+    background: var(--stoa-bg-input);
+    border: 1px solid var(--stoa-border);
+    border-radius: var(--stoa-radius);
+    text-decoration: none;
+    transition: all 0.2s;
 }
 
 .social-link-style:hover,
-#social-providers a:hover {
-  background: var(--stoa-bg-secondary);
-  border-color: var(--stoa-text-muted);
-}
-
-/* Error Messages */
-.alert,
-.pf-c-alert,
-#kc-content-wrapper > .alert {
-  padding: 14px 16px;
-  margin-bottom: 20px;
-  font-size: 14px;
-  border-radius: var(--stoa-radius);
-  border: 1px solid;
-}
-
-.alert-error,
-.pf-c-alert.pf-m-danger {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
-}
-
-.alert-warning,
-.pf-c-alert.pf-m-warning {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: rgba(245, 158, 11, 0.3);
-  color: #fcd34d;
-}
-
-.alert-success,
-.pf-c-alert.pf-m-success {
-  background: rgba(34, 197, 94, 0.1);
-  border-color: rgba(34, 197, 94, 0.3);
-  color: #86efac;
-}
-
-.alert-info,
-.pf-c-alert.pf-m-info {
-  background: rgba(99, 102, 241, 0.1);
-  border-color: rgba(99, 102, 241, 0.3);
-  color: #a5b4fc;
+#kc-social-providers a:hover {
+    background: var(--stoa-bg-secondary);
+    border-color: var(--stoa-text-muted);
 }
 
 /* Registration Link */
-#kc-registration,
-.pf-c-login__main-footer {
-  text-align: center;
-  padding: 20px 32px;
-  border-top: 1px solid var(--stoa-border);
-  background: rgba(0, 0, 0, 0.2);
+#kc-registration {
+    text-align: center;
+    padding: 20px 32px;
+    border-top: 1px solid var(--stoa-border);
+    background: rgba(0, 0, 0, 0.2);
 }
 
-#kc-registration span,
-.pf-c-login__main-footer span {
-  color: var(--stoa-text-muted);
-  font-size: 14px;
+#kc-registration span {
+    color: var(--stoa-text-muted);
+    font-size: 14px;
 }
 
-#kc-registration a,
-.pf-c-login__main-footer a {
-  color: var(--stoa-purple);
-  text-decoration: none;
-  font-weight: 500;
-  margin-left: 4px;
+#kc-registration a {
+    color: var(--stoa-purple);
+    text-decoration: none;
+    font-weight: 500;
+    margin-left: 4px;
 }
 
-#kc-registration a:hover,
-.pf-c-login__main-footer a:hover {
-  text-decoration: underline;
+#kc-registration a:hover {
+    text-decoration: underline;
+}
+
+/* Alert Styles */
+.alert {
+    padding: 14px 16px;
+    margin: 0 32px;
+    margin-bottom: 0;
+    font-size: 14px;
+    border-radius: 0;
+    border-bottom: 1px solid var(--stoa-border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.alert-error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #fca5a5;
+}
+
+.alert-warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: #fcd34d;
+}
+
+.alert-success {
+    background: rgba(34, 197, 94, 0.1);
+    color: #86efac;
+}
+
+.alert-info {
+    background: rgba(99, 102, 241, 0.1);
+    color: #a5b4fc;
+}
+
+.alert-icon {
+    font-size: 14px;
+}
+
+.alert-text {
+    flex: 1;
+}
+
+/* Input Error */
+.input-error {
+    display: block;
+    color: #fca5a5;
+    font-size: 13px;
+    margin-top: 6px;
 }
 
 /* Footer */
 .stoa-footer {
-  text-align: center;
-  padding: 24px;
-  color: var(--stoa-text-muted);
-  font-size: 12px;
+    text-align: center;
+    padding: 24px;
+    color: var(--stoa-text-muted);
+    font-size: 12px;
+    width: 100%;
+    max-width: 420px;
 }
 
 .stoa-footer a {
-  color: var(--stoa-text-secondary);
-  text-decoration: none;
+    color: var(--stoa-text-secondary);
+    text-decoration: none;
 }
 
 .stoa-footer a:hover {
-  color: var(--stoa-purple);
+    color: var(--stoa-purple);
 }
 
-/* Info/Tooltip messages */
-#kc-info,
-.kc-feedback-text,
-.pf-c-helper-text {
-  font-size: 13px;
-  color: var(--stoa-text-muted);
-  margin-top: 16px;
-  text-align: center;
+.footer-links {
+    margin-top: 8px;
 }
 
-/* Loading State */
-.loading #kc-login {
-  pointer-events: none;
-  opacity: 0.7;
+.footer-links span {
+    margin: 0 8px;
+    opacity: 0.5;
 }
 
-.loading #kc-login::after {
-  content: '';
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-left: 10px;
+/* Logged User (for multi-step auth) */
+.logged-user {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--stoa-radius);
+    color: white;
+    font-size: 14px;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.logged-user a {
+    color: rgba(255, 255, 255, 0.7);
+    transition: color 0.2s;
+}
+
+.logged-user a:hover {
+    color: white;
 }
 
 /* Responsive */
 @media (max-width: 480px) {
-  #kc-form,
-  .card-pf {
-    max-width: 100%;
-    border-radius: var(--stoa-radius);
-  }
-  
-  #kc-header-wrapper,
-  .pf-c-login__main-header {
-    padding: 32px 24px;
-  }
-  
-  #kc-form-login,
-  .pf-c-login__main-body {
-    padding: 24px;
-  }
-}
+    .login-card {
+        max-width: 100%;
+        border-radius: var(--stoa-radius);
+    }
 
-/* Two Factor Authentication */
-#kc-totp-settings,
-.otp-input-group {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  margin: 20px 0;
-}
+    .stoa-header {
+        padding: 32px 24px;
+    }
 
-.otp-input-group input {
-  width: 48px;
-  height: 56px;
-  text-align: center;
-  font-size: 24px;
-  font-weight: 600;
-}
+    .login-content {
+        padding: 24px;
+    }
 
-/* Password strength indicator */
-.password-strength {
-  height: 4px;
-  background: var(--stoa-bg-input);
-  border-radius: 2px;
-  margin-top: 8px;
-  overflow: hidden;
-}
-
-.password-strength-bar {
-  height: 100%;
-  transition: all 0.3s;
-}
-
-.password-strength-bar.weak { width: 33%; background: #ef4444; }
-.password-strength-bar.medium { width: 66%; background: #f59e0b; }
-.password-strength-bar.strong { width: 100%; background: #22c55e; }
-
-/* Badge for Open Source */
-.stoa-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 20px;
-  margin-bottom: 16px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.stoa-badge::before {
-  content: '◆';
-  font-size: 8px;
-  color: #22c55e;
+    #kc-social-providers ul {
+        flex-direction: column;
+    }
 }

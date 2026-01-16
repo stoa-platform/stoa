@@ -128,7 +128,7 @@ class MCPSession:
             return self._make_error(msg_id, -32602, "Missing tool name")
 
         registry = await get_tool_registry()
-        tool = registry.get_tool(tool_name)
+        tool = registry.get(tool_name)
 
         if not tool:
             return self._make_error(msg_id, -32602, f"Tool not found: {tool_name}")

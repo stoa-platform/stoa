@@ -398,14 +398,27 @@ async def get_current_user(
 
     # Try Bearer token first
     if bearer and bearer.credentials:
-        authenticator = get_authenticator()
-        claims = await authenticator.validate_token(bearer.credentials)
-        logger.debug(
-            "User authenticated via Bearer token",
-            sub=claims.subject,
-            username=claims.preferred_username,
+        logger.info(
+            "Attempting Bearer token authentication",
+            token_prefix=bearer.credentials[:50] if len(bearer.credentials) > 50 else bearer.credentials,
         )
-        return claims
+        authenticator = get_authenticator()
+        try:
+            claims = await authenticator.validate_token(bearer.credentials)
+            logger.info(
+                "User authenticated via Bearer token",
+                sub=claims.subject,
+                username=claims.preferred_username,
+                issuer=claims.iss,
+            )
+            return claims
+        except HTTPException as e:
+            logger.warning(
+                "Bearer token validation failed",
+                error=e.detail,
+                token_prefix=bearer.credentials[:50] if len(bearer.credentials) > 50 else bearer.credentials,
+            )
+            raise
 
     # Try Basic Auth (OAuth2 Client Credentials)
     if basic and basic.username and basic.password:
@@ -438,6 +451,13 @@ async def get_current_user(
         )
 
     # No authentication provided
+    logger.warning(
+        "No authentication provided",
+        has_bearer=bool(bearer),
+        has_api_key=bool(api_key),
+        has_basic=bool(basic),
+        auth_header=request.headers.get("Authorization", "")[:50] if request.headers.get("Authorization") else None,
+    )
     raise HTTPException(
         status_code=401,
         detail="Not authenticated",

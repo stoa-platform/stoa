@@ -48,18 +48,51 @@ Claude.ai                         STOA MCP Gateway                    Keycloak
 
 ## Endpoints
 
+### MCP Protocol Endpoints
+
 | Endpoint | Method | Auth Required | Description |
 |----------|--------|---------------|-------------|
-| `/mcp/sse` | POST | Yes | MCP SSE bidirectional transport |
-| `/mcp/sse` | GET | Yes | Receive server-initiated messages |
-| `/mcp/sse` | DELETE | Yes | Close session |
+| `/mcp/sse` | POST | Optional | MCP SSE bidirectional transport |
+| `/mcp/sse` | GET | Optional | Receive server-initiated messages |
+| `/mcp/sse` | DELETE | Optional | Close session |
+| `/sse` | POST/GET/DELETE | Optional | Alias for `/mcp/sse` (Phase 2) |
+| `/tools` | GET | No | REST endpoint for tool listing |
+| `/subscriptions` | GET | No | REST endpoint for subscriptions |
+
+### OAuth Endpoints
+
+| Endpoint | Method | Auth Required | Description |
+|----------|--------|---------------|-------------|
 | `/.well-known/oauth-protected-resource/mcp/sse` | GET | No | OAuth 2.0 Protected Resource Metadata (RFC 9449) |
 | `/.well-known/oauth-authorization-server` | GET | No | OAuth AS metadata (proxied from Keycloak) |
-| `/oauth/authorize` | GET | No | OAuth authorization proxy |
 | `/oauth/token` | POST | No | Token exchange proxy |
 | `/oauth/register` | POST | No | Dynamic client registration proxy |
-| `/tools` | GET | No | REST endpoint for tool listing (hybrid mode) |
-| `/subscriptions` | GET | No | REST endpoint for subscriptions (hybrid mode) |
+
+### Public API Endpoints (Phase 2)
+
+| Endpoint | Method | Auth Required | Description |
+|----------|--------|---------------|-------------|
+| `/healthz` | GET | No | Public health check |
+| `/status` | GET | No | Detailed status with environment info |
+| `/api` | GET | No | API root information |
+| `/api/v1` | GET | No | API v1 information |
+| `/api/health` | GET | No | API health endpoint |
+| `/api/status` | GET | No | API status endpoint |
+| `/api/info` | GET | No | Detailed MCP Gateway info |
+| `/api/tools` | GET | No | List MCP tools (alias for /tools) |
+| `/api/apis` | GET | No | List available STOA APIs |
+| `/openapi.json` | GET | No | OpenAPI specification |
+| `/api/openapi.json` | GET | No | OpenAPI specification (alias) |
+
+### Internal Endpoints (K8s probes only)
+
+| Endpoint | Method | Auth Required | Description |
+|----------|--------|---------------|-------------|
+| `/health` | GET | Internal | K8s legacy health check |
+| `/health/live` | GET | Internal | K8s liveness probe |
+| `/health/ready` | GET | Internal | K8s readiness probe |
+| `/health/startup` | GET | Internal | K8s startup probe |
+| `/metrics` | GET | Internal | Prometheus metrics |
 
 ## Authentication Methods
 
@@ -94,6 +127,14 @@ async def mcp_sse_post_endpoint(
 **Note**: This approach allows Claude.ai to connect without requiring Bearer tokens on every request, which matches how other MCP clients work.
 
 ## Known Issues and Solutions
+
+### Issue 6: tools/call Fails with "get_tool" AttributeError (Fixed)
+
+**Symptom**: All tool calls fail with error `'ToolRegistry' object has no attribute 'get_tool'`.
+
+**Root Cause**: `mcp_sse.py` line 131 called `registry.get_tool(tool_name)` but the method is named `get()`.
+
+**Solution**: Changed to `registry.get(tool_name)` (commit `92595d607`).
 
 ### Issue 1: 401 on All MCP Requests (Fixed)
 
@@ -219,6 +260,8 @@ kubectl get events -n stoa-system --sort-by='.lastTimestamp'
 
 | Date | Commit | Description |
 |------|--------|-------------|
+| 2026-01-16 | TBD | Phase 2: Add public health/status, API discovery, /sse alias endpoints |
+| 2026-01-16 | `92595d607` | Fix tools/call - use correct ToolRegistry.get() method |
 | 2026-01-16 | `fabc02f3e` | Revert MCP SSE to optional auth for Claude.ai compatibility |
 | 2026-01-16 | `532b91615` | Add detailed auth logging for debugging |
 | 2026-01-16 | `8950e9b6f` | Add OAuth Protected Resource Metadata endpoint (RFC 9449) |

@@ -1,0 +1,442 @@
+/* ============================================
+   STOA Platform - Keycloak Login Theme
+   Dark theme with purple/indigo gradient branding
+   ============================================ */
+
+/* CSS Variables for STOA branding */
+:root {
+  --stoa-primary: #6366f1;
+  --stoa-secondary: #8b5cf6;
+  --stoa-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --stoa-dark-bg: #0f0f23;
+  --stoa-dark-surface: #1a1a2e;
+  --stoa-dark-card: #16213e;
+  --stoa-text-primary: #ffffff;
+  --stoa-text-secondary: #a0aec0;
+  --stoa-border: rgba(99, 102, 241, 0.3);
+  --stoa-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================
+   Background - Dark gradient
+   ============================================ */
+body.kcBodyClass {
+  background: var(--stoa-dark-bg);
+  background-image:
+    radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+  min-height: 100vh;
+}
+
+/* Login container */
+.login-pf {
+  background: transparent;
+}
+
+.login-pf body {
+  background: transparent;
+}
+
+/* ============================================
+   Login Card
+   ============================================ */
+#kc-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+#kc-container-wrapper {
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+}
+
+#kc-content {
+  background: var(--stoa-dark-card);
+  border-radius: 16px;
+  box-shadow: var(--stoa-shadow);
+  border: 1px solid var(--stoa-border);
+  overflow: hidden;
+}
+
+#kc-content-wrapper {
+  padding: 40px;
+}
+
+/* ============================================
+   Header / Logo
+   ============================================ */
+#kc-header {
+  background: var(--stoa-gradient);
+  padding: 32px 40px;
+  text-align: center;
+}
+
+#kc-header-wrapper {
+  color: var(--stoa-text-primary);
+}
+
+.kc-logo-text {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+/* Hide default logo, show text */
+.login-pf-brand img {
+  display: none;
+}
+
+/* Page title */
+#kc-page-title {
+  color: var(--stoa-text-primary);
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+/* ============================================
+   Form Elements
+   ============================================ */
+.login-pf-page .card-pf {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Labels */
+label {
+  color: var(--stoa-text-secondary) !important;
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+/* Input fields */
+.login-pf-page .form-control,
+input[type="text"],
+input[type="password"],
+input[type="email"] {
+  background: var(--stoa-dark-surface) !important;
+  border: 1px solid var(--stoa-border) !important;
+  border-radius: 8px !important;
+  color: var(--stoa-text-primary) !important;
+  padding: 12px 16px !important;
+  font-size: 15px !important;
+  transition: all 0.2s ease;
+}
+
+.login-pf-page .form-control:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus {
+  border-color: var(--stoa-primary) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+  outline: none !important;
+}
+
+.login-pf-page .form-control::placeholder {
+  color: var(--stoa-text-secondary) !important;
+  opacity: 0.6;
+}
+
+/* Form groups */
+.form-group {
+  margin-bottom: 20px;
+}
+
+/* ============================================
+   Buttons
+   ============================================ */
+/* Primary button (Login) */
+.btn-primary,
+input[type="submit"].btn-primary,
+button.btn-primary {
+  background: var(--stoa-gradient) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 14px 24px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: var(--stoa-text-primary) !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: none;
+  width: 100%;
+}
+
+.btn-primary:hover,
+input[type="submit"].btn-primary:hover,
+button.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4) !important;
+  opacity: 0.95;
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Secondary/Default button */
+.btn-default,
+.btn-secondary {
+  background: transparent !important;
+  border: 1px solid var(--stoa-border) !important;
+  border-radius: 8px !important;
+  color: var(--stoa-text-secondary) !important;
+  padding: 12px 20px !important;
+  transition: all 0.2s ease;
+}
+
+.btn-default:hover,
+.btn-secondary:hover {
+  background: var(--stoa-dark-surface) !important;
+  border-color: var(--stoa-primary) !important;
+  color: var(--stoa-text-primary) !important;
+}
+
+/* ============================================
+   Links
+   ============================================ */
+a {
+  color: var(--stoa-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--stoa-secondary);
+  text-decoration: underline;
+}
+
+#kc-registration a,
+#kc-info a,
+.kc-social-links a {
+  color: var(--stoa-primary);
+}
+
+/* Forgot password link */
+#kc-form-options {
+  margin-top: 16px;
+  text-align: center;
+}
+
+#kc-form-options span {
+  color: var(--stoa-text-secondary);
+}
+
+/* ============================================
+   Checkbox / Remember me
+   ============================================ */
+.checkbox label,
+.checkbox-inline {
+  color: var(--stoa-text-secondary) !important;
+  font-size: 14px;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--stoa-primary);
+}
+
+/* ============================================
+   Alerts / Messages
+   ============================================ */
+.alert {
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  border: none;
+}
+
+.alert-error,
+.alert-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.alert-success {
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.alert-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.alert-info {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* ============================================
+   Social / Identity Providers
+   ============================================ */
+#kc-social-providers {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--stoa-border);
+}
+
+#kc-social-providers h4,
+.kc-social-section h4 {
+  color: var(--stoa-text-secondary);
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.kc-social-links li {
+  margin-bottom: 10px;
+}
+
+.kc-social-links a.zocial {
+  background: var(--stoa-dark-surface) !important;
+  border: 1px solid var(--stoa-border) !important;
+  border-radius: 8px !important;
+  color: var(--stoa-text-primary) !important;
+  padding: 12px 16px !important;
+  text-align: center;
+  display: block;
+  transition: all 0.2s ease;
+}
+
+.kc-social-links a.zocial:hover {
+  border-color: var(--stoa-primary) !important;
+  background: rgba(99, 102, 241, 0.1) !important;
+}
+
+/* ============================================
+   OTP / 2FA Page
+   ============================================ */
+.otp-input {
+  letter-spacing: 8px;
+  font-size: 24px !important;
+  text-align: center;
+}
+
+/* ============================================
+   Info / Footer
+   ============================================ */
+#kc-info {
+  margin-top: 24px;
+  text-align: center;
+}
+
+#kc-info-wrapper {
+  color: var(--stoa-text-secondary);
+  font-size: 14px;
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+@media (max-width: 480px) {
+  #kc-container-wrapper {
+    padding: 16px;
+  }
+
+  #kc-content-wrapper {
+    padding: 24px;
+  }
+
+  #kc-header {
+    padding: 24px;
+  }
+
+  .kc-logo-text {
+    font-size: 24px;
+  }
+}
+
+/* ============================================
+   TOTP / Authenticator Setup
+   ============================================ */
+#kc-totp-settings {
+  background: var(--stoa-dark-surface);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.kc-qrcode {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+/* ============================================
+   Account Management
+   ============================================ */
+.kc-dropdown {
+  color: var(--stoa-text-secondary);
+}
+
+.kc-dropdown:hover {
+  color: var(--stoa-text-primary);
+}
+
+/* ============================================
+   Locale Selector
+   ============================================ */
+#kc-locale {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+
+#kc-locale-dropdown {
+  background: var(--stoa-dark-surface);
+  border: 1px solid var(--stoa-border);
+  border-radius: 6px;
+  color: var(--stoa-text-secondary);
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* ============================================
+   Terms and Conditions
+   ============================================ */
+#kc-terms-text {
+  background: var(--stoa-dark-surface);
+  border-radius: 8px;
+  padding: 16px;
+  color: var(--stoa-text-secondary);
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+/* ============================================
+   Additional Keycloak 23+ specific fixes
+   ============================================ */
+.pf-c-login {
+  background: transparent !important;
+}
+
+.pf-c-login__main {
+  background: var(--stoa-dark-card) !important;
+  border-radius: 16px;
+  box-shadow: var(--stoa-shadow);
+}
+
+.pf-c-form-control {
+  background: var(--stoa-dark-surface) !important;
+  border-color: var(--stoa-border) !important;
+  color: var(--stoa-text-primary) !important;
+}
+
+.pf-c-button.pf-m-primary {
+  background: var(--stoa-gradient) !important;
+  border: none !important;
+}

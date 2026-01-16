@@ -73,12 +73,15 @@ async def list_tenants(user: User = Depends(get_current_user)):
                     tree = git_service._project.repository_tree(path="tenants", ref="main")
                     for item in tree:
                         if item["type"] == "tree":
-                            tenant_data = await git_service.get_tenant(item["name"])
-                            if tenant_data:
-                                apis = await git_service.list_apis(item["name"])
-                                tenants.append(_tenant_from_yaml(tenant_data, len(apis), 0))
-            except Exception:
-                pass
+                            try:
+                                tenant_data = await git_service.get_tenant(item["name"])
+                                if tenant_data:
+                                    apis = await git_service.list_apis(item["name"])
+                                    tenants.append(_tenant_from_yaml(tenant_data, len(apis), 0))
+                            except Exception as tenant_err:
+                                logger.warning(f"Failed to load tenant {item['name']}: {tenant_err}")
+            except Exception as e:
+                logger.error(f"Failed to list tenant directories: {e}")
             return tenants
 
         # Others see only their tenant

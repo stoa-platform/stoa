@@ -74,8 +74,9 @@ class MCPSession:
 
         print(f"[MCP] _handle_initialize: client={client_info}, protocol={protocol_version}", flush=True)
 
+        # Use the client's requested protocol version for compatibility
         response = self._make_response(msg_id, {
-            "protocolVersion": "2024-11-05",
+            "protocolVersion": protocol_version,
             "capabilities": {
                 "tools": {"listChanged": True},
                 "resources": {},

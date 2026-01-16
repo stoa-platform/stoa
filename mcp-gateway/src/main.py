@@ -10,9 +10,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
 import structlog
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -408,28 +409,112 @@ def register_routes(app: FastAPI) -> None:
             },
         }
 
+    # Claude.ai REST endpoints for MCP tools (hybrid mode)
+    @app.get("/tools", tags=["MCP REST"])
+    async def list_tools_rest() -> dict[str, Any]:
+        """List available MCP tools (REST endpoint for Claude.ai hybrid mode)."""
+        from .services import get_tool_registry
+
+        print("[MCP REST] GET /tools called", flush=True)
+        registry = await get_tool_registry()
+        result = registry.list_tools(limit=1000)
+
+        tools = []
+        for tool in result.tools:
+            schema = tool.input_schema
+            if schema:
+                input_schema = schema.model_dump() if hasattr(schema, 'model_dump') else dict(schema)
+            else:
+                input_schema = {"type": "object", "properties": {}}
+
+            tools.append({
+                "name": tool.name,
+                "description": tool.description or "",
+                "inputSchema": input_schema,
+            })
+
+        print(f"[MCP REST] Returning {len(tools)} tools", flush=True)
+        return {"tools": tools}
+
+    @app.get("/subscriptions", tags=["MCP REST"])
+    async def list_subscriptions_rest() -> dict[str, Any]:
+        """List subscriptions (REST endpoint for Claude.ai hybrid mode)."""
+        print("[MCP REST] GET /subscriptions called", flush=True)
+        # Return empty subscriptions - Claude.ai checks this endpoint
+        return {"subscriptions": []}
+
+    @app.post("/tools/{tool_name}", tags=["MCP REST"])
+    async def call_tool_rest(tool_name: str, request: Request) -> dict[str, Any]:
+        """Call an MCP tool (REST endpoint for Claude.ai hybrid mode)."""
+        import json
+        from .services import get_tool_registry
+        from .models.mcp import ToolInvocation
+
+        body = await request.json()
+        arguments = body.get("arguments", {})
+
+        print(f"[MCP REST] POST /tools/{tool_name} called with args: {arguments}", flush=True)
+
+        registry = await get_tool_registry()
+        tool = registry.get_tool(tool_name)
+
+        if not tool:
+            return JSONResponse(
+                content={"error": f"Tool not found: {tool_name}"},
+                status_code=404,
+            )
+
+        try:
+            invocation = ToolInvocation(
+                name=tool_name,
+                arguments=arguments,
+            )
+            result = await registry.invoke(invocation)
+
+            content = []
+            for item in result.content:
+                if hasattr(item, 'text'):
+                    content.append({"type": "text", "text": item.text})
+                else:
+                    content.append({"type": "text", "text": str(item)})
+
+            print(f"[MCP REST] Tool {tool_name} result: is_error={result.is_error}", flush=True)
+            return {
+                "content": content,
+                "isError": result.is_error,
+            }
+        except Exception as e:
+            print(f"[MCP REST] Tool {tool_name} error: {e}", flush=True)
+            return {
+                "content": [{"type": "text", "text": f"Error: {str(e)}"}],
+                "isError": True,
+            }
+
     # OAuth Authorization Server Metadata (RFC 8414) for Claude.ai integration
     @app.get("/.well-known/oauth-authorization-server", tags=["OAuth"])
     async def oauth_authorization_server_metadata() -> dict[str, Any]:
         """OAuth 2.0 Authorization Server Metadata (RFC 8414).
 
         Required by Claude.ai for OAuth integration with remote MCP servers.
-        Proxies metadata from Keycloak authorization server.
+        Points to local proxy endpoints for token/registration to handle network issues.
         """
         settings = get_settings()
         keycloak_issuer = settings.keycloak_issuer
+        mcp_gateway_url = f"https://mcp.{settings.base_domain}"
 
         return {
             "issuer": keycloak_issuer,
             "authorization_endpoint": f"{keycloak_issuer}/protocol/openid-connect/auth",
-            "token_endpoint": f"{keycloak_issuer}/protocol/openid-connect/token",
+            # Use our proxy for token endpoint (Claude.ai may not reach auth.stoa.cab-i.com)
+            "token_endpoint": f"{mcp_gateway_url}/oauth/token",
             "userinfo_endpoint": f"{keycloak_issuer}/protocol/openid-connect/userinfo",
             "jwks_uri": f"{keycloak_issuer}/protocol/openid-connect/certs",
-            "registration_endpoint": f"{keycloak_issuer}/clients-registrations/openid-connect",
+            # Use our proxy for registration endpoint
+            "registration_endpoint": f"{mcp_gateway_url}/oauth/register",
             "scopes_supported": ["openid", "profile", "email", "offline_access"],
             "response_types_supported": ["code", "token", "id_token", "code token", "code id_token", "token id_token", "code token id_token"],
             "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials", "password"],
-            "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "private_key_jwt"],
+            "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "private_key_jwt", "none"],
             "code_challenge_methods_supported": ["S256", "plain"],
             "introspection_endpoint": f"{keycloak_issuer}/protocol/openid-connect/token/introspect",
             "revocation_endpoint": f"{keycloak_issuer}/protocol/openid-connect/revoke",
@@ -440,28 +525,31 @@ def register_routes(app: FastAPI) -> None:
     async def openid_configuration() -> dict[str, Any]:
         """OpenID Connect Discovery (RFC 8414).
 
-        Proxies OpenID configuration from Keycloak.
+        Points to local proxy endpoints for token/registration.
         """
         settings = get_settings()
         keycloak_issuer = settings.keycloak_issuer
+        mcp_gateway_url = f"https://mcp.{settings.base_domain}"
 
         return {
             "issuer": keycloak_issuer,
             "authorization_endpoint": f"{keycloak_issuer}/protocol/openid-connect/auth",
-            "token_endpoint": f"{keycloak_issuer}/protocol/openid-connect/token",
+            # Use our proxy for token endpoint
+            "token_endpoint": f"{mcp_gateway_url}/oauth/token",
             "userinfo_endpoint": f"{keycloak_issuer}/protocol/openid-connect/userinfo",
             "jwks_uri": f"{keycloak_issuer}/protocol/openid-connect/certs",
             "end_session_endpoint": f"{keycloak_issuer}/protocol/openid-connect/logout",
             "check_session_iframe": f"{keycloak_issuer}/protocol/openid-connect/login-status-iframe.html",
             "introspection_endpoint": f"{keycloak_issuer}/protocol/openid-connect/token/introspect",
             "revocation_endpoint": f"{keycloak_issuer}/protocol/openid-connect/revoke",
-            "registration_endpoint": f"{keycloak_issuer}/clients-registrations/openid-connect",
+            # Use our proxy for registration endpoint
+            "registration_endpoint": f"{mcp_gateway_url}/oauth/register",
             "scopes_supported": ["openid", "profile", "email", "offline_access", "address", "phone"],
             "response_types_supported": ["code", "token", "id_token", "code token", "code id_token", "token id_token", "code token id_token"],
             "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials", "password", "urn:ietf:params:oauth:grant-type:device_code"],
             "subject_types_supported": ["public", "pairwise"],
             "id_token_signing_alg_values_supported": ["RS256", "ES256"],
-            "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "private_key_jwt"],
+            "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "private_key_jwt", "none"],
             "code_challenge_methods_supported": ["S256", "plain"],
             "claims_supported": ["sub", "iss", "aud", "exp", "iat", "name", "email", "preferred_username", "given_name", "family_name"],
         }
@@ -486,6 +574,221 @@ def register_routes(app: FastAPI) -> None:
             "bearer_methods_supported": ["header"],
             "resource_documentation": "https://docs.stoa.cab-i.com/mcp",
         }
+
+    # OAuth Token Proxy - Proxies token requests to Keycloak
+    # This is needed because Claude.ai servers may not be able to reach auth.stoa.cab-i.com directly
+    @app.post("/oauth/token", tags=["OAuth"])
+    async def oauth_token_proxy(request: Request) -> JSONResponse:
+        """Proxy OAuth token requests to Keycloak.
+
+        This endpoint proxies token exchange requests to Keycloak's token endpoint.
+        Required because Claude.ai's backend servers may not have direct access to auth.stoa.cab-i.com.
+        """
+        settings = get_settings()
+        keycloak_token_url = f"{settings.keycloak_issuer}/protocol/openid-connect/token"
+
+        # Get the form data from the request
+        form_data = await request.form()
+        form_dict = {key: value for key, value in form_data.items()}
+
+        logger.info(
+            "Proxying token request to Keycloak",
+            grant_type=form_dict.get("grant_type"),
+            client_id=form_dict.get("client_id"),
+        )
+
+        # Forward headers (especially Authorization for client credentials)
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        if "Authorization" in request.headers:
+            headers["Authorization"] = request.headers["Authorization"]
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    keycloak_token_url,
+                    data=form_dict,
+                    headers=headers,
+                )
+
+                logger.info(
+                    "Keycloak token response",
+                    status_code=response.status_code,
+                    client_id=form_dict.get("client_id"),
+                )
+
+                # Return the response from Keycloak
+                return JSONResponse(
+                    content=response.json(),
+                    status_code=response.status_code,
+                    headers={
+                        "Cache-Control": "no-store",
+                        "Pragma": "no-cache",
+                    },
+                )
+
+        except httpx.HTTPError as e:
+            logger.error("Failed to proxy token request to Keycloak", error=str(e))
+            return JSONResponse(
+                content={"error": "server_error", "error_description": "Failed to contact authorization server"},
+                status_code=502,
+            )
+
+    # OAuth Registration Proxy - Proxies DCR requests to Keycloak
+    # Forces public client creation for MCP OAuth (PKCE-based authentication)
+    @app.post("/oauth/register", tags=["OAuth"])
+    async def oauth_register_proxy(request: Request) -> JSONResponse:
+        """Proxy OAuth Dynamic Client Registration to Keycloak.
+
+        This endpoint:
+        1. Creates the client via standard DCR
+        2. Modifies the client via Admin API to make it public (PKCE-only)
+
+        Claude.ai uses PKCE for MCP OAuth and doesn't have client secrets.
+        Keycloak DCR doesn't properly support token_endpoint_auth_method: none,
+        so we patch the client after creation.
+        """
+        import json
+
+        settings = get_settings()
+        keycloak_register_url = f"{settings.keycloak_issuer}/clients-registrations/openid-connect"
+        keycloak_admin_url = f"{settings.keycloak_url}/admin/realms/{settings.keycloak_realm}"
+        keycloak_token_url = f"{settings.keycloak_url}/realms/master/protocol/openid-connect/token"
+
+        body = await request.body()
+
+        # Parse DCR request for logging
+        try:
+            dcr_request = json.loads(body)
+            logger.info(
+                "DCR request received",
+                client_name=dcr_request.get("client_name"),
+                token_endpoint_auth_method=dcr_request.get("token_endpoint_auth_method"),
+                redirect_uris=dcr_request.get("redirect_uris"),
+            )
+        except json.JSONDecodeError:
+            dcr_request = {}
+
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if "Authorization" in request.headers:
+            headers["Authorization"] = request.headers["Authorization"]
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Step 1: Create client via DCR
+                response = await client.post(
+                    keycloak_register_url,
+                    content=body,
+                    headers=headers,
+                )
+
+                if response.status_code != 201:
+                    logger.warning("DCR failed", status_code=response.status_code)
+                    return JSONResponse(
+                        content=response.json(),
+                        status_code=response.status_code,
+                    )
+
+                response_data = response.json()
+                client_id = response_data.get("client_id")
+
+                logger.info(
+                    "DCR client created, now patching to public",
+                    client_id=client_id,
+                )
+
+                # Step 2: Get admin token to modify the client
+                admin_token_response = await client.post(
+                    keycloak_token_url,
+                    data={
+                        "grant_type": "password",
+                        "client_id": "admin-cli",
+                        "username": "admin",
+                        "password": settings.keycloak_admin_password,
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+
+                if admin_token_response.status_code != 200:
+                    logger.warning(
+                        "Failed to get admin token, client will be confidential",
+                        status_code=admin_token_response.status_code,
+                    )
+                    return JSONResponse(content=response_data, status_code=201)
+
+                admin_token = admin_token_response.json().get("access_token")
+
+                # Step 3: Get the full client configuration first
+                # Keycloak Admin API PUT replaces the entire resource, so we need the full config
+                get_client_response = await client.get(
+                    f"{keycloak_admin_url}/clients/{client_id}",
+                    headers={
+                        "Authorization": f"Bearer {admin_token}",
+                    },
+                )
+
+                if get_client_response.status_code != 200:
+                    logger.warning(
+                        "Failed to get client for patching",
+                        client_id=client_id,
+                        status_code=get_client_response.status_code,
+                    )
+                    return JSONResponse(content=response_data, status_code=201)
+
+                # Step 4: Modify the client to make it public with PKCE
+                full_client = get_client_response.json()
+                full_client["publicClient"] = True
+                # Ensure attributes dict exists
+                if "attributes" not in full_client or full_client["attributes"] is None:
+                    full_client["attributes"] = {}
+                full_client["attributes"]["pkce.code.challenge.method"] = "S256"
+
+                logger.info(
+                    "Updating client to public with PKCE",
+                    client_id=client_id,
+                    current_public=full_client.get("publicClient"),
+                )
+
+                # Step 5: PUT the modified client back
+                patch_response = await client.put(
+                    f"{keycloak_admin_url}/clients/{client_id}",
+                    json=full_client,
+                    headers={
+                        "Authorization": f"Bearer {admin_token}",
+                        "Content-Type": "application/json",
+                    },
+                )
+
+                if patch_response.status_code in (200, 204):
+                    logger.info(
+                        "Client patched to public successfully",
+                        client_id=client_id,
+                    )
+                    # Update response to reflect public client
+                    response_data["token_endpoint_auth_method"] = "none"
+                    response_data.pop("client_secret", None)
+                else:
+                    logger.warning(
+                        "Failed to patch client to public",
+                        client_id=client_id,
+                        status_code=patch_response.status_code,
+                        response=patch_response.text[:500],
+                    )
+
+                return JSONResponse(
+                    content=response_data,
+                    status_code=201,
+                )
+
+        except httpx.HTTPError as e:
+            logger.error("Failed to proxy DCR request to Keycloak", error=str(e))
+            return JSONResponse(
+                content={"error": "server_error", "error_description": "Failed to contact authorization server"},
+                status_code=502,
+            )
 
 
 

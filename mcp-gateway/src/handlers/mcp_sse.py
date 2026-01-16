@@ -85,10 +85,18 @@ class MCPSession:
 
         tools = []
         for tool in result.tools:
+            # Use input_schema (snake_case) - the Python attribute name
+            # MCP protocol expects inputSchema (camelCase) in the response
+            schema = tool.input_schema
+            if schema:
+                input_schema = schema.model_dump() if hasattr(schema, 'model_dump') else dict(schema)
+            else:
+                input_schema = {"type": "object", "properties": {}}
+
             tools.append({
                 "name": tool.name,
                 "description": tool.description or "",
-                "inputSchema": tool.inputSchema or {"type": "object", "properties": {}},
+                "inputSchema": input_schema,
             })
 
         return self._make_response(msg_id, {"tools": tools})

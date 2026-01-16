@@ -87,8 +87,14 @@ class MCPSession:
                 "prompts": {},
             },
             "serverInfo": {
-                "name": "stoa-mcp-gateway",
+                "name": "STOA MCP Gateway",
                 "version": settings.app_version,
+                "icons": [
+                    {
+                        "url": f"https://portal.{settings.base_domain}/favicon.svg",
+                        "mimeType": "image/svg+xml",
+                    },
+                ],
             },
         })
 

@@ -289,10 +289,11 @@ async def mcp_sse_post_endpoint(
 
     if wants_sse and response is not None:
         # Return SSE stream with the response
+        # Per MCP Streamable HTTP spec, just use data: without event:
         async def sse_response_stream() -> AsyncGenerator[str, None]:
             """Generate SSE events for the response."""
-            # Send the JSON-RPC response as an SSE event
-            yield f"event: message\ndata: {json.dumps(response)}\n\n"
+            # Send the JSON-RPC response as SSE data
+            yield f"data: {json.dumps(response)}\n\n"
 
         return StreamingResponse(
             sse_response_stream(),

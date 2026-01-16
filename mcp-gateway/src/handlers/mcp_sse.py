@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from ..middleware.auth import TokenClaims, get_current_user
 from ..services import get_tool_registry
 from ..config import get_settings
+from ..models.mcp import ToolInvocation
 
 logger = structlog.get_logger(__name__)
 
@@ -137,12 +138,31 @@ class MCPSession:
 
         # Execute tool
         try:
-            result = await registry.invoke_tool(tool_name, arguments, user=self.user)
+            # Create ToolInvocation object for the registry
+            invocation = ToolInvocation(
+                name=tool_name,
+                arguments=arguments,
+                request_id=str(msg_id) if msg_id else None,
+            )
+
+            # Get user token if available
+            user_token = None
+            if self.user and hasattr(self.user, 'raw_token'):
+                user_token = self.user.raw_token
+
+            result = await registry.invoke(invocation, user_token=user_token)
+
+            # Format content from ToolResult
+            content = []
+            for item in result.content:
+                if hasattr(item, 'text'):
+                    content.append({"type": "text", "text": item.text})
+                else:
+                    content.append({"type": "text", "text": str(item)})
+
             return self._make_response(msg_id, {
-                "content": [
-                    {"type": "text", "text": json.dumps(result.result, indent=2)}
-                ],
-                "isError": not result.success,
+                "content": content,
+                "isError": result.is_error,
             })
         except Exception as e:
             logger.error("Tool invocation failed", tool=tool_name, error=str(e))

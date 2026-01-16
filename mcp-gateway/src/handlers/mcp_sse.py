@@ -14,10 +14,10 @@ import uuid
 from typing import Any, AsyncGenerator
 
 import structlog
-from fastapi import APIRouter, Depends, Request, Response, HTTPException
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse, JSONResponse
 
-from ..middleware.auth import TokenClaims, get_current_user, get_optional_user
+from ..middleware.auth import TokenClaims, get_optional_user
 from ..services import get_tool_registry
 from ..config import get_settings
 from ..models.mcp import ToolInvocation
@@ -201,59 +201,10 @@ def _get_session_id_from_request(request: Request) -> str | None:
     return request.headers.get("Mcp-Session-Id") or request.headers.get("X-MCP-Session-Id")
 
 
-async def get_user_or_session(
-    request: Request,
-    user: TokenClaims | None = Depends(get_optional_user),
-) -> TokenClaims:
-    """Authenticate via Bearer token OR via existing MCP session.
-
-    Claude.ai sends the Bearer token only on the first request (initialize),
-    then uses Mcp-Session-Id for subsequent requests. This function allows
-    both authentication methods.
-
-    Priority:
-    1. Bearer token (if provided and valid)
-    2. Existing MCP session (if session_id is valid and already authenticated)
-    3. Raise 401 if neither works
-    """
-    # If we have a valid Bearer token, use it
-    if user is not None:
-        logger.debug("Authenticated via Bearer token", sub=user.subject)
-        return user
-
-    # Try session-based authentication
-    session_id = _get_session_id_from_request(request)
-    if session_id and session_id in _sessions:
-        session = _sessions[session_id]
-        if session.user is not None:
-            logger.debug("Authenticated via MCP session", session_id=session_id, sub=session.user.subject)
-            return session.user
-
-    # Log all headers for debugging
-    all_headers = dict(request.headers)
-    if "authorization" in all_headers:
-        all_headers["authorization"] = all_headers["authorization"][:50] + "..."
-
-    logger.warning(
-        "MCP authentication failed - no Bearer token and no valid session",
-        session_id=session_id,
-        session_exists=session_id in _sessions if session_id else False,
-        path=str(request.url.path),
-        method=request.method,
-    )
-    print(f"[MCP AUTH] 401 for {request.method} {request.url.path} - session_id={session_id}, headers={all_headers}", flush=True)
-
-    raise HTTPException(
-        status_code=401,
-        detail="Not authenticated - provide Bearer token or valid Mcp-Session-Id",
-        headers={"WWW-Authenticate": 'Bearer, Basic realm="STOA MCP Gateway"'},
-    )
-
-
 @router.post("/sse")
 async def mcp_sse_post_endpoint(
     request: Request,
-    user: TokenClaims = Depends(get_user_or_session),
+    user: TokenClaims | None = Depends(get_optional_user),
 ) -> Response:
     """
     MCP Streamable HTTP Transport endpoint (POST).
@@ -276,7 +227,7 @@ async def mcp_sse_post_endpoint(
         session_id = str(uuid.uuid4())
         session = MCPSession(session_id, user)
         _sessions[session_id] = session
-        logger.info("Created new MCP session", session_id=session_id, user=user.subject)
+        logger.info("Created new MCP session", session_id=session_id, user=user.subject if user else "anonymous")
 
     # Parse the JSON-RPC message
     try:
@@ -369,7 +320,7 @@ async def mcp_sse_post_endpoint(
 @router.get("/sse")
 async def mcp_sse_get_endpoint(
     request: Request,
-    user: TokenClaims = Depends(get_user_or_session),
+    user: TokenClaims | None = Depends(get_optional_user),
 ) -> StreamingResponse:
     """
     MCP Server-Sent Events endpoint (GET).
@@ -389,7 +340,7 @@ async def mcp_sse_get_endpoint(
         session_id = str(uuid.uuid4())
         session = MCPSession(session_id, user)
         _sessions[session_id] = session
-        logger.info("MCP SSE session started", session_id=session_id, user=user.subject)
+        logger.info("MCP SSE session started", session_id=session_id, user=user.subject if user else "anonymous")
 
     async def event_stream() -> AsyncGenerator[str, None]:
         """Generate SSE events."""
@@ -438,7 +389,7 @@ async def mcp_sse_get_endpoint(
 @router.delete("/sse")
 async def mcp_sse_delete_endpoint(
     request: Request,
-    user: TokenClaims = Depends(get_user_or_session),
+    user: TokenClaims | None = Depends(get_optional_user),
 ) -> Response:
     """
     Close MCP session endpoint (DELETE).
@@ -458,7 +409,7 @@ async def mcp_sse_delete_endpoint(
 @router.post("/message")
 async def mcp_message_endpoint(
     request: Request,
-    user: TokenClaims = Depends(get_user_or_session),
+    user: TokenClaims | None = Depends(get_optional_user),
 ) -> Response:
     """
     Handle MCP JSON-RPC messages (legacy endpoint).
@@ -498,7 +449,7 @@ async def mcp_message_endpoint(
 @router.post("/")
 async def mcp_jsonrpc_endpoint(
     request: Request,
-    user: TokenClaims = Depends(get_user_or_session),
+    user: TokenClaims | None = Depends(get_optional_user),
 ) -> Response:
     """
     Direct JSON-RPC endpoint for MCP.

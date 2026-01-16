@@ -260,7 +260,7 @@ kubectl get events -n stoa-system --sort-by='.lastTimestamp'
 
 | Date | Commit | Description |
 |------|--------|-------------|
-| 2026-01-16 | TBD | Phase 2: Add public health/status, API discovery, /sse alias endpoints |
+| 2026-01-16 | `4176fc6dc` | Phase 2: Add public health/status, API discovery, /sse alias endpoints |
 | 2026-01-16 | `92595d607` | Fix tools/call - use correct ToolRegistry.get() method |
 | 2026-01-16 | `fabc02f3e` | Revert MCP SSE to optional auth for Claude.ai compatibility |
 | 2026-01-16 | `532b91615` | Add detailed auth logging for debugging |

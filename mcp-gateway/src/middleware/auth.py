@@ -451,13 +451,22 @@ async def get_current_user(
         )
 
     # No authentication provided
+    # Log all headers for debugging Claude.ai auth issues
+    all_headers = dict(request.headers)
+    # Redact sensitive headers
+    if "authorization" in all_headers:
+        all_headers["authorization"] = all_headers["authorization"][:50] + "..."
     logger.warning(
         "No authentication provided",
         has_bearer=bool(bearer),
         has_api_key=bool(api_key),
         has_basic=bool(basic),
         auth_header=request.headers.get("Authorization", "")[:50] if request.headers.get("Authorization") else None,
+        path=str(request.url.path),
+        method=request.method,
+        mcp_session_id=request.headers.get("Mcp-Session-Id"),
     )
+    print(f"[AUTH DEBUG] 401 for {request.method} {request.url.path} - Headers: {all_headers}", flush=True)
     raise HTTPException(
         status_code=401,
         detail="Not authenticated",

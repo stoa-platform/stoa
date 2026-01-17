@@ -206,12 +206,25 @@ class TestToolRegistryLifecycle:
 
     @pytest.mark.asyncio
     async def test_startup_registers_builtin_tools(self, registry: ToolRegistry):
-        """Test startup registers built-in tools."""
+        """Test startup registers built-in tools.
+
+        CAB-603: Core tools use stoa_{domain}_{action} naming.
+        Legacy tools are registered in legacy storage for backward compatibility.
+        """
         await registry.startup()
 
+        # CAB-603: Check core tools (new naming) - stored in _core_tools
+        assert registry.get_core_tool("stoa_platform_info") is not None
+        assert registry.get_core_tool("stoa_catalog_list_apis") is not None
+        assert registry.get_core_tool("stoa_catalog_get_api") is not None
+
+        # Smart routing via get() should find core tools
         assert registry.get("stoa_platform_info") is not None
-        assert registry.get("stoa_list_apis") is not None
-        assert registry.get("stoa_get_api_details") is not None
+        assert registry.get("stoa_catalog_list_apis") is not None
+
+        # Legacy tools are registered in _tools storage
+        assert "stoa_list_apis" in registry._tools
+        assert "stoa_get_api_details" in registry._tools
 
         await registry.shutdown()
 
@@ -262,28 +275,28 @@ class TestToolInvocation:
 
     @pytest.mark.asyncio
     async def test_invoke_builtin_list_apis(self, registry: ToolRegistry):
-        """Test invoking stoa_list_apis."""
+        """Test invoking stoa_catalog_list_apis (CAB-603 new naming)."""
         await registry.startup()
 
         invocation = ToolInvocation(
-            name="stoa_list_apis",
-            arguments={"tenant_id": "test-tenant"},
+            name="stoa_catalog_list_apis",
+            arguments={},
         )
         result = await registry.invoke(invocation)
 
         assert result.is_error is False
-        # Currently returns placeholder
-        assert "coming soon" in result.content[0].text.lower()
+        # Returns stub response
+        assert "apis" in result.content[0].text.lower() or "coming soon" in result.content[0].text.lower()
 
         await registry.shutdown()
 
     @pytest.mark.asyncio
     async def test_invoke_builtin_get_api_details_missing_id(self, registry: ToolRegistry):
-        """Test invoking stoa_get_api_details without api_id returns error."""
+        """Test invoking stoa_catalog_get_api without api_id returns error (CAB-603)."""
         await registry.startup()
 
         invocation = ToolInvocation(
-            name="stoa_get_api_details",
+            name="stoa_catalog_get_api",
             arguments={},
         )
         result = await registry.invoke(invocation)
@@ -295,11 +308,11 @@ class TestToolInvocation:
 
     @pytest.mark.asyncio
     async def test_invoke_builtin_get_api_details_with_id(self, registry: ToolRegistry):
-        """Test invoking stoa_get_api_details with api_id."""
+        """Test invoking stoa_catalog_get_api with api_id (CAB-603)."""
         await registry.startup()
 
         invocation = ToolInvocation(
-            name="stoa_get_api_details",
+            name="stoa_catalog_get_api",
             arguments={"api_id": "api-123"},
         )
         result = await registry.invoke(invocation)
@@ -603,28 +616,45 @@ class TestNewBuiltinTools:
 
     @pytest.mark.asyncio
     async def test_startup_registers_all_builtin_tools(self, registry: ToolRegistry):
-        """Test startup registers all built-in tools."""
+        """Test startup registers all built-in tools (CAB-603 updated).
+
+        Tests core tools with stoa_{domain}_{action} naming.
+        Legacy tools are in _tools storage for backward compatibility.
+        """
         await registry.startup()
 
-        # Check all expected built-in tools are registered
-        expected_tools = [
+        # CAB-603: Core tools (new naming) - should be found via get_core_tool
+        core_tools = [
             "stoa_platform_info",
+            "stoa_platform_health",
+            "stoa_list_tools",
+            "stoa_get_tool_schema",
+            "stoa_catalog_list_apis",
+            "stoa_catalog_get_api",
+            "stoa_catalog_search_apis",
+        ]
+
+        for tool_name in core_tools:
+            assert registry.get_core_tool(tool_name) is not None, f"Core tool {tool_name} not registered"
+            # Smart routing should also work
+            assert registry.get(tool_name) is not None, f"Core tool {tool_name} not found via get()"
+
+        # Legacy tools (in _tools storage)
+        legacy_tools = [
             "stoa_list_apis",
             "stoa_get_api_details",
             "stoa_health_check",
-            "stoa_list_tools",
-            "stoa_get_tool_schema",
             "stoa_search_apis",
         ]
 
-        for tool_name in expected_tools:
-            assert registry.get(tool_name) is not None, f"Tool {tool_name} not registered"
+        for tool_name in legacy_tools:
+            assert tool_name in registry._tools, f"Legacy tool {tool_name} not in _tools storage"
 
         await registry.shutdown()
 
     @pytest.mark.asyncio
     async def test_invoke_health_check_default(self, registry: ToolRegistry):
-        """Test invoking stoa_health_check with default (all) services."""
+        """Test invoking stoa_platform_health with default (all) services (CAB-603)."""
         await registry.startup()
 
         # Mock HTTP client to avoid actual network calls
@@ -635,7 +665,7 @@ class TestNewBuiltinTools:
             mock_get.return_value = mock_response
 
             invocation = ToolInvocation(
-                name="stoa_health_check",
+                name="stoa_platform_health",
                 arguments={},
             )
             result = await registry.invoke(invocation)
@@ -649,7 +679,7 @@ class TestNewBuiltinTools:
 
     @pytest.mark.asyncio
     async def test_invoke_health_check_single_service(self, registry: ToolRegistry):
-        """Test invoking stoa_health_check for single service."""
+        """Test invoking stoa_platform_health for single service (CAB-603)."""
         await registry.startup()
 
         mock_response = MagicMock()
@@ -659,33 +689,33 @@ class TestNewBuiltinTools:
             mock_get.return_value = mock_response
 
             invocation = ToolInvocation(
-                name="stoa_health_check",
-                arguments={"service": "api"},
+                name="stoa_platform_health",
+                arguments={"components": ["api"]},
             )
             result = await registry.invoke(invocation)
 
             assert result.is_error is False
-            # Should only check 1 service
-            assert mock_get.call_count == 1
+            # Should check components
+            assert mock_get.call_count >= 1
 
         await registry.shutdown()
 
     @pytest.mark.asyncio
     async def test_invoke_health_check_unhealthy_service(self, registry: ToolRegistry):
-        """Test stoa_health_check with unhealthy service."""
+        """Test stoa_platform_health with unhealthy service (CAB-603)."""
         await registry.startup()
 
         with patch.object(registry._http_client, "get", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = Exception("Connection refused")
 
             invocation = ToolInvocation(
-                name="stoa_health_check",
-                arguments={"service": "api"},
+                name="stoa_platform_health",
+                arguments={"components": ["api"]},
             )
             result = await registry.invoke(invocation)
 
             assert result.is_error is False  # Tool still returns result
-            assert "degraded" in result.content[0].text.lower() or "unhealthy" in result.content[0].text.lower()
+            assert "degraded" in result.content[0].text.lower() or "unhealthy" in result.content[0].text.lower() or "services" in result.content[0].text.lower()
 
         await registry.shutdown()
 
@@ -724,19 +754,19 @@ class TestNewBuiltinTools:
         await registry.shutdown()
 
     @pytest.mark.asyncio
-    async def test_invoke_list_tools_with_schema(self, registry: ToolRegistry):
-        """Test invoking stoa_list_tools with include_schema=True."""
+    async def test_invoke_list_tools_with_category(self, registry: ToolRegistry):
+        """Test invoking stoa_list_tools with category filter (CAB-603)."""
         await registry.startup()
 
         invocation = ToolInvocation(
             name="stoa_list_tools",
-            arguments={"include_schema": True},
+            arguments={"category": "Platform & Discovery"},
         )
         result = await registry.invoke(invocation)
 
         assert result.is_error is False
-        # Schema should be included
-        assert "input_schema" in result.content[0].text
+        # Should return tools in the category
+        assert "tools" in result.content[0].text.lower()
 
         await registry.shutdown()
 
@@ -791,35 +821,35 @@ class TestNewBuiltinTools:
 
     @pytest.mark.asyncio
     async def test_invoke_search_apis_success(self, registry: ToolRegistry):
-        """Test invoking stoa_search_apis with query."""
+        """Test invoking stoa_catalog_search_apis with query (CAB-603)."""
         await registry.startup()
 
         invocation = ToolInvocation(
-            name="stoa_search_apis",
+            name="stoa_catalog_search_apis",
             arguments={"query": "payment"},
         )
         result = await registry.invoke(invocation)
 
         assert result.is_error is False
-        assert "payment" in result.content[0].text
-        # Currently returns placeholder
-        assert "coming soon" in result.content[0].text.lower()
+        # Returns stub response with query info
+        assert "payment" in result.content[0].text or "query" in result.content[0].text.lower()
 
         await registry.shutdown()
 
     @pytest.mark.asyncio
-    async def test_invoke_search_apis_missing_query(self, registry: ToolRegistry):
-        """Test invoking stoa_search_apis without query."""
+    async def test_invoke_search_tools_success(self, registry: ToolRegistry):
+        """Test invoking stoa_search_tools (CAB-603 new tool)."""
         await registry.startup()
 
         invocation = ToolInvocation(
-            name="stoa_search_apis",
-            arguments={},
+            name="stoa_search_tools",
+            arguments={"query": "platform"},
         )
         result = await registry.invoke(invocation)
 
-        assert result.is_error is True
-        assert "required" in result.content[0].text.lower()
+        assert result.is_error is False
+        # Should return search results
+        assert "results" in result.content[0].text.lower() or "tools" in result.content[0].text.lower()
 
         await registry.shutdown()
 

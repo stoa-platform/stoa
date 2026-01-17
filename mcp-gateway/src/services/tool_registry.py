@@ -2,6 +2,10 @@
 
 Manages the registration and discovery of MCP tools.
 Tools are mapped from STOA API definitions.
+
+CAB-603: Restructured for Core vs Proxied tool separation.
+- Core Tools: 35 static platform tools with stoa_{domain}_{action} naming
+- Proxied Tools: Dynamic tenant API tools with {tenant}:{api}:{operation} namespace
 """
 
 import time
@@ -13,6 +17,10 @@ import structlog
 from ..config import get_settings
 from ..models import (
     Tool,
+    CoreTool,
+    ProxiedTool,
+    AnyTool,
+    ToolType,
     ToolInputSchema,
     ToolInvocation,
     ToolResult,
@@ -22,6 +30,7 @@ from ..models import (
     ListTagsResponse,
     ToolCategory,
 )
+from ..tools import CORE_TOOLS, get_core_tool
 
 logger = structlog.get_logger(__name__)
 
@@ -31,14 +40,23 @@ class ToolRegistry:
 
     Manages tool definitions and provides lookup functionality.
     Tools can be registered from:
-    - Static configuration
+    - Static configuration (core tools)
     - STOA Control Plane API (dynamic discovery)
+    - Kubernetes CRDs (proxied tools)
     - OpenAPI specifications
+
+    CAB-603: Three-tier storage structure:
+    - _core_tools: Static platform tools (stoa_*)
+    - _proxied_tools: Dynamic tenant API tools ({tenant}:{api}:{operation})
+    - _tools: Legacy tools (backward compatibility)
     """
 
     def __init__(self) -> None:
         """Initialize the tool registry."""
-        self._tools: dict[str, Tool] = {}
+        # CAB-603: Separate storage for core vs proxied tools
+        self._core_tools: dict[str, CoreTool] = {}
+        self._proxied_tools: dict[str, ProxiedTool] = {}  # Key: namespaced_name
+        self._tools: dict[str, Tool] = {}  # Legacy storage for backward compatibility
         self._http_client: httpx.AsyncClient | None = None
 
     async def startup(self) -> None:
@@ -50,8 +68,21 @@ class ToolRegistry:
         )
         logger.info("Tool registry initialized")
 
-        # Register built-in tools
+        # CAB-603: Register the 35 core tools from the new tools package
+        await self._register_core_tools()
+
+        # Register built-in tools (legacy, for backward compatibility)
         await self._register_builtin_tools()
+
+    async def _register_core_tools(self) -> None:
+        """Register all 35 core platform tools.
+
+        CAB-603: Core tools are static platform capabilities defined in
+        src/tools/core_tools.py with stoa_{domain}_{action} naming.
+        """
+        for core_tool in CORE_TOOLS:
+            self.register_core_tool(core_tool)
+        logger.info("Registered core tools", count=len(self._core_tools))
 
     async def shutdown(self) -> None:
         """Cleanup on application shutdown."""
@@ -622,23 +653,140 @@ class ToolRegistry:
 
         logger.info("Registered demo tools with categories", count=16)
 
+    # =========================================================================
+    # Registration Methods (CAB-603)
+    # =========================================================================
+
+    def register_core_tool(self, tool: CoreTool) -> None:
+        """Register a core platform tool.
+
+        Args:
+            tool: CoreTool instance with stoa_* naming
+        """
+        if tool.name in self._core_tools:
+            logger.warning("Overwriting existing core tool", tool_name=tool.name)
+        self._core_tools[tool.name] = tool
+        logger.debug("Core tool registered", tool_name=tool.name, domain=tool.domain.value)
+
+    def register_proxied_tool(self, tool: ProxiedTool) -> None:
+        """Register a proxied tenant API tool.
+
+        Args:
+            tool: ProxiedTool instance with {tenant}:{api}:{operation} namespace
+        """
+        key = tool.namespaced_name
+        if key in self._proxied_tools:
+            logger.warning("Overwriting existing proxied tool", tool_name=key)
+        self._proxied_tools[key] = tool
+        logger.debug(
+            "Proxied tool registered",
+            tool_name=tool.name,
+            namespaced_name=key,
+            tenant_id=tool.tenant_id,
+        )
+
     def register(self, tool: Tool) -> None:
-        """Register a tool."""
+        """Register a legacy tool (backward compatibility).
+
+        For new code, prefer register_core_tool() or register_proxied_tool().
+        """
         if tool.name in self._tools:
             logger.warning("Overwriting existing tool", tool_name=tool.name)
         self._tools[tool.name] = tool
         logger.debug("Tool registered", tool_name=tool.name)
 
+    def unregister_core_tool(self, name: str) -> bool:
+        """Unregister a core tool."""
+        if name in self._core_tools:
+            del self._core_tools[name]
+            logger.debug("Core tool unregistered", tool_name=name)
+            return True
+        return False
+
+    def unregister_proxied_tool(self, namespaced_name: str) -> bool:
+        """Unregister a proxied tool by its namespaced name.
+
+        Args:
+            namespaced_name: Full namespace {tenant}:{api}:{operation}
+        """
+        if namespaced_name in self._proxied_tools:
+            del self._proxied_tools[namespaced_name]
+            logger.debug("Proxied tool unregistered", namespaced_name=namespaced_name)
+            return True
+        return False
+
     def unregister(self, name: str) -> bool:
-        """Unregister a tool."""
+        """Unregister a legacy tool."""
         if name in self._tools:
             del self._tools[name]
             logger.debug("Tool unregistered", tool_name=name)
             return True
         return False
 
-    def get(self, name: str) -> Tool | None:
-        """Get a tool by name."""
+    # =========================================================================
+    # Lookup Methods (CAB-603)
+    # =========================================================================
+
+    def get_core_tool(self, name: str) -> CoreTool | None:
+        """Get a core tool by name."""
+        return self._core_tools.get(name)
+
+    def get_proxied_tool(
+        self,
+        name: str,
+        tenant_id: str | None = None,
+    ) -> ProxiedTool | None:
+        """Get a proxied tool by name or namespaced name.
+
+        Args:
+            name: Tool name or full namespaced name {tenant}:{api}:{operation}
+            tenant_id: Optional tenant context for lookup
+
+        Returns:
+            ProxiedTool if found, None otherwise
+        """
+        # Direct lookup by namespaced name
+        if ":" in name:
+            return self._proxied_tools.get(name)
+
+        # Search by operation name within tenant context
+        if tenant_id:
+            for key, tool in self._proxied_tools.items():
+                if tool.tenant_id == tenant_id and tool.operation == name:
+                    return tool
+
+        return None
+
+    def get(self, name: str, tenant_id: str | None = None) -> AnyTool | None:
+        """Get a tool by name with smart routing.
+
+        CAB-603: Routes lookup based on naming convention:
+        - stoa_* -> Core tools
+        - {tenant}:{api}:{operation} -> Proxied tools
+        - other -> Legacy tools
+
+        Args:
+            name: Tool name
+            tenant_id: Optional tenant context for proxied tool lookup
+
+        Returns:
+            Tool if found, None otherwise
+        """
+        # Core tools: stoa_* prefix
+        if name.startswith("stoa_"):
+            return self._core_tools.get(name)
+
+        # Proxied tools: namespaced format
+        if ":" in name:
+            return self._proxied_tools.get(name)
+
+        # Try proxied tool lookup with tenant context
+        if tenant_id:
+            proxied = self.get_proxied_tool(name, tenant_id)
+            if proxied:
+                return proxied
+
+        # Legacy tools
         return self._tools.get(name)
 
     def list_tools(
@@ -650,23 +798,66 @@ class ToolRegistry:
         search: str | None = None,
         cursor: str | None = None,
         limit: int = 100,
+        include_core: bool = True,
+        include_proxied: bool = True,
+        include_legacy: bool = True,
     ) -> ListToolsResponse:
         """List all registered tools with optional filtering.
 
+        CAB-603: Aggregates tools from all three storage tiers.
+
         Args:
-            tenant_id: Filter by tenant ID
+            tenant_id: Filter by tenant ID (for proxied and legacy tools)
             tag: Filter by single tag (legacy parameter)
             tags: Filter by multiple tags (AND logic)
             category: Filter by category
             search: Search in name and description
             cursor: Pagination cursor
             limit: Maximum results to return
+            include_core: Include core platform tools (default: True)
+            include_proxied: Include proxied tenant tools (default: True)
+            include_legacy: Include legacy tools (default: True)
         """
-        tools = list(self._tools.values())
+        # CAB-603: Aggregate tools from all storage tiers
+        tools: list[Tool] = []
 
-        # Filter by tenant
-        if tenant_id:
-            tools = [t for t in tools if t.tenant_id == tenant_id or t.tenant_id is None]
+        # Add core tools (converted to Tool for response compatibility)
+        if include_core:
+            for core_tool in self._core_tools.values():
+                # Convert CoreTool to Tool for API response
+                tools.append(Tool(
+                    name=core_tool.name,
+                    description=core_tool.description,
+                    input_schema=core_tool.input_schema,
+                    category=core_tool.category,
+                    tags=core_tool.tags,
+                    version=core_tool.version,
+                ))
+
+        # Add proxied tools (tenant-filtered)
+        if include_proxied:
+            for proxied_tool in self._proxied_tools.values():
+                # Only include tools for the user's tenant or global tools
+                if tenant_id is None or proxied_tool.tenant_id == tenant_id:
+                    tools.append(Tool(
+                        name=proxied_tool.namespaced_name,  # Use namespaced name
+                        description=proxied_tool.description,
+                        input_schema=proxied_tool.input_schema,
+                        api_id=proxied_tool.api_id,
+                        tenant_id=proxied_tool.tenant_id,
+                        endpoint=proxied_tool.endpoint,
+                        method=proxied_tool.method,
+                        category=proxied_tool.category,
+                        tags=proxied_tool.tags,
+                        version=proxied_tool.version,
+                    ))
+
+        # Add legacy tools
+        if include_legacy:
+            for legacy_tool in self._tools.values():
+                # Filter legacy tools by tenant
+                if tenant_id is None or legacy_tool.tenant_id is None or legacy_tool.tenant_id == tenant_id:
+                    tools.append(legacy_tool)
 
         # Filter by single tag (legacy)
         if tag:
@@ -707,13 +898,26 @@ class ToolRegistry:
         )
 
     def list_categories(self) -> ListCategoriesResponse:
-        """List all unique categories with tool counts."""
+        """List all unique categories with tool counts.
+
+        CAB-603: Includes categories from core, proxied, and legacy tools.
+        """
         category_counts: dict[str, int] = {}
 
+        # Count core tool categories
+        for tool in self._core_tools.values():
+            if tool.category:
+                category_counts[tool.category] = category_counts.get(tool.category, 0) + 1
+
+        # Count proxied tool categories
+        for tool in self._proxied_tools.values():
+            if tool.category:
+                category_counts[tool.category] = category_counts.get(tool.category, 0) + 1
+
+        # Count legacy tool categories
         for tool in self._tools.values():
             if tool.category:
-                cat = tool.category
-                category_counts[cat] = category_counts.get(cat, 0) + 1
+                category_counts[tool.category] = category_counts.get(tool.category, 0) + 1
 
         categories = [
             ToolCategory(name=name, count=count)
@@ -723,9 +927,23 @@ class ToolRegistry:
         return ListCategoriesResponse(categories=categories)
 
     def list_tags(self) -> ListTagsResponse:
-        """List all unique tags with counts."""
+        """List all unique tags with counts.
+
+        CAB-603: Includes tags from core, proxied, and legacy tools.
+        """
         tag_counts: dict[str, int] = {}
 
+        # Count core tool tags
+        for tool in self._core_tools.values():
+            for tag in tool.tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        # Count proxied tool tags
+        for tool in self._proxied_tools.values():
+            for tag in tool.tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        # Count legacy tool tags
         for tool in self._tools.values():
             for tag in tool.tags:
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
@@ -739,18 +957,25 @@ class ToolRegistry:
         self,
         invocation: ToolInvocation,
         user_token: str | None = None,
+        tenant_id: str | None = None,
     ) -> ToolResult:
         """Invoke a tool.
+
+        CAB-603: Routes invocation based on tool type:
+        - CoreTool: Internal handler execution
+        - ProxiedTool: HTTP forwarding to backend API
+        - Legacy Tool: Existing behavior
 
         Args:
             invocation: Tool invocation request
             user_token: Optional user JWT for backend authentication
+            tenant_id: Optional tenant context for tool lookup
 
         Returns:
             Tool execution result
         """
         start_time = time.time()
-        tool = self.get(invocation.name)
+        tool = self.get(invocation.name, tenant_id)
 
         if not tool:
             return ToolResult(
@@ -759,18 +984,27 @@ class ToolRegistry:
                 request_id=invocation.request_id,
             )
 
+        # CAB-603: Determine tool type for routing
+        tool_type = tool.tool_type if hasattr(tool, 'tool_type') else ToolType.LEGACY
+
         logger.info(
             "Invoking tool",
             tool_name=tool.name,
+            tool_type=tool_type.value if hasattr(tool_type, 'value') else str(tool_type),
             request_id=invocation.request_id,
         )
 
         try:
-            # Handle built-in tools
-            if tool.name.startswith("stoa_"):
+            # CAB-603: Route by tool type
+            if isinstance(tool, CoreTool):
+                result = await self._invoke_core_tool(tool, invocation.arguments)
+            elif isinstance(tool, ProxiedTool):
+                result = await self._invoke_proxied_tool(tool, invocation.arguments, user_token)
+            # Legacy: Handle built-in tools (backward compatibility)
+            elif tool.name.startswith("stoa_"):
                 result = await self._invoke_builtin(tool, invocation.arguments)
-            # Handle API-backed tools
-            elif tool.endpoint:
+            # Legacy: Handle API-backed tools
+            elif hasattr(tool, 'endpoint') and tool.endpoint:
                 result = await self._invoke_api(tool, invocation.arguments, user_token)
             else:
                 result = ToolResult(
@@ -808,12 +1042,264 @@ class ToolRegistry:
                 latency_ms=latency_ms,
             )
 
+    # =========================================================================
+    # Invocation Methods (CAB-603)
+    # =========================================================================
+
+    async def _invoke_core_tool(
+        self,
+        tool: CoreTool,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Invoke a core platform tool.
+
+        CAB-603: Core tools are handled internally with specific handlers
+        based on the tool's domain and action.
+
+        Args:
+            tool: CoreTool instance
+            arguments: Tool invocation arguments
+
+        Returns:
+            ToolResult with execution output
+        """
+        settings = get_settings()
+
+        # Route to domain-specific handlers
+        # For now, use handler reference or fallback to name-based routing
+        handler_name = tool.handler or tool.name
+
+        # Platform & Discovery handlers
+        if tool.name == "stoa_platform_info":
+            info = {
+                "platform": "STOA",
+                "version": settings.app_version,
+                "environment": settings.environment,
+                "base_domain": settings.base_domain,
+                "core_tools_count": len(self._core_tools),
+                "proxied_tools_count": len(self._proxied_tools),
+                "legacy_tools_count": len(self._tools),
+                "services": {
+                    "api": f"https://api.{settings.base_domain}",
+                    "gateway": f"https://gateway.{settings.base_domain}",
+                    "auth": f"https://auth.{settings.base_domain}",
+                    "mcp": f"https://mcp.{settings.base_domain}",
+                },
+            }
+            return ToolResult(content=[TextContent(text=str(info))])
+
+        elif tool.name == "stoa_platform_health":
+            components = arguments.get("components", [])
+            health_status = await self._check_health(
+                "all" if not components else ",".join(components),
+                settings,
+            )
+            return ToolResult(content=[TextContent(text=str(health_status))])
+
+        elif tool.name == "stoa_list_tools":
+            category = arguments.get("category")
+            tag = arguments.get("tag")
+            search = arguments.get("search")
+            include_proxied = arguments.get("include_proxied", True)
+            tools_response = self.list_tools(
+                category=category,
+                tag=tag,
+                search=search,
+                include_proxied=include_proxied,
+            )
+            return ToolResult(content=[TextContent(text=str({
+                "tools": [{"name": t.name, "description": t.description, "category": t.category} for t in tools_response.tools],
+                "total": tools_response.total_count,
+            }))])
+
+        elif tool.name == "stoa_get_tool_schema":
+            tool_name = arguments.get("tool_name")
+            if not tool_name:
+                return ToolResult(
+                    content=[TextContent(text="tool_name is required")],
+                    is_error=True,
+                )
+            schema_info = self._get_tool_schema(tool_name)
+            if schema_info is None:
+                return ToolResult(
+                    content=[TextContent(text=f"Tool not found: {tool_name}")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str(schema_info))])
+
+        elif tool.name == "stoa_search_tools":
+            query = arguments.get("query", "")
+            limit = arguments.get("limit", 20)
+            tools_response = self.list_tools(search=query, limit=limit)
+            return ToolResult(content=[TextContent(text=str({
+                "query": query,
+                "results": [{"name": t.name, "description": t.description} for t in tools_response.tools],
+                "total": tools_response.total_count,
+            }))])
+
+        elif tool.name == "stoa_list_tenants":
+            # Admin-only tool - implementation stub
+            include_inactive = arguments.get("include_inactive", False)
+            return ToolResult(content=[TextContent(text=str({
+                "tenants": [],
+                "message": "Tenant listing requires admin scope - coming soon",
+                "include_inactive": include_inactive,
+            }))])
+
+        # API Catalog handlers
+        elif tool.name in ("stoa_catalog_list_apis", "stoa_list_apis"):
+            return ToolResult(content=[TextContent(text=str({
+                "apis": [],
+                "message": "API catalog integration - coming soon",
+                "total": 0,
+            }))])
+
+        elif tool.name in ("stoa_catalog_get_api", "stoa_get_api_details"):
+            api_id = arguments.get("api_id")
+            if not api_id:
+                return ToolResult(
+                    content=[TextContent(text="api_id is required")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=f"API details for {api_id} - coming soon")])
+
+        elif tool.name == "stoa_catalog_search_apis":
+            query = arguments.get("query", "")
+            return ToolResult(content=[TextContent(text=str({
+                "query": query,
+                "results": [],
+                "message": "API search - coming soon",
+            }))])
+
+        # Default stub for unimplemented core tools
+        else:
+            return ToolResult(content=[TextContent(text=str({
+                "tool": tool.name,
+                "domain": tool.domain.value,
+                "action": tool.action,
+                "arguments": arguments,
+                "status": "stub",
+                "message": f"Core tool handler for {tool.name} - implementation pending",
+            }))])
+
+    async def _invoke_proxied_tool(
+        self,
+        tool: ProxiedTool,
+        arguments: dict[str, Any],
+        user_token: str | None = None,
+    ) -> ToolResult:
+        """Invoke a proxied tenant API tool.
+
+        CAB-603: Proxied tools forward requests to backend APIs
+        with proper authentication and header injection.
+
+        Args:
+            tool: ProxiedTool instance
+            arguments: Tool invocation arguments
+            user_token: User JWT for backend authentication
+
+        Returns:
+            ToolResult with backend response
+        """
+        if not self._http_client:
+            return ToolResult(
+                content=[TextContent(text="HTTP client not initialized")],
+                is_error=True,
+            )
+
+        if not tool.endpoint:
+            return ToolResult(
+                content=[TextContent(text=f"Proxied tool {tool.name} has no endpoint configured")],
+                is_error=True,
+            )
+
+        # Build headers
+        headers: dict[str, str] = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-STOA-Tenant-ID": tool.tenant_id,
+            "X-STOA-Tool-Name": tool.namespaced_name,
+        }
+
+        # Add user token if available
+        if user_token:
+            headers["Authorization"] = f"Bearer {user_token}"
+
+        # Add custom headers from tool definition
+        headers.update(tool.headers)
+
+        try:
+            method = tool.method.upper()
+
+            if method == "GET":
+                response = await self._http_client.get(
+                    tool.endpoint,
+                    params=arguments,
+                    headers=headers,
+                )
+            elif method == "POST":
+                response = await self._http_client.post(
+                    tool.endpoint,
+                    json=arguments,
+                    headers=headers,
+                )
+            elif method == "PUT":
+                response = await self._http_client.put(
+                    tool.endpoint,
+                    json=arguments,
+                    headers=headers,
+                )
+            elif method == "DELETE":
+                response = await self._http_client.delete(
+                    tool.endpoint,
+                    params=arguments,
+                    headers=headers,
+                )
+            elif method == "PATCH":
+                response = await self._http_client.patch(
+                    tool.endpoint,
+                    json=arguments,
+                    headers=headers,
+                )
+            else:
+                return ToolResult(
+                    content=[TextContent(text=f"Unsupported HTTP method: {method}")],
+                    is_error=True,
+                )
+
+            # Return result
+            is_error = response.status_code >= 400
+            return ToolResult(
+                content=[TextContent(text=response.text)],
+                is_error=is_error,
+                backend_status=response.status_code,
+            )
+
+        except httpx.RequestError as e:
+            logger.error(
+                "Proxied tool request failed",
+                tool_name=tool.namespaced_name,
+                endpoint=tool.endpoint,
+                error=str(e),
+            )
+            return ToolResult(
+                content=[TextContent(text=f"Request to backend failed: {str(e)}")],
+                is_error=True,
+            )
+
+    # =========================================================================
+    # Legacy Invocation Methods (backward compatibility)
+    # =========================================================================
+
     async def _invoke_builtin(
         self,
         tool: Tool,
         arguments: dict[str, Any],
     ) -> ToolResult:
-        """Invoke a built-in platform tool."""
+        """Invoke a built-in platform tool (legacy).
+
+        Deprecated: Use _invoke_core_tool for new CoreTool instances.
+        """
         settings = get_settings()
 
         if tool.name == "stoa_platform_info":

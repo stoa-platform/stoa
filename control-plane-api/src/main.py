@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .logging_config import configure_logging, get_logger
-from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts
+from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
 from .routers import portal, mcp_gitops, mcp_proxy
@@ -299,6 +299,9 @@ app.include_router(mcp_gitops.router)
 
 # MCP Tools proxy router (proxies to MCP Gateway)
 app.include_router(mcp_proxy.router)
+
+# API Monitoring
+app.include_router(monitoring.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # =============================================================================
@@ -28,6 +28,30 @@ class ContentType(str, Enum):
     TEXT = "text"
     IMAGE = "image"
     RESOURCE = "resource"
+
+
+# =============================================================================
+# Tool Type Constants
+# =============================================================================
+
+
+class ToolType(str, Enum):
+    """Tool types for STOA platform."""
+
+    CORE = "core"  # Static platform tools (stoa_*)
+    PROXIED = "proxied"  # Dynamic tenant API tools ({tenant}:{api}:{operation})
+    LEGACY = "legacy"  # Backward-compatible tool (existing Tool model)
+
+
+class ToolDomain(str, Enum):
+    """Core tool domains for STOA platform."""
+
+    PLATFORM = "platform"  # Platform & Discovery
+    CATALOG = "catalog"  # API Catalog
+    SUBSCRIPTION = "subscription"  # Subscriptions & Access
+    OBSERVABILITY = "observability"  # Observability & Metrics (metrics, logs, alerts)
+    UAC = "uac"  # UAC Contracts
+    SECURITY = "security"  # Security & Compliance
 
 
 # =============================================================================
@@ -79,6 +103,116 @@ class Tool(BaseModel):
     version: str = Field("1.0.0", description="Tool version")
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @property
+    def tool_type(self) -> ToolType:
+        """Determine tool type based on naming convention."""
+        if self.name.startswith("stoa_"):
+            return ToolType.CORE
+        if ":" in self.name:
+            return ToolType.PROXIED
+        return ToolType.LEGACY
+
+
+# =============================================================================
+# Typed Tool Models (CAB-603)
+# =============================================================================
+
+
+class BaseTool(BaseModel):
+    """Base model for all STOA tools.
+
+    Provides common fields shared between CoreTool and ProxiedTool.
+    """
+
+    name: str = Field(..., description="Unique tool identifier")
+    description: str = Field(..., description="Human-readable tool description")
+    input_schema: ToolInputSchema = Field(
+        default_factory=ToolInputSchema,
+        alias="inputSchema",
+        description="JSON Schema for tool input",
+    )
+    category: str | None = Field(None, description="Tool category")
+    tags: list[str] = Field(default_factory=list, description="Categorization tags")
+    version: str = Field("1.0.0", description="Tool version")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @property
+    def tool_type(self) -> ToolType:
+        """Return the tool type. Must be overridden by subclasses."""
+        raise NotImplementedError("Subclasses must implement tool_type")
+
+
+class CoreTool(BaseTool):
+    """Static STOA platform tool with stoa_{domain}_{action} naming.
+
+    Core tools are built-in platform capabilities that are always available
+    and don't require external API calls.
+
+    Naming convention: stoa_{domain}_{action}
+    Examples: stoa_platform_info, stoa_catalog_list_apis, stoa_subscription_create
+    """
+
+    domain: ToolDomain = Field(..., description="Tool domain (platform, catalog, etc.)")
+    action: str = Field(..., description="Action within the domain (list, get, create, etc.)")
+    handler: str | None = Field(None, description="Internal handler reference")
+
+    @property
+    def tool_type(self) -> ToolType:
+        """Return core tool type."""
+        return ToolType.CORE
+
+    @field_validator("name")
+    @classmethod
+    def validate_core_name(cls, v: str) -> str:
+        """Ensure core tool names follow stoa_* convention."""
+        if not v.startswith("stoa_"):
+            raise ValueError(f"Core tool name must start with 'stoa_', got: {v}")
+        return v
+
+
+class ProxiedTool(BaseTool):
+    """Dynamic tenant API tool with {tenant}:{api}:{operation} namespace.
+
+    Proxied tools represent external API endpoints registered by tenants.
+    They forward requests to backend APIs with appropriate authentication.
+
+    Naming convention: {tenant_id}:{api_id}:{operation}
+    Examples: acme:crm-api:get_customer, contoso:billing:create_invoice
+    """
+
+    tenant_id: str = Field(..., description="Owning tenant ID")
+    api_id: str = Field(..., description="Associated STOA API ID")
+    operation: str = Field(..., description="Operation name")
+    endpoint: str = Field(..., description="Backend API endpoint URL")
+    method: str = Field("POST", description="HTTP method for backend call")
+    headers: dict[str, str] = Field(
+        default_factory=dict,
+        description="Additional headers for backend call",
+    )
+
+    @property
+    def tool_type(self) -> ToolType:
+        """Return proxied tool type."""
+        return ToolType.PROXIED
+
+    @property
+    def namespaced_name(self) -> str:
+        """Return the fully qualified namespaced tool name."""
+        return f"{self.tenant_id}:{self.api_id}:{self.operation}"
+
+    @field_validator("name")
+    @classmethod
+    def validate_proxied_name(cls, v: str) -> str:
+        """Warn if proxied tool name doesn't follow namespace convention."""
+        # Don't enforce strictly for backward compatibility,
+        # but the namespaced_name property should be used
+        return v
+
+
+# Type alias for polymorphic tool handling
+AnyTool = Tool | CoreTool | ProxiedTool
 
 
 class ToolInvocation(BaseModel):

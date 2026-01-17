@@ -2,6 +2,8 @@
 
 Integrates Open Policy Agent for fine-grained access control.
 Supports both embedded evaluation and remote OPA sidecar.
+
+CAB-603: Updated for Core vs Proxied tool authorization.
 """
 
 import time
@@ -13,6 +15,7 @@ import httpx
 import structlog
 
 from ..config import get_settings
+from ..models import ToolType, ToolDomain
 
 logger = structlog.get_logger(__name__)
 
@@ -35,29 +38,81 @@ class EmbeddedEvaluator:
     This is a simplified evaluator for MVP that doesn't require
     OPA sidecar. Policies are defined in Python for simplicity.
     For production, use OPA sidecar with Rego policies.
+
+    CAB-603: Updated with Core Tool categories by scope.
     """
 
     def __init__(self) -> None:
-        # Define read-only tools that any authenticated user can access
+        # =====================================================================
+        # CAB-603: Core Tool Authorization by Scope
+        # =====================================================================
+
+        # Core tools requiring stoa:read scope (Platform, Catalog, Observability read ops)
         self.read_only_tools = {
+            # Platform & Discovery (read)
             "stoa_platform_info",
-            "stoa_list_apis",
+            "stoa_platform_health",
             "stoa_list_tools",
+            "stoa_get_tool_schema",
+            "stoa_search_tools",
+            # API Catalog (read)
+            "stoa_catalog_list_apis",
+            "stoa_catalog_get_api",
+            "stoa_catalog_search_apis",
+            "stoa_catalog_get_openapi",
+            "stoa_catalog_list_versions",
+            "stoa_catalog_get_documentation",
+            "stoa_catalog_list_categories",
+            "stoa_catalog_get_endpoints",
+            # Subscriptions (read)
+            "stoa_subscription_list",
+            "stoa_subscription_get",
+            "stoa_subscription_get_credentials",
+            # Observability (read)
+            "stoa_metrics_get_usage",
+            "stoa_metrics_get_latency",
+            "stoa_metrics_get_errors",
+            "stoa_metrics_get_quota",
+            "stoa_logs_search",
+            "stoa_logs_get_recent",
+            "stoa_alerts_list",
+            # UAC (read)
+            "stoa_uac_list_contracts",
+            "stoa_uac_get_contract",
+            "stoa_uac_get_sla",
+            # Security (read)
+            "stoa_security_check_permissions",
+            "stoa_security_list_policies",
+            # Legacy tools (backward compatibility)
+            "stoa_list_apis",
             "stoa_health_check",
             "stoa_search_apis",
-            "stoa_get_tool_schema",
             "stoa_get_api_details",
         }
 
-        # Tools that require write scope
+        # Core tools requiring stoa:write scope (Subscriptions write, Observability ack)
         self.write_tools = {
+            # Subscriptions (write)
+            "stoa_subscription_create",
+            "stoa_subscription_cancel",
+            "stoa_subscription_rotate_key",
+            # Observability (write)
+            "stoa_alerts_acknowledge",
+            # UAC (write)
+            "stoa_uac_validate_contract",
+            # Legacy tools
             "stoa_create_api",
             "stoa_update_api",
             "stoa_deploy_api",
         }
 
-        # Destructive tools that require admin scope
+        # Core tools requiring stoa:admin scope (Platform admin, Security audit)
         self.admin_tools = {
+            # Platform (admin)
+            "stoa_list_tenants",
+            # Security (admin)
+            "stoa_security_audit_log",
+            # Legacy tools
             "stoa_delete_api",
             "stoa_delete_tool",
         }
@@ -69,6 +124,12 @@ class EmbeddedEvaluator:
             "devops": {"stoa:write", "stoa:read"},
             "viewer": {"stoa:read"},
         }
+
+        # =====================================================================
+        # CAB-603: Tool Type Detection Patterns
+        # =====================================================================
+        self.core_tool_prefix = "stoa_"
+        self.proxied_tool_separator = ":"
 
     def get_user_scopes(self, user: dict[str, Any]) -> set[str]:
         """Extract scopes from user claims."""
@@ -93,6 +154,47 @@ class EmbeddedEvaluator:
 
         return scopes
 
+    def _get_tool_type(self, tool_name: str) -> str:
+        """Determine tool type from name.
+
+        CAB-603: Classify tool by naming convention.
+
+        Args:
+            tool_name: Tool name
+
+        Returns:
+            "core", "proxied", or "legacy"
+        """
+        if tool_name.startswith(self.core_tool_prefix):
+            return "core"
+        elif self.proxied_tool_separator in tool_name:
+            return "proxied"
+        return "legacy"
+
+    def _parse_proxied_tool_namespace(self, tool_name: str) -> dict[str, str]:
+        """Parse proxied tool namespace {tenant}:{api}:{operation}.
+
+        Args:
+            tool_name: Namespaced tool name
+
+        Returns:
+            Dict with tenant_id, api_id, operation
+        """
+        parts = tool_name.split(self.proxied_tool_separator)
+        if len(parts) >= 3:
+            return {
+                "tenant_id": parts[0],
+                "api_id": parts[1],
+                "operation": parts[2],
+            }
+        elif len(parts) == 2:
+            return {
+                "tenant_id": parts[0],
+                "api_id": parts[1],
+                "operation": "",
+            }
+        return {"tenant_id": "", "api_id": "", "operation": ""}
+
     def evaluate_authz(
         self,
         user: dict[str, Any],
@@ -100,6 +202,11 @@ class EmbeddedEvaluator:
         action: str = "invoke",
     ) -> PolicyDecision:
         """Evaluate authorization policy.
+
+        CAB-603: Routes authorization based on tool type:
+        - Core tools: Check against read_only_tools, write_tools, admin_tools
+        - Proxied tools: Check tenant membership + stoa:read scope
+        - Legacy tools: Existing behavior
 
         Args:
             user: User claims from JWT
@@ -113,14 +220,50 @@ class EmbeddedEvaluator:
         tool_tenant_id = tool.get("tenant_id")
         user_tenant_id = user.get("tenant_id")
         scopes = self.get_user_scopes(user)
+        tool_type = self._get_tool_type(tool_name)
 
         # Admin can do everything
         if "stoa:admin" in scopes:
             return PolicyDecision(
                 allowed=True,
                 reason="Admin access granted",
-                metadata={"scope": "stoa:admin"},
+                metadata={"scope": "stoa:admin", "tool_type": tool_type},
             )
+
+        # =====================================================================
+        # CAB-603: Proxied Tool Authorization
+        # =====================================================================
+        if tool_type == "proxied":
+            # Parse namespace to get tenant
+            namespace = self._parse_proxied_tool_namespace(tool_name)
+            proxied_tenant_id = namespace.get("tenant_id") or tool_tenant_id
+
+            # Tenant isolation check for proxied tools
+            if proxied_tenant_id and user_tenant_id:
+                if proxied_tenant_id != user_tenant_id:
+                    return PolicyDecision(
+                        allowed=False,
+                        reason=f"Tenant mismatch: user={user_tenant_id}, tool={proxied_tenant_id}",
+                        metadata={"tool_type": "proxied"},
+                    )
+
+            # Proxied tools require stoa:read scope + tenant membership
+            if "stoa:read" in scopes:
+                return PolicyDecision(
+                    allowed=True,
+                    reason="Proxied tool access granted",
+                    metadata={"scope": "stoa:read", "tool_type": "proxied", "tenant_id": proxied_tenant_id},
+                )
+
+            return PolicyDecision(
+                allowed=False,
+                reason=f"Missing scope stoa:read for proxied tool {tool_name}",
+                metadata={"tool_type": "proxied"},
+            )
+
+        # =====================================================================
+        # Core Tool and Legacy Tool Authorization
+        # =====================================================================
 
         # Check tenant isolation (if tool has tenant_id)
         if tool_tenant_id and user_tenant_id:
@@ -128,6 +271,7 @@ class EmbeddedEvaluator:
                 return PolicyDecision(
                     allowed=False,
                     reason=f"Tenant mismatch: user={user_tenant_id}, tool={tool_tenant_id}",
+                    metadata={"tool_type": tool_type},
                 )
 
         # Read-only tools require stoa:read
@@ -136,11 +280,12 @@ class EmbeddedEvaluator:
                 return PolicyDecision(
                     allowed=True,
                     reason="Read access granted",
-                    metadata={"scope": "stoa:read"},
+                    metadata={"scope": "stoa:read", "tool_type": tool_type},
                 )
             return PolicyDecision(
                 allowed=False,
                 reason=f"Missing scope stoa:read for tool {tool_name}",
+                metadata={"tool_type": tool_type},
             )
 
         # Write tools require stoa:write
@@ -149,11 +294,12 @@ class EmbeddedEvaluator:
                 return PolicyDecision(
                     allowed=True,
                     reason="Write access granted",
-                    metadata={"scope": "stoa:write"},
+                    metadata={"scope": "stoa:write", "tool_type": tool_type},
                 )
             return PolicyDecision(
                 allowed=False,
                 reason=f"Missing scope stoa:write for tool {tool_name}",
+                metadata={"tool_type": tool_type},
             )
 
         # Admin tools require stoa:admin
@@ -161,20 +307,37 @@ class EmbeddedEvaluator:
             return PolicyDecision(
                 allowed=False,
                 reason=f"Tool {tool_name} requires admin scope",
+                metadata={"tool_type": tool_type},
             )
 
-        # Unknown tools - allow if user has at least read scope
+        # Unknown core tools (new stoa_* tools not yet categorized)
+        # Default to read scope requirement for safety
+        if tool_type == "core":
+            if "stoa:read" in scopes:
+                return PolicyDecision(
+                    allowed=True,
+                    reason="Default read access for uncategorized core tool",
+                    metadata={"scope": "stoa:read", "tool_type": "core"},
+                )
+            return PolicyDecision(
+                allowed=False,
+                reason=f"Missing scope stoa:read for core tool {tool_name}",
+                metadata={"tool_type": "core"},
+            )
+
+        # Legacy tools - allow if user has at least read scope
         # This allows dynamically registered API tools to work
         if "stoa:read" in scopes:
             return PolicyDecision(
                 allowed=True,
-                reason="Default read access for unknown tool",
-                metadata={"scope": "stoa:read", "tool_type": "dynamic"},
+                reason="Default read access for legacy tool",
+                metadata={"scope": "stoa:read", "tool_type": "legacy"},
             )
 
         return PolicyDecision(
             allowed=False,
             reason="No valid scope for tool access",
+            metadata={"tool_type": tool_type},
         )
 
     def evaluate_tenant_isolation(

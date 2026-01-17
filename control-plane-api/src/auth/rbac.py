@@ -99,3 +99,25 @@ def require_tenant_access(func):
             )
         return await func(*args, tenant_id=tenant_id, user=user, **kwargs)
     return wrapper
+
+
+def require_role(allowed_roles: List[str]):
+    """
+    Dependency factory that checks if the user has one of the allowed roles.
+
+    Usage:
+        @router.post("/sync")
+        async def trigger_sync(user: User = Depends(require_role(["cpi-admin", "devops"]))):
+            ...
+    """
+    from .dependencies import get_current_user, User
+
+    async def role_checker(user: User = Depends(get_current_user)) -> User:
+        if not any(role in user.roles for role in allowed_roles):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied. Required roles: {allowed_roles}"
+            )
+        return user
+
+    return role_checker

@@ -4,8 +4,14 @@ from .mcp import (
     # Enums
     MCPVersion,
     ContentType,
+    ToolType,
+    ToolDomain,
     # Tool models
     Tool,
+    BaseTool,
+    CoreTool,
+    ProxiedTool,
+    AnyTool,
     ToolParameter,
     ToolInputSchema,
     ToolInvocation,
@@ -65,8 +71,14 @@ __all__ = [
     # Enums
     "MCPVersion",
     "ContentType",
+    "ToolType",
+    "ToolDomain",
     # Tool models
     "Tool",
+    "BaseTool",
+    "CoreTool",
+    "ProxiedTool",
+    "AnyTool",
     "ToolParameter",
     "ToolInputSchema",
     "ToolInvocation",

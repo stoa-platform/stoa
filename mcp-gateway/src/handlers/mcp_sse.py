@@ -123,7 +123,11 @@ class MCPSession:
         return self._make_response(msg_id, {"tools": tools})
 
     async def _handle_call_tool(self, msg_id: Any, params: dict) -> dict:
-        """Handle tools/call request."""
+        """Handle tools/call request.
+
+        CAB-605: Uses resolve_tool() for deprecation handling. Old tool names
+        are automatically redirected to new consolidated tools.
+        """
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
 
@@ -131,18 +135,30 @@ class MCPSession:
             return self._make_error(msg_id, -32602, "Missing tool name")
 
         registry = await get_tool_registry()
-        tool = registry.get(tool_name)
 
-        if not tool:
-            return self._make_error(msg_id, -32602, f"Tool not found: {tool_name}")
+        # CAB-605: Use resolve_tool for deprecation handling
+        # This redirects old tool names to new consolidated tools
+        try:
+            from ..services.tool_registry import ToolNotFoundError
+            tool, resolved_args, is_deprecated = registry.resolve_tool(
+                tool_name,
+                arguments,
+                tenant_id=self.user.tenant_id if self.user else None,
+            )
+            if is_deprecated:
+                print(f"[MCP] Deprecated tool '{tool_name}' redirected to '{tool.name}'", flush=True)
+        except ToolNotFoundError as e:
+            print(f"[MCP] Tool not found: {tool_name} - {e}", flush=True)
+            return self._make_error(msg_id, -32602, str(e))
 
-        # Execute tool
-        print(f"[MCP] _handle_call_tool: {tool_name} with args {arguments}", flush=True)
+        # Execute tool with resolved arguments
+        print(f"[MCP] _handle_call_tool: {tool.name} (original: {tool_name}) with args {resolved_args}", flush=True)
         try:
             # Create ToolInvocation object for the registry
+            # Use the resolved tool name and arguments
             invocation = ToolInvocation(
-                name=tool_name,
-                arguments=arguments,
+                name=tool.name,  # Use resolved tool name
+                arguments=resolved_args,  # Use resolved arguments with action injected
                 request_id=str(msg_id) if msg_id else None,
             )
 
@@ -151,7 +167,7 @@ class MCPSession:
             if self.user and hasattr(self.user, 'raw_token'):
                 user_token = self.user.raw_token
 
-            print(f"[MCP] Invoking registry.invoke() for {tool_name}", flush=True)
+            print(f"[MCP] Invoking registry.invoke() for {tool.name}", flush=True)
             result = await registry.invoke(invocation, user_token=user_token)
             print(f"[MCP] Tool result: is_error={result.is_error}, content_len={len(result.content)}", flush=True)
 
@@ -162,6 +178,12 @@ class MCPSession:
                     content.append({"type": "text", "text": item.text})
                 else:
                     content.append({"type": "text", "text": str(item)})
+
+            # CAB-605: Add deprecation warning to response if applicable
+            if is_deprecated and result.metadata and "_deprecation_warning" in result.metadata:
+                # Prepend deprecation warning to content
+                warning = result.metadata["_deprecation_warning"]
+                content.insert(0, {"type": "text", "text": f"⚠️ DEPRECATION WARNING: {warning}\n\n"})
 
             response = self._make_response(msg_id, {
                 "content": content,

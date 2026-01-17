@@ -4,6 +4,7 @@ Integrates Open Policy Agent for fine-grained access control.
 Supports both embedded evaluation and remote OPA sidecar.
 
 CAB-603: Updated for Core vs Proxied tool authorization.
+CAB-604: Updated with 12 granular OAuth2 scopes and 6 personas.
 """
 
 import time
@@ -16,6 +17,17 @@ import structlog
 
 from ..config import get_settings
 from ..models import ToolType, ToolDomain
+from .scopes import (
+    Scope,
+    LegacyScope,
+    PERSONAS,
+    LEGACY_ROLE_TO_PERSONA,
+    expand_legacy_scopes,
+    get_scopes_for_roles,
+    get_required_scopes_for_tool,
+    TOOL_SCOPE_REQUIREMENTS,
+    PROXIED_TOOL_REQUIRED_SCOPES,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -40,89 +52,23 @@ class EmbeddedEvaluator:
     For production, use OPA sidecar with Rego policies.
 
     CAB-603: Updated with Core Tool categories by scope.
+    CAB-604: Updated with 12 granular OAuth2 scopes and 6 personas.
     """
 
     def __init__(self) -> None:
         # =====================================================================
-        # CAB-603: Core Tool Authorization by Scope
+        # CAB-604: Granular Scope Configuration (from scopes.py)
         # =====================================================================
+        # Tool scope requirements are now defined in scopes.py
+        # This class uses the centralized definitions
 
-        # Core tools requiring stoa:read scope (Platform, Catalog, Observability read ops)
-        self.read_only_tools = {
-            # Platform & Discovery (read)
-            "stoa_platform_info",
-            "stoa_platform_health",
-            "stoa_list_tools",
-            "stoa_get_tool_schema",
-            "stoa_search_tools",
-            # API Catalog (read)
-            "stoa_catalog_list_apis",
-            "stoa_catalog_get_api",
-            "stoa_catalog_search_apis",
-            "stoa_catalog_get_openapi",
-            "stoa_catalog_list_versions",
-            "stoa_catalog_get_documentation",
-            "stoa_catalog_list_categories",
-            "stoa_catalog_get_endpoints",
-            # Subscriptions (read)
-            "stoa_subscription_list",
-            "stoa_subscription_get",
-            "stoa_subscription_get_credentials",
-            # Observability (read)
-            "stoa_metrics_get_usage",
-            "stoa_metrics_get_latency",
-            "stoa_metrics_get_errors",
-            "stoa_metrics_get_quota",
-            "stoa_logs_search",
-            "stoa_logs_get_recent",
-            "stoa_alerts_list",
-            # UAC (read)
-            "stoa_uac_list_contracts",
-            "stoa_uac_get_contract",
-            "stoa_uac_get_sla",
-            # Security (read)
-            "stoa_security_check_permissions",
-            "stoa_security_list_policies",
-            # Legacy tools (backward compatibility)
-            "stoa_list_apis",
-            "stoa_health_check",
-            "stoa_search_apis",
-            "stoa_get_api_details",
-        }
-
-        # Core tools requiring stoa:write scope (Subscriptions write, Observability ack)
-        self.write_tools = {
-            # Subscriptions (write)
-            "stoa_subscription_create",
-            "stoa_subscription_cancel",
-            "stoa_subscription_rotate_key",
-            # Observability (write)
-            "stoa_alerts_acknowledge",
-            # UAC (write)
-            "stoa_uac_validate_contract",
-            # Legacy tools
-            "stoa_create_api",
-            "stoa_update_api",
-            "stoa_deploy_api",
-        }
-
-        # Core tools requiring stoa:admin scope (Platform admin, Security audit)
-        self.admin_tools = {
-            # Platform (admin)
-            "stoa_list_tenants",
-            # Security (admin)
-            "stoa_security_audit_log",
-            # Legacy tools
-            "stoa_delete_api",
-            "stoa_delete_tool",
-        }
-
-        # Role to scope mapping (aligned with Keycloak roles)
-        self.role_scopes = {
-            "cpi-admin": {"stoa:admin", "stoa:write", "stoa:read"},
-            "tenant-admin": {"stoa:write", "stoa:read"},
-            "devops": {"stoa:write", "stoa:read"},
-            "viewer": {"stoa:read"},
+        # Legacy role to scope mapping (backward compatibility)
+        # These roles grant legacy scopes which are then expanded
+        self.legacy_role_scopes = {
+            "cpi-admin": {LegacyScope.ADMIN.value, LegacyScope.WRITE.value, LegacyScope.READ.value},
+            "tenant-admin": {LegacyScope.WRITE.value, LegacyScope.READ.value},
+            "devops": {LegacyScope.WRITE.value, LegacyScope.READ.value},
+            "viewer": {LegacyScope.READ.value},
         }
 
         # =====================================================================
@@ -132,27 +78,103 @@ class EmbeddedEvaluator:
         self.proxied_tool_separator = "__"
 
     def get_user_scopes(self, user: dict[str, Any]) -> set[str]:
-        """Extract scopes from user claims."""
-        scopes = set()
+        """Extract and expand scopes from user claims.
 
-        # Check explicit scopes in token
+        CAB-604: Now supports both legacy scopes and granular scopes.
+        Legacy scopes are automatically expanded to their granular equivalents.
+
+        Args:
+            user: User claims from JWT
+
+        Returns:
+            Set of all effective scopes (legacy + expanded granular)
+        """
+        scopes: set[str] = set()
+
+        # 1. Check explicit scopes in token
         if "scope" in user:
             scope_str = user.get("scope", "")
             if isinstance(scope_str, str):
                 scopes.update(scope_str.split())
 
-        # Map roles to scopes
-        roles = []
+        # 2. Extract roles from token
+        roles: list[str] = []
         if "realm_access" in user and "roles" in user["realm_access"]:
             roles = user["realm_access"]["roles"]
         elif "roles" in user:
             roles = user["roles"]
 
-        for role in roles:
-            if role in self.role_scopes:
-                scopes.update(self.role_scopes[role])
+        # 3. CAB-604: Map persona roles to scopes
+        role_scopes = get_scopes_for_roles(roles)
+        scopes.update(role_scopes)
 
-        return scopes
+        # 4. Map legacy roles to legacy scopes (backward compat)
+        for role in roles:
+            if role in self.legacy_role_scopes:
+                scopes.update(self.legacy_role_scopes[role])
+
+        # 5. Expand legacy scopes to granular scopes
+        expanded_scopes = expand_legacy_scopes(scopes)
+
+        return expanded_scopes
+
+    def get_user_persona(self, user: dict[str, Any]) -> str | None:
+        """Get the user's persona from their roles.
+
+        CAB-604: Returns the highest-privilege persona for the user.
+
+        Args:
+            user: User claims from JWT
+
+        Returns:
+            Persona name or None if no matching persona
+        """
+        roles: list[str] = []
+        if "realm_access" in user and "roles" in user["realm_access"]:
+            roles = user["realm_access"]["roles"]
+        elif "roles" in user:
+            roles = user["roles"]
+
+        # Check for persona roles
+        for role in roles:
+            if role in PERSONAS:
+                return role
+            if role in LEGACY_ROLE_TO_PERSONA:
+                return LEGACY_ROLE_TO_PERSONA[role].keycloak_role
+
+        return None
+
+    def check_tenant_constraint(self, user: dict[str, Any], resource_tenant_id: str | None) -> bool:
+        """Check if user can access resources in a tenant.
+
+        CAB-604: Personas may be constrained to own tenant only.
+
+        Args:
+            user: User claims from JWT
+            resource_tenant_id: Tenant ID of the resource
+
+        Returns:
+            True if access is allowed
+        """
+        if not resource_tenant_id:
+            return True  # Global resources accessible to all
+
+        user_tenant_id = user.get("tenant_id")
+        scopes = self.get_user_scopes(user)
+
+        # Admin scope bypasses tenant isolation
+        if LegacyScope.ADMIN.value in scopes or Scope.ADMIN_READ.value in scopes:
+            return True
+
+        # Check persona constraints
+        persona_name = self.get_user_persona(user)
+        if persona_name and persona_name in PERSONAS:
+            persona = PERSONAS[persona_name]
+            if not persona.own_tenant_only:
+                return True  # Persona can access all tenants
+
+        # Otherwise, must match tenant
+        return user_tenant_id == resource_tenant_id
 
     def _get_tool_type(self, tool_name: str) -> str:
         """Determine tool type from name.
@@ -204,9 +226,11 @@ class EmbeddedEvaluator:
         """Evaluate authorization policy.
 
         CAB-603: Routes authorization based on tool type:
-        - Core tools: Check against read_only_tools, write_tools, admin_tools
-        - Proxied tools: Check tenant membership + stoa:read scope
-        - Legacy tools: Existing behavior
+        - Core tools: Check against TOOL_SCOPE_REQUIREMENTS from scopes.py
+        - Proxied tools: Check tenant membership + stoa:tools:execute scope
+        - Legacy tools: Backward compatible behavior
+
+        CAB-604: Uses granular OAuth2 scopes with legacy scope expansion.
 
         Args:
             user: User claims from JWT
@@ -222,16 +246,16 @@ class EmbeddedEvaluator:
         scopes = self.get_user_scopes(user)
         tool_type = self._get_tool_type(tool_name)
 
-        # Admin can do everything
-        if "stoa:admin" in scopes:
+        # Admin scopes grant full access (legacy or granular)
+        if LegacyScope.ADMIN.value in scopes or Scope.ADMIN_WRITE.value in scopes:
             return PolicyDecision(
                 allowed=True,
                 reason="Admin access granted",
-                metadata={"scope": "stoa:admin", "tool_type": tool_type},
+                metadata={"scope": "admin", "tool_type": tool_type},
             )
 
         # =====================================================================
-        # CAB-603: Proxied Tool Authorization
+        # CAB-604: Proxied Tool Authorization (requires tools:execute)
         # =====================================================================
         if tool_type == "proxied":
             # Parse namespace to get tenant
@@ -239,105 +263,113 @@ class EmbeddedEvaluator:
             proxied_tenant_id = namespace.get("tenant_id") or tool_tenant_id
 
             # Tenant isolation check for proxied tools
-            if proxied_tenant_id and user_tenant_id:
-                if proxied_tenant_id != user_tenant_id:
-                    return PolicyDecision(
-                        allowed=False,
-                        reason=f"Tenant mismatch: user={user_tenant_id}, tool={proxied_tenant_id}",
-                        metadata={"tool_type": "proxied"},
-                    )
+            if not self.check_tenant_constraint(user, proxied_tenant_id):
+                return PolicyDecision(
+                    allowed=False,
+                    reason=f"Tenant mismatch: user={user_tenant_id}, tool={proxied_tenant_id}",
+                    metadata={"tool_type": "proxied"},
+                )
 
-            # Proxied tools require stoa:read scope + tenant membership
-            if "stoa:read" in scopes:
+            # CAB-604: Proxied tools require tools:execute scope
+            required_scopes = PROXIED_TOOL_REQUIRED_SCOPES
+            if required_scopes.issubset(scopes):
                 return PolicyDecision(
                     allowed=True,
                     reason="Proxied tool access granted",
-                    metadata={"scope": "stoa:read", "tool_type": "proxied", "tenant_id": proxied_tenant_id},
+                    metadata={
+                        "scopes": list(required_scopes),
+                        "tool_type": "proxied",
+                        "tenant_id": proxied_tenant_id,
+                    },
+                )
+
+            # Also accept legacy stoa:read for backward compatibility
+            if LegacyScope.READ.value in scopes:
+                return PolicyDecision(
+                    allowed=True,
+                    reason="Proxied tool access granted (legacy scope)",
+                    metadata={
+                        "scope": LegacyScope.READ.value,
+                        "tool_type": "proxied",
+                        "tenant_id": proxied_tenant_id,
+                    },
                 )
 
             return PolicyDecision(
                 allowed=False,
-                reason=f"Missing scope stoa:read for proxied tool {tool_name}",
-                metadata={"tool_type": "proxied"},
+                reason=f"Missing scope {Scope.TOOLS_EXECUTE.value} for proxied tool {tool_name}",
+                metadata={"tool_type": "proxied", "required_scopes": list(required_scopes)},
             )
 
         # =====================================================================
-        # Core Tool and Legacy Tool Authorization
+        # CAB-604: Core Tool Authorization (granular scopes)
         # =====================================================================
 
         # Check tenant isolation (if tool has tenant_id)
-        if tool_tenant_id and user_tenant_id:
-            if tool_tenant_id != user_tenant_id:
-                return PolicyDecision(
-                    allowed=False,
-                    reason=f"Tenant mismatch: user={user_tenant_id}, tool={tool_tenant_id}",
-                    metadata={"tool_type": tool_type},
-                )
-
-        # Read-only tools require stoa:read
-        if tool_name in self.read_only_tools:
-            if "stoa:read" in scopes:
-                return PolicyDecision(
-                    allowed=True,
-                    reason="Read access granted",
-                    metadata={"scope": "stoa:read", "tool_type": tool_type},
-                )
+        if not self.check_tenant_constraint(user, tool_tenant_id):
             return PolicyDecision(
                 allowed=False,
-                reason=f"Missing scope stoa:read for tool {tool_name}",
+                reason=f"Tenant mismatch: user={user_tenant_id}, tool={tool_tenant_id}",
                 metadata={"tool_type": tool_type},
             )
 
-        # Write tools require stoa:write
-        if tool_name in self.write_tools:
-            if "stoa:write" in scopes:
-                return PolicyDecision(
-                    allowed=True,
-                    reason="Write access granted",
-                    metadata={"scope": "stoa:write", "tool_type": tool_type},
-                )
+        # Get required scopes for the tool
+        required_scopes = get_required_scopes_for_tool(tool_name, tool_type)
+
+        # Check if user has any of the required scopes
+        if required_scopes.issubset(scopes):
             return PolicyDecision(
-                allowed=False,
-                reason=f"Missing scope stoa:write for tool {tool_name}",
-                metadata={"tool_type": tool_type},
+                allowed=True,
+                reason="Access granted",
+                metadata={"scopes": list(required_scopes), "tool_type": tool_type},
             )
 
-        # Admin tools require stoa:admin
-        if tool_name in self.admin_tools:
+        # CAB-604: Check legacy scopes for backward compatibility
+        # Legacy read grants basic tool access
+        if LegacyScope.READ.value in scopes:
+            # Check if this is a read-only operation
+            read_scopes = {
+                Scope.CATALOG_READ.value,
+                Scope.SUBSCRIPTION_READ.value,
+                Scope.OBSERVABILITY_READ.value,
+                Scope.TOOLS_READ.value,
+                Scope.SECURITY_READ.value,
+                Scope.ADMIN_READ.value,
+            }
+            if required_scopes.issubset(read_scopes | {Scope.TOOLS_EXECUTE.value}):
+                return PolicyDecision(
+                    allowed=True,
+                    reason="Access granted (legacy read scope)",
+                    metadata={"scope": LegacyScope.READ.value, "tool_type": tool_type},
+                )
+
+        # Legacy write grants write operations
+        if LegacyScope.WRITE.value in scopes:
+            write_scopes = {
+                Scope.CATALOG_WRITE.value,
+                Scope.SUBSCRIPTION_WRITE.value,
+                Scope.OBSERVABILITY_WRITE.value,
+            }
+            if required_scopes.issubset(write_scopes):
+                return PolicyDecision(
+                    allowed=True,
+                    reason="Access granted (legacy write scope)",
+                    metadata={"scope": LegacyScope.WRITE.value, "tool_type": tool_type},
+                )
+
+        # Admin tools require admin scopes
+        admin_required = {Scope.ADMIN_READ.value, Scope.ADMIN_WRITE.value, Scope.SECURITY_WRITE.value}
+        if required_scopes & admin_required:
             return PolicyDecision(
                 allowed=False,
                 reason=f"Tool {tool_name} requires admin scope",
-                metadata={"tool_type": tool_type},
-            )
-
-        # Unknown core tools (new stoa_* tools not yet categorized)
-        # Default to read scope requirement for safety
-        if tool_type == "core":
-            if "stoa:read" in scopes:
-                return PolicyDecision(
-                    allowed=True,
-                    reason="Default read access for uncategorized core tool",
-                    metadata={"scope": "stoa:read", "tool_type": "core"},
-                )
-            return PolicyDecision(
-                allowed=False,
-                reason=f"Missing scope stoa:read for core tool {tool_name}",
-                metadata={"tool_type": "core"},
-            )
-
-        # Legacy tools - allow if user has at least read scope
-        # This allows dynamically registered API tools to work
-        if "stoa:read" in scopes:
-            return PolicyDecision(
-                allowed=True,
-                reason="Default read access for legacy tool",
-                metadata={"scope": "stoa:read", "tool_type": "legacy"},
+                metadata={"tool_type": tool_type, "required_scopes": list(required_scopes)},
             )
 
         return PolicyDecision(
             allowed=False,
-            reason="No valid scope for tool access",
-            metadata={"tool_type": tool_type},
+            reason=f"Missing required scopes for tool {tool_name}",
+            metadata={"tool_type": tool_type, "required_scopes": list(required_scopes)},
         )
 
     def evaluate_tenant_isolation(
@@ -346,6 +378,8 @@ class EmbeddedEvaluator:
         tool: dict[str, Any],
     ) -> PolicyDecision:
         """Check tenant isolation policy.
+
+        CAB-604: Uses persona-based tenant constraints.
 
         Args:
             user: User claims
@@ -364,19 +398,12 @@ class EmbeddedEvaluator:
                 reason="Global tool access",
             )
 
-        # Admin bypass
-        scopes = self.get_user_scopes(user)
-        if "stoa:admin" in scopes:
+        # Use the new tenant constraint check
+        if self.check_tenant_constraint(user, tool_tenant_id):
             return PolicyDecision(
                 allowed=True,
-                reason="Admin bypass tenant isolation",
-            )
-
-        # Tenant must match
-        if user_tenant_id == tool_tenant_id:
-            return PolicyDecision(
-                allowed=True,
-                reason="Tenant match",
+                reason="Tenant access granted",
+                metadata={"user_tenant": user_tenant_id, "tool_tenant": tool_tenant_id},
             )
 
         return PolicyDecision(

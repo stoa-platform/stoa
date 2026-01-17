@@ -48,7 +48,7 @@ router = APIRouter(prefix="/mcp/v1", tags=["MCP"])
     description="Returns a list of all tools available to the authenticated user.",
 )
 async def list_tools(
-    tenant_id: str | None = Query(None, description="Filter by tenant ID"),
+    tenant_id: str | None = Query(None, description="Filter by tenant ID (overrides JWT tenant)"),
     tag: str | None = Query(None, description="Filter by single tag (legacy)"),
     tags: str | None = Query(None, description="Filter by multiple tags (comma-separated)"),
     category: str | None = Query(None, description="Filter by category (Sales, Finance, Operations, Communications)"),
@@ -58,6 +58,9 @@ async def list_tools(
     user: TokenClaims = Depends(get_current_user),
 ) -> ListToolsResponse:
     """List all available MCP tools.
+
+    CAB-605 Phase 2: Proxied tools are filtered by tenant from JWT.
+    The tenant_id query parameter can override this for admin users.
 
     Tools are mapped from registered APIs in the STOA platform.
     Results can be filtered by tenant, category, tags, and search query.
@@ -69,11 +72,27 @@ async def list_tools(
     """
     registry = await get_tool_registry()
 
-    # If user is authenticated, filter by their accessible tenants
+    # CAB-605 Phase 2: Use tenant from JWT by default, allow override for admins
     effective_tenant = tenant_id
-    if user and tenant_id:
-        # TODO: Validate user has access to requested tenant
-        pass
+    if user:
+        if tenant_id and user.is_admin:
+            # Admin can filter by any tenant
+            effective_tenant = tenant_id
+        elif tenant_id and not user.can_access_tenant(tenant_id):
+            # Non-admin trying to access another tenant
+            logger.warning(
+                "User attempted to list tools for unauthorized tenant",
+                user=user.subject,
+                user_tenant=user.tenant_id,
+                requested_tenant=tenant_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access to tenant '{tenant_id}' denied",
+            )
+        else:
+            # Use JWT tenant if no explicit filter
+            effective_tenant = tenant_id or user.tenant_id
 
     # Parse comma-separated tags
     tags_list = [t.strip() for t in tags.split(",")] if tags else None
@@ -95,6 +114,7 @@ async def list_tools(
         tags=tags,
         search=search,
         user=user.subject,
+        tenant_id=effective_tenant,
     )
 
     return result
@@ -190,13 +210,16 @@ async def invoke_tool(
 
     Requires authentication. The tool will be executed with the user's
     permissions and credentials.
+
+    CAB-605 Phase 2: Tenant is resolved from JWT context, not from tool name.
     """
     start_time = time.perf_counter()
     metering_status = MeteringStatus.SUCCESS
     error_detail: str | None = None
 
     registry = await get_tool_registry()
-    tool = registry.get(tool_name)
+    # CAB-605 Phase 2: Pass tenant_id from JWT for tenant-scoped lookup
+    tool = registry.get(tool_name, tenant_id=user.tenant_id)
 
     if not tool:
         raise HTTPException(

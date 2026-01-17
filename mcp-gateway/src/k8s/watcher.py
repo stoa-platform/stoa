@@ -621,7 +621,8 @@ class ToolWatcher:
     def _generate_tool_name(self, namespace: str, name: str, api_id: str | None = None) -> str:
         """Generate a unique tool name from namespace and CR name.
 
-        CAB-603: Now supports both legacy format and new namespace format.
+        CAB-603: Uses double underscore (__) as separator to comply with
+        MCP tool name pattern ^[a-zA-Z0-9_-]{1,64}$.
 
         Args:
             namespace: Kubernetes namespace (tenant_id)
@@ -629,18 +630,18 @@ class ToolWatcher:
             api_id: Optional API ID
 
         Returns:
-            Namespaced tool name in format {tenant}:{api}:{operation}
+            Namespaced tool name in format {tenant}__{api}__{operation}
         """
-        # CAB-603: New namespaced format
+        # CAB-603: New namespaced format with __ separator
         tenant_id = namespace.lower()
         operation = name.lower()
         api = (api_id or name).lower()
 
-        # Sanitize components
+        # Sanitize components - only allow alphanumeric, hyphen, underscore
         def sanitize(s: str) -> str:
             return "".join(c if c.isalnum() or c in "-_" else "-" for c in s).strip("-_")
 
-        return f"{sanitize(tenant_id)}:{sanitize(api)}:{sanitize(operation)}"
+        return f"{sanitize(tenant_id)}__{sanitize(api)}__{sanitize(operation)}"
 
     def _generate_legacy_tool_name(self, namespace: str, name: str) -> str:
         """Generate a legacy tool name (backward compatibility).

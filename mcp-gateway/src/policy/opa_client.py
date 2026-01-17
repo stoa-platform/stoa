@@ -129,7 +129,7 @@ class EmbeddedEvaluator:
         # CAB-603: Tool Type Detection Patterns
         # =====================================================================
         self.core_tool_prefix = "stoa_"
-        self.proxied_tool_separator = ":"
+        self.proxied_tool_separator = "__"
 
     def get_user_scopes(self, user: dict[str, Any]) -> set[str]:
         """Extract scopes from user claims."""

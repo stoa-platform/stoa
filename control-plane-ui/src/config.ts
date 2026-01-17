@@ -96,6 +96,22 @@ export const config = {
         return `${this.url}/${projectPath}`;
       },
     },
+    // Observability services (CAB-654)
+    argocd: {
+      url: import.meta.env.VITE_ARGOCD_URL || `https://argocd.${BASE_DOMAIN}`,
+      getAppUrl(appName: string) {
+        return `${this.url}/applications/${appName}`;
+      },
+    },
+    grafana: {
+      url: import.meta.env.VITE_GRAFANA_URL || `https://grafana.${BASE_DOMAIN}`,
+    },
+    prometheus: {
+      url: import.meta.env.VITE_PROMETHEUS_URL || `https://prometheus.${BASE_DOMAIN}`,
+    },
+    logs: {
+      url: import.meta.env.VITE_LOGS_URL || `https://grafana.${BASE_DOMAIN}/explore`,
+    },
   },
 
   // Feature Flags

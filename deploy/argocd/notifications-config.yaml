@@ -1,0 +1,136 @@
+# Argo CD Notifications Configuration (CAB-654)
+#
+# Configures notifications for platform components to enable
+# real-time status updates in the Console dashboard.
+#
+# Apply with: kubectl apply -f notifications-config.yaml -n argocd
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-notifications-cm
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: notifications
+data:
+  # Webhook service for Control-Plane API
+  service.webhook.control-plane: |
+    url: https://api.stoa.cab-i.com/v1/webhooks/argocd
+    headers:
+      - name: Content-Type
+        value: application/json
+      - name: X-ArgoCD-Notification
+        value: "true"
+
+  # Notification templates
+  template.app-sync-status: |
+    webhook:
+      control-plane:
+        method: POST
+        body: |
+          {
+            "event_type": "sync",
+            "app_name": "{{.app.metadata.name}}",
+            "project": "{{.app.spec.project}}",
+            "sync_status": "{{.app.status.sync.status}}",
+            "health_status": "{{.app.status.health.status}}",
+            "revision": "{{.app.status.sync.revision}}",
+            "message": "{{.app.status.operationState.message}}",
+            "timestamp": "{{.app.status.reconciledAt}}"
+          }
+
+  template.app-health-degraded: |
+    webhook:
+      control-plane:
+        method: POST
+        body: |
+          {
+            "event_type": "health_degraded",
+            "app_name": "{{.app.metadata.name}}",
+            "project": "{{.app.spec.project}}",
+            "sync_status": "{{.app.status.sync.status}}",
+            "health_status": "{{.app.status.health.status}}",
+            "message": "Application health is degraded",
+            "timestamp": "{{.app.status.reconciledAt}}"
+          }
+
+  template.app-sync-failed: |
+    webhook:
+      control-plane:
+        method: POST
+        body: |
+          {
+            "event_type": "sync_failed",
+            "app_name": "{{.app.metadata.name}}",
+            "project": "{{.app.spec.project}}",
+            "sync_status": "{{.app.status.sync.status}}",
+            "health_status": "{{.app.status.health.status}}",
+            "message": "{{.app.status.operationState.message}}",
+            "timestamp": "{{.app.status.reconciledAt}}"
+          }
+
+  template.app-sync-succeeded: |
+    webhook:
+      control-plane:
+        method: POST
+        body: |
+          {
+            "event_type": "sync_succeeded",
+            "app_name": "{{.app.metadata.name}}",
+            "project": "{{.app.spec.project}}",
+            "sync_status": "{{.app.status.sync.status}}",
+            "health_status": "{{.app.status.health.status}}",
+            "revision": "{{.app.status.sync.revision}}",
+            "message": "Sync succeeded",
+            "timestamp": "{{.app.status.reconciledAt}}"
+          }
+
+  # Notification triggers
+  trigger.on-sync-status-unknown: |
+    - when: app.status.sync.status == 'Unknown'
+      send: [app-sync-status]
+
+  trigger.on-sync-running: |
+    - when: app.status.operationState != nil and app.status.operationState.phase == 'Running'
+      send: [app-sync-status]
+
+  trigger.on-sync-succeeded: |
+    - when: app.status.operationState != nil and app.status.operationState.phase == 'Succeeded'
+      send: [app-sync-succeeded]
+
+  trigger.on-sync-failed: |
+    - when: app.status.operationState != nil and app.status.operationState.phase == 'Failed'
+      send: [app-sync-failed]
+
+  trigger.on-health-degraded: |
+    - when: app.status.health.status == 'Degraded'
+      send: [app-health-degraded]
+
+  # Default subscriptions for platform components
+  # Subscribe these apps by adding annotation:
+  # notifications.argoproj.io/subscribe.on-sync-succeeded.control-plane: ""
+  subscriptions: |
+    - recipients:
+        - control-plane
+      triggers:
+        - on-sync-succeeded
+        - on-sync-failed
+        - on-health-degraded
+      selector: app.kubernetes.io/part-of=stoa-platform
+---
+# Secret for webhook authentication (optional)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-notifications-secret
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-notifications-secret
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: notifications
+type: Opaque
+stringData:
+  # Add webhook authentication token if needed
+  # webhook-token: "your-webhook-token"

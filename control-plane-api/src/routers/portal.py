@@ -42,6 +42,7 @@ class PortalAPIResponse(BaseModel):
     category: Optional[str] = None
     tags: List[str] = []
     deployments: dict = {}
+    is_promoted: bool = True  # Whether API is promoted to Portal (has portal:published tag)
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -97,11 +98,15 @@ async def list_portal_apis(
     search: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    include_unpromoted: bool = Query(False, description="Include APIs not promoted to Portal"),
 ):
     """
-    List all published APIs available in the Portal catalog.
+    List all promoted APIs available in the Portal catalog.
 
     Source: GitLab (source of truth for API definitions)
+
+    By default, only returns APIs with the 'portal:published' or 'promoted:portal' tag.
+    Set include_unpromoted=true to see all APIs (for admin/debugging).
 
     Returns APIs from all tenants the user has access to.
     """
@@ -126,6 +131,15 @@ async def list_portal_apis(
                         if status and api_status != status:
                             continue
 
+                        # Filter by promotion tags unless explicitly including unpromoted
+                        # APIs must have 'portal:published' or 'promoted:portal' tag to appear in Portal
+                        api_tags = api.get("tags", [])
+                        promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
+                        is_promoted = any(tag.lower() in promotion_tags for tag in api_tags)
+
+                        if not include_unpromoted and not is_promoted:
+                            continue
+
                         # Filter by search term
                         if search:
                             search_lower = search.lower()
@@ -139,6 +153,7 @@ async def list_portal_apis(
                             **api,
                             "tenant_id": tenant_id,
                             "tenant_name": tenant_id,  # Could be enhanced with tenant display name
+                            "is_promoted": is_promoted,
                         })
 
         except Exception as e:
@@ -168,6 +183,7 @@ async def list_portal_apis(
                     category=api.get("category"),
                     tags=api.get("tags", []),
                     deployments=api.get("deployments", {}),
+                    is_promoted=api.get("is_promoted", False),
                 )
                 for api in paginated_apis
             ],

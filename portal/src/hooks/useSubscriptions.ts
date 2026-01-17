@@ -172,66 +172,134 @@ export function useSubscriptionRotationInfo(id: string | undefined) {
 }
 
 // ============ API Subscriptions (Control-Plane API) ============
-// These are placeholder hooks for the API Catalog feature.
-// API Subscriptions (apps subscribing to APIs) are separate from MCP Subscriptions (users subscribing to MCP tools).
-// TODO: Implement these when Control-Plane API adds /v1/subscriptions endpoints
+// API Subscriptions (apps subscribing to REST APIs) are separate from MCP Subscriptions.
+// Uses Control-Plane API endpoints (/v1/subscriptions)
+// Reference: CAB-483
 
-interface SubscribeToAPIRequest {
+import {
+  apiSubscriptionsService,
+  CreateAPISubscriptionRequest,
+  KeyRotationResponse as APIKeyRotationResponse,
+} from '../services/apiSubscriptions';
+
+export interface SubscribeToAPIRequest {
   applicationId: string;
+  applicationName: string;
   apiId: string;
-  plan: 'free' | 'basic' | 'premium' | 'enterprise';
+  apiName: string;
+  apiVersion: string;
+  tenantId: string;
+  planId?: string;
+  planName?: string;
+}
+
+export interface SubscribeToAPIResponse {
+  subscription: APISubscription;
+  apiKey: string; // Full API key - shown only once!
+  apiKeyPrefix: string;
 }
 
 /**
  * Hook to subscribe an application to an API
- * NOTE: Placeholder - backend endpoint not yet implemented
+ * Returns the subscription AND the API key (shown only once!)
  */
 export function useSubscribe() {
   const queryClient = useQueryClient();
 
-  return useMutation<APISubscription, Error, SubscribeToAPIRequest>({
+  return useMutation<SubscribeToAPIResponse, Error, SubscribeToAPIRequest>({
     mutationFn: async (data) => {
-      // TODO: Implement when Control-Plane API adds /v1/subscriptions endpoint
-      console.warn('API subscriptions not yet implemented. Request:', data);
-      throw new Error('API subscriptions feature not yet available. Coming soon!');
+      const request: CreateAPISubscriptionRequest = {
+        application_id: data.applicationId,
+        application_name: data.applicationName,
+        api_id: data.apiId,
+        api_name: data.apiName,
+        api_version: data.apiVersion,
+        tenant_id: data.tenantId,
+        plan_id: data.planId,
+        plan_name: data.planName,
+      };
+
+      const response = await apiSubscriptionsService.createSubscription(request);
+
+      // Return both the subscription info and the API key
+      const subscription: APISubscription = {
+        id: response.subscription_id,
+        applicationId: data.applicationId,
+        apiId: data.apiId,
+        status: 'active',
+        plan: 'free', // Default plan
+        createdAt: new Date().toISOString(),
+        expiresAt: response.expires_at || undefined,
+      };
+
+      return {
+        subscription,
+        apiKey: response.api_key,
+        apiKeyPrefix: response.api_key_prefix,
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['my-api-subscriptions'] });
     },
+  });
+}
+
+/**
+ * Hook to get my API subscriptions
+ */
+export function useMyAPISubscriptions() {
+  return useQuery<APISubscription[]>({
+    queryKey: ['my-api-subscriptions'],
+    queryFn: () => apiSubscriptionsService.getMySubscriptionsFormatted(),
+    staleTime: 30 * 1000, // 30 seconds
   });
 }
 
 /**
  * Hook to get subscriptions for an application
- * NOTE: Placeholder - backend endpoint not yet implemented
  */
 export function useApplicationSubscriptions(applicationId: string | undefined) {
-  return useQuery<APISubscription[]>({
-    queryKey: ['api-subscriptions', 'application', applicationId],
-    queryFn: async () => {
-      // TODO: Implement when Control-Plane API adds /v1/applications/{id}/subscriptions endpoint
-      console.warn('Application subscriptions not yet implemented for:', applicationId);
-      return [];
-    },
-    enabled: !!applicationId,
-  });
+  const { data: allSubscriptions, ...rest } = useMyAPISubscriptions();
+
+  // Filter subscriptions by application ID
+  const subscriptions = allSubscriptions?.filter(
+    (sub) => sub.applicationId === applicationId
+  );
+
+  return {
+    ...rest,
+    data: subscriptions,
+  };
 }
 
 /**
  * Hook to cancel an API subscription
- * NOTE: Placeholder - backend endpoint not yet implemented
  */
 export function useCancelSubscription() {
   const queryClient = useQueryClient();
 
   return useMutation<void, Error, string>({
-    mutationFn: async (subscriptionId) => {
-      // TODO: Implement when Control-Plane API adds DELETE /v1/subscriptions/{id} endpoint
-      console.warn('Cancel API subscription not yet implemented. ID:', subscriptionId);
-      throw new Error('Cancel subscription feature not yet available. Coming soon!');
-    },
+    mutationFn: (subscriptionId) => apiSubscriptionsService.cancelSubscription(subscriptionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['my-api-subscriptions'] });
+    },
+  });
+}
+
+/**
+ * Hook to rotate API key for an API subscription
+ */
+export function useRotateAPISubscriptionKey() {
+  const queryClient = useQueryClient();
+
+  return useMutation<APIKeyRotationResponse, Error, { id: string; gracePeriodHours?: number }>({
+    mutationFn: ({ id, gracePeriodHours }) =>
+      apiSubscriptionsService.rotateKey(id, gracePeriodHours ? { grace_period_hours: gracePeriodHours } : undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['my-api-subscriptions'] });
     },
   });
 }

@@ -190,6 +190,7 @@ export function APIs() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Version</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Portal</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deployed</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
@@ -210,6 +211,18 @@ export function APIs() {
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[api.status]}`}>
                       {api.status}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {api.portal_promoted || api.tags?.includes('portal:published') ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Published
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-xs">Not promoted</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex gap-2">
@@ -301,6 +314,8 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
     description: api?.description || '',
     backend_url: api?.backend_url || '',
     openapi_spec: '',
+    tags: api?.tags || [],
+    portal_promoted: api?.portal_promoted || api?.tags?.includes('portal:published') || false,
   });
   const [parseError, setParseError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -376,7 +391,19 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData, deployToDev);
+
+    // Build tags array based on portal_promoted flag
+    const tags = [...(formData.tags || [])].filter(tag => tag !== 'portal:published');
+    if (formData.portal_promoted) {
+      tags.push('portal:published');
+    }
+
+    const submitData: APICreate = {
+      ...formData,
+      tags,
+    };
+
+    onSubmit(submitData, deployToDev);
   };
 
   return (
@@ -567,6 +594,30 @@ paths:
               />
             </div>
           )}
+
+          {/* Portal Promotion Toggle */}
+          <div className="pt-4 border-t">
+            <div className="flex items-start gap-3">
+              <div className="flex items-center h-5">
+                <input
+                  type="checkbox"
+                  id="portalPromoted"
+                  checked={formData.portal_promoted}
+                  onChange={(e) => setFormData({ ...formData, portal_promoted: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex-1">
+                <label htmlFor="portalPromoted" className="text-sm font-medium text-gray-700">
+                  Promote to Developer Portal
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  When enabled, this API will be visible in the Developer Portal for consumers to discover and subscribe.
+                  This adds the <code className="bg-gray-100 px-1 rounded">portal:published</code> tag.
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Deploy to DEV checkbox */}
           {!isEdit && (

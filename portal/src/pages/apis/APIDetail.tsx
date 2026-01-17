@@ -25,8 +25,8 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { useAPI, useOpenAPISpec } from '../../hooks/useAPIs';
-import { useSubscribe } from '../../hooks/useSubscriptions';
-import { SubscribeModal } from '../../components/subscriptions/SubscribeModal';
+import { useSubscribe, SubscribeToAPIResponse } from '../../hooks/useSubscriptions';
+import { SubscribeModal, SubscribeFormData } from '../../components/subscriptions/SubscribeModal';
 import { config } from '../../config';
 import type { APIEndpoint } from '../../types';
 
@@ -47,15 +47,26 @@ export function APIDetail() {
   const [copiedSpec, setCopiedSpec] = useState(false);
   const [isSubscribeModalOpen, setIsSubscribeModalOpen] = useState(false);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
+  const [subscriptionResult, setSubscriptionResult] = useState<SubscribeToAPIResponse | null>(null);
+  const [copiedApiKey, setCopiedApiKey] = useState(false);
 
   const { data: api, isLoading, isError, error } = useAPI(id);
   const { data: openApiSpec, isLoading: specLoading } = useOpenAPISpec(id);
   const subscribeMutation = useSubscribe();
 
-  const handleSubscribe = async (data: { applicationId: string; apiId: string; plan: 'free' | 'basic' | 'premium' | 'enterprise' }) => {
+  const handleSubscribe = async (data: SubscribeFormData) => {
     setSubscribeError(null);
     try {
-      await subscribeMutation.mutateAsync(data);
+      const result = await subscribeMutation.mutateAsync({
+        applicationId: data.applicationId,
+        applicationName: data.applicationName,
+        apiId: data.apiId,
+        apiName: api.name,
+        apiVersion: api.version,
+        tenantId: api.tenantId || 'default',
+        planName: data.plan,
+      });
+      setSubscriptionResult(result);
       setIsSubscribeModalOpen(false);
     } catch (err) {
       setSubscribeError((err as Error)?.message || 'Failed to subscribe to API');
@@ -460,6 +471,72 @@ export function APIDetail() {
         isLoading={subscribeMutation.isPending}
         error={subscribeError}
       />
+
+      {/* Subscription Success Modal - Shows API Key (only once!) */}
+      {subscriptionResult && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-black/50 transition-opacity"
+            onClick={() => setSubscriptionResult(null)}
+          />
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+              <div className="text-center mb-6">
+                <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                  <Check className="h-6 w-6 text-green-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Subscription Created!
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Your API key is shown below. Save it now - it won't be shown again.
+                </p>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-800">
+                    <strong>Important:</strong> Copy and save this API key now. For security reasons, it cannot be displayed again.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <span className="block text-sm font-medium text-gray-700 mb-2">
+                  Your API Key
+                </span>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm font-mono break-all" aria-label="API Key">
+                    {subscriptionResult.apiKey}
+                  </code>
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(subscriptionResult.apiKey);
+                      setCopiedApiKey(true);
+                      setTimeout(() => setCopiedApiKey(false), 2000);
+                    }}
+                    className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                  >
+                    {copiedApiKey ? (
+                      <Check className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <Copy className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSubscriptionResult(null)}
+                className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

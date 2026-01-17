@@ -436,8 +436,10 @@ class ToolWatcher:
             required=spec.inputSchema.get("required", []),
         )
 
-        return ProxiedTool(
-            name=spec.displayName or tool_cr.metadata.name,  # Human-readable name
+        # CAB-605: Create ProxiedTool with namespaced_name as the primary name
+        # The display_name is stored separately for UI purposes
+        proxied = ProxiedTool(
+            name=spec.displayName or tool_cr.metadata.name,  # Human-readable display name
             description=spec.description,
             input_schema=input_schema,
             tenant_id=tenant_id,
@@ -449,6 +451,10 @@ class ToolWatcher:
             tags=spec.tags,
             version=spec.version,
         )
+        # Override name with namespaced_name for MCP tool lookup
+        # This is required because invoke() uses tool.name to find the tool
+        object.__setattr__(proxied, 'name', proxied.namespaced_name)
+        return proxied
 
     def _proxied_to_legacy_tool(self, proxied: ProxiedTool) -> Tool:
         """Convert a ProxiedTool to legacy Tool for backward compatibility.

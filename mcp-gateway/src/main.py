@@ -94,7 +94,28 @@ async def lifespan(app: FastAPI):
         # Get watcher without starting (to set callbacks first)
         watcher = await get_tool_watcher(start=False)
 
-        # Define callbacks to connect watcher to registry
+        # CAB-605: Define callbacks to connect watcher to registry
+        # Use register_proxied_tool for ProxiedTool instances from K8s CRDs
+        async def on_proxied_added(tool):
+            """Register ProxiedTool from K8s CRD."""
+            registry.register_proxied_tool(tool)
+            logger.info(
+                "K8s proxied tool registered",
+                tool_name=tool.name,
+                namespaced_name=tool.namespaced_name,
+                internal_key=tool.internal_key,
+                tenant_id=tool.tenant_id,
+            )
+
+        async def on_proxied_removed(tool_key):
+            """Unregister ProxiedTool by key."""
+            removed = registry.unregister_proxied_tool(tool_key)
+            if removed:
+                logger.info("K8s proxied tool unregistered", tool_key=tool_key)
+            else:
+                logger.warning("K8s proxied tool not found for removal", tool_key=tool_key)
+
+        # Legacy callbacks for backward compatibility (non-ProxiedTool)
         async def on_tool_added(tool):
             registry.register(tool)
             logger.info("K8s tool registered", tool_name=tool.name)
@@ -108,10 +129,13 @@ async def lifespan(app: FastAPI):
             logger.info("K8s tool updated", tool_name=tool.name)
 
         # Set callbacks BEFORE starting to catch initial events
+        # CAB-605: Use dedicated proxied tool callbacks for CRD-sourced tools
         watcher.set_callbacks(
             on_added=on_tool_added,
             on_removed=on_tool_removed,
             on_modified=on_tool_modified,
+            on_proxied_added=on_proxied_added,
+            on_proxied_removed=on_proxied_removed,
         )
 
         # Now start the watcher

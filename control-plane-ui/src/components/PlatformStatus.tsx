@@ -7,7 +7,6 @@
 import { useState } from 'react';
 import { usePlatformStatus, useSyncComponent } from '../hooks/usePlatformStatus';
 import { ComponentStatus } from '../services/api';
-import { config } from '../config';
 
 // Status color mappings
 const syncStatusColors: Record<string, string> = {

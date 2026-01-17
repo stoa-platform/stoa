@@ -8,6 +8,7 @@ import { Deployments } from './pages/Deployments';
 import { APIMonitoring } from './pages/APIMonitoring';
 import { ToolCatalog, ToolDetail, MySubscriptions, UsageDashboard } from './pages/AITools';
 import { ErrorSnapshots } from './pages/ErrorSnapshots';
+import { PlatformStatus } from './components/PlatformStatus';
 import { quickLinks } from './config';
 
 function Dashboard() {
@@ -83,6 +84,9 @@ function Dashboard() {
           color="green"
         />
       </div>
+
+      {/* Platform Status (CAB-654) */}
+      <PlatformStatus />
 
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

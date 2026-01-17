@@ -21,22 +21,22 @@ router = APIRouter(prefix="/health", tags=["Health"])
 
 def _check_kafka_connected() -> bool:
     """Check if Kafka producer is connected."""
-    return kafka_service.kafka_service._producer is not None
+    return kafka_service._producer is not None
 
 
 def _check_gitlab_connected() -> bool:
     """Check if GitLab client is connected."""
-    return git_service.git_service._gl is not None
+    return git_service._gl is not None
 
 
 def _check_keycloak_connected() -> bool:
     """Check if Keycloak admin client is connected."""
-    return keycloak_service.keycloak_service._admin is not None
+    return keycloak_service._admin is not None
 
 
 def _check_awx_connected() -> bool:
     """Check if AWX client is connected."""
-    return awx_service.awx_service._client is not None
+    return awx_service._client is not None
 
 
 def _check_gateway_connected() -> bool:

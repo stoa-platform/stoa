@@ -215,6 +215,99 @@ class ApiService {
     const { data } = await this.client.get('/v1/traces/live');
     return data;
   }
+
+  // Platform Status (CAB-654)
+  async getPlatformStatus(): Promise<PlatformStatusResponse> {
+    const { data } = await this.client.get('/v1/platform/status');
+    return data;
+  }
+
+  async getPlatformComponents(): Promise<ComponentStatus[]> {
+    const { data } = await this.client.get('/v1/platform/components');
+    return data;
+  }
+
+  async getComponentStatus(name: string): Promise<ComponentStatus> {
+    const { data } = await this.client.get(`/v1/platform/components/${name}`);
+    return data;
+  }
+
+  async syncPlatformComponent(name: string): Promise<{ message: string; operation: string }> {
+    const { data } = await this.client.post(`/v1/platform/components/${name}/sync`);
+    return data;
+  }
+
+  async getComponentDiff(name: string): Promise<ApplicationDiffResponse> {
+    const { data } = await this.client.get(`/v1/platform/components/${name}/diff`);
+    return data;
+  }
+
+  async getPlatformEvents(component?: string, limit?: number): Promise<PlatformEvent[]> {
+    const params: Record<string, any> = {};
+    if (component) params.component = component;
+    if (limit) params.limit = limit;
+    const { data } = await this.client.get('/v1/platform/events', { params });
+    return data;
+  }
+}
+
+// Platform Status types (CAB-654)
+export interface ComponentStatus {
+  name: string;
+  display_name: string;
+  sync_status: string;
+  health_status: string;
+  revision: string;
+  last_sync: string | null;
+  message: string | null;
+}
+
+export interface GitOpsStatus {
+  status: string;
+  components: ComponentStatus[];
+  checked_at: string;
+}
+
+export interface PlatformEvent {
+  id: number | null;
+  component: string;
+  event_type: string;
+  status: string;
+  revision: string;
+  message: string | null;
+  timestamp: string;
+  actor: string | null;
+}
+
+export interface ExternalLinks {
+  argocd: string;
+  grafana: string;
+  prometheus: string;
+  logs: string;
+}
+
+export interface PlatformStatusResponse {
+  gitops: GitOpsStatus;
+  events: PlatformEvent[];
+  external_links: ExternalLinks;
+  timestamp: string;
+}
+
+export interface ApplicationDiffResource {
+  name: string;
+  namespace: string | null;
+  kind: string;
+  group: string | null;
+  status: string;
+  health: string | null;
+  diff: string | null;
+}
+
+export interface ApplicationDiffResponse {
+  application: string;
+  total_resources: number;
+  diff_count: number;
+  resources: ApplicationDiffResource[];
 }
 
 export const apiService = new ApiService();

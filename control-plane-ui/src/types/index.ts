@@ -532,3 +532,75 @@ export interface APITransactionStats {
   }>;
   by_status_code: Record<number, number>;
 }
+
+// =============================================================================
+// Platform Status types (CAB-654 - GitOps Observability)
+// =============================================================================
+
+export type ComponentHealth = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+export type GitOpsSyncStatus = 'Synced' | 'OutOfSync' | 'Unknown' | 'NotFound' | 'Error';
+export type GitOpsHealthStatus = 'Healthy' | 'Degraded' | 'Progressing' | 'Suspended' | 'Missing' | 'Unknown';
+export type PlatformEventSeverity = 'info' | 'warning' | 'error';
+
+export interface ComponentStatus {
+  name: string;
+  display_name: string;
+  sync_status: GitOpsSyncStatus;
+  health_status: GitOpsHealthStatus;
+  revision: string;
+  last_sync: string | null;
+  message: string | null;
+}
+
+export interface GitOpsStatus {
+  status: 'healthy' | 'degraded' | 'syncing' | 'unknown';
+  components: ComponentStatus[];
+  checked_at: string;
+}
+
+export interface PlatformEvent {
+  id?: number;
+  component: string;
+  event_type: string;
+  status: string;
+  revision: string;
+  message: string | null;
+  timestamp: string;
+  actor: string | null;
+}
+
+export interface ExternalLinks {
+  argocd: string;
+  grafana: string;
+  prometheus: string;
+  logs: string;
+}
+
+export interface PlatformStatusResponse {
+  gitops: GitOpsStatus;
+  events: PlatformEvent[];
+  external_links: ExternalLinks;
+  timestamp: string;
+}
+
+export interface ApplicationDiffResource {
+  name: string;
+  namespace: string | null;
+  kind: string;
+  group: string | null;
+  status: string;
+  health: string | null;
+  diff: string | null;
+}
+
+export interface ApplicationDiffResponse {
+  application: string;
+  total_resources: number;
+  diff_count: number;
+  resources: ApplicationDiffResource[];
+}
+
+export interface SyncResponse {
+  message: string;
+  operation: string | null;
+}

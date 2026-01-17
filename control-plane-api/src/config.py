@@ -66,6 +66,17 @@ class Settings(BaseSettings):
     # MCP Gateway URL (for tools proxy)
     MCP_GATEWAY_URL: str = f"https://mcp.{_BASE_DOMAIN}"
 
+    # ArgoCD (GitOps Observability - CAB-654)
+    ARGOCD_URL: str = f"https://argocd.{_BASE_DOMAIN}"
+    ARGOCD_TOKEN: str = ""
+    ARGOCD_VERIFY_SSL: bool = True
+    ARGOCD_PLATFORM_APPS: str = "stoa-control-plane,stoa-console,stoa-portal,stoa-mcp-gateway,stoa-redpanda"
+
+    # External Observability URLs (CAB-654)
+    GRAFANA_URL: str = f"https://grafana.{_BASE_DOMAIN}"
+    PROMETHEUS_URL: str = f"https://prometheus.{_BASE_DOMAIN}"
+    LOGS_URL: str = f"https://grafana.{_BASE_DOMAIN}/explore"
+
     # CORS - comma-separated list of allowed origins
     CORS_ORIGINS: str = f"https://console.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
 
@@ -141,6 +152,13 @@ class Settings(BaseSettings):
     def database_url_sync(self) -> str:
         """Return sync database URL for Alembic migrations"""
         return self.DATABASE_URL.replace("+asyncpg", "")
+
+    @property
+    def argocd_platform_apps_list(self) -> List[str]:
+        """Return ARGOCD_PLATFORM_APPS as a list"""
+        if isinstance(self.ARGOCD_PLATFORM_APPS, list):
+            return self.ARGOCD_PLATFORM_APPS
+        return [app.strip() for app in self.ARGOCD_PLATFORM_APPS.split(",") if app.strip()]
 
     @property
     def cors_origins_list(self) -> List[str]:

@@ -17,9 +17,10 @@ from .logging_config import configure_logging, get_logger
 from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
-from .routers import portal, mcp_gitops, mcp_proxy
+from .routers import portal, mcp_gitops, mcp_proxy, platform
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
-from .services import kafka_service, git_service, awx_service, keycloak_service
+from .services import kafka_service, git_service, awx_service, keycloak_service, argocd_service
+# Note: These are now imported as instances, not modules
 from .middleware.metrics import MetricsMiddleware, get_metrics
 from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from .middleware.http_logging import HTTPLoggingMiddleware
@@ -44,25 +45,25 @@ async def lifespan(app: FastAPI):
     # Initialize services
     worker_task = None
     try:
-        await kafka_service.kafka_service.connect()
+        await kafka_service.connect()
         logger.info("Kafka connected")
     except Exception as e:
         logger.warning("Failed to connect Kafka", error=str(e))
 
     try:
-        await git_service.git_service.connect()
+        await git_service.connect()
         logger.info("GitLab connected")
     except Exception as e:
         logger.warning("Failed to connect GitLab", error=str(e))
 
     try:
-        await awx_service.awx_service.connect()
+        await awx_service.connect()
         logger.info("AWX connected")
     except Exception as e:
         logger.warning("Failed to connect AWX", error=str(e))
 
     try:
-        await keycloak_service.keycloak_service.connect()
+        await keycloak_service.connect()
         logger.info("Keycloak connected")
     except Exception as e:
         logger.warning("Failed to connect Keycloak", error=str(e))
@@ -72,6 +73,12 @@ async def lifespan(app: FastAPI):
         logger.info("Gateway connected", oidc_proxy=settings.GATEWAY_USE_OIDC_PROXY)
     except Exception as e:
         logger.warning("Failed to connect Gateway", error=str(e))
+
+    try:
+        await argocd_service.connect()
+        logger.info("ArgoCD connected")
+    except Exception as e:
+        logger.warning("Failed to connect ArgoCD", error=str(e))
 
     # Initialize OpenSearch (CAB-307)
     try:
@@ -129,11 +136,12 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
-    await kafka_service.kafka_service.disconnect()
-    await git_service.git_service.disconnect()
-    await awx_service.awx_service.disconnect()
-    await keycloak_service.keycloak_service.disconnect()
+    await kafka_service.disconnect()
+    await git_service.disconnect()
+    await awx_service.disconnect()
+    await keycloak_service.disconnect()
     await gateway_service.disconnect()
+    await argocd_service.disconnect()
 
 API_DESCRIPTION = """
 ## STOA Platform API
@@ -223,6 +231,7 @@ app = FastAPI(
         {"name": "Portal", "description": "Developer Portal API catalog and MCP server browsing"},
         {"name": "MCP GitOps", "description": "GitOps synchronization for MCP servers"},
         {"name": "MCP Tools", "description": "MCP tools discovery and invocation (proxy to MCP Gateway)"},
+        {"name": "Platform", "description": "Platform status and GitOps observability (CAB-654)"},
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -302,6 +311,9 @@ app.include_router(mcp_proxy.router)
 
 # API Monitoring
 app.include_router(monitoring.router)
+
+# Platform Status (GitOps Observability - CAB-654)
+app.include_router(platform.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

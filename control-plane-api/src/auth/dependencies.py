@@ -91,7 +91,12 @@ async def get_current_user(
         email = payload.get("email", "")
         username = payload.get("preferred_username", "")
         roles = payload.get("realm_access", {}).get("roles", [])
-        tenant_id = payload.get("tenant_id")
+        # Handle tenant_id as either string or list (from group membership mapper)
+        raw_tenant_id = payload.get("tenant_id")
+        if isinstance(raw_tenant_id, list):
+            tenant_id = raw_tenant_id[0] if raw_tenant_id else None
+        else:
+            tenant_id = raw_tenant_id
 
         # Get user ID from 'sub' claim, with fallback to email or username
         # Some Keycloak configurations may not include 'sub' in certain token types

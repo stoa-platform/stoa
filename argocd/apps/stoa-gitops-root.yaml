@@ -1,0 +1,38 @@
+# App of Apps - Bootstrap all Argo CD applications
+# CAB-649: Root application that manages all other applications
+#
+# This application watches the argocd/apps directory and automatically
+# creates/updates all Application resources found there.
+#
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stoa-gitops-root
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: stoa-gitops-root
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: stoa-platform
+  source:
+    repoURL: https://gitlab.com/cab6961310/apim-aws.git
+    targetRevision: main
+    path: argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

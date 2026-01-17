@@ -1,6 +1,8 @@
 """
 E2E Test Fixtures for STOA Platform (CAB-238)
 Keycloak authentication fixtures for console.stoa.cab-i.com
+
+Updated for CAB-650/CAB-651: Added gateway and portal session fixtures
 """
 
 import json
@@ -10,12 +12,15 @@ from pathlib import Path
 from typing import Generator
 
 import pytest
+import requests
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
 # Configuration
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.stoa.cab-i.com")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "stoa")
 CONSOLE_URL = os.getenv("CONSOLE_URL", "https://console.stoa.cab-i.com")
+GATEWAY_URL = os.getenv("GATEWAY_URL", "https://gateway.stoa.cab-i.com")
+PORTAL_URL = os.getenv("PORTAL_URL", "https://portal.stoa.cab-i.com")
 KEYCLOAK_AUTH_URL = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect"
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
 E2E_CREDENTIALS_SECRET = os.getenv("E2E_CREDENTIALS_SECRET", "stoa/e2e-test-credentials")
@@ -310,3 +315,142 @@ def get_access_token_from_storage(page: Page) -> str | None:
 def get_token(page: Page):
     """Fixture to extract token after login."""
     return lambda: get_access_token_from_storage(page)
+
+
+# =============================================================================
+# API Session Fixtures (CAB-650, CAB-651)
+# =============================================================================
+
+
+class KeycloakClient:
+    """
+    Keycloak client for obtaining tokens via password grant.
+
+    Used by API-based tests (sync verification, RBAC tests) that don't
+    need browser automation.
+    """
+
+    def __init__(self):
+        self.server_url = KEYCLOAK_URL
+        self.realm = KEYCLOAK_REALM
+        self.token_url = f"{self.server_url}/realms/{self.realm}/protocol/openid-connect/token"
+
+    def get_token(
+        self,
+        username: str,
+        password: str,
+        client_id: str,
+        scopes: list[str] | None = None
+    ) -> str:
+        """
+        Get access token using password grant.
+
+        Args:
+            username: User's username
+            password: User's password
+            client_id: OAuth2 client ID
+            scopes: List of scopes to request
+
+        Returns:
+            Access token string
+
+        Raises:
+            Exception: If token request fails
+        """
+        data = {
+            "grant_type": "password",
+            "client_id": client_id,
+            "username": username,
+            "password": password,
+        }
+
+        if scopes:
+            data["scope"] = " ".join(scopes)
+
+        response = requests.post(
+            self.token_url,
+            data=data,
+            timeout=30
+        )
+
+        if response.status_code != 200:
+            raise Exception(
+                f"Failed to get token for {username}: "
+                f"{response.status_code} - {response.text}"
+            )
+
+        return response.json()["access_token"]
+
+
+@pytest.fixture(scope="session")
+def keycloak_client() -> KeycloakClient:
+    """Provide a Keycloak client for obtaining tokens."""
+    return KeycloakClient()
+
+
+class AuthenticatedSession(requests.Session):
+    """
+    Requests session with base_url support and authentication.
+
+    Extends requests.Session to add a base_url attribute for cleaner API calls.
+    """
+
+    def __init__(self, base_url: str, token: str):
+        super().__init__()
+        self.base_url = base_url
+        self.headers.update({
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        })
+
+    def request(self, method, url, **kwargs):
+        """Override to support relative URLs with base_url."""
+        if not url.startswith(("http://", "https://")):
+            url = f"{self.base_url}{url}"
+        return super().request(method, url, **kwargs)
+
+
+@pytest.fixture(scope="session")
+def gateway_admin_session(keycloak_client: KeycloakClient) -> AuthenticatedSession:
+    """
+    Authenticated session for webMethods Gateway Admin API.
+
+    Used by sync verification tests to fetch APIs from the Gateway.
+    """
+    username = os.getenv("GATEWAY_ADMIN_USER", "gateway-admin")
+    password = os.getenv("GATEWAY_ADMIN_PASSWORD")
+
+    if not password:
+        pytest.skip("GATEWAY_ADMIN_PASSWORD not set")
+
+    token = keycloak_client.get_token(
+        username=username,
+        password=password,
+        client_id="stoa-gateway",
+        scopes=["gateway:admin"]
+    )
+
+    return AuthenticatedSession(base_url=GATEWAY_URL, token=token)
+
+
+@pytest.fixture(scope="session")
+def portal_session(keycloak_client: KeycloakClient) -> AuthenticatedSession:
+    """
+    Authenticated session for Developer Portal API.
+
+    Used by sync verification tests to fetch APIs from the Portal.
+    """
+    username = os.getenv("PORTAL_ADMIN_USER", "portal-admin")
+    password = os.getenv("PORTAL_ADMIN_PASSWORD")
+
+    if not password:
+        pytest.skip("PORTAL_ADMIN_PASSWORD not set")
+
+    token = keycloak_client.get_token(
+        username=username,
+        password=password,
+        client_id="stoa-portal",
+        scopes=["portal:admin"]
+    )
+
+    return AuthenticatedSession(base_url=PORTAL_URL, token=token)

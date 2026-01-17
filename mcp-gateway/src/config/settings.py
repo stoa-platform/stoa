@@ -92,6 +92,10 @@ class Settings(BaseSettings):
     k8s_watch_namespace: str | None = None  # None = all namespaces
     kubeconfig_path: str | None = None  # None = in-cluster config
 
+    # Feature Flags (CAB-605)
+    enable_demo_tools: bool = False  # Enable RPO Easter egg tools (demo environments only)
+    use_tenant_scoped_tools: bool = False  # Phase 2: Tenant-scoped tool naming (removes tenant prefix)
+
     @model_validator(mode="after")
     def derive_urls_from_base_domain(self) -> "Settings":
         """Derive service URLs from base_domain if not explicitly set."""

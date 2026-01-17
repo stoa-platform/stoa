@@ -1,6 +1,12 @@
-"""Tests for Core Tools (CAB-603).
+"""Tests for Core Tools (CAB-603, CAB-605).
 
-Tests the 35 core platform tools with stoa_{domain}_{action} naming.
+CAB-605 Phase 3: Consolidated to 12 action-based tools.
+- Platform & Discovery: 4 tools (stoa_platform_info, stoa_platform_health, stoa_tools, stoa_tenants)
+- API Catalog: 2 tools (stoa_catalog, stoa_api_spec)
+- Subscriptions & Access: 1 tool (stoa_subscription)
+- Observability & Metrics: 3 tools (stoa_metrics, stoa_logs, stoa_alerts)
+- UAC Contracts: 1 tool (stoa_uac)
+- Security & Compliance: 1 tool (stoa_security)
 """
 
 import pytest
@@ -14,13 +20,14 @@ from src.tools import (
     get_core_tools_by_domain,
     list_all_core_tools,
 )
-from src.tools.core_tools import (
-    PLATFORM_TOOLS,
-    CATALOG_TOOLS,
-    SUBSCRIPTION_TOOLS,
-    OBSERVABILITY_TOOLS,
-    UAC_TOOLS,
-    SECURITY_TOOLS,
+# CAB-605: Import consolidated tools by domain
+from src.tools.consolidated_tools import (
+    CONSOLIDATED_PLATFORM_TOOLS as PLATFORM_TOOLS,
+    CONSOLIDATED_CATALOG_TOOLS as CATALOG_TOOLS,
+    CONSOLIDATED_SUBSCRIPTION_TOOLS as SUBSCRIPTION_TOOLS,
+    CONSOLIDATED_OBSERVABILITY_TOOLS as OBSERVABILITY_TOOLS,
+    CONSOLIDATED_UAC_TOOLS as UAC_TOOLS,
+    CONSOLIDATED_SECURITY_TOOLS as SECURITY_TOOLS,
 )
 
 
@@ -30,35 +37,45 @@ from src.tools.core_tools import (
 
 
 class TestCoreToolCounts:
-    """Test that we have the expected number of core tools."""
+    """Test that we have the expected number of core tools.
+
+    CAB-605 Phase 3: Consolidated from 35 to 12 action-based tools.
+    """
 
     def test_total_core_tools_count(self):
-        """Test that we have exactly 35 core tools."""
-        assert len(CORE_TOOLS) == 35
+        """Test that we have exactly 12 consolidated core tools."""
+        # CAB-605: Reduced from 35 to 12 via action-based consolidation
+        assert len(CORE_TOOLS) == 12
 
     def test_platform_tools_count(self):
-        """Test Platform & Discovery has 6 tools."""
-        assert len(PLATFORM_TOOLS) == 6
+        """Test Platform & Discovery has 4 tools."""
+        # CAB-605: Consolidated from 6 to 4
+        assert len(PLATFORM_TOOLS) == 4
 
     def test_catalog_tools_count(self):
-        """Test API Catalog has 8 tools."""
-        assert len(CATALOG_TOOLS) == 8
+        """Test API Catalog has 2 tools."""
+        # CAB-605: Consolidated from 8 to 2
+        assert len(CATALOG_TOOLS) == 2
 
     def test_subscription_tools_count(self):
-        """Test Subscriptions & Access has 6 tools."""
-        assert len(SUBSCRIPTION_TOOLS) == 6
+        """Test Subscriptions & Access has 1 tool."""
+        # CAB-605: Consolidated from 6 to 1
+        assert len(SUBSCRIPTION_TOOLS) == 1
 
     def test_observability_tools_count(self):
-        """Test Observability & Metrics has 8 tools."""
-        assert len(OBSERVABILITY_TOOLS) == 8
+        """Test Observability & Metrics has 3 tools."""
+        # CAB-605: Consolidated from 8 to 3
+        assert len(OBSERVABILITY_TOOLS) == 3
 
     def test_uac_tools_count(self):
-        """Test UAC Contracts has 4 tools."""
-        assert len(UAC_TOOLS) == 4
+        """Test UAC Contracts has 1 tool."""
+        # CAB-605: Consolidated from 4 to 1
+        assert len(UAC_TOOLS) == 1
 
     def test_security_tools_count(self):
-        """Test Security & Compliance has 3 tools."""
-        assert len(SECURITY_TOOLS) == 3
+        """Test Security & Compliance has 1 tool."""
+        # CAB-605: Consolidated from 3 to 1
+        assert len(SECURITY_TOOLS) == 1
 
 
 # =============================================================================
@@ -67,7 +84,10 @@ class TestCoreToolCounts:
 
 
 class TestCoreToolNaming:
-    """Test that all core tools follow stoa_* naming convention."""
+    """Test that all core tools follow stoa_* naming convention.
+
+    CAB-605: Consolidated tools use stoa_{domain} naming (e.g., stoa_catalog).
+    """
 
     def test_all_tools_have_stoa_prefix(self):
         """Test all core tools start with 'stoa_'."""
@@ -80,44 +100,51 @@ class TestCoreToolNaming:
         assert len(names) == len(set(names)), "Duplicate tool names found"
 
     def test_platform_tools_naming(self):
-        """Test platform tools follow stoa_platform_* or stoa_{action} naming."""
+        """Test platform tools follow consolidated stoa_* naming."""
+        # CAB-605: Consolidated from 6 to 4 tools
         expected_names = {
             "stoa_platform_info",
             "stoa_platform_health",
-            "stoa_list_tools",
-            "stoa_get_tool_schema",
-            "stoa_search_tools",
-            "stoa_list_tenants",
+            "stoa_tools",       # Consolidated from stoa_list_tools, stoa_get_tool_schema, stoa_search_tools
+            "stoa_tenants",     # Renamed from stoa_list_tenants
         }
         actual_names = {tool.name for tool in PLATFORM_TOOLS}
         assert actual_names == expected_names
 
     def test_catalog_tools_naming(self):
-        """Test catalog tools follow stoa_catalog_* naming."""
-        for tool in CATALOG_TOOLS:
-            assert tool.name.startswith("stoa_catalog_"), f"Catalog tool {tool.name} doesn't follow stoa_catalog_* naming"
+        """Test catalog tools follow consolidated stoa_* naming."""
+        # CAB-605: Consolidated from 8 to 2 tools
+        expected_names = {"stoa_catalog", "stoa_api_spec"}
+        actual_names = {tool.name for tool in CATALOG_TOOLS}
+        assert actual_names == expected_names
 
     def test_subscription_tools_naming(self):
-        """Test subscription tools follow stoa_subscription_* naming."""
-        for tool in SUBSCRIPTION_TOOLS:
-            assert tool.name.startswith("stoa_subscription_"), f"Subscription tool {tool.name} doesn't follow stoa_subscription_* naming"
+        """Test subscription tools follow consolidated stoa_* naming."""
+        # CAB-605: Consolidated from 6 to 1 tool
+        expected_names = {"stoa_subscription"}
+        actual_names = {tool.name for tool in SUBSCRIPTION_TOOLS}
+        assert actual_names == expected_names
 
     def test_observability_tools_naming(self):
-        """Test observability tools follow stoa_metrics_*, stoa_logs_*, stoa_alerts_* naming."""
-        valid_prefixes = ("stoa_metrics_", "stoa_logs_", "stoa_alerts_")
-        for tool in OBSERVABILITY_TOOLS:
-            assert any(tool.name.startswith(p) for p in valid_prefixes), \
-                f"Observability tool {tool.name} doesn't follow expected naming"
+        """Test observability tools follow consolidated stoa_* naming."""
+        # CAB-605: Consolidated from 8 to 3 tools
+        expected_names = {"stoa_metrics", "stoa_logs", "stoa_alerts"}
+        actual_names = {tool.name for tool in OBSERVABILITY_TOOLS}
+        assert actual_names == expected_names
 
     def test_uac_tools_naming(self):
-        """Test UAC tools follow stoa_uac_* naming."""
-        for tool in UAC_TOOLS:
-            assert tool.name.startswith("stoa_uac_"), f"UAC tool {tool.name} doesn't follow stoa_uac_* naming"
+        """Test UAC tools follow consolidated stoa_* naming."""
+        # CAB-605: Consolidated from 4 to 1 tool
+        expected_names = {"stoa_uac"}
+        actual_names = {tool.name for tool in UAC_TOOLS}
+        assert actual_names == expected_names
 
     def test_security_tools_naming(self):
-        """Test security tools follow stoa_security_* naming."""
-        for tool in SECURITY_TOOLS:
-            assert tool.name.startswith("stoa_security_"), f"Security tool {tool.name} doesn't follow stoa_security_* naming"
+        """Test security tools follow consolidated stoa_* naming."""
+        # CAB-605: Consolidated from 3 to 1 tool
+        expected_names = {"stoa_security"}
+        actual_names = {tool.name for tool in SECURITY_TOOLS}
+        assert actual_names == expected_names
 
 
 # =============================================================================

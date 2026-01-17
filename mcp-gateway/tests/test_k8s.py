@@ -215,15 +215,21 @@ class TestToolWatcher:
         assert watcher._on_tool_removed is on_removed
 
     def test_generate_tool_name(self):
-        """Test tool name generation."""
+        """Test tool name generation.
+
+        CAB-603: Tool names now use double underscore (__) separator:
+        {tenant}__{api}__{operation}
+        """
         watcher = ToolWatcher()
 
+        # Basic case: tenant-acme, payment-search
+        # Format: {tenant}__{api}__{operation} where api defaults to name
         name = watcher._generate_tool_name("tenant-acme", "payment-search")
-        assert name == "tenant_acme_payment_search"
+        assert name == "tenant-acme__payment-search__payment-search"
 
-        # Test special characters
+        # Test special characters get sanitized
         name = watcher._generate_tool_name("my-ns", "my.tool.v1")
-        assert name == "my_ns_my_tool_v1"
+        assert name == "my-ns__my-tool-v1__my-tool-v1"
 
     def test_parse_tool_cr(self):
         """Test parsing Tool CR from dict."""
@@ -248,7 +254,11 @@ class TestToolWatcher:
         assert tool_cr.spec.displayName == "Test Tool"
 
     def test_cr_to_tool(self):
-        """Test converting Tool CR to MCP Tool."""
+        """Test converting Tool CR to MCP Tool.
+
+        CAB-603: Tool names now use double underscore (__) separator:
+        {tenant}__{api}__{operation}
+        """
         watcher = ToolWatcher()
 
         tool_cr = ToolCR(
@@ -273,7 +283,8 @@ class TestToolWatcher:
 
         tool = watcher._cr_to_tool(tool_cr)
 
-        assert tool.name == "tenant_acme_payment_api"
+        # CAB-603: New format {tenant}__{api}__{operation}
+        assert tool.name == "tenant-acme__payment-api__payment-api"
         assert tool.description == "Payment API operations"
         assert tool.endpoint == "https://api.example.com/payments"
         assert tool.method == "POST"
@@ -282,7 +293,10 @@ class TestToolWatcher:
 
     @pytest.mark.asyncio
     async def test_handle_tool_event_added(self):
-        """Test handling ADDED event."""
+        """Test handling ADDED event.
+
+        CAB-603: Tool names now use double underscore (__) separator.
+        """
         watcher = ToolWatcher()
 
         added_tools = []
@@ -300,17 +314,22 @@ class TestToolWatcher:
             spec=ToolCRSpec(
                 displayName="Test",
                 description="Test tool",
+                endpoint="https://api.example.com/test",  # Required field
             ),
         )
 
         await watcher._handle_tool_event("ADDED", tool_cr)
 
         assert len(added_tools) == 1
-        assert added_tools[0].name == "default_test_tool"
+        # CAB-603: New format {tenant}__{api}__{operation}
+        assert added_tools[0].name == "default__test-tool__test-tool"
 
     @pytest.mark.asyncio
     async def test_handle_tool_event_deleted(self):
-        """Test handling DELETED event."""
+        """Test handling DELETED event.
+
+        CAB-603: Tool names now use double underscore (__) separator.
+        """
         watcher = ToolWatcher()
 
         removed_tools = []
@@ -329,14 +348,16 @@ class TestToolWatcher:
             spec=ToolCRSpec(
                 displayName="Test",
                 description="Test tool",
+                endpoint="https://api.example.com/test",  # Required field
             ),
         )
-        watcher._cr_to_tools["default/test-tool"] = ["default_test_tool"]
+        # CAB-603: New format {tenant}__{api}__{operation}
+        watcher._cr_to_tools["default/test-tool"] = ["default__test-tool__test-tool"]
 
         # Then delete it
         await watcher._handle_tool_event("DELETED", tool_cr)
 
-        assert "default_test_tool" in removed_tools
+        assert "default__test-tool__test-tool" in removed_tools
 
     @pytest.mark.asyncio
     async def test_handle_tool_event_disabled(self):

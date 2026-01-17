@@ -157,7 +157,8 @@ class TestEmbeddedEvaluatorAuthz:
             {"name": "stoa_create_api"},
         )
         assert decision.allowed is False
-        assert "stoa:write" in decision.reason
+        # CAB-604: Error message now mentions the tool name or required scopes
+        assert "stoa_create_api" in decision.reason or "scopes" in decision.reason
 
     def test_viewer_cannot_access_admin_tools(self, evaluator: EmbeddedEvaluator, viewer_user: dict):
         """Test viewer cannot access admin tools."""
@@ -255,7 +256,7 @@ class TestEmbeddedEvaluatorTenantIsolation:
 
 
 class TestEmbeddedEvaluatorDynamicTools:
-    """Tests for dynamically registered tools."""
+    """Tests for dynamically registered tools (legacy tools)."""
 
     def test_dynamic_tool_allowed_with_read(
         self, evaluator: EmbeddedEvaluator, viewer_user: dict
@@ -263,10 +264,11 @@ class TestEmbeddedEvaluatorDynamicTools:
         """Test unknown tools are allowed with read scope."""
         decision = evaluator.evaluate_authz(
             viewer_user,
-            {"name": "api_tool_petstore_listpets"},  # Dynamic tool
+            {"name": "api_tool_petstore_listpets"},  # Dynamic/legacy tool
         )
         assert decision.allowed is True
-        assert decision.metadata.get("tool_type") == "dynamic"
+        # CAB-604: Legacy tools are now classified as "legacy" not "dynamic"
+        assert decision.metadata.get("tool_type") == "legacy"
 
     def test_dynamic_tool_denied_without_scope(
         self, evaluator: EmbeddedEvaluator, no_role_user: dict

@@ -9,7 +9,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..auth.dependencies import get_current_user, require_role, User
+from ..auth.dependencies import get_current_user, User
+from ..auth.rbac import require_role
 from ..services.argocd_service import argocd_service
 from ..config import settings
 

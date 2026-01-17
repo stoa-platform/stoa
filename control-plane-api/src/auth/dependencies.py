@@ -75,8 +75,20 @@ async def get_current_user(
                 azp=payload.get("azp"),
             )
 
-        # Manually verify audience - accept tokens from both UI and API clients
-        valid_audiences = {settings.KEYCLOAK_CLIENT_ID, "control-plane-ui", "stoa-portal", "account"}
+        # Verify audience - tokens should be intended for this API (Resource Server)
+        # OAuth2 Best Practice:
+        # - `aud` = the API that consumes the token (control-plane-api)
+        # - `azp` = the client that requested the token (control-plane-ui, stoa-portal, etc.)
+        #
+        # All clients should have Audience Mappers configured in Keycloak to include
+        # 'control-plane-api' in the 'aud' claim. See: configure-keycloak-audience.sh
+        #
+        # Accepted audiences:
+        # - control-plane-api: Primary API audience (from Audience Mapper)
+        # - account: Keycloak account management tokens
+        # - control-plane-ui, stoa-portal: Legacy support for tokens without Audience Mapper
+        #   TODO: Remove these once all users have refreshed their tokens
+        valid_audiences = {settings.KEYCLOAK_CLIENT_ID, "account", "control-plane-ui", "stoa-portal"}
         token_aud = payload.get("aud", [])
         if isinstance(token_aud, str):
             token_aud = [token_aud]
@@ -85,8 +97,10 @@ async def get_current_user(
                 "JWT audience validation failed",
                 token_aud=token_aud,
                 valid_audiences=list(valid_audiences),
+                azp=payload.get("azp"),
+                hint="Ensure Audience Mapper is configured in Keycloak for this client",
             )
-            raise JWTError(f"Invalid audience: {token_aud}")
+            raise JWTError(f"Invalid audience: {token_aud}. Expected: {list(valid_audiences)}")
 
         email = payload.get("email", "")
         username = payload.get("preferred_username", "")

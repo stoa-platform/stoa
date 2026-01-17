@@ -5,6 +5,8 @@ Supports multiple authentication schemes:
 - Bearer token in Authorization header
 - API Key in X-API-Key header (for M2M)
 - OAuth2 Client Credentials (client_id/client_secret via Basic Auth)
+
+CAB-604: Updated with 12 granular OAuth2 scopes and 6 personas.
 """
 
 import base64
@@ -22,6 +24,16 @@ from jose.exceptions import ExpiredSignatureError
 from pydantic import BaseModel
 
 from ..config import get_settings
+from ..policy.scopes import (
+    Scope,
+    LegacyScope,
+    Persona,
+    PERSONAS,
+    LEGACY_ROLE_TO_PERSONA,
+    expand_legacy_scopes,
+    get_scopes_for_roles,
+    get_persona_for_roles,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -32,7 +44,10 @@ basic_scheme = HTTPBasic(auto_error=False)
 
 
 class TokenClaims(BaseModel):
-    """Validated token claims."""
+    """Validated token claims.
+
+    CAB-604: Extended with granular scope and persona support.
+    """
 
     sub: str | None = None  # Subject (user ID) - may be missing for service accounts
     email: str | None = None
@@ -50,6 +65,7 @@ class TokenClaims(BaseModel):
     exp: int | None = None  # Expiration
     iat: int | None = None  # Issued at
     acr: str | None = None  # Authentication Context Class Reference (for step-up auth/TOTP)
+    tenant_id: str | None = None  # Tenant ID for multi-tenancy
 
     @property
     def subject(self) -> str:
@@ -78,10 +94,96 @@ class TokenClaims(BaseModel):
         return role in self.roles
 
     def has_scope(self, scope: str) -> bool:
-        """Check if token has a specific scope."""
+        """Check if token has a specific scope (direct or via expansion)."""
+        effective_scopes = self.effective_scopes
+        return scope in effective_scopes
+
+    @property
+    def token_scopes(self) -> set[str]:
+        """Get raw scopes from the token."""
         if not self.scope:
-            return False
-        return scope in self.scope.split()
+            return set()
+        return set(self.scope.split())
+
+    @property
+    def effective_scopes(self) -> set[str]:
+        """Get all effective scopes including role-derived and expanded scopes.
+
+        CAB-604: Combines token scopes, role-derived scopes, and expands
+        legacy scopes to their granular equivalents.
+        """
+        scopes = self.token_scopes.copy()
+
+        # Add scopes from persona roles
+        role_scopes = get_scopes_for_roles(self.roles)
+        scopes.update(role_scopes)
+
+        # Expand legacy scopes to granular
+        expanded = expand_legacy_scopes(scopes)
+        return expanded
+
+    @property
+    def persona(self) -> Persona | None:
+        """Get the user's persona based on their roles.
+
+        CAB-604: Returns the highest-privilege persona for the user.
+        """
+        return get_persona_for_roles(self.roles)
+
+    @property
+    def persona_name(self) -> str | None:
+        """Get the user's persona name."""
+        persona = self.persona
+        return persona.name if persona else None
+
+    def has_any_scope(self, *scopes: str) -> bool:
+        """Check if user has any of the specified scopes."""
+        effective = self.effective_scopes
+        return any(scope in effective for scope in scopes)
+
+    def has_all_scopes(self, *scopes: str) -> bool:
+        """Check if user has all of the specified scopes."""
+        effective = self.effective_scopes
+        return all(scope in effective for scope in scopes)
+
+    @property
+    def is_admin(self) -> bool:
+        """Check if user has admin privileges."""
+        return self.has_any_scope(
+            LegacyScope.ADMIN.value,
+            Scope.ADMIN_READ.value,
+            Scope.ADMIN_WRITE.value,
+        )
+
+    @property
+    def can_write(self) -> bool:
+        """Check if user has write privileges."""
+        return self.has_any_scope(
+            LegacyScope.WRITE.value,
+            LegacyScope.ADMIN.value,
+            Scope.CATALOG_WRITE.value,
+            Scope.SUBSCRIPTION_WRITE.value,
+        )
+
+    def can_access_tenant(self, tenant_id: str | None) -> bool:
+        """Check if user can access resources in a tenant.
+
+        CAB-604: Uses persona constraints for tenant isolation.
+        """
+        if not tenant_id:
+            return True  # Global resources
+
+        # Admins can access all tenants
+        if self.is_admin:
+            return True
+
+        # Check persona constraints
+        persona = self.persona
+        if persona and not persona.own_tenant_only:
+            return True
+
+        # Must match own tenant
+        return self.tenant_id == tenant_id
 
 
 @dataclass
@@ -530,8 +632,10 @@ def require_role(role: str):
 def require_scope(scope: str):
     """Dependency factory to require a specific scope.
 
+    CAB-604: Uses effective scopes (including expanded legacy scopes).
+
     Usage:
-        @app.get("/data", dependencies=[Depends(require_scope("read:data"))])
+        @app.get("/data", dependencies=[Depends(require_scope("stoa:catalog:read"))])
         async def data_endpoint():
             ...
     """
@@ -544,7 +648,8 @@ def require_scope(scope: str):
                 "Access denied - missing scope",
                 user=user.subject,
                 required_scope=scope,
-                user_scopes=user.scope,
+                user_scopes=list(user.effective_scopes),
+                persona=user.persona_name,
             )
             raise HTTPException(
                 status_code=403,
@@ -553,3 +658,170 @@ def require_scope(scope: str):
         return user
 
     return scope_checker
+
+
+def require_any_scope(*scopes: str):
+    """Dependency factory to require any of the specified scopes.
+
+    CAB-604: Allows access if user has at least one of the scopes.
+
+    Usage:
+        @app.get("/data", dependencies=[Depends(require_any_scope(
+            Scope.CATALOG_READ.value, Scope.ADMIN_READ.value
+        ))])
+        async def data_endpoint():
+            ...
+    """
+
+    async def scope_checker(
+        user: Annotated[TokenClaims, Depends(get_current_user)],
+    ) -> TokenClaims:
+        if not user.has_any_scope(*scopes):
+            logger.warning(
+                "Access denied - missing scopes",
+                user=user.subject,
+                required_scopes=list(scopes),
+                user_scopes=list(user.effective_scopes),
+                persona=user.persona_name,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=f"One of scopes {list(scopes)} required",
+            )
+        return user
+
+    return scope_checker
+
+
+def require_all_scopes(*scopes: str):
+    """Dependency factory to require all of the specified scopes.
+
+    CAB-604: Requires user to have all specified scopes.
+
+    Usage:
+        @app.get("/admin-data", dependencies=[Depends(require_all_scopes(
+            Scope.ADMIN_READ.value, Scope.SECURITY_READ.value
+        ))])
+        async def admin_data_endpoint():
+            ...
+    """
+
+    async def scope_checker(
+        user: Annotated[TokenClaims, Depends(get_current_user)],
+    ) -> TokenClaims:
+        if not user.has_all_scopes(*scopes):
+            missing = set(scopes) - user.effective_scopes
+            logger.warning(
+                "Access denied - missing scopes",
+                user=user.subject,
+                required_scopes=list(scopes),
+                missing_scopes=list(missing),
+                user_scopes=list(user.effective_scopes),
+                persona=user.persona_name,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=f"All scopes {list(scopes)} required",
+            )
+        return user
+
+    return scope_checker
+
+
+def require_persona(*personas: str):
+    """Dependency factory to require one of the specified personas.
+
+    CAB-604: Requires user to have a specific persona role.
+
+    Usage:
+        @app.get("/admin", dependencies=[Depends(require_persona("stoa.admin", "stoa.security"))])
+        async def admin_endpoint():
+            ...
+    """
+
+    async def persona_checker(
+        user: Annotated[TokenClaims, Depends(get_current_user)],
+    ) -> TokenClaims:
+        user_persona = user.persona_name
+        if not user_persona or user_persona not in personas:
+            logger.warning(
+                "Access denied - missing persona",
+                user=user.subject,
+                required_personas=list(personas),
+                user_persona=user_persona,
+                user_roles=user.roles,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=f"One of personas {list(personas)} required",
+            )
+        return user
+
+    return persona_checker
+
+
+def require_tenant_access(tenant_id_param: str = "tenant_id"):
+    """Dependency factory to require access to a specific tenant.
+
+    CAB-604: Uses persona constraints for tenant isolation.
+
+    Usage:
+        @app.get("/tenants/{tenant_id}/data")
+        async def tenant_data(
+            tenant_id: str,
+            user: TokenClaims = Depends(require_tenant_access("tenant_id"))
+        ):
+            ...
+    """
+
+    async def tenant_checker(
+        request: Request,
+        user: Annotated[TokenClaims, Depends(get_current_user)],
+    ) -> TokenClaims:
+        # Get tenant_id from path parameters
+        tenant_id = request.path_params.get(tenant_id_param)
+
+        if tenant_id and not user.can_access_tenant(tenant_id):
+            logger.warning(
+                "Access denied - tenant isolation",
+                user=user.subject,
+                user_tenant=user.tenant_id,
+                requested_tenant=tenant_id,
+                persona=user.persona_name,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access to tenant '{tenant_id}' denied",
+            )
+        return user
+
+    return tenant_checker
+
+
+# =============================================================================
+# CAB-604: Pre-built scope requirements for common operations
+# =============================================================================
+
+# Catalog operations
+require_catalog_read = require_scope(Scope.CATALOG_READ.value)
+require_catalog_write = require_scope(Scope.CATALOG_WRITE.value)
+
+# Subscription operations
+require_subscription_read = require_scope(Scope.SUBSCRIPTION_READ.value)
+require_subscription_write = require_scope(Scope.SUBSCRIPTION_WRITE.value)
+
+# Observability operations
+require_observability_read = require_scope(Scope.OBSERVABILITY_READ.value)
+require_observability_write = require_scope(Scope.OBSERVABILITY_WRITE.value)
+
+# Tool operations
+require_tools_read = require_scope(Scope.TOOLS_READ.value)
+require_tools_execute = require_scope(Scope.TOOLS_EXECUTE.value)
+
+# Admin operations
+require_admin_read = require_scope(Scope.ADMIN_READ.value)
+require_admin_write = require_scope(Scope.ADMIN_WRITE.value)
+
+# Security operations
+require_security_read = require_scope(Scope.SECURITY_READ.value)
+require_security_write = require_scope(Scope.SECURITY_WRITE.value)

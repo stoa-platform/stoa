@@ -6,9 +6,15 @@ Tools are mapped from STOA API definitions.
 CAB-603: Restructured for Core vs Proxied tool separation.
 - Core Tools: 35 static platform tools with stoa_{domain}_{action} naming
 - Proxied Tools: Dynamic tenant API tools with {tenant}:{api}:{operation} namespace
+
+CAB-605 Phase 3: Tool consolidation with deprecation layer.
+- Action-based tools: Single tool with action enum parameter
+- Deprecation aliases: Backward compatibility for 60 days
 """
 
 import time
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -30,9 +36,53 @@ from ..models import (
     ListTagsResponse,
     ToolCategory,
 )
-from ..tools import CORE_TOOLS, get_core_tool
+from ..tools import CORE_TOOLS, DEPRECATION_MAPPINGS, get_core_tool
 
 logger = structlog.get_logger(__name__)
+
+
+# =============================================================================
+# CAB-605 Phase 3: Deprecation Layer
+# =============================================================================
+
+
+class ToolNotFoundError(Exception):
+    """Raised when a tool is not found or has been permanently removed."""
+
+    pass
+
+
+@dataclass
+class DeprecatedToolAlias:
+    """Alias for backward compatibility during deprecation period.
+
+    CAB-605: When old tools are renamed/consolidated, aliases allow
+    existing clients to continue working for 60 days with warnings.
+
+    Attributes:
+        old_name: The deprecated tool name
+        new_name: The replacement tool name
+        new_args: Arguments to inject when redirecting
+        deprecated_at: When the deprecation started
+        remove_after: When the alias will stop working (60 days default)
+    """
+
+    old_name: str
+    new_name: str
+    new_args: dict[str, Any] = field(default_factory=dict)
+    deprecated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    remove_after: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=60)
+    )
+
+    def is_expired(self) -> bool:
+        """Check if the deprecation period has ended."""
+        return datetime.now(timezone.utc) > self.remove_after
+
+    def days_until_removal(self) -> int:
+        """Get days remaining until removal."""
+        remaining = self.remove_after - datetime.now(timezone.utc)
+        return max(0, remaining.days)
 
 
 class ToolRegistry:
@@ -59,6 +109,9 @@ class ToolRegistry:
         self._tools: dict[str, Tool] = {}  # Legacy storage for backward compatibility
         self._http_client: httpx.AsyncClient | None = None
 
+        # CAB-605 Phase 3: Deprecation aliases for backward compatibility
+        self._deprecated_aliases: dict[str, DeprecatedToolAlias] = {}
+
     async def startup(self) -> None:
         """Initialize the registry on application startup."""
         settings = get_settings()
@@ -68,21 +121,37 @@ class ToolRegistry:
         )
         logger.info("Tool registry initialized")
 
-        # CAB-603: Register the 35 core tools from the new tools package
+        # CAB-605: Register consolidated core tools (12 action-based tools)
         await self._register_core_tools()
+
+        # CAB-605: Register deprecation aliases for backward compatibility
+        await self._register_deprecation_aliases()
 
         # Register built-in tools (legacy, for backward compatibility)
         await self._register_builtin_tools()
 
     async def _register_core_tools(self) -> None:
-        """Register all 35 core platform tools.
+        """Register consolidated core platform tools.
 
-        CAB-603: Core tools are static platform capabilities defined in
-        src/tools/core_tools.py with stoa_{domain}_{action} naming.
+        CAB-605 Phase 3: Consolidated action-based tools (12 total).
+        Tools are defined in src/tools/consolidated_tools.py.
         """
         for core_tool in CORE_TOOLS:
             self.register_core_tool(core_tool)
         logger.info("Registered core tools", count=len(self._core_tools))
+
+    async def _register_deprecation_aliases(self) -> None:
+        """Register deprecation aliases for legacy tool names.
+
+        CAB-605 Phase 3: Maps old tool names to new consolidated tools
+        with appropriate action parameters.
+        """
+        for old_name, (new_name, new_args) in DEPRECATION_MAPPINGS.items():
+            self.register_deprecation(old_name, new_name, new_args)
+        logger.info(
+            "Registered deprecation aliases",
+            count=len(self._deprecated_aliases),
+        )
 
     async def shutdown(self) -> None:
         """Cleanup on application shutdown."""
@@ -91,451 +160,51 @@ class ToolRegistry:
         logger.info("Tool registry shutdown")
 
     async def _register_builtin_tools(self) -> None:
-        """Register built-in platform tools."""
-        # Platform info tool
-        self.register(
-            Tool(
-                name="stoa_platform_info",
-                description="Get information about the STOA API Management Platform",
-                input_schema=ToolInputSchema(
-                    properties={},
-                    required=[],
-                ),
-                tags=["platform", "info"],
-            )
-        )
+        """Register built-in platform tools.
 
-        # API catalog tool
-        self.register(
-            Tool(
-                name="stoa_list_apis",
-                description="List available APIs in the STOA catalog",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "tenant_id": {
-                            "type": "string",
-                            "description": "Filter by tenant ID",
-                        },
-                        "tag": {
-                            "type": "string",
-                            "description": "Filter by tag",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum number of results",
-                            "default": 20,
-                        },
-                    },
-                    required=[],
-                ),
-                tags=["platform", "catalog"],
-            )
-        )
-
-        # API details tool
-        self.register(
-            Tool(
-                name="stoa_get_api_details",
-                description="Get detailed information about a specific API",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "api_id": {
-                            "type": "string",
-                            "description": "The API identifier",
-                        },
-                    },
-                    required=["api_id"],
-                ),
-                tags=["platform", "catalog"],
-            )
-        )
-
-        # Health check tool
-        self.register(
-            Tool(
-                name="stoa_health_check",
-                description="Check the health status of STOA platform services",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "service": {
-                            "type": "string",
-                            "description": "Specific service to check (api, gateway, auth, all)",
-                            "enum": ["api", "gateway", "auth", "all"],
-                            "default": "all",
-                        },
-                    },
-                    required=[],
-                ),
-                tags=["platform", "health"],
-            )
-        )
-
-        # List available tools
-        self.register(
-            Tool(
-                name="stoa_list_tools",
-                description="List all available MCP tools with their descriptions",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "tag": {
-                            "type": "string",
-                            "description": "Filter tools by tag",
-                        },
-                        "include_schema": {
-                            "type": "boolean",
-                            "description": "Include input schema in response",
-                            "default": False,
-                        },
-                    },
-                    required=[],
-                ),
-                tags=["platform", "discovery"],
-            )
-        )
-
-        # Get tool schema
-        self.register(
-            Tool(
-                name="stoa_get_tool_schema",
-                description="Get the input schema for a specific tool",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "tool_name": {
-                            "type": "string",
-                            "description": "Name of the tool to get schema for",
-                        },
-                    },
-                    required=["tool_name"],
-                ),
-                tags=["platform", "discovery"],
-            )
-        )
-
-        # Search APIs
-        self.register(
-            Tool(
-                name="stoa_search_apis",
-                description="Search for APIs by keyword in name or description",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "query": {
-                            "type": "string",
-                            "description": "Search query string",
-                        },
-                        "tenant_id": {
-                            "type": "string",
-                            "description": "Filter by tenant ID",
-                        },
-                    },
-                    required=["query"],
-                ),
-                tags=["platform", "search"],
-            )
-        )
-
-        # Register demo tools with categories
+        CAB-605: Legacy duplicate tools removed. Use core tools instead:
+        - stoa_platform_info -> Core stoa_platform_info
+        - stoa_list_apis -> Core stoa_catalog_list_apis
+        - stoa_get_api_details -> Core stoa_catalog_get_api
+        - stoa_health_check -> Core stoa_platform_health
+        - stoa_list_tools -> Core stoa_list_tools
+        - stoa_get_tool_schema -> Core stoa_get_tool_schema
+        - stoa_search_apis -> Core stoa_catalog_search_apis
+        """
+        # CAB-605: Register demo tools with categories (feature-flagged)
         await self._register_demo_tools()
 
         logger.info("Registered builtin tools", count=len(self._tools))
 
     async def _register_demo_tools(self) -> None:
-        """Register demo tools with categories for CAB-311."""
-        # Sales category tools
-        self.register(
-            Tool(
-                name="crm_search",
-                description="Search customer records in the CRM database by name, email, or account ID",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "query": {
-                            "type": "string",
-                            "description": "Search query (name, email, or account ID)",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum results to return",
-                            "default": 10,
-                        },
-                    },
-                    required=["query"],
-                ),
-                category="Sales",
-                tags=["crm", "customer", "search"],
-            )
-        )
+        """Register demo tools with categories.
 
-        self.register(
-            Tool(
-                name="sales_pipeline",
-                description="Get current sales pipeline status and opportunities",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "stage": {
-                            "type": "string",
-                            "description": "Filter by pipeline stage",
-                            "enum": ["prospect", "qualified", "proposal", "negotiation", "closed"],
-                        },
-                        "min_value": {
-                            "type": "number",
-                            "description": "Minimum deal value",
-                        },
-                    },
-                    required=[],
-                ),
-                category="Sales",
-                tags=["crm", "pipeline", "opportunities"],
-            )
-        )
+        CAB-605: Backend-less demo tools removed. They returned "no backend configured".
+        Removed tools:
+        - crm_search, sales_pipeline, lead_scoring (Sales)
+        - billing_invoice, expense_report, revenue_analytics (Finance)
+        - inventory_lookup, order_tracking, supply_chain_status (Operations)
+        - notifications_send, email_templates, chat_integration (Communications)
 
-        self.register(
-            Tool(
-                name="lead_scoring",
-                description="Calculate lead score based on engagement and profile data",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "lead_id": {
-                            "type": "string",
-                            "description": "Lead identifier",
-                        },
-                    },
-                    required=["lead_id"],
-                ),
-                category="Sales",
-                tags=["crm", "leads", "scoring"],
-            )
-        )
+        RPO Easter eggs are feature-flagged via enable_demo_tools setting.
+        """
+        settings = get_settings()
 
-        # Finance category tools
-        self.register(
-            Tool(
-                name="billing_invoice",
-                description="Create, retrieve, or update billing invoices",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "action": {
-                            "type": "string",
-                            "description": "Action to perform",
-                            "enum": ["create", "get", "list", "update"],
-                        },
-                        "invoice_id": {
-                            "type": "string",
-                            "description": "Invoice ID (for get/update)",
-                        },
-                        "customer_id": {
-                            "type": "string",
-                            "description": "Customer ID (for create/list)",
-                        },
-                    },
-                    required=["action"],
-                ),
-                category="Finance",
-                tags=["billing", "invoice", "accounting"],
-            )
-        )
+        # CAB-605: Only register RPO Easter eggs if feature flag is enabled
+        if settings.enable_demo_tools:
+            await self._register_rpo_easter_eggs()
+        else:
+            logger.debug("Demo tools disabled (enable_demo_tools=false)")
 
-        self.register(
-            Tool(
-                name="expense_report",
-                description="Submit or review expense reports",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "action": {
-                            "type": "string",
-                            "description": "Action to perform",
-                            "enum": ["submit", "approve", "reject", "list"],
-                        },
-                        "report_id": {
-                            "type": "string",
-                            "description": "Expense report ID",
-                        },
-                    },
-                    required=["action"],
-                ),
-                category="Finance",
-                tags=["expense", "finance", "reporting"],
-            )
-        )
+    async def _register_rpo_easter_eggs(self) -> None:
+        """Register Ready Player One Easter egg tools (demo only).
 
-        self.register(
-            Tool(
-                name="revenue_analytics",
-                description="Get revenue analytics and financial metrics",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "period": {
-                            "type": "string",
-                            "description": "Time period",
-                            "enum": ["daily", "weekly", "monthly", "quarterly", "yearly"],
-                        },
-                        "metric": {
-                            "type": "string",
-                            "description": "Metric to retrieve",
-                            "enum": ["revenue", "mrr", "arr", "churn"],
-                        },
-                    },
-                    required=["period"],
-                ),
-                category="Finance",
-                tags=["analytics", "revenue", "metrics"],
-            )
-        )
+        CAB-605: These tools are feature-flagged and hidden in production.
+        Set ENABLE_DEMO_TOOLS=true to enable.
 
-        # Operations category tools
-        self.register(
-            Tool(
-                name="inventory_lookup",
-                description="Check inventory levels and stock availability",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "product_id": {
-                            "type": "string",
-                            "description": "Product identifier",
-                        },
-                        "warehouse": {
-                            "type": "string",
-                            "description": "Warehouse location",
-                        },
-                    },
-                    required=["product_id"],
-                ),
-                category="Operations",
-                tags=["inventory", "warehouse", "stock"],
-            )
-        )
-
-        self.register(
-            Tool(
-                name="order_tracking",
-                description="Track order status and shipment information",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "order_id": {
-                            "type": "string",
-                            "description": "Order identifier",
-                        },
-                    },
-                    required=["order_id"],
-                ),
-                category="Operations",
-                tags=["orders", "shipping", "tracking"],
-            )
-        )
-
-        self.register(
-            Tool(
-                name="supply_chain_status",
-                description="Get supply chain status and supplier information",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "supplier_id": {
-                            "type": "string",
-                            "description": "Supplier identifier",
-                        },
-                        "category": {
-                            "type": "string",
-                            "description": "Product category",
-                        },
-                    },
-                    required=[],
-                ),
-                category="Operations",
-                tags=["supply-chain", "suppliers", "logistics"],
-            )
-        )
-
-        # Communications category tools
-        self.register(
-            Tool(
-                name="notifications_send",
-                description="Send notifications via email, SMS, or push",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "channel": {
-                            "type": "string",
-                            "description": "Notification channel",
-                            "enum": ["email", "sms", "push", "slack"],
-                        },
-                        "recipient": {
-                            "type": "string",
-                            "description": "Recipient identifier or address",
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "Message content",
-                        },
-                        "template_id": {
-                            "type": "string",
-                            "description": "Optional template ID",
-                        },
-                    },
-                    required=["channel", "recipient", "message"],
-                ),
-                category="Communications",
-                tags=["notifications", "email", "messaging"],
-            )
-        )
-
-        self.register(
-            Tool(
-                name="email_templates",
-                description="Manage email templates for communications",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "action": {
-                            "type": "string",
-                            "description": "Action to perform",
-                            "enum": ["list", "get", "preview"],
-                        },
-                        "template_id": {
-                            "type": "string",
-                            "description": "Template identifier",
-                        },
-                        "variables": {
-                            "type": "object",
-                            "description": "Template variables for preview",
-                        },
-                    },
-                    required=["action"],
-                ),
-                category="Communications",
-                tags=["email", "templates", "marketing"],
-            )
-        )
-
-        self.register(
-            Tool(
-                name="chat_integration",
-                description="Send messages to team chat platforms (Slack, Teams)",
-                input_schema=ToolInputSchema(
-                    properties={
-                        "platform": {
-                            "type": "string",
-                            "description": "Chat platform",
-                            "enum": ["slack", "teams", "discord"],
-                        },
-                        "channel": {
-                            "type": "string",
-                            "description": "Channel or conversation ID",
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "Message to send",
-                        },
-                    },
-                    required=["platform", "channel", "message"],
-                ),
-                category="Communications",
-                tags=["chat", "slack", "teams", "messaging"],
-            )
-        )
-
-        # =====================================================================
-        # Ready Player One Demo Tools
-        # =====================================================================
-        # These tools demonstrate tenant-based ownership for the RPO demo
-        # - high-five tenant: Parzival's resistance team
-        # - ioi tenant: IOI Corporation (antagonists)
-
+        - high-five tenant: Parzival's resistance team
+        - ioi tenant: IOI Corporation (antagonists)
+        """
         # High Five Tools (Parzival's team)
         self.register(
             Tool(
@@ -559,8 +228,8 @@ class ToolRegistry:
                     },
                     required=["query"],
                 ),
-                category="Sales",
-                tags=["oasis", "artifacts", "easter-eggs", "hunting"],
+                category="Demo",
+                tags=["oasis", "artifacts", "easter-eggs", "hunting", "demo"],
                 tenant_id="high-five",
             )
         )
@@ -588,8 +257,8 @@ class ToolRegistry:
                     },
                     required=[],
                 ),
-                category="Finance",
-                tags=["rankings", "scores", "gunters", "leaderboard"],
+                category="Demo",
+                tags=["rankings", "scores", "gunters", "leaderboard", "demo"],
                 tenant_id="high-five",
             )
         )
@@ -617,8 +286,8 @@ class ToolRegistry:
                     },
                     required=[],
                 ),
-                category="Operations",
-                tags=["inventory", "sixers", "equipment", "ioi"],
+                category="Demo",
+                tags=["inventory", "sixers", "equipment", "ioi", "demo"],
                 tenant_id="ioi",
             )
         )
@@ -645,13 +314,13 @@ class ToolRegistry:
                     },
                     required=[],
                 ),
-                category="Communications",
-                tags=["surveillance", "monitoring", "tracking", "ioi"],
+                category="Demo",
+                tags=["surveillance", "monitoring", "tracking", "ioi", "demo"],
                 tenant_id="ioi",
             )
         )
 
-        logger.info("Registered demo tools with categories", count=16)
+        logger.info("Registered RPO Easter egg tools (demo mode)", count=4)
 
     # =========================================================================
     # Registration Methods (CAB-603)
@@ -671,17 +340,22 @@ class ToolRegistry:
     def register_proxied_tool(self, tool: ProxiedTool) -> None:
         """Register a proxied tenant API tool.
 
+        CAB-605 Phase 2: Uses internal_key for storage to handle collisions
+        when multiple tenants have APIs with the same name.
+
         Args:
-            tool: ProxiedTool instance with {tenant}:{api}:{operation} namespace
+            tool: ProxiedTool instance with tenant_id, api_id, and operation
         """
-        key = tool.namespaced_name
+        # CAB-605: Use internal_key for storage (always includes tenant)
+        key = tool.internal_key
         if key in self._proxied_tools:
-            logger.warning("Overwriting existing proxied tool", tool_name=key)
+            logger.info("Updating existing proxied tool", internal_key=key)
         self._proxied_tools[key] = tool
         logger.debug(
             "Proxied tool registered",
             tool_name=tool.name,
-            namespaced_name=key,
+            display_name=tool.namespaced_name,  # May or may not include tenant
+            internal_key=key,
             tenant_id=tool.tenant_id,
         )
 
@@ -703,16 +377,28 @@ class ToolRegistry:
             return True
         return False
 
-    def unregister_proxied_tool(self, namespaced_name: str) -> bool:
-        """Unregister a proxied tool by its namespaced name.
+    def unregister_proxied_tool(self, key: str) -> bool:
+        """Unregister a proxied tool by its key.
+
+        CAB-605 Phase 2: Accepts either internal_key (tenant::api__op) or
+        legacy namespaced_name (tenant__api__op) for backward compatibility.
 
         Args:
-            namespaced_name: Full namespace {tenant}:{api}:{operation}
+            key: Internal key or namespaced name
         """
-        if namespaced_name in self._proxied_tools:
-            del self._proxied_tools[namespaced_name]
-            logger.debug("Proxied tool unregistered", namespaced_name=namespaced_name)
+        # Try direct lookup first (internal_key format)
+        if key in self._proxied_tools:
+            del self._proxied_tools[key]
+            logger.debug("Proxied tool unregistered", key=key)
             return True
+
+        # CAB-605: Also try finding by legacy namespaced_name for backward compat
+        for internal_key, tool in list(self._proxied_tools.items()):
+            if tool.namespaced_name == key:
+                del self._proxied_tools[internal_key]
+                logger.debug("Proxied tool unregistered (by namespaced_name)", key=key)
+                return True
+
         return False
 
     def unregister(self, name: str) -> bool:
@@ -722,6 +408,142 @@ class ToolRegistry:
             logger.debug("Tool unregistered", tool_name=name)
             return True
         return False
+
+    # =========================================================================
+    # Deprecation Methods (CAB-605 Phase 3)
+    # =========================================================================
+
+    def register_deprecation(
+        self,
+        old_name: str,
+        new_name: str,
+        new_args: dict[str, Any] | None = None,
+        deprecation_days: int = 60,
+    ) -> None:
+        """Register a deprecated tool alias for backward compatibility.
+
+        CAB-605: When consolidating tools, register deprecations to maintain
+        backward compatibility. Clients calling the old tool name will be
+        redirected to the new tool with appropriate arguments.
+
+        Args:
+            old_name: The deprecated tool name
+            new_name: The replacement tool name
+            new_args: Arguments to inject (e.g., {"action": "list"})
+            deprecation_days: Days until the alias expires (default: 60)
+        """
+        now = datetime.now(timezone.utc)
+        alias = DeprecatedToolAlias(
+            old_name=old_name,
+            new_name=new_name,
+            new_args=new_args or {},
+            deprecated_at=now,
+            remove_after=now + timedelta(days=deprecation_days),
+        )
+        self._deprecated_aliases[old_name] = alias
+        logger.info(
+            "Registered deprecation alias",
+            old_name=old_name,
+            new_name=new_name,
+            new_args=new_args,
+            remove_after=alias.remove_after.isoformat(),
+        )
+
+    def resolve_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        tenant_id: str | None = None,
+    ) -> tuple[AnyTool, dict[str, Any], bool]:
+        """Resolve tool name, handling deprecations.
+
+        CAB-605 Phase 3: Checks for deprecated aliases and redirects to
+        new tools while logging deprecation warnings.
+
+        Args:
+            name: Tool name (may be deprecated)
+            arguments: Original arguments from client
+            tenant_id: Tenant context for tool lookup
+
+        Returns:
+            Tuple of (tool, merged_arguments, is_deprecated)
+
+        Raises:
+            ToolNotFoundError: If tool not found or deprecation expired
+        """
+        # Check for deprecated alias first
+        if name in self._deprecated_aliases:
+            alias = self._deprecated_aliases[name]
+
+            # Check if past removal date
+            if alias.is_expired():
+                raise ToolNotFoundError(
+                    f"Tool '{name}' has been removed. "
+                    f"Use '{alias.new_name}' instead."
+                )
+
+            # Log deprecation warning
+            days_left = alias.days_until_removal()
+            logger.warning(
+                "Deprecated tool called",
+                old_name=name,
+                new_name=alias.new_name,
+                days_until_removal=days_left,
+                deprecated_at=alias.deprecated_at.isoformat(),
+            )
+
+            # Merge arguments (alias args first, client args override)
+            merged_args = {**alias.new_args, **arguments}
+
+            # Lookup the new tool
+            tool = self.get(alias.new_name, tenant_id)
+            if not tool:
+                raise ToolNotFoundError(
+                    f"Replacement tool '{alias.new_name}' not found"
+                )
+
+            return tool, merged_args, True
+
+        # Normal lookup
+        tool = self.get(name, tenant_id)
+        if not tool:
+            raise ToolNotFoundError(f"Tool '{name}' not found")
+
+        return tool, arguments, False
+
+    def list_deprecated_tools(self) -> list[dict[str, Any]]:
+        """List all deprecated tool aliases.
+
+        Returns:
+            List of deprecation information dictionaries
+        """
+        return [
+            {
+                "old_name": alias.old_name,
+                "new_name": alias.new_name,
+                "new_args": alias.new_args,
+                "deprecated_at": alias.deprecated_at.isoformat(),
+                "remove_after": alias.remove_after.isoformat(),
+                "days_until_removal": alias.days_until_removal(),
+                "is_expired": alias.is_expired(),
+            }
+            for alias in self._deprecated_aliases.values()
+        ]
+
+    def clear_expired_deprecations(self) -> int:
+        """Remove expired deprecation aliases.
+
+        Returns:
+            Number of aliases removed
+        """
+        expired = [
+            name for name, alias in self._deprecated_aliases.items()
+            if alias.is_expired()
+        ]
+        for name in expired:
+            del self._deprecated_aliases[name]
+            logger.info("Removed expired deprecation alias", old_name=name)
+        return len(expired)
 
     # =========================================================================
     # Lookup Methods (CAB-603)
@@ -736,18 +558,60 @@ class ToolRegistry:
         name: str,
         tenant_id: str | None = None,
     ) -> ProxiedTool | None:
-        """Get a proxied tool by name or namespaced name.
+        """Get a proxied tool by name with tenant-scoped lookup.
+
+        CAB-605 Phase 2: When use_tenant_scoped_tools is enabled, tools are
+        looked up by {api}__{operation} name within the tenant's scope.
 
         Args:
-            name: Tool name or full namespaced name {tenant}:{api}:{operation}
-            tenant_id: Optional tenant context for lookup
+            name: Tool name (api__op format or full tenant__api__op)
+            tenant_id: Tenant ID from JWT (required for Phase 2 lookup)
 
         Returns:
-            ProxiedTool if found, None otherwise
+            ProxiedTool if found and accessible, None otherwise
         """
-        # Direct lookup by namespaced name (uses __ separator)
-        if "__" in name:
-            return self._proxied_tools.get(name)
+        settings = get_settings()
+        use_tenant_scoped = getattr(settings, 'use_tenant_scoped_tools', False)
+
+        # Phase 2: Tenant-scoped lookup
+        if use_tenant_scoped and tenant_id:
+            # Try internal_key lookup: tenant::api__op
+            internal_key = f"{tenant_id}::{name}"
+            if internal_key in self._proxied_tools:
+                return self._proxied_tools[internal_key]
+
+            # Also search by display name match
+            for key, tool in self._proxied_tools.items():
+                if tool.tenant_id == tenant_id and tool.namespaced_name == name:
+                    return tool
+
+        # Legacy: Direct lookup by internal_key or namespaced_name
+        if name in self._proxied_tools:
+            tool = self._proxied_tools[name]
+            # Apply tenant filter if provided
+            if tenant_id and tool.tenant_id != tenant_id:
+                logger.warning(
+                    "Tenant attempted to access tool from another tenant",
+                    requesting_tenant=tenant_id,
+                    tool_tenant=tool.tenant_id,
+                    tool_name=name,
+                )
+                return None
+            return tool
+
+        # Search by namespaced_name in all tools
+        for key, tool in self._proxied_tools.items():
+            if tool.namespaced_name == name:
+                # Apply tenant filter if provided
+                if tenant_id and tool.tenant_id != tenant_id:
+                    logger.warning(
+                        "Tenant attempted to access tool from another tenant",
+                        requesting_tenant=tenant_id,
+                        tool_tenant=tool.tenant_id,
+                        tool_name=name,
+                    )
+                    return None
+                return tool
 
         # Search by operation name within tenant context
         if tenant_id:
@@ -762,15 +626,19 @@ class ToolRegistry:
 
         CAB-603: Routes lookup based on naming convention:
         - stoa_* -> Core tools
-        - {tenant}:{api}:{operation} -> Proxied tools
+        - {api}__{operation} or {tenant}__{api}__{operation} -> Proxied tools
         - other -> Legacy tools
+
+        CAB-605 Phase 2: tenant_id is required for proxied tool lookup when
+        use_tenant_scoped_tools is enabled. The tenant is used to filter
+        which tools the user can access.
 
         Args:
             name: Tool name
-            tenant_id: Optional tenant context for proxied tool lookup
+            tenant_id: Tenant context for proxied tool lookup (from JWT)
 
         Returns:
-            Tool if found, None otherwise
+            Tool if found and accessible, None otherwise
         """
         # Core tools: stoa_* prefix
         if name.startswith("stoa_"):
@@ -778,7 +646,8 @@ class ToolRegistry:
 
         # Proxied tools: namespaced format (uses __ separator)
         if "__" in name:
-            return self._proxied_tools.get(name)
+            # CAB-605: Use tenant-scoped lookup
+            return self.get_proxied_tool(name, tenant_id)
 
         # Try proxied tool lookup with tenant context
         if tenant_id:
@@ -879,6 +748,22 @@ class ToolRegistry:
                 if search_lower in t.name.lower() or search_lower in t.description.lower()
             ]
 
+        # CAB-605: Safety net - deduplicate by name (first occurrence wins)
+        # This prevents duplicate tools from being returned if registered in multiple tiers
+        seen_names: set[str] = set()
+        deduplicated: list[Tool] = []
+        for tool in tools:
+            if tool.name not in seen_names:
+                seen_names.add(tool.name)
+                deduplicated.append(tool)
+            else:
+                logger.warning(
+                    "Duplicate tool filtered out",
+                    tool_name=tool.name,
+                    category=tool.category,
+                )
+        tools = deduplicated
+
         # Pagination (simple offset-based for now)
         start_idx = 0
         if cursor:
@@ -975,11 +860,27 @@ class ToolRegistry:
             Tool execution result
         """
         start_time = time.time()
-        tool = self.get(invocation.name, tenant_id)
+        is_deprecated = False
+        deprecation_warning: str | None = None
+        arguments = invocation.arguments
 
-        if not tool:
+        # CAB-605 Phase 3: Use resolve_tool for deprecation handling
+        try:
+            tool, arguments, is_deprecated = self.resolve_tool(
+                invocation.name,
+                invocation.arguments,
+                tenant_id,
+            )
+            if is_deprecated:
+                alias = self._deprecated_aliases.get(invocation.name)
+                if alias:
+                    deprecation_warning = (
+                        f"Tool '{invocation.name}' is deprecated and will be removed "
+                        f"in {alias.days_until_removal()} days. Use '{alias.new_name}' instead."
+                    )
+        except ToolNotFoundError as e:
             return ToolResult(
-                content=[TextContent(text=f"Tool not found: {invocation.name}")],
+                content=[TextContent(text=str(e))],
                 is_error=True,
                 request_id=invocation.request_id,
             )
@@ -992,20 +893,22 @@ class ToolRegistry:
             tool_name=tool.name,
             tool_type=tool_type.value if hasattr(tool_type, 'value') else str(tool_type),
             request_id=invocation.request_id,
+            is_deprecated=is_deprecated,
+            original_name=invocation.name if is_deprecated else None,
         )
 
         try:
             # CAB-603: Route by tool type
             if isinstance(tool, CoreTool):
-                result = await self._invoke_core_tool(tool, invocation.arguments)
+                result = await self._invoke_core_tool(tool, arguments)
             elif isinstance(tool, ProxiedTool):
-                result = await self._invoke_proxied_tool(tool, invocation.arguments, user_token)
+                result = await self._invoke_proxied_tool(tool, arguments, user_token)
             # Legacy: Handle built-in tools (backward compatibility)
             elif tool.name.startswith("stoa_"):
-                result = await self._invoke_builtin(tool, invocation.arguments)
+                result = await self._invoke_builtin(tool, arguments)
             # Legacy: Handle API-backed tools
             elif hasattr(tool, 'endpoint') and tool.endpoint:
-                result = await self._invoke_api(tool, invocation.arguments, user_token)
+                result = await self._invoke_api(tool, arguments, user_token)
             else:
                 result = ToolResult(
                     content=[TextContent(text=f"Tool {tool.name} has no backend configured")],
@@ -1016,6 +919,11 @@ class ToolRegistry:
             latency_ms = int((time.time() - start_time) * 1000)
             result.latency_ms = latency_ms
             result.request_id = invocation.request_id
+
+            # CAB-605: Add deprecation warning to result metadata
+            if is_deprecated and deprecation_warning:
+                result.metadata = result.metadata or {}
+                result.metadata["_deprecation_warning"] = deprecation_warning
 
             return result
 
@@ -1053,8 +961,8 @@ class ToolRegistry:
     ) -> ToolResult:
         """Invoke a core platform tool.
 
-        CAB-603: Core tools are handled internally with specific handlers
-        based on the tool's domain and action.
+        CAB-605 Phase 3: Handles consolidated action-based tools and legacy tools.
+        Action-based tools use the 'action' parameter to dispatch to specific handlers.
 
         Args:
             tool: CoreTool instance
@@ -1065,12 +973,107 @@ class ToolRegistry:
         """
         settings = get_settings()
 
-        # Route to domain-specific handlers
-        # For now, use handler reference or fallback to name-based routing
-        handler_name = tool.handler or tool.name
+        # =====================================================================
+        # CAB-605 Phase 3: Consolidated Action-Based Tools
+        # =====================================================================
 
-        # Platform & Discovery handlers
-        if tool.name == "stoa_platform_info":
+        # stoa_catalog - API catalog operations
+        if tool.name == "stoa_catalog":
+            action = arguments.get("action")
+            if not action:
+                return ToolResult(
+                    content=[TextContent(text="action is required (list, get, search, versions, categories)")],
+                    is_error=True,
+                )
+            return await self._handle_catalog_action(action, arguments)
+
+        # stoa_api_spec - API specification retrieval
+        elif tool.name == "stoa_api_spec":
+            action = arguments.get("action")
+            api_id = arguments.get("api_id")
+            if not action or not api_id:
+                return ToolResult(
+                    content=[TextContent(text="action and api_id are required")],
+                    is_error=True,
+                )
+            return await self._handle_api_spec_action(action, arguments)
+
+        # stoa_subscription - Subscription management
+        elif tool.name == "stoa_subscription":
+            action = arguments.get("action")
+            if not action:
+                return ToolResult(
+                    content=[TextContent(text="action is required (list, get, create, cancel, credentials, rotate_key)")],
+                    is_error=True,
+                )
+            return await self._handle_subscription_action(action, arguments)
+
+        # stoa_metrics - Metrics retrieval
+        elif tool.name == "stoa_metrics":
+            action = arguments.get("action")
+            if not action:
+                return ToolResult(
+                    content=[TextContent(text="action is required (usage, latency, errors, quota)")],
+                    is_error=True,
+                )
+            return await self._handle_metrics_action(action, arguments)
+
+        # stoa_logs - Log search and retrieval
+        elif tool.name == "stoa_logs":
+            action = arguments.get("action")
+            if not action:
+                return ToolResult(
+                    content=[TextContent(text="action is required (search, recent)")],
+                    is_error=True,
+                )
+            return await self._handle_logs_action(action, arguments)
+
+        # stoa_alerts - Alert management
+        elif tool.name == "stoa_alerts":
+            action = arguments.get("action")
+            if not action:
+                return ToolResult(
+                    content=[TextContent(text="action is required (list, acknowledge)")],
+                    is_error=True,
+                )
+            return await self._handle_alerts_action(action, arguments)
+
+        # stoa_tools - Tool discovery
+        elif tool.name == "stoa_tools":
+            action = arguments.get("action")
+            if not action:
+                return ToolResult(
+                    content=[TextContent(text="action is required (list, schema, search)")],
+                    is_error=True,
+                )
+            return await self._handle_tools_action(action, arguments)
+
+        # stoa_uac - UAC contract management
+        elif tool.name == "stoa_uac":
+            action = arguments.get("action")
+            if not action:
+                return ToolResult(
+                    content=[TextContent(text="action is required (list, get, validate, sla)")],
+                    is_error=True,
+                )
+            return await self._handle_uac_action(action, arguments)
+
+        # stoa_security - Security operations
+        elif tool.name == "stoa_security":
+            action = arguments.get("action")
+            if not action:
+                return ToolResult(
+                    content=[TextContent(text="action is required (audit_log, check_permissions, list_policies)")],
+                    is_error=True,
+                )
+            return await self._handle_security_action(action, arguments)
+
+        # =====================================================================
+        # Standalone Platform Tools (not consolidated)
+        # =====================================================================
+
+        # stoa_platform_info
+        elif tool.name == "stoa_platform_info":
             info = {
                 "platform": "STOA",
                 "version": settings.app_version,
@@ -1078,7 +1081,7 @@ class ToolRegistry:
                 "base_domain": settings.base_domain,
                 "core_tools_count": len(self._core_tools),
                 "proxied_tools_count": len(self._proxied_tools),
-                "legacy_tools_count": len(self._tools),
+                "deprecated_aliases_count": len(self._deprecated_aliases),
                 "services": {
                     "api": f"https://api.{settings.base_domain}",
                     "gateway": f"https://gateway.{settings.base_domain}",
@@ -1088,6 +1091,7 @@ class ToolRegistry:
             }
             return ToolResult(content=[TextContent(text=str(info))])
 
+        # stoa_platform_health
         elif tool.name == "stoa_platform_health":
             components = arguments.get("components", [])
             health_status = await self._check_health(
@@ -1096,23 +1100,356 @@ class ToolRegistry:
             )
             return ToolResult(content=[TextContent(text=str(health_status))])
 
-        elif tool.name == "stoa_list_tools":
+        # stoa_tenants (renamed from stoa_list_tenants)
+        elif tool.name == "stoa_tenants":
+            include_inactive = arguments.get("include_inactive", False)
+            return ToolResult(content=[TextContent(text=str({
+                "tenants": [],
+                "message": "Tenant listing requires admin scope - coming soon",
+                "include_inactive": include_inactive,
+            }))])
+
+        # =====================================================================
+        # Legacy Tools (for deprecation period - handled via aliases)
+        # =====================================================================
+
+        # Default stub for unhandled tools
+        else:
+            return ToolResult(content=[TextContent(text=str({
+                "tool": tool.name,
+                "domain": tool.domain.value,
+                "action": tool.action,
+                "arguments": arguments,
+                "status": "stub",
+                "message": f"Core tool handler for {tool.name} - implementation pending",
+            }))])
+
+    # =========================================================================
+    # CAB-605 Phase 3: Consolidated Tool Action Handlers
+    # =========================================================================
+
+    async def _handle_catalog_action(
+        self,
+        action: str,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Handle stoa_catalog actions."""
+        if action == "list":
+            return ToolResult(content=[TextContent(text=str({
+                "apis": [],
+                "total": 0,
+                "page": arguments.get("page", 1),
+                "page_size": arguments.get("page_size", 20),
+                "message": "API catalog integration - coming soon",
+            }))])
+        elif action == "get":
+            api_id = arguments.get("api_id")
+            if not api_id:
+                return ToolResult(
+                    content=[TextContent(text="api_id is required for 'get' action")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": api_id,
+                "message": f"API details for {api_id} - coming soon",
+            }))])
+        elif action == "search":
+            query = arguments.get("query", "")
+            return ToolResult(content=[TextContent(text=str({
+                "query": query,
+                "results": [],
+                "total": 0,
+                "message": "API search - coming soon",
+            }))])
+        elif action == "versions":
+            api_id = arguments.get("api_id")
+            if not api_id:
+                return ToolResult(
+                    content=[TextContent(text="api_id is required for 'versions' action")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": api_id,
+                "versions": [],
+                "message": f"Versions for {api_id} - coming soon",
+            }))])
+        elif action == "categories":
+            categories = self.list_categories()
+            return ToolResult(content=[TextContent(text=str({
+                "categories": [{"name": c.name, "count": c.count} for c in categories.categories],
+            }))])
+        else:
+            return ToolResult(
+                content=[TextContent(text=f"Unknown action: {action}")],
+                is_error=True,
+            )
+
+    async def _handle_api_spec_action(
+        self,
+        action: str,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Handle stoa_api_spec actions."""
+        api_id = arguments.get("api_id")
+        version = arguments.get("version", "latest")
+
+        if action == "openapi":
+            format_ = arguments.get("format", "json")
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": api_id,
+                "version": version,
+                "format": format_,
+                "spec": {},
+                "message": f"OpenAPI spec for {api_id} - coming soon",
+            }))])
+        elif action == "docs":
+            section = arguments.get("section")
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": api_id,
+                "section": section,
+                "documentation": "",
+                "message": f"Documentation for {api_id} - coming soon",
+            }))])
+        elif action == "endpoints":
+            method = arguments.get("method")
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": api_id,
+                "method_filter": method,
+                "endpoints": [],
+                "message": f"Endpoints for {api_id} - coming soon",
+            }))])
+        else:
+            return ToolResult(
+                content=[TextContent(text=f"Unknown action: {action}")],
+                is_error=True,
+            )
+
+    async def _handle_subscription_action(
+        self,
+        action: str,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Handle stoa_subscription actions."""
+        if action == "list":
+            return ToolResult(content=[TextContent(text=str({
+                "subscriptions": [],
+                "total": 0,
+                "message": "Subscription listing - coming soon",
+            }))])
+        elif action == "get":
+            subscription_id = arguments.get("subscription_id")
+            if not subscription_id:
+                return ToolResult(
+                    content=[TextContent(text="subscription_id is required")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "subscription_id": subscription_id,
+                "message": f"Subscription details - coming soon",
+            }))])
+        elif action == "create":
+            api_id = arguments.get("api_id")
+            if not api_id:
+                return ToolResult(
+                    content=[TextContent(text="api_id is required")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": api_id,
+                "plan": arguments.get("plan"),
+                "message": "Subscription creation - coming soon",
+            }))])
+        elif action == "cancel":
+            subscription_id = arguments.get("subscription_id")
+            if not subscription_id:
+                return ToolResult(
+                    content=[TextContent(text="subscription_id is required")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "subscription_id": subscription_id,
+                "message": "Subscription cancellation - coming soon",
+            }))])
+        elif action == "credentials":
+            subscription_id = arguments.get("subscription_id")
+            if not subscription_id:
+                return ToolResult(
+                    content=[TextContent(text="subscription_id is required")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "subscription_id": subscription_id,
+                "message": "Credentials retrieval - coming soon",
+            }))])
+        elif action == "rotate_key":
+            subscription_id = arguments.get("subscription_id")
+            if not subscription_id:
+                return ToolResult(
+                    content=[TextContent(text="subscription_id is required")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "subscription_id": subscription_id,
+                "grace_period_hours": arguments.get("grace_period_hours", 24),
+                "message": "Key rotation - coming soon",
+            }))])
+        else:
+            return ToolResult(
+                content=[TextContent(text=f"Unknown action: {action}")],
+                is_error=True,
+            )
+
+    async def _handle_metrics_action(
+        self,
+        action: str,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Handle stoa_metrics actions."""
+        time_range = arguments.get("time_range", "24h")
+
+        if action == "usage":
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": arguments.get("api_id"),
+                "subscription_id": arguments.get("subscription_id"),
+                "time_range": time_range,
+                "requests": 0,
+                "data_volume_bytes": 0,
+                "message": "Usage metrics - coming soon",
+            }))])
+        elif action == "latency":
+            api_id = arguments.get("api_id")
+            if not api_id:
+                return ToolResult(
+                    content=[TextContent(text="api_id is required for latency metrics")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": api_id,
+                "endpoint": arguments.get("endpoint"),
+                "time_range": time_range,
+                "p50_ms": 0,
+                "p95_ms": 0,
+                "p99_ms": 0,
+                "message": "Latency metrics - coming soon",
+            }))])
+        elif action == "errors":
+            api_id = arguments.get("api_id")
+            if not api_id:
+                return ToolResult(
+                    content=[TextContent(text="api_id is required for error metrics")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": api_id,
+                "time_range": time_range,
+                "error_rate": 0,
+                "errors_by_code": {},
+                "message": "Error metrics - coming soon",
+            }))])
+        elif action == "quota":
+            subscription_id = arguments.get("subscription_id")
+            if not subscription_id:
+                return ToolResult(
+                    content=[TextContent(text="subscription_id is required for quota")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "subscription_id": subscription_id,
+                "used": 0,
+                "limit": 0,
+                "percentage": 0,
+                "message": "Quota usage - coming soon",
+            }))])
+        else:
+            return ToolResult(
+                content=[TextContent(text=f"Unknown action: {action}")],
+                is_error=True,
+            )
+
+    async def _handle_logs_action(
+        self,
+        action: str,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Handle stoa_logs actions."""
+        if action == "search":
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": arguments.get("api_id"),
+                "query": arguments.get("query"),
+                "level": arguments.get("level"),
+                "time_range": arguments.get("time_range", "24h"),
+                "logs": [],
+                "total": 0,
+                "message": "Log search - coming soon",
+            }))])
+        elif action == "recent":
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": arguments.get("api_id"),
+                "subscription_id": arguments.get("subscription_id"),
+                "limit": arguments.get("limit", 50),
+                "logs": [],
+                "message": "Recent logs - coming soon",
+            }))])
+        else:
+            return ToolResult(
+                content=[TextContent(text=f"Unknown action: {action}")],
+                is_error=True,
+            )
+
+    async def _handle_alerts_action(
+        self,
+        action: str,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Handle stoa_alerts actions."""
+        if action == "list":
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": arguments.get("api_id"),
+                "severity": arguments.get("severity"),
+                "status": arguments.get("status", "active"),
+                "alerts": [],
+                "total": 0,
+                "message": "Alert listing - coming soon",
+            }))])
+        elif action == "acknowledge":
+            alert_id = arguments.get("alert_id")
+            if not alert_id:
+                return ToolResult(
+                    content=[TextContent(text="alert_id is required")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "alert_id": alert_id,
+                "comment": arguments.get("comment"),
+                "acknowledged": True,
+                "message": "Alert acknowledged - coming soon",
+            }))])
+        else:
+            return ToolResult(
+                content=[TextContent(text=f"Unknown action: {action}")],
+                is_error=True,
+            )
+
+    async def _handle_tools_action(
+        self,
+        action: str,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Handle stoa_tools actions."""
+        if action == "list":
             category = arguments.get("category")
             tag = arguments.get("tag")
-            search = arguments.get("search")
             include_proxied = arguments.get("include_proxied", True)
             tools_response = self.list_tools(
                 category=category,
                 tag=tag,
-                search=search,
                 include_proxied=include_proxied,
             )
             return ToolResult(content=[TextContent(text=str({
                 "tools": [{"name": t.name, "description": t.description, "category": t.category} for t in tools_response.tools],
                 "total": tools_response.total_count,
             }))])
-
-        elif tool.name == "stoa_get_tool_schema":
+        elif action == "schema":
             tool_name = arguments.get("tool_name")
             if not tool_name:
                 return ToolResult(
@@ -1126,8 +1463,7 @@ class ToolRegistry:
                     is_error=True,
                 )
             return ToolResult(content=[TextContent(text=str(schema_info))])
-
-        elif tool.name == "stoa_search_tools":
+        elif action == "search":
             query = arguments.get("query", "")
             limit = arguments.get("limit", 20)
             tools_response = self.list_tools(search=query, limit=limit)
@@ -1136,51 +1472,114 @@ class ToolRegistry:
                 "results": [{"name": t.name, "description": t.description} for t in tools_response.tools],
                 "total": tools_response.total_count,
             }))])
+        else:
+            return ToolResult(
+                content=[TextContent(text=f"Unknown action: {action}")],
+                is_error=True,
+            )
 
-        elif tool.name == "stoa_list_tenants":
-            # Admin-only tool - implementation stub
-            include_inactive = arguments.get("include_inactive", False)
+    async def _handle_uac_action(
+        self,
+        action: str,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Handle stoa_uac actions."""
+        if action == "list":
             return ToolResult(content=[TextContent(text=str({
-                "tenants": [],
-                "message": "Tenant listing requires admin scope - coming soon",
-                "include_inactive": include_inactive,
-            }))])
-
-        # API Catalog handlers
-        elif tool.name in ("stoa_catalog_list_apis", "stoa_list_apis"):
-            return ToolResult(content=[TextContent(text=str({
-                "apis": [],
-                "message": "API catalog integration - coming soon",
+                "api_id": arguments.get("api_id"),
+                "status": arguments.get("status"),
+                "contracts": [],
                 "total": 0,
+                "message": "UAC contracts listing - coming soon",
             }))])
-
-        elif tool.name in ("stoa_catalog_get_api", "stoa_get_api_details"):
-            api_id = arguments.get("api_id")
-            if not api_id:
+        elif action == "get":
+            contract_id = arguments.get("contract_id")
+            if not contract_id:
                 return ToolResult(
-                    content=[TextContent(text="api_id is required")],
+                    content=[TextContent(text="contract_id is required")],
                     is_error=True,
                 )
-            return ToolResult(content=[TextContent(text=f"API details for {api_id} - coming soon")])
-
-        elif tool.name == "stoa_catalog_search_apis":
-            query = arguments.get("query", "")
             return ToolResult(content=[TextContent(text=str({
-                "query": query,
-                "results": [],
-                "message": "API search - coming soon",
+                "contract_id": contract_id,
+                "message": "UAC contract details - coming soon",
             }))])
-
-        # Default stub for unimplemented core tools
+        elif action == "validate":
+            contract_id = arguments.get("contract_id")
+            if not contract_id:
+                return ToolResult(
+                    content=[TextContent(text="contract_id is required")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "contract_id": contract_id,
+                "subscription_id": arguments.get("subscription_id"),
+                "compliant": True,
+                "message": "UAC validation - coming soon",
+            }))])
+        elif action == "sla":
+            contract_id = arguments.get("contract_id")
+            if not contract_id:
+                return ToolResult(
+                    content=[TextContent(text="contract_id is required")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "contract_id": contract_id,
+                "time_range": arguments.get("time_range", "30d"),
+                "uptime_percentage": 0,
+                "latency_compliance": 0,
+                "message": "SLA metrics - coming soon",
+            }))])
         else:
+            return ToolResult(
+                content=[TextContent(text=f"Unknown action: {action}")],
+                is_error=True,
+            )
+
+    async def _handle_security_action(
+        self,
+        action: str,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Handle stoa_security actions."""
+        if action == "audit_log":
             return ToolResult(content=[TextContent(text=str({
-                "tool": tool.name,
-                "domain": tool.domain.value,
-                "action": tool.action,
-                "arguments": arguments,
-                "status": "stub",
-                "message": f"Core tool handler for {tool.name} - implementation pending",
+                "api_id": arguments.get("api_id"),
+                "user_id": arguments.get("user_id"),
+                "time_range": arguments.get("time_range", "7d"),
+                "limit": arguments.get("limit", 100),
+                "entries": [],
+                "total": 0,
+                "message": "Audit log - coming soon",
             }))])
+        elif action == "check_permissions":
+            api_id = arguments.get("api_id")
+            action_type = arguments.get("action_type")
+            if not api_id or not action_type:
+                return ToolResult(
+                    content=[TextContent(text="api_id and action_type are required")],
+                    is_error=True,
+                )
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": api_id,
+                "action": action_type,
+                "user_id": arguments.get("user_id"),
+                "allowed": True,
+                "message": "Permission check - coming soon",
+            }))])
+        elif action == "list_policies":
+            return ToolResult(content=[TextContent(text=str({
+                "api_id": arguments.get("api_id"),
+                "policy_type": arguments.get("policy_type"),
+                "policies": [],
+                "total": 0,
+                "message": "Policy listing - coming soon",
+            }))])
+        else:
+            return ToolResult(
+                content=[TextContent(text=f"Unknown action: {action}")],
+                is_error=True,
+            )
 
     async def _invoke_proxied_tool(
         self,
@@ -1471,19 +1870,57 @@ class ToolRegistry:
         }
 
     def _get_tool_schema(self, tool_name: str) -> dict[str, Any] | None:
-        """Get the schema for a specific tool."""
+        """Get the schema for a specific tool.
+
+        CAB-605: Searches all three storage tiers:
+        1. Core tools (_core_tools)
+        2. Proxied tools (_proxied_tools)
+        3. Legacy tools (_tools)
+        """
+        # Try core tools first (stoa_* prefix)
+        tool = self._core_tools.get(tool_name)
+        if tool:
+            return {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.input_schema.model_dump() if hasattr(tool.input_schema, 'model_dump') else {
+                    "type": "object",
+                    "properties": tool.input_schema.properties,
+                    "required": tool.input_schema.required,
+                },
+                "category": tool.category,
+                "domain": tool.domain.value,
+            }
+
+        # Try proxied tools
+        tool = self._proxied_tools.get(tool_name)
+        if tool:
+            return {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": {
+                    "type": "object",
+                    "properties": tool.input_schema.properties,
+                    "required": tool.input_schema.required,
+                },
+                "category": tool.category,
+                "tenant_id": tool.tenant_id,
+            }
+
+        # Try legacy tools
         tool = self._tools.get(tool_name)
-        if not tool:
-            return None
-        return {
-            "name": tool.name,
-            "description": tool.description,
-            "input_schema": {
-                "type": "object",
-                "properties": tool.input_schema.properties,
-                "required": tool.input_schema.required,
-            },
-        }
+        if tool:
+            return {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": {
+                    "type": "object",
+                    "properties": tool.input_schema.properties,
+                    "required": tool.input_schema.required,
+                },
+            }
+
+        return None
 
     async def _invoke_api(
         self,

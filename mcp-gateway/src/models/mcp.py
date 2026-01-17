@@ -173,13 +173,17 @@ class CoreTool(BaseTool):
 
 
 class ProxiedTool(BaseTool):
-    """Dynamic tenant API tool with {tenant}__{api}__{operation} namespace.
+    """Dynamic tenant API tool with namespaced naming.
 
     Proxied tools represent external API endpoints registered by tenants.
     They forward requests to backend APIs with appropriate authentication.
 
-    Naming convention: {tenant_id}__{api_id}__{operation}
-    Examples: acme__crm-api__get_customer, contoso__billing__create_invoice
+    CAB-605 Phase 2: Naming convention changed based on feature flag:
+    - Legacy (use_tenant_scoped_tools=False): {tenant_id}__{api_id}__{operation}
+    - New (use_tenant_scoped_tools=True): {api_id}__{operation}
+
+    The tenant_id is always stored on the tool for RBAC filtering,
+    but is no longer included in the tool name when the feature is enabled.
 
     Note: Uses double underscore (__) as separator to comply with MCP tool
     name pattern ^[a-zA-Z0-9_-]{1,64}$
@@ -202,12 +206,34 @@ class ProxiedTool(BaseTool):
 
     @property
     def namespaced_name(self) -> str:
-        """Return the fully qualified namespaced tool name.
+        """Return the tool name for MCP listing.
+
+        CAB-605 Phase 2: When use_tenant_scoped_tools is enabled,
+        returns {api_id}__{operation} (no tenant prefix).
+        Otherwise returns legacy {tenant_id}__{api_id}__{operation}.
 
         Uses double underscore (__) as separator to comply with MCP tool
         name pattern ^[a-zA-Z0-9_-]{1,64}$.
         """
-        return f"{self.tenant_id}__{self.api_id}__{self.operation}"
+        from ..config import get_settings
+        settings = get_settings()
+
+        if getattr(settings, 'use_tenant_scoped_tools', False):
+            # Phase 2: No tenant prefix, resolve tenant from JWT
+            return f"{self.api_id}__{self.operation}"
+        else:
+            # Legacy: Include tenant prefix
+            return f"{self.tenant_id}__{self.api_id}__{self.operation}"
+
+    @property
+    def internal_key(self) -> str:
+        """Return the internal storage key (always includes tenant for uniqueness).
+
+        CAB-605 Phase 2: Even when use_tenant_scoped_tools is enabled,
+        the internal key includes tenant_id to handle collisions when
+        multiple tenants have the same API name.
+        """
+        return f"{self.tenant_id}::{self.api_id}__{self.operation}"
 
     @field_validator("name")
     @classmethod
@@ -268,6 +294,7 @@ class ToolResult(BaseModel):
     request_id: str | None = Field(None, description="Request ID for tracing")
     latency_ms: int | None = Field(None, description="Backend latency in milliseconds")
     backend_status: int | None = Field(None, description="Backend HTTP status code")
+    metadata: dict | None = Field(None, description="Additional metadata (e.g., deprecation warnings)")
 
     model_config = ConfigDict(populate_by_name=True)
 

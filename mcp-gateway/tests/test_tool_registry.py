@@ -209,22 +209,22 @@ class TestToolRegistryLifecycle:
         """Test startup registers built-in tools.
 
         CAB-603: Core tools use stoa_{domain}_{action} naming.
-        Legacy tools are registered in legacy storage for backward compatibility.
+        CAB-605: Consolidated to 12 action-based tools.
+        Legacy tools are accessible via deprecation aliases.
         """
         await registry.startup()
 
-        # CAB-603: Check core tools (new naming) - stored in _core_tools
+        # CAB-605: Check consolidated core tools
         assert registry.get_core_tool("stoa_platform_info") is not None
-        assert registry.get_core_tool("stoa_catalog_list_apis") is not None
-        assert registry.get_core_tool("stoa_catalog_get_api") is not None
+        assert registry.get_core_tool("stoa_catalog") is not None  # Consolidated
+        assert registry.get_core_tool("stoa_api_spec") is not None  # Consolidated
 
         # Smart routing via get() should find core tools
         assert registry.get("stoa_platform_info") is not None
-        assert registry.get("stoa_catalog_list_apis") is not None
+        assert registry.get("stoa_catalog") is not None
 
-        # Legacy tools are registered in _tools storage
-        assert "stoa_list_apis" in registry._tools
-        assert "stoa_get_api_details" in registry._tools
+        # CAB-605: Deprecation aliases are registered
+        assert len(registry._deprecated_aliases) > 0
 
         await registry.shutdown()
 
@@ -616,22 +616,27 @@ class TestNewBuiltinTools:
 
     @pytest.mark.asyncio
     async def test_startup_registers_all_builtin_tools(self, registry: ToolRegistry):
-        """Test startup registers all built-in tools (CAB-603 updated).
+        """Test startup registers all built-in tools (CAB-605 Phase 3).
 
-        Tests core tools with stoa_{domain}_{action} naming.
-        Legacy tools are in _tools storage for backward compatibility.
+        CAB-605: Consolidated 35 tools to 12 action-based tools.
+        Legacy tool names are available via deprecation aliases.
         """
         await registry.startup()
 
-        # CAB-603: Core tools (new naming) - should be found via get_core_tool
+        # CAB-605: Consolidated core tools (12 total)
         core_tools = [
             "stoa_platform_info",
             "stoa_platform_health",
-            "stoa_list_tools",
-            "stoa_get_tool_schema",
-            "stoa_catalog_list_apis",
-            "stoa_catalog_get_api",
-            "stoa_catalog_search_apis",
+            "stoa_tools",       # Consolidated from stoa_list_tools, stoa_get_tool_schema, stoa_search_tools
+            "stoa_tenants",     # Renamed from stoa_list_tenants
+            "stoa_catalog",     # Consolidated from stoa_catalog_list_apis, etc.
+            "stoa_api_spec",    # Consolidated from stoa_catalog_get_openapi, etc.
+            "stoa_subscription",  # Consolidated from 6 subscription tools
+            "stoa_metrics",     # Consolidated from 4 metrics tools
+            "stoa_logs",        # Consolidated from 2 log tools
+            "stoa_alerts",      # Consolidated from 2 alert tools
+            "stoa_uac",         # Consolidated from 4 UAC tools
+            "stoa_security",    # Consolidated from 3 security tools
         ]
 
         for tool_name in core_tools:
@@ -639,16 +644,10 @@ class TestNewBuiltinTools:
             # Smart routing should also work
             assert registry.get(tool_name) is not None, f"Core tool {tool_name} not found via get()"
 
-        # Legacy tools (in _tools storage)
-        legacy_tools = [
-            "stoa_list_apis",
-            "stoa_get_api_details",
-            "stoa_health_check",
-            "stoa_search_apis",
-        ]
-
-        for tool_name in legacy_tools:
-            assert tool_name in registry._tools, f"Legacy tool {tool_name} not in _tools storage"
+        # CAB-605: Verify deprecation aliases are registered
+        assert len(registry._deprecated_aliases) > 0
+        assert "stoa_catalog_list_apis" in registry._deprecated_aliases
+        assert "stoa_list_tools" in registry._deprecated_aliases
 
         await registry.shutdown()
 

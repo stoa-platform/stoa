@@ -745,8 +745,8 @@ class ToolRegistry:
         Returns:
             ProxiedTool if found, None otherwise
         """
-        # Direct lookup by namespaced name
-        if ":" in name:
+        # Direct lookup by namespaced name (uses __ separator)
+        if "__" in name:
             return self._proxied_tools.get(name)
 
         # Search by operation name within tenant context
@@ -776,8 +776,8 @@ class ToolRegistry:
         if name.startswith("stoa_"):
             return self._core_tools.get(name)
 
-        # Proxied tools: namespaced format
-        if ":" in name:
+        # Proxied tools: namespaced format (uses __ separator)
+        if "__" in name:
             return self._proxied_tools.get(name)
 
         # Try proxied tool lookup with tenant context

@@ -11,10 +11,17 @@ import type { API, Application } from '../../types';
 
 type SubscriptionPlan = 'free' | 'basic' | 'premium' | 'enterprise';
 
+export interface SubscribeFormData {
+  applicationId: string;
+  applicationName: string;
+  apiId: string;
+  plan: SubscriptionPlan;
+}
+
 interface SubscribeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { applicationId: string; apiId: string; plan: SubscriptionPlan }) => Promise<void>;
+  onSubmit: (data: SubscribeFormData) => Promise<void>;
   api: API;
   isLoading?: boolean;
   error?: string | null;
@@ -101,8 +108,13 @@ export function SubscribeModal({
     e.preventDefault();
     if (!selectedAppId) return;
 
+    // Find selected application to get its name
+    const selectedApp = activeApps.find((app: Application) => app.id === selectedAppId);
+    if (!selectedApp) return;
+
     await onSubmit({
       applicationId: selectedAppId,
+      applicationName: selectedApp.name,
       apiId: api.id,
       plan: selectedPlan,
     });

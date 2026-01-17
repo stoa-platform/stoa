@@ -42,6 +42,8 @@ export interface API {
   status: 'draft' | 'published' | 'deprecated';
   deployed_dev: boolean;
   deployed_staging: boolean;
+  tags?: string[];
+  portal_promoted?: boolean; // Whether API is promoted to Developer Portal
   created_at: string;
   updated_at: string;
 }
@@ -53,6 +55,8 @@ export interface APICreate {
   description: string;
   backend_url: string;
   openapi_spec?: string;
+  tags?: string[];
+  portal_promoted?: boolean; // Add portal:published tag when true
 }
 
 // Application types

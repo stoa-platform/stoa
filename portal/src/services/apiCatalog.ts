@@ -16,6 +16,7 @@ export interface ListAPIsParams {
   category?: string;
   status?: 'published' | 'deprecated' | 'draft';
   tags?: string[];
+  includeUnpromoted?: boolean; // Include APIs not promoted to Portal (for admin view)
 }
 
 // Portal API response format
@@ -32,6 +33,7 @@ interface PortalAPI {
   category?: string;
   tags?: string[];
   deployments?: Record<string, boolean>;
+  is_promoted: boolean; // Whether API is promoted to Portal (has portal:published tag)
   created_at?: string;
   updated_at?: string;
 }
@@ -77,6 +79,7 @@ export const apiCatalogService = {
           search: params?.search,
           category: params?.category,
           status: params?.status,
+          include_unpromoted: params?.includeUnpromoted || false,
         },
       });
 

@@ -22,6 +22,7 @@ class APICreate(BaseModel):
     description: str = ""
     backend_url: str
     openapi_spec: Optional[str] = None
+    tags: List[str] = []  # Tags for categorization and portal promotion
 
 
 class APIUpdate(BaseModel):
@@ -30,6 +31,7 @@ class APIUpdate(BaseModel):
     description: Optional[str] = None
     backend_url: Optional[str] = None
     openapi_spec: Optional[str] = None
+    tags: Optional[List[str]] = None  # Tags for categorization and portal promotion
 
 
 class APIResponse(BaseModel):
@@ -43,11 +45,18 @@ class APIResponse(BaseModel):
     status: str = "draft"
     deployed_dev: bool = False
     deployed_staging: bool = False
+    tags: List[str] = []
+    portal_promoted: bool = False  # True if API has portal:published tag
 
 
 def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
     """Convert GitLab YAML data to API response"""
     deployments = api_data.get("deployments", {})
+    tags = api_data.get("tags", [])
+    # Check if API is promoted to portal
+    promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
+    portal_promoted = any(tag.lower() in promotion_tags for tag in tags)
+
     return APIResponse(
         id=api_data.get("id", api_data.get("name", "")),
         tenant_id=tenant_id,
@@ -59,6 +68,8 @@ def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
         status=api_data.get("status", "draft"),
         deployed_dev=deployments.get("dev", False),
         deployed_staging=deployments.get("staging", False),
+        tags=tags,
+        portal_promoted=portal_promoted,
     )
 
 
@@ -103,6 +114,11 @@ async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_cu
     """
     api_id = str(uuid.uuid4())
 
+    # Check if portal:published tag is present for portal_promoted status
+    tags = api.tags or []
+    promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
+    portal_promoted = any(tag.lower() in promotion_tags for tag in tags)
+
     api_data = {
         "id": api_id,
         "name": api.name,
@@ -111,6 +127,7 @@ async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_cu
         "description": api.description,
         "backend_url": api.backend_url,
         "openapi_spec": api.openapi_spec,
+        "tags": tags,
     }
 
     try:
@@ -151,6 +168,8 @@ async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_cu
             status="draft",
             deployed_dev=False,
             deployed_staging=False,
+            tags=tags,
+            portal_promoted=portal_promoted,
         )
 
     except ValueError as e:

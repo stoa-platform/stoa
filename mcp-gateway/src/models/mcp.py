@@ -109,7 +109,7 @@ class Tool(BaseModel):
         """Determine tool type based on naming convention."""
         if self.name.startswith("stoa_"):
             return ToolType.CORE
-        if ":" in self.name:
+        if "__" in self.name:
             return ToolType.PROXIED
         return ToolType.LEGACY
 
@@ -173,13 +173,16 @@ class CoreTool(BaseTool):
 
 
 class ProxiedTool(BaseTool):
-    """Dynamic tenant API tool with {tenant}:{api}:{operation} namespace.
+    """Dynamic tenant API tool with {tenant}__{api}__{operation} namespace.
 
     Proxied tools represent external API endpoints registered by tenants.
     They forward requests to backend APIs with appropriate authentication.
 
-    Naming convention: {tenant_id}:{api_id}:{operation}
-    Examples: acme:crm-api:get_customer, contoso:billing:create_invoice
+    Naming convention: {tenant_id}__{api_id}__{operation}
+    Examples: acme__crm-api__get_customer, contoso__billing__create_invoice
+
+    Note: Uses double underscore (__) as separator to comply with MCP tool
+    name pattern ^[a-zA-Z0-9_-]{1,64}$
     """
 
     tenant_id: str = Field(..., description="Owning tenant ID")
@@ -199,8 +202,12 @@ class ProxiedTool(BaseTool):
 
     @property
     def namespaced_name(self) -> str:
-        """Return the fully qualified namespaced tool name."""
-        return f"{self.tenant_id}:{self.api_id}:{self.operation}"
+        """Return the fully qualified namespaced tool name.
+
+        Uses double underscore (__) as separator to comply with MCP tool
+        name pattern ^[a-zA-Z0-9_-]{1,64}$.
+        """
+        return f"{self.tenant_id}__{self.api_id}__{self.operation}"
 
     @field_validator("name")
     @classmethod

@@ -101,6 +101,8 @@ class MCPSession:
         registry = await get_tool_registry()
         result = registry.list_tools(limit=1000)
 
+        print(f"[MCP] tools/list: registry returned {result.total_count} tools", flush=True)
+
         tools = []
         for tool in result.tools:
             # Use input_schema (snake_case) - the Python attribute name
@@ -117,6 +119,7 @@ class MCPSession:
                 "inputSchema": input_schema,
             })
 
+        print(f"[MCP] tools/list: returning {len(tools)} tools in response", flush=True)
         return self._make_response(msg_id, {"tools": tools})
 
     async def _handle_call_tool(self, msg_id: Any, params: dict) -> dict:

@@ -1,6 +1,6 @@
 """Tests for Proxied Tools (CAB-603).
 
-Tests ProxiedTool model and namespace format {tenant}:{api}:{operation}.
+Tests ProxiedTool model and namespace format {tenant}__{api}__{operation}.
 """
 
 import pytest
@@ -88,8 +88,8 @@ class TestProxiedToolModel:
         assert sample_proxied_tool.tool_type == ToolType.PROXIED
 
     def test_namespaced_name_format(self, sample_proxied_tool: ProxiedTool):
-        """Test namespaced_name follows {tenant}:{api}:{operation} format."""
-        assert sample_proxied_tool.namespaced_name == "acme:crm-api:get_customer"
+        """Test namespaced_name follows {tenant}__{api}__{operation} format."""
+        assert sample_proxied_tool.namespaced_name == "acme__crm-api__get_customer"
 
     def test_namespaced_name_with_different_values(self):
         """Test namespaced_name with various tenant/api/operation values."""
@@ -101,7 +101,7 @@ class TestProxiedToolModel:
             operation="my-operation",
             endpoint="https://example.com",
         )
-        assert tool.namespaced_name == "my-tenant:my-api:my-operation"
+        assert tool.namespaced_name == "my-tenant__my-api__my-operation"
 
     def test_proxied_tool_with_headers(self, proxied_tool_with_headers: ProxiedTool):
         """Test ProxiedTool with custom headers."""
@@ -153,7 +153,7 @@ class TestProxiedToolNamespace:
             operation="get",
             endpoint="https://example.com",
         )
-        assert tool.namespaced_name == "acme:api1:get"
+        assert tool.namespaced_name == "acme__api1__get"
 
     def test_namespace_with_hyphens(self):
         """Test namespace with hyphenated names."""
@@ -165,7 +165,7 @@ class TestProxiedToolNamespace:
             operation="get-customer",
             endpoint="https://example.com",
         )
-        assert tool.namespaced_name == "acme-corp:crm-api:get-customer"
+        assert tool.namespaced_name == "acme-corp__crm-api__get-customer"
 
     def test_namespace_with_underscores(self):
         """Test namespace with underscored names."""
@@ -177,7 +177,7 @@ class TestProxiedToolNamespace:
             operation="get_customer",
             endpoint="https://example.com",
         )
-        assert tool.namespaced_name == "acme_corp:crm_api:get_customer"
+        assert tool.namespaced_name == "acme_corp__crm_api__get_customer"
 
     def test_namespace_is_unique_per_tool(self):
         """Test that different tools have different namespaces."""
@@ -231,7 +231,7 @@ class TestProxiedToolRegistry:
 
     def test_unregister_nonexistent_proxied_tool(self, registry: ToolRegistry):
         """Test unregistering non-existent ProxiedTool returns False."""
-        result = registry.unregister_proxied_tool("nonexistent:api:op")
+        result = registry.unregister_proxied_tool("nonexistent__api__op")
         assert result is False
 
     def test_get_proxied_tool_by_namespace(
@@ -239,7 +239,7 @@ class TestProxiedToolRegistry:
     ):
         """Test getting ProxiedTool by namespaced name."""
         registry.register_proxied_tool(sample_proxied_tool)
-        tool = registry.get_proxied_tool("acme:crm-api:get_customer")
+        tool = registry.get_proxied_tool("acme__crm-api__get_customer")
         assert tool is not None
         assert tool.name == sample_proxied_tool.name
 
@@ -254,7 +254,7 @@ class TestProxiedToolRegistry:
 
     def test_get_proxied_tool_not_found(self, registry: ToolRegistry):
         """Test getting non-existent ProxiedTool returns None."""
-        tool = registry.get_proxied_tool("nonexistent:api:op")
+        tool = registry.get_proxied_tool("nonexistent__api__op")
         assert tool is None
 
     def test_smart_routing_for_proxied_tool(
@@ -263,7 +263,7 @@ class TestProxiedToolRegistry:
         """Test smart routing via get() method for proxied tools."""
         registry.register_proxied_tool(sample_proxied_tool)
         # Get using namespaced name should route to proxied tools
-        tool = registry.get("acme:crm-api:get_customer")
+        tool = registry.get("acme__crm-api__get_customer")
         assert tool is not None
 
 
@@ -496,5 +496,5 @@ class TestProxiedToolTenantIsolation:
     ):
         """Test that fully namespaced lookup works regardless of context."""
         # Can look up tenant-b tool by full namespace even if context is tenant-a
-        tool = registry_multi_tenant.get("tenant-b:api:get")
+        tool = registry_multi_tenant.get("tenant-b__api__get")
         assert tool is not None

@@ -32,6 +32,21 @@ from .health import (
     PlatformHealth,
     check_platform_health,
 )
+# CAB-660: Tool handlers with real database backend
+from .tool_handlers import (
+    STOAToolHandlers,
+    get_tool_handlers,
+    init_tool_handlers,
+    shutdown_tool_handlers,
+)
+from .business import (
+    RequestContext,
+    TenantService,
+    CatalogService,
+    SubscriptionService,
+    SecurityService,
+    UACService,
+)
 
 __all__ = [
     "ToolRegistry",
@@ -55,4 +70,15 @@ __all__ = [
     "ComponentHealth",
     "PlatformHealth",
     "check_platform_health",
+    # CAB-660: Tool handlers with real database backend
+    "STOAToolHandlers",
+    "get_tool_handlers",
+    "init_tool_handlers",
+    "shutdown_tool_handlers",
+    "RequestContext",
+    "TenantService",
+    "CatalogService",
+    "SubscriptionService",
+    "SecurityService",
+    "UACService",
 ]

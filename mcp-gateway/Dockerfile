@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 COPY static/ ./static/
+COPY migrations/ ./migrations/
+COPY alembic.ini ./
 
 # Install dependencies using pip (including k8s extras for CRD watcher)
 RUN pip install --no-cache-dir hatchling && \
@@ -34,6 +36,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY src/ ./src/
 COPY static/ ./static/
+COPY migrations/ ./migrations/
+COPY alembic.ini ./
 
 # Set ownership
 RUN chown -R stoa:stoa /app

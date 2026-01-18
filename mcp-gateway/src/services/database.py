@@ -34,8 +34,8 @@ def get_database_url() -> str:
 
     Uses the shared Control-Plane PostgreSQL database.
     """
-    # First, check for explicit DATABASE_URL
-    database_url = os.environ.get("DATABASE_URL")
+    # First, check for explicit DATABASE_URL (support both STOA_ prefixed and plain)
+    database_url = os.environ.get("STOA_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if database_url:
         # Convert postgresql:// to postgresql+asyncpg://
         if database_url.startswith("postgresql://"):

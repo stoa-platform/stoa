@@ -32,20 +32,12 @@ from .health import (
     PlatformHealth,
     check_platform_health,
 )
-# CAB-660: Tool handlers with real database backend
+# CAB-660/ADR-001: Tool handlers using CoreAPIClient (no direct DB access)
 from .tool_handlers import (
     STOAToolHandlers,
     get_tool_handlers,
     init_tool_handlers,
     shutdown_tool_handlers,
-)
-from .business import (
-    RequestContext,
-    TenantService,
-    CatalogService,
-    SubscriptionService,
-    SecurityService,
-    UACService,
 )
 
 __all__ = [
@@ -70,15 +62,9 @@ __all__ = [
     "ComponentHealth",
     "PlatformHealth",
     "check_platform_health",
-    # CAB-660: Tool handlers with real database backend
+    # CAB-660/ADR-001: Tool handlers using CoreAPIClient (no direct DB access)
     "STOAToolHandlers",
     "get_tool_handlers",
     "init_tool_handlers",
     "shutdown_tool_handlers",
-    "RequestContext",
-    "TenantService",
-    "CatalogService",
-    "SubscriptionService",
-    "SecurityService",
-    "UACService",
 ]

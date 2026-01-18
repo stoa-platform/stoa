@@ -1,24 +1,47 @@
-# 🔄 Ansible Playbook — webMethods Gateway Reconciliation
+# Ansible Playbook - webMethods Gateway Reconciliation
 
-> **GitOps Reconciliation for webMethods API Gateway**
+> **Unified Tenant-Based Architecture**
 >
-> This playbook automatically synchronizes APIs defined in Git to webMethods Gateway.
+> All APIs (admin + business) come from a single source: `stoa-catalog/tenants/`
 
 ---
 
-## 📋 Features
+## Architecture
 
-- ✅ **Create** new APIs (present in Git, missing from Gateway)
-- ✅ **Update** modified APIs (diff Git vs Gateway)
-- ✅ **Delete** orphaned APIs (optional)
-- ✅ **Apply** security policies
-- ✅ **Configure** backend aliases per environment
-- ✅ **Notifications** via Slack/Discord/webhook
-- ✅ **Dry-run mode** for simulation
+```
+stoa-catalog/
+└── tenants/
+    ├── stoa-platform/              ← Platform/Admin APIs (internal)
+    │   ├── tenant.yaml             ← portalVisibility: internal
+    │   └── apis/
+    │       └── control-plane-api/
+    │           └── api.yaml
+    │
+    ├── acme-corp/                  ← Business APIs (public)
+    │   ├── tenant.yaml             ← portalVisibility: public
+    │   └── apis/
+    │       └── crm-api/
+    │           └── api.yaml
+    │
+    └── demo-tenant/                ← Demo APIs (public)
+        ├── tenant.yaml
+        └── apis/
+            └── sample-api/
+                └── api.yaml
+```
+
+## Features
+
+- **Single Source**: All APIs from `stoa-catalog/tenants/`
+- **Portal Visibility**: Controlled via `tenant.yaml` (`public`, `internal`, `hidden`)
+- **Automatic Publish/Unpublish**: APIs published to portal based on visibility
+- **Idempotent**: Multiple runs produce the same result
+- **Error Isolation**: One tenant failure doesn't block others
+- **Dry-run Mode**: Simulate without applying changes
 
 ---
 
-## 🚀 Usage
+## Usage
 
 ### Local Execution
 
@@ -33,166 +56,224 @@ ansible-playbook reconcile-webmethods.yml -e "env=dev"
 ansible-playbook reconcile-webmethods.yml -e "env=prod" --check
 ansible-playbook reconcile-webmethods.yml -e "env=prod"
 
+# With custom catalog directory
+ansible-playbook reconcile-webmethods.yml \
+  -e "catalog_dir=/path/to/stoa-catalog" \
+  -e "env=dev"
+
 # Without deleting orphans
 ansible-playbook reconcile-webmethods.yml -e "env=dev delete_orphans=false"
 ```
 
 ### Via AWX
 
-1. Import Job Template from `awx-job-template.yml`
-2. Launch job using the form (environment, options)
+1. Import configuration from `awx/awx-config.yml`
+2. Launch job using the survey form
 3. Or trigger via webhook from ArgoCD/GitLab
 
 ---
 
-## ⚙️ Environment Variables
+## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `GITOPS_DIR` | GitOps clone directory | `/opt/stoa-gitops` |
+| `CATALOG_DIR` | Path to stoa-catalog | `playbook_dir/../..` |
 | `STOA_ENV` | Target environment | `dev` |
-| `WM_GATEWAY_URL` | webMethods API URL | `http://apim-gateway:5555` |
+| `WM_GATEWAY_URL` | webMethods Gateway URL | `http://apim-gateway:5555` |
 | `WM_ADMIN_USER` | Gateway admin user | `Administrator` |
 | `WM_ADMIN_PASSWORD` | Admin password | (required) |
+| `PORTAL_GATEWAY_ID` | Portal Gateway ID | `default` |
 | `DELETE_ORPHANS` | Delete orphaned APIs | `true` |
-| `NOTIFY_WEBHOOK_URL` | Slack webhook | (optional) |
-| `DISCORD_WEBHOOK_URL` | Discord webhook | (optional) |
 
 ---
 
-## 📁 File Structure
+## Portal Visibility Matrix
+
+| `portalVisibility` | Developer Portal | Gateway | MCP Tools | Use Case |
+|--------------------|------------------|---------|-----------|----------|
+| `public` | Visible | Accessible | Exposed | Business APIs |
+| `internal` | Hidden | Accessible | Admins only | Platform APIs |
+| `hidden` | Hidden | Accessible | Not exposed | Technical APIs |
+
+---
+
+## Reconciliation Flow
 
 ```
-ansible-webmethods/
+┌─────────────────────────────────────────────────────────────────┐
+│  PHASE 1: LOAD                                                  │
+│  ├── Find all tenants in catalog_dir/tenants/                   │
+│  ├── Load tenant.yaml (extract portalVisibility)                │
+│  └── Load all apis/{api}/api.yaml per tenant                    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  PHASE 2: FETCH                                                 │
+│  └── GET /rest/apigateway/apis (current state)                  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  PHASE 3: DIFF                                                  │
+│  ├── APIs to create (Git - Gateway)                             │
+│  ├── APIs to delete (Gateway - Git)                             │
+│  └── APIs to update (Git ∩ Gateway)                             │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  PHASE 4: SYNC                                                  │
+│  ├── POST /apis (create new)                                    │
+│  ├── PUT /apis/{id} (update existing)                           │
+│  └── DELETE /apis/{id} (remove orphans)                         │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  PHASE 5: PORTAL                                                │
+│  ├── PUT /apis/{id}/publish (portalVisibility: public)          │
+│  └── PUT /apis/{id}/unpublish (portalVisibility: internal)      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## File Structure
+
+```
+ansible/reconcile-webmethods/
 ├── reconcile-webmethods.yml    # Main playbook
-├── awx-job-template.yml        # AWX configuration
 ├── README.md                   # This file
 └── tasks/
-    ├── load-git-apis.yml       # Load APIs from Git
-    ├── fetch-gateway-apis.yml  # Fetch Gateway state
-    ├── compute-diff.yml        # Calculate differences
-    ├── compare-api.yml         # Compare single API
-    ├── create-apis.yml         # Creation orchestration
-    ├── create-single-api.yml   # Create single API
-    ├── update-apis.yml         # Update orchestration
-    ├── update-single-api.yml   # Update single API
-    ├── delete-apis.yml         # Deletion orchestration
-    ├── delete-single-api.yml   # Delete single API
-    ├── apply-policies.yml      # Policy orchestration
-    ├── apply-api-policies.yml  # Policies per API
-    ├── apply-single-policy.yml # Apply single policy
-    ├── configure-aliases.yml   # Alias orchestration
-    ├── configure-single-alias.yml # Configure single alias
-    └── notify.yml              # Notifications
+    ├── load-tenant.yml         # Load tenant config + list APIs
+    ├── load-api.yml            # Load single API with metadata
+    ├── sync-api-unified.yml    # Create/update API in Gateway
+    ├── delete-api.yml          # Delete orphaned API
+    ├── publish-to-portal.yml   # Publish public API
+    ├── unpublish-from-portal.yml # Unpublish internal API
+    └── notify.yml              # Send notifications
 ```
 
 ---
 
-## 🔄 Reconciliation Flow
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  1. LOAD                                                        │
-│     ├── Load APIs from Git (webmethods/apis/*.yaml)             │
-│     ├── Load Policies (webmethods/policies/*.yaml)              │
-│     └── Load Aliases (webmethods/aliases/{env}.yaml)            │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  2. FETCH                                                       │
-│     └── Retrieve current APIs from webMethods Gateway           │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  3. DIFF                                                        │
-│     ├── APIs to create (Git - Gateway)                          │
-│     ├── APIs to delete (Gateway - Git)                          │
-│     └── APIs to update (changes detected)                       │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  4. APPLY                                                       │
-│     ├── Create new APIs                                         │
-│     ├── Update modified APIs                                    │
-│     ├── Delete orphaned APIs (if enabled)                       │
-│     ├── Apply policies                                          │
-│     └── Configure aliases                                       │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  5. NOTIFY                                                      │
-│     └── Send summary (Slack/Discord/webhook)                    │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🔗 ArgoCD Integration
-
-### Option 1: PostSync Hook
+## tenant.yaml Schema
 
 ```yaml
-# In ArgoCD Application
-apiVersion: argoproj.io/v1alpha1
-kind: Application
+apiVersion: stoa.io/v1
+kind: Tenant
 metadata:
-  annotations:
-    argocd.argoproj.io/sync-options: PostSync=true
+  name: my-tenant
+  displayName: "My Tenant"
+
 spec:
-  syncPolicy:
-    syncOptions:
-      - CreateNamespace=true
-    automated:
-      prune: true
-      selfHeal: true
+  # Portal visibility: public | internal | hidden
+  portalVisibility: public
+
+  visibility:
+    allowedRoles:
+      - developer
+      - api-consumer
+    denyRoles: []
+
+  defaultPolicies:
+    - name: rate-limit-standard
+      config:
+        requestsPerMinute: 100
+
+  tags:
+    - business
+    - external
+
+  contact:
+    team: "My Team"
+    email: "api@example.com"
+```
+
 ---
-# Job triggered after sync
-apiVersion: batch/v1
-kind: Job
+
+## api.yaml Schema
+
+```yaml
+apiVersion: stoa.cab-i.com/v1
+kind: API
 metadata:
-  name: reconcile-webmethods
-  annotations:
-    argocd.argoproj.io/hook: PostSync
+  name: my-api
+  version: "1.0"
+
 spec:
-  template:
-    spec:
-      containers:
-        - name: ansible
-          image: ghcr.io/stoa-platform/ansible-runner:latest
-          command: ["ansible-playbook", "reconcile-webmethods.yml"]
-          env:
-            - name: STOA_ENV
-              value: "dev"
-      restartPolicy: Never
-```
+  displayName: "My API"
+  description: "API description"
+  status: published
+  category: integration
 
-### Option 2: Webhook → AWX
+  tags:
+    - rest
+    - external
 
-Configure a GitLab/GitHub webhook that triggers the AWX Job Template.
+  backend:
+    url: https://backend.example.com/api
 
----
+  # Override tenant visibility (optional)
+  portalVisibility: public
 
-## 📊 Reconciliation Metrics
-
-The playbook outputs metrics that can be scraped by Prometheus:
-
-```
-# HELP stoa_reconciliation_apis_total Total APIs reconciled
-# TYPE stoa_reconciliation_apis_total gauge
-stoa_reconciliation_apis_created{env="dev"} 2
-stoa_reconciliation_apis_updated{env="dev"} 1
-stoa_reconciliation_apis_deleted{env="dev"} 0
-stoa_reconciliation_duration_seconds{env="dev"} 45
+  gateway:
+    type: REST
+    isActive: true
 ```
 
 ---
 
-## 🔗 Links
+## ArgoCD Integration
 
-- [CAB-367 — GitOps Reconciliation](https://linear.app/hlfh-workspace/issue/CAB-367)
-- [stoa-gitops Repository](https://gitlab.com/cab6961310/stoa-gitops)
-- [webMethods API Gateway REST API](https://documentation.softwareag.com/webmethods/api_gateway/)
+The `stoa-webmethods-gitops` application watches `stoa-catalog/tenants/` and triggers reconciliation via PostSync hook.
+
+```yaml
+# argocd/apps/stoa-webmethods-gitops.yaml
+source:
+  repoURL: https://gitlab.com/cab6961310/stoa-catalog.git
+  targetRevision: main
+  path: tenants
+```
+
+---
+
+## Migration from Multi-Source
+
+If migrating from the old multi-source architecture:
+
+```bash
+# Run migration script
+./scripts/migrate-admin-apis.sh \
+  --gitops-dir=/path/to/stoa-gitops \
+  --catalog-dir=/path/to/stoa-catalog \
+  --dry-run
+
+# Review and apply
+./scripts/migrate-admin-apis.sh \
+  --gitops-dir=/path/to/stoa-gitops \
+  --catalog-dir=/path/to/stoa-catalog
+```
+
+---
+
+## Verification
+
+```bash
+# Check APIs in Gateway
+curl -u Administrator:password \
+  "https://gateway.stoa.cab-i.com/rest/apigateway/apis" | \
+  jq '.apiResponse[] | {name: .api.apiName, tags: .api.tags}'
+
+# Check portal visibility
+curl "https://portal.stoa.cab-i.com/portal/rest/v1/apis" | \
+  jq '.[].name'
+# stoa-platform APIs should NOT appear
+```
+
+---
+
+## Links
+
+- [stoa-catalog Repository](https://gitlab.com/cab6961310/stoa-catalog)
+- [webMethods Gateway API Reference](https://documentation.softwareag.com/webmethods/api_gateway/)

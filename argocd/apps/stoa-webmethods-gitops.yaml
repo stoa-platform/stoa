@@ -1,5 +1,8 @@
 ---
-# webMethods GitOps Application (triggers PostSync hook)
+# stoa-webmethods-gitops.yaml
+# UNIFIED TENANT-BASED ARCHITECTURE
+# Single source: stoa-catalog/tenants (includes stoa-platform for admin APIs)
+#
 # This application syncs webMethods configs and triggers AWX reconciliation
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -16,10 +19,11 @@ metadata:
 spec:
   project: stoa-platform
 
+  # SINGLE SOURCE - stoa-catalog only
   source:
-    repoURL: https://gitlab.com/cab6961310/stoa-gitops.git
+    repoURL: https://gitlab.com/cab6961310/stoa-catalog.git
     targetRevision: main
-    path: webmethods
+    path: tenants
 
   destination:
     server: https://kubernetes.default.svc

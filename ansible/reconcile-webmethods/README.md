@@ -51,7 +51,7 @@ ansible-playbook reconcile-webmethods.yml -e "env=dev delete_orphans=false"
 |----------|-------------|---------|
 | `GITOPS_DIR` | GitOps clone directory | `/opt/stoa-gitops` |
 | `STOA_ENV` | Target environment | `dev` |
-| `WM_GATEWAY_URL` | webMethods API URL | `http://apim-gateway:9072` |
+| `WM_GATEWAY_URL` | webMethods API URL | `http://apim-gateway:5555` |
 | `WM_ADMIN_USER` | Gateway admin user | `Administrator` |
 | `WM_ADMIN_PASSWORD` | Admin password | (required) |
 | `DELETE_ORPHANS` | Delete orphaned APIs | `true` |

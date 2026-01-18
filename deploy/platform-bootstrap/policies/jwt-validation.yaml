@@ -67,3 +67,4 @@ spec:
       insufficientScope:
         status: 403
         message: "Insufficient permissions"
+

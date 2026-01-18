@@ -39,6 +39,7 @@ from ..models import (
 )
 from ..tools import CORE_TOOLS, DEPRECATION_MAPPINGS, get_core_tool
 from .health import HealthChecker, PlatformHealth, HealthStatus
+from .tool_handlers import get_tool_handlers, STOAToolHandlers
 
 logger = structlog.get_logger(__name__)
 
@@ -845,6 +846,7 @@ class ToolRegistry:
         invocation: ToolInvocation,
         user_token: str | None = None,
         tenant_id: str | None = None,
+        user_claims: Any = None,  # CAB-660: TokenClaims for real handlers
     ) -> ToolResult:
         """Invoke a tool.
 
@@ -857,6 +859,7 @@ class ToolRegistry:
             invocation: Tool invocation request
             user_token: Optional user JWT for backend authentication
             tenant_id: Optional tenant context for tool lookup
+            user_claims: Optional TokenClaims for CAB-660 real handlers
 
         Returns:
             Tool execution result
@@ -902,7 +905,7 @@ class ToolRegistry:
         try:
             # CAB-603: Route by tool type
             if isinstance(tool, CoreTool):
-                result = await self._invoke_core_tool(tool, arguments)
+                result = await self._invoke_core_tool(tool, arguments, user_claims)
             elif isinstance(tool, ProxiedTool):
                 result = await self._invoke_proxied_tool(tool, arguments, user_token)
             # Legacy: Handle built-in tools (backward compatibility)
@@ -960,15 +963,19 @@ class ToolRegistry:
         self,
         tool: CoreTool,
         arguments: dict[str, Any],
+        user_claims: Any = None,  # CAB-660: TokenClaims for real handlers
     ) -> ToolResult:
         """Invoke a core platform tool.
 
         CAB-605 Phase 3: Handles consolidated action-based tools and legacy tools.
         Action-based tools use the 'action' parameter to dispatch to specific handlers.
 
+        CAB-660: Now uses real PostgreSQL backend via STOAToolHandlers.
+
         Args:
             tool: CoreTool instance
             arguments: Tool invocation arguments
+            user_claims: Optional TokenClaims for authorization
 
         Returns:
             ToolResult with execution output
@@ -979,6 +986,9 @@ class ToolRegistry:
         # CAB-605 Phase 3: Consolidated Action-Based Tools
         # =====================================================================
 
+        # CAB-660: Use real handlers if available
+        handlers = get_tool_handlers()
+
         # stoa_catalog - API catalog operations
         if tool.name == "stoa_catalog":
             action = arguments.get("action")
@@ -987,7 +997,7 @@ class ToolRegistry:
                     content=[TextContent(text="action is required (list, get, search, versions, categories)")],
                     is_error=True,
                 )
-            return await self._handle_catalog_action(action, arguments)
+            return await self._handle_catalog_action(action, arguments, user_claims, handlers)
 
         # stoa_api_spec - API specification retrieval
         elif tool.name == "stoa_api_spec":
@@ -998,7 +1008,7 @@ class ToolRegistry:
                     content=[TextContent(text="action and api_id are required")],
                     is_error=True,
                 )
-            return await self._handle_api_spec_action(action, arguments)
+            return await self._handle_api_spec_action(action, arguments, user_claims, handlers)
 
         # stoa_subscription - Subscription management
         elif tool.name == "stoa_subscription":
@@ -1008,7 +1018,7 @@ class ToolRegistry:
                     content=[TextContent(text="action is required (list, get, create, cancel, credentials, rotate_key)")],
                     is_error=True,
                 )
-            return await self._handle_subscription_action(action, arguments)
+            return await self._handle_subscription_action(action, arguments, user_claims, handlers)
 
         # stoa_metrics - Metrics retrieval
         elif tool.name == "stoa_metrics":
@@ -1058,7 +1068,7 @@ class ToolRegistry:
                     content=[TextContent(text="action is required (list, get, validate, sla)")],
                     is_error=True,
                 )
-            return await self._handle_uac_action(action, arguments)
+            return await self._handle_uac_action(action, arguments, user_claims, handlers)
 
         # stoa_security - Security operations
         elif tool.name == "stoa_security":
@@ -1068,7 +1078,7 @@ class ToolRegistry:
                     content=[TextContent(text="action is required (audit_log, check_permissions, list_policies)")],
                     is_error=True,
                 )
-            return await self._handle_security_action(action, arguments)
+            return await self._handle_security_action(action, arguments, user_claims, handlers)
 
         # =====================================================================
         # Standalone Platform Tools (not consolidated)
@@ -1101,12 +1111,7 @@ class ToolRegistry:
 
         # stoa_tenants (renamed from stoa_list_tenants)
         elif tool.name == "stoa_tenants":
-            include_inactive = arguments.get("include_inactive", False)
-            return ToolResult(content=[TextContent(text=str({
-                "tenants": [],
-                "message": "Tenant listing requires admin scope - coming soon",
-                "include_inactive": include_inactive,
-            }))])
+            return await self._handle_tenants_action(arguments, user_claims, handlers)
 
         # =====================================================================
         # Legacy Tools (for deprecation period - handled via aliases)
@@ -1124,179 +1129,108 @@ class ToolRegistry:
             }))])
 
     # =========================================================================
-    # CAB-605 Phase 3: Consolidated Tool Action Handlers
+    # CAB-660: Real Tool Action Handlers (with fallback to stubs)
     # =========================================================================
 
     async def _handle_catalog_action(
         self,
         action: str,
         arguments: dict[str, Any],
+        user_claims: Any = None,
+        handlers: STOAToolHandlers | None = None,
     ) -> ToolResult:
-        """Handle stoa_catalog actions."""
-        if action == "list":
-            return ToolResult(content=[TextContent(text=str({
-                "apis": [],
-                "total": 0,
-                "page": arguments.get("page", 1),
-                "page_size": arguments.get("page_size", 20),
-                "message": "API catalog integration - coming soon",
-            }))])
-        elif action == "get":
-            api_id = arguments.get("api_id")
-            if not api_id:
+        """Handle stoa_catalog actions.
+
+        CAB-660: Uses real database backend via STOAToolHandlers.
+        Falls back to stub if handlers not initialized.
+        """
+        import json
+
+        if handlers:
+            try:
+                result = await handlers.handle_catalog(action, arguments, user_claims)
+                return ToolResult(content=[TextContent(text=json.dumps(result, default=str))])
+            except Exception as e:
+                logger.exception("Catalog handler error", error=str(e))
                 return ToolResult(
-                    content=[TextContent(text="api_id is required for 'get' action")],
+                    content=[TextContent(text=f"Handler error: {str(e)}")],
                     is_error=True,
                 )
-            return ToolResult(content=[TextContent(text=str({
-                "api_id": api_id,
-                "message": f"API details for {api_id} - coming soon",
-            }))])
-        elif action == "search":
-            query = arguments.get("query", "")
-            return ToolResult(content=[TextContent(text=str({
-                "query": query,
-                "results": [],
-                "total": 0,
-                "message": "API search - coming soon",
-            }))])
-        elif action == "versions":
-            api_id = arguments.get("api_id")
-            if not api_id:
-                return ToolResult(
-                    content=[TextContent(text="api_id is required for 'versions' action")],
-                    is_error=True,
-                )
-            return ToolResult(content=[TextContent(text=str({
-                "api_id": api_id,
-                "versions": [],
-                "message": f"Versions for {api_id} - coming soon",
-            }))])
-        elif action == "categories":
+
+        # Fallback stub
+        if action == "categories":
             categories = self.list_categories()
             return ToolResult(content=[TextContent(text=str({
                 "categories": [{"name": c.name, "count": c.count} for c in categories.categories],
             }))])
-        else:
-            return ToolResult(
-                content=[TextContent(text=f"Unknown action: {action}")],
-                is_error=True,
-            )
+
+        return ToolResult(content=[TextContent(text=str({
+            "action": action,
+            "arguments": arguments,
+            "message": "Database handlers not initialized - stub response",
+        }))])
 
     async def _handle_api_spec_action(
         self,
         action: str,
         arguments: dict[str, Any],
+        user_claims: Any = None,
+        handlers: STOAToolHandlers | None = None,
     ) -> ToolResult:
-        """Handle stoa_api_spec actions."""
-        api_id = arguments.get("api_id")
-        version = arguments.get("version", "latest")
+        """Handle stoa_api_spec actions.
 
-        if action == "openapi":
-            format_ = arguments.get("format", "json")
-            return ToolResult(content=[TextContent(text=str({
-                "api_id": api_id,
-                "version": version,
-                "format": format_,
-                "spec": {},
-                "message": f"OpenAPI spec for {api_id} - coming soon",
-            }))])
-        elif action == "docs":
-            section = arguments.get("section")
-            return ToolResult(content=[TextContent(text=str({
-                "api_id": api_id,
-                "section": section,
-                "documentation": "",
-                "message": f"Documentation for {api_id} - coming soon",
-            }))])
-        elif action == "endpoints":
-            method = arguments.get("method")
-            return ToolResult(content=[TextContent(text=str({
-                "api_id": api_id,
-                "method_filter": method,
-                "endpoints": [],
-                "message": f"Endpoints for {api_id} - coming soon",
-            }))])
-        else:
-            return ToolResult(
-                content=[TextContent(text=f"Unknown action: {action}")],
-                is_error=True,
-            )
+        CAB-660: Uses real database backend via STOAToolHandlers.
+        """
+        import json
+
+        if handlers:
+            try:
+                result = await handlers.handle_api_spec(action, arguments, user_claims)
+                return ToolResult(content=[TextContent(text=json.dumps(result, default=str))])
+            except Exception as e:
+                logger.exception("API spec handler error", error=str(e))
+                return ToolResult(
+                    content=[TextContent(text=f"Handler error: {str(e)}")],
+                    is_error=True,
+                )
+
+        # Fallback stub
+        return ToolResult(content=[TextContent(text=str({
+            "action": action,
+            "api_id": arguments.get("api_id"),
+            "message": "Database handlers not initialized - stub response",
+        }))])
 
     async def _handle_subscription_action(
         self,
         action: str,
         arguments: dict[str, Any],
+        user_claims: Any = None,
+        handlers: STOAToolHandlers | None = None,
     ) -> ToolResult:
-        """Handle stoa_subscription actions."""
-        if action == "list":
-            return ToolResult(content=[TextContent(text=str({
-                "subscriptions": [],
-                "total": 0,
-                "message": "Subscription listing - coming soon",
-            }))])
-        elif action == "get":
-            subscription_id = arguments.get("subscription_id")
-            if not subscription_id:
+        """Handle stoa_subscription actions.
+
+        CAB-660: Uses real database backend via STOAToolHandlers.
+        """
+        import json
+
+        if handlers:
+            try:
+                result = await handlers.handle_subscription(action, arguments, user_claims)
+                return ToolResult(content=[TextContent(text=json.dumps(result, default=str))])
+            except Exception as e:
+                logger.exception("Subscription handler error", error=str(e))
                 return ToolResult(
-                    content=[TextContent(text="subscription_id is required")],
+                    content=[TextContent(text=f"Handler error: {str(e)}")],
                     is_error=True,
                 )
-            return ToolResult(content=[TextContent(text=str({
-                "subscription_id": subscription_id,
-                "message": f"Subscription details - coming soon",
-            }))])
-        elif action == "create":
-            api_id = arguments.get("api_id")
-            if not api_id:
-                return ToolResult(
-                    content=[TextContent(text="api_id is required")],
-                    is_error=True,
-                )
-            return ToolResult(content=[TextContent(text=str({
-                "api_id": api_id,
-                "plan": arguments.get("plan"),
-                "message": "Subscription creation - coming soon",
-            }))])
-        elif action == "cancel":
-            subscription_id = arguments.get("subscription_id")
-            if not subscription_id:
-                return ToolResult(
-                    content=[TextContent(text="subscription_id is required")],
-                    is_error=True,
-                )
-            return ToolResult(content=[TextContent(text=str({
-                "subscription_id": subscription_id,
-                "message": "Subscription cancellation - coming soon",
-            }))])
-        elif action == "credentials":
-            subscription_id = arguments.get("subscription_id")
-            if not subscription_id:
-                return ToolResult(
-                    content=[TextContent(text="subscription_id is required")],
-                    is_error=True,
-                )
-            return ToolResult(content=[TextContent(text=str({
-                "subscription_id": subscription_id,
-                "message": "Credentials retrieval - coming soon",
-            }))])
-        elif action == "rotate_key":
-            subscription_id = arguments.get("subscription_id")
-            if not subscription_id:
-                return ToolResult(
-                    content=[TextContent(text="subscription_id is required")],
-                    is_error=True,
-                )
-            return ToolResult(content=[TextContent(text=str({
-                "subscription_id": subscription_id,
-                "grace_period_hours": arguments.get("grace_period_hours", 24),
-                "message": "Key rotation - coming soon",
-            }))])
-        else:
-            return ToolResult(
-                content=[TextContent(text=f"Unknown action: {action}")],
-                is_error=True,
-            )
+
+        # Fallback stub
+        return ToolResult(content=[TextContent(text=str({
+            "action": action,
+            "arguments": arguments,
+            "message": "Database handlers not initialized - stub response",
+        }))])
 
     async def _handle_metrics_action(
         self,
@@ -1481,104 +1415,92 @@ class ToolRegistry:
         self,
         action: str,
         arguments: dict[str, Any],
+        user_claims: Any = None,
+        handlers: STOAToolHandlers | None = None,
     ) -> ToolResult:
-        """Handle stoa_uac actions."""
-        if action == "list":
-            return ToolResult(content=[TextContent(text=str({
-                "api_id": arguments.get("api_id"),
-                "status": arguments.get("status"),
-                "contracts": [],
-                "total": 0,
-                "message": "UAC contracts listing - coming soon",
-            }))])
-        elif action == "get":
-            contract_id = arguments.get("contract_id")
-            if not contract_id:
+        """Handle stoa_uac actions.
+
+        CAB-660: Uses real database backend via STOAToolHandlers.
+        """
+        import json
+
+        if handlers:
+            try:
+                result = await handlers.handle_uac(action, arguments, user_claims)
+                return ToolResult(content=[TextContent(text=json.dumps(result, default=str))])
+            except Exception as e:
+                logger.exception("UAC handler error", error=str(e))
                 return ToolResult(
-                    content=[TextContent(text="contract_id is required")],
+                    content=[TextContent(text=f"Handler error: {str(e)}")],
                     is_error=True,
                 )
-            return ToolResult(content=[TextContent(text=str({
-                "contract_id": contract_id,
-                "message": "UAC contract details - coming soon",
-            }))])
-        elif action == "validate":
-            contract_id = arguments.get("contract_id")
-            if not contract_id:
-                return ToolResult(
-                    content=[TextContent(text="contract_id is required")],
-                    is_error=True,
-                )
-            return ToolResult(content=[TextContent(text=str({
-                "contract_id": contract_id,
-                "subscription_id": arguments.get("subscription_id"),
-                "compliant": True,
-                "message": "UAC validation - coming soon",
-            }))])
-        elif action == "sla":
-            contract_id = arguments.get("contract_id")
-            if not contract_id:
-                return ToolResult(
-                    content=[TextContent(text="contract_id is required")],
-                    is_error=True,
-                )
-            return ToolResult(content=[TextContent(text=str({
-                "contract_id": contract_id,
-                "time_range": arguments.get("time_range", "30d"),
-                "uptime_percentage": 0,
-                "latency_compliance": 0,
-                "message": "SLA metrics - coming soon",
-            }))])
-        else:
-            return ToolResult(
-                content=[TextContent(text=f"Unknown action: {action}")],
-                is_error=True,
-            )
+
+        # Fallback stub
+        return ToolResult(content=[TextContent(text=str({
+            "action": action,
+            "arguments": arguments,
+            "message": "Database handlers not initialized - stub response",
+        }))])
 
     async def _handle_security_action(
         self,
         action: str,
         arguments: dict[str, Any],
+        user_claims: Any = None,
+        handlers: STOAToolHandlers | None = None,
     ) -> ToolResult:
-        """Handle stoa_security actions."""
-        if action == "audit_log":
-            return ToolResult(content=[TextContent(text=str({
-                "api_id": arguments.get("api_id"),
-                "user_id": arguments.get("user_id"),
-                "time_range": arguments.get("time_range", "7d"),
-                "limit": arguments.get("limit", 100),
-                "entries": [],
-                "total": 0,
-                "message": "Audit log - coming soon",
-            }))])
-        elif action == "check_permissions":
-            api_id = arguments.get("api_id")
-            action_type = arguments.get("action_type")
-            if not api_id or not action_type:
+        """Handle stoa_security actions.
+
+        CAB-660: Uses real database backend via STOAToolHandlers.
+        """
+        import json
+
+        if handlers:
+            try:
+                result = await handlers.handle_security(action, arguments, user_claims)
+                return ToolResult(content=[TextContent(text=json.dumps(result, default=str))])
+            except Exception as e:
+                logger.exception("Security handler error", error=str(e))
                 return ToolResult(
-                    content=[TextContent(text="api_id and action_type are required")],
+                    content=[TextContent(text=f"Handler error: {str(e)}")],
                     is_error=True,
                 )
-            return ToolResult(content=[TextContent(text=str({
-                "api_id": api_id,
-                "action": action_type,
-                "user_id": arguments.get("user_id"),
-                "allowed": True,
-                "message": "Permission check - coming soon",
-            }))])
-        elif action == "list_policies":
-            return ToolResult(content=[TextContent(text=str({
-                "api_id": arguments.get("api_id"),
-                "policy_type": arguments.get("policy_type"),
-                "policies": [],
-                "total": 0,
-                "message": "Policy listing - coming soon",
-            }))])
-        else:
-            return ToolResult(
-                content=[TextContent(text=f"Unknown action: {action}")],
-                is_error=True,
-            )
+
+        # Fallback stub
+        return ToolResult(content=[TextContent(text=str({
+            "action": action,
+            "arguments": arguments,
+            "message": "Database handlers not initialized - stub response",
+        }))])
+
+    async def _handle_tenants_action(
+        self,
+        arguments: dict[str, Any],
+        user_claims: Any = None,
+        handlers: STOAToolHandlers | None = None,
+    ) -> ToolResult:
+        """Handle stoa_tenants tool.
+
+        CAB-660: Uses real database backend via STOAToolHandlers.
+        """
+        import json
+
+        if handlers:
+            try:
+                result = await handlers.handle_tenants(arguments, user_claims)
+                return ToolResult(content=[TextContent(text=json.dumps(result, default=str))])
+            except Exception as e:
+                logger.exception("Tenants handler error", error=str(e))
+                return ToolResult(
+                    content=[TextContent(text=f"Handler error: {str(e)}")],
+                    is_error=True,
+                )
+
+        # Fallback stub
+        return ToolResult(content=[TextContent(text=str({
+            "tenants": [],
+            "message": "Database handlers not initialized - stub response",
+        }))])
 
     async def _invoke_proxied_tool(
         self,

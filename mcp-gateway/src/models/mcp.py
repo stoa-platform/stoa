@@ -135,6 +135,7 @@ class BaseTool(BaseModel):
     category: str | None = Field(None, description="Tool category")
     tags: list[str] = Field(default_factory=list, description="Categorization tags")
     version: str = Field("1.0.0", description="Tool version")
+    tenant_id: str | None = Field(None, description="Owning tenant ID (for metering)")
 
     model_config = ConfigDict(populate_by_name=True)
 

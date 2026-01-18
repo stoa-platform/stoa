@@ -24,6 +24,8 @@ from .config import get_settings
 from .handlers import mcp_router, subscriptions_router, mcp_sse_router, sse_alias_router, servers_router
 from .middleware import MetricsMiddleware
 from .services import get_tool_registry, shutdown_tool_registry, init_database, shutdown_database
+from .services.tool_handlers import init_tool_handlers, shutdown_tool_handlers
+from .services.database import get_session_factory
 from .k8s import get_tool_watcher, shutdown_tool_watcher
 from .features.error_snapshots import (
     MCPErrorSnapshotMiddleware,
@@ -74,6 +76,15 @@ async def lifespan(app: FastAPI):
     try:
         await init_database()
         logger.info("Database initialized")
+
+        # CAB-660: Initialize tool handlers with database session factory
+        try:
+            session_factory = get_session_factory()
+            init_tool_handlers(session_factory)
+            logger.info("Tool handlers initialized with database backend")
+        except Exception as e:
+            logger.warning("Tool handlers initialization failed, using stubs", error=str(e))
+
     except Exception as e:
         logger.warning("Database initialization failed, using in-memory storage", error=str(e))
 
@@ -165,6 +176,9 @@ async def lifespan(app: FastAPI):
 
     # Cleanup tool registry
     await shutdown_tool_registry()
+
+    # CAB-660: Cleanup tool handlers
+    shutdown_tool_handlers()
 
     # Cleanup database
     await shutdown_database()

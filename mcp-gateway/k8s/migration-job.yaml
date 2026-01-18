@@ -1,0 +1,54 @@
+# CAB-660: Database migration job for MCP Gateway
+# Run with: kubectl apply -f k8s/migration-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mcp-gateway-migration
+  namespace: stoa-system
+  labels:
+    app: mcp-gateway
+    component: migration
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: mcp-gateway
+        component: migration
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migration
+          image: ${MCP_GATEWAY_IMAGE:-stoa-mcp-gateway:latest}
+          command: ["alembic", "upgrade", "head"]
+          workingDir: /app
+          env:
+            - name: STOA_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: control-plane-db-secret
+                  key: url
+            # Fallback to individual components if url not available
+            - name: DB_HOST
+              value: control-plane-db.stoa-system.svc.cluster.local
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: stoa
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: control-plane-db-secret
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: control-plane-db-secret
+                  key: password
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"

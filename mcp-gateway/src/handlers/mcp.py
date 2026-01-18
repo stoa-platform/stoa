@@ -280,7 +280,8 @@ async def invoke_tool(
         # Get user's token for backend calls
         # Note: In production, you might want to use a service token
         # or token exchange instead of passing user's token
-        result = await registry.invoke(invocation, user_token=None)
+        # CAB-660: Pass user_claims for real tool handlers
+        result = await registry.invoke(invocation, user_token=None, user_claims=user)
         metering_status = MeteringStatus.SUCCESS
     except Exception as e:
         metering_status = MeteringStatus.ERROR

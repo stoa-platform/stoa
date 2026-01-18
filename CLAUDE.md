@@ -123,9 +123,8 @@ kubectl get tools -n tenant-acme
 ## Key URLs (Production)
 - Console UI: https://console.stoa.cab-i.com (API Provider)
 - **Developer Portal**: https://portal.stoa.cab-i.com (API Consumer)
-- API (direct): https://api.stoa.cab-i.com
-- **API Gateway Runtime**: https://apis.stoa.cab-i.com (OIDC auth)
-  - Control-Plane-API: `https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`
+- **Control-Plane-API**: https://api.stoa.cab-i.com (used by Console UI & Portal)
+- API Gateway Runtime: https://apis.stoa.cab-i.com (for external API consumers)
 - Gateway Admin: https://gateway.stoa.cab-i.com
 - MCP Gateway: https://mcp.stoa.cab-i.com
 - Keycloak: https://auth.stoa.cab-i.com

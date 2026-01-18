@@ -50,9 +50,9 @@ export const config = {
   },
 
   // API Configuration
-  // API is proxied through webMethods Gateway for OIDC authentication
+  // Direct connection to Control-Plane-API backend
   api: {
-    baseUrl: import.meta.env.VITE_API_URL || `https://apis.${BASE_DOMAIN}/gateway/Control-Plane-API/2.0`,
+    baseUrl: import.meta.env.VITE_API_URL || `https://api.${BASE_DOMAIN}`,
     docsUrl: import.meta.env.VITE_API_DOCS_URL || `https://api.${BASE_DOMAIN}/docs`,
     timeout: Number(import.meta.env.VITE_API_TIMEOUT) || 30000,
   },

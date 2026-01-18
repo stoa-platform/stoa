@@ -25,6 +25,13 @@ from .api_key import (
     hash_api_key,
     verify_api_key_hash,
 )
+from .health import (
+    HealthChecker,
+    HealthStatus,
+    ComponentHealth,
+    PlatformHealth,
+    check_platform_health,
+)
 
 __all__ = [
     "ToolRegistry",
@@ -42,4 +49,10 @@ __all__ = [
     "validate_api_key",
     "hash_api_key",
     "verify_api_key_hash",
+    # CAB-658: Health check module
+    "HealthChecker",
+    "HealthStatus",
+    "ComponentHealth",
+    "PlatformHealth",
+    "check_platform_health",
 ]

@@ -82,7 +82,8 @@ class Settings(BaseSettings):
     GATEWAY_USE_OIDC_PROXY: bool = True  # Set to False to use Basic Auth directly
 
     # MCP Gateway URL (for tools proxy)
-    MCP_GATEWAY_URL: str = f"https://mcp.{_BASE_DOMAIN}"
+    # Default to internal K8s service, can be overridden for external access
+    MCP_GATEWAY_URL: str = "http://mcp-gateway.stoa-system.svc.cluster.local:80"
 
     # ArgoCD (GitOps Observability - CAB-654)
     ARGOCD_URL: str = f"https://argocd.{_BASE_DOMAIN}"

@@ -2,6 +2,10 @@
 # tasks/load-api.yml
 # Load a single API definition with tenant metadata
 #
+# Supports TWO formats:
+#   1. NEW format (with apiVersion/kind/metadata/spec)
+#   2. LEGACY format (flat: id, name, version, backend_url, etc.)
+#
 # Expected variables:
 #   - api_dir: Directory object containing API path
 #   - current_tenant_id: Parent tenant ID
@@ -9,7 +13,7 @@
 #   - tenant_config: Full tenant configuration (for RBAC)
 #   - all_apis: List to append API to
 
-- name: "Extract API ID"
+- name: "Extract API ID from directory name"
   ansible.builtin.set_fact:
     current_api_id: "{{ api_dir.path | basename }}"
 
@@ -29,23 +33,75 @@
 
     - name: "Parse API definition"
       ansible.builtin.set_fact:
-        api_def: "{{ api_yaml_content.content | b64decode | from_yaml }}"
+        api_raw: "{{ api_yaml_content.content | b64decode | from_yaml }}"
+
+    # Detect format: NEW (has apiVersion) vs LEGACY (has name at root)
+    - name: "Detect API format"
+      ansible.builtin.set_fact:
+        is_new_format: "{{ api_raw.apiVersion is defined }}"
+
+    # NORMALIZE to common structure
+    - name: "Normalize NEW format API"
+      when: is_new_format
+      ansible.builtin.set_fact:
+        api_def:
+          metadata:
+            name: "{{ api_raw.metadata.name }}"
+            version: "{{ api_raw.metadata.version | default('1.0') }}"
+          spec:
+            displayName: "{{ api_raw.spec.displayName | default(api_raw.metadata.name) }}"
+            description: "{{ api_raw.spec.description | default('') }}"
+            status: "{{ api_raw.spec.status | default('active') }}"
+            category: "{{ api_raw.spec.category | default('general') }}"
+            tags: "{{ api_raw.spec.tags | default([]) }}"
+            portalVisibility: "{{ api_raw.spec.portalVisibility | default(omit) }}"
+            backend:
+              url: "{{ api_raw.spec.backend.url | default('') }}"
+            gateway:
+              type: "{{ api_raw.spec.gateway.type | default('REST') }}"
+              isActive: "{{ api_raw.spec.gateway.isActive | default(true) }}"
+
+    - name: "Normalize LEGACY format API"
+      when: not is_new_format
+      ansible.builtin.set_fact:
+        api_def:
+          metadata:
+            name: "{{ api_raw.name | default(current_api_id) }}"
+            version: "{{ api_raw.version | default('1.0') }}"
+          spec:
+            displayName: "{{ api_raw.display_name | default(api_raw.name | default(current_api_id)) }}"
+            description: "{{ api_raw.description | default('') }}"
+            status: "{{ api_raw.status | default('active') }}"
+            category: "{{ api_raw.category | default('general') }}"
+            tags: "{{ api_raw.tags | default([]) }}"
+            portalVisibility: "{{ 'public' if 'portal:published' in (api_raw.tags | default([])) else omit }}"
+            backend:
+              url: "{{ api_raw.backend_url | default('') }}"
+            gateway:
+              type: "REST"
+              isActive: "{{ api_raw.status | default('active') == 'active' }}"
 
     - name: "Determine API portal visibility"
       ansible.builtin.set_fact:
         # API can override tenant visibility, otherwise inherit from tenant
         api_portal_visibility: "{{ api_def.spec.portalVisibility | default(tenant_portal_visibility) }}"
 
+    - name: "Set API format label"
+      ansible.builtin.set_fact:
+        api_format_label: "{{ 'new' if is_new_format else 'legacy' }}"
+
     - name: "Enrich API with metadata"
       ansible.builtin.set_fact:
-        enriched_api: "{{ api_def | combine({
-          '_tenant': current_tenant_id,
-          '_tenant_display_name': tenant_display_name,
-          '_tenant_config': tenant_config,
-          '_portal_visibility': api_portal_visibility,
-          '_source_path': api_dir.path,
-          '_api_id': current_api_id
-        }) }}"
+        enriched_api: >-
+          {{ api_def | combine({
+            '_tenant': current_tenant_id,
+            '_tenant_display_name': tenant_display_name,
+            '_tenant_config': tenant_config,
+            '_portal_visibility': api_portal_visibility,
+            '_source_path': api_dir.path,
+            '_api_id': current_api_id,
+            '_format': api_format_label
+          }) }}
 
     - name: "Add API to all_apis list"
       ansible.builtin.set_fact:
@@ -53,7 +109,7 @@
 
     - name: "Display API loaded"
       ansible.builtin.debug:
-        msg: "  - {{ api_def.metadata.name | default(current_api_id) }} (v{{ api_def.metadata.version | default('1.0') }}) [{{ api_portal_visibility }}]"
+        msg: "  - {{ api_def.metadata.name }} (v{{ api_def.metadata.version }}) [{{ api_portal_visibility }}] ({{ api_format_label }} format)"
         verbosity: 1
 
 - name: "Warn if no api.yaml found"

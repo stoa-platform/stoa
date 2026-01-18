@@ -6,13 +6,28 @@
 # All APIs (admin + business) come from a single source: stoa-catalog/tenants/
 #
 # Usage:
+#   # Standard sync (create/update only, no delete)
 #   ansible-playbook reconcile-webmethods.yml -e "env=dev"
-#   ansible-playbook reconcile-webmethods.yml -e "env=prod" --check  # Dry-run
+#
+#   # Full sync with orphan deletion
+#   ansible-playbook reconcile-webmethods.yml -e "env=dev" -e "delete_orphans=true"
+#
+#   # Dry-run mode
+#   ansible-playbook reconcile-webmethods.yml -e "env=prod" --check
+#
+#   # Scheduled daily sync (AWX)
+#   ansible-playbook reconcile-webmethods.yml -e "env=prod" -e "sync_mode=scheduled"
+#
+# Sync Modes:
+#   - sync_mode=default: Create/update APIs, no deletion (safe for frequent runs)
+#   - sync_mode=full: Create/update/delete - use for cleanup
+#   - sync_mode=scheduled: Same as full, intended for daily cron
 #
 # Triggered by:
-#   - ArgoCD PostSync hook
-#   - AWX Job Template
+#   - ArgoCD PostSync hook (default mode)
+#   - AWX Job Template (configurable mode)
 #   - GitLab CI webhook
+#   - Cron/Scheduled job (full mode)
 
 - name: "Reconcile webMethods Gateway from Git"
   hosts: localhost
@@ -37,9 +52,13 @@
     # Portal Gateway ID for publish/unpublish
     portal_gateway_id: "{{ lookup('env', 'PORTAL_GATEWAY_ID') | default('default', true) }}"
 
+    # Sync mode: default, full, scheduled
+    sync_mode: "{{ lookup('env', 'SYNC_MODE') | default('default', true) }}"
+
     # Options
     dry_run: "{{ ansible_check_mode | default(false) }}"
-    delete_orphans: "{{ lookup('env', 'DELETE_ORPHANS') | default('true', true) | bool }}"
+    # delete_orphans: only true for 'full' or 'scheduled' modes (safe default)
+    delete_orphans: "{{ lookup('env', 'DELETE_ORPHANS') | default('false', true) | bool or sync_mode in ['full', 'scheduled'] }}"
 
     # Initialize collections
     all_tenants: []
@@ -58,11 +77,12 @@
         msg: |
           === webMethods Reconciliation (Unified Tenant Architecture) ===
           Environment: {{ env }}
+          Sync Mode: {{ sync_mode }}
           Catalog Dir: {{ catalog_dir }}
           Tenants Dir: {{ tenants_dir }}
           Gateway URL: {{ wm_gateway_url }}
           Dry Run: {{ dry_run }}
-          Delete Orphans: {{ delete_orphans }}
+          Delete Orphans: {{ delete_orphans }} ({{ 'ENABLED - will remove APIs not in Git' if delete_orphans else 'DISABLED - safe mode' }})
 
     - name: "Verify tenants directory exists"
       ansible.builtin.stat:

@@ -41,19 +41,48 @@ class TenantResponse(BaseModel):
 
 
 def _tenant_from_yaml(tenant_data: dict, api_count: int = 0, app_count: int = 0) -> TenantResponse:
-    """Convert GitLab YAML data to Tenant response"""
+    """Convert GitLab YAML data to Tenant response.
+
+    Supports both flat format and Kubernetes-style format:
+    - Flat: {name, display_name, description, ...}
+    - K8s: {metadata: {name, displayName, description}, spec: {status, ...}}
+    """
+    # Check if this is Kubernetes-style format (has 'metadata' key)
+    if "metadata" in tenant_data:
+        metadata = tenant_data.get("metadata", {})
+        spec = tenant_data.get("spec", {})
+
+        name = metadata.get("name", "")
+        display_name = metadata.get("displayName", metadata.get("display_name", name))
+        description = metadata.get("description", "")
+
+        # Contact info might be in spec
+        contact = spec.get("contact", {})
+        owner_email = contact.get("email", "")
+
+        # Status and created_at from spec
+        status = spec.get("status", "active")
+        created_at = spec.get("created_at")
+    else:
+        # Flat format (legacy)
+        name = tenant_data.get("name", "")
+        display_name = tenant_data.get("display_name", name)
+        description = tenant_data.get("description", "")
+        owner_email = tenant_data.get("owner_email", "")
+        status = tenant_data.get("status", "active")
+        created_at = tenant_data.get("created_at")
+
     # Convert created_at to string if it's a datetime
-    created_at = tenant_data.get("created_at")
     if created_at and not isinstance(created_at, str):
         created_at = str(created_at)
 
     return TenantResponse(
-        id=tenant_data.get("id", tenant_data.get("name", "")),
-        name=tenant_data.get("name", ""),
-        display_name=tenant_data.get("display_name", tenant_data.get("name", "")),
-        description=tenant_data.get("description", ""),
-        owner_email=tenant_data.get("owner_email", ""),
-        status=tenant_data.get("status", "active"),
+        id=name,
+        name=name,
+        display_name=display_name,
+        description=description,
+        owner_email=owner_email,
+        status=status,
         api_count=api_count,
         application_count=app_count,
         created_at=created_at,

@@ -194,7 +194,7 @@ class CoreAPIClient:
         return await self._request("GET", f"/v1/mcp/tools/{tool_name}", token)
 
     # =========================================================================
-    # CATALOG (APIs)
+    # CATALOG (APIs) - Uses Portal API endpoints
     # =========================================================================
 
     async def list_apis(
@@ -204,7 +204,7 @@ class CoreAPIClient:
         status: Optional[str] = None,
         category: Optional[str] = None
     ) -> List[dict]:
-        """List APIs from catalog."""
+        """List APIs from portal catalog."""
         params = {}
         if tenant_id:
             params["tenant_id"] = tenant_id
@@ -213,16 +213,16 @@ class CoreAPIClient:
         if category:
             params["category"] = category
 
-        result = await self._request("GET", "/v1/catalog/apis", token, params=params)
+        result = await self._request("GET", "/v1/portal/apis", token, params=params)
         return result.get("items", result) if isinstance(result, dict) else result
 
     async def get_api(self, api_id: str, token: str) -> dict:
-        """Get API by ID."""
-        return await self._request("GET", f"/v1/catalog/apis/{api_id}", token)
+        """Get API by ID from portal."""
+        return await self._request("GET", f"/v1/portal/apis/{api_id}", token)
 
     async def get_api_spec(self, api_id: str, token: str) -> dict:
         """Get OpenAPI spec for an API."""
-        return await self._request("GET", f"/v1/catalog/apis/{api_id}/spec", token)
+        return await self._request("GET", f"/v1/portal/apis/{api_id}/openapi", token)
 
     # =========================================================================
     # USERS

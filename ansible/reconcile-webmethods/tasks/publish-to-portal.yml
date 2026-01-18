@@ -1,0 +1,76 @@
+---
+# tasks/publish-to-portal.yml
+# Publish an API to the Developer Portal
+#
+# Expected variables:
+#   - api_def: API definition with metadata
+#   - wm_gateway_url: Gateway URL
+#   - wm_admin_user: Gateway admin username
+#   - wm_admin_password: Gateway admin password
+#   - portal_gateway_id: Portal Gateway ID (default: 'default')
+#   - dry_run: Whether to simulate only
+#   - sync_results: Results tracking dict
+
+- name: "Extract API details"
+  ansible.builtin.set_fact:
+    publish_api_name: "{{ api_def.metadata.name }}"
+    publish_api_tenant: "{{ api_def._tenant }}"
+
+- name: "Find API ID by name"
+  ansible.builtin.uri:
+    url: "{{ wm_gateway_url }}/rest/apigateway/apis?apiName={{ publish_api_name | urlencode }}"
+    method: GET
+    user: "{{ wm_admin_user }}"
+    password: "{{ wm_admin_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    headers:
+      Accept: "application/json"
+    status_code: [200]
+  register: find_result
+
+- name: "Extract API ID"
+  ansible.builtin.set_fact:
+    publish_api_id: "{{ find_result.json.apiResponse[0].api.id }}"
+  when: find_result.json.apiResponse | length > 0
+
+- name: "Publish API to portal"
+  when:
+    - publish_api_id is defined
+    - not dry_run
+  block:
+    - name: "PUT publish API"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ publish_api_id }}/publish"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          portalGatewayId: "{{ portal_gateway_id | default('default') }}"
+        status_code: [200, 400]  # 400 if already published
+      register: publish_result
+
+    - name: "Add to sync_results.published"
+      ansible.builtin.set_fact:
+        sync_results: "{{ sync_results | combine({'published': sync_results.published + [publish_api_name]}) }}"
+      when: publish_result.status == 200
+
+    - name: "Log publication"
+      ansible.builtin.debug:
+        msg: "Published API {{ publish_api_name }} to portal (tenant: {{ publish_api_tenant }})"
+        verbosity: 1
+
+- name: "Dry-run: Would publish API"
+  when: dry_run
+  ansible.builtin.debug:
+    msg: |
+      DRY-RUN: Would publish API to portal:
+        Name: {{ publish_api_name }}
+        Tenant: {{ publish_api_tenant }}
+        Visibility: public

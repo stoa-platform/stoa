@@ -120,12 +120,10 @@ export const apiCatalogService = {
 
   /**
    * Get OpenAPI specification for an API
-   *
-   * NOTE: May need to be updated when /v1/portal/apis/{id}/openapi is available
    */
   getOpenAPISpec: async (id: string): Promise<object | null> => {
     try {
-      const response = await apiClient.get<object>(`/v1/gateway/apis/${id}/openapi`);
+      const response = await apiClient.get<object>(`/v1/portal/apis/${id}/openapi`);
       return response.data;
     } catch (error) {
       console.warn(`OpenAPI spec not available for API ${id}:`, error);

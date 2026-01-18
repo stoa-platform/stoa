@@ -283,6 +283,33 @@ settings:
             logger.error(f"Failed to parse API YAML for {api_name}: {e}")
             return None
 
+    async def get_api_openapi_spec(self, tenant_id: str, api_name: str) -> Optional[dict]:
+        """Get OpenAPI specification for an API from GitLab"""
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+
+        try:
+            # Try openapi.yaml first, then openapi.json
+            for filename in ["openapi.yaml", "openapi.yml", "openapi.json"]:
+                try:
+                    file = self._project.files.get(
+                        f"{self._get_api_path(tenant_id, api_name)}/{filename}",
+                        ref="main"
+                    )
+                    content = file.decode()
+                    if filename.endswith(".json"):
+                        import json
+                        return json.loads(content)
+                    else:
+                        return yaml.safe_load(content)
+                except gitlab.exceptions.GitlabGetError:
+                    continue
+
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get OpenAPI spec for {api_name}: {e}")
+            return None
+
     async def list_apis(self, tenant_id: str) -> list[dict]:
         """List all APIs for a tenant"""
         if not self._project:

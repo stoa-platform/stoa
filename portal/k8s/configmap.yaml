@@ -20,7 +20,7 @@ data:
 
   # Service URLs
   MCP_URL: "https://mcp.stoa.cab-i.com"
-  API_URL: "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0"
+  API_URL: "https://api.stoa.cab-i.com"
   CONSOLE_URL: "https://console.stoa.cab-i.com"
   DOCS_URL: "https://docs.stoa.cab-i.com"
 

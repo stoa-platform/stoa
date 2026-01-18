@@ -4,31 +4,80 @@
 #
 # This task file syncs applications defined in Git to webMethods Gateway.
 # Applications use 'azp' (authorized party) claim to identify OAuth2 clients.
+# Supports both legacy (webmethods/applications/) and new (tenants/{tenant}/applications/) structures.
 #
 # Expected variables:
 #   - webmethods_dir: Path to GitOps webmethods directory
+#   - tenants_dir: Path to GitOps tenants directory
 #   - wm_gateway_url: Gateway REST API URL
 #   - wm_admin_user: Gateway admin username
 #   - wm_admin_password: Gateway admin password
 
-- name: "📱 Check if applications directory exists"
+- name: "📱 Initialize application files list"
+  ansible.builtin.set_fact:
+    all_app_files: []
+
+# ============ LEGACY STRUCTURE (webmethods/applications/) ============
+- name: "📱 Check if legacy applications directory exists"
   ansible.builtin.stat:
     path: "{{ webmethods_dir }}/applications"
-  register: apps_dir_check
+  register: legacy_apps_dir_check
 
-- name: "📱 Skip application sync if no definitions"
-  ansible.builtin.debug:
-    msg: "No applications directory found - skipping application sync"
-  when: not apps_dir_check.stat.exists
-
-- name: "📱 Sync applications from Git"
-  when: apps_dir_check.stat.exists
+- name: "📱 Load applications from legacy directory"
+  when: legacy_apps_dir_check.stat.exists | default(false)
   block:
-    - name: "📁 Find application definition files"
+    - name: "📁 Find application files in webmethods/applications"
       ansible.builtin.find:
         paths: "{{ webmethods_dir }}/applications"
         patterns: "*.yaml,*.yml"
-      register: app_files
+      register: legacy_app_files
+
+    - name: "📋 Add legacy app files to list"
+      ansible.builtin.set_fact:
+        all_app_files: "{{ all_app_files + legacy_app_files.files }}"
+
+# ============ NEW STRUCTURE (tenants/{tenant}/applications/) ============
+- name: "📱 Check if tenants directory exists"
+  ansible.builtin.stat:
+    path: "{{ tenants_dir }}"
+  register: tenants_dir_apps_check
+
+- name: "📱 Load applications from tenant directories"
+  when: tenants_dir_apps_check.stat.exists | default(false)
+  block:
+    - name: "📁 Find all tenant directories"
+      ansible.builtin.find:
+        paths: "{{ tenants_dir }}"
+        file_type: directory
+        recurse: false
+      register: tenant_dirs_for_apps
+
+    - name: "📁 Find application files in each tenant"
+      ansible.builtin.find:
+        paths: "{{ item.path }}/applications"
+        patterns: "*.yaml,*.yml"
+      loop: "{{ tenant_dirs_for_apps.files }}"
+      register: tenant_app_files_nested
+      ignore_errors: true
+
+    - name: "📋 Add tenant app files to list"
+      ansible.builtin.set_fact:
+        all_app_files: "{{ all_app_files + (item.files | default([])) }}"
+      loop: "{{ tenant_app_files_nested.results }}"
+      when: item.files is defined
+
+- name: "📱 Skip application sync if no definitions"
+  ansible.builtin.debug:
+    msg: "No applications found in webmethods/applications/ or tenants/*/applications/ - skipping application sync"
+  when: all_app_files | length == 0
+
+- name: "📱 Sync applications from Git"
+  when: all_app_files | length > 0
+  block:
+    - name: "📋 Set app_files for compatibility"
+      ansible.builtin.set_fact:
+        app_files:
+          files: "{{ all_app_files }}"
 
     - name: "📖 Load application definitions"
       ansible.builtin.include_vars:
@@ -109,4 +158,4 @@
 
 - name: "📊 Set applications synced count"
   ansible.builtin.set_fact:
-    applications_synced: "{{ app_files.files | default([]) | length }}"
+    applications_synced: "{{ all_app_files | default([]) | length }}"

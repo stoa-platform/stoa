@@ -35,9 +35,17 @@ export const config = {
   },
 
   // Control Plane API (for subscriptions, profile)
+  // VITE_API_DIRECT=true bypasses the webMethods gateway and calls the API directly
+  // This is useful when the gateway isn't updated or has CORS issues
   api: {
-    baseUrl: import.meta.env.VITE_API_URL || `https://apis.${BASE_DOMAIN}/gateway/Control-Plane-API/2.0`,
+    baseUrl: import.meta.env.VITE_API_URL || (
+      import.meta.env.VITE_API_DIRECT === 'true'
+        ? `https://api.${BASE_DOMAIN}`
+        : `https://apis.${BASE_DOMAIN}/gateway/Control-Plane-API/2.0`
+    ),
     timeout: Number(import.meta.env.VITE_API_TIMEOUT) || 30000,
+    // Flag to indicate if we're using direct API access
+    isDirect: import.meta.env.VITE_API_DIRECT === 'true',
   },
 
   // Keycloak Configuration - DIFFERENT client from Console

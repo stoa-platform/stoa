@@ -1,25 +1,62 @@
 ---
 # tasks/load-git-apis.yml
 # Load and parse all API YAML files from Git
+# Supports both legacy (webmethods/apis/) and new (tenants/{tenant}/apis/) structures
 
-- name: "Find all API YAML files"
-  ansible.builtin.find:
-    paths: "{{ webmethods_dir }}/apis"
-    patterns: "*.yaml,*.yml"
-    excludes: "_*"  # Ignore template files prefixed with _
-  register: api_files
-
-- name: "Load API file contents"
-  ansible.builtin.slurp:
-    src: "{{ item.path }}"
-  loop: "{{ api_files.files }}"
-  register: api_contents
-
-- name: "Parse API YAML files"
+- name: "Initialize git_apis list"
   ansible.builtin.set_fact:
-    git_apis: "{{ git_apis | default([]) + [item.content | b64decode | from_yaml] }}"
-  loop: "{{ api_contents.results }}"
-  when: item.content is defined
+    git_apis: []
+
+# ============ LEGACY STRUCTURE (webmethods/apis/) ============
+- name: "Check if legacy webmethods/apis directory exists"
+  ansible.builtin.stat:
+    path: "{{ webmethods_dir }}/apis"
+  register: legacy_apis_dir
+
+- name: "Load APIs from legacy webmethods/apis directory"
+  when: legacy_apis_dir.stat.exists | default(false)
+  block:
+    - name: "Find all API YAML files in webmethods/apis"
+      ansible.builtin.find:
+        paths: "{{ webmethods_dir }}/apis"
+        patterns: "*.yaml,*.yml"
+        excludes: "_*"  # Ignore template files prefixed with _
+      register: legacy_api_files
+
+    - name: "Load legacy API file contents"
+      ansible.builtin.slurp:
+        src: "{{ item.path }}"
+      loop: "{{ legacy_api_files.files }}"
+      register: legacy_api_contents
+
+    - name: "Parse legacy API YAML files"
+      ansible.builtin.set_fact:
+        git_apis: "{{ git_apis + [item.content | b64decode | from_yaml | combine({'_source': 'webmethods', '_tenant': 'default'})] }}"
+      loop: "{{ legacy_api_contents.results }}"
+      when: item.content is defined
+
+# ============ NEW STRUCTURE (tenants/{tenant}/apis/) ============
+- name: "Check if tenants directory exists"
+  ansible.builtin.stat:
+    path: "{{ tenants_dir }}"
+  register: tenants_dir_check
+
+- name: "Load APIs from tenant directories"
+  when: tenants_dir_check.stat.exists | default(false)
+  block:
+    - name: "Find all tenant directories"
+      ansible.builtin.find:
+        paths: "{{ tenants_dir }}"
+        file_type: directory
+        recurse: false
+      register: tenant_dirs
+
+    - name: "Load APIs for each tenant"
+      ansible.builtin.include_tasks: load-tenant-apis.yml
+      loop: "{{ tenant_dirs.files }}"
+      loop_control:
+        loop_var: tenant_dir
+        label: "{{ tenant_dir.path | basename }}"
 
 - name: "Load aliases for environment {{ env }}"
   ansible.builtin.slurp:
@@ -37,6 +74,7 @@
     paths: "{{ webmethods_dir }}/policies"
     patterns: "*.yaml,*.yml"
   register: policy_files
+  ignore_errors: true
 
 - name: "Load policy file contents"
   ansible.builtin.slurp:
@@ -53,6 +91,10 @@
 - name: "Display APIs loaded from Git"
   ansible.builtin.debug:
     msg: |
-      📁 APIs found in Git: {{ git_apis | map(attribute='metadata.name') | list }}
-      🔒 Policies: {{ git_policies.keys() | list }}
+      📁 Total APIs found in Git: {{ git_apis | length }}
+      📁 APIs from webmethods/: {{ git_apis | selectattr('_source', 'equalto', 'webmethods') | list | length }}
+      📁 APIs from tenants/: {{ git_apis | selectattr('_source', 'equalto', 'tenants') | list | length }}
+      📁 APIs by tenant: {{ git_apis | groupby('_tenant') | map('first') | list }}
+      📁 API names: {{ git_apis | map(attribute='metadata.name') | list }}
+      🔒 Policies: {{ git_policies.keys() | default([]) | list }}
       🔗 Aliases ({{ env }}): {{ git_aliases.aliases.keys() | list if git_aliases is defined else 'Not found' }}

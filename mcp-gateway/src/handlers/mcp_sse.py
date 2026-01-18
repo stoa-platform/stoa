@@ -167,8 +167,8 @@ class MCPSession:
             if self.user and hasattr(self.user, 'raw_token'):
                 user_token = self.user.raw_token
 
-            print(f"[MCP] Invoking registry.invoke() for {tool.name}", flush=True)
-            result = await registry.invoke(invocation, user_token=user_token)
+            print(f"[MCP] Invoking registry.invoke() for {tool.name}, user={self.user.subject if self.user else None}", flush=True)
+            result = await registry.invoke(invocation, user_token=user_token, user_claims=self.user)
             print(f"[MCP] Tool result: is_error={result.is_error}, content_len={len(result.content)}", flush=True)
 
             # Format content from ToolResult

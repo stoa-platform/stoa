@@ -239,11 +239,18 @@ export interface ApplicationCreateRequest {
 export interface APISubscription {
   id: string;
   applicationId: string;
+  applicationName?: string;
   application?: Application;
   apiId: string;
+  apiName?: string;
+  apiVersion?: string;
   api?: API;
-  status: 'pending' | 'active' | 'suspended' | 'cancelled';
-  plan: 'free' | 'basic' | 'premium' | 'enterprise';
+  tenantId?: string;
+  planId?: string;
+  planName?: string;
+  status: 'pending' | 'active' | 'suspended' | 'cancelled' | 'revoked' | 'expired';
+  plan?: 'free' | 'basic' | 'premium' | 'enterprise';
+  apiKeyPrefix?: string;
   rateLimit?: {
     requests: number;
     period: string;

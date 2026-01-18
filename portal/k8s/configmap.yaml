@@ -20,11 +20,16 @@ data:
 
   # Service URLs
   MCP_URL: "https://mcp.stoa.cab-i.com"
-  API_URL: "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0"
+  # Use direct API URL to bypass webMethods gateway CORS issues
+  API_URL: "https://api.stoa.cab-i.com"
   CONSOLE_URL: "https://console.stoa.cab-i.com"
   DOCS_URL: "https://docs.stoa.cab-i.com"
 
   # Feature Flags
   ENABLE_MCP_TOOLS: "true"
   ENABLE_SUBSCRIPTIONS: "true"
-  ENABLE_API_CATALOG: "false"
+  ENABLE_API_CATALOG: "true"
+
+  # API Direct Access (bypass webMethods gateway if CORS issues)
+  # Set to "true" to use https://api.stoa.cab-i.com directly
+  API_DIRECT: "true"

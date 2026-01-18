@@ -201,6 +201,13 @@ jobs:
         run: |
           echo "=== Triggering Gateway Reconciliation ==="
 
+          # Check if AWX is configured
+          if [ -z "$AWX_URL" ] || [ -z "$AWX_TOKEN" ]; then
+            echo "⚠️ AWX_URL or AWX_TOKEN not configured. Skipping AWX trigger."
+            echo "ℹ️ GitLab sync completed. ArgoCD will handle deployment if configured."
+            exit 0
+          fi
+
           # Trigger AWX job template
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "${AWX_URL}/api/v2/job_templates/reconcile-webmethods/launch/" \
@@ -227,7 +234,7 @@ jobs:
           fi
 
       - name: Wait for reconciliation (optional)
-        if: env.JOB_ID != ''
+        if: env.JOB_ID != '' && env.JOB_ID != 'null'
         env:
           AWX_URL: ${{ secrets.AWX_URL }}
           AWX_TOKEN: ${{ secrets.AWX_TOKEN }}

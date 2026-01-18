@@ -181,11 +181,23 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Check if EKS cluster exists
+        id: cluster-check
+        run: |
+          if aws eks describe-cluster --name stoa-dev-cluster --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "CLUSTER_EXISTS=true" >> $GITHUB_OUTPUT
+          else
+            echo "CLUSTER_EXISTS=false" >> $GITHUB_OUTPUT
+            echo "⚠️ EKS cluster 'stoa-dev-cluster' not found. Skipping deployment."
+          fi
+
       - name: Update kubeconfig
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
           aws eks update-kubeconfig --name stoa-dev-cluster --region ${{ env.AWS_REGION }}
 
       - name: Update deployment image
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
           ENV="${{ steps.env.outputs.ENVIRONMENT }}"
           IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${ENV}-latest"
@@ -200,6 +212,7 @@ jobs:
           kubectl rollout status deployment/control-plane-api -n stoa-system --timeout=300s
 
       - name: Verify deployment
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
           echo "=== Deployment Status ==="
           kubectl get deployment control-plane-api -n stoa-system
@@ -216,6 +229,7 @@ jobs:
           kubectl exec -n stoa-system $POD -- curl -s http://localhost:8000/health || echo "Health check via exec not available"
 
       - name: Security check - API requires authentication
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
           echo "=== Security Check - API endpoints should require auth ==="
 

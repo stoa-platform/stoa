@@ -157,7 +157,7 @@ jobs:
             VITE_KEYCLOAK_REALM=stoa
             VITE_KEYCLOAK_CLIENT_ID=control-plane-ui
             VITE_MCP_GATEWAY_URL=https://mcp.${{ steps.env.outputs.BASE_DOMAIN }}
-            VITE_API_URL=https://apis.${{ steps.env.outputs.BASE_DOMAIN }}/gateway/Control-Plane-API/2.0
+            VITE_API_URL=https://api.${{ steps.env.outputs.BASE_DOMAIN }}
 
   # ==========================================================================
   # Deploy to Kubernetes

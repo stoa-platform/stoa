@@ -1808,9 +1808,11 @@ class ToolRegistry:
         - Configurable thresholds per component
         """
         # Create health checker with environment-based configuration
+        # Components without URLs configured will be skipped
         checker = HealthChecker(
             gateway_url=os.getenv("STOA_GATEWAY_URL", f"https://gateway.{settings.base_domain}"),
             keycloak_url=os.getenv("STOA_KEYCLOAK_URL", f"https://auth.{settings.base_domain}"),
+            keycloak_realm=os.getenv("STOA_KEYCLOAK_REALM", getattr(settings, "keycloak_realm", "stoa")),
             database_url=os.getenv("STOA_DATABASE_URL", os.getenv("DATABASE_URL", "")),
             kafka_bootstrap=os.getenv("STOA_KAFKA_BOOTSTRAP", os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")),
             opensearch_url=os.getenv("STOA_OPENSEARCH_URL", ""),

@@ -1,0 +1,75 @@
+---
+# tasks/load-tenant.yml
+# Load a tenant configuration and all its APIs
+#
+# Expected variables:
+#   - tenant_dir: Directory object containing tenant path
+#   - all_tenants: List to append tenant info to
+#   - all_apis: List to append APIs to
+
+- name: "Extract tenant ID"
+  ansible.builtin.set_fact:
+    current_tenant_id: "{{ tenant_dir.path | basename }}"
+
+- name: "Check if tenant.yaml exists"
+  ansible.builtin.stat:
+    path: "{{ tenant_dir.path }}/tenant.yaml"
+  register: tenant_yaml_check
+
+- name: "Load tenant configuration"
+  when: tenant_yaml_check.stat.exists
+  block:
+    - name: "Read tenant.yaml"
+      ansible.builtin.slurp:
+        src: "{{ tenant_dir.path }}/tenant.yaml"
+      register: tenant_yaml_content
+
+    - name: "Parse tenant configuration"
+      ansible.builtin.set_fact:
+        tenant_config: "{{ tenant_yaml_content.content | b64decode | from_yaml }}"
+
+    - name: "Extract portal visibility"
+      ansible.builtin.set_fact:
+        tenant_portal_visibility: "{{ tenant_config.spec.portalVisibility | default('public') }}"
+        tenant_display_name: "{{ tenant_config.metadata.displayName | default(current_tenant_id) }}"
+
+- name: "Set default tenant config if missing tenant.yaml"
+  when: not tenant_yaml_check.stat.exists
+  ansible.builtin.set_fact:
+    tenant_config: {}
+    tenant_portal_visibility: "public"
+    tenant_display_name: "{{ current_tenant_id }}"
+
+- name: "Check if tenant has apis directory"
+  ansible.builtin.stat:
+    path: "{{ tenant_dir.path }}/apis"
+  register: tenant_apis_dir
+
+- name: "Load tenant APIs"
+  when: tenant_apis_dir.stat.exists | default(false)
+  block:
+    - name: "Find API directories for tenant {{ current_tenant_id }}"
+      ansible.builtin.find:
+        paths: "{{ tenant_dir.path }}/apis"
+        file_type: directory
+        recurse: false
+      register: tenant_api_dirs
+
+    - name: "Load each API"
+      ansible.builtin.include_tasks: load-api.yml
+      loop: "{{ tenant_api_dirs.files }}"
+      loop_control:
+        loop_var: api_dir
+        label: "{{ api_dir.path | basename }}"
+
+- name: "Set API count for tenant"
+  ansible.builtin.set_fact:
+    tenant_api_count: "{{ tenant_api_dirs.files | default([]) | length }}"
+
+- name: "Register tenant in all_tenants"
+  ansible.builtin.set_fact:
+    all_tenants: "{{ all_tenants + [{'name': current_tenant_id, 'display_name': tenant_display_name, 'portal_visibility': tenant_portal_visibility, 'api_count': tenant_api_count | int, 'config': tenant_config}] }}"
+
+- name: "Display tenant loaded"
+  ansible.builtin.debug:
+    msg: "Loaded tenant {{ current_tenant_id }}: {{ tenant_api_count }} APIs [{{ tenant_portal_visibility }}]"

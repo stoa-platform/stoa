@@ -1,0 +1,164 @@
+---
+# tasks/sync-api-unified.yml
+# Create or update an API in webMethods Gateway
+#
+# Expected variables:
+#   - api_def: API definition with metadata
+#   - action: 'create' or 'update'
+#   - wm_gateway_url: Gateway URL
+#   - wm_admin_user: Gateway admin username
+#   - wm_admin_password: Gateway admin password
+#   - dry_run: Whether to simulate only
+#   - sync_results: Results tracking dict
+
+- name: "Extract API details"
+  ansible.builtin.set_fact:
+    api_name: "{{ api_def.metadata.name }}"
+    api_version: "{{ api_def.metadata.version | default('1.0') }}"
+    api_description: "{{ api_def.spec.description | default('') }}"
+    api_tenant: "{{ api_def._tenant }}"
+    api_visibility: "{{ api_def._portal_visibility }}"
+
+- name: "Extract RBAC configuration from tenant"
+  ansible.builtin.set_fact:
+    tenant_allowed_roles: "{{ api_def._tenant_config.spec.visibility.allowedRoles | default(['cpi-admin']) }}"
+    tenant_denied_roles: "{{ api_def._tenant_config.spec.visibility.denyRoles | default([]) }}"
+  when: api_def._tenant_config is defined
+
+- name: "Set default RBAC if no tenant config"
+  ansible.builtin.set_fact:
+    tenant_allowed_roles: ["cpi-admin"]
+    tenant_denied_roles: []
+  when: api_def._tenant_config is not defined
+
+- name: "Build webMethods API payload"
+  ansible.builtin.set_fact:
+    wm_api_payload:
+      apiName: "{{ api_name }}"
+      apiVersion: "{{ api_version }}"
+      apiDescription: "{{ api_description }}"
+      type: "{{ api_def.spec.gateway.type | default('REST') }}"
+      isActive: "{{ api_def.spec.gateway.isActive | default(true) }}"
+      maturityState: "{{ api_def.spec.gateway.maturityState | default('Production') }}"
+      # Add tenant and RBAC tags for identification and access control
+      tags:
+        - "tenant:{{ api_tenant }}"
+        - "visibility:{{ api_visibility }}"
+        - "managed-by:gitops"
+        - "rbac:allowed:{{ tenant_allowed_roles | join(',') }}"
+        - "rbac:denied:{{ tenant_denied_roles | join(',') }}"
+
+- name: "Add backend URL if specified"
+  when: api_def.spec.backend.url is defined
+  ansible.builtin.set_fact:
+    wm_api_payload: "{{ wm_api_payload | combine({'nativeEndpoint': [{'uri': api_def.spec.backend.url}]}) }}"
+
+# CREATE API
+- name: "Create API in Gateway"
+  when:
+    - action == 'create'
+    - not dry_run
+  block:
+    - name: "POST new API"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis"
+        method: POST
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          apiDefinition: "{{ wm_api_payload }}"
+        status_code: [200, 201]
+      register: create_result
+
+    - name: "Record created API ID"
+      ansible.builtin.set_fact:
+        created_api_id: "{{ create_result.json.apiResponse.api.id }}"
+
+    - name: "Add to sync_results.created"
+      ansible.builtin.set_fact:
+        sync_results: "{{ sync_results | combine({'created': sync_results.created + [api_name]}) }}"
+
+    - name: "Log creation"
+      ansible.builtin.debug:
+        msg: "Created API {{ api_name }} (ID: {{ created_api_id }})"
+
+# UPDATE API
+- name: "Update API in Gateway"
+  when:
+    - action == 'update'
+    - not dry_run
+  block:
+    - name: "Find API ID by name"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis?apiName={{ api_name | urlencode }}"
+        method: GET
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: find_result
+
+    - name: "Extract existing API ID"
+      ansible.builtin.set_fact:
+        existing_api_id: "{{ find_result.json.apiResponse[0].api.id }}"
+      when: find_result.json.apiResponse | length > 0
+
+    - name: "PUT updated API"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ existing_api_id }}"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          apiDefinition: "{{ wm_api_payload }}"
+        status_code: [200]
+      register: update_result
+      when: existing_api_id is defined
+
+    - name: "Add to sync_results.updated"
+      ansible.builtin.set_fact:
+        sync_results: "{{ sync_results | combine({'updated': sync_results.updated + [api_name]}) }}"
+      when: existing_api_id is defined
+
+    - name: "Log update"
+      ansible.builtin.debug:
+        msg: "Updated API {{ api_name }} (ID: {{ existing_api_id }})"
+      when: existing_api_id is defined
+
+# DRY-RUN
+- name: "Dry-run: Would {{ action }} API"
+  when: dry_run
+  ansible.builtin.debug:
+    msg: |
+      DRY-RUN: Would {{ action }} API:
+        Name: {{ api_name }}
+        Version: {{ api_version }}
+        Tenant: {{ api_tenant }}
+        Visibility: {{ api_visibility }}
+
+# ERROR HANDLING
+- name: "Handle errors"
+  when: false  # Placeholder for rescue block
+  rescue:
+    - name: "Record error"
+      ansible.builtin.set_fact:
+        sync_results: "{{ sync_results | combine({'errors': sync_results.errors + [{'api': api_name, 'action': action, 'error': ansible_failed_result.msg | default('Unknown error')}]}) }}"
+
+    - name: "Log error"
+      ansible.builtin.debug:
+        msg: "ERROR {{ action }}ing API {{ api_name }}: {{ ansible_failed_result.msg | default('Unknown error') }}"

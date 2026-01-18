@@ -1,0 +1,62 @@
+---
+# tasks/load-api.yml
+# Load a single API definition with tenant metadata
+#
+# Expected variables:
+#   - api_dir: Directory object containing API path
+#   - current_tenant_id: Parent tenant ID
+#   - tenant_portal_visibility: Tenant's portal visibility setting
+#   - tenant_config: Full tenant configuration (for RBAC)
+#   - all_apis: List to append API to
+
+- name: "Extract API ID"
+  ansible.builtin.set_fact:
+    current_api_id: "{{ api_dir.path | basename }}"
+
+- name: "Find API definition file"
+  ansible.builtin.find:
+    paths: "{{ api_dir.path }}"
+    patterns: "api.yaml,api.yml"
+  register: api_yaml_files
+
+- name: "Load API definition"
+  when: api_yaml_files.files | length > 0
+  block:
+    - name: "Read api.yaml"
+      ansible.builtin.slurp:
+        src: "{{ api_yaml_files.files[0].path }}"
+      register: api_yaml_content
+
+    - name: "Parse API definition"
+      ansible.builtin.set_fact:
+        api_def: "{{ api_yaml_content.content | b64decode | from_yaml }}"
+
+    - name: "Determine API portal visibility"
+      ansible.builtin.set_fact:
+        # API can override tenant visibility, otherwise inherit from tenant
+        api_portal_visibility: "{{ api_def.spec.portalVisibility | default(tenant_portal_visibility) }}"
+
+    - name: "Enrich API with metadata"
+      ansible.builtin.set_fact:
+        enriched_api: "{{ api_def | combine({
+          '_tenant': current_tenant_id,
+          '_tenant_display_name': tenant_display_name,
+          '_tenant_config': tenant_config,
+          '_portal_visibility': api_portal_visibility,
+          '_source_path': api_dir.path,
+          '_api_id': current_api_id
+        }) }}"
+
+    - name: "Add API to all_apis list"
+      ansible.builtin.set_fact:
+        all_apis: "{{ all_apis + [enriched_api] }}"
+
+    - name: "Display API loaded"
+      ansible.builtin.debug:
+        msg: "  - {{ api_def.metadata.name | default(current_api_id) }} (v{{ api_def.metadata.version | default('1.0') }}) [{{ api_portal_visibility }}]"
+        verbosity: 1
+
+- name: "Warn if no api.yaml found"
+  when: api_yaml_files.files | length == 0
+  ansible.builtin.debug:
+    msg: "WARNING: No api.yaml found in {{ api_dir.path }}"

@@ -313,6 +313,11 @@ class OIDCAuthenticator:
                 },
             )
 
+            # Normalize tenant_id if it's an array (Keycloak user attributes)
+            if "tenant_id" in payload and isinstance(payload["tenant_id"], list):
+                # Take the first tenant_id if it's a list
+                payload["tenant_id"] = payload["tenant_id"][0] if payload["tenant_id"] else None
+
             # ADR-001: Store raw token for Core API calls
             claims = TokenClaims(**payload)
             claims.raw_token = token

@@ -52,8 +52,13 @@ validate-webmethods:
       when: always
     - when: never
 
+# =============================================================================
+# AWX Reconciliation Jobs (DISABLED - requires AWX_API_TOKEN CI variable)
+# To enable: Add AWX_API_TOKEN in GitLab CI/CD Variables and remove 'when: never'
+# =============================================================================
+
 # Trigger AWX reconciliation - DEV
-trigger-awx-dev:
+.trigger-awx-dev:
   stage: reconcile
   image: curlimages/curl:8.5.0
   variables:
@@ -93,15 +98,12 @@ trigger-awx-dev:
         exit 1
       fi
   rules:
-    - if: '$CI_COMMIT_BRANCH == "develop"'
-      changes:
-        - webmethods/**/*
-      when: on_success
+    - when: never
   needs:
     - validate-webmethods
 
 # Trigger AWX reconciliation - STAGING
-trigger-awx-staging:
+.trigger-awx-staging:
   stage: reconcile
   image: curlimages/curl:8.5.0
   variables:
@@ -129,15 +131,12 @@ trigger-awx-staging:
         exit 1
       fi
   rules:
-    - if: '$CI_COMMIT_BRANCH == "staging"'
-      changes:
-        - webmethods/**/*
-      when: on_success
+    - when: never
   needs:
     - validate-webmethods
 
 # Trigger AWX reconciliation - PROD
-trigger-awx-prod:
+.trigger-awx-prod:
   stage: reconcile
   image: curlimages/curl:8.5.0
   variables:
@@ -165,10 +164,7 @@ trigger-awx-prod:
         exit 1
       fi
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      changes:
-        - webmethods/**/*
-      when: on_success
+    - when: never
   needs:
     - validate-webmethods
 
@@ -180,11 +176,7 @@ trigger-awx-prod:
 e2e-tests:
   stage: e2e-test
   image: python:3.11-slim
-  needs:
-    - job: trigger-awx-prod
-      optional: true
-    - job: trigger-awx-dev
-      optional: true
+  needs: []
   before_script:
     - pip install pytest requests python-keycloak pyyaml --quiet
   script:

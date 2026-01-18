@@ -17,10 +17,14 @@ from typing import Any, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from ..auth import get_current_user, User
 from ..config import settings
+
+# Security scheme for extracting Bearer token
+security = HTTPBearer()
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +53,7 @@ async def proxy_to_mcp(
     method: str,
     path: str,
     user: User,
+    auth_token: str,
     params: dict | None = None,
     json_body: dict | None = None,
 ) -> Any:
@@ -58,6 +63,7 @@ async def proxy_to_mcp(
         method: HTTP method (GET, POST, etc.)
         path: Path on MCP Gateway (e.g., /mcp/v1/tools)
         user: Authenticated user
+        auth_token: Bearer token to forward to MCP Gateway
         params: Query parameters
         json_body: JSON body for POST/PUT requests
 
@@ -69,9 +75,10 @@ async def proxy_to_mcp(
     """
     client = await get_http_client()
 
-    # Build headers - pass user context to MCP Gateway
+    # Build headers - forward the Bearer token and user context
     headers = {
         "Content-Type": "application/json",
+        "Authorization": f"Bearer {auth_token}",
         "X-User-Id": user.id,
         "X-User-Email": user.email or "",
         "X-User-Roles": ",".join(user.roles or []),
@@ -166,6 +173,7 @@ async def list_tools(
     cursor: Optional[str] = Query(None, description="Pagination cursor"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     List all available MCP tools.
@@ -184,7 +192,7 @@ async def list_tools(
     # Remove None values
     params = {k: v for k, v in params.items() if v is not None}
 
-    result = await proxy_to_mcp("GET", "/mcp/v1/tools", user, params=params)
+    result = await proxy_to_mcp("GET", "/mcp/v1/tools", user, credentials.credentials, params=params)
     return result
 
 
@@ -192,13 +200,14 @@ async def list_tools(
 async def get_tool_tags(
     request: Request,
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     Get all available tool tags with counts.
 
     Proxies to MCP Gateway.
     """
-    result = await proxy_to_mcp("GET", "/mcp/v1/tools/tags", user)
+    result = await proxy_to_mcp("GET", "/mcp/v1/tools/tags", user, credentials.credentials)
     return result
 
 
@@ -206,13 +215,14 @@ async def get_tool_tags(
 async def get_tool_categories(
     request: Request,
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     Get all available tool categories with counts.
 
     Proxies to MCP Gateway.
     """
-    result = await proxy_to_mcp("GET", "/mcp/v1/tools/categories", user)
+    result = await proxy_to_mcp("GET", "/mcp/v1/tools/categories", user, credentials.credentials)
     return result
 
 
@@ -221,13 +231,14 @@ async def get_tool(
     request: Request,
     tool_name: str,
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     Get details of a specific tool.
 
     Proxies to MCP Gateway.
     """
-    result = await proxy_to_mcp("GET", f"/mcp/v1/tools/{tool_name}", user)
+    result = await proxy_to_mcp("GET", f"/mcp/v1/tools/{tool_name}", user, credentials.credentials)
     return result
 
 
@@ -236,13 +247,14 @@ async def get_tool_schema(
     request: Request,
     tool_name: str,
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     Get the input schema for a tool.
 
     Proxies to MCP Gateway.
     """
-    result = await proxy_to_mcp("GET", f"/mcp/v1/tools/{tool_name}/schema", user)
+    result = await proxy_to_mcp("GET", f"/mcp/v1/tools/{tool_name}/schema", user, credentials.credentials)
     return result
 
 
@@ -252,6 +264,7 @@ async def invoke_tool(
     tool_name: str,
     body: ToolInvokeRequest,
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     Invoke a tool with the provided arguments.
@@ -262,6 +275,7 @@ async def invoke_tool(
         "POST",
         f"/mcp/v1/tools/{tool_name}/invoke",
         user,
+        credentials.credentials,
         json_body={"arguments": body.arguments},
     )
     return result

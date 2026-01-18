@@ -1,0 +1,26 @@
+# Halliday's Journal API
+# Access to Anorak's Almanac and Halliday's personal writings
+id: halliday-journal-api
+name: halliday-journal-api
+display_name: "Halliday's Journal API"
+version: "1.0.0"
+description: |
+  Access the collected writings and video journals of James Halliday.
+  
+  Anorak's Almanac contains thousands of pages of Halliday's journals, 
+  personal essays, and the entire collection of Almanac video clips. 
+  Study them carefully - every clue to the Easter Egg hunt is hidden within.
+  
+  "I created a series of three keys..."
+backend_url: https://httpbin.org/anything
+status: active
+category: Lore
+tags:
+  - portal:published
+  - lore
+  - oasis
+  - rest
+  - reference
+deployments:
+  dev: true
+  staging: false

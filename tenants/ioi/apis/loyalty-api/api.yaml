@@ -1,0 +1,26 @@
+# IOI Loyalty API
+# Track employee loyalty and performance metrics
+id: loyalty-api
+name: loyalty-api
+display_name: "IOI Loyalty Program API"
+version: "1.0.0"
+description: |
+  IOI Employee Loyalty and Performance Tracking System.
+  
+  Monitor employee productivity, track debt repayment progress, 
+  and manage indenturement contracts. Loyalty scores affect 
+  privileges and promotion opportunities within IOI.
+  
+  "Working for IOI was like being a slave..."
+backend_url: https://httpbin.org/anything
+status: active
+category: HR
+tags:
+  - portal:published
+  - hr
+  - ioi
+  - rest
+  - employee
+deployments:
+  dev: true
+  staging: false

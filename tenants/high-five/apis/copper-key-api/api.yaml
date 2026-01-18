@@ -1,0 +1,26 @@
+# Copper Key Quest API
+# First of the three keys to find Halliday's Easter Egg
+id: copper-key-api
+name: copper-key-api
+display_name: "Copper Key Quest API"
+version: "1.0.0"
+description: |
+  First Quest - Unlock the Copper Key hidden in Halliday's favorite video game.
+  
+  The Copper Key awaits within a classic 80s arcade game. 
+  To find it, one must prove their skills at Joust - the first game Halliday 
+  ever mastered. Score 100,000 points without dying to reveal the key's location.
+  
+  "Three hidden keys open three secret gates, wherein the errant will be tested..."
+backend_url: https://httpbin.org/anything
+status: active
+category: Quest
+tags:
+  - portal:published
+  - quest
+  - oasis
+  - rest
+  - first-gate
+deployments:
+  dev: true
+  staging: false

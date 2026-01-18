@@ -1,0 +1,4320 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Control-Plane-API-Test",
+    "description" : "\n## APIM Control-Plane API\n\nMulti-tenant API Management Control Plane with GitOps integration.\n\n### Features\n\n- **Multi-tenant Management**: Create and manage isolated API tenants\n- **API Lifecycle**: Full CRUD operations for APIs with versioning\n- **GitOps Integration**: Automatic sync with GitLab repositories\n- **Event-Driven Architecture**: Kafka/Redpanda message bus for async operations\n- **Pipeline Monitoring**: End-to-end tracing of deployments\n- **RBAC**: Role-based access control via Keycloak\n\n### Changelog\n\n#### v2.0.0 (Current)\n- Added Pipeline Tracing (`/v1/traces`) for end-to-end monitoring\n- Added GitLab Webhook integration (`/webhooks/gitlab`)\n- Added Kafka integration for event-driven deployments\n- Added AWX integration for automated Gateway deployments\n\n#### v1.0.0\n- Initial release with tenant, API, and application management\n- Basic deployment endpoints\n- Git operations (commits, merge requests)\n\n### Authentication\n\nAll endpoints require a valid JWT token from Keycloak (realm: `apim`).\nInclude the token in the `Authorization: Bearer <token>` header.\n",
+    "contact" : {
+      "name" : "CAB Ingenierie",
+      "email" : "admin@cab-i.com"
+    },
+    "license" : {
+      "name" : "Proprietary"
+    },
+    "version" : "2.1"
+  },
+  "tags" : [ {
+    "name" : "Tenants",
+    "description" : "Tenant management operations"
+  }, {
+    "name" : "APIs",
+    "description" : "API lifecycle management"
+  }, {
+    "name" : "Applications",
+    "description" : "Application and subscription management"
+  }, {
+    "name" : "Deployments",
+    "description" : "Deployment operations and status"
+  }, {
+    "name" : "Git",
+    "description" : "GitLab integration (commits, MRs, files)"
+  }, {
+    "name" : "Events",
+    "description" : "Real-time event streaming (SSE)"
+  }, {
+    "name" : "Webhooks",
+    "description" : "GitLab webhook handlers for GitOps"
+  }, {
+    "name" : "Traces",
+    "description" : "Pipeline monitoring and tracing"
+  }, {
+    "name" : "Gateway",
+    "description" : "webMethods Gateway administration via OIDC proxy"
+  } ],
+  "paths" : {
+    "/v1/traces/live" : {
+      "get" : {
+        "tags" : [ "Traces" ],
+        "summary" : "Get Live Traces",
+        "description" : "Get currently running traces (in_progress status).\n\nUseful for real-time monitoring dashboards.",
+        "operationId" : "get_live_traces_v1_traces_live_get",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/gateway/scopes" : {
+      "get" : {
+        "tags" : [ "Gateway" ],
+        "summary" : "List Gateway Scopes",
+        "description" : "List all OAuth scopes configured in the Gateway.\n\nRequires: cpi-admin role",
+        "operationId" : "list_gateway_scopes_v1_gateway_scopes_get",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "title" : "Response List Gateway Scopes V1 Gateway Scopes Get",
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/GatewayScopeResponse"
+                  },
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/deployments/{deployment_id}/logs" : {
+      "get" : {
+        "tags" : [ "Deployments" ],
+        "summary" : "Get Deployment Logs",
+        "description" : "Get deployment logs from AWX",
+        "operationId" : "get_deployment_logs_v1_tenants__tenant_id__deployments__deployment_id__logs_get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "deployment_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Deployment Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/events/stream/{tenant_id}" : {
+      "get" : {
+        "tags" : [ "Events" ],
+        "summary" : "Stream Events",
+        "description" : "Stream real-time events for a tenant via Server-Sent Events.\n\nConnect to this endpoint to receive real-time updates about:\n- API lifecycle events (created, updated, deleted)\n- Deployment status changes\n- Application events\n\nQuery params:\n- event_types: Comma-separated list of event types to filter (optional)\n\nExample:\n```\nconst eventSource = new EventSource('/v1/events/stream/tenant-123?event_types=deploy-progress,deploy-success');\neventSource.onmessage = (event) => {\n    console.log(event.data);\n};\n```",
+        "operationId" : "stream_events_v1_events_stream__tenant_id__get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "event_types",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Event Types",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/apis/{api_id}" : {
+      "get" : {
+        "tags" : [ "APIs" ],
+        "summary" : "Get Api",
+        "description" : "Get API by ID from GitLab",
+        "operationId" : "get_api_v1_tenants__tenant_id__apis__api_id__get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "api_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/APIResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [ "APIs" ],
+        "summary" : "Update Api",
+        "description" : "Update API in GitLab",
+        "operationId" : "update_api_v1_tenants__tenant_id__apis__api_id__put",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "api_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/APIUpdate"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/APIResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "APIs" ],
+        "summary" : "Delete Api",
+        "description" : "Delete API from GitLab",
+        "operationId" : "delete_api_v1_tenants__tenant_id__apis__api_id__delete",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "api_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/git/commits" : {
+      "get" : {
+        "tags" : [ "Git" ],
+        "summary" : "List Commits",
+        "description" : "List recent commits for tenant repository",
+        "operationId" : "list_commits_v1_tenants__tenant_id__git_commits_get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "path",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Path",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Limit",
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "title" : "Response List Commits V1 Tenants  Tenant Id  Git Commits Get",
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/CommitInfo"
+                  },
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants" : {
+      "get" : {
+        "tags" : [ "Tenants" ],
+        "summary" : "List Tenants",
+        "description" : "List tenants.\n\n- CPI Admin: See all tenants\n- Others: See only their own tenant",
+        "operationId" : "list_tenants_v1_tenants_get",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "title" : "Response List Tenants V1 Tenants Get",
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/TenantResponse"
+                  },
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "Tenants" ],
+        "summary" : "Create Tenant",
+        "description" : "Create a new tenant (CPI Admin only).\n\nThis will:\n1. Create tenant structure in GitLab\n2. Create Keycloak group for the tenant\n3. Emit tenant-created event",
+        "operationId" : "create_tenant_v1_tenants_post",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantCreate"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/applications/{app_id}" : {
+      "get" : {
+        "tags" : [ "Applications" ],
+        "summary" : "Get Application",
+        "description" : "Get application by ID",
+        "operationId" : "get_application_v1_tenants__tenant_id__applications__app_id__get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "app_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "App Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicationResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [ "Applications" ],
+        "summary" : "Update Application",
+        "description" : "Update application",
+        "operationId" : "update_application_v1_tenants__tenant_id__applications__app_id__put",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "app_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "App Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApplicationCreate"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicationResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "Applications" ],
+        "summary" : "Delete Application",
+        "description" : "Delete application",
+        "operationId" : "delete_application_v1_tenants__tenant_id__applications__app_id__delete",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "app_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "App Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/deployments/environments/{environment}/status" : {
+      "get" : {
+        "tags" : [ "Deployments" ],
+        "summary" : "Get Environment Status",
+        "description" : "Get status of all APIs deployed in an environment",
+        "operationId" : "get_environment_status_v1_tenants__tenant_id__deployments_environments__environment__status_get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "environment",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "$ref" : "#/components/schemas/Environment"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/events/history/{tenant_id}" : {
+      "get" : {
+        "tags" : [ "Events" ],
+        "summary" : "Get Event History",
+        "description" : "Get historical events from database/Kafka",
+        "operationId" : "get_event_history_v1_events_history__tenant_id__get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "event_type",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Event Type",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Limit",
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 100,
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}" : {
+      "get" : {
+        "tags" : [ "Tenants" ],
+        "summary" : "Get Tenant",
+        "description" : "Get tenant by ID",
+        "operationId" : "get_tenant_v1_tenants__tenant_id__get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [ "Tenants" ],
+        "summary" : "Update Tenant",
+        "description" : "Update tenant",
+        "operationId" : "update_tenant_v1_tenants__tenant_id__put",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantUpdate"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "Tenants" ],
+        "summary" : "Delete Tenant",
+        "description" : "Delete tenant (CPI Admin only).\n\nWARNING: This will delete all tenant data including APIs and applications.",
+        "operationId" : "delete_tenant_v1_tenants__tenant_id__delete",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/gateway/health" : {
+      "get" : {
+        "tags" : [ "Gateway" ],
+        "summary" : "Gateway Health",
+        "description" : "Check Gateway health status via OIDC proxy.\n\nThis validates that:\n1. The Gateway-Admin-API proxy is accessible\n2. The user's JWT token is valid for Gateway operations",
+        "operationId" : "gateway_health_v1_gateway_health_get",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/webhooks/gitlab/health" : {
+      "get" : {
+        "tags" : [ "Webhooks" ],
+        "summary" : "Webhook Health",
+        "description" : "Health check for GitLab webhook endpoint",
+        "operationId" : "webhook_health_webhooks_gitlab_health_get",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/gateway/apis/{api_id}/activate" : {
+      "put" : {
+        "tags" : [ "Gateway" ],
+        "summary" : "Activate Gateway Api",
+        "description" : "Activate an API in the Gateway.\n\nRequires: cpi-admin or devops role with promote permission",
+        "operationId" : "activate_gateway_api_v1_gateway_apis__api_id__activate_put",
+        "parameters" : [ {
+          "name" : "api_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/events/deployment-result" : {
+      "post" : {
+        "tags" : [ "Events" ],
+        "summary" : "Receive Deployment Result",
+        "description" : "Receive deployment result notification from AWX playbooks.\n\nThis endpoint is called by Ansible playbooks after completing\ndeployment, rollback, or other gateway operations.\n\nThe result is published to Kafka for:\n- Real-time UI updates via SSE\n- Audit logging\n- Metrics collection",
+        "operationId" : "receive_deployment_result_v1_events_deployment_result_post",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DeploymentResult"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/traces" : {
+      "get" : {
+        "tags" : [ "Traces" ],
+        "summary" : "List Traces",
+        "description" : "List recent pipeline traces with optional filtering.\n\nReturns summaries for efficient list display.",
+        "operationId" : "list_traces_v1_traces_get",
+        "parameters" : [ {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Limit",
+            "maximum" : 200,
+            "minimum" : 1,
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50,
+            "example" : null
+          }
+        }, {
+          "name" : "tenant_id",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        }, {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Status",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/git/files/{file_path}" : {
+      "get" : {
+        "tags" : [ "Git" ],
+        "summary" : "Get File",
+        "description" : "Get file content from GitLab",
+        "operationId" : "get_file_v1_tenants__tenant_id__git_files__file_path__get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "file_path",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "File Path",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "ref",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Ref",
+            "type" : "string",
+            "default" : "main",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "Git" ],
+        "summary" : "Create Or Update File",
+        "description" : "Create or update a file in GitLab",
+        "operationId" : "create_or_update_file_v1_tenants__tenant_id__git_files__file_path__post",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "file_path",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "File Path",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "branch",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Branch",
+            "type" : "string",
+            "default" : "main",
+            "example" : null
+          }
+        }, {
+          "name" : "commit_message",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Commit Message",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/FileContent"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "Git" ],
+        "summary" : "Delete File",
+        "description" : "Delete a file from GitLab",
+        "operationId" : "delete_file_v1_tenants__tenant_id__git_files__file_path__delete",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "file_path",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "File Path",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "branch",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Branch",
+            "type" : "string",
+            "default" : "main",
+            "example" : null
+          }
+        }, {
+          "name" : "commit_message",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Commit Message",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/webhooks/gitlab" : {
+      "post" : {
+        "tags" : [ "Webhooks" ],
+        "summary" : "Gitlab Webhook",
+        "description" : "Handle GitLab webhooks for GitOps with full pipeline tracing.",
+        "operationId" : "gitlab_webhook_webhooks_gitlab_post",
+        "parameters" : [ {
+          "name" : "X-Gitlab-Token",
+          "in" : "header",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "X-Gitlab-Token",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        }, {
+          "name" : "X-Gitlab-Event",
+          "in" : "header",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "X-Gitlab-Event",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/gateway/applications" : {
+      "get" : {
+        "tags" : [ "Gateway" ],
+        "summary" : "List Gateway Applications",
+        "description" : "List all applications registered in the Gateway.\n\nRequires: cpi-admin or tenant-admin role",
+        "operationId" : "list_gateway_applications_v1_gateway_applications_get",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "title" : "Response List Gateway Applications V1 Gateway Applications Get",
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/GatewayApplicationResponse"
+                  },
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/deployments" : {
+      "get" : {
+        "tags" : [ "Deployments" ],
+        "summary" : "List Deployments",
+        "description" : "List deployment history",
+        "operationId" : "list_deployments_v1_tenants__tenant_id__deployments_get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "api_id",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Api Id",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        }, {
+          "name" : "environment",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Environment",
+            "type" : "object",
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/Environment"
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Limit",
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50,
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "title" : "Response List Deployments V1 Tenants  Tenant Id  Deployments Get",
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/DeploymentResponse"
+                  },
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "Deployments" ],
+        "summary" : "Create Deployment",
+        "description" : "Deploy an API to an environment.\n\nThis will:\n1. Validate the API exists and is deployable\n2. Create a deploy-request event in Kafka\n3. AWX will pick up the event and execute the deployment\n4. Status updates will be streamed via SSE",
+        "operationId" : "create_deployment_v1_tenants__tenant_id__deployments_post",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DeploymentRequest"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeploymentResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/git/merge-requests" : {
+      "get" : {
+        "tags" : [ "Git" ],
+        "summary" : "List Merge Requests",
+        "description" : "List merge requests",
+        "operationId" : "list_merge_requests_v1_tenants__tenant_id__git_merge_requests_get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "state",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "State",
+            "type" : "string",
+            "default" : "opened",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "title" : "Response List Merge Requests V1 Tenants  Tenant Id  Git Merge Requests Get",
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/MergeRequestResponse"
+                  },
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "Git" ],
+        "summary" : "Create Merge Request",
+        "description" : "Create a merge request",
+        "operationId" : "create_merge_request_v1_tenants__tenant_id__git_merge_requests_post",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MergeRequestCreate"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MergeRequestResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/apis" : {
+      "get" : {
+        "tags" : [ "APIs" ],
+        "summary" : "List Apis",
+        "description" : "List all APIs for a tenant from GitLab",
+        "operationId" : "list_apis_v1_tenants__tenant_id__apis_get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "title" : "Response List Apis V1 Tenants  Tenant Id  Apis Get",
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/APIResponse"
+                  },
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "APIs" ],
+        "summary" : "Create Api",
+        "description" : "Create a new API in GitLab and emit event.\n\nThis creates the API definition in the GitOps repository:\n- tenants/{tenant_id}/apis/{api_name}/api.yaml\n- tenants/{tenant_id}/apis/{api_name}/openapi.yaml (if provided)",
+        "operationId" : "create_api_v1_tenants__tenant_id__apis_post",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/APICreate"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/APIResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/gateway/configure-oidc" : {
+      "post" : {
+        "tags" : [ "Gateway" ],
+        "summary" : "Configure Api Oidc",
+        "description" : "Configure OIDC authentication for an API in the Gateway.\n\nThis high-level operation:\n1. Creates an OAuth strategy for the API\n2. Creates an application for the tenant\n3. Creates scope mappings with standardized naming\n\nNaming pattern: {AuthServer}:{TenantId}:{ApiName}:{Version}:{Scope}\n\nRequires: cpi-admin role",
+        "operationId" : "configure_api_oidc_v1_gateway_configure_oidc_post",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OIDCConfigRequest"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OIDCConfigResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/applications/{app_id}/subscribe/{api_id}" : {
+      "post" : {
+        "tags" : [ "Applications" ],
+        "summary" : "Subscribe To Api",
+        "description" : "Subscribe application to an API",
+        "operationId" : "subscribe_to_api_v1_tenants__tenant_id__applications__app_id__subscribe__api_id__post",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "app_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "App Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "api_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "Applications" ],
+        "summary" : "Unsubscribe From Api",
+        "description" : "Unsubscribe application from an API",
+        "operationId" : "unsubscribe_from_api_v1_tenants__tenant_id__applications__app_id__subscribe__api_id__delete",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "app_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "App Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "api_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/traces/{trace_id}/timeline" : {
+      "get" : {
+        "tags" : [ "Traces" ],
+        "summary" : "Get Trace Timeline",
+        "description" : "Get a timeline view of a trace suitable for visualization.\n\nReturns steps in a format optimized for timeline rendering.",
+        "operationId" : "get_trace_timeline_v1_traces__trace_id__timeline_get",
+        "parameters" : [ {
+          "name" : "trace_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Trace Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/events/stream/global" : {
+      "get" : {
+        "tags" : [ "Events" ],
+        "summary" : "Stream Global Events",
+        "description" : "Stream all events (for cpi-admin users only).\n\nThis endpoint streams events from all tenants.\nOnly users with cpi-admin role can access this.",
+        "operationId" : "stream_global_events_v1_events_stream_global_get",
+        "parameters" : [ {
+          "name" : "event_types",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Event Types",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/gateway/apis/{api_id}" : {
+      "get" : {
+        "tags" : [ "Gateway" ],
+        "summary" : "Get Gateway Api",
+        "description" : "Get API details from Gateway.\n\nRequires: cpi-admin or devops role",
+        "operationId" : "get_gateway_api_v1_gateway_apis__api_id__get",
+        "parameters" : [ {
+          "name" : "api_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "Gateway" ],
+        "summary" : "Delete Gateway Api",
+        "description" : "Delete an API from the Gateway.\n\nRequires: cpi-admin role",
+        "operationId" : "delete_gateway_api_v1_gateway_apis__api_id__delete",
+        "parameters" : [ {
+          "name" : "api_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/git/tree" : {
+      "get" : {
+        "tags" : [ "Git" ],
+        "summary" : "Get Tree",
+        "description" : "Get directory tree from GitLab",
+        "operationId" : "get_tree_v1_tenants__tenant_id__git_tree_get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "path",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Path",
+            "type" : "string",
+            "default" : "",
+            "example" : null
+          }
+        }, {
+          "name" : "ref",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Ref",
+            "type" : "string",
+            "default" : "main",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/traces/stats" : {
+      "get" : {
+        "tags" : [ "Traces" ],
+        "summary" : "Get Trace Stats",
+        "description" : "Get pipeline trace statistics.\n\nReturns aggregated metrics about pipeline executions.",
+        "operationId" : "get_trace_stats_v1_traces_stats_get",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/deployments/{deployment_id}/rollback" : {
+      "post" : {
+        "tags" : [ "Deployments" ],
+        "summary" : "Rollback Deployment",
+        "description" : "Rollback a deployment to a previous version",
+        "operationId" : "rollback_deployment_v1_tenants__tenant_id__deployments__deployment_id__rollback_post",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "deployment_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Deployment Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RollbackRequest"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeploymentResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/" : {
+      "get" : {
+        "summary" : "Root",
+        "operationId" : "root__get",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/gateway/apis" : {
+      "get" : {
+        "tags" : [ "Gateway" ],
+        "summary" : "List Gateway Apis",
+        "description" : "List all APIs registered in the Gateway.\n\nRequires: cpi-admin or devops role",
+        "operationId" : "list_gateway_apis_v1_gateway_apis_get",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "title" : "Response List Gateway Apis V1 Gateway Apis Get",
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/GatewayAPIResponse"
+                  },
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "Gateway" ],
+        "summary" : "Import Gateway Api",
+        "description" : "Import an API from OpenAPI specification into the Gateway.\n\nRequires: cpi-admin or devops role with create permission\n\nArgs:\n    apiName: Name for the API\n    apiVersion: Version of the API\n    url: URL to fetch OpenAPI spec from\n    apiDefinition: OpenAPI spec content as string (alternative to url)\n    type: API type (openapi, swagger, raml, wsdl)",
+        "operationId" : "import_gateway_api_v1_gateway_apis_post",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ImportAPIRequest"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportAPIResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/health" : {
+      "get" : {
+        "summary" : "Health",
+        "operationId" : "health_health_get",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/gateway/apis/{api_id}/deactivate" : {
+      "put" : {
+        "tags" : [ "Gateway" ],
+        "summary" : "Deactivate Gateway Api",
+        "description" : "Deactivate an API in the Gateway.\n\nRequires: cpi-admin or devops role with promote permission",
+        "operationId" : "deactivate_gateway_api_v1_gateway_apis__api_id__deactivate_put",
+        "parameters" : [ {
+          "name" : "api_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/git/branches" : {
+      "get" : {
+        "tags" : [ "Git" ],
+        "summary" : "List Branches",
+        "description" : "List branches",
+        "operationId" : "list_branches_v1_tenants__tenant_id__git_branches_get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "Git" ],
+        "summary" : "Create Branch",
+        "description" : "Create a new branch",
+        "operationId" : "create_branch_v1_tenants__tenant_id__git_branches_post",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "branch_name",
+          "in" : "query",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Branch Name",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "ref",
+          "in" : "query",
+          "required" : false,
+          "allowEmptyValue" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "title" : "Ref",
+            "type" : "string",
+            "default" : "main",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/applications/{app_id}/regenerate-secret" : {
+      "post" : {
+        "tags" : [ "Applications" ],
+        "summary" : "Regenerate Secret",
+        "description" : "Regenerate application client secret",
+        "operationId" : "regenerate_secret_v1_tenants__tenant_id__applications__app_id__regenerate_secret_post",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "app_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "App Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicationCredentials"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/traces/{trace_id}" : {
+      "get" : {
+        "tags" : [ "Traces" ],
+        "summary" : "Get Trace",
+        "description" : "Get detailed information about a specific trace.\n\nIncludes all steps with timing and error details.",
+        "operationId" : "get_trace_v1_traces__trace_id__get",
+        "parameters" : [ {
+          "name" : "trace_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Trace Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/git/merge-requests/{mr_iid}/merge" : {
+      "post" : {
+        "tags" : [ "Git" ],
+        "summary" : "Merge Request",
+        "description" : "Merge a merge request",
+        "operationId" : "merge_request_v1_tenants__tenant_id__git_merge_requests__mr_iid__merge_post",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "mr_iid",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Mr Iid",
+            "type" : "integer",
+            "format" : "int32",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/applications" : {
+      "get" : {
+        "tags" : [ "Applications" ],
+        "summary" : "List Applications",
+        "description" : "List all applications for a tenant",
+        "operationId" : "list_applications_v1_tenants__tenant_id__applications_get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "title" : "Response List Applications V1 Tenants  Tenant Id  Applications Get",
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ApplicationResponse"
+                  },
+                  "example" : null
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "Applications" ],
+        "summary" : "Create Application",
+        "description" : "Create a new application (Keycloak client)",
+        "operationId" : "create_application_v1_tenants__tenant_id__applications_post",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApplicationCreate"
+              },
+              "example" : null
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApplicationResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    },
+    "/v1/tenants/{tenant_id}/deployments/{deployment_id}" : {
+      "get" : {
+        "tags" : [ "Deployments" ],
+        "summary" : "Get Deployment",
+        "description" : "Get deployment details",
+        "operationId" : "get_deployment_v1_tenants__tenant_id__deployments__deployment_id__get",
+        "parameters" : [ {
+          "name" : "tenant_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          }
+        }, {
+          "name" : "deployment_id",
+          "in" : "path",
+          "required" : true,
+          "allowEmptyValue" : false,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "title" : "Deployment Id",
+            "type" : "string",
+            "example" : null
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Successful Response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeploymentResponse"
+                },
+                "example" : null
+              }
+            }
+          },
+          "422" : {
+            "description" : "Validation Error",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HTTPValidationError"
+                },
+                "example" : null
+              }
+            }
+          }
+        }
+      },
+      "parameters" : [ ]
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "GatewayApplicationResponse" : {
+        "title" : "GatewayApplicationResponse",
+        "required" : [ "id", "name" ],
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "title" : "Name",
+            "type" : "string",
+            "example" : null
+          },
+          "contactEmails" : {
+            "title" : "Contactemails",
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "example" : null
+            },
+            "default" : "[]",
+            "example" : null
+          },
+          "description" : {
+            "title" : "Description",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "id" : {
+            "title" : "Id",
+            "type" : "string",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "ApplicationCreate" : {
+        "title" : "ApplicationCreate",
+        "required" : [ "display_name", "name" ],
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "title" : "Name",
+            "type" : "string",
+            "example" : null
+          },
+          "description" : {
+            "title" : "Description",
+            "type" : "string",
+            "default" : "",
+            "example" : null
+          },
+          "redirect_uris" : {
+            "title" : "Redirect Uris",
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "example" : null
+            },
+            "default" : "[]",
+            "example" : null
+          },
+          "display_name" : {
+            "title" : "Display Name",
+            "type" : "string",
+            "example" : null
+          },
+          "api_subscriptions" : {
+            "title" : "Api Subscriptions",
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "example" : null
+            },
+            "default" : "[]",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "APIResponse" : {
+        "title" : "APIResponse",
+        "required" : [ "backend_url", "description", "display_name", "id", "name", "tenant_id", "version" ],
+        "type" : "object",
+        "properties" : {
+          "tenant_id" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          },
+          "deployed_staging" : {
+            "title" : "Deployed Staging",
+            "type" : "boolean",
+            "default" : false,
+            "example" : null
+          },
+          "deployed_dev" : {
+            "title" : "Deployed Dev",
+            "type" : "boolean",
+            "default" : false,
+            "example" : null
+          },
+          "name" : {
+            "title" : "Name",
+            "type" : "string",
+            "example" : null
+          },
+          "description" : {
+            "title" : "Description",
+            "type" : "string",
+            "example" : null
+          },
+          "backend_url" : {
+            "title" : "Backend Url",
+            "type" : "string",
+            "example" : null
+          },
+          "id" : {
+            "title" : "Id",
+            "type" : "string",
+            "example" : null
+          },
+          "display_name" : {
+            "title" : "Display Name",
+            "type" : "string",
+            "example" : null
+          },
+          "version" : {
+            "title" : "Version",
+            "type" : "string",
+            "example" : null
+          },
+          "status" : {
+            "title" : "Status",
+            "type" : "string",
+            "default" : "draft",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "TenantCreate" : {
+        "title" : "TenantCreate",
+        "required" : [ "display_name", "name", "owner_email" ],
+        "type" : "object",
+        "properties" : {
+          "owner_email" : {
+            "title" : "Owner Email",
+            "type" : "string",
+            "example" : null
+          },
+          "name" : {
+            "title" : "Name",
+            "type" : "string",
+            "example" : null
+          },
+          "description" : {
+            "title" : "Description",
+            "type" : "string",
+            "default" : "",
+            "example" : null
+          },
+          "display_name" : {
+            "title" : "Display Name",
+            "type" : "string",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "TenantUpdate" : {
+        "title" : "TenantUpdate",
+        "type" : "object",
+        "properties" : {
+          "owner_email" : {
+            "title" : "Owner Email",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "description" : {
+            "title" : "Description",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "display_name" : {
+            "title" : "Display Name",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "MergeRequestCreate" : {
+        "title" : "MergeRequestCreate",
+        "required" : [ "description", "source_branch", "title" ],
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "title" : "Description",
+            "type" : "string",
+            "example" : null
+          },
+          "target_branch" : {
+            "title" : "Target Branch",
+            "type" : "string",
+            "default" : "main",
+            "example" : null
+          },
+          "title" : {
+            "title" : "Title",
+            "type" : "string",
+            "example" : null
+          },
+          "source_branch" : {
+            "title" : "Source Branch",
+            "type" : "string",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "RollbackRequest" : {
+        "title" : "RollbackRequest",
+        "type" : "object",
+        "properties" : {
+          "target_version" : {
+            "title" : "Target Version",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "ImportAPIResponse" : {
+        "title" : "ImportAPIResponse",
+        "required" : [ "api_name", "api_version", "success" ],
+        "type" : "object",
+        "properties" : {
+          "api_id" : {
+            "title" : "Api Id",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "success" : {
+            "title" : "Success",
+            "type" : "boolean",
+            "example" : null
+          },
+          "api_name" : {
+            "title" : "Api Name",
+            "type" : "string",
+            "example" : null
+          },
+          "api_version" : {
+            "title" : "Api Version",
+            "type" : "string",
+            "example" : null
+          },
+          "message" : {
+            "title" : "Message",
+            "type" : "string",
+            "default" : "",
+            "example" : null
+          }
+        },
+        "description" : "Response model for imported API.",
+        "example" : null
+      },
+      "GatewayScopeResponse" : {
+        "title" : "GatewayScopeResponse",
+        "required" : [ "scopeName" ],
+        "type" : "object",
+        "properties" : {
+          "audience" : {
+            "title" : "Audience",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "scopeName" : {
+            "title" : "Scopename",
+            "type" : "string",
+            "example" : null
+          },
+          "scopeDescription" : {
+            "title" : "Scopedescription",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "CommitInfo" : {
+        "title" : "CommitInfo",
+        "required" : [ "author", "date", "message", "sha" ],
+        "type" : "object",
+        "properties" : {
+          "date" : {
+            "title" : "Date",
+            "type" : "string",
+            "example" : null
+          },
+          "author" : {
+            "title" : "Author",
+            "type" : "string",
+            "example" : null
+          },
+          "message" : {
+            "title" : "Message",
+            "type" : "string",
+            "example" : null
+          },
+          "sha" : {
+            "title" : "Sha",
+            "type" : "string",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "ValidationError" : {
+        "title" : "ValidationError",
+        "required" : [ "loc", "msg", "type" ],
+        "type" : "object",
+        "properties" : {
+          "msg" : {
+            "title" : "Message",
+            "type" : "string",
+            "example" : null
+          },
+          "loc" : {
+            "title" : "Location",
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "anyOf" : [ {
+                "type" : "string",
+                "example" : null
+              }, {
+                "type" : "integer",
+                "format" : "int32",
+                "example" : null
+              } ],
+              "example" : null
+            },
+            "example" : null
+          },
+          "type" : {
+            "title" : "Error Type",
+            "type" : "string",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "ImportAPIRequest" : {
+        "title" : "ImportAPIRequest",
+        "required" : [ "apiName", "apiVersion" ],
+        "type" : "object",
+        "properties" : {
+          "apiName" : {
+            "title" : "Apiname",
+            "type" : "string",
+            "example" : null
+          },
+          "apiVersion" : {
+            "title" : "Apiversion",
+            "type" : "string",
+            "example" : null
+          },
+          "apiDefinition" : {
+            "title" : "Apidefinition",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "object",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "type" : {
+            "title" : "Type",
+            "type" : "string",
+            "default" : "openapi",
+            "example" : null
+          },
+          "url" : {
+            "title" : "Url",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        },
+        "description" : "Request model for importing an API from OpenAPI spec.\n\nUses Gateway-native field names for compatibility with existing playbooks.",
+        "example" : null
+      },
+      "MergeRequestResponse" : {
+        "title" : "MergeRequestResponse",
+        "required" : [ "author", "created_at", "description", "id", "iid", "source_branch", "state", "target_branch", "title", "web_url" ],
+        "type" : "object",
+        "properties" : {
+          "web_url" : {
+            "title" : "Web Url",
+            "type" : "string",
+            "example" : null
+          },
+          "iid" : {
+            "title" : "Iid",
+            "type" : "integer",
+            "format" : "int32",
+            "example" : null
+          },
+          "author" : {
+            "title" : "Author",
+            "type" : "string",
+            "example" : null
+          },
+          "description" : {
+            "title" : "Description",
+            "type" : "string",
+            "example" : null
+          },
+          "target_branch" : {
+            "title" : "Target Branch",
+            "type" : "string",
+            "example" : null
+          },
+          "created_at" : {
+            "title" : "Created At",
+            "type" : "string",
+            "example" : null
+          },
+          "id" : {
+            "title" : "Id",
+            "type" : "integer",
+            "format" : "int32",
+            "example" : null
+          },
+          "state" : {
+            "title" : "State",
+            "type" : "string",
+            "example" : null
+          },
+          "title" : {
+            "title" : "Title",
+            "type" : "string",
+            "example" : null
+          },
+          "source_branch" : {
+            "title" : "Source Branch",
+            "type" : "string",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "ApplicationResponse" : {
+        "title" : "ApplicationResponse",
+        "required" : [ "client_id", "created_at", "description", "display_name", "id", "name", "tenant_id", "updated_at" ],
+        "type" : "object",
+        "properties" : {
+          "tenant_id" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          },
+          "updated_at" : {
+            "title" : "Updated At",
+            "type" : "string",
+            "example" : null
+          },
+          "name" : {
+            "title" : "Name",
+            "type" : "string",
+            "example" : null
+          },
+          "description" : {
+            "title" : "Description",
+            "type" : "string",
+            "example" : null
+          },
+          "created_at" : {
+            "title" : "Created At",
+            "type" : "string",
+            "example" : null
+          },
+          "id" : {
+            "title" : "Id",
+            "type" : "string",
+            "example" : null
+          },
+          "display_name" : {
+            "title" : "Display Name",
+            "type" : "string",
+            "example" : null
+          },
+          "client_id" : {
+            "title" : "Client Id",
+            "type" : "string",
+            "example" : null
+          },
+          "api_subscriptions" : {
+            "title" : "Api Subscriptions",
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "example" : null
+            },
+            "default" : "[]",
+            "example" : null
+          },
+          "status" : {
+            "title" : "Status",
+            "type" : "string",
+            "default" : "pending",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "APIUpdate" : {
+        "title" : "APIUpdate",
+        "type" : "object",
+        "properties" : {
+          "openapi_spec" : {
+            "title" : "Openapi Spec",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "description" : {
+            "title" : "Description",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "backend_url" : {
+            "title" : "Backend Url",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "display_name" : {
+            "title" : "Display Name",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "version" : {
+            "title" : "Version",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "ApplicationCredentials" : {
+        "title" : "ApplicationCredentials",
+        "required" : [ "client_id", "client_secret" ],
+        "type" : "object",
+        "properties" : {
+          "client_secret" : {
+            "title" : "Client Secret",
+            "type" : "string",
+            "example" : null
+          },
+          "client_id" : {
+            "title" : "Client Id",
+            "type" : "string",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "DeploymentResult" : {
+        "title" : "DeploymentResult",
+        "required" : [ "api_name", "status", "tenant_id" ],
+        "type" : "object",
+        "properties" : {
+          "tenant_id" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          },
+          "api_id" : {
+            "title" : "Api Id",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "api_name" : {
+            "title" : "Api Name",
+            "type" : "string",
+            "example" : null
+          },
+          "action" : {
+            "title" : "Action",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "api_version" : {
+            "title" : "Api Version",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "message" : {
+            "title" : "Message",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "error" : {
+            "title" : "Error",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "status" : {
+            "title" : "Status",
+            "type" : "string",
+            "example" : null
+          }
+        },
+        "description" : "Deployment result from AWX playbook",
+        "example" : null
+      },
+      "FileContent" : {
+        "title" : "FileContent",
+        "required" : [ "content", "path" ],
+        "type" : "object",
+        "properties" : {
+          "path" : {
+            "title" : "Path",
+            "type" : "string",
+            "example" : null
+          },
+          "encoding" : {
+            "title" : "Encoding",
+            "type" : "string",
+            "default" : "text",
+            "example" : null
+          },
+          "content" : {
+            "title" : "Content",
+            "type" : "string",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "OIDCConfigResponse" : {
+        "title" : "OIDCConfigResponse",
+        "required" : [ "success" ],
+        "type" : "object",
+        "properties" : {
+          "application" : {
+            "title" : "Application",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "object",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "success" : {
+            "title" : "Success",
+            "type" : "boolean",
+            "example" : null
+          },
+          "scopes" : {
+            "title" : "Scopes",
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "example" : null
+            },
+            "default" : "[]",
+            "example" : null
+          },
+          "strategy" : {
+            "title" : "Strategy",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "object",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "message" : {
+            "title" : "Message",
+            "type" : "string",
+            "default" : "",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "HTTPValidationError" : {
+        "title" : "HTTPValidationError",
+        "type" : "object",
+        "properties" : {
+          "detail" : {
+            "title" : "Detail",
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ValidationError"
+            },
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "OIDCConfigRequest" : {
+        "title" : "OIDCConfigRequest",
+        "required" : [ "api_id", "api_name", "api_version", "client_id", "tenant_id" ],
+        "type" : "object",
+        "properties" : {
+          "tenant_id" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          },
+          "api_id" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          },
+          "audience" : {
+            "title" : "Audience",
+            "type" : "string",
+            "default" : "control-plane-api",
+            "example" : null
+          },
+          "api_name" : {
+            "title" : "Api Name",
+            "type" : "string",
+            "example" : null
+          },
+          "api_version" : {
+            "title" : "Api Version",
+            "type" : "string",
+            "example" : null
+          },
+          "auth_server_alias" : {
+            "title" : "Auth Server Alias",
+            "type" : "string",
+            "default" : "KeycloakOIDC",
+            "example" : null
+          },
+          "client_id" : {
+            "title" : "Client Id",
+            "type" : "string",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "APICreate" : {
+        "title" : "APICreate",
+        "required" : [ "backend_url", "display_name", "name" ],
+        "type" : "object",
+        "properties" : {
+          "openapi_spec" : {
+            "title" : "Openapi Spec",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "name" : {
+            "title" : "Name",
+            "type" : "string",
+            "example" : null
+          },
+          "description" : {
+            "title" : "Description",
+            "type" : "string",
+            "default" : "",
+            "example" : null
+          },
+          "backend_url" : {
+            "title" : "Backend Url",
+            "type" : "string",
+            "example" : null
+          },
+          "display_name" : {
+            "title" : "Display Name",
+            "type" : "string",
+            "example" : null
+          },
+          "version" : {
+            "title" : "Version",
+            "type" : "string",
+            "default" : "1.0.0",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "DeploymentRequest" : {
+        "title" : "DeploymentRequest",
+        "required" : [ "api_id", "environment" ],
+        "type" : "object",
+        "properties" : {
+          "api_id" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          },
+          "environment" : {
+            "$ref" : "#/components/schemas/Environment"
+          },
+          "version" : {
+            "title" : "Version",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "DeploymentResponse" : {
+        "title" : "DeploymentResponse",
+        "required" : [ "api_id", "api_name", "deployed_by", "environment", "id", "started_at", "status", "tenant_id", "version" ],
+        "type" : "object",
+        "properties" : {
+          "tenant_id" : {
+            "title" : "Tenant Id",
+            "type" : "string",
+            "example" : null
+          },
+          "error_message" : {
+            "title" : "Error Message",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "api_id" : {
+            "title" : "Api Id",
+            "type" : "string",
+            "example" : null
+          },
+          "completed_at" : {
+            "title" : "Completed At",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "environment" : {
+            "$ref" : "#/components/schemas/Environment"
+          },
+          "api_name" : {
+            "title" : "Api Name",
+            "type" : "string",
+            "example" : null
+          },
+          "awx_job_id" : {
+            "title" : "Awx Job Id",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "started_at" : {
+            "title" : "Started At",
+            "type" : "string",
+            "example" : null
+          },
+          "id" : {
+            "title" : "Id",
+            "type" : "string",
+            "example" : null
+          },
+          "deployed_by" : {
+            "title" : "Deployed By",
+            "type" : "string",
+            "example" : null
+          },
+          "version" : {
+            "title" : "Version",
+            "type" : "string",
+            "example" : null
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/DeploymentStatus"
+          }
+        },
+        "example" : null
+      },
+      "Environment" : {
+        "title" : "Environment",
+        "type" : "string",
+        "enum" : [ "dev", "staging" ],
+        "example" : null
+      },
+      "GatewayAPIResponse" : {
+        "title" : "GatewayAPIResponse",
+        "required" : [ "apiName", "apiVersion", "id" ],
+        "type" : "object",
+        "properties" : {
+          "apiName" : {
+            "title" : "Apiname",
+            "type" : "string",
+            "example" : null
+          },
+          "apiVersion" : {
+            "title" : "Apiversion",
+            "type" : "string",
+            "example" : null
+          },
+          "id" : {
+            "title" : "Id",
+            "type" : "string",
+            "example" : null
+          },
+          "type" : {
+            "title" : "Type",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "isActive" : {
+            "title" : "Isactive",
+            "type" : "boolean",
+            "default" : false,
+            "example" : null
+          },
+          "systemVersion" : {
+            "title" : "Systemversion",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "integer",
+              "format" : "int32",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "TenantResponse" : {
+        "title" : "TenantResponse",
+        "required" : [ "description", "display_name", "id", "name", "owner_email" ],
+        "type" : "object",
+        "properties" : {
+          "owner_email" : {
+            "title" : "Owner Email",
+            "type" : "string",
+            "example" : null
+          },
+          "application_count" : {
+            "title" : "Application Count",
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0,
+            "example" : null
+          },
+          "name" : {
+            "title" : "Name",
+            "type" : "string",
+            "example" : null
+          },
+          "description" : {
+            "title" : "Description",
+            "type" : "string",
+            "example" : null
+          },
+          "api_count" : {
+            "title" : "Api Count",
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0,
+            "example" : null
+          },
+          "created_at" : {
+            "title" : "Created At",
+            "type" : "object",
+            "anyOf" : [ {
+              "type" : "string",
+              "example" : null
+            }, {
+              "type" : "object",
+              "example" : null
+            } ],
+            "example" : null
+          },
+          "id" : {
+            "title" : "Id",
+            "type" : "string",
+            "example" : null
+          },
+          "display_name" : {
+            "title" : "Display Name",
+            "type" : "string",
+            "example" : null
+          },
+          "status" : {
+            "title" : "Status",
+            "type" : "string",
+            "default" : "active",
+            "example" : null
+          }
+        },
+        "example" : null
+      },
+      "DeploymentStatus" : {
+        "title" : "DeploymentStatus",
+        "type" : "string",
+        "enum" : [ "pending", "in_progress", "success", "failed", "rolled_back" ],
+        "example" : null
+      }
+    },
+    "securitySchemes" : {
+      "HTTPBearer" : {
+        "type" : "http",
+        "scheme" : "bearer"
+      }
+    }
+  }
+}

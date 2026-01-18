@@ -1,0 +1,43 @@
+apiVersion: stoa.io/v1
+kind: Tenant
+metadata:
+  name: oasis
+  displayName: "OASIS Platform"
+  description: "OASIS virtual reality platform APIs"
+  labels:
+    tier: platform
+    visibility: public
+    managed-by: gitops
+
+spec:
+  portalVisibility: public
+
+  visibility:
+    allowedRoles:
+      - cpi-admin
+      - tenant-admin
+      - devops
+      - viewer
+    denyRoles: []
+
+  defaultPolicies:
+    - name: rate-limit-standard
+      config:
+        requestsPerMinute: 100
+        burstLimit: 20
+
+  settings:
+    max_apis: 100
+    max_applications: 50
+    environments:
+      - dev
+      - staging
+
+  tags:
+    - platform
+    - public
+    - virtual-reality
+
+  contact:
+    team: "OASIS Team"
+    email: "oasis@stoa.cab-i.com"

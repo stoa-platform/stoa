@@ -1,0 +1,26 @@
+# Sixers Army API
+# Command and control for IOI's avatar army
+id: sixers-army-api
+name: sixers-army-api
+display_name: "Sixers Army API"
+version: "1.0.0"
+description: |
+  Command and control system for IOI's Sixer army deployment.
+  
+  Coordinate avatar deployments, manage resource allocation, and execute 
+  tactical operations across OASIS sectors. IOI maintains the largest 
+  organized force in the simulation.
+  
+  "The Sixers were IOI's army of indentured employees."
+backend_url: https://httpbin.org/anything
+status: active
+category: Operations
+tags:
+  - portal:published
+  - operations
+  - ioi
+  - rest
+  - military
+deployments:
+  dev: true
+  staging: false

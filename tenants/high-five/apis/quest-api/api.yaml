@@ -1,0 +1,26 @@
+# Quest Progress API
+# Track gunter progress through the Easter Egg hunt
+id: quest-api
+name: quest-api
+display_name: "Quest Progress API"
+version: "1.0.0"
+description: |
+  Track your progress through Halliday's Easter Egg hunt.
+  
+  Monitor your position on the Scoreboard, check your inventory of keys 
+  and gates cleared, and view your overall gunter statistics.
+  
+  The Scoreboard shows the top 10 gunters in the hunt.
+  Will you be the first to clear all three gates?
+backend_url: https://httpbin.org/anything
+status: active
+category: Platform
+tags:
+  - portal:published
+  - platform
+  - oasis
+  - rest
+  - scoring
+deployments:
+  dev: true
+  staging: false

@@ -17,9 +17,12 @@
   
   vars:
     # GitOps source directory (cloned by AWX/CI)
-    # AWX sets playbook_dir to the project root, so we use that as default
-    gitops_dir: "{{ lookup('env', 'GITOPS_DIR') | default(playbook_dir | dirname, true) }}"
+    # AWX sets playbook_dir to the playbook location, dirname goes up to project root
+    gitops_dir: "{{ lookup('env', 'GITOPS_DIR') | default(playbook_dir | dirname | dirname, true) }}"
+
+    # APIs can be in webmethods/ (legacy) or tenants/ (new structure)
     webmethods_dir: "{{ gitops_dir }}/webmethods"
+    tenants_dir: "{{ gitops_dir }}/tenants"
 
     # Base domain for URL substitution
     base_domain: "{{ lookup('env', 'BASE_DOMAIN') | default('stoa.cab-i.com', true) }}"
@@ -47,11 +50,18 @@
           Dry Run: {{ dry_run }}
           Delete Orphans: {{ delete_orphans }}
           
-    - name: "✅ Verify GitOps directory exists"
+    - name: "✅ Verify GitOps directory exists (webmethods or tenants)"
       ansible.builtin.stat:
-        path: "{{ webmethods_dir }}"
+        path: "{{ item }}"
       register: gitops_check
-      failed_when: not gitops_check.stat.exists
+      loop:
+        - "{{ webmethods_dir }}"
+        - "{{ tenants_dir }}"
+
+    - name: "✅ Ensure at least one API directory exists"
+      ansible.builtin.fail:
+        msg: "Neither {{ webmethods_dir }} nor {{ tenants_dir }} exists"
+      when: not (gitops_check.results | selectattr('stat.exists', 'true') | list | length > 0)
       
     - name: "✅ Verify Gateway connectivity"
       ansible.builtin.uri:

@@ -247,7 +247,12 @@ async def mcp_sse_post_endpoint(
 
     if session_id and session_id in _sessions:
         session = _sessions[session_id]
-        logger.info("Resuming MCP session", session_id=session_id)
+        # Update user token if provided (may have new/refreshed token)
+        if user and user.raw_token:
+            session.user = user
+            logger.info("Resuming MCP session with updated token", session_id=session_id, user=user.subject)
+        else:
+            logger.info("Resuming MCP session", session_id=session_id)
     else:
         session_id = str(uuid.uuid4())
         session = MCPSession(session_id, user)
@@ -360,7 +365,12 @@ async def mcp_sse_get_endpoint(
 
     if session_id and session_id in _sessions:
         session = _sessions[session_id]
-        logger.info("Resuming MCP SSE session", session_id=session_id)
+        # Update user token if provided (may have new/refreshed token)
+        if user and user.raw_token:
+            session.user = user
+            logger.info("Resuming MCP SSE session with updated token", session_id=session_id, user=user.subject)
+        else:
+            logger.info("Resuming MCP SSE session", session_id=session_id)
     else:
         session_id = str(uuid.uuid4())
         session = MCPSession(session_id, user)

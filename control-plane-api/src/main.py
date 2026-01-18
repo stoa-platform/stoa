@@ -17,7 +17,7 @@ from .logging_config import configure_logging, get_logger
 from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
-from .routers import portal, mcp_gitops, mcp_proxy, platform
+from .routers import portal, mcp_gitops, mcp_proxy, platform, portal_applications
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service, argocd_service
 # Note: These are now imported as instances, not modules
@@ -304,6 +304,7 @@ app.include_router(mcp_admin_servers_router)
 
 # Portal and GitOps routers
 app.include_router(portal.router)
+app.include_router(portal_applications.router)
 app.include_router(mcp_gitops.router)
 
 # MCP Tools proxy router (proxies to MCP Gateway)

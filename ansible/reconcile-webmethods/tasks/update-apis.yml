@@ -3,6 +3,10 @@
 # Update existing APIs on webMethods Gateway
 # Preserves policies and re-applies them after contract update
 
+- name: "Initialize apis_updated list"
+  ansible.builtin.set_fact:
+    apis_updated: []
+
 - name: "Update API {{ item }}"
   ansible.builtin.include_tasks: update-single-api.yml
   loop: "{{ apis_to_update }}"

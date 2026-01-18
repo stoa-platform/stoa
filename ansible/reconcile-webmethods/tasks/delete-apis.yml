@@ -3,6 +3,10 @@
 # Delete orphaned APIs from webMethods Gateway
 # (APIs that exist on Gateway but not in Git)
 
+- name: "Initialize apis_deleted list"
+  ansible.builtin.set_fact:
+    apis_deleted: []
+
 - name: "Delete orphaned APIs"
   ansible.builtin.include_tasks: delete-single-api.yml
   loop: "{{ apis_to_delete }}"

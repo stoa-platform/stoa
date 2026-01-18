@@ -9,26 +9,52 @@
 ## Architecture
 
 ```
-stoa-catalog/
-└── tenants/
-    ├── stoa-platform/              ← Platform/Admin APIs (internal)
-    │   ├── tenant.yaml             ← portalVisibility: internal
-    │   └── apis/
-    │       └── control-plane-api/
-    │           └── api.yaml
-    │
-    ├── acme-corp/                  ← Business APIs (public)
-    │   ├── tenant.yaml             ← portalVisibility: public
-    │   └── apis/
-    │       └── crm-api/
-    │           └── api.yaml
-    │
-    └── demo-tenant/                ← Demo APIs (public)
-        ├── tenant.yaml
-        └── apis/
-            └── sample-api/
-                └── api.yaml
+tenants/
+├── stoa-platform/              ← Platform/Admin APIs (internal) - 1 API
+│   ├── tenant.yaml             ← portalVisibility: internal
+│   └── apis/
+│       └── control-plane-api/
+│           └── api.yaml
+│
+├── acme-corp/                  ← Business APIs (public) - 3 APIs
+│   ├── tenant.yaml             ← portalVisibility: public
+│   └── apis/
+│       ├── billing-api/
+│       ├── crm-api/
+│       └── inventory-api/
+│
+├── demo/                       ← Demo APIs (public) - 13 APIs
+│   ├── tenant.yaml
+│   └── apis/
+│       ├── account-management-api/
+│       ├── customer-360-api/
+│       ├── fraud-detection-api/
+│       ├── payment-api/
+│       ├── petstore/
+│       └── ... (+ 8 more)
+│
+├── high-five/                  ← Ready Player One themed (public) - 4 APIs
+│   ├── tenant.yaml
+│   └── apis/
+│       ├── copper-key-api/
+│       ├── halliday-journal-api/
+│       ├── jade-key-api/
+│       └── quest-api/
+│
+├── ioi/                        ← IOI Corporation (public) - 3 APIs
+│   ├── tenant.yaml
+│   └── apis/
+│       ├── loyalty-api/
+│       ├── sixers-army-api/
+│       └── surveillance-api/
+│
+└── oasis/                      ← OASIS Platform (public) - 1 API
+    ├── tenant.yaml
+    └── apis/
+        └── crystal-key-api/
 ```
+
+**Total: 6 tenants, 25 APIs**
 
 ## Features
 
@@ -273,7 +299,41 @@ curl "https://portal.stoa.cab-i.com/portal/rest/v1/apis" | \
 
 ---
 
+## Current Tenants
+
+| Tenant | Visibility | APIs | Description |
+|--------|------------|------|-------------|
+| `stoa-platform` | `internal` | 1 | Platform admin APIs (Control-Plane-API) |
+| `acme-corp` | `public` | 3 | Business APIs (CRM, Billing, Inventory) |
+| `demo` | `public` | 13 | Demo/test APIs |
+| `high-five` | `public` | 4 | Ready Player One - The Resistance |
+| `ioi` | `public` | 3 | IOI Corporation APIs |
+| `oasis` | `public` | 1 | OASIS Platform APIs |
+
+---
+
+## RBAC Configuration
+
+Each tenant can define access control via `visibility` in `tenant.yaml`:
+
+```yaml
+spec:
+  visibility:
+    allowedRoles:
+      - cpi-admin        # Platform administrators
+      - tenant-admin     # Tenant administrators
+      - devops           # DevOps users
+      - viewer           # Read-only users
+    denyRoles:
+      - external-partner # Explicitly denied
+```
+
+These roles map to Keycloak realm roles defined in `control-plane-api/src/auth/rbac.py`.
+
+---
+
 ## Links
 
 - [stoa-catalog Repository](https://gitlab.com/cab6961310/stoa-catalog)
+- [GitHub Repository](https://github.com/PotoMitan/stoa)
 - [webMethods Gateway API Reference](https://documentation.softwareag.com/webmethods/api_gateway/)

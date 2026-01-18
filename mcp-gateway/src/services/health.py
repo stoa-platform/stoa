@@ -95,16 +95,18 @@ class HealthChecker:
 
     def __init__(
         self,
-        gateway_url: str = "http://localhost:8080",
-        keycloak_url: str = "http://localhost:8180",
-        database_url: str = "postgresql://localhost:5432/stoa",
-        kafka_bootstrap: str = "localhost:9092",
-        opensearch_url: str = "http://localhost:9200",
+        gateway_url: str = "",
+        keycloak_url: str = "",
+        keycloak_realm: str = "stoa",
+        database_url: str = "",
+        kafka_bootstrap: str = "",
+        opensearch_url: str = "",
         timeout_seconds: float = 5.0,
         thresholds: Optional[dict[str, HealthThresholds]] = None,
     ):
         self.gateway_url = gateway_url
         self.keycloak_url = keycloak_url
+        self.keycloak_realm = keycloak_realm
         self.database_url = database_url
         self.kafka_bootstrap = kafka_bootstrap
         self.opensearch_url = opensearch_url
@@ -128,13 +130,26 @@ class HealthChecker:
             "opensearch": self._check_opensearch,
         }
 
-        # Run checks in parallel
+        # Check which components are configured
+        configured = {
+            "gateway": bool(self.gateway_url),
+            "keycloak": bool(self.keycloak_url),
+            "database": bool(self.database_url),
+            "kafka": bool(self.kafka_bootstrap),
+            "opensearch": bool(self.opensearch_url),
+        }
+
+        # Run checks in parallel (only for configured components)
         tasks = []
         valid_components = []
         for comp in components:
             if comp in check_funcs:
-                tasks.append(check_funcs[comp]())
-                valid_components.append(comp)
+                if configured.get(comp, False):
+                    tasks.append(check_funcs[comp]())
+                    valid_components.append(comp)
+                else:
+                    # Component not configured - skip silently
+                    pass
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -167,16 +182,57 @@ class HealthChecker:
         )
 
     async def _check_gateway(self) -> ComponentHealth:
-        """Check webMethods Gateway health endpoint."""
-        return await self._check_http_endpoint(
-            url=f"{self.gateway_url}/health",
-            component="gateway"
-        )
+        """Check webMethods Gateway via root endpoint.
+
+        The gateway returns 302 redirect to /apigatewayui when healthy.
+        The /health endpoint is only accessible from internal network.
+        """
+        start = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=False) as client:
+                response = await client.get(f"{self.gateway_url}/")
+                latency_ms = (time.perf_counter() - start) * 1000
+
+                # Gateway returns 302 redirect when healthy, or 200 for some configs
+                if response.status_code in [200, 302]:
+                    return ComponentHealth(
+                        status=self._latency_status(latency_ms, "gateway"),
+                        latency_ms=round(latency_ms, 2),
+                        details={"redirect": response.status_code == 302}
+                    )
+                else:
+                    return ComponentHealth(
+                        status=HealthStatus.DEGRADED if response.status_code < 500 else HealthStatus.DOWN,
+                        latency_ms=round(latency_ms, 2),
+                        error=f"HTTP {response.status_code}"
+                    )
+        except httpx.TimeoutException:
+            return ComponentHealth(
+                status=HealthStatus.DOWN,
+                error=f"Connection timeout ({self.timeout}s)"
+            )
+        except httpx.ConnectError as e:
+            return ComponentHealth(
+                status=HealthStatus.DOWN,
+                error=f"Connection refused: {str(e)}"
+            )
+        except Exception as e:
+            latency_ms = (time.perf_counter() - start) * 1000
+            return ComponentHealth(
+                status=HealthStatus.DOWN,
+                latency_ms=round(latency_ms, 2) if latency_ms < self.timeout * 1000 else None,
+                error=str(e)
+            )
 
     async def _check_keycloak(self) -> ComponentHealth:
-        """Check Keycloak health endpoint."""
+        """Check Keycloak via OIDC discovery endpoint.
+
+        Uses the .well-known/openid-configuration endpoint which is always
+        publicly accessible and doesn't require authentication.
+        """
+        url = f"{self.keycloak_url}/realms/{self.keycloak_realm}/.well-known/openid-configuration"
         return await self._check_http_endpoint(
-            url=f"{self.keycloak_url}/health/ready",
+            url=url,
             component="keycloak"
         )
 

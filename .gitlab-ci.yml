@@ -51,8 +51,6 @@ validate-webmethods:
         - webmethods/**/*
       when: always
     - when: never
-  tags:
-    - docker
 
 # Trigger AWX reconciliation - DEV
 trigger-awx-dev:
@@ -101,8 +99,6 @@ trigger-awx-dev:
       when: on_success
   needs:
     - validate-webmethods
-  tags:
-    - docker
 
 # Trigger AWX reconciliation - STAGING
 trigger-awx-staging:
@@ -139,8 +135,6 @@ trigger-awx-staging:
       when: on_success
   needs:
     - validate-webmethods
-  tags:
-    - docker
 
 # Trigger AWX reconciliation - PROD
 trigger-awx-prod:
@@ -177,8 +171,6 @@ trigger-awx-prod:
       when: on_success
   needs:
     - validate-webmethods
-  tags:
-    - docker
 
 # =============================================================================
 # E2E Tests (CAB-652)
@@ -223,8 +215,6 @@ e2e-tests:
     - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_PIPELINE_SOURCE == "schedule"
   allow_failure: false
-  tags:
-    - docker
 
 # E2E Tests - Manual trigger for non-main branches
 e2e-tests-manual:
@@ -257,8 +247,6 @@ e2e-tests-manual:
     - if: $CI_COMMIT_BRANCH != "main"
       when: manual
   allow_failure: true
-  tags:
-    - docker
 
 # Smoke tests - Quick validation on every push
 e2e-smoke:
@@ -288,5 +276,3 @@ e2e-smoke:
     - if: $CI_COMMIT_BRANCH == "develop"
     - if: $CI_MERGE_REQUEST_ID
   allow_failure: true
-  tags:
-    - docker

@@ -2,24 +2,6 @@
 # tasks/configure-single-alias.yml
 # Configure a single backend alias on webMethods Gateway
 
-- name: "Build alias payload for {{ alias_item.key }}"
-  ansible.builtin.set_fact:
-    alias_payload:
-      alias:
-        name: "{{ alias_item.key }}"
-        description: "{{ alias_item.value.description | default('Backend alias for ' + alias_item.key) }}"
-        type: "simple"
-        endPointURI: "{{ alias_item.value.url }}"
-        # Connection settings
-        connectionTimeout: "{{ alias_item.value.connectionTimeout | default(30000) }}"
-        readTimeout: "{{ alias_item.value.readTimeout | default(30000) }}"
-        # SSL/TLS settings
-        sslConfig:
-          keystoreAlias: "{{ alias_item.value.keystoreAlias | default('') }}"
-          truststoreAlias: "{{ alias_item.value.truststoreAlias | default('') }}"
-        # Authentication for backend
-        authConfig: "{{ alias_auth_config }}"
-
 - name: "Build auth config for {{ alias_item.key }}"
   ansible.builtin.set_fact:
     alias_auth_config:
@@ -29,6 +11,18 @@
       password: "{{ alias_item.value.password | default('') }}"
       # For OAuth/JWT passthrough
       passthrough: "{{ alias_item.value.passthrough | default(true) }}"
+
+- name: "Build alias payload for {{ alias_item.key }}"
+  ansible.builtin.set_fact:
+    alias_payload:
+      # webMethods Simple Alias format - type at root level
+      type: "simple"
+      name: "{{ alias_item.key }}"
+      description: "{{ alias_item.value.description | default('Backend alias for ' + alias_item.key) }}"
+      endPointURI: "{{ alias_item.value.url }}"
+      # Connection timeouts in ms
+      connectionTimeout: "{{ alias_item.value.connectionTimeout | default(30000) }}"
+      readTimeout: "{{ alias_item.value.readTimeout | default(30000) }}"
 
 - name: "Check if alias {{ alias_item.key }} exists"
   ansible.builtin.uri:

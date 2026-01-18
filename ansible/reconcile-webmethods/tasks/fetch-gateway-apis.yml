@@ -19,6 +19,10 @@
   ansible.builtin.set_fact:
     gateway_apis: "{{ gateway_apis_response.json.apiResponse | default([]) }}"
 
+- name: "Initialize Gateway API lookup"
+  ansible.builtin.set_fact:
+    gateway_api_lookup: {}
+
 - name: "Build Gateway API lookup by name+version"
   ansible.builtin.set_fact:
     gateway_api_lookup: "{{ gateway_api_lookup | default({}) | combine({(item.api.apiName + ':' + item.api.apiVersion): item.api}) }}"

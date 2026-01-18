@@ -2,19 +2,30 @@
 # tasks/compute-diff.yml
 # Compare Git state vs Gateway and determine actions to perform
 
+# Build Git API keys in same format as Gateway lookup: name:version
+- name: "Build Git API keys (name:version format)"
+  ansible.builtin.set_fact:
+    git_api_keys: "{{ git_apis | map(attribute='metadata') | map('json_query', 'join(`:`, [name, version || `1.0.0`])') | list }}"
+
+# Also keep simple names for lookups
 - name: "Extract Git API names"
   ansible.builtin.set_fact:
     git_api_names: "{{ git_apis | map(attribute='metadata.name') | list }}"
 
-- name: "Extract Gateway API names"
+- name: "Extract Gateway API keys"
   ansible.builtin.set_fact:
-    gateway_api_names: "{{ gateway_api_lookup.keys() | list }}"
+    gateway_api_keys: "{{ gateway_api_lookup.keys() | list }}"
+
+# Extract just the names from Gateway for backwards compatibility
+- name: "Extract Gateway API names only"
+  ansible.builtin.set_fact:
+    gateway_api_names: "{{ gateway_api_lookup.values() | map(attribute='apiName') | list }}"
 
 - name: "Calculate APIs to create (in Git, not on Gateway)"
   ansible.builtin.set_fact:
     apis_to_create: "{{ git_api_names | difference(gateway_api_names) }}"
 
-- name: "Calculate APIs to delete (on Gateway, not in Git)"
+- name: "Calculate APIs to delete (on Gateway, not in Git) - use names only"
   ansible.builtin.set_fact:
     apis_to_delete: "{{ gateway_api_names | difference(git_api_names) }}"
 

@@ -47,6 +47,8 @@ spec:
           value: "true"
         - name: APPLY_POLICIES
           value: "true"
+        - name: CORS_ORIGINS
+          value: "https://console.stoa.cab-i.com,https://portal.stoa.cab-i.com,http://localhost:3000,http://localhost:5173"
         command:
         - /bin/sh
         - -c
@@ -205,6 +207,39 @@ spec:
                 log_ok "JWT passthrough configured"
               fi
             fi
+
+            # Configure CORS policy using webMethods policyAction format
+            log_info "Configuring CORS policy..."
+
+            CORS_POLICY='{
+              "policyAction": [
+                {
+                  "type": "corsPolicy",
+                  "parameters": {
+                    "enabled": true,
+                    "allowOrigins": ["'"$(echo ${CORS_ORIGINS} | sed 's/,/","/g')"'"],
+                    "allowMethods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+                    "allowHeaders": ["Authorization", "Content-Type", "Accept", "X-Request-ID", "X-Tenant-ID", "X-Correlation-ID"],
+                    "exposeHeaders": ["X-Request-ID", "X-RateLimit-Remaining", "X-RateLimit-Limit"],
+                    "allowCredentials": true,
+                    "maxAge": 3600
+                  }
+                }
+              ]
+            }'
+
+            CORS_RESULT=$(curl -s -X PUT \
+              -u "${GATEWAY_USER}:${GATEWAY_PASSWORD}" \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/json" \
+              -d "${CORS_POLICY}" \
+              "${GATEWAY_URL}/rest/apigateway/apis/${API_ID}/policies" 2>&1 || echo "CORS_ERROR")
+
+            if [ "$CORS_RESULT" = "CORS_ERROR" ]; then
+              log_warn "Could not apply CORS policy via API"
+            else
+              log_ok "CORS policy applied"
+            fi
           fi
 
           # =============================================================================
@@ -235,4 +270,5 @@ spec:
           echo "JWT Auth: ${KEYCLOAK_ISSUER}"
           echo "Audience: ${API_AUDIENCE}"
           echo "Backend Passthrough: ${BACKEND_PASSTHROUGH}"
+          echo "CORS Origins: ${CORS_ORIGINS}"
           echo "========================================="

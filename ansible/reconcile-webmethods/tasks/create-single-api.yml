@@ -1,6 +1,7 @@
 ---
 # tasks/create-single-api.yml
 # Create a single API on webMethods Gateway
+# Converts spec.resources into proper Swagger paths
 
 - name: "Get Git definition for {{ api_name_to_create }}"
   ansible.builtin.set_fact:
@@ -9,17 +10,92 @@
 - name: "Resolve backend alias"
   ansible.builtin.set_fact:
     backend_url: "{{ git_aliases.aliases[api_def.spec.backend.alias].url }}"
-  when: 
+  when:
     - git_aliases is defined
     - api_def.spec.backend.alias is defined
     - api_def.spec.backend.alias in git_aliases.aliases
 
-- name: "Set default backend URL if alias not found"
+- name: "Use direct backend URL if specified"
+  ansible.builtin.set_fact:
+    backend_url: "{{ api_def.spec.backend.url }}"
+  when:
+    - backend_url is not defined
+    - api_def.spec.backend.url is defined
+
+- name: "Set default backend URL if none found"
   ansible.builtin.set_fact:
     backend_url: "http://localhost:8080"
   when: backend_url is not defined
 
-- name: "Build Swagger spec for {{ api_name_to_create }}"
+- name: "Extract host from backend URL"
+  ansible.builtin.set_fact:
+    backend_host: "{{ backend_url | regex_replace('^https?://', '') | regex_replace('/.*$', '') }}"
+
+- name: "Build paths dictionary from resources"
+  ansible.builtin.set_fact:
+    api_paths_list: "{{ api_def.spec.resources | default([]) }}"
+
+- name: "Create paths using Python"
+  ansible.builtin.shell: |
+    python3 << 'PYTHON'
+    import json
+    import re
+
+    resources = json.loads("""{{ api_paths_list | to_json }}""")
+
+    paths = {}
+    for res in resources:
+        path = res.get('path', '/')
+        methods = res.get('methods', ['GET'])
+        description = res.get('description', path)
+
+        if path not in paths:
+            paths[path] = {}
+
+        for method in methods:
+            m = method.lower()
+            op_id = re.sub(r'[/{}-]', '_', path)
+            op_id = re.sub(r'^_+|_+$', '', op_id)
+            op_id = re.sub(r'_+', '_', op_id)
+            op_id = f"{op_id}_{m}"
+
+            paths[path][m] = {
+                "operationId": op_id,
+                "summary": description,
+                "responses": {
+                    "200": {"description": "Successful response"},
+                    "400": {"description": "Bad request"},
+                    "401": {"description": "Unauthorized"},
+                    "404": {"description": "Not found"}
+                }
+            }
+
+            params = re.findall(r'\{(\w+)\}', path)
+            if params:
+                paths[path][m]["parameters"] = [
+                    {"name": p, "in": "path", "required": True, "type": "string"}
+                    for p in params
+                ]
+
+    if not paths:
+        paths["/"] = {
+            "get": {
+                "operationId": "default_get",
+                "summary": "Default endpoint",
+                "responses": {"200": {"description": "Successful response"}}
+            }
+        }
+
+    print(json.dumps(paths))
+    PYTHON
+  register: swagger_paths_result
+  changed_when: false
+
+- name: "Parse generated paths"
+  ansible.builtin.set_fact:
+    swagger_paths: "{{ swagger_paths_result.stdout | from_json }}"
+
+- name: "Build complete Swagger spec for {{ api_name_to_create }}"
   ansible.builtin.set_fact:
     swagger_spec:
       swagger: "2.0"
@@ -27,20 +103,33 @@
         title: "{{ api_def.metadata.name }}"
         version: "{{ api_def.metadata.version | default('1.0.0') }}"
         description: "{{ api_def.metadata.description | default('') }}"
-      host: "{{ backend_url | regex_replace('^https?://', '') | regex_replace('/.*$', '') }}"
+      host: "{{ backend_host }}"
       basePath: "{{ api_def.spec.basePath | default('/') }}"
       schemes:
         - https
-      paths: {}
+        - http
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      paths: "{{ swagger_paths }}"
 
 - name: "Write Swagger spec to temp file"
   ansible.builtin.copy:
-    content: "{{ swagger_spec | to_json }}"
+    content: "{{ swagger_spec | to_nice_json }}"
     dest: "/tmp/api-{{ api_name_to_create }}.json"
     mode: '0644'
   when: not dry_run
 
-- name: "➕ Create API {{ api_name_to_create }} on Gateway (file upload)"
+- name: "Display generated Swagger for {{ api_name_to_create }}"
+  ansible.builtin.debug:
+    msg: |
+      Generated Swagger for {{ api_name_to_create }}:
+        Host: {{ backend_host }}
+        BasePath: {{ api_def.spec.basePath | default('/') }}
+        Paths count: {{ swagger_paths | length }}
+
+- name: "Create API {{ api_name_to_create }} on Gateway (file upload)"
   ansible.builtin.shell: |
     curl -s -X POST "{{ wm_gateway_url }}/rest/apigateway/apis" \
       -u "{{ wm_admin_user }}:{{ wm_admin_password }}" \
@@ -56,6 +145,12 @@
   when:
     - not dry_run
     - create_result_raw is succeeded
+    - create_result_raw.stdout | length > 0
+
+- name: "Display create result"
+  ansible.builtin.debug:
+    msg: "API creation result: {{ create_result_raw.stdout | default('dry-run') }}"
+  when: not dry_run
 
 - name: "Clean up temp file"
   ansible.builtin.file:
@@ -71,6 +166,23 @@
     - create_result is defined
     - create_result.json is defined
     - create_result.json.apiResponse is defined
+    - create_result.json.apiResponse.api is defined
+
+- name: "Activate API {{ api_name_to_create }}"
+  ansible.builtin.uri:
+    url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ created_api_id }}/activate"
+    method: PUT
+    user: "{{ wm_admin_user }}"
+    password: "{{ wm_admin_password }}"
+    force_basic_auth: true
+    headers:
+      Accept: "application/json"
+    status_code: [200, 204]
+    timeout: 30
+  when:
+    - not dry_run
+    - created_api_id is defined
+  ignore_errors: true
 
 - name: "Record created API"
   ansible.builtin.set_fact:
@@ -78,4 +190,4 @@
 
 - name: "Log creation {{ api_name_to_create }}"
   ansible.builtin.debug:
-    msg: "✅ API {{ api_name_to_create }} created{{ ' (dry-run)' if dry_run else '' }}"
+    msg: "API {{ api_name_to_create }} created with {{ swagger_paths | length }} paths{{ ' (dry-run)' if dry_run else '' }}"

@@ -35,8 +35,9 @@ export const config = {
   },
 
   // Control Plane API (for subscriptions, profile)
+  // Direct connection to Control-Plane-API backend
   api: {
-    baseUrl: import.meta.env.VITE_API_URL || `https://apis.${BASE_DOMAIN}/gateway/Control-Plane-API/2.0`,
+    baseUrl: import.meta.env.VITE_API_URL || `https://api.${BASE_DOMAIN}`,
     timeout: Number(import.meta.env.VITE_API_TIMEOUT) || 30000,
   },
 

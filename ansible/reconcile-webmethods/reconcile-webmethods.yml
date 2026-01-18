@@ -89,7 +89,14 @@
       
     - name: "🔗 Configure aliases"
       ansible.builtin.include_tasks: tasks/configure-aliases.yml
-      
+
+    - name: "📱 Sync applications"
+      ansible.builtin.include_tasks: tasks/sync-applications.yml
+      when: sync_applications | default(true)
+      tags:
+        - applications
+        - sync
+
   post_tasks:
     - name: "📊 Reconciliation summary"
       ansible.builtin.debug:
@@ -100,6 +107,7 @@
           ➖ APIs deleted: {{ apis_deleted | default([]) | length }}
           🔒 Policies applied: {{ policies_applied | default([]) | length }}
           🔗 Aliases configured: {{ aliases_configured | default([]) | length }}
+          📱 Applications synced: {{ applications_synced | default(0) }}
           
           {% if dry_run %}
           ⚠️  DRY-RUN mode - No changes applied

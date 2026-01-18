@@ -46,13 +46,14 @@ class STOAToolHandlers:
     ) -> RequestContext:
         """Extract request context from TokenClaims."""
         if claims is None:
+            logger.warning("No claims provided, using anonymous context")
             return RequestContext(
                 user_id="anonymous",
                 tenant_id="unknown",
                 roles=[],
             )
 
-        return RequestContext(
+        ctx = RequestContext(
             user_id=claims.subject,
             tenant_id=claims.tenant_id or "unknown",
             roles=claims.roles,
@@ -60,6 +61,18 @@ class STOAToolHandlers:
             name=claims.name or claims.preferred_username,
             ip_address=ip_address,
         )
+
+        logger.info(
+            "Extracted request context",
+            user_id=ctx.user_id,
+            tenant_id=ctx.tenant_id,
+            roles=ctx.roles,
+            is_platform_admin=ctx.is_platform_admin,
+            is_tenant_admin=ctx.is_tenant_admin,
+            realm_access=claims.realm_access,
+        )
+
+        return ctx
 
     # =========================================================================
     # TENANT HANDLERS

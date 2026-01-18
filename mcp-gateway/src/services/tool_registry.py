@@ -12,6 +12,7 @@ CAB-605 Phase 3: Tool consolidation with deprecation layer.
 - Deprecation aliases: Backward compatibility for 60 days
 """
 
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -37,6 +38,7 @@ from ..models import (
     ToolCategory,
 )
 from ..tools import CORE_TOOLS, DEPRECATION_MAPPINGS, get_core_tool
+from .health import HealthChecker, PlatformHealth, HealthStatus
 
 logger = structlog.get_logger(__name__)
 
@@ -1091,14 +1093,11 @@ class ToolRegistry:
             }
             return ToolResult(content=[TextContent(text=str(info))])
 
-        # stoa_platform_health
+        # stoa_platform_health (CAB-658: Enhanced with latency tracking)
         elif tool.name == "stoa_platform_health":
             components = arguments.get("components", [])
-            health_status = await self._check_health(
-                "all" if not components else ",".join(components),
-                settings,
-            )
-            return ToolResult(content=[TextContent(text=str(health_status))])
+            health_result = await self._check_platform_health(components, settings)
+            return ToolResult(content=[TextContent(text=str(health_result))])
 
         # stoa_tenants (renamed from stoa_list_tenants)
         elif tool.name == "stoa_tenants":
@@ -1795,52 +1794,73 @@ class ToolRegistry:
             is_error=True,
         )
 
+    async def _check_platform_health(
+        self,
+        components: list[str],
+        settings: Any,
+    ) -> dict[str, Any]:
+        """Check health of platform components with latency tracking.
+
+        CAB-658: Enhanced health check with:
+        - Per-component latency measurement (ms)
+        - Tri-state status: healthy / degraded / down / unknown
+        - Async parallel checks for performance
+        - Configurable thresholds per component
+        """
+        # Create health checker with environment-based configuration
+        checker = HealthChecker(
+            gateway_url=os.getenv("STOA_GATEWAY_URL", f"https://gateway.{settings.base_domain}"),
+            keycloak_url=os.getenv("STOA_KEYCLOAK_URL", f"https://auth.{settings.base_domain}"),
+            database_url=os.getenv("STOA_DATABASE_URL", os.getenv("DATABASE_URL", "")),
+            kafka_bootstrap=os.getenv("STOA_KAFKA_BOOTSTRAP", os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")),
+            opensearch_url=os.getenv("STOA_OPENSEARCH_URL", ""),
+            timeout_seconds=float(os.getenv("STOA_HEALTH_TIMEOUT", "5.0")),
+        )
+
+        # Check requested components or all
+        if components:
+            health = await checker.check_components(components)
+        else:
+            health = await checker.check_all()
+
+        # Convert to dict format for response
+        return {
+            "overall": health.overall.value,
+            "summary": health.summary,
+            "components": {
+                name: {
+                    "status": comp.status.value,
+                    "latency_ms": comp.latency_ms,
+                    **({"error": comp.error} if comp.error else {}),
+                    **({"details": comp.details} if comp.details else {}),
+                }
+                for name, comp in health.components.items()
+            },
+            "checked_at": health.checked_at,
+        }
+
     async def _check_health(
         self,
         service: str,
         settings: Any,
     ) -> dict[str, Any]:
-        """Check health of platform services."""
-        health: dict[str, Any] = {
-            "status": "healthy",
-            "services": {},
+        """Legacy health check - redirects to new implementation.
+
+        Deprecated: Use _check_platform_health instead.
+        """
+        # Map legacy service names to new component names
+        component_map = {
+            "api": "gateway",  # API is checked via gateway
+            "gateway": "gateway",
+            "auth": "keycloak",
         }
 
-        services_to_check = []
         if service == "all":
-            services_to_check = ["api", "gateway", "auth"]
+            components = ["gateway", "keycloak", "database", "kafka"]
         else:
-            services_to_check = [service]
+            components = [component_map.get(service, service)]
 
-        for svc in services_to_check:
-            try:
-                if svc == "api":
-                    url = f"https://api.{settings.base_domain}/health"
-                    expected_codes = [200]
-                elif svc == "gateway":
-                    # webMethods API Gateway - root returns 302 redirect to /apigatewayui when healthy
-                    url = f"https://gateway.{settings.base_domain}/"
-                    expected_codes = [200, 302]
-                elif svc == "auth":
-                    # Keycloak - use OIDC discovery endpoint (always publicly accessible)
-                    url = f"https://auth.{settings.base_domain}/realms/{settings.keycloak_realm}/.well-known/openid-configuration"
-                    expected_codes = [200]
-                else:
-                    continue
-
-                if self._http_client:
-                    response = await self._http_client.get(url, timeout=5.0, follow_redirects=False)
-                    health["services"][svc] = {
-                        "status": "healthy" if response.status_code in expected_codes else "unhealthy",
-                        "status_code": response.status_code,
-                    }
-                else:
-                    health["services"][svc] = {"status": "unknown", "error": "HTTP client not initialized"}
-            except Exception as e:
-                health["services"][svc] = {"status": "unhealthy", "error": str(e)}
-                health["status"] = "degraded"
-
-        return health
+        return await self._check_platform_health(components, settings)
 
     def _get_tools_info(
         self,

@@ -8,7 +8,7 @@
 
 - name: "Extract Gateway API names"
   ansible.builtin.set_fact:
-    gateway_api_names: "{{ gateway_apis.keys() | list }}"
+    gateway_api_names: "{{ gateway_api_lookup.keys() | list }}"
 
 - name: "Calculate APIs to create (in Git, not on Gateway)"
   ansible.builtin.set_fact:

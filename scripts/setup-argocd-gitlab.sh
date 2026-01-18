@@ -3,7 +3,7 @@
 set -e
 
 NAMESPACE="argocd"
-GITLAB_REPO="https://gitlab.com/potomitan/stoa-gitops.git"
+GITLAB_REPO="https://gitlab.com/cab6961310/stoa-gitops.git"
 
 echo "=== Configuring ArgoCD GitLab Integration ==="
 

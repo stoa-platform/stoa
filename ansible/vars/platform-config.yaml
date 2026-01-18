@@ -115,7 +115,7 @@ awx:
 
   # Project for playbooks
   project:
-    name: APIM Playbooks
+    name: STOA Playbooks
     scm_url: "https://gitlab.com/cab6961310/stoa-gitops.git"
     scm_branch: main
 
@@ -160,7 +160,7 @@ aws_secrets:
 applications:
   control_plane_ui:
     name: control-plane-ui
-    description: "APIM Control Plane UI Application"
+    description: "STOA Control Plane UI Application"
     contact_email: admin@cab-i.com
     identifier:
       key: openIdClaims

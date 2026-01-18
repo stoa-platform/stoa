@@ -3,7 +3,7 @@
 # This script copies the base structure to a new GitLab repo
 set -e
 
-GITLAB_REPO_URL="${GITLAB_REPO_URL:-git@gitlab.com:potomitan/stoa-gitops.git}"
+GITLAB_REPO_URL="${GITLAB_REPO_URL:-git@gitlab.com:cab6961310/stoa-gitops.git}"
 TEMPLATES_DIR="$(dirname "$0")/../gitops-templates"
 TEMP_DIR=$(mktemp -d)
 
@@ -45,9 +45,9 @@ fi
 
 # Create README
 cat > README.md << 'EOF'
-# APIM GitOps Repository
+# STOA GitOps Repository
 
-Source of Truth for APIM Platform tenant configurations.
+Source of Truth for STOA Platform tenant configurations.
 
 ## Structure
 

@@ -30,7 +30,7 @@ spec:
                   namespace_suffix: prod
                   auto_sync: false
           - git:
-              repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}
+              repoURL: ${GITLAB_REPO_URL:https://gitlab.com/cab6961310/stoa-gitops.git}
               revision: ${GITLAB_BRANCH:main}
               directories:
                 - path: tenants/*
@@ -45,7 +45,7 @@ spec:
     spec:
       project: '{{path.basename}}'
       source:
-        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/cab6961310/stoa-gitops.git}
         targetRevision: ${GITLAB_BRANCH:main}
         path: 'tenants/{{path.basename}}'
         helm:

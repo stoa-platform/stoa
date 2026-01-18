@@ -33,13 +33,28 @@ class Settings(BaseSettings):
     KEYCLOAK_ADMIN_CLIENT_ID: str = "admin-cli"
     KEYCLOAK_ADMIN_CLIENT_SECRET: str = ""
 
-    # GitLab Integration (stoa-gitops repository)
+    # GitLab Integration
     GITLAB_URL: str = "https://gitlab.com"
     GITLAB_TOKEN: str = ""
-    GITLAB_PROJECT_ID: str = "77260481"  # cab6961310/stoa-gitops
-    GITLAB_PROJECT_PATH: str = "cab6961310/stoa-gitops"
     GITLAB_WEBHOOK_SECRET: str = ""
     GITLAB_DEFAULT_BRANCH: str = "main"
+
+    # stoa-catalog: APIs/Applications created via Console (source of truth for webMethods)
+    GITLAB_CATALOG_PROJECT_ID: str = ""  # cab6961310/stoa-catalog - set via env
+    GITLAB_CATALOG_PROJECT_PATH: str = "cab6961310/stoa-catalog"
+
+    # stoa-gitops: Infrastructure configs, policies, Ansible playbooks
+    GITLAB_GITOPS_PROJECT_ID: str = "77260481"  # cab6961310/stoa-gitops
+    GITLAB_GITOPS_PROJECT_PATH: str = "cab6961310/stoa-gitops"
+
+    # Legacy aliases (for backward compatibility)
+    @property
+    def GITLAB_PROJECT_ID(self) -> str:
+        return self.GITLAB_CATALOG_PROJECT_ID or self.GITLAB_GITOPS_PROJECT_ID
+
+    @property
+    def GITLAB_PROJECT_PATH(self) -> str:
+        return self.GITLAB_CATALOG_PROJECT_PATH
 
     # Kafka/Redpanda Event Streaming
     KAFKA_BOOTSTRAP_SERVERS: str = "redpanda.stoa-system.svc.cluster.local:9092"

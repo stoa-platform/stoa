@@ -245,18 +245,25 @@ async def mcp_sse_post_endpoint(
     # Get or create session
     session_id = _get_session_id_from_request(request)
 
+    # Debug: Check what auth info we received
+    auth_header = request.headers.get("Authorization", "")[:50] if request.headers.get("Authorization") else "None"
+    print(f"[MCP-AUTH] POST /sse - Auth header: {auth_header}..., user={user.subject if user else 'None'}, has_token={bool(user and user.raw_token)}", flush=True)
+
     if session_id and session_id in _sessions:
         session = _sessions[session_id]
         # Update user token if provided (may have new/refreshed token)
         if user and user.raw_token:
             session.user = user
+            print(f"[MCP-AUTH] Session {session_id[:8]}... updated with user {user.subject}", flush=True)
             logger.info("Resuming MCP session with updated token", session_id=session_id, user=user.subject)
         else:
+            print(f"[MCP-AUTH] Session {session_id[:8]}... resumed, session.user={session.user.subject if session.user else 'None'}", flush=True)
             logger.info("Resuming MCP session", session_id=session_id)
     else:
         session_id = str(uuid.uuid4())
         session = MCPSession(session_id, user)
         _sessions[session_id] = session
+        print(f"[MCP-AUTH] New session {session_id[:8]}... created with user={user.subject if user else 'None'}", flush=True)
         logger.info("Created new MCP session", session_id=session_id, user=user.subject if user else "anonymous")
 
     # Parse the JSON-RPC message

@@ -1,4 +1,11 @@
-"""CAB-660: Database models and repositories for Tool Handlers."""
+"""CAB-660: Database models for MCP Gateway.
+
+ADR-001 Compliance: Repositories removed - MCP Gateway uses CoreAPIClient
+to access data via Control-Plane-API instead of direct database access.
+
+Note: db/models.py is still used for MCP Subscription management
+(tool subscriptions with API keys) and error snapshots.
+"""
 
 from .models import (
     Base,
@@ -10,25 +17,9 @@ from .models import (
     AuditLog,
     UACContract,
 )
-from .repositories import (
-    # DTOs
-    TenantDTO,
-    APIDTO,
-    APIEndpointDTO,
-    SubscriptionDTO,
-    AuditLogDTO,
-    UACContractDTO,
-    # Repositories
-    BaseRepository,
-    TenantRepository,
-    APIRepository,
-    SubscriptionRepository,
-    AuditLogRepository,
-    UACContractRepository,
-)
 
 __all__ = [
-    # Models
+    # Models (still used for MCP subscriptions and migrations)
     "Base",
     "Tenant",
     "User",
@@ -37,18 +28,4 @@ __all__ = [
     "Subscription",
     "AuditLog",
     "UACContract",
-    # DTOs
-    "TenantDTO",
-    "APIDTO",
-    "APIEndpointDTO",
-    "SubscriptionDTO",
-    "AuditLogDTO",
-    "UACContractDTO",
-    # Repositories
-    "BaseRepository",
-    "TenantRepository",
-    "APIRepository",
-    "SubscriptionRepository",
-    "AuditLogRepository",
-    "UACContractRepository",
 ]

@@ -135,9 +135,18 @@ awx:
 # =============================================================================
 gitlab:
   url: "https://gitlab.com"
-  project_path: cab6961310/stoa-gitops
   # token: Set via environment or AWS Secrets Manager
   default_branch: main
+
+  # stoa-catalog: APIs/Applications (created via Console, source for webMethods sync)
+  catalog:
+    project_path: cab6961310/stoa-catalog
+    # Contains: apis/, applications/, subscriptions/
+
+  # stoa-gitops: Infrastructure configs, policies, Ansible playbooks
+  gitops:
+    project_path: cab6961310/stoa-gitops
+    # Contains: tenants/, policies/, ansible/
 
 # =============================================================================
 # AWS SECRETS MANAGER PATHS

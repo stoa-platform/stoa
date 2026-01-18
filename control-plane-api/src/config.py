@@ -39,18 +39,21 @@ class Settings(BaseSettings):
     GITLAB_WEBHOOK_SECRET: str = ""
     GITLAB_DEFAULT_BRANCH: str = "main"
 
-    # stoa-catalog: APIs/Applications created via Console (source of truth for webMethods)
-    GITLAB_CATALOG_PROJECT_ID: str = ""  # cab6961310/stoa-catalog - set via env
+    # GitLab Project ID - primary project for API catalog (stoa-catalog)
+    # This is the main project ID used by git_service for tenant/API operations
+    # Can be set via GITLAB_PROJECT_ID env var (for backward compatibility)
+    # or GITLAB_CATALOG_PROJECT_ID (explicit naming)
+    GITLAB_PROJECT_ID: str = ""  # Set via env - defaults to stoa-catalog
     GITLAB_CATALOG_PROJECT_PATH: str = "cab6961310/stoa-catalog"
 
-    # stoa-gitops: Infrastructure configs, policies, Ansible playbooks
+    # stoa-gitops: Infrastructure configs, policies, Ansible playbooks (secondary)
     GITLAB_GITOPS_PROJECT_ID: str = "77260481"  # cab6961310/stoa-gitops
     GITLAB_GITOPS_PROJECT_PATH: str = "cab6961310/stoa-gitops"
 
-    # Legacy aliases (for backward compatibility)
+    # Alias for catalog project ID (for code clarity)
     @property
-    def GITLAB_PROJECT_ID(self) -> str:
-        return self.GITLAB_CATALOG_PROJECT_ID or self.GITLAB_GITOPS_PROJECT_ID
+    def GITLAB_CATALOG_PROJECT_ID(self) -> str:
+        return self.GITLAB_PROJECT_ID
 
     @property
     def GITLAB_PROJECT_PATH(self) -> str:

@@ -56,6 +56,10 @@ export function APIDetail() {
 
   const handleSubscribe = async (data: SubscribeFormData) => {
     setSubscribeError(null);
+    if (!api) {
+      setSubscribeError('API not loaded');
+      return;
+    }
     try {
       const result = await subscribeMutation.mutateAsync({
         applicationId: data.applicationId,

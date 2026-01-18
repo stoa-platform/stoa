@@ -26,8 +26,10 @@ ARG VITE_MCP_URL=https://mcp.stoa.cab-i.com
 ARG VITE_MCP_TIMEOUT=30000
 
 # API Configuration
-ARG VITE_API_URL=https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0
+# Use direct API URL to bypass webMethods gateway CORS issues
+ARG VITE_API_URL=https://api.stoa.cab-i.com
 ARG VITE_API_TIMEOUT=30000
+ARG VITE_API_DIRECT=true
 
 # Keycloak Authentication - DIFFERENT CLIENT from Console
 ARG VITE_KEYCLOAK_URL=https://auth.stoa.cab-i.com
@@ -41,7 +43,7 @@ ARG VITE_DOCS_URL=https://docs.stoa.cab-i.com
 # Feature Flags
 ARG VITE_ENABLE_MCP_TOOLS=true
 ARG VITE_ENABLE_SUBSCRIPTIONS=true
-ARG VITE_ENABLE_API_CATALOG=false
+ARG VITE_ENABLE_API_CATALOG=true
 ARG VITE_ENABLE_DEBUG=false
 
 # UI Settings
@@ -57,6 +59,7 @@ ENV VITE_BASE_DOMAIN=$VITE_BASE_DOMAIN \
     VITE_MCP_TIMEOUT=$VITE_MCP_TIMEOUT \
     VITE_API_URL=$VITE_API_URL \
     VITE_API_TIMEOUT=$VITE_API_TIMEOUT \
+    VITE_API_DIRECT=$VITE_API_DIRECT \
     VITE_KEYCLOAK_URL=$VITE_KEYCLOAK_URL \
     VITE_KEYCLOAK_REALM=$VITE_KEYCLOAK_REALM \
     VITE_KEYCLOAK_CLIENT_ID=$VITE_KEYCLOAK_CLIENT_ID \

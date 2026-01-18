@@ -110,7 +110,7 @@ else
     echo -e "${YELLOW}GITLAB_TOKEN not set, skipping GitLab sync${NC}"
     echo "Set GITLAB_TOKEN to enable automatic sync"
   else
-    GITLAB_PROJECT="${GITLAB_PROJECT:-stoa-platform/stoa-gitops}"
+    GITLAB_PROJECT="${GITLAB_PROJECT:-cab6961310/stoa-gitops}"
     GITLAB_REPO_DIR=$(mktemp -d)
 
     git clone "https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git" "$GITLAB_REPO_DIR" 2>/dev/null
@@ -236,7 +236,7 @@ echo -e "${GREEN}        Platform Bootstrap Complete!                       ${NC
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 echo "Next steps:"
-echo "  1. Verify configs in GitLab: https://gitlab.com/stoa-platform/stoa-gitops"
+echo "  1. Verify configs in GitLab: https://gitlab.com/cab6961310/stoa-gitops"
 echo "  2. Check ArgoCD sync status: https://argocd.${BASE_DOMAIN}"
 echo "  3. Verify Gateway APIs: https://gateway.${BASE_DOMAIN}"
 echo ""

@@ -1,5 +1,5 @@
 ---
-# Playbook: Bootstrap APIM Platform
+# Playbook: Bootstrap STOA Platform
 # Initializes the platform with:
 #   1. Keycloak OIDC External Authorization Server in Gateway
 #   2. Control-Plane API registration and OIDC configuration
@@ -22,7 +22,7 @@
 #   - GATEWAY_ADMIN_USER: Gateway admin username
 #   - GATEWAY_PASSWORD: Gateway admin password
 
-- name: Bootstrap APIM Platform
+- name: Bootstrap STOA Platform
   hosts: localhost
   connection: local
   gather_facts: false
@@ -53,7 +53,7 @@
       debug:
         msg: |
           ========================================
-          APIM Platform Bootstrap
+          STOA Platform Bootstrap
           ========================================
           Gateway: {{ gateway_url }}
           Keycloak: {{ keycloak_url }}/realms/{{ keycloak_realm }}
@@ -650,7 +650,7 @@
         body_format: json
         body:
           name: "control-plane-ui"
-          description: "APIM Control Plane UI Application"
+          description: "STOA Control Plane UI Application"
           contactEmails:
             - "admin@cab-i.com"
           identifiers:
@@ -685,7 +685,7 @@
         body_format: json
         body:
           name: "control-plane-ui"
-          description: "APIM Control Plane UI Application"
+          description: "STOA Control Plane UI Application"
           contactEmails:
             - "admin@cab-i.com"
           authStrategyIds:
@@ -970,7 +970,7 @@
       debug:
         msg: |
           ========================================
-          APIM Platform Bootstrap Complete
+          STOA Platform Bootstrap Complete
           ========================================
 
           Auth Server: {{ auth_server_name }}

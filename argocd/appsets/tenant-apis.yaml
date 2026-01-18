@@ -18,7 +18,7 @@ metadata:
 spec:
   generators:
     - git:
-        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/cab6961310/stoa-gitops.git}
         revision: ${GITLAB_BRANCH:main}
         directories:
           - path: tenants/*/apis/*
@@ -33,7 +33,7 @@ spec:
     spec:
       project: '{{path[1]}}'
       source:
-        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/PotoMitan1/stoa-gitops.git}
+        repoURL: ${GITLAB_REPO_URL:https://gitlab.com/cab6961310/stoa-gitops.git}
         targetRevision: ${GITLAB_BRANCH:main}
         path: '{{path}}'
         plugin:

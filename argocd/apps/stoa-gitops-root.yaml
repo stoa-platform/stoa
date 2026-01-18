@@ -18,7 +18,7 @@ metadata:
 spec:
   project: stoa-platform
   source:
-    repoURL: https://gitlab.com/cab6961310/apim-aws.git
+    repoURL: https://gitlab.com/cab6961310/stoa-catalog.git
     targetRevision: main
     path: argocd/apps
   destination:

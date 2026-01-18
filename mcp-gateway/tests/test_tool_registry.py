@@ -653,55 +653,53 @@ class TestNewBuiltinTools:
 
     @pytest.mark.asyncio
     async def test_invoke_health_check_default(self, registry: ToolRegistry):
-        """Test invoking stoa_platform_health with default (all) services (CAB-603)."""
+        """Test invoking stoa_platform_health with default (all) components (CAB-603)."""
         await registry.startup()
 
-        # Mock HTTP client to avoid actual network calls
-        mock_response = MagicMock()
-        mock_response.status_code = 200
+        invocation = ToolInvocation(
+            name="stoa_platform_health",
+            arguments={},
+        )
+        result = await registry.invoke(invocation)
 
-        with patch.object(registry._http_client, "get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = mock_response
-
-            invocation = ToolInvocation(
-                name="stoa_platform_health",
-                arguments={},
-            )
-            result = await registry.invoke(invocation)
-
-            assert result.is_error is False
-            assert "services" in result.content[0].text
-            # Should check all 3 services
-            assert mock_get.call_count == 3
+        assert result.is_error is False
+        # New behavior: shows all 5 components including not_configured ones
+        result_text = result.content[0].text
+        assert "components" in result_text
+        assert "overall" in result_text
+        # Should show all 5 components (gateway, keycloak are enabled; database, kafka, opensearch are not_configured)
+        assert "gateway" in result_text
+        assert "keycloak" in result_text
+        assert "database" in result_text
+        assert "kafka" in result_text
+        assert "opensearch" in result_text
+        # Should have not_configured status for disabled components
+        assert "not_configured" in result_text
 
         await registry.shutdown()
 
     @pytest.mark.asyncio
     async def test_invoke_health_check_single_service(self, registry: ToolRegistry):
-        """Test invoking stoa_platform_health for single service (CAB-603)."""
+        """Test invoking stoa_platform_health for single component (CAB-603)."""
         await registry.startup()
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
+        invocation = ToolInvocation(
+            name="stoa_platform_health",
+            arguments={"components": ["gateway"]},  # Use valid component name
+        )
+        result = await registry.invoke(invocation)
 
-        with patch.object(registry._http_client, "get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = mock_response
-
-            invocation = ToolInvocation(
-                name="stoa_platform_health",
-                arguments={"components": ["api"]},
-            )
-            result = await registry.invoke(invocation)
-
-            assert result.is_error is False
-            # Should check components
-            assert mock_get.call_count >= 1
+        assert result.is_error is False
+        result_text = result.content[0].text
+        # Should show gateway component with status
+        assert "gateway" in result_text
+        assert "status" in result_text.lower()
 
         await registry.shutdown()
 
     @pytest.mark.asyncio
     async def test_invoke_health_check_unhealthy_service(self, registry: ToolRegistry):
-        """Test stoa_platform_health with unhealthy service (CAB-603)."""
+        """Test stoa_platform_health with unhealthy component (CAB-603)."""
         await registry.startup()
 
         with patch.object(registry._http_client, "get", new_callable=AsyncMock) as mock_get:
@@ -709,12 +707,14 @@ class TestNewBuiltinTools:
 
             invocation = ToolInvocation(
                 name="stoa_platform_health",
-                arguments={"components": ["api"]},
+                arguments={"components": ["gateway"]},  # Use valid component name
             )
             result = await registry.invoke(invocation)
 
             assert result.is_error is False  # Tool still returns result
-            assert "degraded" in result.content[0].text.lower() or "unhealthy" in result.content[0].text.lower() or "services" in result.content[0].text.lower()
+            # Gateway should show status (unknown/down due to exception)
+            assert "gateway" in result.content[0].text.lower()
+            assert "status" in result.content[0].text.lower()
 
         await registry.shutdown()
 

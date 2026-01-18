@@ -146,7 +146,7 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le, tool) (rate(stoa_mcp_http_request_duration_seconds_bucket{tool=~\"$tool\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le, tool) (rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{tool=~\"$tool\"}[5m])))",
               "legendFormat": "{{tool}}",
               "refId": "A"
             }

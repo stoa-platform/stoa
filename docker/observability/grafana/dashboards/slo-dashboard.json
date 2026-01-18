@@ -44,7 +44,7 @@
       "title": "SLO Documentation",
       "tooltip": "View SLO/SLA Documentation",
       "type": "link",
-      "url": "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/SLO-SLA.md"
+      "url": "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/SLO-SLA.md"
     },
     {
       "asDropdown": false,
@@ -56,7 +56,7 @@
       "title": "Runbooks",
       "tooltip": "View Incident Runbooks",
       "type": "link",
-      "url": "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/tree/main/docs/runbooks"
+      "url": "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/tree/main/docs/runbooks"
     }
   ],
   "liveNow": false,

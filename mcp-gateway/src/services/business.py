@@ -40,13 +40,19 @@ class RequestContext:
 
     @property
     def is_platform_admin(self) -> bool:
-        """Check if user is platform admin."""
-        return "platform-admin" in self.roles
+        """Check if user is platform admin.
+
+        Supports Keycloak role names:
+        - cpi-admin: Keycloak realm role for platform admin
+        - platform-admin: Alternative/legacy name
+        - admin: Simple admin role
+        """
+        return any(role in self.roles for role in ["cpi-admin", "platform-admin", "admin"])
 
     @property
     def is_tenant_admin(self) -> bool:
         """Check if user is tenant admin."""
-        return "tenant-admin" in self.roles or self.is_platform_admin
+        return any(role in self.roles for role in ["tenant-admin"]) or self.is_platform_admin
 
 
 # =============================================================================

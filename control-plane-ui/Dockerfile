@@ -21,8 +21,8 @@ ARG VITE_ENVIRONMENT=production
 ARG VITE_APP_TITLE="STOA Control Plane"
 ARG VITE_APP_VERSION=2.0.0
 
-# API Configuration (via webMethods Gateway for OIDC authentication)
-ARG VITE_API_URL=https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0
+# API Configuration (direct connection to Control-Plane-API)
+ARG VITE_API_URL=https://api.stoa.cab-i.com
 ARG VITE_API_TIMEOUT=30000
 
 # Keycloak Authentication

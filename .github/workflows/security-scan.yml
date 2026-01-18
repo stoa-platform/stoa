@@ -147,6 +147,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read
 
     strategy:
       fail-fast: false
@@ -206,6 +207,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read
 
     steps:
       - name: Checkout repository

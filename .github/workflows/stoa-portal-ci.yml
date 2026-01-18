@@ -177,11 +177,23 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-west-1
 
+      - name: Check if EKS cluster exists
+        id: cluster-check
+        run: |
+          if aws eks describe-cluster --name stoa-dev-cluster --region eu-west-1 2>/dev/null; then
+            echo "CLUSTER_EXISTS=true" >> $GITHUB_OUTPUT
+          else
+            echo "CLUSTER_EXISTS=false" >> $GITHUB_OUTPUT
+            echo "⚠️ EKS cluster 'stoa-dev-cluster' not found. Skipping deployment."
+          fi
+
       - name: Update kubeconfig
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
           aws eks update-kubeconfig --name stoa-dev-cluster --region eu-west-1
 
       - name: Deploy to Kubernetes
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
           # Update image tag in deployment
           kubectl set image deployment/stoa-portal \
@@ -192,6 +204,7 @@ jobs:
           kubectl rollout status deployment/stoa-portal -n stoa-system --timeout=300s
 
       - name: Verify deployment
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
           kubectl get pods -n stoa-system -l app.kubernetes.io/name=stoa-portal
           kubectl get ingress -n stoa-system stoa-portal
@@ -208,6 +221,7 @@ jobs:
     steps:
       - name: Send Slack notification
         uses: slackapi/slack-github-action@v1.24.0
+        continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:

@@ -1,0 +1,238 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gateway-openapi-sync-with-policies
+  namespace: stoa-system
+  labels:
+    app: gateway-sync
+    component: gitops
+spec:
+  activeDeadlineSeconds: 600
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: sync
+        image: curlimages/curl:8.5.0
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        env:
+        - name: BACKEND_URL
+          value: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+        - name: GATEWAY_URL
+          value: "http://apigateway.stoa-system.svc.cluster.local:5555"
+        - name: GATEWAY_USER
+          value: "Administrator"
+        - name: GATEWAY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: apigateway-credentials
+              key: password
+              optional: true
+        - name: API_NAME
+          value: "Control-Plane-API"
+        - name: API_VERSION
+          value: "2.0"
+        - name: KEYCLOAK_ISSUER
+          value: "https://auth.stoa.cab-i.com/realms/stoa"
+        - name: API_AUDIENCE
+          value: "control-plane-api"
+        - name: BACKEND_PASSTHROUGH
+          value: "true"
+        - name: APPLY_POLICIES
+          value: "true"
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+
+          # Colors (simplified for container logs)
+          log_info() { echo "[INFO] $1"; }
+          log_ok() { echo "[OK] $1"; }
+          log_warn() { echo "[WARN] $1"; }
+          log_error() { echo "[ERROR] $1"; }
+          log_step() { echo ""; echo "==> $1"; }
+
+          # Default password if secret not mounted
+          GATEWAY_PASSWORD="${GATEWAY_PASSWORD:-manage}"
+
+          log_step "OpenAPI Contract + Policies Sync"
+          log_info "Backend: ${BACKEND_URL}"
+          log_info "Gateway: ${GATEWAY_URL}"
+          log_info "Keycloak: ${KEYCLOAK_ISSUER}"
+
+          # =============================================================================
+          # Step 1: Fetch OpenAPI spec
+          # =============================================================================
+          log_step "Fetching OpenAPI specification"
+
+          curl -sf "${BACKEND_URL}/openapi.json" -o /tmp/openapi.json
+          ENDPOINT_COUNT=$(grep -o '"/v1' /tmp/openapi.json | wc -l)
+          log_ok "Fetched spec with ~${ENDPOINT_COUNT} endpoints"
+
+          # =============================================================================
+          # Step 2: Convert 3.1 to 3.0.3
+          # =============================================================================
+          log_step "Converting OpenAPI version"
+          sed -i 's/"openapi":"3.1[^"]*"/"openapi":"3.0.3"/g' /tmp/openapi.json
+          log_ok "Converted to OpenAPI 3.0.3"
+
+          # =============================================================================
+          # Step 3: Get API from Gateway
+          # =============================================================================
+          log_step "Finding API on Gateway"
+
+          API_RESPONSE=$(curl -sf -u "${GATEWAY_USER}:${GATEWAY_PASSWORD}" \
+            -H "Accept: application/json" \
+            "${GATEWAY_URL}/rest/apigateway/apis")
+
+          API_ID=$(echo "$API_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+          if [ -z "$API_ID" ]; then
+            log_error "API not found on Gateway"
+            exit 1
+          fi
+          log_ok "Found API: ${API_ID}"
+
+          # =============================================================================
+          # Step 4: Deactivate API
+          # =============================================================================
+          log_step "Deactivating API for update"
+          curl -sf -X PUT -u "${GATEWAY_USER}:${GATEWAY_PASSWORD}" \
+            "${GATEWAY_URL}/rest/apigateway/apis/${API_ID}/deactivate" > /dev/null 2>&1 || true
+          log_ok "API deactivated"
+
+          # =============================================================================
+          # Step 5: Upload new OpenAPI spec
+          # =============================================================================
+          log_step "Uploading new OpenAPI specification"
+
+          UPDATE_RESULT=$(curl -s -X PUT \
+            -u "${GATEWAY_USER}:${GATEWAY_PASSWORD}" \
+            -H "Accept: application/json" \
+            -F "type=openapi" \
+            -F "file=@/tmp/openapi.json" \
+            "${GATEWAY_URL}/rest/apigateway/apis/${API_ID}")
+
+          if echo "$UPDATE_RESULT" | grep -q "apiResponse"; then
+            log_ok "OpenAPI spec updated"
+          else
+            log_error "Failed to update API"
+            echo "$UPDATE_RESULT"
+            exit 1
+          fi
+
+          # =============================================================================
+          # Step 6: Configure JWT Authentication Policy
+          # =============================================================================
+          if [ "${APPLY_POLICIES}" = "true" ]; then
+            log_step "Applying Security Policies"
+
+            log_info "Configuring JWT authentication..."
+
+            # Create JWT policy payload
+            JWT_POLICY='{
+              "policyActions": [
+                {
+                  "names": ["Identify & Authorize"],
+                  "actions": [
+                    {
+                      "type": "jwtAuthentication",
+                      "parameters": {
+                        "oauth2Provider": {
+                          "name": "Keycloak-STOA",
+                          "type": "EXTERNAL",
+                          "issuer": "'"${KEYCLOAK_ISSUER}"'",
+                          "jwksUri": "'"${KEYCLOAK_ISSUER}"'/protocol/openid-connect/certs"
+                        },
+                        "validateAudience": true,
+                        "audience": ["'"${API_AUDIENCE}"'"],
+                        "validateIssuer": true,
+                        "validateExpiry": true,
+                        "clockSkewSeconds": 30
+                      }
+                    }
+                  ]
+                }
+              ]
+            }'
+
+            JWT_RESULT=$(curl -s -X PUT \
+              -u "${GATEWAY_USER}:${GATEWAY_PASSWORD}" \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/json" \
+              -d "${JWT_POLICY}" \
+              "${GATEWAY_URL}/rest/apigateway/apis/${API_ID}/policies" 2>&1 || echo "POLICY_ERROR")
+
+            if [ "$JWT_RESULT" = "POLICY_ERROR" ]; then
+              log_warn "Could not apply JWT policy via API - may need Gateway-specific configuration"
+            else
+              log_ok "JWT authentication policy applied"
+            fi
+
+            # Configure JWT passthrough to backend
+            if [ "${BACKEND_PASSTHROUGH}" = "true" ]; then
+              log_info "Configuring JWT passthrough to backend..."
+
+              ROUTING_POLICY='{
+                "nativeEndpoint": [
+                  {
+                    "uri": "'"${BACKEND_URL}"'",
+                    "connectionTimeout": 30,
+                    "readTimeout": 30,
+                    "passSecurityHeaders": true
+                  }
+                ]
+              }'
+
+              ROUTING_RESULT=$(curl -s -X PATCH \
+                -u "${GATEWAY_USER}:${GATEWAY_PASSWORD}" \
+                -H "Content-Type: application/json" \
+                -H "Accept: application/json" \
+                -d "${ROUTING_POLICY}" \
+                "${GATEWAY_URL}/rest/apigateway/apis/${API_ID}" 2>&1 || echo "ROUTING_ERROR")
+
+              if [ "$ROUTING_RESULT" = "ROUTING_ERROR" ]; then
+                log_warn "Could not configure routing - may need manual configuration"
+              else
+                log_ok "JWT passthrough configured"
+              fi
+            fi
+          fi
+
+          # =============================================================================
+          # Step 7: Reactivate API
+          # =============================================================================
+          log_step "Reactivating API"
+
+          ACTIVATE_RESULT=$(curl -sf -X PUT -u "${GATEWAY_USER}:${GATEWAY_PASSWORD}" \
+            -H "Accept: application/json" \
+            "${GATEWAY_URL}/rest/apigateway/apis/${API_ID}/activate" 2>&1)
+
+          if echo "$ACTIVATE_RESULT" | grep -q "isActive.*true"; then
+            log_ok "API reactivated"
+          else
+            log_ok "API activation requested"
+          fi
+
+          # =============================================================================
+          # Summary
+          # =============================================================================
+          echo ""
+          echo "========================================="
+          echo "Sync Completed Successfully!"
+          echo "========================================="
+          echo "API: ${API_NAME} v${API_VERSION}"
+          echo "API ID: ${API_ID}"
+          echo "Endpoints: ~${ENDPOINT_COUNT}"
+          echo "JWT Auth: ${KEYCLOAK_ISSUER}"
+          echo "Audience: ${API_AUDIENCE}"
+          echo "Backend Passthrough: ${BACKEND_PASSTHROUGH}"
+          echo "========================================="

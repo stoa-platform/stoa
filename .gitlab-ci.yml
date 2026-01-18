@@ -53,12 +53,12 @@ validate-webmethods:
     - when: never
 
 # =============================================================================
-# AWX Reconciliation Jobs (DISABLED - requires AWX_API_TOKEN CI variable)
-# To enable: Add AWX_API_TOKEN in GitLab CI/CD Variables and remove 'when: never'
+# AWX Reconciliation Jobs
+# Requires AWX_API_TOKEN CI variable (Settings > CI/CD > Variables)
 # =============================================================================
 
 # Trigger AWX reconciliation - DEV
-.trigger-awx-dev:
+trigger-awx-dev:
   stage: reconcile
   image: curlimages/curl:8.5.0
   variables:
@@ -98,12 +98,18 @@ validate-webmethods:
         exit 1
       fi
   rules:
-    - when: never
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - webmethods/**/*
+        - ansible/reconcile-webmethods/**/*
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        STOA_ENV: "dev"
   needs:
     - validate-webmethods
 
 # Trigger AWX reconciliation - STAGING
-.trigger-awx-staging:
+trigger-awx-staging:
   stage: reconcile
   image: curlimages/curl:8.5.0
   variables:
@@ -131,12 +137,15 @@ validate-webmethods:
         exit 1
       fi
   rules:
-    - when: never
+    - if: $CI_COMMIT_BRANCH == "staging"
+      changes:
+        - webmethods/**/*
+        - ansible/reconcile-webmethods/**/*
   needs:
     - validate-webmethods
 
-# Trigger AWX reconciliation - PROD
-.trigger-awx-prod:
+# Trigger AWX reconciliation - PROD (manual approval required)
+trigger-awx-prod:
   stage: reconcile
   image: curlimages/curl:8.5.0
   variables:
@@ -164,9 +173,15 @@ validate-webmethods:
         exit 1
       fi
   rules:
-    - when: never
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - webmethods/**/*
+        - ansible/reconcile-webmethods/**/*
+      when: manual
+      allow_failure: false
   needs:
     - validate-webmethods
+    - trigger-awx-dev
 
 # =============================================================================
 # E2E Tests (CAB-652)

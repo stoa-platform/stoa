@@ -1,0 +1,30 @@
+# Crystal Key Quest API
+# The final key to unlock Halliday's Easter Egg
+id: crystal-key-api
+name: crystal-key-api
+display_name: "Crystal Key Quest API"
+version: "1.0.0"
+description: |
+  Final Quest - Obtain the Crystal Key and claim Halliday's Easter Egg.
+  
+  The Crystal Key is hidden within Castle Anorak on the planet Chthonia.
+  Only those who have cleared the first two gates may attempt the final 
+  challenge. Complete Tempest on the legendary difficulty to prove your worth.
+  
+  "Three keys will open three hidden gates. And those who pass all three 
+  will reach the end, where the prize awaits."
+  
+  This is the endgame. Are you ready?
+backend_url: https://httpbin.org/anything
+status: active
+category: Quest
+tags:
+  - portal:published
+  - quest
+  - oasis
+  - rest
+  - final-gate
+  - endgame
+deployments:
+  dev: true
+  staging: false

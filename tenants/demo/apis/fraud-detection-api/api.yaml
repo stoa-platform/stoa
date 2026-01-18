@@ -1,0 +1,31 @@
+# Fraud Detection API
+# Real-time transaction monitoring and risk scoring
+id: fraud-detection-api
+name: fraud-detection-api
+display_name: "Fraud Detection API"
+version: "1.5.0"
+description: |
+  Real-time Fraud Detection and Risk Assessment Service.
+  
+  AI-powered transaction monitoring providing:
+  - Real-time fraud scoring (0-1000 risk scale)
+  - Behavioral analytics and anomaly detection
+  - Device fingerprinting
+  - Geo-location verification
+  - Velocity checks
+  - Machine learning model predictions
+  
+  Integrates with 3D-Secure and card network fraud systems.
+backend_url: https://httpbin.org/anything
+status: active
+category: Security
+tags:
+  - portal:published
+  - security
+  - fraud
+  - rest
+  - ai
+  - risk-management
+deployments:
+  dev: true
+  staging: false

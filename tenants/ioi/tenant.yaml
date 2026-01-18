@@ -1,0 +1,43 @@
+apiVersion: stoa.io/v1
+kind: Tenant
+metadata:
+  name: ioi
+  displayName: "IOI Corporation"
+  description: "Innovative Online Industries - Enterprise APIs"
+  labels:
+    tier: enterprise
+    visibility: public
+    managed-by: gitops
+
+spec:
+  portalVisibility: public
+
+  visibility:
+    allowedRoles:
+      - cpi-admin
+      - tenant-admin
+      - devops
+      - viewer
+    denyRoles: []
+
+  defaultPolicies:
+    - name: rate-limit-standard
+      config:
+        requestsPerMinute: 100
+        burstLimit: 20
+
+  settings:
+    max_apis: 100
+    max_applications: 50
+    environments:
+      - dev
+      - staging
+
+  tags:
+    - enterprise
+    - public
+    - corporate
+
+  contact:
+    team: "IOI Team"
+    email: "ioi@stoa.cab-i.com"

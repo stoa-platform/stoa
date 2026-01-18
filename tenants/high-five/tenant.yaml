@@ -1,0 +1,43 @@
+apiVersion: stoa.io/v1
+kind: Tenant
+metadata:
+  name: high-five
+  displayName: "High Five - The Resistance"
+  description: "High Five clan APIs - Ready Player One themed"
+  labels:
+    tier: business
+    visibility: public
+    managed-by: gitops
+
+spec:
+  portalVisibility: public
+
+  visibility:
+    allowedRoles:
+      - cpi-admin
+      - tenant-admin
+      - devops
+      - viewer
+    denyRoles: []
+
+  defaultPolicies:
+    - name: rate-limit-standard
+      config:
+        requestsPerMinute: 100
+        burstLimit: 20
+
+  settings:
+    max_apis: 100
+    max_applications: 50
+    environments:
+      - dev
+      - staging
+
+  tags:
+    - gaming
+    - public
+    - oasis
+
+  contact:
+    team: "High Five Team"
+    email: "highfive@stoa.cab-i.com"

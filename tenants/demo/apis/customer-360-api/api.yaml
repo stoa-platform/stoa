@@ -1,0 +1,31 @@
+# Customer 360 API
+# Unified customer view across all touchpoints
+id: customer-360-api
+name: customer-360-api
+display_name: "Customer 360 API"
+version: "2.1.0"
+description: |
+  Unified Customer Data Platform API.
+  
+  Provides a 360-degree view of customer relationships:
+  - Complete customer profile
+  - Product holdings across all business lines
+  - Interaction history (branch, digital, call center)
+  - Behavioral insights and preferences
+  - Next-best-action recommendations
+  - Customer lifetime value calculation
+  
+  GDPR compliant with data masking and consent management.
+backend_url: https://httpbin.org/anything
+status: active
+category: CRM
+tags:
+  - portal:published
+  - crm
+  - customer
+  - rest
+  - gdpr
+  - analytics
+deployments:
+  dev: true
+  staging: false

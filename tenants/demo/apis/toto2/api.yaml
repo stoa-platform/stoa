@@ -1,0 +1,64 @@
+backend_url: https://toto.Com
+deployments:
+  dev: false
+  staging: false
+description: '
+
+  ## APIM Control-Plane API
+
+
+  Multi-tenant API Management Control Plane with GitOps integration.
+
+
+  ### Features
+
+
+  - **Multi-tenant Management**: Create and manage isolated API tenants
+
+  - **API Lifecycle**: Full CRUD operations for APIs with versioning
+
+  - **GitOps Integration**: Automatic sync with GitLab repositories
+
+  - **Event-Driven Architecture**: Kafka/Redpanda message bus for async operations
+
+  - **Pipeline Monitoring**: End-to-end tracing of deployments
+
+  - **RBAC**: Role-based access control via Keycloak
+
+
+  ### Changelog
+
+
+  #### v2.0.0 (Current)
+
+  - Added Pipeline Tracing (`/v1/traces`) for end-to-end monitoring
+
+  - Added GitLab Webhook integration (`/webhooks/gitlab`)
+
+  - Added Kafka integration for event-driven deployments
+
+  - Added AWX integration for automated Gateway deployments
+
+
+  #### v1.0.0
+
+  - Initial release with tenant, API, and application management
+
+  - Basic deployment endpoints
+
+  - Git operations (commits, merge requests)
+
+
+  ### Authentication
+
+
+  All endpoints require a valid JWT token from Keycloak (realm: `apim`).
+
+  Include the token in the `Authorization: Bearer <token>` header.
+
+  '
+display_name: Test 2
+id: 170012e3-c0ed-4637-b674-4644bba288cd
+name: toto2
+status: draft
+version: 2.0.0

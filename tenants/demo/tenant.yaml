@@ -1,32 +1,30 @@
 apiVersion: stoa.io/v1
 kind: Tenant
 metadata:
-  name: demo-tenant
+  name: demo
   displayName: "Demo Tenant"
-  description: "Demo tenant for testing and showcasing STOA Platform capabilities"
+  description: "Demo tenant for testing and showcasing APIs"
   labels:
     tier: demo
     visibility: public
     managed-by: gitops
 
 spec:
-  # Portal visibility - public for demo APIs
   portalVisibility: public
 
   visibility:
     allowedRoles:
-      - developer
-      - api-consumer
-      - demo-user
+      - cpi-admin
+      - tenant-admin
+      - devops
+      - viewer
     denyRoles: []
 
   defaultPolicies:
-    - name: require-api-key
-    - name: rate-limit-demo
+    - name: rate-limit-standard
       config:
-        requestsPerMinute: 50
-        burstLimit: 10
-    - name: cors-standard
+        requestsPerMinute: 100
+        burstLimit: 20
 
   settings:
     max_apis: 100
@@ -37,12 +35,9 @@ spec:
 
   tags:
     - demo
-    - sandbox
+    - public
     - testing
 
   contact:
-    team: "STOA Demo Team"
+    team: "Demo Team"
     email: "demo@stoa.cab-i.com"
-
-  created_at: "2024-01-01T00:00:00Z"
-  status: active

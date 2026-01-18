@@ -1,0 +1,26 @@
+# IOI Surveillance API
+# Monitor OASIS activity and track gunter movements
+id: surveillance-api
+name: surveillance-api
+display_name: "IOI Surveillance API"
+version: "1.0.0"
+description: |
+  Innovative Online Industries surveillance and monitoring system.
+  
+  Track avatar movements, monitor communications, and analyze behavioral 
+  patterns across the OASIS. IOI's army of oologists use this data to 
+  gain competitive advantage in the hunt.
+  
+  WARNING: This API is for authorized IOI personnel only.
+backend_url: https://httpbin.org/anything
+status: active
+category: Security
+tags:
+  - portal:published
+  - security
+  - ioi
+  - rest
+  - monitoring
+deployments:
+  dev: true
+  staging: false

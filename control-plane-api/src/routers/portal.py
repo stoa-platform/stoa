@@ -256,6 +256,52 @@ async def get_portal_api(
         raise HTTPException(status_code=500, detail=f"Failed to get API: {str(e)}")
 
 
+@router.get("/apis/{api_id}/openapi")
+async def get_portal_api_openapi(
+    api_id: str,
+    user: User = Depends(get_current_user),
+):
+    """
+    Get OpenAPI specification for an API.
+
+    Returns the OpenAPI spec file (openapi.yaml or openapi.json) from GitLab.
+    """
+    try:
+        if not git_service._project:
+            await git_service.connect()
+
+        # Parse api_id - could be "tenant/api_name" or just "api_name"
+        if "/" in api_id:
+            tenant_id, api_name = api_id.split("/", 1)
+        else:
+            # Search across all tenants
+            api_name = api_id
+            tenant_id = None
+
+            tenants_tree = git_service._project.repository_tree(path="tenants", ref="main")
+            for tenant_item in tenants_tree:
+                if tenant_item["type"] == "tree":
+                    api = await git_service.get_api(tenant_item["name"], api_name)
+                    if api:
+                        tenant_id = tenant_item["name"]
+                        break
+
+        if not tenant_id:
+            raise HTTPException(status_code=404, detail=f"API {api_id} not found")
+
+        spec = await git_service.get_api_openapi_spec(tenant_id, api_name)
+        if not spec:
+            raise HTTPException(status_code=404, detail=f"OpenAPI spec not found for API {api_id}")
+
+        return spec
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get OpenAPI spec for {api_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get OpenAPI spec: {str(e)}")
+
+
 # ============================================================================
 # MCP Server Catalog Endpoints
 # ============================================================================

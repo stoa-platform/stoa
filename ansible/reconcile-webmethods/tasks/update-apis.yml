@@ -1,0 +1,10 @@
+---
+# tasks/update-apis.yml
+# Update existing APIs on webMethods Gateway
+# Preserves policies and re-applies them after contract update
+
+- name: "Update API {{ item }}"
+  ansible.builtin.include_tasks: update-single-api.yml
+  loop: "{{ apis_to_update }}"
+  loop_control:
+    loop_var: api_name_to_update

@@ -1,0 +1,111 @@
+---
+# tasks/update-single-api.yml
+# Update a single API on webMethods Gateway
+# Handles contract update while preserving/reapplying policies
+
+- name: "Get Git definition for {{ api_name_to_update }}"
+  ansible.builtin.set_fact:
+    api_def: "{{ git_apis | selectattr('metadata.name', 'equalto', api_name_to_update) | first }}"
+
+- name: "Get Gateway API ID for {{ api_name_to_update }}"
+  ansible.builtin.set_fact:
+    api_key: "{{ api_def.metadata.name }}:{{ api_def.metadata.version | default('1.0.0') }}"
+
+- name: "Lookup API on Gateway"
+  ansible.builtin.set_fact:
+    gateway_api: "{{ gateway_api_lookup[api_key] }}"
+  when: api_key in gateway_api_lookup
+
+- name: "Skip if API not found on Gateway"
+  ansible.builtin.debug:
+    msg: "⚠️ API {{ api_name_to_update }} not found on Gateway, skipping update"
+  when: gateway_api is not defined
+
+- name: "Update API on Gateway"
+  when:
+    - gateway_api is defined
+    - not dry_run
+  block:
+    # Step 1: Deactivate API for update
+    - name: "Deactivate API {{ api_name_to_update }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ gateway_api.id }}/deactivate"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204]
+        timeout: 30
+      ignore_errors: true
+
+    # Step 2: Resolve backend URL
+    - name: "Resolve backend alias"
+      ansible.builtin.set_fact:
+        backend_url: "{{ git_aliases.aliases[api_def.spec.backend.alias].url }}"
+      when:
+        - git_aliases is defined
+        - api_def.spec.backend.alias is defined
+        - api_def.spec.backend.alias in git_aliases.aliases
+
+    - name: "Use direct backend URL"
+      ansible.builtin.set_fact:
+        backend_url: "{{ api_def.spec.backend.url }}"
+      when:
+        - backend_url is not defined
+        - api_def.spec.backend.url is defined
+
+    # Step 3: Build update payload
+    - name: "Build API update payload"
+      ansible.builtin.set_fact:
+        api_update_payload:
+          apiName: "{{ api_def.metadata.name }}"
+          apiVersion: "{{ api_def.metadata.version | default('1.0.0') }}"
+          apiDescription: "{{ api_def.metadata.description | default('') }}"
+          type: "{{ api_def.spec.type | default('REST') }}"
+          nativeEndpoint:
+            - uri: "{{ backend_url }}{{ api_def.spec.backend.pathPrefix | default('') }}"
+              connectionTimeout: "{{ api_def.spec.backend.connectionTimeout | default(30) }}"
+              readTimeout: "{{ api_def.spec.backend.readTimeout | default(30) }}"
+          isActive: false
+          tags: "{{ api_def.metadata.tags | default([]) }}"
+
+    # Step 4: Update API definition
+    - name: "Update API {{ api_name_to_update }} definition"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ gateway_api.id }}"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body: "{{ api_update_payload | to_json }}"
+        body_format: json
+        status_code: [200]
+        timeout: 60
+      register: update_result
+
+    # Step 5: Reactivate API
+    - name: "Reactivate API {{ api_name_to_update }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ gateway_api.id }}/activate"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+        timeout: 30
+      when: update_result is succeeded
+
+    - name: "Record updated API"
+      ansible.builtin.set_fact:
+        apis_updated: "{{ apis_updated | default([]) + [api_name_to_update] }}"
+
+- name: "Log update {{ api_name_to_update }}"
+  ansible.builtin.debug:
+    msg: "🔄 API {{ api_name_to_update }} updated{{ ' (dry-run)' if dry_run else '' }}"

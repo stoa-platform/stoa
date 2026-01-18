@@ -1,0 +1,247 @@
+{{- if .Values.gatewaySync.enabled }}
+---
+# CronJob for periodic OpenAPI sync to webMethods Gateway
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gateway-openapi-sync
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: gateway-openapi-sync
+    app.kubernetes.io/component: gateway-sync
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.gatewaySync.schedule | default "0 */6 * * *" | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: gateway-openapi-sync
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ .Values.gatewaySync.serviceAccount | default "default" }}
+          containers:
+          - name: sync
+            image: {{ .Values.gatewaySync.image | default "curlimages/curl:8.5.0" }}
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+
+              echo "==> Starting OpenAPI sync to webMethods Gateway"
+
+              # Configuration
+              BACKEND_URL="{{ .Values.gatewaySync.backendUrl | default "http://control-plane-api.stoa-system.svc.cluster.local:8000" }}"
+              GATEWAY_URL="{{ .Values.gatewaySync.gatewayUrl | default "http://apigateway.stoa-system.svc.cluster.local:5555" }}"
+              GATEWAY_USER="${GATEWAY_USER:-Administrator}"
+              GATEWAY_PASSWORD="${GATEWAY_PASSWORD:-manage}"
+              API_NAME="{{ .Values.gatewaySync.apiName | default "Control-Plane-API" }}"
+              API_VERSION="{{ .Values.gatewaySync.apiVersion | default "2.0" }}"
+
+              echo "[INFO] Backend: $BACKEND_URL"
+              echo "[INFO] Gateway: $GATEWAY_URL"
+              echo "[INFO] API: $API_NAME v$API_VERSION"
+
+              # Fetch OpenAPI spec
+              echo "==> Fetching OpenAPI spec from backend..."
+              if ! curl -sf "$BACKEND_URL/openapi.json" -o /tmp/openapi.json; then
+                echo "[ERROR] Failed to fetch OpenAPI spec"
+                exit 1
+              fi
+
+              SPEC_VERSION=$(cat /tmp/openapi.json | grep -o '"openapi":"[^"]*"' | cut -d'"' -f4)
+              ENDPOINT_COUNT=$(cat /tmp/openapi.json | grep -o '"/' | wc -l)
+              echo "[OK] Fetched OpenAPI $SPEC_VERSION with ~$ENDPOINT_COUNT paths"
+
+              # Convert 3.1 to 3.0 if needed (simple sed replacement)
+              if echo "$SPEC_VERSION" | grep -q "3.1"; then
+                echo "[WARN] Converting OpenAPI 3.1 to 3.0.3..."
+                sed -i 's/"openapi":"3.1[^"]*"/"openapi":"3.0.3"/g' /tmp/openapi.json
+              fi
+
+              # Get API ID
+              echo "==> Finding API on Gateway..."
+              API_ID=$(curl -sf -u "$GATEWAY_USER:$GATEWAY_PASSWORD" \
+                -H "Accept: application/json" \
+                "$GATEWAY_URL/rest/apigateway/apis" | \
+                grep -o '"id":"[^"]*"[^}]*"apiName":"'"$API_NAME"'"[^}]*"apiVersion":"'"$API_VERSION"'"' | \
+                head -1 | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+
+              if [ -z "$API_ID" ]; then
+                echo "[ERROR] API '$API_NAME' v$API_VERSION not found on Gateway"
+                exit 1
+              fi
+              echo "[OK] Found API: $API_ID"
+
+              # Deactivate API
+              echo "==> Deactivating API for update..."
+              curl -sf -X PUT -u "$GATEWAY_USER:$GATEWAY_PASSWORD" \
+                "$GATEWAY_URL/rest/apigateway/apis/$API_ID/deactivate" > /dev/null 2>&1 || true
+
+              # Update API
+              echo "==> Uploading new OpenAPI spec..."
+              UPDATE_RESULT=$(curl -sf -X PUT \
+                -u "$GATEWAY_USER:$GATEWAY_PASSWORD" \
+                -H "Accept: application/json" \
+                -F "type=openapi" \
+                -F "file=@/tmp/openapi.json" \
+                "$GATEWAY_URL/rest/apigateway/apis/$API_ID" 2>&1)
+
+              if echo "$UPDATE_RESULT" | grep -q '"responseStatus":"SUCCESS"'; then
+                echo "[OK] API updated successfully"
+              else
+                echo "[ERROR] Failed to update API"
+                echo "$UPDATE_RESULT"
+                exit 1
+              fi
+
+              # Reactivate API
+              echo "==> Reactivating API..."
+              curl -sf -X PUT -u "$GATEWAY_USER:$GATEWAY_PASSWORD" \
+                -H "Accept: application/json" \
+                "$GATEWAY_URL/rest/apigateway/apis/$API_ID/activate" > /dev/null
+
+              echo "[OK] API reactivated"
+              echo "==> OpenAPI sync completed successfully"
+
+            env:
+            - name: GATEWAY_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gatewaySync.credentialsSecret | default "apigateway-credentials" }}
+                  key: username
+                  optional: true
+            - name: GATEWAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gatewaySync.credentialsSecret | default "apigateway-credentials" }}
+                  key: password
+                  optional: true
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 200m
+                memory: 128Mi
+---
+# Job template for manual/triggered sync
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gateway-openapi-sync-manual
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: gateway-openapi-sync
+    app.kubernetes.io/component: gateway-sync
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+  annotations:
+    # This job is for manual triggering - delete before recreating
+    "helm.sh/hook": "post-upgrade,post-install"
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": "before-hook-creation"
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gateway-openapi-sync
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: sync
+        image: {{ .Values.gatewaySync.image | default "curlimages/curl:8.5.0" }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+
+          echo "==> Post-deploy OpenAPI sync to webMethods Gateway"
+
+          # Wait for API to be ready
+          echo "[INFO] Waiting for Control-Plane-API to be ready..."
+          BACKEND_URL="{{ .Values.gatewaySync.backendUrl | default "http://control-plane-api.stoa-system.svc.cluster.local:8000" }}"
+          for i in $(seq 1 30); do
+            if curl -sf "$BACKEND_URL/health/live" > /dev/null 2>&1; then
+              echo "[OK] Backend is ready"
+              break
+            fi
+            echo "[INFO] Waiting... ($i/30)"
+            sleep 5
+          done
+
+          # Run sync (same script as CronJob)
+          GATEWAY_URL="{{ .Values.gatewaySync.gatewayUrl | default "http://apigateway.stoa-system.svc.cluster.local:5555" }}"
+          GATEWAY_USER="${GATEWAY_USER:-Administrator}"
+          GATEWAY_PASSWORD="${GATEWAY_PASSWORD:-manage}"
+          API_NAME="{{ .Values.gatewaySync.apiName | default "Control-Plane-API" }}"
+          API_VERSION="{{ .Values.gatewaySync.apiVersion | default "2.0" }}"
+
+          # Fetch OpenAPI spec
+          echo "==> Fetching OpenAPI spec..."
+          if ! curl -sf "$BACKEND_URL/openapi.json" -o /tmp/openapi.json; then
+            echo "[ERROR] Failed to fetch OpenAPI spec"
+            exit 1
+          fi
+
+          # Convert 3.1 to 3.0
+          sed -i 's/"openapi":"3.1[^"]*"/"openapi":"3.0.3"/g' /tmp/openapi.json
+
+          # Get API ID
+          API_ID=$(curl -sf -u "$GATEWAY_USER:$GATEWAY_PASSWORD" \
+            -H "Accept: application/json" \
+            "$GATEWAY_URL/rest/apigateway/apis" | \
+            grep -o '"id":"[^"]*"[^}]*"apiName":"'"$API_NAME"'"' | \
+            head -1 | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+
+          if [ -z "$API_ID" ]; then
+            echo "[WARN] API not found - skipping sync"
+            exit 0
+          fi
+
+          # Deactivate, Update, Reactivate
+          curl -sf -X PUT -u "$GATEWAY_USER:$GATEWAY_PASSWORD" \
+            "$GATEWAY_URL/rest/apigateway/apis/$API_ID/deactivate" > /dev/null 2>&1 || true
+
+          curl -sf -X PUT -u "$GATEWAY_USER:$GATEWAY_PASSWORD" \
+            -H "Accept: application/json" \
+            -F "type=openapi" \
+            -F "file=@/tmp/openapi.json" \
+            "$GATEWAY_URL/rest/apigateway/apis/$API_ID" > /dev/null
+
+          curl -sf -X PUT -u "$GATEWAY_USER:$GATEWAY_PASSWORD" \
+            "$GATEWAY_URL/rest/apigateway/apis/$API_ID/activate" > /dev/null
+
+          echo "[OK] Gateway OpenAPI sync completed"
+
+        env:
+        - name: GATEWAY_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.gatewaySync.credentialsSecret | default "apigateway-credentials" }}
+              key: username
+              optional: true
+        - name: GATEWAY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.gatewaySync.credentialsSecret | default "apigateway-credentials" }}
+              key: password
+              optional: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+{{- end }}

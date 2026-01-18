@@ -10,6 +10,7 @@ Provides health checking with:
 """
 
 import asyncio
+import os
 import time
 from enum import Enum
 from typing import Optional
@@ -21,17 +22,20 @@ from aiokafka.errors import KafkaConnectionError
 
 
 class HealthStatus(str, Enum):
-    """Tri-state health status matching v2.0 system prompt spec."""
+    """Health status matching v2.0 system prompt spec."""
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     DOWN = "down"
     UNKNOWN = "unknown"
+    NOT_CONFIGURED = "not_configured"  # Component not yet deployed/configured
 
 
 class ComponentHealth(BaseModel):
     """Health status for a single component."""
     status: HealthStatus
     latency_ms: Optional[float] = Field(None, description="Response time in milliseconds")
+    description: Optional[str] = Field(None, description="Component description")
+    message: Optional[str] = Field(None, description="Human-readable status message")
     error: Optional[str] = Field(None, description="Error message if status is down")
     details: Optional[dict] = Field(None, description="Additional component-specific details")
 
@@ -45,15 +49,19 @@ class PlatformHealth(BaseModel):
     @property
     def summary(self) -> str:
         """Human-readable summary for LLM responses."""
-        statuses = [c.status for c in self.components.values()]
-        if all(s == HealthStatus.HEALTHY for s in statuses):
-            return "All systems operational"
-        elif HealthStatus.DOWN in statuses:
-            down = [k for k, v in self.components.items() if v.status == HealthStatus.DOWN]
-            return f"Service degraded: {', '.join(down)} down"
-        else:
-            degraded = [k for k, v in self.components.items() if v.status == HealthStatus.DEGRADED]
-            return f"Performance issues: {', '.join(degraded)} degraded"
+        statuses = {name: c.status for name, c in self.components.items()}
+
+        down = [k for k, v in statuses.items() if v == HealthStatus.DOWN]
+        not_configured = [k for k, v in statuses.items() if v == HealthStatus.NOT_CONFIGURED]
+        degraded = [k for k, v in statuses.items() if v == HealthStatus.DEGRADED]
+
+        if down:
+            return f"Service down: {', '.join(down)}"
+        if not_configured:
+            return f"{len(not_configured)} components not configured: {', '.join(not_configured)}"
+        if degraded:
+            return f"Performance issues: {', '.join(degraded)}"
+        return "All systems operational"
 
 
 class HealthThresholds(BaseModel):
@@ -63,13 +71,70 @@ class HealthThresholds(BaseModel):
 
 
 # Default thresholds per component (from CAB-658 spec)
+# Note: External services (mcp/webmethods/keycloak) have higher thresholds for ALB round-trip
+# Internal services (database/kafka/opensearch) have moderate thresholds for K8s network
 DEFAULT_THRESHOLDS: dict[str, HealthThresholds] = {
-    "gateway": HealthThresholds(healthy_max=100, degraded_max=500),
-    "keycloak": HealthThresholds(healthy_max=200, degraded_max=1000),
-    "database": HealthThresholds(healthy_max=50, degraded_max=200),
-    "kafka": HealthThresholds(healthy_max=100, degraded_max=500),
-    "opensearch": HealthThresholds(healthy_max=100, degraded_max=500),
+    "mcp": HealthThresholds(healthy_max=500, degraded_max=2000),
+    "webmethods": HealthThresholds(healthy_max=500, degraded_max=2000),
+    "keycloak": HealthThresholds(healthy_max=500, degraded_max=2000),
+    "database": HealthThresholds(healthy_max=200, degraded_max=1000),
+    "kafka": HealthThresholds(healthy_max=200, degraded_max=1000),
+    "opensearch": HealthThresholds(healthy_max=200, degraded_max=1000),
 }
+
+
+def get_component_config() -> dict[str, dict]:
+    """Build component configuration with auto-detection via environment variables.
+
+    Core components (mcp, webmethods, keycloak) are always enabled.
+    Optional components (database, kafka, opensearch) are enabled if their
+    corresponding environment variable is set.
+
+    Environment Variables:
+    - STOA_DATABASE_URL: Enable PostgreSQL health check
+    - STOA_KAFKA_BOOTSTRAP: Enable Kafka health check
+    - STOA_OPENSEARCH_URL: Enable OpenSearch health check
+    """
+    return {
+        "mcp": {
+            "enabled": True,  # Always enabled (it's us)
+            "url_attr": "mcp_url",
+            "description": "STOA MCP Server",
+        },
+        "webmethods": {
+            "enabled": True,  # Always enabled (core dependency)
+            "url_attr": "webmethods_url",
+            "description": "webMethods API Gateway",
+        },
+        "keycloak": {
+            "enabled": True,  # Always enabled (auth)
+            "url_attr": "keycloak_url",
+            "description": "Keycloak Auth Server",
+        },
+        "database": {
+            "enabled": bool(os.getenv("STOA_DATABASE_URL")),
+            "url_attr": "database_url",
+            "description": "PostgreSQL Database",
+            "message": "Set STOA_DATABASE_URL to enable",
+        },
+        "kafka": {
+            "enabled": bool(os.getenv("STOA_KAFKA_BOOTSTRAP")),
+            "url_attr": "kafka_bootstrap",
+            "description": "Kafka Event Bus",
+            "message": "Set STOA_KAFKA_BOOTSTRAP to enable",
+        },
+        "opensearch": {
+            "enabled": bool(os.getenv("STOA_OPENSEARCH_URL")),
+            "url_attr": "opensearch_url",
+            "description": "OpenSearch Analytics",
+            "message": "Set STOA_OPENSEARCH_URL to enable",
+        },
+    }
+
+
+# Component configuration - evaluated at module load time
+# Re-call get_component_config() for runtime re-evaluation if needed
+COMPONENT_CONFIG: dict[str, dict] = get_component_config()
 
 
 def determine_status(latency_ms: float, thresholds: HealthThresholds) -> HealthStatus:
@@ -90,12 +155,13 @@ class HealthChecker:
         checker = HealthChecker(config)
         health = await checker.check_all()
         # or
-        health = await checker.check_components(["gateway", "database"])
+        health = await checker.check_components(["webmethods", "database"])
     """
 
     def __init__(
         self,
-        gateway_url: str = "",
+        mcp_url: str = "",
+        webmethods_url: str = "",
         keycloak_url: str = "",
         keycloak_realm: str = "stoa",
         database_url: str = "",
@@ -104,7 +170,8 @@ class HealthChecker:
         timeout_seconds: float = 5.0,
         thresholds: Optional[dict[str, HealthThresholds]] = None,
     ):
-        self.gateway_url = gateway_url
+        self.mcp_url = mcp_url
+        self.webmethods_url = webmethods_url
         self.keycloak_url = keycloak_url
         self.keycloak_realm = keycloak_realm
         self.database_url = database_url
@@ -114,66 +181,89 @@ class HealthChecker:
         self.thresholds = thresholds or DEFAULT_THRESHOLDS
 
     async def check_all(self) -> PlatformHealth:
-        """Check all components in parallel."""
-        return await self.check_components(list(DEFAULT_THRESHOLDS.keys()))
+        """Check all components in parallel, including not_configured ones."""
+        # Use dynamic config to pick up env var changes at runtime
+        component_config = get_component_config()
+        return await self.check_components(list(component_config.keys()))
 
     async def check_components(self, components: list[str]) -> PlatformHealth:
-        """Check specified components in parallel."""
+        """Check specified components in parallel, including not_configured ones."""
         from datetime import datetime, timezone
+
+        # Get dynamic config to pick up env var changes at runtime
+        component_config = get_component_config()
 
         # Map component names to check functions
         check_funcs = {
-            "gateway": self._check_gateway,
+            "mcp": self._check_mcp,
+            "webmethods": self._check_webmethods,
             "keycloak": self._check_keycloak,
             "database": self._check_database,
             "kafka": self._check_kafka,
             "opensearch": self._check_opensearch,
         }
 
-        # Check which components are configured
-        configured = {
-            "gateway": bool(self.gateway_url),
+        # Check which components have URLs configured
+        url_configured = {
+            "mcp": bool(self.mcp_url),
+            "webmethods": bool(self.webmethods_url),
             "keycloak": bool(self.keycloak_url),
             "database": bool(self.database_url),
             "kafka": bool(self.kafka_bootstrap),
             "opensearch": bool(self.opensearch_url),
         }
 
-        # Run checks in parallel (only for configured components)
+        # Separate enabled (will check) vs disabled (not_configured) components
         tasks = []
-        valid_components = []
-        for comp in components:
-            if comp in check_funcs:
-                if configured.get(comp, False):
-                    tasks.append(check_funcs[comp]())
-                    valid_components.append(comp)
-                else:
-                    # Component not configured - skip silently
-                    pass
+        enabled_components = []
+        not_configured_components = []
 
+        for comp in components:
+            if comp not in component_config:
+                continue
+
+            config = component_config[comp]
+
+            # Check if component is enabled AND has URL configured
+            if config.get("enabled", False) and url_configured.get(comp, False):
+                if comp in check_funcs:
+                    tasks.append(check_funcs[comp]())
+                    enabled_components.append(comp)
+            else:
+                # Component disabled or no URL - mark as not_configured
+                not_configured_components.append(comp)
+
+        # Run checks in parallel for enabled components
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Build response
+        # Build response with all components
         component_health: dict[str, ComponentHealth] = {}
-        for comp, result in zip(valid_components, results):
+
+        # Add enabled components with their check results
+        for comp, result in zip(enabled_components, results):
+            config = component_config.get(comp, {})
             if isinstance(result, Exception):
                 component_health[comp] = ComponentHealth(
                     status=HealthStatus.UNKNOWN,
+                    description=config.get("description"),
                     error=f"Check failed: {str(result)}"
                 )
             else:
+                # Add description from config to the result
+                result.description = config.get("description")
                 component_health[comp] = result
 
-        # Determine overall status
-        statuses = [h.status for h in component_health.values()]
-        if HealthStatus.DOWN in statuses:
-            overall = HealthStatus.DOWN
-        elif HealthStatus.DEGRADED in statuses:
-            overall = HealthStatus.DEGRADED
-        elif HealthStatus.UNKNOWN in statuses:
-            overall = HealthStatus.UNKNOWN
-        else:
-            overall = HealthStatus.HEALTHY
+        # Add not_configured components
+        for comp in not_configured_components:
+            config = component_config.get(comp, {})
+            component_health[comp] = ComponentHealth(
+                status=HealthStatus.NOT_CONFIGURED,
+                description=config.get("description"),
+                message=config.get("message", f"{comp} not configured")
+            )
+
+        # Determine overall status (priority: DOWN > DEGRADED > NOT_CONFIGURED > UNKNOWN > HEALTHY)
+        overall = self._compute_overall(component_health)
 
         return PlatformHealth(
             overall=overall,
@@ -181,8 +271,37 @@ class HealthChecker:
             checked_at=datetime.now(timezone.utc).isoformat()
         )
 
-    async def _check_gateway(self) -> ComponentHealth:
-        """Check webMethods Gateway via root endpoint.
+    def _compute_overall(self, components: dict[str, ComponentHealth]) -> HealthStatus:
+        """Compute overall health status from components.
+
+        Priority: DOWN > DEGRADED > NOT_CONFIGURED > UNKNOWN > HEALTHY
+        """
+        statuses = [c.status for c in components.values()]
+
+        if HealthStatus.DOWN in statuses:
+            return HealthStatus.DOWN
+        if HealthStatus.DEGRADED in statuses:
+            return HealthStatus.DEGRADED
+        if HealthStatus.NOT_CONFIGURED in statuses:
+            # Overall degraded if some components not configured
+            return HealthStatus.DEGRADED
+        if HealthStatus.UNKNOWN in statuses:
+            return HealthStatus.UNKNOWN
+        return HealthStatus.HEALTHY
+
+    async def _check_mcp(self) -> ComponentHealth:
+        """Check STOA MCP Server via /healthz (public endpoint).
+
+        Note: /health/live is internal-only (403 for external).
+        /healthz is the public health endpoint.
+        """
+        return await self._check_http_endpoint(
+            url=f"{self.mcp_url}/healthz",
+            component="mcp"
+        )
+
+    async def _check_webmethods(self) -> ComponentHealth:
+        """Check webMethods Gateway via root endpoint (/).
 
         The gateway returns 302 redirect to /apigatewayui when healthy.
         The /health endpoint is only accessible from internal network.
@@ -190,13 +309,13 @@ class HealthChecker:
         start = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=False) as client:
-                response = await client.get(f"{self.gateway_url}/")
+                response = await client.get(f"{self.webmethods_url}/")
                 latency_ms = (time.perf_counter() - start) * 1000
 
                 # Gateway returns 302 redirect when healthy, or 200 for some configs
                 if response.status_code in [200, 302]:
                     return ComponentHealth(
-                        status=self._latency_status(latency_ms, "gateway"),
+                        status=self._latency_status(latency_ms, "webmethods"),
                         latency_ms=round(latency_ms, 2),
                         details={"redirect": response.status_code == 302}
                     )

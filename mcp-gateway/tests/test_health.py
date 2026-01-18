@@ -84,6 +84,7 @@ class TestHealthStatus:
         assert HealthStatus.DEGRADED.value == "degraded"
         assert HealthStatus.DOWN.value == "down"
         assert HealthStatus.UNKNOWN.value == "unknown"
+        assert HealthStatus.NOT_CONFIGURED.value == "not_configured"
 
 
 class TestHealthThresholds:
@@ -166,7 +167,8 @@ class TestPlatformHealth:
         health = PlatformHealth(
             overall=HealthStatus.HEALTHY,
             components={
-                "gateway": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=12),
+                "mcp": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=10),
+                "webmethods": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=62),
                 "keycloak": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=45),
             },
             checked_at="2026-01-18T14:30:00Z",
@@ -180,13 +182,13 @@ class TestPlatformHealth:
         health = PlatformHealth(
             overall=HealthStatus.DEGRADED,
             components={
-                "gateway": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=12),
+                "webmethods": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=12),
                 "kafka": ComponentHealth(status=HealthStatus.DEGRADED, latency_ms=230),
             },
             checked_at="2026-01-18T14:30:00Z",
         )
         assert "kafka" in health.summary
-        assert "degraded" in health.summary
+        assert "Performance issues" in health.summary
 
     def test_platform_health_summary_down(self):
         """Test summary when some components are down."""
@@ -195,7 +197,7 @@ class TestPlatformHealth:
         health = PlatformHealth(
             overall=HealthStatus.DOWN,
             components={
-                "gateway": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=12),
+                "webmethods": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=12),
                 "database": ComponentHealth(
                     status=HealthStatus.DOWN,
                     error="Connection refused",
@@ -205,6 +207,55 @@ class TestPlatformHealth:
         )
         assert "database" in health.summary
         assert "down" in health.summary
+
+    def test_platform_health_summary_not_configured(self):
+        """Test summary when some components are not configured."""
+        from src.services.health import PlatformHealth, ComponentHealth, HealthStatus
+
+        health = PlatformHealth(
+            overall=HealthStatus.DEGRADED,
+            components={
+                "mcp": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=10),
+                "webmethods": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=62),
+                "keycloak": ComponentHealth(status=HealthStatus.HEALTHY, latency_ms=50),
+                "database": ComponentHealth(
+                    status=HealthStatus.NOT_CONFIGURED,
+                    message="PostgreSQL not configured - planned for Cycle 4",
+                ),
+                "kafka": ComponentHealth(
+                    status=HealthStatus.NOT_CONFIGURED,
+                    message="Kafka not configured - planned for Cycle 5",
+                ),
+            },
+            checked_at="2026-01-18T14:30:00Z",
+        )
+        assert "not configured" in health.summary
+        assert "database" in health.summary
+        assert "kafka" in health.summary
+        assert "2 components" in health.summary
+
+    def test_platform_health_with_description(self):
+        """Test ComponentHealth with description field."""
+        from src.services.health import PlatformHealth, ComponentHealth, HealthStatus
+
+        health = PlatformHealth(
+            overall=HealthStatus.HEALTHY,
+            components={
+                "mcp": ComponentHealth(
+                    status=HealthStatus.HEALTHY,
+                    latency_ms=10,
+                    description="STOA MCP Server",
+                ),
+                "webmethods": ComponentHealth(
+                    status=HealthStatus.HEALTHY,
+                    latency_ms=62,
+                    description="webMethods API Gateway",
+                ),
+            },
+            checked_at="2026-01-18T14:30:00Z",
+        )
+        assert health.components["mcp"].description == "STOA MCP Server"
+        assert health.components["webmethods"].description == "webMethods API Gateway"
 
 
 class TestHealthChecker:
@@ -216,7 +267,8 @@ class TestHealthChecker:
 
         checker = HealthChecker()
         assert checker.timeout == 5.0
-        assert "gateway" in checker.thresholds
+        assert "mcp" in checker.thresholds
+        assert "webmethods" in checker.thresholds
         assert "keycloak" in checker.thresholds
 
     def test_health_checker_custom_config(self):
@@ -224,10 +276,12 @@ class TestHealthChecker:
         from src.services.health import HealthChecker
 
         checker = HealthChecker(
-            gateway_url="http://custom:8080",
+            mcp_url="http://mcp:8080",
+            webmethods_url="http://gateway:8080",
             timeout_seconds=10.0,
         )
-        assert checker.gateway_url == "http://custom:8080"
+        assert checker.mcp_url == "http://mcp:8080"
+        assert checker.webmethods_url == "http://gateway:8080"
         assert checker.timeout == 10.0
 
     @pytest.mark.asyncio
@@ -239,3 +293,52 @@ class TestHealthChecker:
         health = await checker.check_components(["invalid_component"])
         # Invalid components are silently ignored
         assert len(health.components) == 0
+
+    @pytest.mark.asyncio
+    async def test_check_all_includes_six_components(self):
+        """Test that check_all returns all 6 components."""
+        from src.services.health import HealthChecker, get_component_config
+
+        checker = HealthChecker()
+        # All 6 components should be in get_component_config()
+        component_config = get_component_config()
+        assert len(component_config) == 6
+        assert "mcp" in component_config
+        assert "webmethods" in component_config
+        assert "keycloak" in component_config
+        assert "database" in component_config
+        assert "kafka" in component_config
+        assert "opensearch" in component_config
+
+    def test_component_config_auto_detection(self, monkeypatch):
+        """Test that optional components are auto-detected via env vars."""
+        from src.services.health import get_component_config
+
+        # Without env vars, optional components should be disabled
+        monkeypatch.delenv("STOA_DATABASE_URL", raising=False)
+        monkeypatch.delenv("STOA_KAFKA_BOOTSTRAP", raising=False)
+        monkeypatch.delenv("STOA_OPENSEARCH_URL", raising=False)
+
+        config = get_component_config()
+        assert config["database"]["enabled"] is False
+        assert config["kafka"]["enabled"] is False
+        assert config["opensearch"]["enabled"] is False
+
+        # Core components should always be enabled
+        assert config["mcp"]["enabled"] is True
+        assert config["webmethods"]["enabled"] is True
+        assert config["keycloak"]["enabled"] is True
+
+    def test_component_config_with_env_vars(self, monkeypatch):
+        """Test that optional components are enabled when env vars are set."""
+        from src.services.health import get_component_config
+
+        # Set env vars
+        monkeypatch.setenv("STOA_DATABASE_URL", "postgresql://localhost/test")
+        monkeypatch.setenv("STOA_KAFKA_BOOTSTRAP", "kafka:9092")
+        monkeypatch.setenv("STOA_OPENSEARCH_URL", "http://opensearch:9200")
+
+        config = get_component_config()
+        assert config["database"]["enabled"] is True
+        assert config["kafka"]["enabled"] is True
+        assert config["opensearch"]["enabled"] is True

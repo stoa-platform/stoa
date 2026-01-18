@@ -1803,14 +1803,25 @@ class ToolRegistry:
 
         CAB-658: Enhanced health check with:
         - Per-component latency measurement (ms)
-        - Tri-state status: healthy / degraded / down / unknown
+        - Tri-state status: healthy / degraded / down / unknown / not_configured
         - Async parallel checks for performance
         - Configurable thresholds per component
+
+        Environment Variables:
+        - STOA_MCP_URL: MCP Server URL (default: https://mcp.{base_domain})
+        - STOA_WEBMETHODS_URL: webMethods Gateway URL (default: https://gateway.{base_domain})
+        - STOA_KEYCLOAK_URL: Keycloak URL (default: https://auth.{base_domain})
+        - STOA_KEYCLOAK_REALM: Keycloak realm (default: stoa)
+        - STOA_DATABASE_URL: PostgreSQL connection string
+        - STOA_KAFKA_BOOTSTRAP: Kafka bootstrap servers
+        - STOA_OPENSEARCH_URL: OpenSearch URL
+        - STOA_HEALTH_TIMEOUT: Health check timeout in seconds (default: 5.0)
         """
         # Create health checker with environment-based configuration
-        # Components without URLs configured will be skipped
+        # Components without URLs configured will show as not_configured
         checker = HealthChecker(
-            gateway_url=os.getenv("STOA_GATEWAY_URL", f"https://gateway.{settings.base_domain}"),
+            mcp_url=os.getenv("STOA_MCP_URL", f"https://mcp.{settings.base_domain}"),
+            webmethods_url=os.getenv("STOA_WEBMETHODS_URL", f"https://gateway.{settings.base_domain}"),
             keycloak_url=os.getenv("STOA_KEYCLOAK_URL", f"https://auth.{settings.base_domain}"),
             keycloak_realm=os.getenv("STOA_KEYCLOAK_REALM", getattr(settings, "keycloak_realm", "stoa")),
             database_url=os.getenv("STOA_DATABASE_URL", os.getenv("DATABASE_URL", "")),
@@ -1832,7 +1843,9 @@ class ToolRegistry:
             "components": {
                 name: {
                     "status": comp.status.value,
-                    "latency_ms": comp.latency_ms,
+                    **({"latency_ms": comp.latency_ms} if comp.latency_ms is not None else {}),
+                    **({"description": comp.description} if comp.description else {}),
+                    **({"message": comp.message} if comp.message else {}),
                     **({"error": comp.error} if comp.error else {}),
                     **({"details": comp.details} if comp.details else {}),
                 }
@@ -1852,13 +1865,15 @@ class ToolRegistry:
         """
         # Map legacy service names to new component names
         component_map = {
-            "api": "gateway",  # API is checked via gateway
-            "gateway": "gateway",
+            "api": "webmethods",  # API is checked via webMethods gateway
+            "gateway": "webmethods",  # Legacy gateway -> webmethods
+            "webmethods": "webmethods",
             "auth": "keycloak",
+            "mcp": "mcp",
         }
 
         if service == "all":
-            components = ["gateway", "keycloak", "database", "kafka"]
+            components = ["mcp", "webmethods", "keycloak", "database", "kafka", "opensearch"]
         else:
             components = [component_map.get(service, service)]
 

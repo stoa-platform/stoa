@@ -179,7 +179,7 @@ jobs:
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name apim-dev-cluster --region ${{ env.AWS_REGION }}
+          aws eks update-kubeconfig --name stoa-dev-cluster --region ${{ env.AWS_REGION }}
 
       - name: Update deployment image
         run: |

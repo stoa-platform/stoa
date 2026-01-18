@@ -31,12 +31,12 @@ spec:
           annotations:
             summary: "MCP Gateway high error rate"
             description: "MCP Gateway error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/mcp-gateway-errors.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/mcp-gateway-errors.md"
 
         - alert: MCPGatewayHighLatency
           expr: |
             histogram_quantile(0.95,
-              sum(rate(stoa_mcp_http_request_duration_seconds_bucket[5m])) by (le)
+              sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)
             ) > 2
           for: 5m
           labels:
@@ -45,7 +45,7 @@ spec:
           annotations:
             summary: "MCP Gateway high latency"
             description: "MCP Gateway P95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/mcp-gateway-latency.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/mcp-gateway-latency.md"
 
         - alert: MCPGatewayDown
           expr: |
@@ -57,7 +57,7 @@ spec:
           annotations:
             summary: "MCP Gateway is down"
             description: "MCP Gateway has been down for more than 1 minute"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/mcp-gateway-down.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/mcp-gateway-down.md"
 
         - alert: MCPGatewayToolInvocationErrors
           expr: |
@@ -90,7 +90,7 @@ spec:
           annotations:
             summary: "Control-Plane API high error rate"
             description: "Control-Plane API error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/control-plane-api-errors.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/control-plane-api-errors.md"
 
         - alert: ControlPlaneAPIHighLatency
           expr: |
@@ -104,7 +104,7 @@ spec:
           annotations:
             summary: "Control-Plane API high latency"
             description: "Control-Plane API P95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/control-plane-api-latency.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/control-plane-api-latency.md"
 
         - alert: ControlPlaneAPIDown
           expr: |
@@ -116,7 +116,7 @@ spec:
           annotations:
             summary: "Control-Plane API is down"
             description: "Control-Plane API has been down for more than 1 minute"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/control-plane-api-down.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/control-plane-api-down.md"
 
     # ============================================
     # Database Alerts
@@ -133,7 +133,7 @@ spec:
           annotations:
             summary: "PostgreSQL database is down"
             description: "PostgreSQL database {{ $labels.instance }} has been down for more than 1 minute"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/database-down.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/database-down.md"
 
         - alert: DatabaseHighConnections
           expr: |
@@ -173,7 +173,7 @@ spec:
           annotations:
             summary: "Pod {{ $labels.pod }} not ready"
             description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been not ready for more than 5 minutes"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/pod-not-ready.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/pod-not-ready.md"
 
         - alert: PodCrashLooping
           expr: |
@@ -185,7 +185,7 @@ spec:
           annotations:
             summary: "Pod {{ $labels.pod }} is crash looping"
             description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value | humanize }} times in the last 15 minutes"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/pod-crash-loop.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/pod-crash-loop.md"
 
         - alert: PodHighMemory
           expr: |
@@ -229,7 +229,7 @@ spec:
           annotations:
             summary: "Disk space low on {{ $labels.instance }}"
             description: "Disk {{ $labels.mountpoint }} on {{ $labels.instance }} has only {{ $value | humanizePercentage }} free space"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/disk-space-low.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/disk-space-low.md"
 
         - alert: DiskSpaceCritical
           expr: |
@@ -244,7 +244,7 @@ spec:
           annotations:
             summary: "Disk space critically low on {{ $labels.instance }}"
             description: "Disk {{ $labels.mountpoint }} on {{ $labels.instance }} has only {{ $value | humanizePercentage }} free space"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/disk-space-critical.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/disk-space-critical.md"
 
         - alert: PVCSpaceHigh
           expr: |
@@ -273,7 +273,7 @@ spec:
           annotations:
             summary: "Keycloak is down"
             description: "Keycloak authentication service has been down for more than 1 minute"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/keycloak-down.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/keycloak-down.md"
 
         - alert: KeycloakHighLoginFailures
           expr: |
@@ -302,7 +302,7 @@ spec:
           annotations:
             summary: "Redpanda is down"
             description: "Redpanda event streaming service has been down for more than 1 minute"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/redpanda-down.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/redpanda-down.md"
 
         - alert: RedpandaConsumerLag
           expr: |
@@ -330,7 +330,7 @@ spec:
           annotations:
             summary: "Error budget running low"
             description: "Monthly error budget is at {{ $value | humanizePercentage }} remaining"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/error-budget-low.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/error-budget-low.md"
 
         - alert: ErrorBudgetExhausted
           expr: |
@@ -342,7 +342,7 @@ spec:
           annotations:
             summary: "Error budget nearly exhausted"
             description: "Monthly error budget is at {{ $value | humanizePercentage }} - freeze non-critical deployments"
-            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/apim-aws/-/blob/main/docs/runbooks/error-budget-exhausted.md"
+            runbook_url: "https://gitlab.stoa.cab-i.com/stoa/stoa-catalog/-/blob/main/docs/runbooks/error-budget-exhausted.md"
 
         - alert: SLOAvailabilityBreach
           expr: |

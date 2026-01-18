@@ -1,0 +1,30 @@
+# STOA Platform Helm Values
+# =========================
+
+# Gateway OpenAPI Sync Configuration
+# Automatically syncs OpenAPI spec from Control-Plane-API to webMethods Gateway
+gatewaySync:
+  # Enable/disable automatic sync
+  enabled: true
+
+  # CronJob schedule (default: every 6 hours)
+  schedule: "0 */6 * * *"
+
+  # Image for the sync job
+  image: curlimages/curl:8.5.0
+
+  # Backend API URL (Control-Plane-API)
+  backendUrl: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+
+  # Gateway admin URL
+  gatewayUrl: "http://apigateway.stoa-system.svc.cluster.local:5555"
+
+  # API configuration
+  apiName: "Control-Plane-API"
+  apiVersion: "2.0"
+
+  # Secret containing Gateway credentials (keys: username, password)
+  credentialsSecret: "apigateway-credentials"
+
+  # Service account for the job
+  serviceAccount: "default"

@@ -184,7 +184,7 @@ jobs:
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --name apim-dev-cluster --region eu-west-1
+          aws eks update-kubeconfig --name stoa-dev-cluster --region eu-west-1
 
       - name: Deploy to Kubernetes
         run: |

@@ -31,7 +31,7 @@
     env: "{{ lookup('env', 'STOA_ENV') | default('dev', true) }}"
     
     # webMethods Gateway API
-    wm_gateway_url: "{{ lookup('env', 'WM_GATEWAY_URL') | default('http://apim-gateway:9072', true) }}"
+    wm_gateway_url: "{{ lookup('env', 'WM_GATEWAY_URL') | default('http://apim-gateway:5555', true) }}"
     wm_admin_user: "{{ lookup('env', 'WM_ADMIN_USER') | default('Administrator', true) }}"
     wm_admin_password: "{{ lookup('env', 'WM_ADMIN_PASSWORD') }}"
     

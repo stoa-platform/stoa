@@ -47,6 +47,7 @@ class TokenClaims(BaseModel):
     """Validated token claims.
 
     CAB-604: Extended with granular scope and persona support.
+    CAB-672/ADR-001: Added raw_token for Core API calls.
     """
 
     sub: str | None = None  # Subject (user ID) - may be missing for service accounts
@@ -66,6 +67,7 @@ class TokenClaims(BaseModel):
     iat: int | None = None  # Issued at
     acr: str | None = None  # Authentication Context Class Reference (for step-up auth/TOTP)
     tenant_id: str | None = None  # Tenant ID for multi-tenancy
+    raw_token: str | None = None  # ADR-001: Original JWT token for Core API calls
 
     @property
     def subject(self) -> str:
@@ -311,7 +313,10 @@ class OIDCAuthenticator:
                 },
             )
 
-            return TokenClaims(**payload)
+            # ADR-001: Store raw token for Core API calls
+            claims = TokenClaims(**payload)
+            claims.raw_token = token
+            return claims
 
         except ExpiredSignatureError:
             logger.warning("Token expired")

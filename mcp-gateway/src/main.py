@@ -25,8 +25,8 @@ from .handlers import mcp_router, subscriptions_router, mcp_sse_router, sse_alia
 from .middleware import MetricsMiddleware
 from .services import get_tool_registry, shutdown_tool_registry, init_database, shutdown_database
 from .services.tool_handlers import init_tool_handlers, shutdown_tool_handlers
-from .services.database import get_session_factory
 from .k8s import get_tool_watcher, shutdown_tool_watcher
+from .clients import init_core_api_client, shutdown_core_api_client
 from .features.error_snapshots import (
     MCPErrorSnapshotMiddleware,
     get_mcp_snapshot_settings,
@@ -72,19 +72,24 @@ async def lifespan(app: FastAPI):
     # Startup
     app_state["started_at"] = datetime.now(timezone.utc)
 
-    # Initialize database
+    # Initialize Core API client (ADR-001 compliance)
+    init_core_api_client(
+        base_url=settings.control_plane_api_url,
+        timeout=30.0
+    )
+    logger.info("Core API client initialized", base_url=settings.control_plane_api_url)
+
+    # CAB-672/ADR-001: Initialize tool handlers (uses CoreAPIClient, no DB)
+    try:
+        init_tool_handlers()
+        logger.info("Tool handlers initialized (ADR-001 compliant)")
+    except Exception as e:
+        logger.warning("Tool handlers initialization failed", error=str(e))
+
+    # Initialize database (still needed for error snapshots and legacy features)
     try:
         await init_database()
         logger.info("Database initialized")
-
-        # CAB-660: Initialize tool handlers with database session factory
-        try:
-            session_factory = get_session_factory()
-            init_tool_handlers(session_factory)
-            logger.info("Tool handlers initialized with database backend")
-        except Exception as e:
-            logger.warning("Tool handlers initialization failed, using stubs", error=str(e))
-
     except Exception as e:
         logger.warning("Database initialization failed, using in-memory storage", error=str(e))
 
@@ -182,6 +187,9 @@ async def lifespan(app: FastAPI):
 
     # Cleanup database
     await shutdown_database()
+
+    # Cleanup Core API client
+    shutdown_core_api_client()
 
 
 def create_app() -> FastAPI:

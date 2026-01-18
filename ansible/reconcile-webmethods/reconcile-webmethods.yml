@@ -17,8 +17,12 @@
   
   vars:
     # GitOps source directory (cloned by AWX/CI)
-    gitops_dir: "{{ lookup('env', 'GITOPS_DIR') | default('/opt/stoa-gitops', true) }}"
+    # AWX sets playbook_dir to the project root, so we use that as default
+    gitops_dir: "{{ lookup('env', 'GITOPS_DIR') | default(playbook_dir | dirname, true) }}"
     webmethods_dir: "{{ gitops_dir }}/webmethods"
+
+    # Base domain for URL substitution
+    base_domain: "{{ lookup('env', 'BASE_DOMAIN') | default('stoa.cab-i.com', true) }}"
     
     # Target environment
     env: "{{ lookup('env', 'STOA_ENV') | default('dev', true) }}"

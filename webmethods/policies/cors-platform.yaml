@@ -1,0 +1,64 @@
+# CORS Policy for Platform Applications
+# Allows cross-origin requests from Portal and Console
+apiVersion: stoa.io/v1
+kind: Policy
+metadata:
+  name: cors-platform
+  description: "CORS configuration for STOA platform frontends"
+  tags:
+    - security
+    - cors
+
+spec:
+  type: cors
+  order: 5  # Execute early in the chain
+
+  config:
+    enabled: true
+
+    # Allowed origins
+    allowOrigins:
+      - https://console.${BASE_DOMAIN}
+      - https://portal.${BASE_DOMAIN}
+      - https://mcp.${BASE_DOMAIN}
+      # Development
+      - http://localhost:3000
+      - http://localhost:5173
+      - http://localhost:8080
+
+    # Allowed methods
+    allowMethods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+      - HEAD
+
+    # Allowed headers
+    allowHeaders:
+      - Authorization
+      - Content-Type
+      - Accept
+      - X-Request-ID
+      - X-Tenant-ID
+      - X-Correlation-ID
+      - Cache-Control
+
+    # Exposed headers (readable by frontend)
+    exposeHeaders:
+      - X-Request-ID
+      - X-RateLimit-Remaining
+      - X-RateLimit-Limit
+      - X-RateLimit-Reset
+      - Content-Disposition
+
+    # Credentials support
+    allowCredentials: true
+
+    # Preflight cache
+    maxAge: 3600
+
+    # Handle OPTIONS automatically
+    preflightContinue: false

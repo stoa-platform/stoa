@@ -34,7 +34,7 @@ on:
 
 env:
   BASE_DOMAIN: stoa.cab-i.com
-  GITLAB_PROJECT: stoa-platform/stoa-gitops
+  GITLAB_PROJECT: cab6961310/stoa-gitops
 
 jobs:
   # ============================================

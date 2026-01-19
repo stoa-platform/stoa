@@ -15,7 +15,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .logging_config import configure_logging, get_logger
-from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring
+from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring, users
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
 from .routers import portal, mcp_gitops, mcp_proxy, platform, portal_applications, catalog_admin
@@ -322,6 +322,9 @@ app.include_router(platform.router)
 
 # Catalog Admin (CAB-682 - Catalog Cache Sync)
 app.include_router(catalog_admin.router)
+
+# User profile and permissions (Single Source of Truth for RBAC)
+app.include_router(users.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

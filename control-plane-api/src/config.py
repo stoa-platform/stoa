@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     # Uses OIDC authentication - forwards user's Keycloak token to ArgoCD
     ARGOCD_URL: str = f"https://argocd.{_BASE_DOMAIN}"
     ARGOCD_VERIFY_SSL: bool = True
-    ARGOCD_PLATFORM_APPS: str = "stoa-control-plane,stoa-console,stoa-portal,stoa-mcp-gateway,stoa-redpanda"
+    ARGOCD_PLATFORM_APPS: str = "control-plane-api,control-plane-ui,stoa-portal,mcp-gateway,devportal"
 
     # External Observability URLs (CAB-654)
     GRAFANA_URL: str = f"https://grafana.{_BASE_DOMAIN}"

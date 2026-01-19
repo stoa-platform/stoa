@@ -2,8 +2,10 @@
  * Application Card Component
  *
  * Displays a consumer application in the applications list.
+ * Optimized with React.memo to prevent unnecessary re-renders.
  */
 
+import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Key, Clock, CheckCircle, XCircle, PauseCircle } from 'lucide-react';
 import type { Application } from '../../types';
@@ -12,41 +14,46 @@ interface ApplicationCardProps {
   application: Application;
 }
 
-export function ApplicationCard({ application }: ApplicationCardProps) {
-  const statusConfig = {
-    active: {
-      icon: CheckCircle,
-      color: 'text-green-500',
-      bg: 'bg-green-100',
-      text: 'text-green-800',
-      label: 'Active',
-    },
-    suspended: {
-      icon: PauseCircle,
-      color: 'text-amber-500',
-      bg: 'bg-amber-100',
-      text: 'text-amber-800',
-      label: 'Suspended',
-    },
-    deleted: {
-      icon: XCircle,
-      color: 'text-red-500',
-      bg: 'bg-red-100',
-      text: 'text-red-800',
-      label: 'Deleted',
-    },
-  };
+// Move static config outside component
+const statusConfig = {
+  active: {
+    icon: CheckCircle,
+    color: 'text-green-500',
+    bg: 'bg-green-100',
+    text: 'text-green-800',
+    label: 'Active',
+  },
+  suspended: {
+    icon: PauseCircle,
+    color: 'text-amber-500',
+    bg: 'bg-amber-100',
+    text: 'text-amber-800',
+    label: 'Suspended',
+  },
+  deleted: {
+    icon: XCircle,
+    color: 'text-red-500',
+    bg: 'bg-red-100',
+    text: 'text-red-800',
+    label: 'Deleted',
+  },
+} as const;
 
+// Date formatting options - created once
+const dateFormatOptions: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+};
+
+export const ApplicationCard = memo(function ApplicationCard({ application }: ApplicationCardProps) {
   const status = statusConfig[application.status] || statusConfig.active;
   const StatusIcon = status.icon;
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
+  // Memoize formatted date
+  const formattedDate = useMemo(() => {
+    return new Date(application.createdAt).toLocaleDateString('en-US', dateFormatOptions);
+  }, [application.createdAt]);
 
   const subscriptionCount = application.subscriptions?.length || 0;
 
@@ -93,7 +100,7 @@ export function ApplicationCard({ application }: ApplicationCardProps) {
       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
         <div className="flex items-center text-xs text-gray-500">
           <Clock className="h-3 w-3 mr-1" />
-          Created {formatDate(application.createdAt)}
+          Created {formattedDate}
         </div>
         <span className="inline-flex items-center text-sm font-medium text-primary-600 group-hover:text-primary-700">
           Manage
@@ -102,6 +109,6 @@ export function ApplicationCard({ application }: ApplicationCardProps) {
       </div>
     </Link>
   );
-}
+});
 
 export default ApplicationCard;

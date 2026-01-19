@@ -6,6 +6,7 @@ import asyncio
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from starlette.responses import Response
 from contextlib import asynccontextmanager
@@ -249,6 +250,9 @@ app = FastAPI(
 # Rate limiting (CAB-298)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+# GZip compression for responses > 1KB (reduces JSON payload size by ~70%)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # CORS
 app.add_middleware(

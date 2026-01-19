@@ -1,15 +1,30 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Suspense, lazy, memo } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
-import { Tenants } from './pages/Tenants';
-import { APIs } from './pages/APIs';
-import { Applications } from './pages/Applications';
-import { Deployments } from './pages/Deployments';
-import { APIMonitoring } from './pages/APIMonitoring';
-import { ToolCatalog, ToolDetail, MySubscriptions, UsageDashboard } from './pages/AITools';
-import { ErrorSnapshots } from './pages/ErrorSnapshots';
 import { PlatformStatus } from './components/PlatformStatus';
 import { quickLinks } from './config';
+
+// Lazy load pages for code splitting
+const Tenants = lazy(() => import('./pages/Tenants').then(m => ({ default: m.Tenants })));
+const APIs = lazy(() => import('./pages/APIs').then(m => ({ default: m.APIs })));
+const Applications = lazy(() => import('./pages/Applications').then(m => ({ default: m.Applications })));
+const Deployments = lazy(() => import('./pages/Deployments').then(m => ({ default: m.Deployments })));
+const APIMonitoring = lazy(() => import('./pages/APIMonitoring').then(m => ({ default: m.APIMonitoring })));
+const ErrorSnapshots = lazy(() => import('./pages/ErrorSnapshots').then(m => ({ default: m.ErrorSnapshots })));
+const ToolCatalog = lazy(() => import('./pages/AITools').then(m => ({ default: m.ToolCatalog })));
+const ToolDetail = lazy(() => import('./pages/AITools').then(m => ({ default: m.ToolDetail })));
+const MySubscriptions = lazy(() => import('./pages/AITools').then(m => ({ default: m.MySubscriptions })));
+const UsageDashboard = lazy(() => import('./pages/AITools').then(m => ({ default: m.UsageDashboard })));
+
+// Loading spinner for lazy-loaded pages
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  );
+}
 
 function Dashboard() {
   const { user } = useAuth();
@@ -140,18 +155,19 @@ interface QuickActionCardProps {
   color: 'blue' | 'purple' | 'green' | 'orange';
 }
 
-function QuickActionCard({ title, description, href, icon, color }: QuickActionCardProps) {
-  const colorClasses = {
-    blue: 'bg-blue-50 text-blue-600 hover:bg-blue-100',
-    purple: 'bg-purple-50 text-purple-600 hover:bg-purple-100',
-    green: 'bg-green-50 text-green-600 hover:bg-green-100',
-    orange: 'bg-orange-50 text-orange-600 hover:bg-orange-100',
-  };
+// Color classes moved outside component to avoid recreation on each render
+const quickActionColorClasses = {
+  blue: 'bg-blue-50 text-blue-600 hover:bg-blue-100',
+  purple: 'bg-purple-50 text-purple-600 hover:bg-purple-100',
+  green: 'bg-green-50 text-green-600 hover:bg-green-100',
+  orange: 'bg-orange-50 text-orange-600 hover:bg-orange-100',
+} as const;
 
+const QuickActionCard = memo(function QuickActionCard({ title, description, href, icon, color }: QuickActionCardProps) {
   return (
     <a
       href={href}
-      className={`block p-6 rounded-lg transition-colors ${colorClasses[color]}`}
+      className={`block p-6 rounded-lg transition-colors ${quickActionColorClasses[color]}`}
     >
       <div className="flex items-center gap-4">
         <div className="flex-shrink-0">{icon}</div>
@@ -162,7 +178,7 @@ function QuickActionCard({ title, description, href, icon, color }: QuickActionC
       </div>
     </a>
   );
-}
+});
 
 function ProtectedRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -181,19 +197,21 @@ function ProtectedRoutes() {
 
   return (
     <Layout>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/tenants" element={<Tenants />} />
-        <Route path="/apis" element={<APIs />} />
-        <Route path="/ai-tools" element={<ToolCatalog />} />
-        <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
-        <Route path="/ai-tools/usage" element={<UsageDashboard />} />
-        <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
-        <Route path="/applications" element={<Applications />} />
-        <Route path="/deployments" element={<Deployments />} />
-        <Route path="/monitoring" element={<APIMonitoring />} />
-        <Route path="/mcp/errors" element={<ErrorSnapshots />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/tenants" element={<Tenants />} />
+          <Route path="/apis" element={<APIs />} />
+          <Route path="/ai-tools" element={<ToolCatalog />} />
+          <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
+          <Route path="/ai-tools/usage" element={<UsageDashboard />} />
+          <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
+          <Route path="/applications" element={<Applications />} />
+          <Route path="/deployments" element={<Deployments />} />
+          <Route path="/monitoring" element={<APIMonitoring />} />
+          <Route path="/mcp/errors" element={<ErrorSnapshots />} />
+        </Routes>
+      </Suspense>
     </Layout>
   );
 }

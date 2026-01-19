@@ -2,8 +2,10 @@
  * API Card Component
  *
  * Displays an API in the catalog grid view.
+ * Optimized with React.memo to prevent unnecessary re-renders in grid.
  */
 
+import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Tag, Clock } from 'lucide-react';
 import type { API } from '../../types';
@@ -12,20 +14,25 @@ interface APICardProps {
   api: API;
 }
 
-export function APICard({ api }: APICardProps) {
-  const statusColors = {
-    published: 'bg-green-100 text-green-800',
-    deprecated: 'bg-amber-100 text-amber-800',
-    draft: 'bg-gray-100 text-gray-800',
-  };
+// Move static objects outside component to prevent recreation on each render
+const statusColors = {
+  published: 'bg-green-100 text-green-800',
+  deprecated: 'bg-amber-100 text-amber-800',
+  draft: 'bg-gray-100 text-gray-800',
+} as const;
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
+// Date formatting options - created once
+const dateFormatOptions: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+};
+
+export const APICard = memo(function APICard({ api }: APICardProps) {
+  // Memoize the formatted date to avoid recalculating on each render
+  const formattedDate = useMemo(() => {
+    return new Date(api.updatedAt).toLocaleDateString('en-US', dateFormatOptions);
+  }, [api.updatedAt]);
 
   return (
     <Link
@@ -73,7 +80,7 @@ export function APICard({ api }: APICardProps) {
       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
         <div className="flex items-center text-xs text-gray-500">
           <Clock className="h-3 w-3 mr-1" />
-          {formatDate(api.updatedAt)}
+          {formattedDate}
         </div>
         <span className="inline-flex items-center text-sm font-medium text-primary-600 group-hover:text-primary-700">
           View Details
@@ -82,6 +89,6 @@ export function APICard({ api }: APICardProps) {
       </div>
     </Link>
   );
-}
+});
 
 export default APICard;

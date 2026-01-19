@@ -4,7 +4,14 @@
 
 - name: "Find API ID for {{ api_name_to_delete }}"
   ansible.builtin.set_fact:
-    api_to_delete_info: "{{ gateway_api_lookup[api_name_to_delete] | default(none) }}"
+    api_to_delete_info: >-
+      {{
+        gateway_api_lookup.values()
+        | selectattr('apiName', 'equalto', api_name_to_delete)
+        | list
+        | first
+        | default(none)
+      }}
 
 - name: "Skip if API not found"
   ansible.builtin.debug:

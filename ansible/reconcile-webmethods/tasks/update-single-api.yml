@@ -41,10 +41,10 @@
       register: deactivate_result
       ignore_errors: true
 
-    # Step 2: Delete the existing API
+    # Step 2: Delete the existing API (forceDelete=true to remove even with apps)
     - name: "Delete existing API {{ api_name_to_update }}"
       ansible.builtin.uri:
-        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ gateway_api.id }}"
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ gateway_api.id }}?forceDelete=true"
         method: DELETE
         user: "{{ wm_admin_user }}"
         password: "{{ wm_admin_password }}"

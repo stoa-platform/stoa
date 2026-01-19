@@ -2,15 +2,28 @@
  * Type definitions for STOA Developer Portal
  */
 
-// User type (simplified for portal - consumers only)
+// User type with RBAC support
 export interface User {
   id: string;
   email: string;
   name: string;
   tenant_id?: string;
   organization?: string;
-  roles?: string[];
+  roles: string[];
+  permissions: string[];
+  effective_scopes: string[];
   is_admin?: boolean;
+}
+
+// Response from /v1/me endpoint (single source of truth)
+export interface UserPermissionsResponse {
+  user_id: string;
+  email: string;
+  username: string;
+  tenant_id: string | null;
+  roles: string[];
+  permissions: string[];
+  effective_scopes: string[];
 }
 
 // MCP Tool types (aligned with MCP Gateway response format)

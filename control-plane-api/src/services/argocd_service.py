@@ -54,8 +54,19 @@ class ArgoCDService:
     async def health_check(self, auth_token: str) -> bool:
         """Check if ArgoCD is healthy and reachable"""
         try:
-            await self._request(auth_token, "GET", "/version")
-            return True
+            # Version endpoint is at /api/version (not /api/v1/version)
+            async with httpx.AsyncClient(
+                base_url=self._base_url,
+                headers={
+                    "Authorization": f"Bearer {auth_token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=10.0,
+                verify=settings.ARGOCD_VERIFY_SSL,
+            ) as client:
+                response = await client.get("/api/version")
+                response.raise_for_status()
+                return True
         except Exception as e:
             logger.warning(f"ArgoCD health check failed: {e}")
             return False

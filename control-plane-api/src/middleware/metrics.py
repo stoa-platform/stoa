@@ -1,16 +1,25 @@
 """Prometheus Metrics Middleware for Control-Plane API.
 
 Collects and exposes HTTP metrics for monitoring.
+
+Performance optimized: Uses pure ASGI middleware instead of BaseHTTPMiddleware
+to avoid response buffering and reduce latency.
 """
 
 import re
 import time
 from typing import Callable
 
-from fastapi import Request, Response
-from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, CONTENT_TYPE_LATEST
-from starlette.middleware.base import BaseHTTPMiddleware
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    Info,
+    generate_latest,
+)
 from starlette.responses import Response as StarletteResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from ..config import settings
 
@@ -54,65 +63,77 @@ SERVICE_INFO.info({
     "version": settings.VERSION,
 })
 
+# Pre-compiled regex patterns for path normalization
+UUID_PATTERN = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.IGNORECASE,
+)
+NUMERIC_ID_PATTERN = re.compile(r"/\d+(?=/|$)")
+
 
 # =============================================================================
 # Middleware
 # =============================================================================
 
 
-class MetricsMiddleware(BaseHTTPMiddleware):
-    """Middleware for collecting HTTP metrics."""
+class MetricsMiddleware:
+    """Pure ASGI middleware for collecting HTTP metrics.
 
-    async def dispatch(
-        self,
-        request: Request,
-        call_next: Callable,
-    ) -> Response:
-        """Process request and collect metrics."""
+    Performance optimized:
+    - No response buffering (unlike BaseHTTPMiddleware)
+    - Pre-compiled regex patterns
+    - Minimal overhead
+    """
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """ASGI interface."""
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+
         # Skip metrics endpoint to avoid recursion
-        if request.url.path == "/metrics":
-            return await call_next(request)
+        if path == "/metrics":
+            await self.app(scope, receive, send)
+            return
 
-        method = request.method
-        # Normalize endpoint for metrics (remove IDs, etc.)
-        endpoint = self._normalize_path(request.url.path)
+        method = scope.get("method", "GET")
+        endpoint = self._normalize_path(path)
 
         # Track in-progress requests
-        HTTP_REQUESTS_IN_PROGRESS.labels(
-            method=method,
-            endpoint=endpoint,
-        ).inc()
+        HTTP_REQUESTS_IN_PROGRESS.labels(method=method, endpoint=endpoint).inc()
 
-        start_time = time.time()
+        start_time = time.perf_counter()
+        status_code = 500  # Default to 500 in case of unhandled exception
+
+        async def send_wrapper(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 200)
+            await send(message)
 
         try:
-            response = await call_next(request)
-            status_code = response.status_code
-        except Exception:
-            status_code = 500
-            raise
+            await self.app(scope, receive, send_wrapper)
         finally:
-            # Record duration
-            duration = time.time() - start_time
+            # Record metrics
+            duration = time.perf_counter() - start_time
+
             HTTP_REQUEST_DURATION_SECONDS.labels(
                 method=method,
                 endpoint=endpoint,
             ).observe(duration)
 
-            # Record request count
             HTTP_REQUESTS_TOTAL.labels(
                 method=method,
                 endpoint=endpoint,
                 status_code=str(status_code),
             ).inc()
 
-            # Decrease in-progress counter
-            HTTP_REQUESTS_IN_PROGRESS.labels(
-                method=method,
-                endpoint=endpoint,
-            ).dec()
-
-        return response
+            HTTP_REQUESTS_IN_PROGRESS.labels(method=method, endpoint=endpoint).dec()
 
     def _normalize_path(self, path: str) -> str:
         """Normalize path for metrics labels.
@@ -121,16 +142,9 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         to prevent high cardinality.
         """
         # Replace UUIDs
-        path = re.sub(
-            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
-            "{id}",
-            path,
-            flags=re.IGNORECASE,
-        )
-
+        path = UUID_PATTERN.sub("{id}", path)
         # Replace numeric IDs
-        path = re.sub(r"/\d+(?=/|$)", "/{id}", path)
-
+        path = NUMERIC_ID_PATTERN.sub("/{id}", path)
         return path
 
 

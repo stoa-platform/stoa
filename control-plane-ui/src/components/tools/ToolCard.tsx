@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo } from 'react';
 import { Wrench, Tag, ExternalLink, Zap } from 'lucide-react';
 import type { MCPTool } from '../../types';
 

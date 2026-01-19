@@ -1,30 +1,74 @@
 import { NavLink } from 'react-router-dom';
-import { Home, CreditCard, BookOpen, User, X, AppWindow, Webhook, BarChart3, Shield, Wrench, ExternalLink, FileCode2 } from 'lucide-react';
+import { Home, CreditCard, BookOpen, User, X, AppWindow, Webhook, BarChart3, Shield, Wrench, ExternalLink, FileCode2, LucideIcon } from 'lucide-react';
 import { config } from '../../config';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const navigation = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: LucideIcon;
+  enabled?: boolean;
+  /** Permission required to see this item (granular permission like 'apis:read') */
+  permission?: string;
+  /** OAuth2 scope required to see this item (like 'stoa:catalog:read') */
+  scope?: string;
+  /** Keycloak role required to see this item */
+  role?: string;
+}
+
+const navigation: NavItem[] = [
+  // Public routes (no permission required)
   { name: 'Home', href: '/', icon: Home },
-  // Consumer Catalogs - Main features
-  { name: 'API Catalog', href: '/apis', icon: BookOpen, enabled: config.features.enableAPICatalog },
-  { name: 'AI Tools', href: '/servers', icon: Wrench, enabled: config.features.enableMCPTools },
-  // Universal API Contracts (UAC)
-  { name: 'Contracts', href: '/contracts', icon: FileCode2 },
-  // Consumer Resources
-  { name: 'My Apps', href: '/apps', icon: AppWindow, enabled: config.features.enableAPICatalog },
-  { name: 'My Subscriptions', href: '/subscriptions', icon: CreditCard, enabled: config.features.enableSubscriptions },
-  { name: 'Service Accounts', href: '/service-accounts', icon: Shield, enabled: config.features.enableMCPTools },
-  // Analytics & Settings
-  { name: 'Usage', href: '/usage', icon: BarChart3, enabled: config.features.enableSubscriptions },
-  { name: 'Webhooks', href: '/webhooks', icon: Webhook, enabled: config.features.enableSubscriptions },
   { name: 'Profile', href: '/profile', icon: User },
-].filter(item => item.enabled !== false);
+
+  // Consumer Catalogs - Main features (requires catalog:read)
+  { name: 'API Catalog', href: '/apis', icon: BookOpen, enabled: config.features.enableAPICatalog, scope: 'stoa:catalog:read' },
+  { name: 'AI Tools', href: '/servers', icon: Wrench, enabled: config.features.enableMCPTools, scope: 'stoa:catalog:read' },
+
+  // Universal API Contracts (UAC) (requires catalog:read)
+  { name: 'Contracts', href: '/contracts', icon: FileCode2, scope: 'stoa:catalog:read' },
+
+  // Consumer Resources (requires apps:read or subscriptions:read)
+  { name: 'My Apps', href: '/apps', icon: AppWindow, enabled: config.features.enableAPICatalog, permission: 'apps:read' },
+  { name: 'My Subscriptions', href: '/subscriptions', icon: CreditCard, enabled: config.features.enableSubscriptions, scope: 'stoa:subscriptions:read' },
+
+  // Service Accounts - tenant-admin+ (requires subscriptions:write)
+  { name: 'Service Accounts', href: '/service-accounts', icon: Shield, enabled: config.features.enableMCPTools, scope: 'stoa:subscriptions:write' },
+
+  // Analytics - requires metrics:read
+  { name: 'Usage', href: '/usage', icon: BarChart3, enabled: config.features.enableSubscriptions, scope: 'stoa:metrics:read' },
+
+  // Tenant Admin - requires subscriptions:write
+  { name: 'Webhooks', href: '/webhooks', icon: Webhook, enabled: config.features.enableSubscriptions, scope: 'stoa:subscriptions:write' },
+];
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const { hasPermission, hasScope, hasRole, user } = useAuth();
+
+  // Filter navigation items based on:
+  // 1. Feature flags (enabled)
+  // 2. Permissions/scopes/roles
+  const filteredNavigation = navigation.filter(item => {
+    // Check feature flag
+    if (item.enabled === false) return false;
+
+    // Check permission if specified
+    if (item.permission && !hasPermission(item.permission)) return false;
+
+    // Check scope if specified
+    if (item.scope && !hasScope(item.scope)) return false;
+
+    // Check role if specified
+    if (item.role && !hasRole(item.role)) return false;
+
+    return true;
+  });
+
   return (
     <>
       {/* Mobile overlay */}
@@ -60,7 +104,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Navigation - flex-1 to push footer down, pb for footer spacing */}
         <nav className="flex-1 p-4 pb-20 space-y-1 overflow-y-auto">
-          {navigation.map((item) => (
+          {filteredNavigation.map((item) => (
             <NavLink
               key={item.name}
               to={item.href}
@@ -96,6 +140,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <p>STOA Developer Portal</p>
             <p>v{config.app.version}</p>
           </div>
+
+          {/* Debug: show user roles in development */}
+          {import.meta.env.DEV && user && (
+            <div className="mt-2 pt-2 border-t border-gray-100">
+              <p className="text-xs text-gray-400">
+                Roles: {user.roles.join(', ') || 'none'}
+              </p>
+            </div>
+          )}
         </div>
       </aside>
     </>

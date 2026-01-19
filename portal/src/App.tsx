@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -22,6 +22,7 @@ const ProfilePage = lazy(() => import('./pages/profile/Profile').then(m => ({ de
 const WebhooksPage = lazy(() => import('./pages/webhooks/WebhooksPage').then(m => ({ default: m.WebhooksPage })));
 const UsagePage = lazy(() => import('./pages/usage').then(m => ({ default: m.UsagePage })));
 const ServiceAccountsPage = lazy(() => import('./pages/service-accounts/ServiceAccountsPage').then(m => ({ default: m.ServiceAccountsPage })));
+const UnauthorizedPage = lazy(() => import('./pages/Unauthorized').then(m => ({ default: m.UnauthorizedPage })));
 
 // Page loader skeleton for lazy-loaded pages
 function PageLoader() {
@@ -86,9 +87,31 @@ function LoginScreen() {
   );
 }
 
-// Protected route wrapper
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+// Protected route wrapper with RBAC support
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  /** Single permission to check */
+  permission?: string;
+  /** Multiple permissions to check */
+  permissions?: string[];
+  /** If true, ALL permissions must be present. If false (default), ANY permission suffices */
+  requireAll?: boolean;
+  /** Role to check (Keycloak realm role) */
+  role?: string;
+  /** OAuth2 scope to check */
+  scope?: string;
+}
+
+function ProtectedRoute({
+  children,
+  permission,
+  permissions,
+  requireAll = false,
+  role,
+  scope,
+}: ProtectedRouteProps) {
+  const { isAuthenticated, isLoading, hasPermission, hasAnyPermission, hasAllPermissions, hasRole, hasScope } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -96,6 +119,31 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <LoginScreen />;
+  }
+
+  // Check single permission
+  if (permission && !hasPermission(permission)) {
+    return <Navigate to="/unauthorized" state={{ from: location }} replace />;
+  }
+
+  // Check multiple permissions
+  if (permissions && permissions.length > 0) {
+    const hasAccess = requireAll
+      ? hasAllPermissions(permissions)
+      : hasAnyPermission(permissions);
+    if (!hasAccess) {
+      return <Navigate to="/unauthorized" state={{ from: location }} replace />;
+    }
+  }
+
+  // Check role
+  if (role && !hasRole(role)) {
+    return <Navigate to="/unauthorized" state={{ from: location }} replace />;
+  }
+
+  // Check scope
+  if (scope && !hasScope(scope)) {
+    return <Navigate to="/unauthorized" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;
@@ -108,32 +156,102 @@ function AppContent() {
       <Layout>
         <Suspense fallback={<PageLoader />}>
           <Routes>
+            {/* Public routes (within authenticated context) */}
             <Route path="/" element={<HomePage />} />
-            {/* MCP Servers (grouped tools with role-based visibility) */}
-            <Route path="/servers" element={<MCPServersPage />} />
-            <Route path="/servers/:serverId" element={<ServerDetailPage />} />
+            <Route path="/unauthorized" element={<UnauthorizedPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+
+            {/* MCP Servers - requires catalog read */}
+            <Route path="/servers" element={
+              <ProtectedRoute scope="stoa:catalog:read">
+                <MCPServersPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/servers/:serverId" element={
+              <ProtectedRoute scope="stoa:catalog:read">
+                <ServerDetailPage />
+              </ProtectedRoute>
+            } />
+
             {/* Redirect legacy /tools to /servers */}
             <Route path="/tools" element={<Navigate to="/servers" replace />} />
             <Route path="/tools/:id" element={<Navigate to="/servers" replace />} />
-            <Route path="/subscriptions" element={<MySubscriptions />} />
-            {/* API Consumer Routes */}
-            <Route path="/apis" element={<APICatalog />} />
-            <Route path="/apis/:id" element={<APIDetail />} />
-            <Route path="/apis/:id/test" element={<APITestingSandbox />} />
-            {/* Consumer Applications */}
-            <Route path="/apps" element={<MyApplications />} />
-            <Route path="/apps/:id" element={<ApplicationDetail />} />
-            {/* Universal API Contracts (UAC) */}
-            <Route path="/contracts" element={<ContractListPage />} />
-            <Route path="/contracts/new" element={<CreateContractPage />} />
-            <Route path="/contracts/:id" element={<ContractDetailPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            {/* Usage Dashboard */}
-            <Route path="/usage" element={<UsagePage />} />
-            {/* Service Accounts for MCP */}
-            <Route path="/service-accounts" element={<ServiceAccountsPage />} />
-            {/* Tenant Admin Routes */}
-            <Route path="/webhooks" element={<WebhooksPage />} />
+
+            {/* Subscriptions - requires subscriptions read */}
+            <Route path="/subscriptions" element={
+              <ProtectedRoute scope="stoa:subscriptions:read">
+                <MySubscriptions />
+              </ProtectedRoute>
+            } />
+
+            {/* API Consumer Routes - requires catalog read */}
+            <Route path="/apis" element={
+              <ProtectedRoute scope="stoa:catalog:read">
+                <APICatalog />
+              </ProtectedRoute>
+            } />
+            <Route path="/apis/:id" element={
+              <ProtectedRoute scope="stoa:catalog:read">
+                <APIDetail />
+              </ProtectedRoute>
+            } />
+            <Route path="/apis/:id/test" element={
+              <ProtectedRoute scope="stoa:tools:execute">
+                <APITestingSandbox />
+              </ProtectedRoute>
+            } />
+
+            {/* Consumer Applications - requires apps read */}
+            <Route path="/apps" element={
+              <ProtectedRoute permission="apps:read">
+                <MyApplications />
+              </ProtectedRoute>
+            } />
+            <Route path="/apps/:id" element={
+              <ProtectedRoute permission="apps:read">
+                <ApplicationDetail />
+              </ProtectedRoute>
+            } />
+
+            {/* Universal API Contracts (UAC) - requires catalog read/write */}
+            <Route path="/contracts" element={
+              <ProtectedRoute scope="stoa:catalog:read">
+                <ContractListPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/contracts/new" element={
+              <ProtectedRoute scope="stoa:catalog:write">
+                <CreateContractPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/contracts/:id" element={
+              <ProtectedRoute scope="stoa:catalog:read">
+                <ContractDetailPage />
+              </ProtectedRoute>
+            } />
+
+            {/* Usage Dashboard - requires metrics read */}
+            <Route path="/usage" element={
+              <ProtectedRoute scope="stoa:metrics:read">
+                <UsagePage />
+              </ProtectedRoute>
+            } />
+
+            {/* Service Accounts for MCP - requires subscriptions write (tenant-admin+) */}
+            <Route path="/service-accounts" element={
+              <ProtectedRoute scope="stoa:subscriptions:write">
+                <ServiceAccountsPage />
+              </ProtectedRoute>
+            } />
+
+            {/* Tenant Admin Routes - requires subscriptions write */}
+            <Route path="/webhooks" element={
+              <ProtectedRoute scope="stoa:subscriptions:write">
+                <WebhooksPage />
+              </ProtectedRoute>
+            } />
+
+            {/* Catch all - redirect to home */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

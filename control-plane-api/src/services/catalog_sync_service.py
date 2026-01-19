@@ -175,6 +175,7 @@ class CatalogSyncService:
                     )
 
                     # Upsert into database
+                    # Use column references to avoid SQLAlchemy metadata conflicts
                     stmt = insert(APICatalog).values(
                         tenant_id=tenant_id,
                         api_id=api_id,
@@ -184,7 +185,7 @@ class CatalogSyncService:
                         category=api.get("category"),
                         tags=tags,
                         portal_published=portal_published,
-                        metadata=api,
+                        api_metadata=api,
                         openapi_spec=openapi_spec,
                         git_path=git_path,
                         git_commit_sha=commit_sha,
@@ -193,17 +194,17 @@ class CatalogSyncService:
                     ).on_conflict_do_update(
                         constraint='uq_api_catalog_tenant_api',
                         set_={
-                            'api_name': api.get("name", api_id),
-                            'version': api.get("version"),
-                            'status': api.get("status", "active"),
-                            'category': api.get("category"),
-                            'tags': tags,
-                            'portal_published': portal_published,
-                            'metadata': api,
-                            'openapi_spec': openapi_spec,
-                            'git_commit_sha': commit_sha,
-                            'synced_at': datetime.now(timezone.utc),
-                            'deleted_at': None
+                            APICatalog.api_name: api.get("name", api_id),
+                            APICatalog.version: api.get("version"),
+                            APICatalog.status: api.get("status", "active"),
+                            APICatalog.category: api.get("category"),
+                            APICatalog.tags: tags,
+                            APICatalog.portal_published: portal_published,
+                            APICatalog.api_metadata: api,
+                            APICatalog.openapi_spec: openapi_spec,
+                            APICatalog.git_commit_sha: commit_sha,
+                            APICatalog.synced_at: datetime.now(timezone.utc),
+                            APICatalog.deleted_at: None
                         }
                     )
                     await self.db.execute(stmt)

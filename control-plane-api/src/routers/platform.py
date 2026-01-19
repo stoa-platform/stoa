@@ -2,17 +2,22 @@
 
 Provides endpoints for monitoring platform component status via Argo CD.
 Enables the Console to display real-time sync status and health.
+
+Uses OIDC authentication - forwards user's Keycloak token to ArgoCD.
 """
 import logging
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from ..auth.dependencies import get_current_user, User
 from ..auth.rbac import require_role
 from ..services.argocd_service import argocd_service
 from ..config import settings
+
+security = HTTPBearer()
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/platform", tags=["Platform"])
@@ -94,6 +99,7 @@ class PlatformStatusResponse(BaseModel):
 @router.get("/status", response_model=PlatformStatusResponse)
 async def get_platform_status(
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     Get current platform status including GitOps sync state and recent events.
@@ -104,25 +110,28 @@ async def get_platform_status(
 
     Required Role: Any authenticated user (cpi-admin sees all details)
     """
+    auth_token = credentials.credentials
+
     try:
-        # Check if ArgoCD is connected
-        if not argocd_service._client:
-            try:
-                await argocd_service.connect()
-            except Exception as e:
-                logger.warning(f"ArgoCD not available: {e}")
-                # Return mock status when ArgoCD is not available
-                return _get_mock_status()
+        # Check if ArgoCD service is configured
+        if not argocd_service.is_connected:
+            logger.warning("ArgoCD service not configured")
+            return _get_mock_status()
+
+        # Verify ArgoCD is reachable with user's token
+        if not await argocd_service.health_check(auth_token):
+            logger.warning("ArgoCD health check failed")
+            return _get_mock_status(error="ArgoCD not reachable")
 
         # Get platform status from ArgoCD
-        status_data = await argocd_service.get_platform_status()
+        status_data = await argocd_service.get_platform_status(auth_token)
 
         # Get recent events for the first few apps
         events = []
         for component in status_data.get("components", [])[:3]:
             try:
                 app_events = await argocd_service.get_application_events(
-                    component["name"], limit=5
+                    auth_token, component["name"], limit=5
                 )
                 for event in app_events[:2]:  # Max 2 events per component
                     events.append(PlatformEvent(
@@ -168,17 +177,17 @@ async def get_platform_status(
 @router.get("/components", response_model=List[ComponentStatus])
 async def list_platform_components(
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     List all platform components and their status.
 
     Returns a list of all monitored Argo CD applications.
     """
-    try:
-        if not argocd_service._client:
-            await argocd_service.connect()
+    auth_token = credentials.credentials
 
-        status_data = await argocd_service.get_platform_status()
+    try:
+        status_data = await argocd_service.get_platform_status(auth_token)
         return [ComponentStatus(**comp) for comp in status_data["components"]]
 
     except Exception as e:
@@ -190,6 +199,7 @@ async def list_platform_components(
 async def get_component_status(
     name: str,
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     Get detailed status for a specific platform component.
@@ -197,11 +207,10 @@ async def get_component_status(
     Args:
         name: Component/application name
     """
-    try:
-        if not argocd_service._client:
-            await argocd_service.connect()
+    auth_token = credentials.credentials
 
-        status = await argocd_service.get_application_sync_status(name)
+    try:
+        status = await argocd_service.get_application_sync_status(auth_token, name)
 
         return ComponentStatus(
             name=status["name"],
@@ -222,6 +231,7 @@ async def get_component_status(
 async def sync_component(
     name: str,
     user: User = Depends(require_role(["cpi-admin", "devops"])),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     Trigger a sync for a platform component.
@@ -231,11 +241,10 @@ async def sync_component(
     Args:
         name: Component/application name
     """
-    try:
-        if not argocd_service._client:
-            await argocd_service.connect()
+    auth_token = credentials.credentials
 
-        result = await argocd_service.sync_application(name)
+    try:
+        result = await argocd_service.sync_application(auth_token, name)
 
         return {
             "message": f"Sync triggered for {name}",
@@ -250,6 +259,7 @@ async def sync_component(
 @router.get("/events", response_model=List[PlatformEvent])
 async def list_platform_events(
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     component: Optional[str] = Query(None, description="Filter by component name"),
     limit: int = Query(20, ge=1, le=100, description="Maximum events to return"),
 ):
@@ -260,16 +270,15 @@ async def list_platform_events(
         component: Optional filter by component name
         limit: Maximum number of events to return
     """
-    try:
-        if not argocd_service._client:
-            await argocd_service.connect()
+    auth_token = credentials.credentials
 
+    try:
         events = []
         app_names = [component] if component else settings.argocd_platform_apps_list
 
         for app_name in app_names:
             try:
-                app_events = await argocd_service.get_application_events(app_name, limit=limit)
+                app_events = await argocd_service.get_application_events(auth_token, app_name, limit=limit)
                 for event in app_events:
                     events.append(PlatformEvent(
                         id=event.get("id"),
@@ -297,6 +306,7 @@ async def list_platform_events(
 async def get_component_diff(
     name: str,
     user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     Get diff for an OutOfSync component.
@@ -307,11 +317,10 @@ async def get_component_diff(
     Args:
         name: Component/application name
     """
-    try:
-        if not argocd_service._client:
-            await argocd_service.connect()
+    auth_token = credentials.credentials
 
-        diff_result = await argocd_service.get_application_diff(name)
+    try:
+        diff_result = await argocd_service.get_application_diff(auth_token, name)
 
         resources = []
         for resource in diff_result.get("resources", []):

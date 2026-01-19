@@ -86,8 +86,8 @@ class Settings(BaseSettings):
     MCP_GATEWAY_URL: str = "http://mcp-gateway.stoa-system.svc.cluster.local:80"
 
     # ArgoCD (GitOps Observability - CAB-654)
+    # Uses OIDC authentication - forwards user's Keycloak token to ArgoCD
     ARGOCD_URL: str = f"https://argocd.{_BASE_DOMAIN}"
-    ARGOCD_TOKEN: str = ""
     ARGOCD_VERIFY_SSL: bool = True
     ARGOCD_PLATFORM_APPS: str = "stoa-control-plane,stoa-console,stoa-portal,stoa-mcp-gateway,stoa-redpanda"
 

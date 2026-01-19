@@ -1,8 +1,27 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { API, APICreate, Tenant } from '../types';
 import yaml from 'js-yaml';
+
+// Debounce hook for search optimization
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+const PAGE_SIZE = 20;
 
 export function APIs() {
   const { isReady } = useAuth();
@@ -13,6 +32,14 @@ export function APIs() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingApi, setEditingApi] = useState<API | null>(null);
+
+  // Search and pagination state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<string>('');
+
+  // Debounce search for performance (300ms delay)
+  const debouncedSearch = useDebounce(searchQuery, 300);
 
   useEffect(() => {
     if (isReady) {
@@ -25,6 +52,11 @@ export function APIs() {
       loadApis(selectedTenant);
     }
   }, [selectedTenant]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, statusFilter, selectedTenant]);
 
   async function loadTenants() {
     try {
@@ -53,6 +85,37 @@ export function APIs() {
       setLoading(false);
     }
   }
+
+  // Client-side filtering and pagination (memoized for performance)
+  const filteredApis = useMemo(() => {
+    let result = apis;
+
+    // Apply search filter
+    if (debouncedSearch) {
+      const searchLower = debouncedSearch.toLowerCase();
+      result = result.filter(api =>
+        api.name.toLowerCase().includes(searchLower) ||
+        (api.display_name || '').toLowerCase().includes(searchLower) ||
+        (api.description || '').toLowerCase().includes(searchLower) ||
+        (api.backend_url || '').toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply status filter
+    if (statusFilter) {
+      result = result.filter(api => api.status === statusFilter);
+    }
+
+    return result;
+  }, [apis, debouncedSearch, statusFilter]);
+
+  // Paginated results
+  const paginatedApis = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return filteredApis.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredApis, currentPage]);
+
+  const totalPages = Math.ceil(filteredApis.length / PAGE_SIZE);
 
   async function handleCreate(api: APICreate, deployToDev: boolean) {
     try {
@@ -141,20 +204,72 @@ export function APIs() {
         </button>
       </div>
 
-      {/* Tenant Selector */}
+      {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Select Tenant</label>
-        <select
-          value={selectedTenant}
-          onChange={(e) => setSelectedTenant(e.target.value)}
-          className="w-full md:w-64 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          {tenants.map((tenant) => (
-            <option key={tenant.id} value={tenant.id}>
-              {tenant.display_name || tenant.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-wrap gap-4 items-end">
+          {/* Tenant Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tenant</label>
+            <select
+              value={selectedTenant}
+              onChange={(e) => setSelectedTenant(e.target.value)}
+              className="w-48 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {tenants.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.display_name || tenant.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Search Input */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, description, URL..."
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 pl-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-36 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All Status</option>
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="deprecated">Deprecated</option>
+            </select>
+          </div>
+
+          {/* Results count */}
+          <div className="text-sm text-gray-500 self-end pb-2">
+            {filteredApis.length} of {apis.length} APIs
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -183,6 +298,19 @@ export function APIs() {
               Create your first API
             </button>
           </div>
+        ) : filteredApis.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <p className="mt-2">No APIs match your search criteria</p>
+            <button
+              onClick={() => { setSearchQuery(''); setStatusFilter(''); }}
+              className="mt-4 text-blue-600 hover:text-blue-700"
+            >
+              Clear filters
+            </button>
+          </div>
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -196,7 +324,7 @@ export function APIs() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {apis.map((api) => (
+              {paginatedApis.map((api) => (
                 <tr key={api.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
@@ -268,6 +396,34 @@ export function APIs() {
               ))}
             </tbody>
           </table>
+        )}
+
+        {/* Pagination */}
+        {!loading && filteredApis.length > 0 && totalPages > 1 && (
+          <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
+            <div className="text-sm text-gray-500">
+              Showing {((currentPage - 1) * PAGE_SIZE) + 1} to {Math.min(currentPage * PAGE_SIZE, filteredApis.length)} of {filteredApis.length} results
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <span className="px-3 py-1 text-sm text-gray-700">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

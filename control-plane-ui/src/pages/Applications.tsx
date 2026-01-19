@@ -1,7 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { Application, ApplicationCreate, Tenant, API } from '../types';
+
+// Debounce hook for search optimization
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+const PAGE_SIZE = 12;
 
 export function Applications() {
   const { isReady } = useAuth();
@@ -14,6 +33,14 @@ export function Applications() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingApp, setEditingApp] = useState<Application | null>(null);
 
+  // Search and pagination state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<string>('');
+
+  // Debounce search for performance (300ms delay)
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
   useEffect(() => {
     if (isReady) {
       loadTenants();
@@ -22,10 +49,15 @@ export function Applications() {
 
   useEffect(() => {
     if (selectedTenant) {
-      loadApplications(selectedTenant);
-      loadApis(selectedTenant);
+      // Parallel loading for better performance
+      loadTenantData(selectedTenant);
     }
   }, [selectedTenant]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, statusFilter, selectedTenant]);
 
   async function loadTenants() {
     try {
@@ -41,34 +73,71 @@ export function Applications() {
     }
   }
 
-  async function loadApplications(tenantId: string) {
+  // Parallel loading of applications and APIs
+  async function loadTenantData(tenantId: string) {
     try {
       setLoading(true);
-      const data = await apiService.getApplications(tenantId);
-      setApplications(data);
       setError(null);
+
+      // Load applications and APIs in parallel for faster performance
+      const [appsData, apisData] = await Promise.all([
+        apiService.getApplications(tenantId).catch(err => {
+          console.error('Failed to load applications:', err);
+          return [] as Application[];
+        }),
+        apiService.getApis(tenantId).catch(err => {
+          console.error('Failed to load APIs:', err);
+          return [] as API[];
+        }),
+      ]);
+
+      setApplications(appsData);
+      setApis(apisData);
     } catch (err: any) {
-      setError(err.message || 'Failed to load applications');
+      setError(err.message || 'Failed to load data');
       setApplications([]);
+      setApis([]);
     } finally {
       setLoading(false);
     }
   }
 
-  async function loadApis(tenantId: string) {
-    try {
-      const data = await apiService.getApis(tenantId);
-      setApis(data);
-    } catch (err: any) {
-      console.error('Failed to load APIs:', err);
+  // Client-side filtering (memoized for performance)
+  const filteredApplications = useMemo(() => {
+    let result = applications;
+
+    // Apply search filter
+    if (debouncedSearch) {
+      const searchLower = debouncedSearch.toLowerCase();
+      result = result.filter(app =>
+        app.name.toLowerCase().includes(searchLower) ||
+        (app.display_name || '').toLowerCase().includes(searchLower) ||
+        (app.description || '').toLowerCase().includes(searchLower) ||
+        app.client_id.toLowerCase().includes(searchLower)
+      );
     }
-  }
+
+    // Apply status filter
+    if (statusFilter) {
+      result = result.filter(app => app.status === statusFilter);
+    }
+
+    return result;
+  }, [applications, debouncedSearch, statusFilter]);
+
+  // Paginated results
+  const paginatedApplications = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return filteredApplications.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredApplications, currentPage]);
+
+  const totalPages = Math.ceil(filteredApplications.length / PAGE_SIZE);
 
   async function handleCreate(app: ApplicationCreate) {
     try {
       await apiService.createApplication(selectedTenant, app);
       setShowCreateModal(false);
-      loadApplications(selectedTenant);
+      loadTenantData(selectedTenant);
     } catch (err: any) {
       setError(err.message || 'Failed to create application');
     }
@@ -78,7 +147,7 @@ export function Applications() {
     try {
       await apiService.updateApplication(selectedTenant, appId, app);
       setEditingApp(null);
-      loadApplications(selectedTenant);
+      loadTenantData(selectedTenant);
     } catch (err: any) {
       setError(err.message || 'Failed to update application');
     }
@@ -88,7 +157,7 @@ export function Applications() {
     if (!confirm('Are you sure you want to delete this application?')) return;
     try {
       await apiService.deleteApplication(selectedTenant, appId);
-      loadApplications(selectedTenant);
+      loadTenantData(selectedTenant);
     } catch (err: any) {
       setError(err.message || 'Failed to delete application');
     }
@@ -127,20 +196,72 @@ export function Applications() {
         </button>
       </div>
 
-      {/* Tenant Selector */}
+      {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Select Tenant</label>
-        <select
-          value={selectedTenant}
-          onChange={(e) => setSelectedTenant(e.target.value)}
-          className="w-full md:w-64 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          {tenants.map((tenant) => (
-            <option key={tenant.id} value={tenant.id}>
-              {tenant.display_name || tenant.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-wrap gap-4 items-end">
+          {/* Tenant Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tenant</label>
+            <select
+              value={selectedTenant}
+              onChange={(e) => setSelectedTenant(e.target.value)}
+              className="w-48 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {tenants.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.display_name || tenant.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Search Input */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, description, client ID..."
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 pl-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-36 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
+
+          {/* Results count */}
+          <div className="text-sm text-gray-500 self-end pb-2">
+            {filteredApplications.length} of {applications.length} applications
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -169,8 +290,21 @@ export function Applications() {
               Create your first application
             </button>
           </div>
+        ) : filteredApplications.length === 0 ? (
+          <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg shadow">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <p className="mt-2">No applications match your search criteria</p>
+            <button
+              onClick={() => { setSearchQuery(''); setStatusFilter(''); }}
+              className="mt-4 text-blue-600 hover:text-blue-700"
+            >
+              Clear filters
+            </button>
+          </div>
         ) : (
-          applications.map((app) => (
+          paginatedApplications.map((app) => (
             <div key={app.id} className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -232,6 +366,34 @@ export function Applications() {
           ))
         )}
       </div>
+
+      {/* Pagination */}
+      {!loading && filteredApplications.length > 0 && totalPages > 1 && (
+        <div className="bg-white rounded-lg shadow px-6 py-3 flex items-center justify-between">
+          <div className="text-sm text-gray-500">
+            Showing {((currentPage - 1) * PAGE_SIZE) + 1} to {Math.min(currentPage * PAGE_SIZE, filteredApplications.length)} of {filteredApplications.length} results
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <span className="px-3 py-1 text-sm text-gray-700">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Create Modal */}
       {showCreateModal && (

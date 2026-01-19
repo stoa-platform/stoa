@@ -6,9 +6,12 @@ These endpoints are available to all authenticated users (no role requirement).
 The source of truth for APIs is GitLab, for MCP servers it's the database
 (which is synced from GitLab via GitOps).
 """
+import asyncio
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
+from functools import lru_cache
+import time
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
@@ -22,6 +25,48 @@ from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/portal", tags=["Portal"])
+
+
+# ============================================================================
+# Caching for Performance
+# ============================================================================
+
+class APICache:
+    """Simple time-based cache for API listings to avoid N+1 GitLab queries."""
+
+    def __init__(self, ttl_seconds: int = 30):
+        self._cache: Dict[str, Any] = {}
+        self._timestamps: Dict[str, float] = {}
+        self._ttl = ttl_seconds
+        self._lock = asyncio.Lock()
+
+    def _is_valid(self, key: str) -> bool:
+        if key not in self._timestamps:
+            return False
+        return (time.time() - self._timestamps[key]) < self._ttl
+
+    async def get(self, key: str) -> Optional[Any]:
+        if self._is_valid(key):
+            return self._cache.get(key)
+        return None
+
+    async def set(self, key: str, value: Any) -> None:
+        async with self._lock:
+            self._cache[key] = value
+            self._timestamps[key] = time.time()
+
+    async def invalidate(self, key: str = None) -> None:
+        async with self._lock:
+            if key:
+                self._cache.pop(key, None)
+                self._timestamps.pop(key, None)
+            else:
+                self._cache.clear()
+                self._timestamps.clear()
+
+
+# Global cache instance (30 second TTL)
+_api_cache = APICache(ttl_seconds=30)
 
 
 # ============================================================================
@@ -90,6 +135,67 @@ class PortalMCPServersResponse(BaseModel):
 # API Catalog Endpoints
 # ============================================================================
 
+async def _fetch_tenant_apis(tenant_id: str) -> List[Dict[str, Any]]:
+    """Fetch APIs for a single tenant (used for parallel loading)."""
+    try:
+        apis = await git_service.list_apis(tenant_id)
+        # Add tenant_id to each API
+        return [
+            {**api, "tenant_id": tenant_id, "tenant_name": tenant_id}
+            for api in apis
+        ]
+    except Exception as e:
+        logger.warning(f"Failed to fetch APIs for tenant {tenant_id}: {e}")
+        return []
+
+
+async def _get_all_apis_cached() -> List[Dict[str, Any]]:
+    """Get all APIs from all tenants with caching and parallel loading."""
+    cache_key = "all_apis"
+
+    # Check cache first
+    cached = await _api_cache.get(cache_key)
+    if cached is not None:
+        logger.debug("Returning cached API list")
+        return cached
+
+    # Ensure GitLab connection
+    if not git_service._project:
+        await git_service.connect()
+
+    all_apis = []
+
+    try:
+        tenants_tree = git_service._project.repository_tree(path="tenants", ref="main")
+        tenant_ids = [
+            item["name"]
+            for item in tenants_tree
+            if item["type"] == "tree"
+        ]
+
+        # Parallel fetch all tenant APIs for better performance
+        if tenant_ids:
+            results = await asyncio.gather(
+                *[_fetch_tenant_apis(tid) for tid in tenant_ids],
+                return_exceptions=True
+            )
+
+            for result in results:
+                if isinstance(result, list):
+                    all_apis.extend(result)
+                elif isinstance(result, Exception):
+                    logger.warning(f"Error fetching tenant APIs: {result}")
+
+    except Exception as e:
+        logger.warning(f"Error listing tenants from GitLab: {e}")
+
+    # Cache the result
+    await _api_cache.set(cache_key, all_apis)
+    logger.debug(f"Cached {len(all_apis)} APIs from {len(tenant_ids) if 'tenant_ids' in dir() else 0} tenants")
+
+    return all_apis
+
+
 @router.get("/apis", response_model=PortalAPIsResponse)
 async def list_portal_apis(
     user: User = Depends(get_current_user),
@@ -109,64 +215,54 @@ async def list_portal_apis(
     Set include_unpromoted=true to see all APIs (for admin/debugging).
 
     Returns APIs from all tenants the user has access to.
+
+    Performance: Uses caching (30s TTL) and parallel tenant loading.
     """
     try:
-        # Ensure GitLab connection
-        if not git_service._project:
-            await git_service.connect()
+        # Get all APIs from cache or fetch with parallel loading
+        all_apis_raw = await _get_all_apis_cached()
 
-        # Get all tenants from GitLab
-        all_apis = []
+        # Apply filters
+        filtered_apis = []
+        promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
 
-        try:
-            tenants_tree = git_service._project.repository_tree(path="tenants", ref="main")
-            for tenant_item in tenants_tree:
-                if tenant_item["type"] == "tree":
-                    tenant_id = tenant_item["name"]
-                    tenant_apis = await git_service.list_apis(tenant_id)
+        for api in all_apis_raw:
+            # Filter by status if specified
+            api_status = api.get("status", "draft")
+            if status and api_status != status:
+                continue
 
-                    for api in tenant_apis:
-                        # Filter by status if specified
-                        api_status = api.get("status", "draft")
-                        if status and api_status != status:
-                            continue
+            # Filter by promotion tags unless explicitly including unpromoted
+            api_tags = api.get("tags", [])
+            is_promoted = any(tag.lower() in promotion_tags for tag in api_tags)
 
-                        # Filter by promotion tags unless explicitly including unpromoted
-                        # APIs must have 'portal:published' or 'promoted:portal' tag to appear in Portal
-                        api_tags = api.get("tags", [])
-                        promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
-                        is_promoted = any(tag.lower() in promotion_tags for tag in api_tags)
+            if not include_unpromoted and not is_promoted:
+                continue
 
-                        if not include_unpromoted and not is_promoted:
-                            continue
+            # Filter by category if specified
+            if category and api.get("category") != category:
+                continue
 
-                        # Filter by search term
-                        if search:
-                            search_lower = search.lower()
-                            name_match = search_lower in api.get("name", "").lower()
-                            display_match = search_lower in api.get("display_name", "").lower()
-                            desc_match = search_lower in api.get("description", "").lower()
-                            if not (name_match or display_match or desc_match):
-                                continue
+            # Filter by search term
+            if search:
+                search_lower = search.lower()
+                name_match = search_lower in api.get("name", "").lower()
+                display_match = search_lower in api.get("display_name", "").lower()
+                desc_match = search_lower in api.get("description", "").lower()
+                tags_match = any(search_lower in tag.lower() for tag in api_tags)
+                if not (name_match or display_match or desc_match or tags_match):
+                    continue
 
-                        all_apis.append({
-                            **api,
-                            "tenant_id": tenant_id,
-                            "tenant_name": tenant_id,  # Could be enhanced with tenant display name
-                            "is_promoted": is_promoted,
-                        })
-
-        except Exception as e:
-            logger.warning(f"Error listing tenants from GitLab: {e}")
+            filtered_apis.append({**api, "is_promoted": is_promoted})
 
         # Sort by name
-        all_apis.sort(key=lambda x: x.get("name", ""))
+        filtered_apis.sort(key=lambda x: x.get("name", ""))
 
         # Paginate
-        total = len(all_apis)
+        total = len(filtered_apis)
         start = (page - 1) * page_size
         end = start + page_size
-        paginated_apis = all_apis[start:end]
+        paginated_apis = filtered_apis[start:end]
 
         return PortalAPIsResponse(
             apis=[

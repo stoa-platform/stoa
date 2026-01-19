@@ -11,3 +11,10 @@ from .mcp_subscription import (
     MCPSubscriptionStatus,
     MCPToolAccessStatus,
 )
+from .catalog import (
+    APICatalog,
+    MCPToolsCatalog,
+    CatalogSyncStatus,
+    SyncType,
+    SyncStatus,
+)

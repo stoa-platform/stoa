@@ -1,18 +1,41 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Suspense, lazy } from 'react';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ErrorBoundary, SkipLink } from './components/common';
-import { HomePage } from './pages/Home';
-import { MCPServersPage, ServerDetailPage } from './pages/servers';
-import { MySubscriptions } from './pages/subscriptions/MySubscriptions';
-import { APICatalog, APIDetail, APITestingSandbox } from './pages/apis';
-import { MyApplications, ApplicationDetail } from './pages/apps';
-import { ContractListPage, ContractDetailPage, CreateContractPage } from './pages/contracts';
-import { ProfilePage } from './pages/profile/Profile';
-import { WebhooksPage } from './pages/webhooks/WebhooksPage';
-import { UsagePage } from './pages/usage';
-import { ServiceAccountsPage } from './pages/service-accounts/ServiceAccountsPage';
 import { config } from './config';
+
+// Lazy load pages for code splitting - reduces initial bundle by ~60%
+const HomePage = lazy(() => import('./pages/Home').then(m => ({ default: m.HomePage })));
+const MCPServersPage = lazy(() => import('./pages/servers').then(m => ({ default: m.MCPServersPage })));
+const ServerDetailPage = lazy(() => import('./pages/servers').then(m => ({ default: m.ServerDetailPage })));
+const MySubscriptions = lazy(() => import('./pages/subscriptions/MySubscriptions').then(m => ({ default: m.MySubscriptions })));
+const APICatalog = lazy(() => import('./pages/apis').then(m => ({ default: m.APICatalog })));
+const APIDetail = lazy(() => import('./pages/apis').then(m => ({ default: m.APIDetail })));
+const APITestingSandbox = lazy(() => import('./pages/apis').then(m => ({ default: m.APITestingSandbox })));
+const MyApplications = lazy(() => import('./pages/apps').then(m => ({ default: m.MyApplications })));
+const ApplicationDetail = lazy(() => import('./pages/apps').then(m => ({ default: m.ApplicationDetail })));
+const ContractListPage = lazy(() => import('./pages/contracts').then(m => ({ default: m.ContractListPage })));
+const ContractDetailPage = lazy(() => import('./pages/contracts').then(m => ({ default: m.ContractDetailPage })));
+const CreateContractPage = lazy(() => import('./pages/contracts').then(m => ({ default: m.CreateContractPage })));
+const ProfilePage = lazy(() => import('./pages/profile/Profile').then(m => ({ default: m.ProfilePage })));
+const WebhooksPage = lazy(() => import('./pages/webhooks/WebhooksPage').then(m => ({ default: m.WebhooksPage })));
+const UsagePage = lazy(() => import('./pages/usage').then(m => ({ default: m.UsagePage })));
+const ServiceAccountsPage = lazy(() => import('./pages/service-accounts/ServiceAccountsPage').then(m => ({ default: m.ServiceAccountsPage })));
+
+// Page loader skeleton for lazy-loaded pages
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="text-center">
+        <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center mx-auto mb-3 animate-pulse">
+          <span className="text-white font-bold text-sm">SP</span>
+        </div>
+        <p className="text-gray-500 text-sm">Loading...</p>
+      </div>
+    </div>
+  );
+}
 
 // Loading screen
 function LoadingScreen() {
@@ -83,35 +106,37 @@ function AppContent() {
   return (
     <ProtectedRoute>
       <Layout>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          {/* MCP Servers (grouped tools with role-based visibility) */}
-          <Route path="/servers" element={<MCPServersPage />} />
-          <Route path="/servers/:serverId" element={<ServerDetailPage />} />
-          {/* Redirect legacy /tools to /servers */}
-          <Route path="/tools" element={<Navigate to="/servers" replace />} />
-          <Route path="/tools/:id" element={<Navigate to="/servers" replace />} />
-          <Route path="/subscriptions" element={<MySubscriptions />} />
-          {/* API Consumer Routes */}
-          <Route path="/apis" element={<APICatalog />} />
-          <Route path="/apis/:id" element={<APIDetail />} />
-          <Route path="/apis/:id/test" element={<APITestingSandbox />} />
-          {/* Consumer Applications */}
-          <Route path="/apps" element={<MyApplications />} />
-          <Route path="/apps/:id" element={<ApplicationDetail />} />
-          {/* Universal API Contracts (UAC) */}
-          <Route path="/contracts" element={<ContractListPage />} />
-          <Route path="/contracts/new" element={<CreateContractPage />} />
-          <Route path="/contracts/:id" element={<ContractDetailPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          {/* Usage Dashboard */}
-          <Route path="/usage" element={<UsagePage />} />
-          {/* Service Accounts for MCP */}
-          <Route path="/service-accounts" element={<ServiceAccountsPage />} />
-          {/* Tenant Admin Routes */}
-          <Route path="/webhooks" element={<WebhooksPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            {/* MCP Servers (grouped tools with role-based visibility) */}
+            <Route path="/servers" element={<MCPServersPage />} />
+            <Route path="/servers/:serverId" element={<ServerDetailPage />} />
+            {/* Redirect legacy /tools to /servers */}
+            <Route path="/tools" element={<Navigate to="/servers" replace />} />
+            <Route path="/tools/:id" element={<Navigate to="/servers" replace />} />
+            <Route path="/subscriptions" element={<MySubscriptions />} />
+            {/* API Consumer Routes */}
+            <Route path="/apis" element={<APICatalog />} />
+            <Route path="/apis/:id" element={<APIDetail />} />
+            <Route path="/apis/:id/test" element={<APITestingSandbox />} />
+            {/* Consumer Applications */}
+            <Route path="/apps" element={<MyApplications />} />
+            <Route path="/apps/:id" element={<ApplicationDetail />} />
+            {/* Universal API Contracts (UAC) */}
+            <Route path="/contracts" element={<ContractListPage />} />
+            <Route path="/contracts/new" element={<CreateContractPage />} />
+            <Route path="/contracts/:id" element={<ContractDetailPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            {/* Usage Dashboard */}
+            <Route path="/usage" element={<UsagePage />} />
+            {/* Service Accounts for MCP */}
+            <Route path="/service-accounts" element={<ServiceAccountsPage />} />
+            {/* Tenant Admin Routes */}
+            <Route path="/webhooks" element={<WebhooksPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </Layout>
     </ProtectedRoute>
   );

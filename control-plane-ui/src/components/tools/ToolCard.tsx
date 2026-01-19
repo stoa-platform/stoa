@@ -1,3 +1,4 @@
+import { memo, useCallback } from 'react';
 import { Wrench, Tag, ExternalLink, Zap } from 'lucide-react';
 import type { MCPTool } from '../../types';
 
@@ -8,14 +9,16 @@ interface ToolCardProps {
   isSubscribed?: boolean;
 }
 
-export function ToolCard({ tool, onClick, onSubscribe, isSubscribed }: ToolCardProps) {
-  const methodColors: Record<string, string> = {
-    GET: 'bg-green-100 text-green-800',
-    POST: 'bg-blue-100 text-blue-800',
-    PUT: 'bg-yellow-100 text-yellow-800',
-    PATCH: 'bg-orange-100 text-orange-800',
-    DELETE: 'bg-red-100 text-red-800',
-  };
+// Move static objects outside component to prevent recreation on each render
+const methodColors: Record<string, string> = {
+  GET: 'bg-green-100 text-green-800',
+  POST: 'bg-blue-100 text-blue-800',
+  PUT: 'bg-yellow-100 text-yellow-800',
+  PATCH: 'bg-orange-100 text-orange-800',
+  DELETE: 'bg-red-100 text-red-800',
+};
+
+export const ToolCard = memo(function ToolCard({ tool, onClick, onSubscribe, isSubscribed }: ToolCardProps) {
 
   const paramCount = Object.keys(tool.inputSchema?.properties || {}).length;
   const requiredCount = tool.inputSchema?.required?.length || 0;
@@ -112,4 +115,4 @@ export function ToolCard({ tool, onClick, onSubscribe, isSubscribed }: ToolCardP
       </div>
     </div>
   );
-}
+});

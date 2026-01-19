@@ -2,8 +2,10 @@
  * Subscription Card Component
  *
  * Displays a subscription with status, usage, and actions.
+ * Optimized with React.memo to prevent unnecessary re-renders.
  */
 
+import { memo, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CheckCircle,
@@ -98,7 +100,14 @@ const planConfig: Record<SubscriptionPlan, {
   },
 };
 
-export function SubscriptionCard({
+// Date formatting options - created once
+const dateFormatOptions: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+};
+
+export const SubscriptionCard = memo(function SubscriptionCard({
   subscription,
   onCancel,
   isCancelling = false,
@@ -108,19 +117,17 @@ export function SubscriptionCard({
   const StatusIcon = status.icon;
   const PlanIcon = plan.icon;
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
+  // Memoize formatted date
+  const formattedDate = useMemo(() => {
+    return new Date(subscription.createdAt).toLocaleDateString('en-US', dateFormatOptions);
+  }, [subscription.createdAt]);
 
-  const handleCancel = () => {
+  // Memoize cancel handler
+  const handleCancel = useCallback(() => {
     if (onCancel && !isCancelling) {
       onCancel(subscription.id);
     }
-  };
+  }, [onCancel, isCancelling, subscription.id]);
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-5 hover:shadow-md transition-shadow">
@@ -212,7 +219,7 @@ export function SubscriptionCard({
       <div className="flex items-center gap-4 text-xs text-gray-500 mb-4">
         <div className="flex items-center gap-1">
           <Calendar className="h-3.5 w-3.5" />
-          Subscribed {formatDate(subscription.createdAt)}
+          Subscribed {formattedDate}
         </div>
       </div>
 
@@ -237,6 +244,6 @@ export function SubscriptionCard({
       </div>
     </div>
   );
-}
+});
 
 export default SubscriptionCard;

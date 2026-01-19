@@ -393,39 +393,46 @@ class MCPSubscriptionRepository:
         return subscription
 
     async def get_stats(self, tenant_id: Optional[str] = None) -> dict:
-        """Get subscription statistics."""
-        base_query = select(MCPServerSubscription)
-        if tenant_id:
-            base_query = base_query.where(MCPServerSubscription.tenant_id == tenant_id)
+        """Get subscription statistics.
 
-        # Total count
-        total_result = await self.session.execute(
-            select(func.count()).select_from(base_query.subquery())
-        )
+        Optimized to use GROUP BY instead of N+1 queries for status counts.
+        """
+        # Build base filter condition
+        base_conditions = []
+        if tenant_id:
+            base_conditions.append(MCPServerSubscription.tenant_id == tenant_id)
+
+        # Total count - single query
+        total_query = select(func.count(MCPServerSubscription.id))
+        if base_conditions:
+            total_query = total_query.where(and_(*base_conditions))
+        total_result = await self.session.execute(total_query)
         total = total_result.scalar_one()
 
-        # Count by status
-        by_status = {}
-        for status in MCPSubscriptionStatus:
-            status_query = select(func.count()).where(
-                MCPServerSubscription.status == status
-            )
-            if tenant_id:
-                status_query = status_query.where(MCPServerSubscription.tenant_id == tenant_id)
-            result = await self.session.execute(status_query)
-            by_status[status.value] = result.scalar_one()
+        # Count by status - single query with GROUP BY instead of N+1
+        status_query = select(
+            MCPServerSubscription.status,
+            func.count(MCPServerSubscription.id)
+        ).group_by(MCPServerSubscription.status)
+        if base_conditions:
+            status_query = status_query.where(and_(*base_conditions))
+        status_result = await self.session.execute(status_query)
 
-        # Recent 24h
+        # Initialize all statuses to 0, then update with actual counts
+        by_status = {status.value: 0 for status in MCPSubscriptionStatus}
+        for row in status_result:
+            by_status[row[0].value] = row[1]
+
+        # Recent 24h - single query
         yesterday = datetime.utcnow() - timedelta(hours=24)
-        recent_query = select(func.count()).where(
-            MCPServerSubscription.created_at >= yesterday
-        )
+        recent_conditions = [MCPServerSubscription.created_at >= yesterday]
         if tenant_id:
-            recent_query = recent_query.where(MCPServerSubscription.tenant_id == tenant_id)
+            recent_conditions.append(MCPServerSubscription.tenant_id == tenant_id)
+        recent_query = select(func.count(MCPServerSubscription.id)).where(and_(*recent_conditions))
         recent_result = await self.session.execute(recent_query)
         recent_24h = recent_result.scalar_one()
 
-        # Count by server
+        # Count by server - single query with JOIN and GROUP BY
         by_server = {}
         server_query = (
             select(MCPServer.name, func.count(MCPServerSubscription.id))

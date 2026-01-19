@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { API, APICreate, Tenant } from '../types';
@@ -22,6 +22,13 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const PAGE_SIZE = 20;
+
+// Status colors moved outside component to prevent recreation
+const statusColors: Record<string, string> = {
+  draft: 'bg-gray-100 text-gray-800',
+  published: 'bg-green-100 text-green-800',
+  deprecated: 'bg-yellow-100 text-yellow-800',
+};
 
 export function APIs() {
   const { isReady } = useAuth();
@@ -117,7 +124,8 @@ export function APIs() {
 
   const totalPages = Math.ceil(filteredApis.length / PAGE_SIZE);
 
-  async function handleCreate(api: APICreate, deployToDev: boolean) {
+  // Memoized handlers to prevent unnecessary re-renders
+  const handleCreate = useCallback(async (api: APICreate, deployToDev: boolean) => {
     try {
       const created = await apiService.createApi(selectedTenant, api);
 
@@ -135,9 +143,9 @@ export function APIs() {
     } catch (err: any) {
       setError(err.message || 'Failed to create API');
     }
-  }
+  }, [selectedTenant]);
 
-  async function handleUpdate(apiId: string, api: Partial<APICreate>) {
+  const handleUpdate = useCallback(async (apiId: string, api: Partial<APICreate>) => {
     try {
       await apiService.updateApi(selectedTenant, apiId, api);
       setEditingApi(null);
@@ -145,9 +153,9 @@ export function APIs() {
     } catch (err: any) {
       setError(err.message || 'Failed to update API');
     }
-  }
+  }, [selectedTenant]);
 
-  async function handleDelete(apiId: string) {
+  const handleDelete = useCallback(async (apiId: string) => {
     if (!confirm('Are you sure you want to delete this API?')) return;
     try {
       await apiService.deleteApi(selectedTenant, apiId);
@@ -155,9 +163,9 @@ export function APIs() {
     } catch (err: any) {
       setError(err.message || 'Failed to delete API');
     }
-  }
+  }, [selectedTenant]);
 
-  async function handleDeploy(api: API, environment: 'dev' | 'staging') {
+  const handleDeploy = useCallback(async (api: API, environment: 'dev' | 'staging') => {
     try {
       await apiService.createDeployment(selectedTenant, {
         api_id: api.id,
@@ -169,13 +177,13 @@ export function APIs() {
     } catch (err: any) {
       setError(err.message || 'Failed to deploy API');
     }
-  }
+  }, [selectedTenant]);
 
-  const statusColors: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-800',
-    published: 'bg-green-100 text-green-800',
-    deprecated: 'bg-yellow-100 text-yellow-800',
-  };
+  // Memoized filter clear handler
+  const clearFilters = useCallback(() => {
+    setSearchQuery('');
+    setStatusFilter('');
+  }, []);
 
   if (loading && tenants.length === 0) {
     return (
@@ -305,7 +313,7 @@ export function APIs() {
             </svg>
             <p className="mt-2">No APIs match your search criteria</p>
             <button
-              onClick={() => { setSearchQuery(''); setStatusFilter(''); }}
+              onClick={clearFilters}
               className="mt-4 text-blue-600 hover:text-blue-700"
             >
               Clear filters

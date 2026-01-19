@@ -1,9 +1,10 @@
 /**
  * StatCard Component - CAB-280
  * Card de statistique avec couleur dynamique
+ * Optimized with React.memo for list rendering.
  */
 
-import { ReactNode } from 'react';
+import { memo, ReactNode } from 'react';
 
 interface StatCardProps {
   title: string;
@@ -51,7 +52,7 @@ const colorClasses = {
   },
 };
 
-export function StatCard({
+export const StatCard = memo(function StatCard({
   title,
   value,
   subtitle,
@@ -108,4 +109,4 @@ export function StatCard({
       </div>
     </div>
   );
-}
+});

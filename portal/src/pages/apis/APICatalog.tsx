@@ -2,9 +2,10 @@
  * API Catalog Page
  *
  * Browse and discover available APIs in the marketplace.
+ * Optimized with debounced search and server-side filtering.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { BookOpen, Grid3X3, List, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAPIs, useAPICategories } from '../../hooks/useAPIs';
 import { APICard } from '../../components/apis/APICard';
@@ -13,6 +14,23 @@ import type { API } from '../../types';
 
 type ViewMode = 'grid' | 'list';
 
+// Debounce hook for search optimization
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export function APICatalog() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
@@ -20,7 +38,10 @@ export function APICatalog() {
   const [page, setPage] = useState(1);
   const pageSize = 12;
 
-  // Fetch APIs with search and filter params
+  // Debounce search for better performance (300ms delay)
+  const debouncedSearch = useDebounce(search, 300);
+
+  // Fetch APIs with debounced search and filter params
   const {
     data: apisResponse,
     isLoading: apisLoading,
@@ -28,44 +49,19 @@ export function APICatalog() {
     error: apisErrorDetails,
     refetch: refetchAPIs,
   } = useAPIs({
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     category: category || undefined,
     page,
     pageSize,
-    // Don't filter by status - show all APIs (draft, published, deprecated)
   });
 
   // Fetch available categories
   const { data: categories = [], isLoading: categoriesLoading } = useAPICategories();
 
-  // Extract APIs from response
+  // Extract APIs from response - server-side filtering is sufficient
   const apis = apisResponse?.items || [];
   const totalCount = apisResponse?.total || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
-
-  // Filter APIs client-side for immediate feedback (in addition to server-side filtering)
-  const filteredAPIs = useMemo(() => {
-    if (!apis.length) return [];
-
-    return apis.filter((api: API) => {
-      // Search filter (already applied server-side, but double-check for consistency)
-      if (search) {
-        const searchLower = search.toLowerCase();
-        const matchesSearch =
-          api.name.toLowerCase().includes(searchLower) ||
-          api.description?.toLowerCase().includes(searchLower) ||
-          api.tags?.some((tag) => tag.toLowerCase().includes(searchLower));
-        if (!matchesSearch) return false;
-      }
-
-      // Category filter (already applied server-side)
-      if (category && api.category !== category) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [apis, search, category]);
 
   // Reset page when filters change
   const handleSearchChange = (value: string) => {
@@ -180,7 +176,7 @@ export function APICatalog() {
       )}
 
       {/* Empty state */}
-      {!apisLoading && !apisError && filteredAPIs.length === 0 && (
+      {!apisLoading && !apisError && apis.length === 0 && (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
           <div className="inline-flex p-4 bg-gray-100 rounded-full mb-4">
             <BookOpen className="h-8 w-8 text-gray-400" />
@@ -206,17 +202,17 @@ export function APICatalog() {
       )}
 
       {/* API Grid/List */}
-      {!apisLoading && !apisError && filteredAPIs.length > 0 && (
+      {!apisLoading && !apisError && apis.length > 0 && (
         <>
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredAPIs.map((api: API) => (
+              {apis.map((api: API) => (
                 <APICard key={api.id} api={api} />
               ))}
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredAPIs.map((api: API) => (
+              {apis.map((api: API) => (
                 <APICard key={api.id} api={api} />
               ))}
             </div>

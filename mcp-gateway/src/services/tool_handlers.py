@@ -39,6 +39,15 @@ class STOAToolHandlers:
             raise ValueError("Authentication required")
         return claims.raw_token
 
+    def _get_token_optional(self, claims: TokenClaims | None) -> str | None:
+        """Extract bearer token from claims, returning None if not available.
+
+        Used for read-only operations that can fall back to demo data.
+        """
+        if claims is None or not claims.raw_token:
+            return None
+        return claims.raw_token
+
     def _is_platform_admin(self, claims: TokenClaims | None) -> bool:
         """Check if user is platform admin."""
         if claims is None:
@@ -60,28 +69,63 @@ class STOAToolHandlers:
         params: dict[str, Any],
         claims: TokenClaims | None,
     ) -> dict[str, Any]:
-        """Handle stoa_tenants tool calls via Core API."""
-        try:
-            token = self._get_token(claims)
-            client = get_core_api_client()
+        """Handle stoa_tenants tool calls via Core API.
 
-            tenants = await client.list_tenants(token)
+        Falls back to demo data when no token is available (public read mode).
+        """
+        token = self._get_token_optional(claims)
 
-            logger.info(
-                "Listed tenants via Core API",
-                user_id=claims.subject if claims else "anonymous",
-                count=len(tenants),
-            )
+        if token:
+            # Authenticated mode: use Core API
+            try:
+                client = get_core_api_client()
+                tenants = await client.list_tenants(token)
 
+                logger.info(
+                    "Listed tenants via Core API",
+                    user_id=claims.subject if claims else "anonymous",
+                    count=len(tenants),
+                )
+
+                return {
+                    "tenants": tenants,
+                    "total": len(tenants),
+                }
+            except Exception as e:
+                logger.error("Failed to list tenants", error=str(e))
+                return {"error": "API_ERROR", "message": str(e)}
+        else:
+            # Public mode: return demo tenants (RPO demo)
+            logger.info("Returning demo tenants (no auth)")
+            demo_tenants = [
+                {
+                    "id": "high-five",
+                    "name": "High Five",
+                    "display_name": "High Five - The Resistance",
+                    "description": "Parzival's team of elite gunters hunting for Halliday's Easter Egg",
+                    "status": "active",
+                },
+                {
+                    "id": "ioi",
+                    "name": "IOI",
+                    "display_name": "Innovative Online Industries",
+                    "description": "The corporate antagonist seeking to monetize the OASIS",
+                    "status": "active",
+                },
+                {
+                    "id": "oasis",
+                    "name": "OASIS",
+                    "display_name": "OASIS Platform Administration",
+                    "description": "Platform-level administration by Halliday's legacy",
+                    "status": "active",
+                },
+            ]
             return {
-                "tenants": tenants,
-                "total": len(tenants),
+                "tenants": demo_tenants,
+                "total": len(demo_tenants),
+                "mode": "demo",
+                "note": "Showing demo data. Authenticate for full access.",
             }
-        except ValueError as e:
-            return {"error": "AUTH_REQUIRED", "message": str(e)}
-        except Exception as e:
-            logger.error("Failed to list tenants", error=str(e))
-            return {"error": "API_ERROR", "message": str(e)}
 
     # =========================================================================
     # CATALOG HANDLERS
@@ -93,89 +137,201 @@ class STOAToolHandlers:
         params: dict[str, Any],
         claims: TokenClaims | None,
     ) -> dict[str, Any]:
-        """Handle stoa_catalog tool calls via Core API."""
-        try:
-            token = self._get_token(claims)
-            client = get_core_api_client()
-            tenant_id = claims.tenant_id if claims else None
+        """Handle stoa_catalog tool calls via Core API.
 
-            if action == "list":
-                apis = await client.list_apis(
-                    token=token,
-                    tenant_id=tenant_id,
-                    status=params.get("status"),
-                    category=params.get("category"),
-                )
-                return {
-                    "apis": apis,
-                    "total": len(apis),
-                    "page": params.get("page", 1),
-                    "page_size": params.get("page_size", 20),
-                }
+        Falls back to demo data when no token is available (public read mode).
+        """
+        token = self._get_token_optional(claims)
+        tenant_id = claims.tenant_id if claims else None
 
-            elif action == "get":
-                api_id = params.get("api_id")
-                if not api_id:
-                    return {"error": "INVALID_PARAMS", "message": "api_id is required"}
-                api = await client.get_api(api_id, token)
-                return api
+        # Demo APIs for public mode (RPO themed)
+        demo_apis = [
+            {
+                "id": "avatar-search-api",
+                "name": "Avatar Search API",
+                "description": "Search OASIS players by gamertag, clan, or achievements",
+                "version": "1.0.0",
+                "status": "published",
+                "category": "Avatar",
+                "tenant_id": "oasis",
+            },
+            {
+                "id": "economy-transfer-api",
+                "name": "Economy Transfer API",
+                "description": "Transfer OASIS coins between players",
+                "version": "1.0.0",
+                "status": "published",
+                "category": "Economy",
+                "tenant_id": "oasis",
+            },
+            {
+                "id": "inventory-artifacts-api",
+                "name": "Inventory Artifacts API",
+                "description": "Check artifact ownership and provenance history",
+                "version": "1.0.0",
+                "status": "published",
+                "category": "Inventory",
+                "tenant_id": "oasis",
+            },
+            {
+                "id": "quests-api",
+                "name": "Quests API",
+                "description": "Create and manage OASIS quests",
+                "version": "1.0.0",
+                "status": "published",
+                "category": "Quests",
+                "tenant_id": "oasis",
+            },
+            {
+                "id": "events-api",
+                "name": "Events API",
+                "description": "Broadcast announcements to OASIS players",
+                "version": "1.0.0",
+                "status": "published",
+                "category": "Events",
+                "tenant_id": "oasis",
+            },
+        ]
 
-            elif action == "search":
-                query = params.get("query")
-                if not query:
-                    return {"error": "INVALID_PARAMS", "message": "query is required"}
-                # Use list with filtering for search (Core API may support query param)
-                apis = await client.list_apis(token=token, tenant_id=tenant_id)
-                # Filter locally if Core API doesn't support search
-                query_lower = query.lower()
-                filtered = [
-                    api for api in apis
-                    if query_lower in api.get("name", "").lower()
-                    or query_lower in api.get("description", "").lower()
-                ]
-                return {
-                    "apis": filtered,
-                    "total": len(filtered),
-                    "query": query,
-                }
-
-            elif action == "versions":
-                api_id = params.get("api_id")
-                if not api_id:
-                    return {"error": "INVALID_PARAMS", "message": "api_id is required"}
-                api = await client.get_api(api_id, token)
-                return {
-                    "api_id": api_id,
-                    "versions": [
-                        {
-                            "version": api.get("version", "1.0.0"),
-                            "status": api.get("status"),
-                        }
-                    ],
-                }
-
-            elif action == "categories":
-                # Get all APIs and extract unique categories
-                apis = await client.list_apis(token=token)
-                categories = {}
-                for api in apis:
-                    cat = api.get("category", "uncategorized")
-                    categories[cat] = categories.get(cat, 0) + 1
-                return {
-                    "categories": [
-                        {"name": name, "count": count}
-                        for name, count in categories.items()
-                    ]
-                }
-
+        if action == "list":
+            if token:
+                try:
+                    client = get_core_api_client()
+                    apis = await client.list_apis(
+                        token=token,
+                        tenant_id=tenant_id,
+                        status=params.get("status"),
+                        category=params.get("category"),
+                    )
+                    return {
+                        "apis": apis,
+                        "total": len(apis),
+                        "page": params.get("page", 1),
+                        "page_size": params.get("page_size", 20),
+                    }
+                except Exception as e:
+                    logger.error("Failed to list APIs", error=str(e))
+                    return {"error": "API_ERROR", "message": str(e)}
             else:
-                return {"error": "INVALID_ACTION", "message": f"Unknown action: {action}"}
+                # Public mode: return demo APIs
+                logger.info("Returning demo APIs (no auth)")
+                return {
+                    "apis": demo_apis,
+                    "total": len(demo_apis),
+                    "page": 1,
+                    "page_size": 20,
+                    "mode": "demo",
+                    "note": "Showing demo APIs. Authenticate for full access.",
+                }
 
-        except ValueError as e:
-            return {"error": "AUTH_REQUIRED", "message": str(e)}
-        except Exception as e:
-            logger.error("Failed to handle catalog action", action=action, error=str(e))
-            return {"error": "API_ERROR", "message": str(e)}
+        elif action == "get":
+            api_id = params.get("api_id")
+            if not api_id:
+                return {"error": "INVALID_PARAMS", "message": "api_id is required"}
+            if token:
+                try:
+                    client = get_core_api_client()
+                    api = await client.get_api(api_id, token)
+                    return api
+                except Exception as e:
+                    logger.error("Failed to get API", api_id=api_id, error=str(e))
+                    return {"error": "API_ERROR", "message": str(e)}
+            else:
+                # Try to find in demo APIs
+                for api in demo_apis:
+                    if api["id"] == api_id:
+                        return api
+                return {"error": "NOT_FOUND", "message": f"API {api_id} not found"}
+
+        elif action == "search":
+            query = params.get("query")
+            if not query:
+                return {"error": "INVALID_PARAMS", "message": "query is required"}
+
+            if token:
+                try:
+                    client = get_core_api_client()
+                    apis = await client.list_apis(token=token, tenant_id=tenant_id)
+                except Exception as e:
+                    logger.error("Failed to search APIs", error=str(e))
+                    return {"error": "API_ERROR", "message": str(e)}
+            else:
+                apis = demo_apis
+
+            # Filter locally
+            query_lower = query.lower()
+            filtered = [
+                api for api in apis
+                if query_lower in api.get("name", "").lower()
+                or query_lower in api.get("description", "").lower()
+            ]
+            result = {
+                "apis": filtered,
+                "total": len(filtered),
+                "query": query,
+            }
+            if not token:
+                result["mode"] = "demo"
+            return result
+
+        elif action == "versions":
+            api_id = params.get("api_id")
+            if not api_id:
+                return {"error": "INVALID_PARAMS", "message": "api_id is required"}
+            if token:
+                try:
+                    client = get_core_api_client()
+                    api = await client.get_api(api_id, token)
+                    return {
+                        "api_id": api_id,
+                        "versions": [
+                            {
+                                "version": api.get("version", "1.0.0"),
+                                "status": api.get("status"),
+                            }
+                        ],
+                    }
+                except Exception as e:
+                    logger.error("Failed to get API versions", api_id=api_id, error=str(e))
+                    return {"error": "API_ERROR", "message": str(e)}
+            else:
+                # Demo mode
+                for api in demo_apis:
+                    if api["id"] == api_id:
+                        return {
+                            "api_id": api_id,
+                            "versions": [{"version": api["version"], "status": api["status"]}],
+                            "mode": "demo",
+                        }
+                return {"error": "NOT_FOUND", "message": f"API {api_id} not found"}
+
+        elif action == "categories":
+            if token:
+                try:
+                    client = get_core_api_client()
+                    apis = await client.list_apis(token=token)
+                except Exception as e:
+                    logger.error("Failed to get categories", error=str(e))
+                    return {"error": "API_ERROR", "message": str(e)}
+            else:
+                apis = demo_apis
+
+            categories = {}
+            for api in apis:
+                cat = api.get("category", "uncategorized")
+                categories[cat] = categories.get(cat, 0) + 1
+            result = {
+                "categories": [
+                    {"name": name, "count": count}
+                    for name, count in categories.items()
+                ]
+            }
+            if not token:
+                result["mode"] = "demo"
+            return result
+
+        else:
+            return {"error": "INVALID_ACTION", "message": f"Unknown action: {action}"}
 
     # =========================================================================
     # API SPEC HANDLERS

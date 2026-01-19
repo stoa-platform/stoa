@@ -1,0 +1,317 @@
+# ============================================================================
+# STOA Platform - Ready Player One Tool CRDs
+# Namespace: oasis
+# ============================================================================
+# Usage: kubectl apply -f deploy/demo-rpo/oasis-tools.yaml
+# ============================================================================
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: oasis
+  labels:
+    stoa.cab-i.com/tenant: oasis-gunters
+    stoa.cab-i.com/environment: demo
+    app.kubernetes.io/part-of: stoa-platform
+
+---
+# ============================================================================
+# Tool 1: Search Players (Avatar API)
+# ============================================================================
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tool
+metadata:
+  name: search-players
+  namespace: oasis
+  labels:
+    stoa.cab-i.com/tenant: oasis-gunters
+    stoa.cab-i.com/category: avatar
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/description: "Ready Player One demo - Avatar tools"
+spec:
+  displayName: "Search OASIS Players"
+  description: "Search OASIS players by gamertag, clan, or achievements. Find other Gunters in the metaverse."
+  version: "1.0.0"
+  enabled: true
+  endpoint: https://httpbin.org/post
+  method: POST
+  apiRef:
+    name: Avatar-API
+    operationId: searchPlayers
+    version: "1.0"
+  inputSchema:
+    type: object
+    properties:
+      query:
+        type: string
+        description: "Search query (gamertag, partial match)"
+      level_min:
+        type: integer
+        description: "Minimum player level filter"
+      level_max:
+        type: integer
+        description: "Maximum player level filter"
+      clan:
+        type: string
+        description: "Filter by clan name"
+      online_only:
+        type: boolean
+        default: false
+        description: "Only show online players"
+      limit:
+        type: integer
+        default: 10
+        description: "Maximum results to return"
+    required:
+      - query
+  rateLimit:
+    requestsPerMinute: 60
+    burst: 10
+  tags:
+    - avatar
+    - search
+    - players
+    - oasis
+  timeout: "30s"
+
+---
+# ============================================================================
+# Tool 2: Transfer Coins (Economy API)
+# ============================================================================
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tool
+metadata:
+  name: transfer-coins
+  namespace: oasis
+  labels:
+    stoa.cab-i.com/tenant: oasis-gunters
+    stoa.cab-i.com/category: economy
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/description: "Ready Player One demo - Economy tools"
+    stoa.cab-i.com/governance: "amount>10000 requires attestation; amount>100000 requires 2FA"
+spec:
+  displayName: "Transfer OASIS Coins"
+  description: "Transfer OASIS coins between players. Large transfers (>10K) require attestation, very large (>100K) require 2FA."
+  version: "1.0.0"
+  enabled: true
+  endpoint: https://httpbin.org/post
+  method: POST
+  apiRef:
+    name: Economy-API
+    operationId: transferCoins
+    version: "1.0"
+  inputSchema:
+    type: object
+    properties:
+      from_player:
+        type: string
+        description: "Source player gamertag"
+      to_player:
+        type: string
+        description: "Destination player gamertag"
+      amount:
+        type: integer
+        description: "Amount of coins to transfer (min: 1)"
+      reason:
+        type: string
+        description: "Transfer reason for audit trail"
+    required:
+      - from_player
+      - to_player
+      - amount
+      - reason
+  rateLimit:
+    requestsPerMinute: 10
+    burst: 2
+  tags:
+    - economy
+    - transfer
+    - coins
+    - oasis
+  timeout: "60s"
+
+---
+# ============================================================================
+# Tool 3: Check Artifact (Inventory API)
+# ============================================================================
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tool
+metadata:
+  name: check-artifact
+  namespace: oasis
+  labels:
+    stoa.cab-i.com/tenant: oasis-gunters
+    stoa.cab-i.com/category: inventory
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/description: "Ready Player One demo - Inventory tools"
+spec:
+  displayName: "Check Artifact Authenticity"
+  description: "Check artifact ownership, authenticity, and complete provenance history. Verify legendary items before trades."
+  version: "1.0.0"
+  enabled: true
+  endpoint: https://httpbin.org/post
+  method: POST
+  apiRef:
+    name: Inventory-API
+    operationId: checkArtifact
+    version: "1.0"
+  inputSchema:
+    type: object
+    properties:
+      artifact_id:
+        type: string
+        description: "Unique artifact identifier (e.g., ART-COPPER-KEY-001)"
+      include_provenance:
+        type: boolean
+        default: true
+        description: "Include full ownership history"
+    required:
+      - artifact_id
+  rateLimit:
+    requestsPerMinute: 30
+    burst: 5
+  tags:
+    - inventory
+    - artifacts
+    - verification
+    - oasis
+  timeout: "30s"
+
+---
+# ============================================================================
+# Tool 4: Create Quest (Quests API)
+# ============================================================================
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tool
+metadata:
+  name: create-quest
+  namespace: oasis
+  labels:
+    stoa.cab-i.com/tenant: oasis-gunters
+    stoa.cab-i.com/category: quests
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/description: "Ready Player One demo - Quest tools"
+    stoa.cab-i.com/governance: "Requires project_owner role"
+spec:
+  displayName: "Create OASIS Quest"
+  description: "Create a new quest in the OASIS. Define objectives, rewards, and locations. Only Project Owners can create quests."
+  version: "1.0.0"
+  enabled: true
+  endpoint: https://httpbin.org/post
+  method: POST
+  apiRef:
+    name: Quests-API
+    operationId: createQuest
+    version: "1.0"
+  inputSchema:
+    type: object
+    properties:
+      title:
+        type: string
+        description: "Quest title (max 100 chars)"
+      description:
+        type: string
+        description: "Quest description and objectives"
+      difficulty:
+        type: string
+        enum:
+          - bronze
+          - silver
+          - gold
+          - crystal
+        description: "Quest difficulty level"
+      reward_coins:
+        type: integer
+        description: "Coin reward for completion"
+      reward_xp:
+        type: integer
+        description: "XP reward for completion"
+      planet:
+        type: string
+        description: "Planet where quest takes place"
+      sector:
+        type: string
+        description: "Sector on the planet"
+      time_limit_hours:
+        type: integer
+        description: "Time limit in hours (optional)"
+    required:
+      - title
+      - difficulty
+      - planet
+  rateLimit:
+    requestsPerMinute: 5
+    burst: 1
+  tags:
+    - quests
+    - creation
+    - rewards
+    - oasis
+  timeout: "60s"
+
+---
+# ============================================================================
+# Tool 5: Broadcast Announcement (Events API)
+# ============================================================================
+apiVersion: stoa.cab-i.com/v1alpha1
+kind: Tool
+metadata:
+  name: broadcast-announcement
+  namespace: oasis
+  labels:
+    stoa.cab-i.com/tenant: oasis-gunters
+    stoa.cab-i.com/category: events
+    stoa.cab-i.com/demo: "true"
+  annotations:
+    stoa.cab-i.com/description: "Ready Player One demo - Events tools"
+    stoa.cab-i.com/governance: "Requires tenant_admin; critical priority requires security_officer approval"
+spec:
+  displayName: "OASIS Broadcast Announcement"
+  description: "Broadcast announcement to all OASIS players. Critical announcements require Security Officer approval."
+  version: "1.0.0"
+  enabled: true
+  endpoint: https://httpbin.org/post
+  method: POST
+  apiRef:
+    name: Events-API
+    operationId: broadcastAnnouncement
+    version: "1.0"
+  inputSchema:
+    type: object
+    properties:
+      message:
+        type: string
+        description: "Announcement message (max 500 chars)"
+      priority:
+        type: string
+        enum:
+          - normal
+          - urgent
+          - critical
+        description: "Announcement priority level"
+      target_planets:
+        type: array
+        items:
+          type: string
+        description: "Target planets (empty = all planets)"
+      duration_minutes:
+        type: integer
+        default: 60
+        description: "How long to display announcement"
+    required:
+      - message
+      - priority
+  rateLimit:
+    requestsPerMinute: 1
+    burst: 1
+  tags:
+    - events
+    - broadcast
+    - announcement
+    - oasis
+  timeout: "30s"

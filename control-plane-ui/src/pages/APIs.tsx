@@ -49,6 +49,7 @@ export function APIs() {
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   useEffect(() => {
+    console.log('[APIs] isReady changed:', isReady);
     if (isReady) {
       loadTenants();
     }
@@ -67,13 +68,16 @@ export function APIs() {
 
   async function loadTenants() {
     try {
+      console.log('[APIs] Loading tenants...');
       const data = await apiService.getTenants();
+      console.log('[APIs] Loaded tenants:', data);
       setTenants(data);
       if (data.length > 0) {
         setSelectedTenant(data[0].id);
       }
       setLoading(false);
     } catch (err: any) {
+      console.error('[APIs] Failed to load tenants:', err);
       setError(err.message || 'Failed to load tenants');
       setLoading(false);
     }
@@ -82,10 +86,13 @@ export function APIs() {
   async function loadApis(tenantId: string) {
     try {
       setLoading(true);
+      console.log('[APIs] Loading APIs for tenant:', tenantId);
       const data = await apiService.getApis(tenantId);
+      console.log('[APIs] Loaded APIs:', data);
       setApis(data);
       setError(null);
     } catch (err: any) {
+      console.error('[APIs] Failed to load APIs:', err);
       setError(err.message || 'Failed to load APIs');
       setApis([]);
     } finally {

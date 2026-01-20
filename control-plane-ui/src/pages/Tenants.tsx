@@ -11,6 +11,7 @@ export function Tenants() {
 
   useEffect(() => {
     // Only load tenants when token is ready
+    console.log('[Tenants] isReady changed:', isReady);
     if (isReady) {
       loadTenants();
     }
@@ -19,10 +20,13 @@ export function Tenants() {
   async function loadTenants() {
     try {
       setLoading(true);
+      console.log('[Tenants] Loading tenants...');
       const data = await apiService.getTenants();
+      console.log('[Tenants] Loaded tenants:', data);
       setTenants(data);
       setError(null);
     } catch (err: any) {
+      console.error('[Tenants] Failed to load tenants:', err);
       setError(err.message || 'Failed to load tenants');
     } finally {
       setLoading(false);

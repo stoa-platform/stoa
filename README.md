@@ -131,6 +131,12 @@ STOA is an **AI-native API Management Platform** that bridges traditional APIs a
 
 ## Quick Start
 
+**Prerequisites:**
+
+Before you begin, ensure you have the following installed:
+- [Git](https://git-scm.com/downloads)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Compose)
+
 > ⚠️ **Coming Soon** — The open-source release is planned for Q1 2026.
 > 
 > Join our [Discord](https://discord.gg/j8tHSSes) to get early access or become a design partner.
@@ -138,15 +144,17 @@ STOA is an **AI-native API Management Platform** that bridges traditional APIs a
 ### Docker Compose (Preview)
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/stoa-platform/stoa.git
 cd stoa
+# Output: Cloning into 'stoa'...
 
-# Start with Docker Compose
+# 2. Start with Docker Compose
 docker compose up -d
+# Output: [+] Running 12/12 ... Container stoa-portal Started
 
-# Access the Portal
-open http://localhost:3000
+# 3. Access the Portal
+# Open your browser to: http://localhost:3000
 ```
 
 ### Helm (Kubernetes)

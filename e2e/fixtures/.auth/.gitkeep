@@ -1,0 +1,2 @@
+# This directory stores authentication states for test personas
+# Files are gitignored as they contain sensitive tokens

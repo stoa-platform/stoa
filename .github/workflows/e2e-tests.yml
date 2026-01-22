@@ -1,0 +1,185 @@
+name: E2E Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'e2e/**'
+      - 'portal/**'
+      - 'control-plane-ui/**'
+      - '.github/workflows/e2e-tests.yml'
+
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'e2e/**'
+      - 'portal/**'
+      - 'control-plane-ui/**'
+
+  # Run daily at 6 AM UTC
+  schedule:
+    - cron: '0 6 * * *'
+
+  # Manual trigger with test suite selection
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'smoke'
+        type: choice
+        options:
+          - all
+          - smoke
+          - critical
+          - portal
+          - console
+          - gateway
+          - rpo
+      environment:
+        description: 'Target environment'
+        required: false
+        default: 'staging'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  e2e-tests:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate BDD tests
+        working-directory: e2e
+        run: npm run bddgen
+
+      - name: Run E2E tests
+        working-directory: e2e
+        env:
+          # URLs - use staging by default
+          STOA_PORTAL_URL: ${{ secrets.E2E_PORTAL_URL || 'https://portal.stoa.cab-i.com' }}
+          STOA_CONSOLE_URL: ${{ secrets.E2E_CONSOLE_URL || 'https://console.stoa.cab-i.com' }}
+          STOA_GATEWAY_URL: ${{ secrets.E2E_GATEWAY_URL || 'https://api.stoa.cab-i.com' }}
+          KEYCLOAK_URL: ${{ secrets.E2E_KEYCLOAK_URL || 'https://auth.stoa.cab-i.com' }}
+          KEYCLOAK_REALM: stoa
+
+          # Personas - High-Five
+          PARZIVAL_USER: ${{ secrets.PARZIVAL_USER }}
+          PARZIVAL_PASSWORD: ${{ secrets.PARZIVAL_PASSWORD }}
+          ART3MIS_USER: ${{ secrets.ART3MIS_USER }}
+          ART3MIS_PASSWORD: ${{ secrets.ART3MIS_PASSWORD }}
+          AECH_USER: ${{ secrets.AECH_USER }}
+          AECH_PASSWORD: ${{ secrets.AECH_PASSWORD }}
+
+          # Personas - IOI
+          SORRENTO_USER: ${{ secrets.SORRENTO_USER }}
+          SORRENTO_PASSWORD: ${{ secrets.SORRENTO_PASSWORD }}
+          I_R0K_USER: ${{ secrets.I_R0K_USER }}
+          I_R0K_PASSWORD: ${{ secrets.I_R0K_PASSWORD }}
+
+          # Personas - Admin
+          ANORAK_USER: ${{ secrets.ANORAK_USER }}
+          ANORAK_PASSWORD: ${{ secrets.ANORAK_PASSWORD }}
+
+          # Test API Key
+          TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
+
+        run: |
+          TEST_SUITE="${{ github.event.inputs.test_suite || 'smoke' }}"
+
+          case "$TEST_SUITE" in
+            "all")
+              npm run test:e2e
+              ;;
+            "smoke")
+              npm run test:smoke
+              ;;
+            "critical")
+              npm run test:critical
+              ;;
+            "portal")
+              npm run test:portal
+              ;;
+            "console")
+              npm run test:console
+              ;;
+            "gateway")
+              npm run test:gateway
+              ;;
+            "rpo")
+              npm run test:rpo
+              ;;
+            *)
+              npm run test:smoke
+              ;;
+          esac
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: e2e/reports/html/
+          retention-days: 14
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-${{ github.run_id }}
+          path: |
+            e2e/test-results/
+            e2e/reports/results.json
+          retention-days: 7
+
+      - name: Post test summary
+        if: always()
+        run: |
+          if [ -f e2e/reports/results.json ]; then
+            echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            TOTAL=$(jq '.stats.expected + .stats.unexpected + .stats.flaky + .stats.skipped' e2e/reports/results.json 2>/dev/null || echo "0")
+            PASSED=$(jq '.stats.expected' e2e/reports/results.json 2>/dev/null || echo "0")
+            FAILED=$(jq '.stats.unexpected' e2e/reports/results.json 2>/dev/null || echo "0")
+            SKIPPED=$(jq '.stats.skipped' e2e/reports/results.json 2>/dev/null || echo "0")
+
+            echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Total | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+            echo "| Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
+            echo "| Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
+            echo "| Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "No results file found" >> $GITHUB_STEP_SUMMARY
+          fi

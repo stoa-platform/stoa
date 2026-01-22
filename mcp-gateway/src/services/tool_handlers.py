@@ -5,6 +5,8 @@ Handlers that connect MCP tools to real backends via service layer.
 ADR-001 Compliance (CAB-672):
 - Uses CoreAPIClient to access data via Control-Plane-API
 - No direct database access
+
+CAB-659: Uses standardized error codes from src/errors.py
 """
 
 import json
@@ -13,6 +15,16 @@ from typing import Any
 import structlog
 
 from ..clients import get_core_api_client, CoreAPIClient
+from ..errors import (
+    STOAErrorCode,
+    error_result,
+    AuthRequiredError,
+    InvalidActionError,
+    InvalidParamsError,
+    APINotFoundError,
+    SubscriptionNotFoundError,
+    BackendError,
+)
 from ..middleware.auth import TokenClaims
 
 logger = structlog.get_logger(__name__)
@@ -93,7 +105,11 @@ class STOAToolHandlers:
                 }
             except Exception as e:
                 logger.error("Failed to list tenants", error=str(e))
-                return {"error": "API_ERROR", "message": str(e)}
+                return error_result(
+                    STOAErrorCode.BACKEND_ERROR,
+                    "Failed to list tenants from backend",
+                    details={"backend_error": str(e)},
+                )
         else:
             # Public mode: return demo tenants (RPO demo)
             logger.info("Returning demo tenants (no auth)")
@@ -211,7 +227,11 @@ class STOAToolHandlers:
                     }
                 except Exception as e:
                     logger.error("Failed to list APIs", error=str(e))
-                    return {"error": "API_ERROR", "message": str(e)}
+                    return error_result(
+                        STOAErrorCode.BACKEND_ERROR,
+                        "Failed to list APIs from backend",
+                        details={"backend_error": str(e)},
+                    )
             else:
                 # Public mode: return demo APIs
                 logger.info("Returning demo APIs (no auth)")
@@ -227,7 +247,11 @@ class STOAToolHandlers:
         elif action == "get":
             api_id = params.get("api_id")
             if not api_id:
-                return {"error": "INVALID_PARAMS", "message": "api_id is required"}
+                return error_result(
+                    STOAErrorCode.INVALID_PARAMS,
+                    "Parameter 'api_id' is required",
+                    details={"parameter": "api_id", "action": action},
+                )
             if token:
                 try:
                     client = get_core_api_client()
@@ -235,18 +259,30 @@ class STOAToolHandlers:
                     return api
                 except Exception as e:
                     logger.error("Failed to get API", api_id=api_id, error=str(e))
-                    return {"error": "API_ERROR", "message": str(e)}
+                    return error_result(
+                        STOAErrorCode.API_NOT_FOUND,
+                        f"API '{api_id}' not found",
+                        details={"api_id": api_id, "backend_error": str(e)},
+                    )
             else:
                 # Try to find in demo APIs
                 for api in demo_apis:
                     if api["id"] == api_id:
                         return api
-                return {"error": "NOT_FOUND", "message": f"API {api_id} not found"}
+                return error_result(
+                    STOAErrorCode.API_NOT_FOUND,
+                    f"API '{api_id}' not found",
+                    details={"api_id": api_id, "mode": "demo"},
+                )
 
         elif action == "search":
             query = params.get("query")
             if not query:
-                return {"error": "INVALID_PARAMS", "message": "query is required"}
+                return error_result(
+                    STOAErrorCode.INVALID_PARAMS,
+                    "Parameter 'query' is required",
+                    details={"parameter": "query", "action": action},
+                )
 
             if token:
                 try:
@@ -254,7 +290,11 @@ class STOAToolHandlers:
                     apis = await client.list_apis(token=token, tenant_id=tenant_id)
                 except Exception as e:
                     logger.error("Failed to search APIs", error=str(e))
-                    return {"error": "API_ERROR", "message": str(e)}
+                    return error_result(
+                        STOAErrorCode.BACKEND_ERROR,
+                        "Failed to search APIs",
+                        details={"backend_error": str(e)},
+                    )
             else:
                 apis = demo_apis
 
@@ -277,7 +317,11 @@ class STOAToolHandlers:
         elif action == "versions":
             api_id = params.get("api_id")
             if not api_id:
-                return {"error": "INVALID_PARAMS", "message": "api_id is required"}
+                return error_result(
+                    STOAErrorCode.INVALID_PARAMS,
+                    "Parameter 'api_id' is required",
+                    details={"parameter": "api_id", "action": action},
+                )
             if token:
                 try:
                     client = get_core_api_client()
@@ -293,7 +337,11 @@ class STOAToolHandlers:
                     }
                 except Exception as e:
                     logger.error("Failed to get API versions", api_id=api_id, error=str(e))
-                    return {"error": "API_ERROR", "message": str(e)}
+                    return error_result(
+                        STOAErrorCode.API_NOT_FOUND,
+                        f"API '{api_id}' not found",
+                        details={"api_id": api_id, "backend_error": str(e)},
+                    )
             else:
                 # Demo mode
                 for api in demo_apis:
@@ -303,7 +351,11 @@ class STOAToolHandlers:
                             "versions": [{"version": api["version"], "status": api["status"]}],
                             "mode": "demo",
                         }
-                return {"error": "NOT_FOUND", "message": f"API {api_id} not found"}
+                return error_result(
+                    STOAErrorCode.API_NOT_FOUND,
+                    f"API '{api_id}' not found",
+                    details={"api_id": api_id, "mode": "demo"},
+                )
 
         elif action == "categories":
             if token:
@@ -312,7 +364,11 @@ class STOAToolHandlers:
                     apis = await client.list_apis(token=token)
                 except Exception as e:
                     logger.error("Failed to get categories", error=str(e))
-                    return {"error": "API_ERROR", "message": str(e)}
+                    return error_result(
+                        STOAErrorCode.BACKEND_ERROR,
+                        "Failed to get API categories",
+                        details={"backend_error": str(e)},
+                    )
             else:
                 apis = demo_apis
 
@@ -331,7 +387,11 @@ class STOAToolHandlers:
             return result
 
         else:
-            return {"error": "INVALID_ACTION", "message": f"Unknown action: {action}"}
+            return error_result(
+                STOAErrorCode.INVALID_ACTION,
+                f"Unknown action: '{action}'",
+                details={"action": action, "valid_actions": ["list", "get", "search", "versions", "categories"]},
+            )
 
     # =========================================================================
     # API SPEC HANDLERS
@@ -350,7 +410,11 @@ class STOAToolHandlers:
 
             api_id = params.get("api_id")
             if not api_id:
-                return {"error": "INVALID_PARAMS", "message": "api_id is required"}
+                return error_result(
+                    STOAErrorCode.INVALID_PARAMS,
+                    "Parameter 'api_id' is required",
+                    details={"parameter": "api_id", "action": action},
+                )
 
             if action == "openapi":
                 try:
@@ -404,13 +468,24 @@ class STOAToolHandlers:
                 }
 
             else:
-                return {"error": "INVALID_ACTION", "message": f"Unknown action: {action}"}
+                return error_result(
+                    STOAErrorCode.INVALID_ACTION,
+                    f"Unknown action: '{action}'",
+                    details={"action": action, "valid_actions": ["openapi", "docs", "endpoints"]},
+                )
 
         except ValueError as e:
-            return {"error": "AUTH_REQUIRED", "message": str(e)}
+            return error_result(
+                STOAErrorCode.AUTH_REQUIRED,
+                str(e),
+            )
         except Exception as e:
             logger.error("Failed to handle api_spec action", action=action, error=str(e))
-            return {"error": "API_ERROR", "message": str(e)}
+            return error_result(
+                STOAErrorCode.BACKEND_ERROR,
+                f"Failed to handle api_spec action: {action}",
+                details={"action": action, "backend_error": str(e)},
+            )
 
     # =========================================================================
     # SUBSCRIPTION HANDLERS (MCP Subscriptions via Core API)
@@ -444,14 +519,22 @@ class STOAToolHandlers:
             elif action == "get":
                 sub_id = params.get("subscription_id")
                 if not sub_id:
-                    return {"error": "INVALID_PARAMS", "message": "subscription_id is required"}
+                    return error_result(
+                        STOAErrorCode.INVALID_PARAMS,
+                        "Parameter 'subscription_id' is required",
+                        details={"parameter": "subscription_id", "action": action},
+                    )
                 sub = await client.get_mcp_subscription(sub_id, token)
                 return sub
 
             elif action == "create":
                 server_id = params.get("server_id") or params.get("api_id")
                 if not server_id:
-                    return {"error": "INVALID_PARAMS", "message": "server_id is required"}
+                    return error_result(
+                        STOAErrorCode.INVALID_PARAMS,
+                        "Parameter 'server_id' is required",
+                        details={"parameter": "server_id", "action": action},
+                    )
                 sub = await client.create_mcp_subscription(
                     data={
                         "server_id": server_id,
@@ -470,7 +553,11 @@ class STOAToolHandlers:
             elif action == "cancel":
                 sub_id = params.get("subscription_id")
                 if not sub_id:
-                    return {"error": "INVALID_PARAMS", "message": "subscription_id is required"}
+                    return error_result(
+                        STOAErrorCode.INVALID_PARAMS,
+                        "Parameter 'subscription_id' is required",
+                        details={"parameter": "subscription_id", "action": action},
+                    )
                 await client.delete_mcp_subscription(sub_id, token)
                 return {
                     "subscription_id": sub_id,
@@ -481,7 +568,11 @@ class STOAToolHandlers:
             elif action == "credentials":
                 sub_id = params.get("subscription_id")
                 if not sub_id:
-                    return {"error": "INVALID_PARAMS", "message": "subscription_id is required"}
+                    return error_result(
+                        STOAErrorCode.INVALID_PARAMS,
+                        "Parameter 'subscription_id' is required",
+                        details={"parameter": "subscription_id", "action": action},
+                    )
                 sub = await client.get_mcp_subscription(sub_id, token)
                 return {
                     "subscription_id": sub_id,
@@ -494,7 +585,11 @@ class STOAToolHandlers:
             elif action == "rotate_key":
                 sub_id = params.get("subscription_id")
                 if not sub_id:
-                    return {"error": "INVALID_PARAMS", "message": "subscription_id is required"}
+                    return error_result(
+                        STOAErrorCode.INVALID_PARAMS,
+                        "Parameter 'subscription_id' is required",
+                        details={"parameter": "subscription_id", "action": action},
+                    )
                 result = await client.rotate_api_key(
                     subscription_id=sub_id,
                     token=token,
@@ -508,13 +603,24 @@ class STOAToolHandlers:
                 }
 
             else:
-                return {"error": "INVALID_ACTION", "message": f"Unknown action: {action}"}
+                return error_result(
+                    STOAErrorCode.INVALID_ACTION,
+                    f"Unknown action: '{action}'",
+                    details={"action": action, "valid_actions": ["list", "get", "create", "cancel", "credentials", "rotate_key"]},
+                )
 
         except ValueError as e:
-            return {"error": "AUTH_REQUIRED", "message": str(e)}
+            return error_result(
+                STOAErrorCode.AUTH_REQUIRED,
+                str(e),
+            )
         except Exception as e:
             logger.error("Failed to handle subscription action", action=action, error=str(e))
-            return {"error": "API_ERROR", "message": str(e)}
+            return error_result(
+                STOAErrorCode.BACKEND_ERROR,
+                f"Failed to handle subscription action: {action}",
+                details={"action": action, "backend_error": str(e)},
+            )
 
     # =========================================================================
     # SECURITY HANDLERS
@@ -548,7 +654,11 @@ class STOAToolHandlers:
                 api_id = params.get("api_id")
                 action_type = params.get("action_type")
                 if not api_id or not action_type:
-                    return {"error": "INVALID_PARAMS", "message": "api_id and action_type are required"}
+                    return error_result(
+                        STOAErrorCode.INVALID_PARAMS,
+                        "Parameters 'api_id' and 'action_type' are required",
+                        details={"required_params": ["api_id", "action_type"], "action": action},
+                    )
 
                 # Check if user can access the API
                 try:
@@ -597,13 +707,24 @@ class STOAToolHandlers:
                 }
 
             else:
-                return {"error": "INVALID_ACTION", "message": f"Unknown action: {action}"}
+                return error_result(
+                    STOAErrorCode.INVALID_ACTION,
+                    f"Unknown action: '{action}'",
+                    details={"action": action, "valid_actions": ["audit_log", "check_permissions", "list_policies"]},
+                )
 
         except ValueError as e:
-            return {"error": "AUTH_REQUIRED", "message": str(e)}
+            return error_result(
+                STOAErrorCode.AUTH_REQUIRED,
+                str(e),
+            )
         except Exception as e:
             logger.error("Failed to handle security action", action=action, error=str(e))
-            return {"error": "API_ERROR", "message": str(e)}
+            return error_result(
+                STOAErrorCode.BACKEND_ERROR,
+                f"Failed to handle security action: {action}",
+                details={"action": action, "backend_error": str(e)},
+            )
 
     # =========================================================================
     # UAC HANDLERS
@@ -633,16 +754,25 @@ class STOAToolHandlers:
             elif action == "get":
                 contract_id = params.get("contract_id")
                 if not contract_id:
-                    return {"error": "INVALID_PARAMS", "message": "contract_id is required"}
-                return {
-                    "error": "NOT_IMPLEMENTED",
-                    "message": "UAC contract retrieval requires Core API endpoint",
-                }
+                    return error_result(
+                        STOAErrorCode.INVALID_PARAMS,
+                        "Parameter 'contract_id' is required",
+                        details={"parameter": "contract_id", "action": action},
+                    )
+                return error_result(
+                    STOAErrorCode.NOT_IMPLEMENTED,
+                    "UAC contract retrieval requires Core API endpoint",
+                    details={"contract_id": contract_id},
+                )
 
             elif action == "validate":
                 contract_id = params.get("contract_id")
                 if not contract_id:
-                    return {"error": "INVALID_PARAMS", "message": "contract_id is required"}
+                    return error_result(
+                        STOAErrorCode.INVALID_PARAMS,
+                        "Parameter 'contract_id' is required",
+                        details={"parameter": "contract_id", "action": action},
+                    )
                 return {
                     "contract_id": contract_id,
                     "subscription_id": params.get("subscription_id"),
@@ -653,7 +783,11 @@ class STOAToolHandlers:
             elif action == "sla":
                 contract_id = params.get("contract_id")
                 if not contract_id:
-                    return {"error": "INVALID_PARAMS", "message": "contract_id is required"}
+                    return error_result(
+                        STOAErrorCode.INVALID_PARAMS,
+                        "Parameter 'contract_id' is required",
+                        details={"parameter": "contract_id", "action": action},
+                    )
                 return {
                     "contract_id": contract_id,
                     "time_range": params.get("time_range", "30d"),
@@ -666,13 +800,24 @@ class STOAToolHandlers:
                 }
 
             else:
-                return {"error": "INVALID_ACTION", "message": f"Unknown action: {action}"}
+                return error_result(
+                    STOAErrorCode.INVALID_ACTION,
+                    f"Unknown action: '{action}'",
+                    details={"action": action, "valid_actions": ["list", "get", "validate", "sla"]},
+                )
 
         except ValueError as e:
-            return {"error": "AUTH_REQUIRED", "message": str(e)}
+            return error_result(
+                STOAErrorCode.AUTH_REQUIRED,
+                str(e),
+            )
         except Exception as e:
             logger.error("Failed to handle uac action", action=action, error=str(e))
-            return {"error": "API_ERROR", "message": str(e)}
+            return error_result(
+                STOAErrorCode.BACKEND_ERROR,
+                f"Failed to handle UAC action: {action}",
+                details={"action": action, "backend_error": str(e)},
+            )
 
 
 # =============================================================================

@@ -381,13 +381,16 @@ class TestOpenSearchIntegration:
         """Get real OpenSearch client."""
         import os
         
+        # CAB-838: Use env var for verify_certs, default false for local dev with self-signed certs
+        verify_certs = os.environ.get("OPENSEARCH_VERIFY_CERTS", "false").lower() == "true"
         client = AsyncOpenSearch(
             hosts=[os.environ.get("OPENSEARCH_HOST", "https://localhost:9200")],
             http_auth=(
                 os.environ.get("OPENSEARCH_USER", "admin"),
                 os.environ.get("OPENSEARCH_PASSWORD", "admin"),
             ),
-            verify_certs=False,
+            verify_certs=verify_certs,
+            ssl_show_warn=verify_certs,
         )
         
         try:

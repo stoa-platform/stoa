@@ -27,11 +27,12 @@ logger = logging.getLogger("stoa.opensearch")
 
 class OpenSearchSettings(BaseSettings):
     """OpenSearch configuration."""
-    
+
     opensearch_host: str = "https://opensearch.stoa.cab-i.com"
     opensearch_user: str = "admin"
     opensearch_password: str = ""
-    opensearch_verify_certs: bool = False
+    opensearch_verify_certs: bool = True  # CAB-838: Enable SSL verification by default
+    opensearch_ca_certs: Optional[str] = None  # CAB-838: Custom CA certificate path
     opensearch_timeout: int = 30
     
     # Audit settings
@@ -78,7 +79,8 @@ class OpenSearchService:
                 self.settings.opensearch_password,
             ),
             verify_certs=self.settings.opensearch_verify_certs,
-            ssl_show_warn=False,
+            ssl_show_warn=self.settings.opensearch_verify_certs,  # CAB-838: Only warn when verification enabled
+            ca_certs=self.settings.opensearch_ca_certs,  # CAB-838: Custom CA support
             timeout=self.settings.opensearch_timeout,
         )
         

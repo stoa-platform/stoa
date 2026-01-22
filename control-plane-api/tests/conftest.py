@@ -60,6 +60,10 @@ _mock_argocd_service = MagicMock()
 _mock_argocd_service.connect = AsyncMock()
 _mock_argocd_service.disconnect = AsyncMock()
 
+_mock_metrics_service = MagicMock()
+_mock_metrics_service.connect = AsyncMock()
+_mock_metrics_service.disconnect = AsyncMock()
+
 # Patch services in the main module where they're imported and used
 # These patches target 'src.main.<service>' because main.py does:
 #   from .services import kafka_service, git_service, ...
@@ -69,11 +73,13 @@ patch('src.main.awx_service', _mock_awx_service).start()
 patch('src.main.keycloak_service', _mock_keycloak_service).start()
 patch('src.main.gateway_service', _mock_gateway_service).start()
 patch('src.main.argocd_service', _mock_argocd_service).start()
+patch('src.main.metrics_service', _mock_metrics_service).start()
 
 # Also patch at service module level for routers that import directly
 patch('src.services.kafka_service.kafka_service', _mock_kafka_service).start()
 patch('src.services.git_service.git_service', _mock_git_service).start()
 patch('src.services.keycloak_service.keycloak_service', _mock_keycloak_service).start()
+patch('src.services.metrics_service.metrics_service', _mock_metrics_service).start()
 
 # Patch OpenSearch setup
 patch('src.main.setup_opensearch', AsyncMock()).start()

@@ -96,6 +96,16 @@ class Settings(BaseSettings):
     PROMETHEUS_URL: str = f"https://prometheus.{_BASE_DOMAIN}"
     LOGS_URL: str = f"https://grafana.{_BASE_DOMAIN}/explore"
 
+    # Prometheus Internal API (CAB-840) - for direct PromQL queries
+    PROMETHEUS_INTERNAL_URL: str = "http://prometheus:9090"
+    PROMETHEUS_TIMEOUT_SECONDS: int = 30
+    PROMETHEUS_ENABLED: bool = True
+
+    # Loki Internal API (CAB-840) - for direct LogQL queries
+    LOKI_INTERNAL_URL: str = "http://loki:3100"
+    LOKI_TIMEOUT_SECONDS: int = 30
+    LOKI_ENABLED: bool = True
+
     # CORS - comma-separated list of allowed origins
     CORS_ORIGINS: str = f"https://console.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
 

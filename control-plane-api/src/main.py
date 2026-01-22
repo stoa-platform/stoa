@@ -20,7 +20,7 @@ from .routers.mcp import servers_router as mcp_servers_router, subscriptions_rou
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
 from .routers import portal, mcp_gitops, mcp_proxy, platform, portal_applications, catalog_admin
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
-from .services import kafka_service, git_service, awx_service, keycloak_service, argocd_service
+from .services import kafka_service, git_service, awx_service, keycloak_service, argocd_service, metrics_service
 # Note: These are now imported as instances, not modules
 from .middleware.metrics import MetricsMiddleware, get_metrics
 from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
@@ -80,6 +80,13 @@ async def lifespan(app: FastAPI):
         logger.info("ArgoCD connected")
     except Exception as e:
         logger.warning("Failed to connect ArgoCD", error=str(e))
+
+    # Initialize Metrics Service (CAB-840) - Prometheus + Loki clients
+    try:
+        await metrics_service.connect()
+        logger.info("Metrics service connected (Prometheus + Loki)")
+    except Exception as e:
+        logger.warning("Failed to connect metrics service", error=str(e))
 
     # Initialize OpenSearch (CAB-307)
     try:
@@ -143,6 +150,7 @@ async def lifespan(app: FastAPI):
     await keycloak_service.disconnect()
     await gateway_service.disconnect()
     await argocd_service.disconnect()
+    await metrics_service.disconnect()
 
 API_DESCRIPTION = """
 ## STOA Platform API

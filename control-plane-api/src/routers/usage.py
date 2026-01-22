@@ -1,31 +1,32 @@
 """
-Usage API Router - CAB-280
+Usage API Router - CAB-280 / CAB-840
 Endpoints pour le Dashboard Usage Consumer (Portal)
 
 Routes:
 - GET /v1/usage/me - Résumé de mon usage
 - GET /v1/usage/me/calls - Mes derniers appels
 - GET /v1/usage/me/subscriptions - Mes subscriptions actives
+
+Data Sources (CAB-840):
+- Prometheus: Metrics (request counts, latencies, success rates)
+- Loki: Logs (call history, activity feed)
+- PostgreSQL: Subscription data, tool counts
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 
 from ..auth import get_current_user, User
+from ..database import get_db
+from ..services.metrics_service import metrics_service
 from ..schemas.usage import (
     UsageSummary,
     UsageCallsResponse,
-    UsageCall,
-    UsagePeriodStats,
-    ToolUsageStat,
-    DailyCallStat,
     ActiveSubscription,
     CallStatus,
     DashboardStats,
     DashboardActivityResponse,
-    RecentActivityItem,
-    ActivityType,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,59 +52,24 @@ async def get_my_usage_summary(
     - Stats aujourd'hui / cette semaine / ce mois
     - Top 5 des tools les plus utilisés
     - Evolution des appels sur 7 jours
+
+    Data Sources (CAB-840):
+    - Prometheus for metrics
+    - Falls back to empty data if Prometheus unavailable
     """
     user_id = current_user.id
     tenant_id = current_user.tenant_id or "default"
 
     logger.info(f"Fetching usage summary for user={user_id} tenant={tenant_id}")
 
-    # TODO: Remplacer par vraies queries DB/Prometheus/Loki
-    # Pour le MVP, retourner des données simulées
-
-    return UsageSummary(
-        tenant_id=tenant_id,
-        user_id=user_id,
-        today=UsagePeriodStats(
-            period="today",
-            total_calls=127,
-            success_count=120,
-            error_count=7,
-            success_rate=94.5,
-            avg_latency_ms=180
-        ),
-        this_week=UsagePeriodStats(
-            period="week",
-            total_calls=842,
-            success_count=810,
-            error_count=32,
-            success_rate=96.2,
-            avg_latency_ms=165
-        ),
-        this_month=UsagePeriodStats(
-            period="month",
-            total_calls=3254,
-            success_count=3180,
-            error_count=74,
-            success_rate=97.7,
-            avg_latency_ms=158
-        ),
-        top_tools=[
-            ToolUsageStat(tool_id="crm-search", tool_name="CRM Customer Search", call_count=1250, success_rate=98.5, avg_latency_ms=120),
-            ToolUsageStat(tool_id="billing-invoice", tool_name="Billing Invoice Generator", call_count=890, success_rate=97.2, avg_latency_ms=200),
-            ToolUsageStat(tool_id="inventory-check", tool_name="Inventory Availability", call_count=654, success_rate=99.1, avg_latency_ms=85),
-            ToolUsageStat(tool_id="notification-send", tool_name="Send Notification", call_count=412, success_rate=95.8, avg_latency_ms=320),
-            ToolUsageStat(tool_id="analytics-report", tool_name="Analytics Report", call_count=48, success_rate=100.0, avg_latency_ms=1200),
-        ],
-        daily_calls=[
-            DailyCallStat(date="2026-01-06", calls=120),
-            DailyCallStat(date="2026-01-07", calls=135),
-            DailyCallStat(date="2026-01-08", calls=98),
-            DailyCallStat(date="2026-01-09", calls=156),
-            DailyCallStat(date="2026-01-10", calls=142),
-            DailyCallStat(date="2026-01-11", calls=118),
-            DailyCallStat(date="2026-01-12", calls=73),
-        ]
-    )
+    try:
+        return await metrics_service.get_usage_summary(user_id, tenant_id)
+    except Exception as e:
+        logger.error(f"Failed to fetch usage summary: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Usage metrics temporarily unavailable"
+        )
 
 
 # ============================================================
@@ -127,41 +93,33 @@ async def get_my_calls(
     - status: success, error, timeout
     - tool_id: filtrer par tool
     - from_date / to_date: période
+
+    Data Sources (CAB-840):
+    - Loki for call logs
+    - Falls back to empty list if Loki unavailable
     """
     user_id = current_user.id
+    tenant_id = current_user.tenant_id or "default"
 
     logger.info(f"Fetching calls for user={user_id} limit={limit} offset={offset} status={status}")
 
-    # TODO: Remplacer par vraies queries DB/Loki
-    # Pour le MVP, retourner des données simulées
-
-    now = datetime.utcnow()
-
-    mock_calls = [
-        UsageCall(
-            id=f"call-{i:04d}",
-            timestamp=now - timedelta(minutes=i * 5),
-            tool_id="crm-search" if i % 3 == 0 else "billing-invoice" if i % 3 == 1 else "inventory-check",
-            tool_name="CRM Customer Search" if i % 3 == 0 else "Billing Invoice" if i % 3 == 1 else "Inventory Check",
-            status=CallStatus.SUCCESS if i % 7 != 0 else CallStatus.ERROR,
-            latency_ms=100 + (i * 10) % 300,
-            error_message="Connection timeout" if i % 7 == 0 else None
+    try:
+        return await metrics_service.get_user_calls(
+            user_id=user_id,
+            tenant_id=tenant_id,
+            limit=limit,
+            offset=offset,
+            status=status,
+            tool_id=tool_id,
+            from_date=from_date,
+            to_date=to_date,
         )
-        for i in range(limit)
-    ]
-
-    # Appliquer les filtres si spécifiés
-    if status:
-        mock_calls = [c for c in mock_calls if c.status == status]
-    if tool_id:
-        mock_calls = [c for c in mock_calls if c.tool_id == tool_id]
-
-    return UsageCallsResponse(
-        calls=mock_calls,
-        total=247,
-        limit=limit,
-        offset=offset
-    )
+    except Exception as e:
+        logger.error(f"Failed to fetch calls: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Call history temporarily unavailable"
+        )
 
 
 # ============================================================
@@ -170,62 +128,28 @@ async def get_my_calls(
 
 @router.get("/me/subscriptions", response_model=list[ActiveSubscription])
 async def get_my_active_subscriptions(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db)
 ) -> list[ActiveSubscription]:
     """
     Retourne la liste des subscriptions actives de l'utilisateur.
+
+    Data Sources (CAB-840):
+    - PostgreSQL for subscription data
+    - Prometheus for usage counts (with DB fallback)
     """
     user_id = current_user.id
 
     logger.info(f"Fetching active subscriptions for user={user_id}")
 
-    # TODO: Remplacer par query DB subscriptions
-    # Pour le MVP, retourner des données simulées
-
-    now = datetime.utcnow()
-
-    return [
-        ActiveSubscription(
-            id="sub-001",
-            tool_id="crm-search",
-            tool_name="CRM Customer Search",
-            tool_description="Search and retrieve customer information from CRM",
-            status="active",
-            created_at=now - timedelta(days=30),
-            last_used_at=now - timedelta(minutes=15),
-            call_count_total=1250
-        ),
-        ActiveSubscription(
-            id="sub-002",
-            tool_id="billing-invoice",
-            tool_name="Billing Invoice Generator",
-            tool_description="Generate and send invoices to customers",
-            status="active",
-            created_at=now - timedelta(days=25),
-            last_used_at=now - timedelta(hours=2),
-            call_count_total=890
-        ),
-        ActiveSubscription(
-            id="sub-003",
-            tool_id="inventory-check",
-            tool_name="Inventory Availability Check",
-            tool_description="Check real-time inventory levels across warehouses",
-            status="active",
-            created_at=now - timedelta(days=20),
-            last_used_at=now - timedelta(hours=1),
-            call_count_total=654
-        ),
-        ActiveSubscription(
-            id="sub-004",
-            tool_id="notification-send",
-            tool_name="Send Notification",
-            tool_description="Send push/email/SMS notifications to users",
-            status="active",
-            created_at=now - timedelta(days=15),
-            last_used_at=now - timedelta(days=1),
-            call_count_total=412
-        ),
-    ]
+    try:
+        return await metrics_service.get_active_subscriptions(user_id, db)
+    except Exception as e:
+        logger.error(f"Failed to fetch subscriptions: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Subscription data temporarily unavailable"
+        )
 
 
 # ============================================================
@@ -234,7 +158,8 @@ async def get_my_active_subscriptions(
 
 @dashboard_router.get("/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db)
 ) -> DashboardStats:
     """
     Retourne les statistiques agrégées pour la home page du Portal.
@@ -244,23 +169,24 @@ async def get_dashboard_stats(
     - Nombre de subscriptions actives
     - Nombre d'appels API cette semaine
     - Tendances (% change)
+
+    Data Sources (CAB-840):
+    - PostgreSQL for tool/subscription counts
+    - Prometheus for API call metrics and trends
     """
     user_id = current_user.id
     tenant_id = current_user.tenant_id or "default"
 
     logger.info(f"Fetching dashboard stats for user={user_id} tenant={tenant_id}")
 
-    # TODO: Remplacer par vraies queries DB/MCP Gateway
-    # Pour le MVP, retourner des données simulées
-
-    return DashboardStats(
-        tools_available=12,
-        active_subscriptions=4,
-        api_calls_this_week=842,
-        tools_trend=8.5,
-        subscriptions_trend=25.0,
-        calls_trend=12.3
-    )
+    try:
+        return await metrics_service.get_dashboard_stats(user_id, tenant_id, db)
+    except Exception as e:
+        logger.error(f"Failed to fetch dashboard stats: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Dashboard stats temporarily unavailable"
+        )
 
 
 @dashboard_router.get("/activity", response_model=DashboardActivityResponse)
@@ -270,62 +196,22 @@ async def get_dashboard_activity(
 ) -> DashboardActivityResponse:
     """
     Retourne l'activité récente pour la home page du Portal.
+
+    Data Sources (CAB-840):
+    - Loki for activity logs
+    - Falls back to empty list if Loki unavailable
     """
     user_id = current_user.id
+    tenant_id = current_user.tenant_id or "default"
 
     logger.info(f"Fetching dashboard activity for user={user_id} limit={limit}")
 
-    now = datetime.utcnow()
-
-    # TODO: Remplacer par vraies queries DB
-    # Pour le MVP, retourner des données simulées
-
-    mock_activity = [
-        RecentActivityItem(
-            id="act-001",
-            type=ActivityType.SUBSCRIPTION_CREATED,
-            title="Subscribed to CRM Search",
-            description="New subscription created",
-            tool_id="crm-search",
-            tool_name="CRM Customer Search",
-            timestamp=now - timedelta(hours=2)
-        ),
-        RecentActivityItem(
-            id="act-002",
-            type=ActivityType.API_CALL,
-            title="API call to Billing Invoice",
-            description="Completed in 145ms",
-            tool_id="billing-invoice",
-            tool_name="Billing Invoice Generator",
-            timestamp=now - timedelta(hours=5)
-        ),
-        RecentActivityItem(
-            id="act-003",
-            type=ActivityType.SUBSCRIPTION_APPROVED,
-            title="Subscription approved",
-            description="Inventory Check access granted",
-            tool_id="inventory-check",
-            tool_name="Inventory Availability",
-            timestamp=now - timedelta(days=1)
-        ),
-        RecentActivityItem(
-            id="act-004",
-            type=ActivityType.KEY_ROTATED,
-            title="API key rotated",
-            description="CRM Search key rotated with 24h grace period",
-            tool_id="crm-search",
-            tool_name="CRM Customer Search",
-            timestamp=now - timedelta(days=2)
-        ),
-        RecentActivityItem(
-            id="act-005",
-            type=ActivityType.API_CALL,
-            title="API call to Notification Send",
-            description="Email notification sent",
-            tool_id="notification-send",
-            tool_name="Send Notification",
-            timestamp=now - timedelta(days=3)
-        ),
-    ]
-
-    return DashboardActivityResponse(activity=mock_activity[:limit])
+    try:
+        activity = await metrics_service.get_dashboard_activity(user_id, tenant_id, limit)
+        return DashboardActivityResponse(activity=activity)
+    except Exception as e:
+        logger.error(f"Failed to fetch dashboard activity: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Activity feed temporarily unavailable"
+        )

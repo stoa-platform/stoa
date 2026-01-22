@@ -10,7 +10,7 @@ data:
   POSTGRES_PORT: "5432"
   POSTGRES_DB: "stoa"
   OPENSEARCH_HOST: "https://opensearch-cluster-master.logging.svc.cluster.local:9200"
-  OPENSEARCH_VERIFY_CERTS: "false"
+  OPENSEARCH_VERIFY_CERTS: "true"  # CAB-838: Enable SSL verification in production
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -44,10 +44,12 @@ data:
                 min_size=2, max_size=10)
             logger.info("PostgreSQL connected")
 
+            _verify = os.environ.get("OPENSEARCH_VERIFY_CERTS", "true").lower() == "true"
+            _ca_certs = os.environ.get("OPENSEARCH_CA_CERTS") or None
             self.os_client = AsyncOpenSearch(
                 hosts=[os.environ.get("OPENSEARCH_HOST")],
                 http_auth=(os.environ.get("OPENSEARCH_USER"), os.environ.get("OPENSEARCH_PASSWORD")),
-                verify_certs=False, ssl_show_warn=False)
+                verify_certs=_verify, ssl_show_warn=_verify, ca_certs=_ca_certs)
             info = await self.os_client.info()
             logger.info(f"OpenSearch connected: {info['cluster_name']}")
 

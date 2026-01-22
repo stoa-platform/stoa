@@ -61,7 +61,8 @@ class Settings(BaseSettings):
     )
     opensearch_user: str = Field(default="admin", alias="OPENSEARCH_USER")
     opensearch_password: str = Field(default="", alias="OPENSEARCH_PASSWORD")
-    opensearch_verify_certs: bool = Field(default=False, alias="OPENSEARCH_VERIFY_CERTS")
+    opensearch_verify_certs: bool = Field(default=True, alias="OPENSEARCH_VERIFY_CERTS")  # CAB-838: Enable SSL verification by default
+    opensearch_ca_certs: Optional[str] = Field(default=None, alias="OPENSEARCH_CA_CERTS")  # CAB-838: Custom CA certificate path
 
     # Sync settings
     batch_size: int = Field(default=100, alias="SYNC_BATCH_SIZE")
@@ -129,7 +130,8 @@ class SyncService:
                 self.settings.opensearch_password,
             ),
             verify_certs=self.settings.opensearch_verify_certs,
-            ssl_show_warn=False,
+            ssl_show_warn=self.settings.opensearch_verify_certs,  # CAB-838: Only warn when verification enabled
+            ca_certs=self.settings.opensearch_ca_certs,  # CAB-838: Custom CA support
         )
         # Test connection
         info = await self.os_client.info()

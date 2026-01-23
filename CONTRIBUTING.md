@@ -27,6 +27,68 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 - **Explain why this enhancement would be useful**
 - **List any alternatives you've considered**
 
+### Creating Issues
+
+We follow the **Marchemalo Standard** for issue quality. Every ticket should pass this test:
+
+> *"Would an architect with 40 years of experience understand this issue in 30 seconds and know exactly what to deliver?"*
+
+#### Required Elements
+
+Each issue MUST include:
+
+| Element | Description |
+|---------|-------------|
+| **🎯 Objective** | One clear sentence stating what will be delivered |
+| **💡 Why Now** | Context, urgency, and impact if not done |
+| **📋 Deliverables** | Explicit list of what will be produced |
+| **✅ Definition of Done** | Objective, verifiable criteria |
+| **⏱️ Estimation** | Story points or time estimate |
+
+#### Issue Template
+
+```markdown
+## 🎯 Objective
+[One clear sentence]
+
+## 💡 Why Now
+[Context and urgency]
+
+## 📋 Deliverables
+- [ ] Deliverable 1
+- [ ] Deliverable 2
+
+## ✅ Definition of Done
+- [ ] Verifiable criterion 1
+- [ ] Verifiable criterion 2
+- [ ] Tests pass
+- [ ] Documentation updated (if applicable)
+
+## ⏱️ Estimation
+[X points] or [~Xh]
+
+## 🔗 References
+- Link 1
+- Link 2
+```
+
+#### Anti-patterns to Avoid
+
+| ❌ Bad | ✅ Good |
+|--------|---------|
+| "Improve the site" | "Add 3 concrete use cases to /use-cases with diagrams" |
+| "Fix the bug" | "Endpoint /v1/users returns 500 when email=null → return 400 with message" |
+| "Documentation" | "Create ADR-005 for multi-tenant isolation decision" |
+| No DoD | "Done when: tests pass + docs updated + review approved" |
+
+#### Splitting Large Issues
+
+If an issue is estimated at **> 5 story points**, it MUST be split into smaller issues.
+
+#### Non-Conforming Issues
+
+Issues that don't meet the Marchemalo Standard will be labeled `needs-triage` and require revision before being worked on.
+
 ### Pull Requests
 
 1. Fork the repo and create your branch from `main`
@@ -46,6 +108,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 - kubectl (for K8s development)
 
 ### Local Development
+
 ```bash
 # Clone your fork
 git clone https://github.com/YOUR_USERNAME/stoa.git
@@ -81,6 +144,7 @@ Use prefixes to categorize your branches:
 ### Commit Messages
 
 We follow [Conventional Commits](https://www.conventionalcommits.org/):
+
 ```
 <type>(<scope>): <description>
 
@@ -105,6 +169,7 @@ docs: update API reference for v0.2
 - **All:** Keep functions small and focused, write meaningful comments
 
 ## Testing
+
 ```bash
 # Run all tests
 make test

@@ -25,12 +25,14 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'apps:create', 'apps:read', 'apps:update', 'apps:delete',
     'users:create', 'users:read', 'users:update', 'users:delete',
     'audit:read',
+    'admin:servers',
   ],
   'tenant-admin': [
     'apis:create', 'apis:read', 'apis:update', 'apis:delete', 'apis:deploy',
     'apps:create', 'apps:read', 'apps:update', 'apps:delete',
     'users:create', 'users:read', 'users:update',
     'audit:read',
+    'admin:servers',
   ],
   'devops': [
     'apis:create', 'apis:read', 'apis:update', 'apis:deploy',

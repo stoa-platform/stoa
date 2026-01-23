@@ -28,3 +28,5 @@ opensearch-py[async]>=2.4.0
 slowapi==0.1.9
 # Error snapshots / MinIO storage (CAB-397)
 aioboto3>=12.0.0
+# Vault client for secure credential storage (CAB-879)
+hvac>=2.1.0

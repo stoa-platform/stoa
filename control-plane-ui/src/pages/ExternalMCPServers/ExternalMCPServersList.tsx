@@ -4,7 +4,7 @@ import { Plus, RefreshCw, Server, CheckCircle, XCircle, AlertCircle, Clock } fro
 import { externalMcpServersService } from '../../services/externalMcpServersApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { ExternalMCPServerModal } from './ExternalMCPServerModal';
-import type { ExternalMCPServer, ExternalMCPServerCreate, ExternalMCPHealthStatus } from '../../types';
+import type { ExternalMCPServer, ExternalMCPServerCreate, ExternalMCPServerUpdate, ExternalMCPHealthStatus } from '../../types';
 
 const healthStatusConfig: Record<ExternalMCPHealthStatus, { color: string; icon: typeof CheckCircle; label: string }> = {
   unknown: { color: 'bg-gray-100 text-gray-800', icon: Clock, label: 'Unknown' },
@@ -49,9 +49,9 @@ export function ExternalMCPServersList() {
     }
   }
 
-  const handleCreate = useCallback(async (data: ExternalMCPServerCreate) => {
+  const handleCreate = useCallback(async (data: ExternalMCPServerCreate | ExternalMCPServerUpdate) => {
     try {
-      await externalMcpServersService.createServer(data);
+      await externalMcpServersService.createServer(data as ExternalMCPServerCreate);
       setShowCreateModal(false);
       await loadServers();
     } catch (err: any) {

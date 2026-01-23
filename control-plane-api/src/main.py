@@ -18,6 +18,7 @@ from .logging_config import configure_logging, get_logger
 from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring, users
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
+from .routers.external_mcp_servers import admin_router as external_mcp_servers_admin_router, internal_router as external_mcp_servers_internal_router
 from .routers import portal, mcp_gitops, mcp_proxy, platform, portal_applications, catalog_admin
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service, argocd_service, metrics_service
@@ -313,6 +314,10 @@ app.include_router(mcp_subscriptions_router)
 app.include_router(mcp_validation_router)
 app.include_router(mcp_admin_subscriptions_router)
 app.include_router(mcp_admin_servers_router)
+
+# External MCP Servers (Linear, GitHub, etc.)
+app.include_router(external_mcp_servers_admin_router)
+app.include_router(external_mcp_servers_internal_router)
 
 # Portal and GitOps routers
 app.include_router(portal.router)

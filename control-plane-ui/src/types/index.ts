@@ -604,3 +604,107 @@ export interface SyncResponse {
   message: string;
   operation: string | null;
 }
+
+// =============================================================================
+// External MCP Server Types
+// =============================================================================
+
+export type ExternalMCPTransport = 'sse' | 'http' | 'websocket';
+export type ExternalMCPAuthType = 'none' | 'api_key' | 'bearer_token' | 'oauth2';
+export type ExternalMCPHealthStatus = 'unknown' | 'healthy' | 'degraded' | 'unhealthy';
+
+export interface ExternalMCPServerTool {
+  id: string;
+  name: string;
+  namespaced_name: string;
+  display_name?: string;
+  description?: string;
+  input_schema?: Record<string, unknown>;
+  enabled: boolean;
+  synced_at: string;
+}
+
+export interface ExternalMCPServer {
+  id: string;
+  name: string;
+  display_name: string;
+  description?: string;
+  icon?: string;
+  base_url: string;
+  transport: ExternalMCPTransport;
+  auth_type: ExternalMCPAuthType;
+  tool_prefix?: string;
+  enabled: boolean;
+  health_status: ExternalMCPHealthStatus;
+  last_health_check?: string;
+  last_sync_at?: string;
+  sync_error?: string;
+  tenant_id?: string;
+  tools_count: number;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface ExternalMCPServerDetail extends ExternalMCPServer {
+  tools: ExternalMCPServerTool[];
+}
+
+export interface OAuth2Credentials {
+  client_id: string;
+  client_secret: string;
+  token_url: string;
+  scope?: string;
+}
+
+export interface ExternalMCPServerCredentials {
+  api_key?: string;
+  bearer_token?: string;
+  oauth2?: OAuth2Credentials;
+}
+
+export interface ExternalMCPServerCreate {
+  name: string;
+  display_name: string;
+  description?: string;
+  icon?: string;
+  base_url: string;
+  transport: ExternalMCPTransport;
+  auth_type: ExternalMCPAuthType;
+  credentials?: ExternalMCPServerCredentials;
+  tool_prefix?: string;
+  tenant_id?: string;
+}
+
+export interface ExternalMCPServerUpdate {
+  display_name?: string;
+  description?: string;
+  icon?: string;
+  base_url?: string;
+  transport?: ExternalMCPTransport;
+  auth_type?: ExternalMCPAuthType;
+  credentials?: ExternalMCPServerCredentials;
+  tool_prefix?: string;
+  enabled?: boolean;
+}
+
+export interface ExternalMCPServerListResponse {
+  servers: ExternalMCPServer[];
+  total_count: number;
+  page: number;
+  page_size: number;
+}
+
+export interface TestConnectionResponse {
+  success: boolean;
+  latency_ms?: number;
+  error?: string;
+  server_info?: Record<string, unknown>;
+  tools_discovered?: number;
+}
+
+export interface SyncToolsResponse {
+  synced_count: number;
+  removed_count: number;
+  tools: ExternalMCPServerTool[];
+}

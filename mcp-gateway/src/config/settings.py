@@ -74,11 +74,16 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
     allowed_audiences: str = ""  # Comma-separated list
 
-    # OPA Policy Engine
+    # OPA Policy Engine (RBAC - who can call tools)
     opa_enabled: bool = True
     opa_url: str = "http://127.0.0.1:8181"  # OPA sidecar URL
     opa_embedded: bool = True  # Use embedded evaluator (no sidecar needed)
     opa_policy_path: str = "policies"  # Path to Rego policies
+
+    # Argument Policy Engine (business rules - what argument values are allowed)
+    argument_policy_enabled: bool = True
+    argument_policy_path: str = "src/policy/rules"  # Path to YAML policy files
+    argument_policy_fail_closed: bool = True  # Block all if policy load fails
 
     # Metering & Billing
     metering_enabled: bool = True

@@ -43,6 +43,7 @@ class STOAErrorCode(str, Enum):
     PERMISSION_DENIED = "PERMISSION_DENIED"
     TENANT_MISMATCH = "TENANT_MISMATCH"
     SCOPE_INSUFFICIENT = "SCOPE_INSUFFICIENT"
+    POLICY_VIOLATION = "POLICY_VIOLATION"
     
     # 404 Not Found
     TENANT_NOT_FOUND = "TENANT_NOT_FOUND"
@@ -91,6 +92,7 @@ ERROR_CODE_TO_HTTP_STATUS: dict[STOAErrorCode, int] = {
     STOAErrorCode.PERMISSION_DENIED: 403,
     STOAErrorCode.TENANT_MISMATCH: 403,
     STOAErrorCode.SCOPE_INSUFFICIENT: 403,
+    STOAErrorCode.POLICY_VIOLATION: 403,
     # 404
     STOAErrorCode.TENANT_NOT_FOUND: 404,
     STOAErrorCode.API_NOT_FOUND: 404,
@@ -129,6 +131,7 @@ ERROR_CODE_SUGGESTIONS: dict[STOAErrorCode, str] = {
     STOAErrorCode.PERMISSION_DENIED: "Contact your tenant admin to request access",
     STOAErrorCode.TENANT_MISMATCH: "Verify you're accessing resources within your tenant",
     STOAErrorCode.SCOPE_INSUFFICIENT: "Request additional OAuth scopes for this operation",
+    STOAErrorCode.POLICY_VIOLATION: "Review the policy requirements and adjust your request parameters",
     STOAErrorCode.TENANT_NOT_FOUND: "Use stoa_tenants to list available tenants",
     STOAErrorCode.API_NOT_FOUND: "Use stoa_catalog action='list' to find available APIs",
     STOAErrorCode.SUBSCRIPTION_NOT_FOUND: "Use stoa_subscription action='list' to find your subscriptions",
@@ -320,7 +323,7 @@ class SubscriptionNotFoundError(STOAError):
 
 class PermissionDeniedError(STOAError):
     """Raised when user lacks permission."""
-    
+
     def __init__(
         self,
         resource: str,
@@ -336,6 +339,27 @@ class PermissionDeniedError(STOAError):
             message=message or default_msg,
             details=details or {"resource": resource, "action": action},
         )
+
+
+class PolicyViolationError(STOAError):
+    """Raised when argument policy validation fails.
+
+    CAB-876: This error is raised when tool arguments violate
+    business rules defined in YAML policy files.
+    """
+
+    def __init__(
+        self,
+        policy_name: str,
+        message: str,
+        details: dict[str, Any] | None = None,
+    ):
+        super().__init__(
+            code=STOAErrorCode.POLICY_VIOLATION,
+            message=message,
+            details={"policy": policy_name, **(details or {})},
+        )
+        self.policy_name = policy_name
 
 
 class RateLimitedError(STOAError):

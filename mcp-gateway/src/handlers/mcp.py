@@ -27,7 +27,7 @@ from ..models import (
     Resource,
     Prompt,
 )
-from ..policy import get_opa_client
+from ..policy import get_opa_client, get_argument_engine
 from ..services import get_tool_registry
 
 logger = structlog.get_logger(__name__)
@@ -265,6 +265,40 @@ async def invoke_tool(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Access denied: {reason}",
         )
+
+    # =========================================================================
+    # CAB-876: Argument Policy Validation (after OPA RBAC, before invocation)
+    # =========================================================================
+    arg_engine = await get_argument_engine()
+    if arg_engine.enabled:
+        policy_result = arg_engine.evaluate(tool_name, invocation.arguments)
+        if not policy_result.allowed:
+            logger.warning(
+                "Tool blocked by argument policy",
+                tool_name=tool_name,
+                policy=policy_result.policy_name,
+                user=user.subject,
+                message=policy_result.message,
+            )
+            # Emit metering event for policy violation
+            await _emit_metering_event(
+                user=user,
+                tool=tool,
+                tool_name=tool_name,
+                start_time=start_time,
+                status=MeteringStatus.ERROR,
+                request_id=invocation.request_id,
+                consumer=x_consumer_id,
+                error=f"Policy violation: {policy_result.message}",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "POLICY_VIOLATION",
+                    "policy": policy_result.policy_name,
+                    "message": policy_result.message,
+                },
+            )
 
     # Override tool name from path
     invocation.name = tool_name

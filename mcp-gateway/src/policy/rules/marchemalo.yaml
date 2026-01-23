@@ -1,0 +1,27 @@
+# Marchemalo Policy: Business rules for Linear issue creation
+# CAB-876: Les tickets Urgent/High doivent etre dans un cycle
+#
+# Use case:
+#   - An AI agent calls Linear:create_issue to create a ticket
+#   - If priority is 1 (Urgent) or 2 (High) AND cycle is null/absent
+#   - The request is BLOCKED with a policy violation
+#
+# This prevents urgent tickets from being created without sprint planning.
+
+policies:
+  - name: marchemalo-cycle-required
+    description: "P1/P2 issues must be assigned to a cycle for proper sprint planning"
+    tool: "Linear:create_issue"
+    enabled: true
+    priority: 100
+    rules:
+      # Rule 1: Block P1/P2 without cycle
+      - condition:
+          all:
+            - field: "priority"
+              operator: "in"
+              value: [1, 2]
+            - field: "cycle"
+              operator: "is_null"
+        action: "deny"
+        message: "Marchemalo: Les tickets Urgent/High doivent etre dans un cycle"

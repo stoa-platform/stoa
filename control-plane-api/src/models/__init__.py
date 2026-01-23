@@ -18,3 +18,10 @@ from .catalog import (
     SyncType,
     SyncStatus,
 )
+from .external_mcp_server import (
+    ExternalMCPServer,
+    ExternalMCPServerTool,
+    ExternalMCPTransport,
+    ExternalMCPAuthType,
+    ExternalMCPHealthStatus,
+)

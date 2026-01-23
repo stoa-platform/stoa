@@ -14,7 +14,7 @@ description: |
   WARNING: This API is for authorized IOI personnel only.
 backend_url: https://httpbin.org/anything
 status: active
-category: Security
+category: Sixers Surveillance
 tags:
   - portal:published
   - security

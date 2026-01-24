@@ -424,7 +424,7 @@ curl -s -X PUT \
 curl -sk "https://localhost:5543/gateway/MyAPI/1.0/health"
 ```
 
-### Complete Mode Opératoire
+### Complete Operating Procedure
 
 Here's the complete procedure to enable HTTPS on a newly imported API:
 

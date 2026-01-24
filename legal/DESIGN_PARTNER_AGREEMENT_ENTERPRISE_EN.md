@@ -6,7 +6,7 @@
 
 ## BETWEEN
 
-**HLFH** (Helion Liber Focus Honor), represented by CAB Ingénierie, a French EURL with a share capital of €1,000, registered with the Bordeaux Trade Registry under number 788 069 867, with its registered office at 24 Chemin du Pas de Madame, 33160 Saint-Médard-en-Jalles, France, represented by Mr. Christophe ABOULICAM, in his capacity as Manager,
+**[COMPANY_NAME]**, a [LEGAL_FORM] with a share capital of [SHARE_CAPITAL], registered under number [REGISTRATION_NUMBER], with its registered office at [COMPANY_ADDRESS], represented by [REPRESENTATIVE_NAME], in their capacity as [REPRESENTATIVE_TITLE],
 
 Hereinafter referred to as "**STOA**",
 
@@ -286,8 +286,8 @@ This agreement may not be assigned by either Party without prior written consent
 
 | Role | STOA | Partner Company |
 |------|------|-----------------|
-| Primary Contact | Christophe ABOULICAM | ______________________ |
-| Email | christophe@gostoa.dev | ______________________ |
+| Primary Contact | [CONTACT_NAME] | ______________________ |
+| Email | [CONTACT_EMAIL] | ______________________ |
 | Technical Contact | ______________________ | ______________________ |
 
 ### Schedule B — Technical Scope
@@ -315,15 +315,15 @@ The evaluation covers the following STOA Platform components:
 
 Made in two original copies.
 
-**At Saint-Médard-en-Jalles, on ____/____/2026**
+**At [CITY], on ____/____/2026**
 
 | For STOA | For Partner Company |
 |----------|---------------------|
 | | |
 | | |
 | | |
-| Christophe ABOULICAM | Mr./Ms. ______________________ |
-| Manager, CAB Ingénierie | [Title] |
+| [REPRESENTATIVE_NAME] | Mr./Ms. ______________________ |
+| [REPRESENTATIVE_TITLE], [COMPANY_NAME] | [Title] |
 | | |
 | Read and approved | Read and approved |
 

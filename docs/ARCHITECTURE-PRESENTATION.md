@@ -993,4 +993,4 @@ webMethods Gateway 10.15 does not support OpenAPI 3.1.0. The `deploy-api.yaml` p
 ---
 
 *Document updated on December 23, 2024*
-*STOA Platform v2 - CAB Ingénierie*
+*STOA Platform v2 - STOA Team*

@@ -147,7 +147,7 @@ stoa/
 │   └── vars/
 │       └── secrets.yaml     # Centralized secrets config (no hardcoding)
 ├── gitops-templates/        # Templates GitOps (Phase 2)
-│   ├── _defaults.yaml       # Variables globales centralisées
+│   ├── _defaults.yaml       # Centralized global variables
 │   ├── environments/        # Config par environnement (dev/staging/prod)
 │   ├── templates/           # Templates API, Tenant, Application
 │   └── argocd/
@@ -330,14 +330,14 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 | EC2 (Nodes) | 3x t3.large | ~$180 |
 | RDS PostgreSQL | db.t3.small | ~$25 |
 | ALB (Ingress) | 1 Load Balancer | ~$20 |
-| **OpenSearch** | t3.small.search (1 node, partagé DEV+STAGING) | **~$35** |
+| **OpenSearch** | t3.small.search (1 node, shared DEV+STAGING) | **~$35** |
 | ECR | Storage images | ~$5 |
 | Route 53 | DNS | ~$1 |
 | Secrets Manager | 5 secrets | ~$2 |
 | Bandwidth | Estimation | ~$10 |
 | **TOTAL** | | **~$350/mois** |
 
-> **Note**: Upgrade t3.medium → t3.large nécessaire pour Redpanda (Kafka) qui requiert ~1.5GB RAM par broker.
+> **Note**: Upgrade t3.medium → t3.large required for Redpanda (Kafka) which requires ~1.5GB RAM per broker.
 
 ### Architecture Elasticsearch / OpenSearch
 
@@ -345,7 +345,7 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 ┌──────────────────────────────────────────────────────────────────┐
 │                    GATEWAY / PORTAL                               │
 │    ┌─────────────────────────────────────────────────────────┐   │
-│    │  Elasticsearch Embarqué (usage interne)                  │   │
+│    │  Elasticsearch Embedded (internal use)                  │   │
 │    │  - Configuration, sessions, cache                        │   │
 │    │  - webMethods 10.15 requiert ES 8+ (incompatible OS 2.x) │   │
 │    └─────────────────────────────────────────────────────────┘   │
@@ -358,7 +358,7 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 │              Amazon OpenSearch (t3.small.search)                  │
 │                 Analytics Multi-tenant par tenant                 │
 ├──────────────────────────────────────────────────────────────────┤
-│  Configuré via Global Policy sur la Gateway                      │
+│  Configured via Global Policy on the Gateway                      │
 │  Index Pattern: {env}-{tenant}-{type}                            │
 │                                                                   │
 │  DEV:                           STAGING:                         │
@@ -368,14 +368,14 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### Note sur la compatibilité ES/OpenSearch
+### Note on ES/OpenSearch compatibility
 
-webMethods API Gateway 10.15 (image lean) nécessite **Elasticsearch 8+** pour son usage interne.
+webMethods API Gateway 10.15 (image lean) requires **Elasticsearch 8+** for its internal use.
 Amazon OpenSearch 2.x est compatible ES 7.x, donc **non compatible**.
 
 **Solution actuelle**:
-- **Elasticsearch 8.11** déployé sur EKS (StatefulSet custom, xpack.security.enabled: false)
-- Gateway et Portal connectés à ES 8 interne
+- **Elasticsearch 8.11** deployed on EKS (StatefulSet custom, xpack.security.enabled: false)
+- Gateway and Portal connected to internal ES 8
 - **OpenSearch** disponible pour analytics multi-tenant via Global Policies
 
 ### Connection Services (Internal URLs)
@@ -731,7 +731,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
    │               ├── api.yaml              # Template avec ${PLACEHOLDERS}
    │               ├── openapi.yaml
    │               └── environments/         # Config par environnement
-   │                   ├── _defaults.yaml    # Valeurs par défaut
+   │                   ├── _defaults.yaml    # Default values
    │                   ├── dev.yaml          # Overrides DEV
    │                   ├── staging.yaml      # Overrides STAGING
    │                   └── prod.yaml         # Overrides PROD
@@ -739,7 +739,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
    ├── environments/                         # Configuration globale par env
    │   ├── dev/
    │   │   ├── config.yaml
-   │   │   └── secrets-refs.yaml             # Références Vault
+   │   │   └── secrets-refs.yaml             # Vault references
    │   ├── staging/
    │   └── prod/
    │
@@ -781,23 +781,23 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
    ```
 
 6. **Variable Resolver dans Control-Plane API** 🔲
-   - Service Python pour résoudre les `${PLACEHOLDERS}`
+   - Python service to resolve `${PLACEHOLDERS}`
    - Fusion: _defaults.yaml + {env}.yaml + global config
-   - Résolution des références Vault au moment du déploiement
+   - Vault reference resolution at deployment time
 
-7. **Gestion des Tenants et Rôles (IAM)** 🔲
+7. **Tenant and Role Management (IAM)** 🔲
 
-   **Architecture IAM** - Gestion des utilisateurs et leurs rôles par tenant:
+   **IAM Architecture - User and role management per tenant:
 
    ```
    ┌─────────────────────────────────────────────────────────────────────────────────────┐
-   │                              SOURCES D'IDENTITÉ                                      │
+   │                              IDENTITY SOURCES                                      │
    │                                                                                      │
    │   PHASE 1 (Actuel)              PHASE 2 (Cible)                                     │
    │   ─────────────────             ────────────────                                     │
    │                                                                                      │
    │   ┌─────────────────┐           ┌─────────────────┐                                 │
-   │   │   GitLab File   │           │   Référentiel   │                                 │
+   │   │   GitLab File   │           │   Repository   │                                 │
    │   │                 │           │   Entreprise    │                                 │
    │   │ iam/tenants.yaml│    →→→    │                 │                                 │
    │   │ - CPI           │           │ • LDAP / AD     │                                 │
@@ -1011,24 +1011,24 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 │                    APPROCHE HYBRIDE : GIT + ALIAS                            │
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                         GIT (Source de Vérité)                       │    │
+│  │                         GIT (Source of Truth)                       │    │
 │  │                                                                      │    │
-│  │  1. Définition API (api.yaml)                                        │    │
+│  │  1. API Definition (api.yaml)                                        │    │
 │  │     → backend_alias: "${BACKEND_ALIAS}"                              │    │
 │  │                                                                      │    │
 │  │  2. Config Environnement (environments/dev.yaml)                     │    │
 │  │     → BACKEND_ALIAS: payment-backend-dev                             │    │
 │  │                                                                      │    │
-│  │  3. Définition Alias (aliases/dev/payment-backend.yaml)              │    │
-│  │     → URL endpoint + Références Vault                                │    │
+│  │  3. Alias Definition (aliases/dev/payment-backend.yaml)              │    │
+│  │     → URL endpoint + Vault references                                │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                    │                                         │
 │                                    ▼                                         │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                    AWX Jobs                                          │    │
 │  │                                                                      │    │
-│  │  sync-alias     → Crée/Update Alias sur Gateway (credentials Vault)  │    │
-│  │  deploy-api     → Déploie API (référence alias existant)             │    │
+│  │  sync-alias     → Creates/Updates Alias on Gateway (Vault credentials)  │    │
+│  │  deploy-api     → Deploys API (references existing alias)             │    │
 │  │  rotate-creds   → Refresh credentials sans redeploy API              │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                    │                                         │
@@ -2390,12 +2390,12 @@ def call(String status, Map details) {
        - Premiers Pas: user-guide/01-getting-started.md
        - UI DevOps: user-guide/02-ui-devops-guide.md
        - Cycle de Vie API: user-guide/03-api-lifecycle.md
-       - Rôles & Permissions: user-guide/04-rbac-roles.md
-       - Dépannage: user-guide/05-troubleshooting.md
+       - Roles & Permissions: user-guide/04-rbac-roles.md
+       - Troubleshooting: user-guide/05-troubleshooting.md
      - Tutoriels:
-       - Créer sa première API: tutorials/create-first-api.md
-       - Déployer une API: tutorials/deploy-api.md
-       - Gérer son équipe: tutorials/manage-team.md
+       - Create your first API: tutorials/create-first-api.md
+       - Deploy an API: tutorials/deploy-api.md
+       - Manage your team: tutorials/manage-team.md
      - API Reference: api-reference/
 
    plugins:
@@ -2429,7 +2429,7 @@ def call(String status, Map details) {
 │                         SECURITY OPERATIONS CENTER                                   │
 │                                                                                      │
 │   ┌──────────────────────────────────────────────────────────────────────────────┐  │
-│   │                        4 JOBS DE SÉCURITÉ                                     │  │
+│   │                        4 SECURITY JOBS                                     │  │
 │   │                                                                               │  │
 │   │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │  │
 │   │  │ Certificate │  │   Secret    │  │   Usage     │  │   GitLab    │          │  │
@@ -2986,11 +2986,11 @@ def call(String status, Map details) {
 │   ┌──────────────────────────────────────────────────────────────────────────────┐  │
 │   │                      CONTROL-PLANE API (FastAPI)                              │  │
 │   │                                                                               │  │
-│   │   /portal/apis          → Liste APIs publiées                                │  │
-│   │   /portal/apis/{id}     → Détail + OpenAPI spec                              │  │
+│   │   /portal/apis          → List published APIs                                │  │
+│   │   /portal/apis/{id}     → Details + OpenAPI spec                              │  │
 │   │   /portal/applications  → CRUD Applications                                   │  │
 │   │   /portal/subscriptions → Gestion souscriptions                              │  │
-│   │   /portal/try-it        → Proxy requêtes vers Gateway                        │  │
+│   │   /portal/try-it        → Proxy requests to Gateway                        │  │
 │   │                                                                               │  │
 │   └───────────────────────────────────┬───────────────────────────────────────────┘  │
 │                                       │                                              │
@@ -3371,9 +3371,9 @@ GET    /v1/requests/prod/stats
 │   │   environment    : dev | staging | sandbox | demo                           │    │
 │   │   owner          : email du responsable                                     │    │
 │   │   project        : nom du projet / tenant                                   │    │
-│   │   cost-center    : code centre de coût                                      │    │
-│   │   ttl            : durée de vie (7d, 14d, 30d max)                          │    │
-│   │   created_at     : date de création (auto)                                  │    │
+│   │   cost-center    : cost center code                                      │    │
+│   │   ttl            : lifetime (7d, 14d, 30d max)                          │    │
+│   │   created_at     : creation date (auto)                                  │    │
 │   │   auto-teardown  : true | false                                             │    │
 │   │   data-class     : public | internal | confidential | restricted            │    │
 │   │                                                                              │    │
@@ -3757,14 +3757,14 @@ jobs:
 │   │   ├── arn:aws:rds:*:*:db:stoa-*              # BDD plateforme              │    │
 │   │   ├── arn:aws:s3:::stoa-artifacts-*          # Buckets artifacts           │    │
 │   │   ├── namespace:stoa-system                   # K8s core namespace         │    │
-│   │   └── tag:critical=true                       # Tag générique              │    │
+│   │   └── tag:critical=true                       # Generic tag              │    │
 │   │                                                                              │    │
 │   └─────────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                       │
 │   ┌─────────────────────────────────────────────────────────────────────────────┐    │
-│   │                    DESTRUCTION ORDONNÉE (Dependencies)                       │    │
+│   │                    ORDERED DESTRUCTION (Dependencies)                       │    │
 │   │                                                                              │    │
-│   │   Ordre de suppression pour éviter les erreurs:                             │    │
+│   │   Deletion order to avoid errors:                             │    │
 │   │                                                                              │    │
 │   │   1. Detach IAM Policies/Roles                                              │    │
 │   │   2. Stop Auto Scaling Groups                                               │    │
@@ -3774,7 +3774,7 @@ jobs:
 │   │   6. Delete RDS Snapshots (optionnel)                                       │    │
 │   │   7. Delete RDS Instances                                                   │    │
 │   │   8. Delete EBS Volumes orphelins                                           │    │
-│   │   9. Delete Security Groups (après dépendances)                             │    │
+│   │   9. Delete Security Groups (after dependencies)                             │    │
 │   │   10. Delete K8s Namespaces (cascade delete)                                │    │
 │   │                                                                              │    │
 │   └─────────────────────────────────────────────────────────────────────────────┘    │
@@ -3782,7 +3782,7 @@ jobs:
 │   ┌─────────────────────────────────────────────────────────────────────────────┐    │
 │   │                         SELF-SERVICE TTL EXTENSION                           │    │
 │   │                                                                              │    │
-│   │   Email de pré-alerte contient:                                             │    │
+│   │   Pre-alert email contains:                                             │    │
 │   │                                                                              │    │
 │   │   ┌───────────────────────────────────────────────────────────────────┐     │    │
 │   │   │  ⚠️ Votre ressource "dev-api-server" expire dans 24h              │     │    │
@@ -3799,27 +3799,27 @@ jobs:
 │   └─────────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                       │
 │   ┌─────────────────────────────────────────────────────────────────────────────┐    │
-│   │                         MÉTRIQUES & REPORTING                                │    │
+│   │                         METRICS & REPORTING                                │    │
 │   │                                                                              │    │
 │   │   Dashboard "Cost Savings":                                                 │    │
 │   │                                                                              │    │
 │   │   ┌─────────────────────────────────────────────────────────────────────┐   │    │
 │   │   │  Ce mois-ci:                                                         │   │    │
-│   │   │  ├── 47 ressources supprimées automatiquement                       │   │    │
-│   │   │  ├── 💰 Coût évité estimé: $2,340                                   │   │    │
+│   │   │  ├── 47 resources deleted automatically                       │   │    │
+│   │   │  ├── 💰 Estimated cost avoided: $2,340                                   │   │    │
 │   │   │  ├── 12 ressources snooze (+7j)                                     │   │    │
-│   │   │  └── 3 violations tags bloquées                                     │   │    │
+│   │   │  └── 3 tag violations blocked                                     │   │    │
 │   │   │                                                                      │   │    │
 │   │   │  Par project:                                                        │   │    │
-│   │   │  ├── tenant-finance: $890 économisés (18 ressources)                │   │    │
-│   │   │  ├── poc-ml-team: $720 économisés (15 ressources)                   │   │    │
-│   │   │  └── sandbox-dev: $730 économisés (14 ressources)                   │   │    │
+│   │   │  ├── tenant-finance: $890 saved (18 ressources)                │   │    │
+│   │   │  ├── poc-ml-team: $720 saved (15 ressources)                   │   │    │
+│   │   │  └── sandbox-dev: $730 saved (14 ressources)                   │   │    │
 │   │   └─────────────────────────────────────────────────────────────────────┘   │    │
 │   │                                                                              │    │
-│   │   Calcul coût évité:                                                        │    │
+│   │   Cost avoided calculation:                                                        │    │
 │   │   - EC2: instance_type → prix horaire AWS × heures restantes TTL           │    │
 │   │   - RDS: db_instance_class × heures × multi-AZ factor                      │    │
-│   │   - S3: storage_gb × $0.023/GB + requests estimées                         │    │
+│   │   - S3: storage_gb × $0.023/GB + estimated requests                         │    │
 │   │                                                                              │    │
 │   └─────────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                       │

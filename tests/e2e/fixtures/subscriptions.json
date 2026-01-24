@@ -1,0 +1,58 @@
+{
+  "test_subscriptions": {
+    "developer_subscription": {
+      "tool_id": "tenant-acme__create-order",
+      "plan": "free",
+      "description": "Test subscription for developer flow"
+    },
+    "admin_approval": {
+      "tool_id": "tenant-acme__get-inventory",
+      "plan": "basic",
+      "description": "Test subscription for admin approval flow"
+    },
+    "api_key_validation": {
+      "tool_id": "tenant-acme__check-status",
+      "plan": "free",
+      "description": "Test subscription for API key validation"
+    },
+    "tenant_isolation": {
+      "tool_id": "tenant-beta__private-tool",
+      "plan": "premium",
+      "tenant_id": "tenant-beta",
+      "description": "Test subscription for tenant isolation (should fail for other tenants)"
+    }
+  },
+  "tenants": {
+    "acme": {
+      "id": "tenant-acme",
+      "name": "ACME Corporation",
+      "description": "Default test tenant"
+    },
+    "beta": {
+      "id": "tenant-beta",
+      "name": "Beta Industries",
+      "description": "Secondary tenant for isolation tests"
+    }
+  },
+  "api_key_format": {
+    "prefix": "stoa_sk_",
+    "length": 40,
+    "pattern": "^stoa_sk_[a-f0-9]{32}$"
+  },
+  "mcp_gateway": {
+    "base_url": "https://mcp.gostoa.dev",
+    "endpoints": {
+      "subscriptions": "/mcp/v1/subscriptions",
+      "validate_key": "/mcp/v1/subscriptions/validate-key",
+      "reveal_key": "/mcp/v1/subscriptions/{id}/reveal-key",
+      "toggle_totp": "/mcp/v1/subscriptions/{id}/totp"
+    }
+  },
+  "expected_statuses": {
+    "active": "active",
+    "pending": "pending",
+    "revoked": "revoked",
+    "expired": "expired"
+  },
+  "_comment": "Test fixtures for CAB-291 E2E subscription testing"
+}

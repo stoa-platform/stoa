@@ -1,0 +1,28 @@
+apiVersion: gostoa.dev/v1
+kind: API
+metadata:
+  name: inventory-api
+  version: "1.2.0"
+  labels:
+    managed-by: gitops
+
+spec:
+  displayName: Inventory Management API
+  description: Stock levels, warehouse management, and product catalog operations
+  status: published
+  category: data
+  tags:
+    - rest
+    - internal
+    - inventory
+    - warehouse
+
+  backend:
+    url: https://inventory.acme-corp.internal/api
+
+  deployments:
+    dev: true
+    staging: false
+
+  documentation:
+    openapi: openapi.yaml

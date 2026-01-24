@@ -1,0 +1,483 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Gateway Admin API",
+    "description": "## Gateway Administration API\n\nOIDC-protected proxy to webMethods API Gateway administration endpoints.\n\n### Purpose\n\nThis API provides secure access to Gateway administration functions through the Control-Plane API, eliminating the need for direct Basic Auth access to the Gateway admin port (5555).\n\n### Authentication\n\nAll endpoints require a valid JWT token from Keycloak (realm: `stoa`).\n- Users with `cpi-admin` role can access all operations\n- Token is forwarded to Gateway for audit trail\n\n### Backend\n\nProxy to: `http://apigateway.stoa-system.svc.cluster.local:5555/rest/apigateway`\n\n### Features\n\n- **API Management**: List, activate, deactivate APIs\n- **Application Management**: Manage OAuth applications\n- **Scope Management**: Configure OAuth scopes\n- **OIDC Configuration**: Set up External Authorization Servers\n",
+    "contact": {
+      "name": "CAB Ingenierie",
+      "email": "admin@cab-i.com"
+    },
+    "license": {
+      "name": "Proprietary"
+    },
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.gostoa.dev/v1/gateway",
+      "description": "Production - via Control-Plane API"
+    }
+  ],
+  "paths": {
+    "/apis": {
+      "get": {
+        "tags": ["APIs"],
+        "summary": "List Gateway APIs",
+        "description": "List all APIs registered in the Gateway",
+        "operationId": "list_gateway_apis",
+        "responses": {
+          "200": {
+            "description": "List of APIs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayAPIList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/apis/{api_id}": {
+      "get": {
+        "tags": ["APIs"],
+        "summary": "Get Gateway API",
+        "description": "Get details of a specific API",
+        "operationId": "get_gateway_api",
+        "parameters": [
+          {
+            "name": "api_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"},
+            "description": "Gateway API ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayAPI"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "API not found"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/apis/{api_id}/activate": {
+      "put": {
+        "tags": ["APIs"],
+        "summary": "Activate Gateway API",
+        "description": "Activate an API to make it accessible via Gateway",
+        "operationId": "activate_gateway_api",
+        "parameters": [
+          {
+            "name": "api_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"},
+            "description": "Gateway API ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API activated successfully"
+          },
+          "404": {
+            "description": "API not found"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/apis/{api_id}/deactivate": {
+      "put": {
+        "tags": ["APIs"],
+        "summary": "Deactivate Gateway API",
+        "description": "Deactivate an API",
+        "operationId": "deactivate_gateway_api",
+        "parameters": [
+          {
+            "name": "api_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"},
+            "description": "Gateway API ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API deactivated successfully"
+          },
+          "404": {
+            "description": "API not found"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/applications": {
+      "get": {
+        "tags": ["Applications"],
+        "summary": "List Gateway Applications",
+        "description": "List all OAuth applications registered in Gateway",
+        "operationId": "list_gateway_applications",
+        "responses": {
+          "200": {
+            "description": "List of applications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayApplicationList"
+                }
+              }
+            }
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      },
+      "post": {
+        "tags": ["Applications"],
+        "summary": "Create Gateway Application",
+        "description": "Create a new OAuth application in Gateway",
+        "operationId": "create_gateway_application",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GatewayApplicationCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Application created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayApplication"
+                }
+              }
+            }
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/scopes": {
+      "get": {
+        "tags": ["Scopes"],
+        "summary": "List OAuth Scopes",
+        "description": "List all OAuth scopes defined in Gateway",
+        "operationId": "list_gateway_scopes",
+        "responses": {
+          "200": {
+            "description": "List of scopes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayScopeList"
+                }
+              }
+            }
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      },
+      "post": {
+        "tags": ["Scopes"],
+        "summary": "Create OAuth Scope",
+        "description": "Create a new OAuth scope",
+        "operationId": "create_gateway_scope",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GatewayScopeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Scope created"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/alias": {
+      "get": {
+        "tags": ["Aliases"],
+        "summary": "List Gateway Aliases",
+        "description": "List all aliases (auth servers, endpoints) in Gateway",
+        "operationId": "list_gateway_aliases",
+        "responses": {
+          "200": {
+            "description": "List of aliases",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayAliasList"
+                }
+              }
+            }
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/configure-oidc": {
+      "post": {
+        "tags": ["OIDC"],
+        "summary": "Configure OIDC for API",
+        "description": "Configure OIDC authentication for an API including:\n- External Authorization Server (if not exists)\n- OAuth Strategy\n- Application with API subscription\n- Scope mappings",
+        "operationId": "configure_oidc",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OIDCConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OIDC configuration applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OIDCConfigResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Gateway Health Check",
+        "description": "Check Gateway connectivity and health",
+        "operationId": "gateway_health",
+        "responses": {
+          "200": {
+            "description": "Gateway is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Gateway unavailable"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GatewayAPI": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "description": "Gateway API ID"},
+          "apiName": {"type": "string"},
+          "apiVersion": {"type": "string"},
+          "apiDescription": {"type": "string"},
+          "isActive": {"type": "boolean"},
+          "type": {"type": "string", "enum": ["REST", "SOAP", "OData"]},
+          "createdDate": {"type": "string", "format": "date-time"},
+          "lastModified": {"type": "string", "format": "date-time"}
+        }
+      },
+      "GatewayAPIList": {
+        "type": "object",
+        "properties": {
+          "apiResponse": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/GatewayAPI"}
+          }
+        }
+      },
+      "GatewayApplication": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "contactEmails": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "authStrategyIds": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "consumingAPIs": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      },
+      "GatewayApplicationList": {
+        "type": "object",
+        "properties": {
+          "applications": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/GatewayApplication"}
+          }
+        }
+      },
+      "GatewayApplicationCreate": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "contactEmails": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "authStrategyIds": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "identifiers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {"type": "string"},
+                "name": {"type": "string"},
+                "value": {
+                  "type": "array",
+                  "items": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "GatewayScope": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "authServerAlias": {"type": "string"}
+        }
+      },
+      "GatewayScopeList": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/GatewayScope"}
+          }
+        }
+      },
+      "GatewayScopeCreate": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string", "description": "Scope name in format: {AuthServer}:{Tenant}:{Api}:{Version}:{Scope}"},
+          "description": {"type": "string"},
+          "authServerAlias": {"type": "string", "default": "KeycloakOIDC"}
+        }
+      },
+      "GatewayAlias": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "type": {"type": "string", "enum": ["authServerAlias", "endpoint", "simple"]},
+          "authServerType": {"type": "string", "enum": ["EXTERNAL", "LOCAL"]}
+        }
+      },
+      "GatewayAliasList": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/GatewayAlias"}
+          }
+        }
+      },
+      "OIDCConfigRequest": {
+        "type": "object",
+        "required": ["api_id", "tenant_id", "app_name"],
+        "properties": {
+          "api_id": {"type": "string", "description": "Gateway API ID to configure"},
+          "tenant_id": {"type": "string", "description": "Tenant identifier"},
+          "app_name": {"type": "string", "description": "Application name for OAuth"},
+          "api_name": {"type": "string", "description": "API name (for scope naming)"},
+          "api_version": {"type": "string", "default": "1.0"},
+          "client_id": {"type": "string", "description": "Keycloak client ID"},
+          "auth_server_name": {"type": "string", "default": "KeycloakOIDC"}
+        }
+      },
+      "OIDCConfigResponse": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "auth_server_id": {"type": "string"},
+          "strategy_id": {"type": "string"},
+          "application_id": {"type": "string"},
+          "scope_id": {"type": "string"},
+          "message": {"type": "string"}
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string", "enum": ["healthy", "degraded", "unhealthy"]},
+          "gateway_reachable": {"type": "boolean"},
+          "auth_mode": {"type": "string", "enum": ["oidc_proxy", "basic_auth"]},
+          "version": {"type": "string"}
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token from Keycloak (realm: stoa)"
+      }
+    }
+  },
+  "tags": [
+    {"name": "APIs", "description": "Gateway API management"},
+    {"name": "Applications", "description": "OAuth application management"},
+    {"name": "Scopes", "description": "OAuth scope management"},
+    {"name": "Aliases", "description": "Gateway alias management (auth servers, endpoints)"},
+    {"name": "OIDC", "description": "OIDC configuration operations"},
+    {"name": "Health", "description": "Health check endpoints"}
+  ]
+}

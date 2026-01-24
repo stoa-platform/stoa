@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stoa-portal
+  namespace: stoa-system
+  labels:
+    app: stoa-portal
+    app.kubernetes.io/name: stoa-portal
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: stoa-platform
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: portal.gostoa.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stoa-portal
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - portal.gostoa.dev
+      secretName: stoa-portal-tls

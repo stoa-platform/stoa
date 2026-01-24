@@ -1,0 +1,63 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+.terraform.lock.hcl
+tfplan
+crash.log
+
+# Ansible
+*.retry
+ansible.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.pem
+*.key
+secrets/
+credentials/
+
+# Logs
+*.log
+logs/
+
+# Backups
+*.bak
+*.backup
+
+# Docker
+docker-compose.override.yml
+
+# Control Plane API
+control-plane-api/.env
+control-plane-api/venv/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+portal/node_modules/node_modules_CLAUDE_OFF/

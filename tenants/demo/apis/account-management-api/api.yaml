@@ -1,0 +1,30 @@
+# Account Management API
+# Core banking account operations
+id: account-management-api
+name: account-management-api
+display_name: "Account Management API"
+version: "2.0.0"
+description: |
+  Core Banking Account Management Service.
+  
+  Provides comprehensive account lifecycle management including:
+  - Account creation and closure
+  - Balance inquiries and statements
+  - Account holder information management
+  - Multi-currency support
+  - Interest calculation and posting
+  
+  Compliant with PSD2 and Open Banking standards.
+backend_url: https://httpbin.org/anything
+status: active
+category: Banking
+tags:
+  - portal:published
+  - banking
+  - accounts
+  - rest
+  - psd2
+  - open-banking
+deployments:
+  dev: true
+  staging: false

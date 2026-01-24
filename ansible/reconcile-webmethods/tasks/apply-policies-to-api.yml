@@ -1,0 +1,341 @@
+---
+# tasks/apply-policies-to-api.yml
+# Apply all configured policies to a single API
+#
+# webMethods Gateway Policy Structure:
+# - Policies are applied via policy actions on the API
+# - Key policy types: Identify & Authorize, Routing, Traffic Management, Logging
+
+- name: "Build API lookup key for {{ api_def.metadata.name }}"
+  ansible.builtin.set_fact:
+    api_lookup_key: "{{ api_def.metadata.name }}:{{ api_def.metadata.version | default('1.0.0') }}"
+
+- name: "Get Gateway API for {{ api_def.metadata.name }}"
+  ansible.builtin.set_fact:
+    current_gateway_api: "{{ gateway_api_lookup[api_lookup_key] | default(none) }}"
+
+- name: "Skip if API not on Gateway"
+  ansible.builtin.debug:
+    msg: "⚠️ API {{ api_def.metadata.name }} not found on Gateway, skipping policy application"
+  when: current_gateway_api is none
+
+- name: "Apply policies to {{ api_def.metadata.name }}"
+  when:
+    - current_gateway_api is not none
+    - not dry_run
+  block:
+    # =========================================================================
+    # 1. JWT/OAuth2 INBOUND AUTHENTICATION POLICY
+    # =========================================================================
+    - name: "Check if JWT validation policy is required"
+      ansible.builtin.set_fact:
+        requires_jwt: "{{ 'jwt-validation' in api_def.spec.policies }}"
+
+    - name: "Build JWT validation policy payload"
+      ansible.builtin.set_fact:
+        jwt_policy_payload:
+          policyAction:
+            - type: "jwtAuthentication"
+              parameters:
+                # OAuth2/OIDC Provider configuration
+                oauth2Provider:
+                  name: "Keycloak-STOA"
+                  type: "EXTERNAL"
+                  issuer: "{{ api_def.spec.auth.issuer | default('https://auth.' + base_domain + '/realms/stoa') }}"
+                  jwksUri: "{{ api_def.spec.auth.issuer | default('https://auth.' + base_domain + '/realms/stoa') }}/protocol/openid-connect/certs"
+                  introspectionEndpoint: ""
+                  userInfoEndpoint: ""
+                # Validation settings
+                validateAudience: true
+                audience: "{{ api_def.spec.auth.audience | default('control-plane-api') }}"
+                validateIssuer: true
+                validateExpiry: true
+                clockSkewSeconds: 30
+                # Extract claims and forward as headers
+                extractClaims:
+                  - claim: "sub"
+                    headerName: "X-User-ID"
+                  - claim: "email"
+                    headerName: "X-User-Email"
+                  - claim: "preferred_username"
+                    headerName: "X-Username"
+                  - claim: "tenant_id"
+                    headerName: "X-Tenant-ID"
+                  - claim: "realm_access.roles"
+                    headerName: "X-User-Roles"
+                # Error responses
+                authenticationFailure:
+                  statusCode: 401
+                  statusMessage: "Unauthorized"
+                  errorMessage: "Invalid or expired JWT token"
+      when: requires_jwt
+
+    - name: "Apply JWT authentication policy to {{ api_def.metadata.name }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ current_gateway_api.id }}/policies"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body: "{{ jwt_policy_payload | to_json }}"
+        body_format: json
+        status_code: [200, 201]
+        timeout: 30
+      register: jwt_policy_result
+      when: requires_jwt
+      ignore_errors: true
+
+    # =========================================================================
+    # 2. OUTBOUND AUTHENTICATION - JWT PASSTHROUGH TO BACKEND
+    # =========================================================================
+    - name: "Build outbound auth policy payload (JWT passthrough)"
+      ansible.builtin.set_fact:
+        outbound_auth_payload:
+          policyAction:
+            - type: "outboundAuthPolicy"
+              parameters:
+                # Passthrough the incoming JWT to the backend
+                authType: "passthrough"
+                # Or use specific header mapping
+                customHeaders:
+                  - sourceName: "Authorization"
+                    targetName: "Authorization"
+                    passthrough: true
+                # Forward extracted claims as headers
+                forwardClaimHeaders: true
+      when: requires_jwt
+
+    - name: "Apply outbound auth policy to {{ api_def.metadata.name }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ current_gateway_api.id }}/policies"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body: "{{ outbound_auth_payload | to_json }}"
+        body_format: json
+        status_code: [200, 201]
+        timeout: 30
+      register: outbound_auth_result
+      when: requires_jwt
+      ignore_errors: true
+
+    # =========================================================================
+    # 3. SCOPE MAPPING / AUTHORIZATION POLICY
+    # =========================================================================
+    - name: "Check if API has scope requirements"
+      ansible.builtin.set_fact:
+        requires_scope_mapping: "{{ api_def.spec.auth.scopes is defined and api_def.spec.auth.scopes | length > 0 }}"
+
+    - name: "Build scope mapping policy payload"
+      ansible.builtin.set_fact:
+        scope_mapping_payload:
+          policyAction:
+            - type: "oauthScopeValidation"
+              parameters:
+                requiredScopes: "{{ api_def.spec.auth.scopes }}"
+                scopeValidationMode: "ANY"  # User needs ANY of the scopes (OR logic)
+                scopeClaimName: "scope"
+                # Also check realm_access.roles for Keycloak
+                additionalClaimPaths:
+                  - "realm_access.roles"
+                  - "resource_access.{{ api_def.spec.auth.audience | default('control-plane-api') }}.roles"
+                # Error response for insufficient scope
+                authorizationFailure:
+                  statusCode: 403
+                  statusMessage: "Forbidden"
+                  errorMessage: "Insufficient permissions. Required scopes: {{ api_def.spec.auth.scopes | join(', ') }}"
+      when: requires_scope_mapping
+
+    - name: "Apply scope mapping policy to {{ api_def.metadata.name }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ current_gateway_api.id }}/policies"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body: "{{ scope_mapping_payload | to_json }}"
+        body_format: json
+        status_code: [200, 201]
+        timeout: 30
+      register: scope_policy_result
+      when: requires_scope_mapping
+      ignore_errors: true
+
+    # =========================================================================
+    # 4. RATE LIMITING POLICY
+    # =========================================================================
+    - name: "Check if rate limiting is required"
+      ansible.builtin.set_fact:
+        requires_rate_limit: "{{ 'rate-limit-standard' in api_def.spec.policies }}"
+
+    - name: "Get rate limit configuration"
+      ansible.builtin.set_fact:
+        rate_limit_config: "{{ git_policies['rate-limit-standard'].spec.config | default({}) }}"
+      when:
+        - requires_rate_limit
+        - git_policies is defined
+        - "'rate-limit-standard' in git_policies"
+
+    - name: "Build rate limiting policy payload"
+      ansible.builtin.set_fact:
+        rate_limit_payload:
+          policyAction:
+            - type: "throttlingPolicy"
+              parameters:
+                maxRequests: "{{ rate_limit_config.maxRequests | default(100) }}"
+                intervalSeconds: "{{ rate_limit_config.intervalSeconds | default(60) }}"
+                throttleBy: "{{ rate_limit_config.throttleBy | default('token') }}"
+                # Custom limits by role/scope
+                customLimits: "{{ rate_limit_config.customLimits | default([]) }}"
+                # Response headers
+                includeRateLimitHeaders: true
+                # Exceeded response
+                limitExceededResponse:
+                  statusCode: 429
+                  statusMessage: "Too Many Requests"
+                  errorMessage: "Rate limit exceeded. Please retry after the reset time."
+                  headers:
+                    - name: "Retry-After"
+                      value: "60"
+      when: requires_rate_limit
+
+    - name: "Apply rate limiting policy to {{ api_def.metadata.name }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ current_gateway_api.id }}/policies"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body: "{{ rate_limit_payload | to_json }}"
+        body_format: json
+        status_code: [200, 201]
+        timeout: 30
+      register: rate_limit_result
+      when: requires_rate_limit
+      ignore_errors: true
+
+    # =========================================================================
+    # 5. CORS POLICY
+    # =========================================================================
+    - name: "Check if CORS is required"
+      ansible.builtin.set_fact:
+        requires_cors: "{{ 'cors-platform' in api_def.spec.policies or api_def.spec.cors.enabled | default(false) }}"
+
+    - name: "Get CORS configuration"
+      ansible.builtin.set_fact:
+        cors_config: "{{ api_def.spec.cors | default(git_policies['cors-platform'].spec.config | default({})) }}"
+      when: requires_cors
+
+    - name: "Build CORS policy payload"
+      ansible.builtin.set_fact:
+        cors_payload:
+          policyAction:
+            - type: "corsPolicy"
+              parameters:
+                enabled: true
+                allowOrigins: "{{ cors_config.allowOrigins | default(['*']) }}"
+                allowMethods: "{{ cors_config.allowMethods | default(['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']) }}"
+                allowHeaders: "{{ cors_config.allowHeaders | default(['Authorization', 'Content-Type', 'X-Request-ID']) }}"
+                exposeHeaders: "{{ cors_config.exposeHeaders | default(['X-Request-ID', 'X-RateLimit-Remaining']) }}"
+                allowCredentials: "{{ cors_config.allowCredentials | default(true) }}"
+                maxAge: "{{ cors_config.maxAge | default(3600) }}"
+      when: requires_cors
+
+    - name: "Apply CORS policy to {{ api_def.metadata.name }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ current_gateway_api.id }}/policies"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body: "{{ cors_payload | to_json }}"
+        body_format: json
+        status_code: [200, 201]
+        timeout: 30
+      register: cors_result
+      when: requires_cors
+      ignore_errors: true
+
+    # =========================================================================
+    # 6. LOGGING POLICY
+    # =========================================================================
+    - name: "Check if logging is required"
+      ansible.builtin.set_fact:
+        requires_logging: "{{ 'logging-standard' in api_def.spec.policies }}"
+
+    - name: "Build logging policy payload"
+      ansible.builtin.set_fact:
+        logging_payload:
+          policyAction:
+            - type: "loggingPolicy"
+              parameters:
+                logLevel: "INFO"
+                logRequest: true
+                logResponse: true
+                logHeaders: true
+                # Redact sensitive data
+                redactPatterns:
+                  - "Authorization: Bearer .*"
+                  - "X-API-Key: .*"
+                  - "password"
+                  - "secret"
+                # Log destinations
+                logDestinations:
+                  - type: "STDOUT"
+                    format: "JSON"
+                  - type: "KAFKA"
+                    topic: "stoa.api.access-logs"
+                    enabled: "{{ lookup('env', 'KAFKA_ENABLED') | default('false') }}"
+      when: requires_logging
+
+    - name: "Apply logging policy to {{ api_def.metadata.name }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ current_gateway_api.id }}/policies"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body: "{{ logging_payload | to_json }}"
+        body_format: json
+        status_code: [200, 201]
+        timeout: 30
+      register: logging_result
+      when: requires_logging
+      ignore_errors: true
+
+    # =========================================================================
+    # RECORD APPLIED POLICIES
+    # =========================================================================
+    - name: "Record policies applied to {{ api_def.metadata.name }}"
+      ansible.builtin.set_fact:
+        policies_applied: "{{ policies_applied | default([]) + [api_def.metadata.name + ':' + (api_def.spec.policies | join(','))] }}"
+
+- name: "Log policies application for {{ api_def.metadata.name }}"
+  ansible.builtin.debug:
+    msg: |
+      🔒 Policies applied to {{ api_def.metadata.name }}:
+        - JWT Authentication: {{ 'jwt-validation' in api_def.spec.policies }}
+        - Outbound Auth (JWT Passthrough): {{ 'jwt-validation' in api_def.spec.policies }}
+        - Scope Mapping: {{ api_def.spec.auth.scopes | default([]) | length > 0 }}
+        - Rate Limiting: {{ 'rate-limit-standard' in api_def.spec.policies }}
+        - CORS: {{ 'cors-platform' in api_def.spec.policies or api_def.spec.cors.enabled | default(false) }}
+        - Logging: {{ 'logging-standard' in api_def.spec.policies }}

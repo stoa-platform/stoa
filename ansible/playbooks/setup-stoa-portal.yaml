@@ -1,0 +1,356 @@
+---
+# Playbook: Setup STOA Developer Portal
+# Creates the stoa-portal Keycloak client and registers the portal application
+#
+# Prerequisites:
+#   - Keycloak deployed with 'stoa' realm
+#   - Gateway configured with KeycloakOIDC auth server
+#   - bootstrap-platform.yaml already run
+#
+# Usage:
+#   ansible-playbook setup-stoa-portal.yaml
+
+- name: Setup STOA Developer Portal
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../vars/secrets.yaml
+
+  vars:
+    # Gateway Configuration
+    gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
+
+    # Keycloak Configuration
+    keycloak_url: "https://auth.{{ base_domain | default('gostoa.dev') }}"
+    keycloak_realm: "stoa"
+
+    # Portal Configuration
+    portal_client_id: "stoa-portal"
+    portal_name: "STOA Developer Portal"
+
+    # Auth Server
+    auth_server_name: "KeycloakOIDC"
+
+    # Environment URLs (all environments)
+    portal_redirect_uris:
+      - "https://portal.gostoa.dev/*"
+      - "https://portal.dev.gostoa.dev/*"
+      - "https://portal.staging.gostoa.dev/*"
+      - "http://localhost:3001/*"
+
+    portal_web_origins:
+      - "https://portal.gostoa.dev"
+      - "https://portal.dev.gostoa.dev"
+      - "https://portal.staging.gostoa.dev"
+      - "http://localhost:3001"
+
+  tasks:
+    - name: Display setup info
+      debug:
+        msg: |
+          ========================================
+          STOA Developer Portal Setup
+          ========================================
+          Keycloak: {{ keycloak_url }}/realms/{{ keycloak_realm }}
+          Client ID: {{ portal_client_id }}
+          ========================================
+
+    # =========================================================================
+    # STEP 1: Get Keycloak Admin Token
+    # =========================================================================
+    - name: Get Keycloak admin token
+      uri:
+        url: "{{ keycloak_url }}/realms/master/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          client_id: admin-cli
+          username: "{{ keycloak_admin_user | default('admin') }}"
+          password: "{{ keycloak_admin_password }}"
+        status_code: [200]
+        validate_certs: false
+      register: keycloak_admin_token
+
+    - name: Fail if Keycloak auth failed
+      fail:
+        msg: "Failed to authenticate with Keycloak admin"
+      when: keycloak_admin_token.json is not defined
+
+    # =========================================================================
+    # STEP 2: Check if stoa-portal client exists
+    # =========================================================================
+    - name: Check if stoa-portal client exists
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId={{ portal_client_id }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: existing_portal_client
+
+    - name: Set portal client exists fact
+      set_fact:
+        portal_client_exists: "{{ existing_portal_client.json | length > 0 }}"
+
+    - name: Get existing portal client UUID
+      set_fact:
+        portal_client_uuid: "{{ existing_portal_client.json[0].id }}"
+      when: portal_client_exists
+
+    # =========================================================================
+    # STEP 3: Create stoa-portal client
+    # =========================================================================
+    - name: Create stoa-portal client in Keycloak
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          clientId: "{{ portal_client_id }}"
+          name: "{{ portal_name }}"
+          description: "Developer Portal for MCP Tools and API Subscriptions"
+          enabled: true
+          publicClient: true
+          standardFlowEnabled: true
+          implicitFlowEnabled: false
+          directAccessGrantsEnabled: false
+          serviceAccountsEnabled: false
+          protocol: "openid-connect"
+          redirectUris: "{{ portal_redirect_uris }}"
+          webOrigins: "{{ portal_web_origins }}"
+          attributes:
+            post.logout.redirect.uris: "{{ portal_redirect_uris | join('##') }}"
+            pkce.code.challenge.method: "S256"
+          defaultClientScopes:
+            - web-origins
+            - acr
+            - profile
+            - roles
+            - email
+        status_code: [201]
+        validate_certs: false
+      register: portal_client_create
+      when: not portal_client_exists
+
+    - name: Display client creation result
+      debug:
+        msg: "Created stoa-portal client"
+      when: not portal_client_exists
+
+    - name: Get newly created client UUID
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId={{ portal_client_id }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: new_portal_client
+      when: not portal_client_exists
+
+    - name: Set portal client UUID
+      set_fact:
+        portal_client_uuid: "{{ new_portal_client.json[0].id }}"
+      when: not portal_client_exists
+
+    # =========================================================================
+    # STEP 4: Update existing client (if exists)
+    # =========================================================================
+    - name: Update stoa-portal client in Keycloak (if exists)
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients/{{ portal_client_uuid }}"
+        method: PUT
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          id: "{{ portal_client_uuid }}"
+          clientId: "{{ portal_client_id }}"
+          name: "{{ portal_name }}"
+          description: "Developer Portal for MCP Tools and API Subscriptions"
+          enabled: true
+          publicClient: true
+          standardFlowEnabled: true
+          implicitFlowEnabled: false
+          directAccessGrantsEnabled: false
+          serviceAccountsEnabled: false
+          protocol: "openid-connect"
+          redirectUris: "{{ portal_redirect_uris }}"
+          webOrigins: "{{ portal_web_origins }}"
+          attributes:
+            post.logout.redirect.uris: "{{ portal_redirect_uris | join('##') }}"
+            pkce.code.challenge.method: "S256"
+        status_code: [204]
+        validate_certs: false
+      when: portal_client_exists
+
+    - name: Display client update result
+      debug:
+        msg: "Updated stoa-portal client"
+      when: portal_client_exists
+
+    # =========================================================================
+    # STEP 5: Register stoa-portal application in Gateway
+    # =========================================================================
+    - name: Get existing Gateway applications
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_apps
+      ignore_errors: true
+
+    - name: Check if stoa-portal app exists in Gateway
+      set_fact:
+        portal_gateway_app_exists: "{{ existing_apps.json.applications | default([]) | selectattr('name', 'equalto', 'stoa-portal') | list | length > 0 }}"
+      when: existing_apps is defined and existing_apps.json is defined
+
+    - name: Get existing portal app ID
+      set_fact:
+        portal_gateway_app_id: "{{ (existing_apps.json.applications | selectattr('name', 'equalto', 'stoa-portal') | list | first).id }}"
+      when: portal_gateway_app_exists | default(false)
+
+    - name: Get OAuth strategy
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/strategies"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_strategies
+      ignore_errors: true
+
+    - name: Find platform OAuth strategy ID
+      set_fact:
+        oauth_strategy_id: "{{ (existing_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'stoa-platform-oauth2') | list | first).id }}"
+      when: existing_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'stoa-platform-oauth2') | list | length > 0
+      ignore_errors: true
+
+    - name: Create stoa-portal OAuth strategy
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/strategies"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "stoa-portal-oauth2"
+          description: "OAuth2/OIDC strategy for STOA Developer Portal"
+          type: "OAUTH2"
+          authServerAlias: "{{ auth_server_name }}"
+          clientId: "{{ portal_client_id }}"
+          audience: "account"
+        status_code: [200, 201, 409]
+      register: portal_strategy_result
+      ignore_errors: true
+
+    - name: Get portal OAuth strategy
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/strategies"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: updated_strategies
+      ignore_errors: true
+
+    - name: Find portal OAuth strategy ID
+      set_fact:
+        portal_strategy_id: "{{ (updated_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'stoa-portal-oauth2') | list | first).id }}"
+      when: updated_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'stoa-portal-oauth2') | list | length > 0
+      ignore_errors: true
+
+    - name: Create stoa-portal application in Gateway
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "stoa-portal"
+          description: "STOA Developer Portal Application"
+          contactEmails:
+            - "developers@cab-i.com"
+          authStrategyIds:
+            - "{{ portal_strategy_id }}"
+          identifiers:
+            - key: "openIdClaims"
+              name: "client_id"
+              value:
+                - "{{ portal_client_id }}"
+        status_code: [200, 201]
+      register: portal_app_create
+      when: not (portal_gateway_app_exists | default(false))
+      ignore_errors: true
+
+    - name: Get created portal app ID
+      set_fact:
+        portal_gateway_app_id: "{{ portal_app_create.json.id }}"
+      when:
+        - not (portal_gateway_app_exists | default(false))
+        - portal_app_create is defined
+        - portal_app_create.json is defined
+
+    # =========================================================================
+    # STEP 6: Summary
+    # =========================================================================
+    - name: Setup summary
+      debug:
+        msg: |
+          ========================================
+          STOA Developer Portal Setup Complete
+          ========================================
+
+          Keycloak Client:
+            Client ID: {{ portal_client_id }}
+            UUID: {{ portal_client_uuid | default('N/A') }}
+            Type: Public (SPA)
+            PKCE: Enabled (S256)
+
+          Redirect URIs:
+          {% for uri in portal_redirect_uris %}
+            - {{ uri }}
+          {% endfor %}
+
+          Gateway Application:
+            ID: {{ portal_gateway_app_id | default('N/A') }}
+            OAuth Strategy: {{ portal_strategy_id | default('N/A') }}
+
+          ========================================
+          NEXT STEPS:
+          1. Deploy stoa-portal to Kubernetes
+          2. Test login at https://portal.{{ base_domain | default('gostoa.dev') }}
+          ========================================

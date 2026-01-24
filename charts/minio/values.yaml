@@ -1,0 +1,100 @@
+# MinIO Helm Values for STOA Platform
+# Used for Error Snapshots storage (CAB-397)
+#
+# Install with:
+#   helm repo add minio https://charts.min.io/
+#   helm install minio minio/minio -n stoa-system -f values.yaml
+
+# Mode: standalone for dev, distributed for prod
+mode: standalone
+
+# Replicas (only for distributed mode)
+replicas: 1
+
+# Resources
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+# Persistence
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""  # Use default storage class
+
+# Root credentials (override in production via secret)
+rootUser: "minioadmin"
+rootPassword: "minioadmin123"  # Change in production!
+
+# Use existing secret for credentials (recommended for prod)
+# existingSecret: minio-credentials
+
+# Service
+service:
+  type: ClusterIP
+  port: 9000
+  consolePort: 9001
+
+# Console (web UI)
+consoleService:
+  type: ClusterIP
+  port: 9001
+
+# Ingress for console (optional)
+ingress:
+  enabled: false
+  # annotations:
+  #   cert-manager.io/cluster-issuer: letsencrypt-prod
+  # hosts:
+  #   - minio.gostoa.dev
+  # tls:
+  #   - secretName: minio-tls
+  #     hosts:
+  #       - minio.gostoa.dev
+
+# Console ingress
+consoleIngress:
+  enabled: false
+
+# Buckets to create on startup
+buckets:
+  - name: error-snapshots
+    policy: none  # none, download, upload, public
+    purge: false
+    versioning: false
+    objectlocking: false
+
+# Lifecycle policies (applied via post-install job)
+# Note: MinIO chart doesn't support lifecycle directly,
+# we'll apply via mc client in a job
+
+# Security context
+securityContext:
+  enabled: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+# Pod security context
+podSecurityContext:
+  enabled: true
+  runAsNonRoot: true
+
+# Node selector (optional)
+nodeSelector: {}
+
+# Tolerations (optional)
+tolerations: []
+
+# Affinity (optional)
+affinity: {}
+
+# Metrics for Prometheus
+metrics:
+  serviceMonitor:
+    enabled: false
+    # interval: 30s

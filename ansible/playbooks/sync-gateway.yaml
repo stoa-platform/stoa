@@ -1,0 +1,170 @@
+---
+# Playbook: Sync Gateway configuration
+# Synchronizes APIs and policies from Git repository
+#
+# Authentication modes:
+#   1. OIDC (recommended): Uses Gateway-Admin-API proxy with Keycloak JWT
+#   2. Basic Auth (fallback): Direct Gateway access with admin credentials
+
+- name: Sync Gateway Configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Authentication mode
+    _use_oidc: true
+    use_oidc_mode: "{{ use_oidc | default(_use_oidc) | bool }}"
+
+    # OIDC configuration defaults (use external HTTPS URLs for proper SSL)
+    _keycloak_url: "https://auth.{{ base_domain | default('gostoa.dev') }}"
+    _client_id: "awx-automation"
+    _client_secret: ""
+    _gateway_proxy_url: "https://api.{{ base_domain | default('gostoa.dev') }}/v1/gateway"
+
+    # Basic Auth fallback defaults
+    _gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
+    _gateway_user: "Administrator"
+    _gateway_password: "manage"
+
+    # Sync configuration defaults
+    _tenant_id: "default"
+    _git_repo: ""
+
+    # Final values
+    kc_url: "{{ keycloak_url | default(_keycloak_url) }}"
+    kc_client_id: "{{ client_id | default(_client_id) }}"
+    kc_client_secret: "{{ client_secret | default(_client_secret) }}"
+    gw_proxy_url: "{{ gateway_proxy_url | default(_gateway_proxy_url) }}"
+    gw_url: "{{ gateway_url | default(_gateway_url) }}"
+    gw_user: "{{ gateway_user | default(_gateway_user) }}"
+    gw_password: "{{ gateway_password | default(_gateway_password) }}"
+    tenant: "{{ tenant_id | default(_tenant_id) }}"
+    git_repo_url: "{{ git_repo | default(_git_repo) }}"
+
+  tasks:
+    - name: Display sync info
+      debug:
+        msg: |
+          Syncing Gateway for tenant '{{ tenant }}'
+          Authentication mode: {{ 'OIDC (proxy)' if use_oidc_mode else 'Basic Auth (direct)' }}
+
+    # ========================================
+    # OIDC Authentication Mode
+    # ========================================
+    - name: Get OIDC access token from Keycloak
+      uri:
+        url: "{{ kc_url }}/realms/stoa/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: client_credentials
+          client_id: "{{ kc_client_id }}"
+          client_secret: "{{ kc_client_secret }}"
+        status_code: [200]
+        validate_certs: false
+      register: token_response
+      when:
+        - use_oidc_mode
+        - kc_client_secret | length > 0
+
+    - name: Set access token
+      set_fact:
+        access_token: "{{ token_response.json.access_token }}"
+      when:
+        - use_oidc_mode
+        - token_response is defined
+        - token_response.json is defined
+
+    - name: Check Gateway health via OIDC proxy
+      uri:
+        url: "{{ gw_proxy_url }}/health"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: health_check_oidc
+      ignore_errors: true
+      when:
+        - use_oidc_mode
+        - access_token is defined
+
+    - name: Get all APIs via OIDC proxy
+      uri:
+        url: "{{ gw_proxy_url }}/apis"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: all_apis_oidc
+      when:
+        - use_oidc_mode
+        - access_token is defined
+
+    # ========================================
+    # Basic Auth Fallback Mode
+    # ========================================
+    - name: Check Gateway health via Basic Auth
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/health"
+        method: GET
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 401]
+      register: health_check_basic
+      ignore_errors: true
+      when: not use_oidc_mode or (access_token is not defined)
+
+    - name: Get all APIs via Basic Auth
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/apis"
+        method: GET
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200]
+      register: all_apis_basic
+      when: not use_oidc_mode or (access_token is not defined)
+
+    # ========================================
+    # Common tasks
+    # ========================================
+    - name: Set APIs result
+      set_fact:
+        all_apis: "{{ all_apis_oidc if (all_apis_oidc is defined and all_apis_oidc.json is defined) else all_apis_basic }}"
+
+    - name: Display current APIs
+      debug:
+        msg: "Found {{ all_apis.json.apiResponse | length | default(0) }} APIs on Gateway"
+      when: all_apis is defined
+
+    - name: Export Gateway configuration via Basic Auth
+      uri:
+        url: "{{ gw_url }}/rest/apigateway/archive"
+        method: GET
+        user: "{{ gw_user }}"
+        password: "{{ gw_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        dest: "/tmp/gateway-export-{{ tenant }}.zip"
+        status_code: [200]
+      register: export_result
+      ignore_errors: true
+      when: not use_oidc_mode or (access_token is not defined)
+
+    - name: Sync summary
+      debug:
+        msg: |
+          ========================================
+          Gateway Sync Complete
+          ----------------------------------------
+          Tenant: {{ tenant }}
+          APIs found: {{ all_apis.json.apiResponse | length | default(0) }}
+          Auth Mode: {{ 'OIDC (proxy)' if (use_oidc_mode and access_token is defined) else 'Basic Auth (direct)' }}
+          Status: SUCCESS
+          ========================================

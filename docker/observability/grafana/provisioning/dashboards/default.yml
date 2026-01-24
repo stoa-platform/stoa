@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: 'STOA Platform Dashboards'
+    orgId: 1
+    folder: 'STOA'
+    folderUid: 'stoa-folder'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

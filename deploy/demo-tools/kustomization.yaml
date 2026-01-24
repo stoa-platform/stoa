@@ -1,0 +1,22 @@
+# CAB-290: Demo MCP Tools Kustomization
+# Deploy all demo tools for multi-tenant isolation demo
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: demo-tools
+  annotations:
+    gostoa.dev/ticket: CAB-290
+
+resources:
+  - crm-search.yaml
+  - billing-invoice.yaml
+  - inventory-lookup.yaml
+  - notifications-send.yaml
+
+commonLabels:
+  gostoa.dev/demo: "true"
+  gostoa.dev/created-by: cab-290
+
+commonAnnotations:
+  gostoa.dev/description: "Demo MCP tools for multi-tenant isolation"

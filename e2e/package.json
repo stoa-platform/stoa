@@ -1,0 +1,28 @@
+{
+  "name": "stoa-e2e",
+  "version": "1.0.0",
+  "description": "STOA Platform E2E Tests with Playwright + Gherkin (BDD)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "bddgen && playwright test",
+    "test:e2e:ui": "bddgen && playwright test --ui",
+    "test:e2e:headed": "bddgen && playwright test --headed",
+    "test:e2e:debug": "bddgen && playwright test --debug",
+    "test:portal": "bddgen && playwright test --grep @portal",
+    "test:console": "bddgen && playwright test --grep @console",
+    "test:gateway": "bddgen && playwright test --grep @gateway",
+    "test:smoke": "bddgen && playwright test --grep @smoke",
+    "test:critical": "bddgen && playwright test --grep @critical",
+    "test:rpo": "bddgen && playwright test --grep @rpo",
+    "report": "playwright show-report reports/html",
+    "bddgen": "bddgen"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^20.11.0",
+    "dotenv": "^16.4.0",
+    "playwright-bdd": "^7.4.0",
+    "typescript": "^5.3.3"
+  }
+}

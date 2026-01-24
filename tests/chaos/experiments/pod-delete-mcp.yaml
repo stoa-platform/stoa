@@ -1,0 +1,62 @@
+# =============================================================================
+# Chaos Experiment: MCP Gateway Pod Delete
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Tests auto-recovery when MCP Gateway pod is killed
+# Expected: Kubernetes recreates pod, AI tool invocations resume
+# =============================================================================
+
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: mcp-pod-delete
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: mcp-gateway
+    chaos-type: pod-delete
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: stoa-system
+    applabel: "app.kubernetes.io/name=mcp-gateway"
+    appkind: deployment
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "30"
+            - name: PODS_AFFECTED_PERC
+              value: "50"
+            - name: CHAOS_INTERVAL
+              value: "10"
+            - name: FORCE
+              value: "false"
+            - name: SEQUENCE
+              value: "serial"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          - name: "mcp-health-check"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://mcp-gateway.stoa-system.svc:8001/health"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 5
+              interval: 5
+              retry: 3
+              probePollingInterval: 2

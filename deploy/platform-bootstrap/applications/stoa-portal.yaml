@@ -1,0 +1,54 @@
+# STOA Developer Portal - OAuth2 Application
+# Public-facing portal for API consumers to discover, subscribe, and test APIs
+apiVersion: stoa.io/v1
+kind: Application
+metadata:
+  name: stoa-portal
+  description: "STOA Developer Portal - API Consumer Interface"
+  tags:
+    - platform
+    - frontend
+    - portal
+
+spec:
+  displayName: STOA Developer Portal
+  type: web
+  public: true
+
+  # OAuth2 Configuration (matches Keycloak client)
+  oauth2:
+    clientId: stoa-portal
+    grantTypes:
+      - authorization_code
+      - refresh_token
+    redirectUris:
+      - https://portal.${BASE_DOMAIN}/*
+      - http://localhost:5173/*
+    webOrigins:
+      - https://portal.${BASE_DOMAIN}
+      - http://localhost:5173
+    pkce: true
+    publicClient: true
+
+  # API Subscriptions
+  subscriptions:
+    - apiName: Control-Plane-API
+      version: "2.0"
+      scopes:
+        - stoa:read
+      # Portal has read-only access to platform APIs
+      # Users subscribe to tenant APIs separately
+
+  # Rate limits for the application
+  rateLimit:
+    requests: 500
+    window: 60
+
+  # Allowed operations
+  permissions:
+    - browse-apis
+    - subscribe-apis
+    - view-subscriptions
+    - manage-own-subscriptions
+    - view-usage
+    - create-service-accounts

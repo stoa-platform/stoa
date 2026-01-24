@@ -1,0 +1,92 @@
+# =============================================================================
+# Chaos Experiment: Control-Plane API Pod Delete
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Tests auto-recovery when Control-Plane API pod is killed
+# Expected: Kubernetes recreates pod, traffic continues via other replicas
+# =============================================================================
+
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: api-pod-delete
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: control-plane-api
+    chaos-type: pod-delete
+spec:
+  # Run once (not continuously)
+  engineState: "active"
+
+  # Target application
+  appinfo:
+    appns: stoa-system
+    applabel: "app.kubernetes.io/name=control-plane-api"
+    appkind: deployment
+
+  # Service account with chaos permissions
+  chaosServiceAccount: litmus-admin
+
+  # Experiment configuration
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            # Duration of chaos
+            - name: TOTAL_CHAOS_DURATION
+              value: "30"
+
+            # Number of pods to kill (or percentage)
+            - name: PODS_AFFECTED_PERC
+              value: "50"
+
+            # Interval between pod deletions
+            - name: CHAOS_INTERVAL
+              value: "10"
+
+            # Force delete (don't wait for graceful termination)
+            - name: FORCE
+              value: "false"
+
+            # Sequence: parallel or serial
+            - name: SEQUENCE
+              value: "serial"
+
+            # Container runtime
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+
+            # Socket path
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        # Probes to validate steady state
+        probe:
+          - name: "api-health-check"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://control-plane-api.stoa-system.svc:8000/health"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 5
+              interval: 5
+              retry: 3
+              probePollingInterval: 2
+---
+# Success criteria
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosResult
+metadata:
+  name: api-pod-delete-result
+  namespace: stoa-system
+spec:
+  experimentName: pod-delete
+  # Expected: PASS
+  # The deployment should recover automatically
+  # Health check probe should remain green

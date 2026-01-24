@@ -1,0 +1,87 @@
+# CAB-279: Demo Tenant - Team Beta
+# Purpose: Operations team with Inventory and Notifications tools
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-beta
+  labels:
+    gostoa.dev/tenant: team-beta
+    gostoa.dev/environment: demo
+  annotations:
+    gostoa.dev/description: "Team Beta - Operations"
+    gostoa.dev/created-by: cab-279
+---
+apiVersion: gostoa.dev/v1alpha1
+kind: Tenant
+metadata:
+  name: team-beta
+  namespace: stoa-system
+  labels:
+    gostoa.dev/demo: "true"
+  annotations:
+    gostoa.dev/created-by: cab-279
+spec:
+  displayName: "Team Beta - Operations"
+  description: "Demo tenant for Inventory and Notifications tools"
+
+  # Contact information
+  contact:
+    name: "Bob Demo"
+    email: "bob@demo.stoa.io"
+
+  # Quotas and limits
+  quota:
+    maxSubscriptions: 10
+    maxRequestsPerDay: 10000
+    maxToolsPerNamespace: 20
+
+  # Rate limiting
+  rateLimit:
+    requestsPerMinute: 100
+    burst: 20
+
+  # Assigned users (mapped from Keycloak)
+  users:
+    - userId: "e2e-devops"
+      role: admin
+      email: "bob@demo.stoa.io"
+    - userId: "e2e-viewer"
+      role: viewer
+      email: "viewer@demo.stoa.io"
+
+  # Tools accessible to this tenant
+  allowedTools:
+    - team_beta_inventory_lookup
+    - team_beta_notifications_send
+
+  # Namespace binding
+  namespaces:
+    - team-beta
+
+  enabled: true
+---
+# ConfigMap with tenant metadata for reference
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: team-beta-config
+  namespace: team-beta
+  labels:
+    gostoa.dev/tenant: team-beta
+data:
+  tenant.json: |
+    {
+      "id": "team-beta",
+      "displayName": "Team Beta - Operations",
+      "description": "Demo tenant for Inventory and Notifications tools",
+      "tools": ["inventory-lookup", "notifications-send"],
+      "users": [
+        {"id": "e2e-devops", "role": "admin", "email": "bob@demo.stoa.io"},
+        {"id": "e2e-viewer", "role": "viewer", "email": "viewer@demo.stoa.io"}
+      ],
+      "quota": {
+        "maxSubscriptions": 10,
+        "maxRequestsPerDay": 10000
+      }
+    }

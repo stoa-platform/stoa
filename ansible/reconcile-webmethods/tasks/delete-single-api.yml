@@ -1,0 +1,59 @@
+---
+# tasks/delete-single-api.yml
+# Delete a single orphaned API from webMethods Gateway
+
+- name: "Find API ID for {{ api_name_to_delete }}"
+  ansible.builtin.set_fact:
+    api_to_delete_info: >-
+      {{
+        gateway_api_lookup.values()
+        | selectattr('apiName', 'equalto', api_name_to_delete)
+        | list
+        | first
+        | default(none)
+      }}
+
+- name: "Skip if API not found"
+  ansible.builtin.debug:
+    msg: "API {{ api_name_to_delete }} not found on Gateway"
+  when: api_to_delete_info is none
+
+- name: "Delete API {{ api_name_to_delete }}"
+  when:
+    - api_to_delete_info is not none
+    - not dry_run
+  block:
+    - name: "Deactivate API {{ api_name_to_delete }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ api_to_delete_info.id }}/deactivate"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204]
+        timeout: 30
+      ignore_errors: true
+
+    - name: "Delete API {{ api_name_to_delete }} from Gateway"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ api_to_delete_info.id }}"
+        method: DELETE
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204]
+        timeout: 30
+      register: delete_result
+
+    - name: "Record deleted API"
+      ansible.builtin.set_fact:
+        apis_deleted: "{{ apis_deleted | default([]) + [api_name_to_delete] }}"
+      when: delete_result is succeeded
+
+- name: "Log deletion {{ api_name_to_delete }}"
+  ansible.builtin.debug:
+    msg: "API {{ api_name_to_delete }} deleted{{ ' (dry-run)' if dry_run else '' }}"

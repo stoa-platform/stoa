@@ -1,0 +1,56 @@
+version: "1.0"
+policies:
+  - name: "linear-cycle-required"
+    description: "Tickets Linear doivent avoir un cycle (anti-Marchemalo bypass)"
+    enabled: true
+    tools:
+      - "Linear:create_issue"
+      - "Linear:update_issue"
+    rules:
+      - field: "cycle"
+        operator: "required"
+        message: "Un ticket doit être assigné à un cycle. Pas de création en backlog direct."
+
+  - name: "rate-limit-coins-transfer"
+    description: "Limite les transferts de coins OASIS > 10K"
+    enabled: true
+    tools:
+      - "oasis__Economy-API__transfer-coins"
+    rules:
+      - field: "amount"
+        operator: "lte"
+        value: 10000
+        message: "Transferts > 10K coins requièrent une attestation."
+
+  - name: "broadcast-critical-approval"
+    description: "Annonces critiques requièrent approbation Security Officer"
+    enabled: true
+    tools:
+      - "oasis__Events-API__broadcast-announcement"
+    rules:
+      - field: "priority"
+        operator: "neq"
+        value: "critical"
+        message: "Annonces critiques requièrent approbation du Security Officer."
+
+  - name: "email-domain-validation"
+    description: "Emails must be from company domain"
+    enabled: true
+    tools:
+      - "user:create"
+      - "user:invite"
+    rules:
+      - field: "email"
+        operator: "matches"
+        value: "^[a-zA-Z0-9._%+-]+@(company\\.com|stoa\\.dev)$"
+        message: "Email must be from company.com or stoa.dev domain"
+
+  - name: "disabled-legacy-policy"
+    description: "This policy is disabled for migration"
+    enabled: false
+    tools:
+      - "*"
+    rules:
+      - field: "legacy_field"
+        operator: "required"
+        message: "This should never trigger"

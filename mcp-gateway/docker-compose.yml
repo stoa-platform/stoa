@@ -1,0 +1,173 @@
+# STOA MCP Gateway - Local Development Stack
+# Usage: docker-compose up -d
+
+version: "3.8"
+
+services:
+  # ==========================================================================
+  # PostgreSQL - Database
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: stoa-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=stoa
+      - POSTGRES_PASSWORD=stoa-dev-password
+      - POSTGRES_DB=stoa_mcp
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stoa -d stoa_mcp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # STOA MCP Gateway
+  # ==========================================================================
+  mcp-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: stoa-mcp-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+    environment:
+      - DEBUG=true
+      - ENVIRONMENT=dev
+      - BASE_DOMAIN=localhost
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=stoa
+      - KEYCLOAK_CLIENT_ID=stoa-mcp-gateway
+      - KEYCLOAK_CLIENT_SECRET=dev-secret
+      - KEYCLOAK_VERIFY_SSL=false
+      - LOG_LEVEL=DEBUG
+      - LOG_FORMAT=text
+      - ENABLE_METRICS=true
+      - RATE_LIMIT_ENABLED=false
+      # OPA Policy Engine
+      - OPA_ENABLED=true
+      - OPA_EMBEDDED=true
+      - OPA_URL=http://opa:8181
+      # Database
+      - STOA_DATABASE_URL=postgresql+asyncpg://stoa:stoa-dev-password@postgres:5432/stoa_mcp
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # Keycloak - Authentication Server
+  # ==========================================================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: stoa-keycloak
+    command: start-dev --import-realm
+    ports:
+      - "8081:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_HEALTH_ENABLED=true
+    volumes:
+      - ./dev/keycloak:/opt/keycloak/data/import:ro
+      - keycloak-data:/opt/keycloak/data
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ==========================================================================
+  # OPA - Open Policy Agent (for production sidecar mode)
+  # ==========================================================================
+  opa:
+    image: openpolicyagent/opa:0.60.0
+    container_name: stoa-opa
+    ports:
+      - "8181:8181"
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--set=decision_logs.console=true"
+      - "/policies"
+    volumes:
+      - ./src/policy/policies:/policies:ro
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8181/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # ==========================================================================
+  # Prometheus - Metrics Collection
+  # ==========================================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: stoa-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./dev/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    networks:
+      - stoa-network
+    depends_on:
+      - mcp-gateway
+
+  # ==========================================================================
+  # Grafana - Metrics Visualization
+  # ==========================================================================
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: stoa-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./dev/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - stoa-network
+    depends_on:
+      - prometheus
+
+networks:
+  stoa-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  keycloak-data:
+  prometheus-data:
+  grafana-data:

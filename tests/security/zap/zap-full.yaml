@@ -1,0 +1,159 @@
+# =============================================================================
+# OWASP ZAP Full Scan Configuration
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Full scan: Active scanning included (NOT safe for production)
+# Run only in dev/staging environments
+# =============================================================================
+
+env:
+  contexts:
+    - name: "STOA Platform - Full Scan"
+      urls:
+        - "${TARGET_URL}"
+      includePaths:
+        - "${TARGET_URL}.*"
+      excludePaths:
+        - ".*\\.js$"
+        - ".*\\.css$"
+        - ".*\\.png$"
+        - ".*\\.jpg$"
+        - ".*\\.gif$"
+        - ".*\\.woff.*$"
+        - ".*\\.svg$"
+        - ".*logout.*"
+        - ".*delete.*"
+      authentication:
+        method: "json"
+        parameters:
+          loginPageUrl: "${AUTH_URL}/realms/stoa/protocol/openid-connect/token"
+          loginRequestUrl: "${AUTH_URL}/realms/stoa/protocol/openid-connect/token"
+          loginRequestBody: "grant_type=password&client_id=stoa-ui&username={%username%}&password={%password%}"
+        verification:
+          method: "response"
+          loggedInRegex: "access_token"
+          loggedOutRegex: "error"
+      sessionManagement:
+        method: "headers"
+        parameters:
+          - name: "Authorization"
+            value: "Bearer {%session%}"
+      users:
+        - name: "test-user"
+          credentials:
+            username: "${ZAP_USER}"
+            password: "${ZAP_PASSWORD}"
+
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  # API Import (if OpenAPI spec available)
+  - type: openapi
+    parameters:
+      apiUrl: "${TARGET_URL}/openapi.json"
+      context: "STOA Platform - Full Scan"
+    rules: []
+
+  # Spider the application
+  - type: spider
+    parameters:
+      context: "STOA Platform - Full Scan"
+      user: "test-user"
+      maxDuration: 10
+      maxDepth: 10
+      maxChildren: 20
+
+  # AJAX Spider for JavaScript-heavy pages
+  - type: spiderAjax
+    parameters:
+      context: "STOA Platform - Full Scan"
+      user: "test-user"
+      maxDuration: 5
+      maxCrawlDepth: 5
+      numberOfBrowsers: 2
+
+  # Passive scan
+  - type: passiveScan-config
+    parameters:
+      maxAlertsPerRule: 10
+      scanOnlyInScope: true
+
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 10
+
+  # Active scan (dangerous - attacks the application)
+  - type: activeScan
+    parameters:
+      context: "STOA Platform - Full Scan"
+      user: "test-user"
+      policy: "API-Scan"
+      maxRuleDurationInMins: 5
+      maxScanDurationInMins: 60
+
+  # Generate reports
+  - type: report
+    parameters:
+      template: "risk-confidence-html"
+      reportDir: "/zap/reports"
+      reportFile: "full-scan-report"
+      reportTitle: "STOA Platform - Full Security Scan"
+      reportDescription: "OWASP ZAP Full Active Scan Results"
+      displayReport: false
+
+  - type: report
+    parameters:
+      template: "sarif-json"
+      reportDir: "/zap/reports"
+      reportFile: "full-scan-report.sarif"
+      reportTitle: "STOA Platform Security Scan"
+
+  # Alert thresholds for CI/CD
+  - type: outputSummary
+    parameters:
+      format: "Long"
+      summaryFile: "/zap/reports/summary.json"
+
+# Scan policy for APIs
+scanPolicies:
+  - name: "API-Scan"
+    rules:
+      # SQL Injection
+      - id: 40018
+        strength: "MEDIUM"
+        threshold: "MEDIUM"
+      # Cross Site Scripting (Reflected)
+      - id: 40012
+        strength: "MEDIUM"
+        threshold: "MEDIUM"
+      # Cross Site Scripting (Persistent)
+      - id: 40014
+        strength: "MEDIUM"
+        threshold: "MEDIUM"
+      # Command Injection
+      - id: 90020
+        strength: "MEDIUM"
+        threshold: "MEDIUM"
+      # Path Traversal
+      - id: 6
+        strength: "MEDIUM"
+        threshold: "MEDIUM"
+      # Remote File Inclusion
+      - id: 7
+        strength: "MEDIUM"
+        threshold: "MEDIUM"
+      # Server Side Request Forgery
+      - id: 40046
+        strength: "MEDIUM"
+        threshold: "MEDIUM"
+      # XML External Entity Attack
+      - id: 90023
+        strength: "MEDIUM"
+        threshold: "MEDIUM"
+      # Disable brute force (too slow)
+      - id: 40025
+        strength: "OFF"
+        threshold: "OFF"

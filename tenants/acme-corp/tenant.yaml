@@ -1,0 +1,51 @@
+apiVersion: stoa.io/v1
+kind: Tenant
+metadata:
+  name: acme-corp
+  displayName: "ACME Corporation"
+  description: "ACME Corporation - Enterprise customer with full API suite"
+  labels:
+    tier: enterprise
+    visibility: public
+    managed-by: gitops
+
+spec:
+  # Portal visibility - public means APIs visible in Developer Portal
+  portalVisibility: public
+
+  visibility:
+    allowedRoles:
+      - developer
+      - api-consumer
+      - partner
+      - tenant-admin
+    denyRoles: []
+
+  defaultPolicies:
+    - name: require-api-key
+      description: "Require valid API key for all requests"
+    - name: rate-limit-standard
+      config:
+        requestsPerMinute: 100
+        burstLimit: 20
+    - name: cors-standard
+
+  settings:
+    max_apis: 200
+    max_applications: 100
+    environments:
+      - dev
+      - staging
+      - prod
+
+  tags:
+    - business
+    - enterprise
+    - external
+
+  contact:
+    team: "ACME IT Team"
+    email: "api-support@acme-corp.com"
+
+  created_at: "2024-03-15T00:00:00Z"
+  status: active

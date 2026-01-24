@@ -1,0 +1,442 @@
+# STOA Platform - Prometheus Metrics Mapping
+# Generated: 2026-01-16
+# Purpose: Maps generic dashboard placeholders to actual STOA metrics
+
+# =============================================================================
+# STOA CUSTOM METRICS
+# =============================================================================
+
+stoa_metrics:
+  # MCP Gateway Metrics
+  mcp_gateway:
+    http_requests_total:
+      name: stoa_mcp_gateway_http_requests_total
+      labels: [method, status_code, endpoint, pod, namespace]
+      type: counter
+      description: Total HTTP requests to MCP Gateway
+
+    http_requests_in_progress:
+      name: stoa_mcp_gateway_http_requests_in_progress
+      labels: [method, pod, namespace]
+      type: gauge
+      description: Current in-flight requests
+
+    http_request_duration_seconds:
+      name: stoa_mcp_gateway_http_request_duration_seconds
+      labels: [method, endpoint, pod, namespace]
+      type: histogram
+      buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+      description: Request latency histogram
+
+    auth_token_validation_duration_seconds:
+      name: stoa_mcp_gateway_auth_token_validation_duration_seconds
+      labels: [pod, namespace]
+      type: histogram
+      description: Token validation latency
+
+    mcp_tools_registered:
+      name: stoa_mcp_gateway_mcp_tools_registered
+      labels: [pod, namespace]
+      type: gauge
+      description: Number of registered MCP tools
+
+    service_info:
+      name: stoa_mcp_gateway_service_info
+      labels: [version, pod, namespace]
+      type: gauge
+      description: Service version information
+
+  # Control Plane API Metrics
+  control_plane_api:
+    http_requests_total:
+      name: stoa_control_plane_http_requests_total
+      labels: [method, status_code, endpoint, pod, namespace]
+      type: counter
+      description: Total HTTP requests to Control Plane API
+
+    http_requests_in_progress:
+      name: stoa_control_plane_http_requests_in_progress
+      labels: [method, pod, namespace]
+      type: gauge
+      description: Current in-flight requests
+
+    http_request_duration_seconds:
+      name: stoa_control_plane_http_request_duration_seconds
+      labels: [method, endpoint, pod, namespace]
+      type: histogram
+      description: Request latency histogram
+
+    service_info:
+      name: stoa_control_plane_service_info
+      labels: [version, pod, namespace]
+      type: gauge
+      description: Service version information
+
+# =============================================================================
+# KUBERNETES METRICS (from kube-state-metrics)
+# =============================================================================
+
+kubernetes_metrics:
+  # Pod Metrics
+  pods:
+    status_ready:
+      name: kube_pod_container_status_ready
+      labels: [pod, namespace, container]
+      filter: namespace="stoa-system"
+
+    restarts_total:
+      name: kube_pod_container_status_restarts_total
+      labels: [pod, namespace, container]
+      filter: namespace="stoa-system"
+
+    container_running:
+      name: kube_pod_container_status_running
+      labels: [pod, namespace, container]
+      filter: namespace="stoa-system"
+
+  # Deployment Metrics
+  deployments:
+    replicas_desired:
+      name: kube_deployment_spec_replicas
+      labels: [deployment, namespace]
+      filter: namespace="stoa-system"
+
+    replicas_available:
+      name: kube_deployment_status_replicas_available
+      labels: [deployment, namespace]
+      filter: namespace="stoa-system"
+
+    replicas_ready:
+      name: kube_deployment_status_replicas_ready
+      labels: [deployment, namespace]
+      filter: namespace="stoa-system"
+
+# =============================================================================
+# CONTAINER METRICS (from cAdvisor)
+# =============================================================================
+
+container_metrics:
+  cpu:
+    usage_seconds_total:
+      name: container_cpu_usage_seconds_total
+      labels: [pod, namespace, container]
+      filter: namespace="stoa-system"
+      description: Cumulative CPU time consumed
+
+    throttled_seconds_total:
+      name: container_cpu_cfs_throttled_seconds_total
+      labels: [pod, namespace, container]
+      description: Total CPU throttle time
+
+  memory:
+    usage_bytes:
+      name: container_memory_usage_bytes
+      labels: [pod, namespace, container]
+      filter: namespace="stoa-system"
+      description: Current memory usage
+
+    working_set_bytes:
+      name: container_memory_working_set_bytes
+      labels: [pod, namespace, container]
+      description: Current working set (active memory)
+
+    cache:
+      name: container_memory_cache
+      labels: [pod, namespace, container]
+      description: Memory cache usage
+
+    rss:
+      name: container_memory_rss
+      labels: [pod, namespace, container]
+      description: Resident set size
+
+  network:
+    receive_bytes_total:
+      name: container_network_receive_bytes_total
+      labels: [pod, namespace, interface]
+      filter: namespace="stoa-system"
+
+    transmit_bytes_total:
+      name: container_network_transmit_bytes_total
+      labels: [pod, namespace, interface]
+      filter: namespace="stoa-system"
+
+    receive_errors_total:
+      name: container_network_receive_errors_total
+      labels: [pod, namespace, interface]
+
+    transmit_errors_total:
+      name: container_network_transmit_errors_total
+      labels: [pod, namespace, interface]
+
+# =============================================================================
+# PROMQL QUERIES FOR DASHBOARDS
+# =============================================================================
+
+dashboard_queries:
+  # MCP Gateway Dashboard
+  mcp_gateway:
+    requests_per_second: |
+      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system"}[5m])) by (status_code)
+
+    request_latency_p50: |
+      histogram_quantile(0.50, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
+
+    request_latency_p95: |
+      histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
+
+    request_latency_p99: |
+      histogram_quantile(0.99, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
+
+    error_rate: |
+      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system", status_code=~"5.."}[5m]))
+      /
+      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system"}[5m])) * 100
+
+    success_rate: |
+      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system", status_code=~"2.."}[5m]))
+      /
+      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system"}[5m])) * 100
+
+    tools_registered: |
+      max(stoa_mcp_gateway_mcp_tools_registered{namespace="stoa-system"})
+
+    auth_latency_p95: |
+      histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_auth_token_validation_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
+
+  # Control Plane API Dashboard
+  control_plane_api:
+    requests_per_second: |
+      sum(rate(stoa_control_plane_http_requests_total{namespace="stoa-system"}[5m])) by (status_code)
+
+    request_latency_p95: |
+      histogram_quantile(0.95, sum(rate(stoa_control_plane_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le))
+
+    error_rate: |
+      sum(rate(stoa_control_plane_http_requests_total{namespace="stoa-system", status_code=~"5.."}[5m]))
+      /
+      sum(rate(stoa_control_plane_http_requests_total{namespace="stoa-system"}[5m])) * 100
+
+  # Resource Usage (for all STOA components)
+  resources:
+    cpu_usage_by_pod: |
+      sum(rate(container_cpu_usage_seconds_total{namespace="stoa-system", container!="POD", container!=""}[5m])) by (pod) * 100
+
+    memory_usage_by_pod: |
+      sum(container_memory_working_set_bytes{namespace="stoa-system", container!="POD", container!=""}) by (pod) / 1024 / 1024
+
+    network_receive_by_pod: |
+      sum(rate(container_network_receive_bytes_total{namespace="stoa-system"}[5m])) by (pod) / 1024
+
+  # Kubernetes Health
+  kubernetes:
+    pod_restarts: |
+      sum(increase(kube_pod_container_status_restarts_total{namespace="stoa-system"}[1h])) by (pod)
+
+    pods_not_ready: |
+      count(kube_pod_container_status_ready{namespace="stoa-system"} == 0)
+
+    deployment_health: |
+      kube_deployment_status_replicas_available{namespace="stoa-system"}
+      /
+      kube_deployment_spec_replicas{namespace="stoa-system"}
+
+# =============================================================================
+# ALERT RULES
+# =============================================================================
+
+alert_rules:
+  - alert: MCPGatewayHighErrorRate
+    expr: |
+      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system", status_code=~"5.."}[5m]))
+      /
+      sum(rate(stoa_mcp_gateway_http_requests_total{namespace="stoa-system"}[5m])) > 0.05
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: MCP Gateway error rate above 5%
+
+  - alert: MCPGatewayHighLatency
+    expr: |
+      histogram_quantile(0.95, sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{namespace="stoa-system"}[5m])) by (le)) > 2
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: MCP Gateway P95 latency above 2s
+
+  - alert: ControlPlaneAPIHighErrorRate
+    expr: |
+      sum(rate(stoa_control_plane_http_requests_total{namespace="stoa-system", status_code=~"5.."}[5m]))
+      /
+      sum(rate(stoa_control_plane_http_requests_total{namespace="stoa-system"}[5m])) > 0.05
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: Control Plane API error rate above 5%
+
+  - alert: PodCrashLooping
+    expr: |
+      rate(kube_pod_container_status_restarts_total{namespace="stoa-system"}[15m]) * 60 * 15 > 3
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: Pod is crash looping
+
+# =============================================================================
+# NGINX INGRESS METRICS (from nginx-ingress-controller)
+# Enabled via: stoa-infra/charts/stoa-platform/templates/servicemonitor-nginx-ingress.yaml
+# =============================================================================
+
+nginx_ingress_metrics:
+  requests:
+    total:
+      name: nginx_ingress_controller_requests
+      labels: [host, method, path, status, ingress, namespace, service]
+      type: counter
+      description: Total number of client requests
+
+    bytes_sent:
+      name: nginx_ingress_controller_bytes_sent_sum
+      labels: [host, ingress, namespace, service]
+      type: counter
+      description: Total bytes sent to clients
+
+    request_duration:
+      name: nginx_ingress_controller_request_duration_seconds
+      labels: [host, ingress, namespace, service]
+      type: histogram
+      description: Request processing time
+
+  connections:
+    active:
+      name: nginx_ingress_controller_nginx_process_connections
+      labels: [state]  # active, reading, writing, waiting
+      type: gauge
+      description: Current number of connections
+
+  ssl:
+    certificate_expiry:
+      name: nginx_ingress_controller_ssl_expire_time_seconds
+      labels: [host, namespace, ingress]
+      type: gauge
+      description: SSL certificate expiry timestamp
+
+# =============================================================================
+# POSTGRESQL METRICS (from postgres_exporter)
+# Enabled via: stoa-infra/charts/stoa-platform/templates/database/postgres-exporter.yaml
+# =============================================================================
+
+postgresql_metrics:
+  connections:
+    active:
+      name: pg_stat_activity_count
+      labels: [datname, state]
+      type: gauge
+      description: Number of connections by state
+
+    max:
+      name: pg_settings_max_connections
+      type: gauge
+      description: Maximum allowed connections
+
+  database:
+    size_bytes:
+      name: pg_database_size_bytes
+      labels: [datname]
+      type: gauge
+      description: Database size in bytes
+
+    transactions:
+      name: pg_stat_database_xact_commit
+      labels: [datname]
+      type: counter
+      description: Committed transactions
+
+    blocks_read:
+      name: pg_stat_database_blks_read
+      labels: [datname]
+      type: counter
+      description: Disk blocks read
+
+  tables:
+    rows_inserted:
+      name: pg_stat_user_tables_n_tup_ins
+      labels: [datname, schemaname, relname]
+      type: counter
+      description: Rows inserted
+
+  uptime:
+    name: pg_postmaster_start_time_seconds
+    type: gauge
+    description: PostgreSQL start timestamp
+
+# =============================================================================
+# REDPANDA/KAFKA METRICS
+# Enabled via: stoa-infra/charts/stoa-platform/templates/servicemonitor-redpanda.yaml
+# =============================================================================
+
+redpanda_metrics:
+  cluster:
+    brokers:
+      name: redpanda_cluster_brokers
+      type: gauge
+      description: Number of brokers in cluster
+
+    partitions:
+      name: redpanda_cluster_partitions
+      labels: [topic]
+      type: gauge
+      description: Number of partitions
+
+  topics:
+    messages_in:
+      name: redpanda_kafka_request_topic_produce_count_total
+      labels: [topic]
+      type: counter
+      description: Messages produced
+
+    bytes_in:
+      name: vectorized_kafka_rpc_received_bytes
+      type: counter
+      description: Bytes received
+
+    bytes_out:
+      name: vectorized_kafka_rpc_sent_bytes
+      type: counter
+      description: Bytes sent
+
+  consumer_groups:
+    lag:
+      name: redpanda_kafka_consumer_group_committed_offset
+      labels: [group, topic, partition]
+      type: gauge
+      description: Consumer group committed offset
+
+  storage:
+    disk_used:
+      name: vectorized_storage_log_partition_size
+      labels: [topic, partition]
+      type: gauge
+      description: Partition size on disk
+
+# =============================================================================
+# KEYCLOAK METRICS (user configuring separately)
+# =============================================================================
+
+keycloak_metrics:
+  note: "Keycloak metrics being configured separately by user"
+  expected_metrics:
+    - keycloak_logins_total
+    - keycloak_login_errors_total
+    - keycloak_registrations_total
+    - keycloak_active_sessions
+
+# =============================================================================
+# MISSING METRICS (optional - to be added later)
+# =============================================================================
+
+# - minio_* (MinIO metrics - need ServiceMonitor for MinIO on port 9000)

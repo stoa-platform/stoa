@@ -1,0 +1,55 @@
+apiVersion: stoa.io/v1
+kind: Tenant
+metadata:
+  name: stoa-platform
+  displayName: "STOA Platform"
+  description: "Internal platform APIs - Control Plane and administrative services"
+  labels:
+    tier: platform
+    visibility: internal
+    managed-by: gitops
+
+spec:
+  # Portal visibility controls API discovery
+  # - public: Visible in Developer Portal, accessible by all authenticated users
+  # - internal: Hidden from portal, accessible only by platform admins
+  # - hidden: Not exposed anywhere, purely technical APIs
+  portalVisibility: internal
+
+  # RBAC visibility - controls who can see/access APIs from this tenant
+  # These roles map to Keycloak realm roles defined in auth/rbac.py
+  visibility:
+    allowedRoles:
+      - cpi-admin        # Platform administrators (full access)
+      - tenant-admin     # Tenant administrators (only stoa-platform tenant)
+    denyRoles:
+      - viewer           # Read-only users should not see admin APIs
+      - devops           # DevOps users should use the portal APIs instead
+
+  defaultPolicies:
+    - name: require-internal-jwt
+      description: "Require valid JWT from internal Keycloak realm"
+    - name: rate-limit-high
+      config:
+        requestsPerMinute: 1000
+        burstLimit: 100
+    - name: audit-all-requests
+      description: "Log all requests for compliance"
+
+  settings:
+    max_apis: 50
+    max_applications: 10
+    environments:
+      - dev
+      - staging
+      - prod
+
+  tags:
+    - platform
+    - internal
+    - admin
+
+  contact:
+    team: "STOA Platform Team"
+    email: "platform@gostoa.dev"
+    slack: "#stoa-platform"

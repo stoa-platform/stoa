@@ -1,0 +1,70 @@
+---
+# AWX Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: awx-config
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: awx-config
+    app.kubernetes.io/component: gitops-hook
+data:
+  # AWX Job Template ID for webMethods reconciliation
+  # Template: "STOA - Reconcile webMethods Gateway"
+  webmethods-job-template-id: "19"
+
+---
+# STOA Environment Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-config
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: stoa-config
+    app.kubernetes.io/component: config
+data:
+  # Target environment (dev, staging, prod)
+  environment: "dev"
+
+  # Additional configuration
+  delete-orphans: "true"
+  notify-on-completion: "true"
+
+---
+# ServiceAccount for ArgoCD hook runner
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argocd-hook-runner
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: argocd-hook-runner
+    app.kubernetes.io/component: gitops-hook
+
+---
+# RBAC: Allow hook to read secrets and configmaps
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argocd-hook-runner
+  namespace: stoa-system
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-hook-runner
+  namespace: stoa-system
+subjects:
+  - kind: ServiceAccount
+    name: argocd-hook-runner
+    namespace: stoa-system
+roleRef:
+  kind: Role
+  name: argocd-hook-runner
+  apiGroup: rbac.authorization.k8s.io

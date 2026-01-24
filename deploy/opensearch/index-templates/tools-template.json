@@ -1,0 +1,119 @@
+{
+  "index_patterns": ["tools"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "analysis": {
+        "analyzer": {
+          "tool_analyzer": {
+            "type": "custom",
+            "tokenizer": "standard",
+            "filter": ["lowercase", "asciifolding", "tool_synonyms"]
+          }
+        },
+        "filter": {
+          "tool_synonyms": {
+            "type": "synonym",
+            "synonyms": [
+              "api, endpoint, service",
+              "crm, customer, client",
+              "db, database, storage",
+              "auth, authentication, login",
+              "msg, message, notification"
+            ]
+          }
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "name": {
+          "type": "text",
+          "analyzer": "tool_analyzer",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            },
+            "suggest": {
+              "type": "completion"
+            }
+          }
+        },
+        "description": {
+          "type": "text",
+          "analyzer": "tool_analyzer"
+        },
+        "category": {
+          "type": "keyword"
+        },
+        "tags": {
+          "type": "keyword"
+        },
+        "tenant_id": {
+          "type": "keyword"
+        },
+        "visibility": {
+          "type": "keyword"
+        },
+        "version": {
+          "type": "keyword"
+        },
+        "schema": {
+          "type": "object",
+          "enabled": false
+        },
+        "input_schema": {
+          "type": "object",
+          "enabled": false
+        },
+        "output_schema": {
+          "type": "object",
+          "enabled": false
+        },
+        "endpoints": {
+          "type": "nested",
+          "properties": {
+            "method": { "type": "keyword" },
+            "path": { "type": "keyword" },
+            "description": { "type": "text" }
+          }
+        },
+        "metadata": {
+          "properties": {
+            "author": { "type": "keyword" },
+            "license": { "type": "keyword" },
+            "documentation_url": { "type": "keyword" },
+            "source_url": { "type": "keyword" }
+          }
+        },
+        "stats": {
+          "properties": {
+            "call_count": { "type": "long" },
+            "avg_latency_ms": { "type": "float" },
+            "success_rate": { "type": "float" },
+            "last_called_at": { "type": "date" }
+          }
+        },
+        "created_at": {
+          "type": "date"
+        },
+        "updated_at": {
+          "type": "date"
+        },
+        "indexed_at": {
+          "type": "date"
+        }
+      }
+    }
+  },
+  "priority": 100,
+  "version": 1,
+  "_meta": {
+    "description": "STOA Platform - MCP Tools Catalog Index",
+    "managed_by": "stoa-sync-service"
+  }
+}

@@ -1,0 +1,36 @@
+---
+# tasks/fetch-gateway-apis.yml
+# Fetch all APIs currently deployed on webMethods Gateway
+
+- name: "Fetch all APIs from Gateway"
+  ansible.builtin.uri:
+    url: "{{ wm_gateway_url }}/rest/apigateway/apis"
+    method: GET
+    user: "{{ wm_admin_user }}"
+    password: "{{ wm_admin_password }}"
+    force_basic_auth: true
+    headers:
+      Accept: "application/json"
+    status_code: [200]
+    timeout: 30
+  register: gateway_apis_response
+
+- name: "Parse Gateway APIs"
+  ansible.builtin.set_fact:
+    gateway_apis: "{{ gateway_apis_response.json.apiResponse | default([]) }}"
+
+- name: "Initialize Gateway API lookup"
+  ansible.builtin.set_fact:
+    gateway_api_lookup: {}
+
+- name: "Build Gateway API lookup by name+version"
+  ansible.builtin.set_fact:
+    gateway_api_lookup: "{{ gateway_api_lookup | default({}) | combine({(item.api.apiName + ':' + item.api.apiVersion): item.api}) }}"
+  loop: "{{ gateway_apis }}"
+  when: item.api is defined
+
+- name: "Display APIs found on Gateway"
+  ansible.builtin.debug:
+    msg: |
+      📡 APIs on Gateway: {{ gateway_api_lookup.keys() | list }}
+      Total: {{ gateway_api_lookup | length }}

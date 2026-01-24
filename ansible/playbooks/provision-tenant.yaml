@@ -1,0 +1,182 @@
+---
+# Playbook: Provision Tenant
+# Creates Keycloak groups, users, and K8s namespaces for a new tenant
+#
+# Required variables:
+#   - tenant_id: Unique tenant identifier
+#   - tenant_name: Display name of the tenant
+#   - users: List of users to create (from iam/users.yaml)
+#
+# Optional variables:
+#   - environments: List of environments to create namespaces for (default: [dev, staging])
+
+- name: Provision Tenant
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../vars/secrets.yaml
+
+  vars:
+    keycloak_url: "http://keycloak.stoa-system.svc.cluster.local:8080"
+    keycloak_realm: "stoa"
+    tenant_id: "{{ tenant_id | default('default') }}"
+    tenant_name: "{{ tenant_name | default(tenant_id) }}"
+    users: "{{ users | default([]) }}"
+    environments: "{{ environments | default(['dev', 'staging']) }}"
+    namespace_prefix: "stoa"
+
+  tasks:
+    - name: Display provisioning info
+      debug:
+        msg: "Provisioning tenant '{{ tenant_id }}' ({{ tenant_name }}) with {{ users | length }} users"
+
+    # =========================================================================
+    # STEP 1: Get Keycloak Admin Token
+    # =========================================================================
+    - name: Get Keycloak admin token
+      uri:
+        url: "{{ keycloak_url }}/realms/master/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          client_id: admin-cli
+          username: "{{ keycloak_admin_user }}"
+          password: "{{ keycloak_admin_password }}"
+        validate_certs: false
+        status_code: [200]
+      register: keycloak_token
+
+    - name: Set auth header
+      set_fact:
+        keycloak_auth_header:
+          Authorization: "Bearer {{ keycloak_token.json.access_token }}"
+
+    # =========================================================================
+    # STEP 2: Create Keycloak Groups
+    # =========================================================================
+    - name: Check if tenants parent group exists
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/groups?search=tenants"
+        method: GET
+        headers: "{{ keycloak_auth_header }}"
+        validate_certs: false
+        status_code: [200]
+      register: tenants_group_check
+
+    - name: Create tenants parent group if not exists
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/groups"
+        method: POST
+        headers: "{{ keycloak_auth_header }}"
+        body_format: json
+        body:
+          name: "tenants"
+        validate_certs: false
+        status_code: [201, 409]
+      when: tenants_group_check.json | length == 0 or tenants_group_check.json | selectattr('name', 'equalto', 'tenants') | list | length == 0
+
+    - name: Get tenants parent group ID
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/groups?search=tenants&exact=true"
+        method: GET
+        headers: "{{ keycloak_auth_header }}"
+        validate_certs: false
+        status_code: [200]
+      register: tenants_parent_group
+
+    - name: Set parent group ID
+      set_fact:
+        parent_group_id: "{{ (tenants_parent_group.json | selectattr('name', 'equalto', 'tenants') | list | first).id }}"
+      when: tenants_parent_group.json | selectattr('name', 'equalto', 'tenants') | list | length > 0
+
+    - name: Create tenant subgroup
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/groups/{{ parent_group_id }}/children"
+        method: POST
+        headers: "{{ keycloak_auth_header }}"
+        body_format: json
+        body:
+          name: "{{ tenant_id }}"
+          attributes:
+            display_name: ["{{ tenant_name }}"]
+        validate_certs: false
+        status_code: [201, 409]
+      when: parent_group_id is defined
+      register: tenant_group_create
+
+    - name: Get tenant group ID
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/groups?search={{ tenant_id }}"
+        method: GET
+        headers: "{{ keycloak_auth_header }}"
+        validate_certs: false
+        status_code: [200]
+      register: tenant_group_info
+
+    - name: Set tenant group ID
+      set_fact:
+        tenant_group_id: "{{ (tenant_group_info.json | selectattr('name', 'equalto', tenant_id) | list | first).id }}"
+      when: tenant_group_info.json | selectattr('name', 'equalto', tenant_id) | list | length > 0
+
+    # =========================================================================
+    # STEP 3: Create Keycloak Users
+    # =========================================================================
+    - name: Create users
+      include_tasks: tasks/create-keycloak-user.yaml
+      loop: "{{ users }}"
+      loop_control:
+        loop_var: user
+      when: users | length > 0
+
+    # =========================================================================
+    # STEP 4: Create Kubernetes Namespaces
+    # =========================================================================
+    - name: Create K8s namespaces for tenant environments
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ namespace_prefix }}-{{ tenant_id }}-{{ item }}"
+            labels:
+              tenant: "{{ tenant_id }}"
+              environment: "{{ item }}"
+              managed-by: "stoa-platform"
+      loop: "{{ environments }}"
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 5: Send completion notification
+    # =========================================================================
+    - name: Send provision success to Control Plane API
+      uri:
+        url: "http://control-plane-api.stoa-system.svc.cluster.local:8000/v1/events/tenant-provisioned"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          tenant_id: "{{ tenant_id }}"
+          status: "success"
+          message: "Tenant provisioned successfully"
+          users_created: "{{ users | length }}"
+          namespaces_created: "{{ environments | length }}"
+        status_code: [200, 201, 202, 404]
+      ignore_errors: true
+
+    - name: Provisioning summary
+      debug:
+        msg: |
+          ========================================
+          Tenant Provisioning Complete
+          ----------------------------------------
+          Tenant ID: {{ tenant_id }}
+          Tenant Name: {{ tenant_name }}
+          Users Created: {{ users | length }}
+          Namespaces: {{ environments | join(', ') }}
+          Status: SUCCESS
+          ========================================

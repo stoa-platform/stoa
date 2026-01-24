@@ -1,0 +1,43 @@
+apiVersion: stoa.io/v1
+kind: Tenant
+metadata:
+  name: demo
+  displayName: "Demo Tenant"
+  description: "Demo tenant for testing and showcasing APIs"
+  labels:
+    tier: demo
+    visibility: public
+    managed-by: gitops
+
+spec:
+  portalVisibility: public
+
+  visibility:
+    allowedRoles:
+      - cpi-admin
+      - tenant-admin
+      - devops
+      - viewer
+    denyRoles: []
+
+  defaultPolicies:
+    - name: rate-limit-standard
+      config:
+        requestsPerMinute: 100
+        burstLimit: 20
+
+  settings:
+    max_apis: 100
+    max_applications: 50
+    environments:
+      - dev
+      - staging
+
+  tags:
+    - demo
+    - public
+    - testing
+
+  contact:
+    team: "Demo Team"
+    email: "demo@gostoa.dev"

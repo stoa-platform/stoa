@@ -1,0 +1,143 @@
+---
+# awx-config.yml
+# UNIFIED TENANT-BASED ARCHITECTURE
+# Single project, single job template (no workflow needed)
+#
+# Import into AWX via:
+#   awx-cli import --file awx-config.yml
+# Or create manually via AWX UI
+
+# =============================================================================
+# PROJECT: stoa-catalog (single source)
+# =============================================================================
+projects:
+  - name: "stoa-catalog"
+    description: "STOA API Catalog - Tenant definitions and APIs"
+    organization: "Default"
+    scm_type: "git"
+    scm_url: "https://gitlab.com/cab6961310/stoa-catalog.git"
+    scm_branch: "main"
+    scm_update_on_launch: true
+    scm_clean: true
+    scm_delete_on_update: true
+    credential: "GitLab Access Token"
+
+# =============================================================================
+# JOB TEMPLATE: Reconcile webMethods (simplified)
+# =============================================================================
+job_templates:
+  - name: "STOA - Reconcile webMethods Gateway"
+    description: |
+      Reconcile webMethods Gateway APIs from stoa-catalog/tenants.
+      All APIs (admin + business) come from the unified tenant structure.
+    job_type: "run"
+    inventory: "STOA Infrastructure"
+    project: "stoa-catalog"
+    playbook: "ansible/reconcile-webmethods/reconcile-webmethods.yml"
+
+    # Credentials
+    credentials:
+      - "webMethods Gateway Admin"
+      - "GitLab Access Token"
+
+    # Default variables
+    extra_vars:
+      env: "dev"
+      delete_orphans: true
+      dry_run: false
+
+    # Environment variables
+    custom_virtualenv: null
+    job_env:
+      CATALOG_DIR: "{{ awx_project_dir }}"
+
+    # Options
+    ask_variables_on_launch: true
+    ask_credential_on_launch: false
+    allow_simultaneous: false
+    use_fact_cache: false
+
+    # Survey (launch form)
+    survey_enabled: true
+    survey_spec:
+      name: "Reconciliation Parameters"
+      description: "GitOps reconciliation configuration"
+      spec:
+        - question_name: "Environment"
+          question_description: "Target environment (dev, staging, prod)"
+          required: true
+          type: "multiplechoice"
+          variable: "env"
+          default: "dev"
+          choices:
+            - "dev"
+            - "staging"
+            - "prod"
+
+        - question_name: "Delete Orphans"
+          question_description: "Delete APIs present on Gateway but missing from Git"
+          required: true
+          type: "multiplechoice"
+          variable: "delete_orphans"
+          default: "true"
+          choices:
+            - "true"
+            - "false"
+
+        - question_name: "Dry-Run Mode"
+          question_description: "Simulate without applying changes"
+          required: false
+          type: "multiplechoice"
+          variable: "dry_run"
+          default: "false"
+          choices:
+            - "true"
+            - "false"
+
+# =============================================================================
+# WEBHOOK
+# =============================================================================
+webhook:
+  enabled: true
+  service: "github"  # Compatible with standard webhooks
+
+# =============================================================================
+# CREDENTIALS
+# =============================================================================
+credentials:
+  - name: "webMethods Gateway Admin"
+    credential_type: "Machine"
+    inputs:
+      username: "Administrator"
+      # Password stored in AWX vault
+      password: "{{ lookup('env', 'WM_ADMIN_PASSWORD') }}"
+
+  - name: "GitLab Access Token"
+    credential_type: "Source Control"
+    inputs:
+      username: "gitlab-ci-token"
+      password: "{{ lookup('env', 'GITLAB_TOKEN') }}"
+
+# =============================================================================
+# SCHEDULE (optional - for periodic reconciliation)
+# =============================================================================
+schedules:
+  - name: "Daily Reconciliation (DEV)"
+    job_template: "STOA - Reconcile webMethods Gateway"
+    rrule: "DTSTART:20240101T020000Z RRULE:FREQ=DAILY;INTERVAL=1"
+    enabled: false  # Enable manually when ready
+    extra_data:
+      env: "dev"
+      delete_orphans: true
+      dry_run: false
+
+# =============================================================================
+# NOTIFICATIONS (optional)
+# =============================================================================
+notification_templates:
+  - name: "Slack - STOA Alerts"
+    notification_type: "slack"
+    notification_configuration:
+      token: "{{ lookup('env', 'SLACK_TOKEN') }}"
+      channels:
+        - "#stoa-alerts"

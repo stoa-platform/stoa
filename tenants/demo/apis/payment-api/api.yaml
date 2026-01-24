@@ -1,0 +1,32 @@
+# Payment API
+# Payment initiation and processing
+id: payment-api
+name: payment-api
+display_name: "Payment Initiation API"
+version: "3.1.0"
+description: |
+  Payment Initiation Service (PIS) API.
+  
+  Enables secure payment processing including:
+  - SEPA Credit Transfers (SCT)
+  - SEPA Instant Payments
+  - International wire transfers (SWIFT)
+  - Bulk payment processing
+  - Payment status tracking
+  - Standing orders management
+  
+  PSD2 compliant with Strong Customer Authentication (SCA) support.
+backend_url: https://httpbin.org/anything
+status: active
+category: Banking
+tags:
+  - portal:published
+  - banking
+  - payments
+  - rest
+  - psd2
+  - sepa
+  - sca
+deployments:
+  dev: true
+  staging: false

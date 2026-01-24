@@ -1,0 +1,285 @@
+---
+# =============================================================================
+# PostgreSQL Backup CronJob
+# =============================================================================
+# STOA Platform - CAB-309
+# Daily backup of PostgreSQL database to S3
+# Runs at 02:00 UTC every day
+# Retention: 7 days
+# =============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: stoa-system
+  labels:
+    app: postgres-backup
+    component: backup
+spec:
+  # Run daily at 02:00 UTC
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400  # Keep job for 24 hours
+      template:
+        metadata:
+          labels:
+            app: postgres-backup
+        spec:
+          serviceAccountName: postgres-backup
+          restartPolicy: OnFailure
+          initContainers:
+            # pg_dump phase using kubectl image
+            - name: dump
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_FILE="/backup/stoa_backup_${TIMESTAMP}.sql.gz"
+                  PG_POD="control-plane-db-0"
+                  PG_USER="stoa"
+                  PG_DATABASE="stoa"
+
+                  echo "========================================="
+                  echo "PostgreSQL Backup - Dump Phase"
+                  echo "========================================="
+                  echo "Timestamp: $TIMESTAMP"
+
+                  # Check PostgreSQL pod
+                  echo "Checking PostgreSQL pod..."
+                  POD_STATUS=$(kubectl get pod "$PG_POD" -n stoa-system -o jsonpath='{.status.phase}')
+                  if [ "$POD_STATUS" != "Running" ]; then
+                    echo "ERROR: PostgreSQL pod not running (status: $POD_STATUS)"
+                    exit 1
+                  fi
+                  echo "PostgreSQL pod is running"
+
+                  # Get database size
+                  DB_SIZE=$(kubectl exec -n stoa-system "$PG_POD" -- \
+                    psql -U "$PG_USER" -d "$PG_DATABASE" -t -c \
+                    "SELECT pg_size_pretty(pg_database_size('$PG_DATABASE'));" 2>/dev/null | tr -d ' ')
+                  echo "Database size: $DB_SIZE"
+
+                  # Perform backup
+                  echo "Running pg_dump..."
+                  START_TIME=$(date +%s)
+                  kubectl exec -n stoa-system "$PG_POD" -- \
+                    pg_dump -U "$PG_USER" -d "$PG_DATABASE" \
+                    --no-owner \
+                    --no-privileges \
+                    --format=plain | gzip > "$BACKUP_FILE"
+                  END_TIME=$(date +%s)
+                  DURATION=$((END_TIME - START_TIME))
+
+                  if [ ! -s "$BACKUP_FILE" ]; then
+                    echo "ERROR: Backup file is empty"
+                    exit 1
+                  fi
+
+                  BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+                  echo "Backup completed in ${DURATION}s (size: $BACKUP_SIZE)"
+
+                  # Verify integrity
+                  echo "Verifying backup integrity..."
+                  if gunzip -t "$BACKUP_FILE"; then
+                    echo "Backup integrity verified"
+                  else
+                    echo "ERROR: Backup integrity check failed"
+                    exit 1
+                  fi
+
+                  # Save metadata
+                  echo "$BACKUP_FILE" > /backup/backup_path
+                  echo "$TIMESTAMP" > /backup/timestamp
+                  echo "$BACKUP_SIZE" > /backup/size
+                  echo "Dump phase completed successfully"
+              volumeMounts:
+                - name: backup-volume
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+          containers:
+            # S3 upload phase using AWS CLI image
+            - name: upload
+              image: amazon/aws-cli:2.15.0
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+
+                  DATE=$(date +%Y-%m-%d)
+                  S3_BUCKET="${S3_BUCKET:-stoa-backups}"
+                  RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
+                  AWS_REGION="${AWS_REGION:-eu-west-1}"
+
+                  BACKUP_FILE=$(cat /backup/backup_path)
+                  TIMESTAMP=$(cat /backup/timestamp)
+                  BACKUP_SIZE=$(cat /backup/size)
+                  BACKUP_FILENAME=$(basename "$BACKUP_FILE")
+                  S3_PATH="s3://${S3_BUCKET}/postgres/${DATE}/${BACKUP_FILENAME}"
+
+                  echo "========================================="
+                  echo "PostgreSQL Backup - Upload Phase"
+                  echo "========================================="
+                  echo "Backup file: $BACKUP_FILE"
+                  echo "S3 Path: $S3_PATH"
+                  echo "Retention: $RETENTION_DAYS days"
+
+                  # Upload to S3
+                  echo "Uploading to S3..."
+                  if [ -n "${KMS_KEY_ID:-}" ]; then
+                    aws s3 cp "$BACKUP_FILE" "$S3_PATH" \
+                      --sse aws:kms \
+                      --sse-kms-key-id "$KMS_KEY_ID" \
+                      --region "$AWS_REGION"
+                  else
+                    aws s3 cp "$BACKUP_FILE" "$S3_PATH" \
+                      --region "$AWS_REGION"
+                  fi
+
+                  # Verify upload
+                  echo "Verifying upload..."
+                  aws s3 ls "$S3_PATH" --region "$AWS_REGION"
+
+                  # Cleanup old backups
+                  echo "Cleaning up backups older than $RETENTION_DAYS days..."
+                  CUTOFF_DATE=$(date -d "-${RETENTION_DAYS} days" +%Y-%m-%d 2>/dev/null || echo "")
+                  if [ -n "$CUTOFF_DATE" ]; then
+                    echo "Removing backups before: $CUTOFF_DATE"
+                    aws s3 ls "s3://${S3_BUCKET}/postgres/" --recursive --region "$AWS_REGION" 2>/dev/null | while read -r line; do
+                      FILE_DATE=$(echo "$line" | awk '{print $1}')
+                      FILE_PATH=$(echo "$line" | awk '{print $4}')
+                      if [ -n "$FILE_PATH" ] && [ "$FILE_DATE" \< "$CUTOFF_DATE" ]; then
+                        echo "Deleting old backup: $FILE_PATH"
+                        aws s3 rm "s3://${S3_BUCKET}/${FILE_PATH}" --region "$AWS_REGION"
+                      fi
+                    done
+                  fi
+
+                  echo "========================================="
+                  echo "Backup completed successfully!"
+                  echo "S3 Path: $S3_PATH"
+                  echo "Size: $BACKUP_SIZE"
+                  echo "========================================="
+              env:
+                - name: S3_BUCKET
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backup-config
+                      key: s3_bucket
+                      optional: true
+                - name: AWS_REGION
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backup-config
+                      key: aws_region
+                      optional: true
+                - name: AWS_DEFAULT_REGION
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backup-config
+                      key: aws_region
+                      optional: true
+                - name: KMS_KEY_ID
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backup-config
+                      key: kms_key_id
+                      optional: true
+                - name: BACKUP_RETENTION_DAYS
+                  valueFrom:
+                    configMapKeyRef:
+                      name: backup-config
+                      key: retention_days
+                      optional: true
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws-backup-credentials
+                      key: access_key_id
+                      optional: true
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws-backup-credentials
+                      key: secret_access_key
+                      optional: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              volumeMounts:
+                - name: backup-volume
+                  mountPath: /backup
+          volumes:
+            - name: backup-volume
+              emptyDir:
+                sizeLimit: 5Gi
+---
+# ServiceAccount for backup job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres-backup
+  namespace: stoa-system
+  annotations:
+    # For IRSA (IAM Roles for Service Accounts) - preferred method
+    eks.amazonaws.com/role-arn: ""
+---
+# Role for postgres-backup
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: postgres-backup
+  namespace: stoa-system
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+# RoleBinding for postgres-backup
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: postgres-backup
+  namespace: stoa-system
+subjects:
+  - kind: ServiceAccount
+    name: postgres-backup
+    namespace: stoa-system
+roleRef:
+  kind: Role
+  name: postgres-backup
+  apiGroup: rbac.authorization.k8s.io
+---
+# ConfigMap for backup configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-config
+  namespace: stoa-system
+data:
+  s3_bucket: "stoa-backups"
+  aws_region: "eu-west-1"
+  kms_key_id: ""
+  retention_days: "7"

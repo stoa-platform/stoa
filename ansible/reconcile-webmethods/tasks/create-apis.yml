@@ -1,0 +1,13 @@
+---
+# tasks/create-apis.yml
+# Create new APIs on webMethods Gateway
+
+- name: "Initialize apis_created list"
+  ansible.builtin.set_fact:
+    apis_created: []
+
+- name: "Create APIs loop"
+  ansible.builtin.include_tasks: create-single-api.yml
+  loop: "{{ apis_to_create }}"
+  loop_control:
+    loop_var: api_name_to_create

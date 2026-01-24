@@ -1,0 +1,24 @@
+---
+# tasks/apply-policies.yml
+# Apply security policies to APIs on webMethods Gateway
+#
+# This handles:
+# - JWT/OAuth2 validation policy (inbound authentication)
+# - Outbound authentication (JWT passthrough to backend)
+# - Scope mapping (RBAC)
+# - Rate limiting
+# - CORS
+# - Logging
+
+- name: "Initialize policies applied counter"
+  ansible.builtin.set_fact:
+    policies_applied: []
+
+- name: "Apply policies to each API"
+  ansible.builtin.include_tasks: apply-policies-to-api.yml
+  loop: "{{ git_apis }}"
+  loop_control:
+    loop_var: api_def
+  when:
+    - api_def.spec.policies is defined
+    - api_def.spec.policies | length > 0

@@ -1,0 +1,137 @@
+# Direct SQL Migration Job - Migration 009 (CAB-682)
+# Creates catalog cache tables directly via SQL
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migration-009-catalog-cache
+  namespace: stoa-system
+  labels:
+    app: database-migration
+    migration: "009"
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migration
+          image: postgres:15-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "=============================================="
+              echo "CAB-682: Catalog Cache Tables Migration"
+              echo "=============================================="
+
+              echo "Connecting to database..."
+              export PGPASSWORD="$DB_PASSWORD"
+
+              # Check if tables already exist
+              EXISTING=$(psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'api_catalog';" 2>/dev/null || echo "0")
+
+              if [ "$EXISTING" -gt 0 ]; then
+                echo "Tables already exist, skipping migration"
+                echo "Migration 009 already applied!"
+                exit 0
+              fi
+
+              echo "Creating catalog cache tables..."
+
+              psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" <<'EOSQL'
+              -- Migration 009: Create catalog cache tables (CAB-682)
+              -- Creates tables for caching API and MCP tools data from GitLab
+
+              BEGIN;
+
+              -- Create api_catalog table
+              CREATE TABLE IF NOT EXISTS api_catalog (
+                  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                  tenant_id VARCHAR(100) NOT NULL,
+                  api_id VARCHAR(100) NOT NULL,
+                  api_name VARCHAR(255),
+                  version VARCHAR(50),
+                  status VARCHAR(50) NOT NULL DEFAULT 'active',
+                  category VARCHAR(100),
+                  tags JSONB NOT NULL DEFAULT '[]',
+                  portal_published BOOLEAN NOT NULL DEFAULT false,
+                  metadata JSONB NOT NULL,
+                  openapi_spec JSONB,
+                  git_path VARCHAR(500),
+                  git_commit_sha VARCHAR(40),
+                  synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                  deleted_at TIMESTAMPTZ,
+                  CONSTRAINT uq_api_catalog_tenant_api UNIQUE (tenant_id, api_id)
+              );
+
+              CREATE INDEX IF NOT EXISTS ix_api_catalog_tenant ON api_catalog (tenant_id);
+              CREATE INDEX IF NOT EXISTS ix_api_catalog_portal ON api_catalog (portal_published);
+              CREATE INDEX IF NOT EXISTS ix_api_catalog_status ON api_catalog (status);
+              CREATE INDEX IF NOT EXISTS ix_api_catalog_category ON api_catalog (category);
+
+              -- Create mcp_tools_catalog table
+              CREATE TABLE IF NOT EXISTS mcp_tools_catalog (
+                  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                  tenant_id VARCHAR(100) NOT NULL,
+                  tool_name VARCHAR(100) NOT NULL,
+                  display_name VARCHAR(255),
+                  description TEXT,
+                  category VARCHAR(100),
+                  input_schema JSONB,
+                  output_schema JSONB,
+                  metadata JSONB NOT NULL DEFAULT '{}',
+                  git_path VARCHAR(500),
+                  git_commit_sha VARCHAR(40),
+                  synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                  deleted_at TIMESTAMPTZ,
+                  CONSTRAINT uq_mcp_tools_tenant_tool UNIQUE (tenant_id, tool_name)
+              );
+
+              CREATE INDEX IF NOT EXISTS ix_mcp_tools_tenant ON mcp_tools_catalog (tenant_id);
+              CREATE INDEX IF NOT EXISTS ix_mcp_tools_category ON mcp_tools_catalog (category);
+
+              -- Create catalog_sync_status table
+              CREATE TABLE IF NOT EXISTS catalog_sync_status (
+                  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                  sync_type VARCHAR(50) NOT NULL,
+                  status VARCHAR(50) NOT NULL,
+                  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                  completed_at TIMESTAMPTZ,
+                  items_synced INTEGER NOT NULL DEFAULT 0,
+                  errors JSONB NOT NULL DEFAULT '[]',
+                  git_commit_sha VARCHAR(40)
+              );
+
+              CREATE INDEX IF NOT EXISTS ix_sync_status_type ON catalog_sync_status (sync_type);
+              CREATE INDEX IF NOT EXISTS ix_sync_status_status ON catalog_sync_status (status);
+              CREATE INDEX IF NOT EXISTS ix_sync_status_started_at ON catalog_sync_status (started_at);
+
+              -- Update alembic_version to mark migration as applied
+              INSERT INTO alembic_version (version_num) VALUES ('009')
+              ON CONFLICT DO NOTHING;
+
+              COMMIT;
+
+              -- Verify tables created
+              SELECT 'api_catalog' as table_name, COUNT(*) as row_count FROM api_catalog
+              UNION ALL
+              SELECT 'mcp_tools_catalog', COUNT(*) FROM mcp_tools_catalog
+              UNION ALL
+              SELECT 'catalog_sync_status', COUNT(*) FROM catalog_sync_status;
+              EOSQL
+
+              echo "=============================================="
+              echo "Migration 009 completed successfully!"
+              echo "=============================================="
+          env:
+            - name: DB_HOST
+              value: "control-plane-db.stoa-system.svc.cluster.local"
+            - name: DB_USER
+              value: "stoa"
+            - name: DB_PASSWORD
+              value: "stoa-db-password-2026"
+            - name: DB_NAME
+              value: "stoa"

@@ -1,0 +1,285 @@
+# stoa-gitops GitLab CI/CD Pipeline
+#
+# Triggers AWX reconciliation when webmethods/ configs change
+# CAB-652: Added e2e-test stage for GitOps verification
+
+stages:
+  - validate
+  - reconcile
+  - e2e-test
+
+variables:
+  AWX_HOST: "https://awx.gostoa.dev"
+  AWX_JOB_TEMPLATE_ID: "19"  # Template: "STOA - Reconcile webMethods Gateway"
+  # E2E Test Configuration
+  KEYCLOAK_URL: "https://auth.gostoa.dev"
+  KEYCLOAK_REALM: "stoa"
+  GATEWAY_URL: "https://gateway.gostoa.dev"
+  PORTAL_URL: "https://portal.gostoa.dev"
+
+# Validate webMethods YAML files
+validate-webmethods:
+  stage: validate
+  image: python:3.11-slim
+  before_script:
+    - pip install pyyaml jsonschema --quiet
+  script:
+    - |
+      echo "Validating webMethods YAML files..."
+      python -c "
+      import yaml
+      import sys
+      from pathlib import Path
+
+      errors = []
+      for f in Path('webmethods').rglob('*.yaml'):
+          try:
+              with open(f) as fh:
+                  yaml.safe_load(fh)
+              print(f'  OK: {f}')
+          except Exception as e:
+              errors.append(f'{f}: {e}')
+              print(f'  FAIL: {f}')
+
+      if errors:
+          print(f'\n{len(errors)} validation error(s)')
+          sys.exit(1)
+      print('\nAll files valid')
+      "
+  rules:
+    - changes:
+        - webmethods/**/*
+      when: always
+    - when: never
+
+# =============================================================================
+# AWX Reconciliation Jobs
+# Requires AWX_API_TOKEN CI variable (Settings > CI/CD > Variables)
+# =============================================================================
+
+# Trigger AWX reconciliation - DEV
+trigger-awx-dev:
+  stage: reconcile
+  image: curlimages/curl:8.5.0
+  variables:
+    STOA_ENV: "dev"
+  script:
+    - |
+      echo "Triggering AWX Job Template for webMethods reconciliation..."
+      echo "   Branch: ${CI_COMMIT_BRANCH}"
+      echo "   Environment: ${STOA_ENV}"
+      echo "   Commit: ${CI_COMMIT_SHORT_SHA}"
+
+      RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+        "${AWX_HOST}/api/v2/job_templates/${AWX_JOB_TEMPLATE_ID}/launch/" \
+        -H "Authorization: Bearer ${AWX_API_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"extra_vars\": {
+            \"env\": \"${STOA_ENV}\",
+            \"delete_orphans\": true,
+            \"git_commit\": \"${CI_COMMIT_SHA}\",
+            \"git_ref\": \"${CI_COMMIT_REF_NAME}\"
+          }
+        }")
+
+      HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+      BODY=$(echo "$RESPONSE" | sed '$d')
+
+      if [ "$HTTP_CODE" -eq 201 ]; then
+        JOB_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+        echo "AWX Job launched successfully!"
+        echo "   Job ID: ${JOB_ID}"
+        echo "   Monitor at: ${AWX_HOST}/#/jobs/playbook/${JOB_ID}"
+      else
+        echo "Failed to launch AWX Job"
+        echo "   HTTP Code: ${HTTP_CODE}"
+        echo "   Response: ${BODY}"
+        exit 1
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - webmethods/**/*
+        - ansible/reconcile-webmethods/**/*
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        STOA_ENV: "dev"
+  needs:
+    - validate-webmethods
+
+# Trigger AWX reconciliation - STAGING
+trigger-awx-staging:
+  stage: reconcile
+  image: curlimages/curl:8.5.0
+  variables:
+    STOA_ENV: "staging"
+  script:
+    - |
+      echo "Triggering AWX Job Template for webMethods reconciliation..."
+      echo "   Branch: ${CI_COMMIT_BRANCH}"
+      echo "   Environment: ${STOA_ENV}"
+
+      RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+        "${AWX_HOST}/api/v2/job_templates/${AWX_JOB_TEMPLATE_ID}/launch/" \
+        -H "Authorization: Bearer ${AWX_API_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{\"extra_vars\": {\"env\": \"${STOA_ENV}\", \"delete_orphans\": true}}")
+
+      HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+      BODY=$(echo "$RESPONSE" | sed '$d')
+
+      if [ "$HTTP_CODE" -eq 201 ]; then
+        JOB_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+        echo "AWX Job launched: ${JOB_ID}"
+      else
+        echo "Failed: ${HTTP_CODE}"
+        exit 1
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == "staging"
+      changes:
+        - webmethods/**/*
+        - ansible/reconcile-webmethods/**/*
+  needs:
+    - validate-webmethods
+
+# Trigger AWX reconciliation - PROD (manual approval required)
+trigger-awx-prod:
+  stage: reconcile
+  image: curlimages/curl:8.5.0
+  variables:
+    STOA_ENV: "prod"
+  script:
+    - |
+      echo "Triggering AWX Job Template for webMethods reconciliation..."
+      echo "   Branch: ${CI_COMMIT_BRANCH}"
+      echo "   Environment: ${STOA_ENV}"
+
+      RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+        "${AWX_HOST}/api/v2/job_templates/${AWX_JOB_TEMPLATE_ID}/launch/" \
+        -H "Authorization: Bearer ${AWX_API_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{\"extra_vars\": {\"env\": \"${STOA_ENV}\", \"delete_orphans\": true}}")
+
+      HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+      BODY=$(echo "$RESPONSE" | sed '$d')
+
+      if [ "$HTTP_CODE" -eq 201 ]; then
+        JOB_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+        echo "AWX Job launched: ${JOB_ID}"
+      else
+        echo "Failed: ${HTTP_CODE}"
+        exit 1
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - webmethods/**/*
+        - ansible/reconcile-webmethods/**/*
+      when: manual
+      allow_failure: false
+  needs:
+    - validate-webmethods
+    - trigger-awx-dev
+
+# =============================================================================
+# E2E Tests (CAB-652)
+# =============================================================================
+
+# E2E Tests - Runs after reconciliation on main branch
+e2e-tests:
+  stage: e2e-test
+  image: python:3.11-slim
+  needs: []
+  before_script:
+    - pip install pytest requests python-keycloak pyyaml --quiet
+  script:
+    - |
+      echo "Running E2E Tests..."
+      echo "   Gateway: ${GATEWAY_URL}"
+      echo "   Portal: ${PORTAL_URL}"
+      echo "   Keycloak: ${KEYCLOAK_URL}"
+      pytest tests/e2e/ -v --junitxml=report.xml -m "sync or rbac" --ignore=tests/e2e/scenarios/
+  variables:
+    KEYCLOAK_URL: "https://auth.gostoa.dev"
+    KEYCLOAK_REALM: "stoa"
+    GATEWAY_URL: "https://gateway.gostoa.dev"
+    PORTAL_URL: "https://portal.gostoa.dev"
+    WEBMETHODS_APIS_PATH: "webmethods/apis"
+  secrets:
+    GATEWAY_ADMIN_PASSWORD:
+      vault: stoa/dev/gateway-admin/password@secrets
+    PORTAL_ADMIN_PASSWORD:
+      vault: stoa/dev/portal-admin/password@secrets
+  artifacts:
+    reports:
+      junit: report.xml
+    paths:
+      - report.xml
+    when: always
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  allow_failure: false
+
+# E2E Tests - Manual trigger for non-main branches
+e2e-tests-manual:
+  stage: e2e-test
+  image: python:3.11-slim
+  before_script:
+    - pip install pytest requests python-keycloak pyyaml --quiet
+  script:
+    - |
+      echo "Running E2E Tests (manual)..."
+      pytest tests/e2e/ -v --junitxml=report.xml -m "sync or rbac" --ignore=tests/e2e/scenarios/
+  variables:
+    KEYCLOAK_URL: "https://auth.gostoa.dev"
+    KEYCLOAK_REALM: "stoa"
+    GATEWAY_URL: "https://gateway.gostoa.dev"
+    PORTAL_URL: "https://portal.gostoa.dev"
+    WEBMETHODS_APIS_PATH: "webmethods/apis"
+  secrets:
+    GATEWAY_ADMIN_PASSWORD:
+      vault: stoa/dev/gateway-admin/password@secrets
+    PORTAL_ADMIN_PASSWORD:
+      vault: stoa/dev/portal-admin/password@secrets
+  artifacts:
+    reports:
+      junit: report.xml
+    paths:
+      - report.xml
+    when: always
+  rules:
+    - if: $CI_COMMIT_BRANCH != "main"
+      when: manual
+  allow_failure: true
+
+# Smoke tests - Quick validation on every push
+e2e-smoke:
+  stage: e2e-test
+  image: python:3.11-slim
+  before_script:
+    - pip install pytest requests python-keycloak pyyaml --quiet
+  script:
+    - |
+      echo "Running E2E Smoke Tests..."
+      pytest tests/e2e/ -v --junitxml=smoke-report.xml -m "smoke" --ignore=tests/e2e/scenarios/
+  variables:
+    KEYCLOAK_URL: "https://auth.gostoa.dev"
+    KEYCLOAK_REALM: "stoa"
+    GATEWAY_URL: "https://gateway.gostoa.dev"
+    PORTAL_URL: "https://portal.gostoa.dev"
+  secrets:
+    GATEWAY_ADMIN_PASSWORD:
+      vault: stoa/dev/gateway-admin/password@secrets
+    PORTAL_ADMIN_PASSWORD:
+      vault: stoa/dev/portal-admin/password@secrets
+  artifacts:
+    reports:
+      junit: smoke-report.xml
+    when: always
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_MERGE_REQUEST_ID
+  allow_failure: true

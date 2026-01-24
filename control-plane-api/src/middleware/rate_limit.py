@@ -123,7 +123,7 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) 
             "message": f"Rate limit exceeded: {limit}",
             "detail": "Too many requests. Please slow down and retry later.",
             "retry_after_seconds": retry_after,
-            "documentation": "https://docs.stoa.cab-i.com/rate-limits",
+            "documentation": "https://docs.gostoa.dev/rate-limits",
         },
         headers={
             "Retry-After": str(retry_after),

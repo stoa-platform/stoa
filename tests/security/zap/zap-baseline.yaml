@@ -9,13 +9,13 @@ env:
   contexts:
     - name: "STOA Platform"
       urls:
-        - "https://api.stoa.cab-i.com"
-        - "https://console.stoa.cab-i.com"
-        - "https://mcp.stoa.cab-i.com"
+        - "https://api.gostoa.dev"
+        - "https://console.gostoa.dev"
+        - "https://mcp.gostoa.dev"
       includePaths:
-        - "https://api.stoa.cab-i.com.*"
-        - "https://console.stoa.cab-i.com.*"
-        - "https://mcp.stoa.cab-i.com.*"
+        - "https://api.gostoa.dev.*"
+        - "https://console.gostoa.dev.*"
+        - "https://mcp.gostoa.dev.*"
       excludePaths:
         - ".*\\.js$"
         - ".*\\.css$"
@@ -27,8 +27,8 @@ env:
       authentication:
         method: "json"
         parameters:
-          loginPageUrl: "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token"
-          loginRequestUrl: "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token"
+          loginPageUrl: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token"
+          loginRequestUrl: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token"
           loginRequestBody: "grant_type=password&client_id=stoa-ui&username={%username%}&password={%password%}"
         verification:
           method: "response"

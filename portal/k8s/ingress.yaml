@@ -13,7 +13,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: portal.stoa.cab-i.com
+    - host: portal.gostoa.dev
       http:
         paths:
           - path: /
@@ -25,5 +25,5 @@ spec:
                   number: 80
   tls:
     - hosts:
-        - portal.stoa.cab-i.com
+        - portal.gostoa.dev
       secretName: stoa-portal-tls

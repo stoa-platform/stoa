@@ -29,7 +29,7 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: process.env.STOA_PORTAL_URL || 'https://portal.stoa.cab-i.com',
+    baseURL: process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'on-first-retry',
@@ -52,7 +52,7 @@ export default defineConfig({
       name: 'portal-chromium',
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: process.env.STOA_PORTAL_URL || 'https://portal.stoa.cab-i.com',
+        baseURL: process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev',
         storageState: 'fixtures/.auth/parzival.json',
       },
       dependencies: ['auth-setup'],
@@ -64,7 +64,7 @@ export default defineConfig({
       name: 'console-chromium',
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: process.env.STOA_CONSOLE_URL || 'https://console.stoa.cab-i.com',
+        baseURL: process.env.STOA_CONSOLE_URL || 'https://console.gostoa.dev',
         storageState: 'fixtures/.auth/parzival.json',
       },
       dependencies: ['auth-setup'],
@@ -75,7 +75,7 @@ export default defineConfig({
     {
       name: 'gateway',
       use: {
-        baseURL: process.env.STOA_GATEWAY_URL || 'https://api.stoa.cab-i.com',
+        baseURL: process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev',
       },
       testMatch: /gateway/,
     },

@@ -96,7 +96,7 @@ jobs:
           sleep 30
 
           # Get admin token
-          TOKEN=$(curl -s -X POST "https://auth.stoa.cab-i.com/realms/master/protocol/openid-connect/token" \
+          TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/master/protocol/openid-connect/token" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "username=admin" \
             -d "password=${KC_PASSWORD}" \
@@ -109,12 +109,12 @@ jobs:
           fi
 
           # Update realm to use STOA theme
-          curl -s -X PUT "https://auth.stoa.cab-i.com/admin/realms/stoa" \
+          curl -s -X PUT "https://auth.gostoa.dev/admin/realms/stoa" \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{"loginTheme": "stoa"}' || echo "Warning: Could not update theme automatically"
 
-          echo "Theme update attempted. Verify at https://auth.stoa.cab-i.com"
+          echo "Theme update attempted. Verify at https://auth.gostoa.dev"
 
       - name: Verify deployment
         if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'

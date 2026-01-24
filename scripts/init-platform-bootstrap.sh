@@ -23,7 +23,7 @@ ENV="dev"
 DRY_RUN=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-BASE_DOMAIN="${BASE_DOMAIN:-stoa.cab-i.com}"
+BASE_DOMAIN="${BASE_DOMAIN:-gostoa.dev}"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do

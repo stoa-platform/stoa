@@ -294,14 +294,14 @@ This document explains the technology choices for the STOA stack and why each co
 
 | Service | URL |
 |---------|-----|
-| Console (Admin) | https://console.stoa.cab-i.com |
-| Developer Portal | https://portal.stoa.cab-i.com |
-| API (direct) | https://api.stoa.cab-i.com |
-| API Gateway Runtime | https://apis.stoa.cab-i.com |
-| MCP Gateway | https://mcp.stoa.cab-i.com |
-| Auth (Keycloak) | https://auth.stoa.cab-i.com |
-| Monitoring (Grafana) | https://grafana.stoa.cab-i.com |
-| ArgoCD | https://argocd.stoa.cab-i.com |
+| Console (Admin) | https://console.gostoa.dev |
+| Developer Portal | https://portal.gostoa.dev |
+| API (direct) | https://api.gostoa.dev |
+| API Gateway Runtime | https://apis.gostoa.dev |
+| MCP Gateway | https://mcp.gostoa.dev |
+| Auth (Keycloak) | https://auth.gostoa.dev |
+| Monitoring (Grafana) | https://grafana.gostoa.dev |
+| ArgoCD | https://argocd.gostoa.dev |
 
 ### Backup Architecture
 

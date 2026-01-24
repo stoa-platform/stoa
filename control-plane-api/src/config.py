@@ -10,7 +10,7 @@ import json
 import os
 
 # Base domain - used to construct default URLs
-_BASE_DOMAIN = os.getenv("BASE_DOMAIN", "stoa.cab-i.com")
+_BASE_DOMAIN = os.getenv("BASE_DOMAIN", "gostoa.dev")
 
 class Settings(BaseSettings):
     # Application

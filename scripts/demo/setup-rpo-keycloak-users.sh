@@ -15,7 +15,7 @@
 set -e
 
 # Configuration
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.stoa.cab-i.com}"
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 REALM="${KEYCLOAK_REALM:-stoa}"
 ADMIN_USER="${KC_ADMIN_USER:-admin}"
 ADMIN_PASSWORD="${KC_ADMIN_PASSWORD:-}"

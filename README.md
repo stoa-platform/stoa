@@ -56,24 +56,24 @@ Multi-tenant API Management Platform with Control-Plane UI, GitOps and Event-Dri
 
 | Client | Path | Auth | Purpose |
 |--------|------|------|---------|
-| Console UI | `apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/*` | Keycloak OIDC | API Provider (Tenant/API management) |
-| Developer Portal | `apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/*` | Keycloak OIDC | API Consumer (Browse, Subscribe, Test) |
-| Third-party/M2M | `apis.stoa.cab-i.com/gateway/*` | OAuth2 Client Credentials | Business API access |
-| Business APIs | `apis.stoa.cab-i.com/gateway/{api}/*` | API Key / OAuth2 | Runtime API calls |
+| Console UI | `apis.gostoa.dev/gateway/Control-Plane-API/2.0/*` | Keycloak OIDC | API Provider (Tenant/API management) |
+| Developer Portal | `apis.gostoa.dev/gateway/Control-Plane-API/2.0/*` | Keycloak OIDC | API Consumer (Browse, Subscribe, Test) |
+| Third-party/M2M | `apis.gostoa.dev/gateway/*` | OAuth2 Client Credentials | Business API access |
+| Business APIs | `apis.gostoa.dev/gateway/{api}/*` | API Key / OAuth2 | Runtime API calls |
 
 ## Components
 
 | Component | Description | Technology | URL |
 |-----------|-------------|------------|-----|
-| Console UI | RBAC Interface for API Provider (management) | React + TypeScript | console.stoa.cab-i.com |
-| **Developer Portal** | API Consumer Portal (browse, subscribe, test) | React + TypeScript + Vite | portal.stoa.cab-i.com |
-| Control-Plane API | REST Backend with RBAC | FastAPI (Python) | api.stoa.cab-i.com |
-| MCP Gateway | AI-Native API Access (MCP Protocol) | FastAPI + OPA | mcp.stoa.cab-i.com |
-| Keycloak | Identity Provider (OIDC) | Keycloak | auth.stoa.cab-i.com |
+| Console UI | RBAC Interface for API Provider (management) | React + TypeScript | console.gostoa.dev |
+| **Developer Portal** | API Consumer Portal (browse, subscribe, test) | React + TypeScript + Vite | portal.gostoa.dev |
+| Control-Plane API | REST Backend with RBAC | FastAPI (Python) | api.gostoa.dev |
+| MCP Gateway | AI-Native API Access (MCP Protocol) | FastAPI + OPA | mcp.gostoa.dev |
+| Keycloak | Identity Provider (OIDC) | Keycloak | auth.gostoa.dev |
 | GitLab | GitOps Source of Truth | GitLab | gitlab.com |
 | Kafka | Event streaming | Redpanda | (internal) |
-| AWX | Automation/Orchestration | AWX/Ansible | awx.stoa.cab-i.com |
-| webMethods Gateway | API Gateway runtime | webMethods | apis.stoa.cab-i.com |
+| AWX | Automation/Orchestration | AWX/Ansible | awx.gostoa.dev |
+| webMethods Gateway | API Gateway runtime | webMethods | apis.gostoa.dev |
 
 ## RBAC Roles
 
@@ -279,30 +279,30 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Console UI | https://console.stoa.cab-i.com | API Provider interface (tenant/API management) |
-| **Developer Portal** | https://portal.stoa.cab-i.com | API Consumer portal (browse, subscribe, test) |
-| Control Plane API (direct) | https://api.stoa.cab-i.com | REST API backend (direct access) |
-| **API Gateway Runtime** | https://apis.stoa.cab-i.com | APIs via Gateway (OIDC auth) |
-| **MCP Gateway** | https://mcp.stoa.cab-i.com | AI-Native MCP Protocol endpoint |
-| Keycloak (Auth) | https://auth.stoa.cab-i.com | Identity Provider (OIDC) |
-| Keycloak Admin | https://auth.stoa.cab-i.com/admin/ | Keycloak admin console |
-| API Gateway UI | https://gateway.stoa.cab-i.com/apigatewayui/ | Gateway console (admin: Administrator/manage) |
-| **ArgoCD** | https://argocd.stoa.cab-i.com | GitOps CD (admin/demo) |
-| **AWX (Ansible)** | https://awx.stoa.cab-i.com | Automation (admin/demo) |
-| Vault | https://vault.stoa.cab-i.com | HashiCorp Vault (secrets) |
+| Console UI | https://console.gostoa.dev | API Provider interface (tenant/API management) |
+| **Developer Portal** | https://portal.gostoa.dev | API Consumer portal (browse, subscribe, test) |
+| Control Plane API (direct) | https://api.gostoa.dev | REST API backend (direct access) |
+| **API Gateway Runtime** | https://apis.gostoa.dev | APIs via Gateway (OIDC auth) |
+| **MCP Gateway** | https://mcp.gostoa.dev | AI-Native MCP Protocol endpoint |
+| Keycloak (Auth) | https://auth.gostoa.dev | Identity Provider (OIDC) |
+| Keycloak Admin | https://auth.gostoa.dev/admin/ | Keycloak admin console |
+| API Gateway UI | https://gateway.gostoa.dev/apigatewayui/ | Gateway console (admin: Administrator/manage) |
+| **ArgoCD** | https://argocd.gostoa.dev | GitOps CD (admin/demo) |
+| **AWX (Ansible)** | https://awx.gostoa.dev | Automation (admin/demo) |
+| Vault | https://vault.gostoa.dev | HashiCorp Vault (secrets) |
 | Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n stoa-system` | Kafka administration (internal) |
 | **GitLab GitOps** | https://gitlab.com/cab6961310/stoa-gitops | Source of Truth (tenants)
 
-> **Note**: The UI uses the API via Gateway (`apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`) to benefit from centralized OIDC authentication.
+> **Note**: The UI uses the API via Gateway (`apis.gostoa.dev/gateway/Control-Plane-API/2.0`) to benefit from centralized OIDC authentication.
 
 ### STAGING Environment (coming soon)
 
 | Service | URL |
 |---------|-----|
-| Control Plane UI | https://devops.staging.stoa.cab-i.com |
-| Control Plane API | https://api.staging.stoa.cab-i.com |
-| Keycloak | https://auth.staging.stoa.cab-i.com |
-| API Gateway | https://gateway.staging.stoa.cab-i.com |
+| Control Plane UI | https://devops.staging.gostoa.dev |
+| Control Plane API | https://api.staging.gostoa.dev |
+| Keycloak | https://auth.staging.gostoa.dev |
+| API Gateway | https://gateway.staging.gostoa.dev |
 
 ## Default Users (DEMO Instance)
 
@@ -384,7 +384,7 @@ Amazon OpenSearch 2.x est compatible ES 7.x, donc **non compatible**.
 |---------|--------------|-------|
 | Elasticsearch | `elasticsearch-master:9200` | No auth (xpack.security.enabled: false) |
 | Redpanda (Kafka) | `redpanda.stoa-system.svc.cluster.local:9092` | No auth |
-| Keycloak | `https://auth.stoa.cab-i.com` | Realm: `stoa`, Client: `control-plane-api` |
+| Keycloak | `https://auth.gostoa.dev` | Realm: `stoa`, Client: `control-plane-api` |
 
 ### Control Plane UI Configuration - Tenant Mapping
 
@@ -420,8 +420,8 @@ Keycloak is configured as central IdP for OIDC authentication:
 
 **Realm Configuration**:
 - **Realm**: `stoa`
-- **URL**: `https://auth.stoa.cab-i.com/realms/stoa`
-- **Discovery**: `https://auth.stoa.cab-i.com/realms/stoa/.well-known/openid-configuration`
+- **URL**: `https://auth.gostoa.dev/realms/stoa`
+- **Discovery**: `https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration`
 
 **Configured Clients**:
 | Client ID | Type | Usage |
@@ -522,7 +522,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 | ECR Repositories | ✅ Deployed | control-plane-api, control-plane-ui, stoa/* |
 | Nginx Ingress | ✅ Deployed | with cert-manager |
 | Cert-Manager | ✅ Deployed | Let's Encrypt prod |
-| Keycloak | ✅ Deployed | https://auth.stoa.cab-i.com |
+| Keycloak | ✅ Deployed | https://auth.gostoa.dev |
 | Control-Plane API | ✅ Deployed | FastAPI backend |
 | Control-Plane UI | ✅ Deployed | React frontend |
 | Elasticsearch 8.11 | ✅ Deployed | On EKS, cluster SAG_EventDataStore (ES 8+ required for Gateway 10.15) |
@@ -532,7 +532,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 | **Redpanda (Kafka)** | ✅ Deployed | Event streaming, 1 broker, Redpanda Console |
 | **Kafka Topics** | ✅ Deployed | api-created/updated/deleted, deploy-requests/results, audit-log, notifications |
 | **Kafka Producer** | ✅ Deployed | Integrated in Control-Plane API (event emission on CRUD) |
-| **AWX (Ansible Tower)** | ✅ Deployed | AWX 24.6.1 via Operator, https://awx.stoa.cab-i.com |
+| **AWX (Ansible Tower)** | ✅ Deployed | AWX 24.6.1 via Operator, https://awx.gostoa.dev |
 
 ### Components To Deploy 🔲
 
@@ -583,7 +583,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 
 4. **AWX (Ansible Tower)** ✅ DEPLOYED + CONFIGURED
    - AWX 24.6.1 via AWX Operator 2.19.1
-   - URL: https://awx.stoa.cab-i.com
+   - URL: https://awx.gostoa.dev
    - Login: admin / demo
    - Database: RDS PostgreSQL (shared with Keycloak)
 
@@ -606,7 +606,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 6. **Control-Plane UI** ✅ FUNCTIONAL
    - React interface with Keycloak authentication (PKCE)
    - Pages: Dashboard, Tenants, APIs, Applications, Deployments, Monitoring
-   - URL: https://console.stoa.cab-i.com
+   - URL: https://console.gostoa.dev
 
 7. **Variabilized Configuration** ✅ (Dec 21, 2024)
    - **UI** ([config.ts](control-plane-ui/src/config.ts)): All URLs and configs via `VITE_*` env vars
@@ -616,7 +616,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
    **Available UI Variables**:
    | Variable | Description | Default |
    |----------|-------------|---------|
-   | `VITE_BASE_DOMAIN` | Base domain | `stoa.cab-i.com` |
+   | `VITE_BASE_DOMAIN` | Base domain | `gostoa.dev` |
    | `VITE_API_URL` | Backend API URL | `https://api.{domain}` |
    | `VITE_KEYCLOAK_URL` | Keycloak URL | `https://auth.{domain}` |
    | `VITE_KEYCLOAK_REALM` | Keycloak Realm | `stoa` |
@@ -627,7 +627,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
    **Available API Variables**:
    | Variable | Description | Default |
    |----------|-------------|---------|
-   | `BASE_DOMAIN` | Base domain | `stoa.cab-i.com` |
+   | `BASE_DOMAIN` | Base domain | `gostoa.dev` |
    | `KEYCLOAK_URL` | Keycloak URL | `https://auth.{domain}` |
    | `KEYCLOAK_REALM` | Realm | `stoa` |
    | `KAFKA_BOOTSTRAP_SERVERS` | Kafka brokers | `redpanda:9092` |
@@ -649,7 +649,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 8. **PKCE Authentication** ✅ (Dec 21, 2024)
    - Keycloak 25+ requires PKCE for public clients
    - `oidc-client-ts` configuration with `response_type: 'code'` and `pkce_method: 'S256'`
-   - Functional login via https://console.stoa.cab-i.com
+   - Functional login via https://console.gostoa.dev
 
 #### Phase 2: GitOps + Environment Variables (High Priority)
 
@@ -748,7 +748,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 
    **API Template Example (api.yaml)**:
    ```yaml
-   apiVersion: stoa.cab-i.com/v1
+   apiVersion: gostoa.dev/v1
    kind: API
    metadata:
      name: payment-api
@@ -766,7 +766,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 
    **Environment Configuration Example (dev.yaml)**:
    ```yaml
-   apiVersion: stoa.cab-i.com/v1
+   apiVersion: gostoa.dev/v1
    kind: APIEnvironmentConfig
    metadata:
      name: payment-api-dev
@@ -835,7 +835,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 
    **tenants.yaml Example**:
    ```yaml
-   apiVersion: stoa.cab-i.com/v1
+   apiVersion: gostoa.dev/v1
    kind: TenantRegistry
    metadata:
      name: tenant-registry
@@ -874,7 +874,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 
    **global-admins.yaml Example**:
    ```yaml
-   apiVersion: stoa.cab-i.com/v1
+   apiVersion: gostoa.dev/v1
    kind: GlobalAdminRegistry
    metadata:
      name: global-admins
@@ -1077,7 +1077,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 
 3. **Gateway Alias Definition (aliases/dev/payment-backend.yaml)** 🔲
    ```yaml
-   apiVersion: stoa.cab-i.com/v1
+   apiVersion: gostoa.dev/v1
    kind: GatewayAlias
    metadata:
      name: payment-backend-dev
@@ -1241,7 +1241,7 @@ Complete observability stack for STOA Platform using **Amazon OpenSearch** for c
    - Alerting: AlertManager → OpenSearch → Slack
 
 5. **OpenSearch Dashboards** (Visualization)
-   - URL: https://opensearch.stoa.cab-i.com/_dashboards
+   - URL: https://opensearch.gostoa.dev/_dashboards
    - Pre-built dashboards:
      - **Pipeline Overview**: Success rate, avg duration, errors/hour
      - **Deployment History**: Timeline per tenant/API
@@ -1309,8 +1309,8 @@ Complete observability stack for STOA Platform using **Amazon OpenSearch** for c
 **Observability URLs**:
 | Service | URL |
 |---------|-----|
-| OpenSearch Dashboards | https://opensearch.stoa.cab-i.com/_dashboards |
-| Control-Plane Monitoring | https://console.stoa.cab-i.com/monitoring |
+| OpenSearch Dashboards | https://opensearch.gostoa.dev/_dashboards |
+| Control-Plane Monitoring | https://console.gostoa.dev/monitoring |
 | Prometheus (interne) | prometheus.stoa-system.svc.cluster.local:9090 |
 
 #### Phase 4.5: Jenkins Orchestration Layer (High Priority - Enterprise)
@@ -1440,7 +1440,7 @@ controller:
             oic:
               clientId: "jenkins"
               clientSecret: "${KEYCLOAK_CLIENT_SECRET}"
-              authorizationServerUrl: "https://auth.stoa.cab-i.com/realms/stoa"
+              authorizationServerUrl: "https://auth.gostoa.dev/realms/stoa"
           authorizationStrategy:
             roleBased:
               roles:
@@ -1478,11 +1478,11 @@ persistence:
 
 ingress:
   enabled: true
-  hostName: jenkins.stoa.cab-i.com
+  hostName: jenkins.gostoa.dev
   tls:
     - secretName: jenkins-tls
       hosts:
-        - jenkins.stoa.cab-i.com
+        - jenkins.gostoa.dev
 ```
 
 **Kafka Consumer → Jenkins Trigger**:
@@ -1493,7 +1493,7 @@ from kafka import KafkaConsumer
 import requests
 import json
 
-JENKINS_URL = "https://jenkins.stoa.cab-i.com"
+JENKINS_URL = "https://jenkins.gostoa.dev"
 JENKINS_TOKEN = os.getenv("JENKINS_API_TOKEN")
 
 consumer = KafkaConsumer(
@@ -1552,7 +1552,7 @@ pipeline {
     }
 
     environment {
-        AWX_HOST = 'https://awx.stoa.cab-i.com'
+        AWX_HOST = 'https://awx.gostoa.dev'
         AWX_TOKEN = credentials('awx-api-token')
         KAFKA_BOOTSTRAP = 'redpanda.stoa-system.svc.cluster.local:9092'
         SLACK_CHANNEL = '#stoa-deployments'
@@ -1574,7 +1574,7 @@ pipeline {
                     // Verify that the API exists in GitLab
                     def apiSpec = sh(
                         script: """
-                            curl -s "https://api.stoa.cab-i.com/v1/tenants/${TENANT_ID}/apis/${API_NAME}" \
+                            curl -s "https://api.gostoa.dev/v1/tenants/${TENANT_ID}/apis/${API_NAME}" \
                                 -H "Authorization: Bearer ${API_TOKEN}"
                         """,
                         returnStdout: true
@@ -1667,7 +1667,7 @@ pipeline {
                         def healthCheck = sh(
                             script: """
                                 curl -s -o /dev/null -w '%{http_code}' \
-                                    "https://gateway.${params.ENVIRONMENT}.stoa.cab-i.com/${params.TENANT_ID}/${params.API_NAME}/health"
+                                    "https://gateway.${params.ENVIRONMENT}.gostoa.dev/${params.TENANT_ID}/${params.API_NAME}/health"
                             """,
                             returnStdout: true
                         ).trim()
@@ -1689,7 +1689,7 @@ pipeline {
 
                     sh """
                         python3 -m pytest tests/smoke/ \
-                            --api-url="https://gateway.${params.ENVIRONMENT}.stoa.cab-i.com/${params.TENANT_ID}/${params.API_NAME}" \
+                            --api-url="https://gateway.${params.ENVIRONMENT}.gostoa.dev/${params.TENANT_ID}/${params.API_NAME}" \
                             --junitxml=smoke-results.xml
                     """
                 }
@@ -1846,7 +1846,7 @@ pipeline {
                     retry(3) {
                         sleep 5
                         sh """
-                            curl -f "https://gateway.${params.ENVIRONMENT}.stoa.cab-i.com/${params.TENANT_ID}/${params.API_NAME}/health"
+                            curl -f "https://gateway.${params.ENVIRONMENT}.gostoa.dev/${params.TENANT_ID}/${params.API_NAME}/health"
                         """
                     }
                 }
@@ -1859,7 +1859,7 @@ pipeline {
             script {
                 // Create an incident ticket for rollback
                 sh """
-                    curl -X POST "https://api.stoa.cab-i.com/v1/incidents" \
+                    curl -X POST "https://api.gostoa.dev/v1/incidents" \
                         -H "Content-Type: application/json" \
                         -d '{
                             "type": "rollback",
@@ -1954,9 +1954,9 @@ def call(String status, Map details) {
 **URLs Jenkins**:
 | Service | URL |
 |---------|-----|
-| Jenkins UI | https://jenkins.stoa.cab-i.com |
-| Blue Ocean | https://jenkins.stoa.cab-i.com/blue |
-| API | https://jenkins.stoa.cab-i.com/api/json |
+| Jenkins UI | https://jenkins.gostoa.dev |
+| Blue Ocean | https://jenkins.gostoa.dev/blue |
+| API | https://jenkins.gostoa.dev/api/json |
 
 #### Phase 5: Multi-Environment (Low Priority)
 1. **STAGING Environment**
@@ -2118,7 +2118,7 @@ def call(String status, Map details) {
 
    **Exemple petstore-api/api.yaml**:
    ```yaml
-   apiVersion: stoa.cab-i.com/v1
+   apiVersion: gostoa.dev/v1
    kind: API
    metadata:
      name: petstore-api
@@ -2146,7 +2146,7 @@ def call(String status, Map details) {
    │                                                                                      │
    │  1. LOGIN                                                                            │
    │     ┌─────────────────────────────────────────────────────────────────────────────┐ │
-   │     │  Access: https://console.stoa.cab-i.com                                      │ │
+   │     │  Access: https://console.gostoa.dev                                      │ │
    │     │  → Redirect to Keycloak                                                     │ │
    │     │  → Login: demo-cpi@cab-i.com / DemoCPI2024!                                 │ │
    │     │  → Redirect to DevOps UI (JWT with tenant_id=tenant-demo)                  │ │
@@ -2190,8 +2190,8 @@ def call(String status, Map details) {
 
    | User | URL | Login | Password |
    |------|-----|-------|----------|
-   | Demo CPI | https://console.stoa.cab-i.com | demo-cpi@cab-i.com | DemoCPI2024! |
-   | Demo DevOps | https://console.stoa.cab-i.com | demo-devops@cab-i.com | DemoDevOps2024! |
+   | Demo CPI | https://console.gostoa.dev | demo-cpi@cab-i.com | DemoCPI2024! |
+   | Demo DevOps | https://console.gostoa.dev | demo-devops@cab-i.com | DemoDevOps2024! |
 
    > **Note**: Credentials will be stored in Vault after beta validation.
 
@@ -2233,7 +2233,7 @@ def call(String status, Map details) {
 
    | Interface | URL | Description |
    |-----------|-----|-------------|
-   | DevOps UI | https://console.stoa.cab-i.com | API management, deployments, monitoring |
+   | DevOps UI | https://console.gostoa.dev | API management, deployments, monitoring |
 
    > **Note**: The custom Developer Portal will be available in Phase 8.
 
@@ -2375,7 +2375,7 @@ def call(String status, Map details) {
    ```yaml
    # mkdocs.yml
    site_name: STOA Platform - Documentation
-   site_url: https://docs.stoa.cab-i.com
+   site_url: https://docs.gostoa.dev
    theme:
      name: material
      palette:
@@ -2404,7 +2404,7 @@ def call(String status, Map details) {
    ```
 
    **Documentation Deployment**:
-   - URL: https://docs.stoa.cab-i.com
+   - URL: https://docs.gostoa.dev
    - CI/CD: GitLab Pages ou S3 + CloudFront
    - Build: `mkdocs build`
 
@@ -3075,7 +3075,7 @@ POST   /portal/try-it                  # Proxy to Gateway
 client_id: developer-portal
 client_type: public
 valid_redirect_uris:
-  - https://portal.stoa.cab-i.com/*
+  - https://portal.gostoa.dev/*
   - http://localhost:3001/*
 roles:
   - developer  # Portal access
@@ -3100,7 +3100,7 @@ roles:
 - [ ] `/portal/*` endpoints in Control-Plane API
 - [ ] Kafka events for audit
 - [ ] Kubernetes deployment (Helm)
-- [ ] URL: https://portal.stoa.cab-i.com
+- [ ] URL: https://portal.gostoa.dev
 
 #### Phase 9: Ticketing System (Production Requests)
 
@@ -3166,7 +3166,7 @@ stoa-gitops/
 
 **Format Ticket YAML**:
 ```yaml
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: PromotionRequest
 metadata:
   id: PR-2024-0003
@@ -3789,7 +3789,7 @@ jobs:
 │   │   │                                                                    │     │    │
 │   │   │  [🔄 Snooze +7 jours]  [🔄 Snooze +14 jours]  [❌ Supprimer]      │     │    │
 │   │   │                                                                    │     │    │
-│   │   │  Lien: https://api.stoa.cab-i.com/v1/resources/{id}/extend?days=7 │     │    │
+│   │   │  Lien: https://api.gostoa.dev/v1/resources/{id}/extend?days=7 │     │    │
 │   │   └───────────────────────────────────────────────────────────────────┘     │    │
 │   │                                                                              │    │
 │   │   API Endpoint: PATCH /v1/resources/{id}/ttl                                │    │
@@ -4044,13 +4044,13 @@ def calculate_cost_avoided(resource, remaining_hours: int) -> float:
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    UI Control-Plane (React + Keycloak)               │
-│                    https://console.stoa.cab-i.com                     │
+│                    https://console.gostoa.dev                     │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Control-Plane API (FastAPI)                       │
-│                    https://api.stoa.cab-i.com                        │
+│                    https://api.gostoa.dev                        │
 │  ┌─────────────────────────────────────────────────────────────────┐│
 │  │ /v1/tenants     │ /v1/apis     │ /v1/deploy     │ /v1/events   ││
 │  └─────────────────────────────────────────────────────────────────┘│

@@ -39,7 +39,7 @@
     tenants_dir: "{{ catalog_dir }}/tenants"
 
     # Base domain for URL substitution
-    base_domain: "{{ lookup('env', 'BASE_DOMAIN') | default('stoa.cab-i.com', true) }}"
+    base_domain: "{{ lookup('env', 'BASE_DOMAIN') | default('gostoa.dev', true) }}"
 
     # Target environment
     env: "{{ lookup('env', 'STOA_ENV') | default('dev', true) }}"

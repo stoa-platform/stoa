@@ -78,7 +78,7 @@
 
 ### Infrastructure - Rebranding ✅
 - [x] CAB-196: [Infra] Rebranding APIM → STOA
-- [x] CAB-197: [Infra] DNS/TLS Migration to *.stoa.cab-i.com
+- [x] CAB-197: [Infra] DNS/TLS Migration to *.gostoa.dev
 - [x] CAB-198: [Infra] Centralized BASE_DOMAIN configuration
 **3/3 issues** ✅
 

@@ -11,7 +11,7 @@ metadata:
     app.kubernetes.io/part-of: stoa-platform
     app.kubernetes.io/component: monitoring
   annotations:
-    stoa.cab-i.com/description: "Infrastructure Networking dashboard for STOA Platform"
+    gostoa.dev/description: "Infrastructure Networking dashboard for STOA Platform"
     grafana_folder: "STOA"
 data:
   infrastructure-networking.json: |

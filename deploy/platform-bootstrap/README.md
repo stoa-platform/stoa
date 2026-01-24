@@ -148,7 +148,7 @@ spec:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BASE_DOMAIN` | `stoa.cab-i.com` | Base domain for URLs |
+| `BASE_DOMAIN` | `gostoa.dev` | Base domain for URLs |
 | `GITLAB_TOKEN` | - | GitLab access token |
 | `GITLAB_PROJECT` | `stoa-platform/stoa-gitops` | GitLab project path |
 | `AWX_URL` | `https://awx.${BASE_DOMAIN}` | AWX server URL |
@@ -184,12 +184,12 @@ spec:
 2. Check AWX job status:
    ```bash
    curl -H "Authorization: Bearer $AWX_TOKEN" \
-     https://awx.stoa.cab-i.com/api/v2/jobs/?order_by=-id
+     https://awx.gostoa.dev/api/v2/jobs/?order_by=-id
    ```
 
 3. Check Gateway directly:
    ```bash
-   curl https://gateway.stoa.cab-i.com/rest/apigateway/apis
+   curl https://gateway.gostoa.dev/rest/apigateway/apis
    ```
 
 ### Validation Errors

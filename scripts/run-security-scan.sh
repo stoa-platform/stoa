@@ -98,16 +98,16 @@ log_error() {
 get_env_urls() {
     case "$ENVIRONMENT" in
         dev)
-            TARGET_URL="${TARGET_URL:-https://api.dev.stoa.cab-i.com}"
-            AUTH_URL="${AUTH_URL:-https://auth.dev.stoa.cab-i.com}"
+            TARGET_URL="${TARGET_URL:-https://api.dev.gostoa.dev}"
+            AUTH_URL="${AUTH_URL:-https://auth.dev.gostoa.dev}"
             ;;
         staging)
-            TARGET_URL="${TARGET_URL:-https://api.staging.stoa.cab-i.com}"
-            AUTH_URL="${AUTH_URL:-https://auth.staging.stoa.cab-i.com}"
+            TARGET_URL="${TARGET_URL:-https://api.staging.gostoa.dev}"
+            AUTH_URL="${AUTH_URL:-https://auth.staging.gostoa.dev}"
             ;;
         prod)
-            TARGET_URL="${TARGET_URL:-https://api.stoa.cab-i.com}"
-            AUTH_URL="${AUTH_URL:-https://auth.stoa.cab-i.com}"
+            TARGET_URL="${TARGET_URL:-https://api.gostoa.dev}"
+            AUTH_URL="${AUTH_URL:-https://auth.gostoa.dev}"
             ;;
         *)
             log_error "Unknown environment: $ENVIRONMENT"

@@ -11,25 +11,25 @@ kind: Namespace
 metadata:
   name: oasis
   labels:
-    stoa.cab-i.com/tenant: oasis-gunters
-    stoa.cab-i.com/environment: demo
+    gostoa.dev/tenant: oasis-gunters
+    gostoa.dev/environment: demo
     app.kubernetes.io/part-of: stoa-platform
 
 ---
 # ============================================================================
 # Tool 1: Search Players (Avatar API)
 # ============================================================================
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: search-players
   namespace: oasis
   labels:
-    stoa.cab-i.com/tenant: oasis-gunters
-    stoa.cab-i.com/category: avatar
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: oasis-gunters
+    gostoa.dev/category: avatar
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/description: "Ready Player One demo - Avatar tools"
+    gostoa.dev/description: "Ready Player One demo - Avatar tools"
 spec:
   displayName: "Search OASIS Players"
   description: "Search OASIS players by gamertag, clan, or achievements. Find other Gunters in the metaverse."
@@ -80,18 +80,18 @@ spec:
 # ============================================================================
 # Tool 2: Transfer Coins (Economy API)
 # ============================================================================
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: transfer-coins
   namespace: oasis
   labels:
-    stoa.cab-i.com/tenant: oasis-gunters
-    stoa.cab-i.com/category: economy
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: oasis-gunters
+    gostoa.dev/category: economy
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/description: "Ready Player One demo - Economy tools"
-    stoa.cab-i.com/governance: "amount>10000 requires attestation; amount>100000 requires 2FA"
+    gostoa.dev/description: "Ready Player One demo - Economy tools"
+    gostoa.dev/governance: "amount>10000 requires attestation; amount>100000 requires 2FA"
 spec:
   displayName: "Transfer OASIS Coins"
   description: "Transfer OASIS coins between players. Large transfers (>10K) require attestation, very large (>100K) require 2FA."
@@ -137,17 +137,17 @@ spec:
 # ============================================================================
 # Tool 3: Check Artifact (Inventory API)
 # ============================================================================
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: check-artifact
   namespace: oasis
   labels:
-    stoa.cab-i.com/tenant: oasis-gunters
-    stoa.cab-i.com/category: inventory
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: oasis-gunters
+    gostoa.dev/category: inventory
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/description: "Ready Player One demo - Inventory tools"
+    gostoa.dev/description: "Ready Player One demo - Inventory tools"
 spec:
   displayName: "Check Artifact Authenticity"
   description: "Check artifact ownership, authenticity, and complete provenance history. Verify legendary items before trades."
@@ -185,18 +185,18 @@ spec:
 # ============================================================================
 # Tool 4: Create Quest (Quests API)
 # ============================================================================
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: create-quest
   namespace: oasis
   labels:
-    stoa.cab-i.com/tenant: oasis-gunters
-    stoa.cab-i.com/category: quests
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: oasis-gunters
+    gostoa.dev/category: quests
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/description: "Ready Player One demo - Quest tools"
-    stoa.cab-i.com/governance: "Requires project_owner role"
+    gostoa.dev/description: "Ready Player One demo - Quest tools"
+    gostoa.dev/governance: "Requires project_owner role"
 spec:
   displayName: "Create OASIS Quest"
   description: "Create a new quest in the OASIS. Define objectives, rewards, and locations. Only Project Owners can create quests."
@@ -258,18 +258,18 @@ spec:
 # ============================================================================
 # Tool 5: Broadcast Announcement (Events API)
 # ============================================================================
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: broadcast-announcement
   namespace: oasis
   labels:
-    stoa.cab-i.com/tenant: oasis-gunters
-    stoa.cab-i.com/category: events
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: oasis-gunters
+    gostoa.dev/category: events
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/description: "Ready Player One demo - Events tools"
-    stoa.cab-i.com/governance: "Requires tenant_admin; critical priority requires security_officer approval"
+    gostoa.dev/description: "Ready Player One demo - Events tools"
+    gostoa.dev/governance: "Requires tenant_admin; critical priority requires security_officer approval"
 spec:
   displayName: "OASIS Broadcast Announcement"
   description: "Broadcast announcement to all OASIS players. Critical announcements require Security Officer approval."

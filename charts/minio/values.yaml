@@ -50,11 +50,11 @@ ingress:
   # annotations:
   #   cert-manager.io/cluster-issuer: letsencrypt-prod
   # hosts:
-  #   - minio.stoa.cab-i.com
+  #   - minio.gostoa.dev
   # tls:
   #   - secretName: minio-tls
   #     hosts:
-  #       - minio.stoa.cab-i.com
+  #       - minio.gostoa.dev
 
 # Console ingress
 consoleIngress:

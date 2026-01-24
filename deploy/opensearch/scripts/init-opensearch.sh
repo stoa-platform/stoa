@@ -8,7 +8,7 @@
 #   ./init-opensearch.sh [OPTIONS]
 #
 # Options:
-#   --host        OpenSearch host (default: https://opensearch.stoa.cab-i.com)
+#   --host        OpenSearch host (default: https://opensearch.gostoa.dev)
 #   --user        Admin username (default: admin)
 #   --password    Admin password (from env OPENSEARCH_PASSWORD or prompt)
 #   --dry-run     Show what would be done without executing
@@ -19,7 +19,7 @@
 set -euo pipefail
 
 # Defaults
-OPENSEARCH_HOST="${OPENSEARCH_HOST:-https://opensearch.stoa.cab-i.com}"
+OPENSEARCH_HOST="${OPENSEARCH_HOST:-https://opensearch.gostoa.dev}"
 OPENSEARCH_USER="${OPENSEARCH_USER:-admin}"
 OPENSEARCH_PASSWORD="${OPENSEARCH_PASSWORD:-}"
 DRY_RUN=false

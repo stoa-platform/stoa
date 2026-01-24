@@ -9,7 +9,7 @@
  */
 
 // Base domain - used to construct default URLs for all services
-const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'stoa.cab-i.com';
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'gostoa.dev';
 
 // Environment detection
 const ENVIRONMENT = import.meta.env.VITE_ENVIRONMENT || 'production';

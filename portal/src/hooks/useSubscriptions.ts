@@ -2,7 +2,7 @@
  * STOA Developer Portal - MCP Subscription Hooks
  *
  * React Query hooks for MCP subscription operations.
- * Uses MCP Gateway endpoints (mcp.stoa.cab-i.com)
+ * Uses MCP Gateway endpoints (mcp.gostoa.dev)
  *
  * Reference: Linear CAB-247
  */

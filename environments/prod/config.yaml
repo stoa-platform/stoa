@@ -1,6 +1,6 @@
 # STOA Platform - prod Environment
 environment: prod
-domain: prod.stoa.cab-i.com
+domain: prod.gostoa.dev
 namespace: stoa-system
 
 gateway:

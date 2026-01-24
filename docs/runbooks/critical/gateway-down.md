@@ -13,14 +13,14 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `GatewayDown` | `up{job="apigateway"} == 0` | [Gateway Dashboard](https://grafana.stoa.cab-i.com/d/gateway) |
-| `GatewayEndpointDown` | `probe_success{job="blackbox", target=~".*gateway.*"} == 0` | [Blackbox Dashboard](https://grafana.stoa.cab-i.com/d/blackbox) |
-| `GatewayPodNotReady` | `kube_pod_status_ready{pod=~"apigateway.*"} == 0` | [K8s Dashboard](https://grafana.stoa.cab-i.com/d/k8s) |
+| `GatewayDown` | `up{job="apigateway"} == 0` | [Gateway Dashboard](https://grafana.gostoa.dev/d/gateway) |
+| `GatewayEndpointDown` | `probe_success{job="blackbox", target=~".*gateway.*"} == 0` | [Blackbox Dashboard](https://grafana.gostoa.dev/d/blackbox) |
+| `GatewayPodNotReady` | `kube_pod_status_ready{pod=~"apigateway.*"} == 0` | [K8s Dashboard](https://grafana.gostoa.dev/d/k8s) |
 
 ### Observed Behavior
 
 - All APIs return 502/503/504
-- Timeout on `https://gateway.stoa.cab-i.com`
+- Timeout on `https://gateway.gostoa.dev`
 - Health check `/rest/apigateway/health` fails
 - Developer Portal displays "Gateway unavailable"
 
@@ -196,10 +196,10 @@ kubectl rollout undo deployment -n stoa apigateway --to-revision=<N>
 
 ```bash
 # Health check
-curl -s https://gateway.stoa.cab-i.com/rest/apigateway/health | jq .
+curl -s https://gateway.gostoa.dev/rest/apigateway/health | jq .
 
 # Test a public API
-curl -s https://gateway.stoa.cab-i.com/gateway/ControlPlane/v1/health
+curl -s https://gateway.gostoa.dev/gateway/ControlPlane/v1/health
 
 # Check metrics
 kubectl exec -n stoa deploy/apigateway -- \
@@ -277,9 +277,9 @@ groups:
 
 ### Grafana Dashboards
 
-- [Gateway Overview](https://grafana.stoa.cab-i.com/d/gateway)
-- [Gateway Latency](https://grafana.stoa.cab-i.com/d/gateway-latency)
-- [Gateway Errors](https://grafana.stoa.cab-i.com/d/gateway-errors)
+- [Gateway Overview](https://grafana.gostoa.dev/d/gateway)
+- [Gateway Latency](https://grafana.gostoa.dev/d/gateway-latency)
+- [Gateway Errors](https://grafana.gostoa.dev/d/gateway-errors)
 
 ---
 

@@ -3,7 +3,7 @@
 #
 # This application uses 'azp' (authorized party) claim from JWT tokens
 # to identify requests from the STOA Console UI.
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: GatewayApplication
 metadata:
   name: ConsoleApp

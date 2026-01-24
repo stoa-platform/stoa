@@ -33,7 +33,7 @@ on:
         type: boolean
 
 env:
-  BASE_DOMAIN: stoa.cab-i.com
+  BASE_DOMAIN: gostoa.dev
   GITLAB_PROJECT: cab6961310/stoa-gitops
 
 jobs:
@@ -118,7 +118,7 @@ jobs:
       - name: Setup Git
         run: |
           git config --global user.name "STOA CI/CD"
-          git config --global user.email "ci@stoa.cab-i.com"
+          git config --global user.email "ci@gostoa.dev"
 
       - name: Clone GitLab repository
         env:

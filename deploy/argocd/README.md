@@ -26,7 +26,7 @@ so it cannot fetch userinfo. Instead, we rely on JWT claims directly.
 The ArgoCD OIDC client is created in Keycloak with:
 
 - **Client ID**: `argocd`
-- **Redirect URI**: `https://argocd.stoa.cab-i.com/auth/callback`
+- **Redirect URI**: `https://argocd.gostoa.dev/auth/callback`
 - **Scopes**: openid, profile, email, roles, groups
 - **tenant_id Mapper**: Maps Keycloak groups to `tenant_id` claim (used for RBAC)
 
@@ -64,7 +64,7 @@ export KEYCLOAK_ADMIN_PASSWORD="demo"
 
 # Run playbook
 cd ansible
-ansible-playbook playbooks/configure-argocd-oidc.yml -e "base_domain=stoa.cab-i.com"
+ansible-playbook playbooks/configure-argocd-oidc.yml -e "base_domain=gostoa.dev"
 ```
 
 #### Option 2: Manual kubectl commands
@@ -86,7 +86,7 @@ kubectl rollout restart deployment argocd-server -n argocd
 
 ### Testing SSO
 
-1. Go to https://argocd.stoa.cab-i.com
+1. Go to https://argocd.gostoa.dev
 2. Click "Login via Keycloak"
 3. Login with your Keycloak credentials
 4. Verify role-based access based on group membership
@@ -95,7 +95,7 @@ kubectl rollout restart deployment argocd-server -n argocd
 
 The Console UI displays ArgoCD application status by forwarding the user's token:
 
-1. Login to Console UI at https://console.stoa.cab-i.com
+1. Login to Console UI at https://console.gostoa.dev
 2. Navigate to Dashboard or Platform Status
 3. Verify that ArgoCD application statuses are displayed (Synced, Healthy, etc.)
 
@@ -137,7 +137,7 @@ kubectl exec -n stoa-system deploy/keycloak -- /opt/keycloak/bin/kcadm.sh get cl
 
 ### URLs
 
-- ArgoCD: https://argocd.stoa.cab-i.com
-- Console UI: https://console.stoa.cab-i.com
-- Keycloak Admin: https://auth.stoa.cab-i.com/admin/stoa/console
-- Keycloak OIDC Discovery: https://auth.stoa.cab-i.com/realms/stoa/.well-known/openid-configuration
+- ArgoCD: https://argocd.gostoa.dev
+- Console UI: https://console.gostoa.dev
+- Keycloak Admin: https://auth.gostoa.dev/admin/stoa/console
+- Keycloak OIDC Discovery: https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration

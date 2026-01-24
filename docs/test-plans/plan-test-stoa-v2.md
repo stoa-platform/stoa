@@ -28,11 +28,11 @@ Valider le fonctionnement de toutes les fonctionnalités UI et backend, incluant
 
 | Service | URL |
 |---------|-----|
-| Console UI | https://console.stoa.cab-i.com |
-| Developer Portal | https://portal.stoa.cab-i.com |
-| API Gateway | https://apis.stoa.cab-i.com |
-| MCP Gateway | https://mcp.stoa.cab-i.com |
-| Keycloak | https://auth.stoa.cab-i.com |
+| Console UI | https://console.gostoa.dev |
+| Developer Portal | https://portal.gostoa.dev |
+| API Gateway | https://apis.gostoa.dev |
+| MCP Gateway | https://mcp.gostoa.dev |
+| Keycloak | https://auth.gostoa.dev |
 
 ---
 
@@ -42,16 +42,16 @@ Valider le fonctionnement de toutes les fonctionnalités UI et backend, incluant
 
 ```bash
 # MCP Gateway
-curl -s https://mcp.stoa.cab-i.com/health | jq
+curl -s https://mcp.gostoa.dev/health | jq
 
 # Control Plane API (direct)
-curl -s https://api.stoa.cab-i.com/health | jq
+curl -s https://api.gostoa.dev/health | jq
 
 # Control Plane API (via Gateway)
-curl -s https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/health | jq
+curl -s https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/health | jq
 
 # Keycloak
-curl -s https://auth.stoa.cab-i.com/realms/stoa/.well-known/openid-configuration | jq .issuer
+curl -s https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration | jq .issuer
 ```
 
 ### 1.2 Logs Kubernetes (Verbose)
@@ -113,7 +113,7 @@ Créer les utilisateurs suivants dans Keycloak (realm `stoa`), liés au tenant `
 
 ```bash
 # Variables
-KC_URL="https://auth.stoa.cab-i.com"
+KC_URL="https://auth.gostoa.dev"
 KC_REALM="stoa"
 KC_ADMIN_USER="admin"
 KC_ADMIN_PASS="<admin_password>"
@@ -193,7 +193,7 @@ echo "✅ All test users created!"
 
 ```bash
 # Variables
-export KC_URL="https://auth.stoa.cab-i.com"
+export KC_URL="https://auth.gostoa.dev"
 export KC_REALM="stoa"
 export KC_CLIENT="control-plane-api"
 
@@ -286,27 +286,27 @@ echo $TOKEN_VIEWER | cut -d. -f2 | base64 -d 2>/dev/null | jq '.realm_access.rol
 
 ```bash
 # Server Info
-curl -s https://mcp.stoa.cab-i.com/mcp/v1/ \
+curl -s https://mcp.gostoa.dev/mcp/v1/ \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Liste des Tools
-curl -s "https://mcp.stoa.cab-i.com/mcp/v1/tools?limit=50" \
+curl -s "https://mcp.gostoa.dev/mcp/v1/tools?limit=50" \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Catégories de Tools
-curl -s https://mcp.stoa.cab-i.com/mcp/v1/tools/categories \
+curl -s https://mcp.gostoa.dev/mcp/v1/tools/categories \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Tags disponibles
-curl -s https://mcp.stoa.cab-i.com/mcp/v1/tools/tags \
+curl -s https://mcp.gostoa.dev/mcp/v1/tools/tags \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Détail d'un Tool spécifique
-curl -s https://mcp.stoa.cab-i.com/mcp/v1/tools/stoa_platform_info \
+curl -s https://mcp.gostoa.dev/mcp/v1/tools/stoa_platform_info \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Invocation d'un Tool
-curl -s -X POST https://mcp.stoa.cab-i.com/mcp/v1/tools/stoa_health_check/invoke \
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/stoa_health_check/invoke \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "stoa_health_check", "arguments": {}}' | jq
@@ -316,7 +316,7 @@ curl -s -X POST https://mcp.stoa.cab-i.com/mcp/v1/tools/stoa_health_check/invoke
 
 ```bash
 # Test connexion SSE (Ctrl+C pour arrêter)
-curl -N -s https://mcp.stoa.cab-i.com/mcp/sse \
+curl -N -s https://mcp.gostoa.dev/mcp/sse \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: text/event-stream"
 ```
@@ -336,31 +336,31 @@ kubectl logs -n stoa-system deployment/mcp-gateway -f 2>&1 | grep -E "(ERROR|WAR
 
 ```bash
 # Liste des Tenants
-curl -s https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/tenants \
+curl -s https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/tenants \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Liste des APIs d'un Tenant (remplacer {tenantId})
-curl -s "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/tenants/demo/apis" \
+curl -s "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/tenants/demo/apis" \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # MCP Subscriptions
-curl -s https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/mcp/subscriptions \
+curl -s https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/mcp/subscriptions \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # MCP Servers
-curl -s https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/mcp/servers \
+curl -s https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/mcp/servers \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Pipeline Traces
-curl -s https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/traces \
+curl -s https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/traces \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Error Snapshots
-curl -s https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/mcp/errors \
+curl -s https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/mcp/errors \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Usage Stats
-curl -s https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/usage/me \
+curl -s https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/usage/me \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
 
@@ -378,28 +378,28 @@ kubectl logs -n stoa-system deployment/control-plane-api -f 2>&1 | grep -E "(ERR
 
 ```bash
 echo "=== Test 1: Tool inexistant ==="
-curl -s -X POST https://mcp.stoa.cab-i.com/mcp/v1/tools/inexistant_tool_xyz/invoke \
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/inexistant_tool_xyz/invoke \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "inexistant_tool_xyz", "arguments": {}}' | jq
 
 echo ""
 echo "=== Test 2: Arguments invalides ==="
-curl -s -X POST https://mcp.stoa.cab-i.com/mcp/v1/tools/stoa_health_check/invoke \
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/stoa_health_check/invoke \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "stoa_health_check", "arguments": {"invalid_param": "should_fail"}}' | jq
 
 echo ""
 echo "=== Test 3: Token invalide ==="
-curl -s -X POST https://mcp.stoa.cab-i.com/mcp/v1/tools/stoa_health_check/invoke \
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/stoa_health_check/invoke \
   -H "Authorization: Bearer invalid_token_12345" \
   -H "Content-Type: application/json" \
   -d '{"name": "stoa_health_check", "arguments": {}}' | jq
 
 echo ""
 echo "=== Test 4: Payload malformé ==="
-curl -s -X POST https://mcp.stoa.cab-i.com/mcp/v1/tools/stoa_health_check/invoke \
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/stoa_health_check/invoke \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d 'not_valid_json{{{' 2>&1 | head -20
@@ -413,11 +413,11 @@ sleep 2
 
 # Lister les derniers Error Snapshots
 echo "=== Error Snapshots capturés ==="
-curl -s "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/mcp/errors?limit=10" \
+curl -s "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/mcp/errors?limit=10" \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Détail du dernier Error Snapshot (si ID connu)
-# curl -s "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/mcp/errors/{error_id}" \
+# curl -s "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/mcp/errors/{error_id}" \
 #   -H "Authorization: Bearer $TOKEN" | jq
 ```
 
@@ -441,11 +441,11 @@ kubectl logs -n stoa-system deployment/control-plane-api --tail=50 2>&1 | grep -
 echo "=== RBAC Positif: parzival (cpi-admin) peut tout faire ==="
 
 # parzival peut lister les tenants
-curl -s https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/tenants \
+curl -s https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/tenants \
   -H "Authorization: Bearer $TOKEN" | jq '.[] | .name' | head -5
 
 # parzival peut invoquer n'importe quel tool
-curl -s -X POST https://mcp.stoa.cab-i.com/mcp/v1/tools/stoa_platform_info/invoke \
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/stoa_platform_info/invoke \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "stoa_platform_info", "arguments": {}}' | jq '.content[0].text' | head -5
@@ -454,7 +454,7 @@ echo ""
 echo "=== RBAC Positif: shoto (viewer) peut lire ==="
 
 # shoto peut lister les tools
-curl -s "https://mcp.stoa.cab-i.com/mcp/v1/tools?limit=5" \
+curl -s "https://mcp.gostoa.dev/mcp/v1/tools?limit=5" \
   -H "Authorization: Bearer $TOKEN_VIEWER" | jq '.tools | length'
 ```
 
@@ -464,7 +464,7 @@ curl -s "https://mcp.stoa.cab-i.com/mcp/v1/tools?limit=5" \
 echo "=== RBAC Négatif: shoto (viewer) ne peut PAS créer ==="
 
 # shoto ne devrait PAS pouvoir créer un tenant
-RESULT=$(curl -s -w "\n%{http_code}" -X POST https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/tenants \
+RESULT=$(curl -s -w "\n%{http_code}" -X POST https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/tenants \
   -H "Authorization: Bearer $TOKEN_VIEWER" \
   -H "Content-Type: application/json" \
   -d '{"name": "hacked-tenant-by-shoto", "description": "Should fail"}')
@@ -483,7 +483,7 @@ echo ""
 echo "=== RBAC Négatif: shoto (viewer) ne peut PAS supprimer ==="
 
 # shoto ne devrait PAS pouvoir supprimer
-RESULT=$(curl -s -w "\n%{http_code}" -X DELETE https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/tenants/demo \
+RESULT=$(curl -s -w "\n%{http_code}" -X DELETE https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/tenants/demo \
   -H "Authorization: Bearer $TOKEN_VIEWER")
 
 HTTP_CODE=$(echo "$RESULT" | tail -1)
@@ -498,7 +498,7 @@ echo ""
 echo "=== RBAC Négatif: irok (Sixer) accès limité aux tools admin ==="
 
 # irok ne devrait PAS voir certains tools sensibles
-RESULT=$(curl -s "https://mcp.stoa.cab-i.com/mcp/v1/tools?category=admin" \
+RESULT=$(curl -s "https://mcp.gostoa.dev/mcp/v1/tools?category=admin" \
   -H "Authorization: Bearer $TOKEN_IROK" | jq '.tools | length')
 
 if [ "$RESULT" == "0" ] || [ "$RESULT" == "null" ]; then
@@ -511,7 +511,7 @@ echo ""
 echo "=== RBAC Négatif: art3mis ne peut PAS modifier un autre tenant ==="
 
 # art3mis (tenant-admin de demo) ne devrait pas pouvoir modifier un autre tenant
-RESULT=$(curl -s -w "\n%{http_code}" -X PUT https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/tenants/other-tenant \
+RESULT=$(curl -s -w "\n%{http_code}" -X PUT https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/tenants/other-tenant \
   -H "Authorization: Bearer $TOKEN_TENANT" \
   -H "Content-Type: application/json" \
   -d '{"description": "Hacked by art3mis"}')
@@ -620,7 +620,7 @@ Pour connecter Claude.ai (web) au MCP Gateway STOA, il faut:
 1. Aller sur https://claude.ai/settings/integrations
 2. Ajouter un nouveau MCP Server:
    - **Name**: STOA Platform
-   - **URL**: `https://mcp.stoa.cab-i.com/mcp/sse`
+   - **URL**: `https://mcp.gostoa.dev/mcp/sse`
    - **Authentication**: Bearer Token (utiliser le token Keycloak ou API Key)
 
 ### 10.3 Test dans Claude.ai
@@ -647,12 +647,12 @@ kubectl logs -n stoa-system deployment/mcp-gateway -f 2>&1 | grep -E "(SSE|sessi
 
 ```bash
 # Test manuel SSE depuis terminal
-curl -N -s "https://mcp.stoa.cab-i.com/mcp/sse" \
+curl -N -s "https://mcp.gostoa.dev/mcp/sse" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: text/event-stream"
 
 # Vérifier CORS headers
-curl -I "https://mcp.stoa.cab-i.com/mcp/v1/" \
+curl -I "https://mcp.gostoa.dev/mcp/v1/" \
   -H "Origin: https://claude.ai"
 ```
 
@@ -672,7 +672,7 @@ echo "=========================================="
 # Step 1: parzival vérifie la plateforme
 echo ""
 echo "Step 1: parzival (admin) vérifie la plateforme..."
-PLATFORM_INFO=$(curl -s -X POST https://mcp.stoa.cab-i.com/mcp/v1/tools/stoa_platform_info/invoke \
+PLATFORM_INFO=$(curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/stoa_platform_info/invoke \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "stoa_platform_info", "arguments": {}}')
@@ -687,7 +687,7 @@ fi
 # Step 2: art3mis liste les tools disponibles
 echo ""
 echo "Step 2: art3mis (tenant-admin) liste les tools..."
-TOOLS_COUNT=$(curl -s "https://mcp.stoa.cab-i.com/mcp/v1/tools?limit=100" \
+TOOLS_COUNT=$(curl -s "https://mcp.gostoa.dev/mcp/v1/tools?limit=100" \
   -H "Authorization: Bearer $TOKEN_TENANT" | jq '.tools | length')
 
 if [ "$TOOLS_COUNT" -gt 0 ]; then
@@ -699,7 +699,7 @@ fi
 # Step 3: aech crée une subscription (si endpoint existe)
 echo ""
 echo "Step 3: aech (devops) vérifie les subscriptions..."
-SUBS=$(curl -s "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/mcp/subscriptions" \
+SUBS=$(curl -s "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/mcp/subscriptions" \
   -H "Authorization: Bearer $TOKEN_DEVOPS" | jq 'if type == "array" then length else 0 end')
 
 echo "  ✅ aech voit $SUBS subscriptions"
@@ -707,7 +707,7 @@ echo "  ✅ aech voit $SUBS subscriptions"
 # Step 4: shoto invoque un tool (lecture seule)
 echo ""
 echo "Step 4: shoto (viewer) invoque stoa_health_check..."
-HEALTH=$(curl -s -X POST https://mcp.stoa.cab-i.com/mcp/v1/tools/stoa_health_check/invoke \
+HEALTH=$(curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/stoa_health_check/invoke \
   -H "Authorization: Bearer $TOKEN_VIEWER" \
   -H "Content-Type: application/json" \
   -d '{"name": "stoa_health_check", "arguments": {}}')
@@ -721,7 +721,7 @@ fi
 # Step 5: Vérifier metering/traces
 echo ""
 echo "Step 5: Vérification des traces..."
-TRACES=$(curl -s "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/traces?limit=5" \
+TRACES=$(curl -s "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/traces?limit=5" \
   -H "Authorization: Bearer $TOKEN" | jq 'if type == "array" then length else 0 end')
 
 echo "  ✅ $TRACES traces récentes trouvées"
@@ -729,7 +729,7 @@ echo "  ✅ $TRACES traces récentes trouvées"
 # Step 6: Vérifier Error Snapshots (des tests précédents)
 echo ""
 echo "Step 6: Vérification Error Snapshots..."
-ERRORS=$(curl -s "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/mcp/errors?limit=5" \
+ERRORS=$(curl -s "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/mcp/errors?limit=5" \
   -H "Authorization: Bearer $TOKEN" | jq 'if type == "array" then length else 0 end')
 
 echo "  ✅ $ERRORS error snapshots capturés"
@@ -737,7 +737,7 @@ echo "  ✅ $ERRORS error snapshots capturés"
 # Step 7: Usage stats
 echo ""
 echo "Step 7: Vérification usage stats..."
-USAGE=$(curl -s "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/usage/me" \
+USAGE=$(curl -s "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/usage/me" \
   -H "Authorization: Bearer $TOKEN")
 
 if echo "$USAGE" | jq -e '.' > /dev/null 2>&1; then
@@ -809,7 +809,7 @@ echo "✅ Cleanup complete!"
 
 ```bash
 # Supprimer les Error Snapshots de test (si API le permet)
-# curl -X DELETE "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/mcp/errors?test=true" \
+# curl -X DELETE "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/mcp/errors?test=true" \
 #   -H "Authorization: Bearer $TOKEN"
 
 # Nettoyer les traces de test

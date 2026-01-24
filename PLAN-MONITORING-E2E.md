@@ -43,7 +43,7 @@ Ajouter un endpoint pour créer des traces de démonstration.
 ### Option B: Configurer un webhook GitLab (Moyen - 1h)
 
 1. Créer un projet test sur GitLab
-2. Configurer le webhook vers `https://api.stoa.cab-i.com/webhooks/gitlab`
+2. Configurer le webhook vers `https://api.gostoa.dev/webhooks/gitlab`
 3. Faire des push pour générer des traces
 
 **Avantages**: Vrais événements, test E2E réel
@@ -152,7 +152,7 @@ async def create_demo_trace():
         ]),
         git_branch="main",
         git_author=random.choice(["alice", "bob", "charlie", "diana"]),
-        git_author_email="dev@stoa.cab-i.com",
+        git_author_email="dev@gostoa.dev",
         git_project="stoa/api-definitions",
         git_files_changed=["tenants/acme/apis/customer-api/openapi.yaml"],
         tenant_id="tenant-acme",
@@ -222,13 +222,13 @@ async def create_demo_traces_batch(count: int = Query(10, ge=1, le=50)):
 
 ```bash
 # Créer 10 traces de démo
-curl -X POST https://api.stoa.cab-i.com/v1/traces/demo/batch?count=10
+curl -X POST https://api.gostoa.dev/v1/traces/demo/batch?count=10
 
 # Vérifier les traces
-curl https://api.stoa.cab-i.com/v1/traces
+curl https://api.gostoa.dev/v1/traces
 
 # Vérifier les stats
-curl https://api.stoa.cab-i.com/v1/traces/stats
+curl https://api.gostoa.dev/v1/traces/stats
 ```
 
 Puis rafraîchir la page Monitoring sur la Console UI.

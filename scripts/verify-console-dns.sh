@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
-# Verify and setup DNS for console.stoa.cab-i.com
-# CAB-237: Rename devops.stoa.cab-i.com → console.stoa.cab-i.com
+# Verify and setup DNS for console.gostoa.dev
+# CAB-237: Rename devops.gostoa.dev → console.gostoa.dev
 # =============================================================================
 #
 # This script verifies DNS configuration for the console subdomain
@@ -15,14 +15,14 @@
 #   ./verify-console-dns.sh [BASE_DOMAIN] [--create]
 #
 # Example:
-#   ./verify-console-dns.sh stoa.cab-i.com          # Verify only
-#   ./verify-console-dns.sh stoa.cab-i.com --create # Create if missing
+#   ./verify-console-dns.sh gostoa.dev          # Verify only
+#   ./verify-console-dns.sh gostoa.dev --create # Create if missing
 # =============================================================================
 
 set -e
 
 # Configuration
-BASE_DOMAIN="${1:-stoa.cab-i.com}"
+BASE_DOMAIN="${1:-gostoa.dev}"
 CREATE_MODE="${2:-}"
 CONSOLE_DOMAIN="console.${BASE_DOMAIN}"
 

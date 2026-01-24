@@ -10,7 +10,7 @@ is identified by the `azp` (authorized party) claim in JWT tokens issued by Keyc
 ## Application Structure
 
 ```yaml
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: GatewayApplication
 metadata:
   name: AppName
@@ -55,7 +55,7 @@ curl -X POST \
   -u Administrator:$GATEWAY_PASSWORD \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
-  "https://gateway.stoa.cab-i.com/rest/apigateway/applications" \
+  "https://gateway.gostoa.dev/rest/apigateway/applications" \
   -d '{
     "name": "AppName",
     "description": "Description",

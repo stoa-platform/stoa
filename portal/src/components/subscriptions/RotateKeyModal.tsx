@@ -85,7 +85,7 @@ export function RotateKeyModal({
           args: ['-y', '@anthropic/mcp-client', 'stdio'],
           env: {
             STOA_API_KEY: rotationResult.new_api_key,
-            STOA_MCP_URL: 'https://mcp.stoa.cab-i.com',
+            STOA_MCP_URL: 'https://mcp.gostoa.dev',
           },
         },
       },

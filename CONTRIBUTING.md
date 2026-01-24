@@ -433,7 +433,7 @@ Email security concerns to: security@cab-i.com
 ## Getting Help
 
 - **Slack:** `#stoa-dev` channel
-- **Documentation:** https://docs.stoa.cab-i.com
+- **Documentation:** https://docs.gostoa.dev
 - **Issues:** GitHub Issues
 
 ---

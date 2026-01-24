@@ -107,7 +107,7 @@ export function SandboxConfirmationModal({
               For safe testing without affecting production, consider using a non-production
               environment through the Development Portal at{' '}
               <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">
-                portal.dev.stoa.cab-i.com
+                portal.dev.gostoa.dev
               </code>
             </p>
 

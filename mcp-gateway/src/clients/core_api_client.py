@@ -20,7 +20,7 @@ class CoreAPIClient:
     def __init__(self, base_url: str, timeout: float = 30.0):
         """
         Args:
-            base_url: URL de base de Core API (ex: https://api.stoa.cab-i.com)
+            base_url: URL de base de Core API (ex: https://api.gostoa.dev)
             timeout: Timeout en secondes pour les requêtes
         """
         if not base_url:

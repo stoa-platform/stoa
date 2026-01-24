@@ -6,7 +6,7 @@ kind: Kustomization
 metadata:
   name: demo-tools
   annotations:
-    stoa.cab-i.com/ticket: CAB-290
+    gostoa.dev/ticket: CAB-290
 
 resources:
   - crm-search.yaml
@@ -15,8 +15,8 @@ resources:
   - notifications-send.yaml
 
 commonLabels:
-  stoa.cab-i.com/demo: "true"
-  stoa.cab-i.com/created-by: cab-290
+  gostoa.dev/demo: "true"
+  gostoa.dev/created-by: cab-290
 
 commonAnnotations:
-  stoa.cab-i.com/description: "Demo MCP tools for multi-tenant isolation"
+  gostoa.dev/description: "Demo MCP tools for multi-tenant isolation"

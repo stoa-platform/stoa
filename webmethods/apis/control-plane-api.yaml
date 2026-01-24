@@ -1,6 +1,6 @@
 # Control-Plane API - Gateway Configuration
 # This API is the core of the STOA platform, consumed by Portal, Console and MCP Gateway
-# Aligned with api.stoa.cab-i.com OpenAPI specification
+# Aligned with api.gostoa.dev OpenAPI specification
 apiVersion: stoa.io/v1
 kind: WebMethodsAPI
 metadata:

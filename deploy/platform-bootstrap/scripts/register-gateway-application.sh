@@ -199,7 +199,7 @@ ${BLUE}# The JWT token should have:${NC}
 
 ${BLUE}# Test API call:${NC}
 curl -H 'Authorization: Bearer \$TOKEN' \\
-    https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/health/live
+    https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/health/live
 "
 
 exit 0

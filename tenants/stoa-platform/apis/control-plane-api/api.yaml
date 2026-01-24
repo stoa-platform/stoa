@@ -1,4 +1,4 @@
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: API
 metadata:
   name: control-plane-api
@@ -25,7 +25,7 @@ spec:
 
   # Backend configuration
   backend:
-    url: https://api.stoa.cab-i.com
+    url: https://api.gostoa.dev
     # Alternative: use alias for per-environment configuration
     # alias: control-plane-backend
 
@@ -50,7 +50,7 @@ spec:
   # OpenAPI specification
   documentation:
     openapi: openapi.yaml
-    docsUrl: https://docs.stoa.cab-i.com/api/control-plane
+    docsUrl: https://docs.gostoa.dev/api/control-plane
 
   # Gateway-specific settings (webMethods)
   gateway:

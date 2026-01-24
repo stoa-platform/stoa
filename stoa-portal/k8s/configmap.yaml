@@ -10,19 +10,19 @@ data:
   # This ConfigMap is for documentation/reference purposes
   # To change values, rebuild the image with different build args
 
-  BASE_DOMAIN: "stoa.cab-i.com"
+  BASE_DOMAIN: "gostoa.dev"
   ENVIRONMENT: "production"
 
   # Keycloak Configuration
-  KEYCLOAK_URL: "https://auth.stoa.cab-i.com"
+  KEYCLOAK_URL: "https://auth.gostoa.dev"
   KEYCLOAK_REALM: "stoa"
   KEYCLOAK_CLIENT_ID: "stoa-portal"
 
   # Service URLs
-  MCP_URL: "https://mcp.stoa.cab-i.com"
-  API_URL: "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0"
-  CONSOLE_URL: "https://console.stoa.cab-i.com"
-  DOCS_URL: "https://docs.stoa.cab-i.com"
+  MCP_URL: "https://mcp.gostoa.dev"
+  API_URL: "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0"
+  CONSOLE_URL: "https://console.gostoa.dev"
+  DOCS_URL: "https://docs.gostoa.dev"
 
   # Feature Flags
   ENABLE_MCP_TOOLS: "true"

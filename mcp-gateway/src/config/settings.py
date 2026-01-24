@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     workers: int = 1
 
     # Base domain for STOA platform (single source of truth)
-    base_domain: str = "stoa.cab-i.com"
+    base_domain: str = "gostoa.dev"
 
     # Keycloak Authentication
     keycloak_url: str = ""

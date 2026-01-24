@@ -8,9 +8,9 @@ import { PERSONAS, PersonaKey, Persona, getAuthStatePath } from './personas';
 import * as fs from 'fs';
 
 // URLs
-const PORTAL_URL = process.env.STOA_PORTAL_URL || 'https://portal.stoa.cab-i.com';
-const CONSOLE_URL = process.env.STOA_CONSOLE_URL || 'https://console.stoa.cab-i.com';
-const GATEWAY_URL = process.env.STOA_GATEWAY_URL || 'https://api.stoa.cab-i.com';
+const PORTAL_URL = process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev';
+const CONSOLE_URL = process.env.STOA_CONSOLE_URL || 'https://console.gostoa.dev';
+const GATEWAY_URL = process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev';
 
 /**
  * Custom test fixtures

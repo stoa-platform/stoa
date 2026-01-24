@@ -54,7 +54,7 @@ export function ApiKeyModal({
           args: ['-y', '@anthropic/mcp-client', 'stdio'],
           env: {
             STOA_API_KEY: apiKey,
-            STOA_MCP_URL: 'https://mcp.stoa.cab-i.com',
+            STOA_MCP_URL: 'https://mcp.gostoa.dev',
           },
         },
       },
@@ -204,7 +204,7 @@ export function ApiKeyModal({
 # Add to ~/.config/claude/claude_desktop_config.json
 
 # Or use the API directly:
-curl -X POST https://mcp.stoa.cab-i.com/mcp/v1/invoke \\
+curl -X POST https://mcp.gostoa.dev/mcp/v1/invoke \\
   -H "Authorization: Bearer ${apiKey.substring(0, 8)}..." \\
   -H "Content-Type: application/json" \\
   -d '{"tool": "${toolId}", "args": {}}'`}

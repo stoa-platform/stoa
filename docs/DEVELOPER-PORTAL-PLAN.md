@@ -2,7 +2,7 @@
 
 > **Status**: ✅ **COMPLETED** (CAB-246)
 > **Completion Date**: January 2025
-> **Production URL**: https://portal.stoa.cab-i.com
+> **Production URL**: https://portal.gostoa.dev
 
 ## 📋 Overview
 
@@ -390,10 +390,10 @@ Client:
   client_type: public
   valid_redirect_uris:
     - http://localhost:5173/*         # Vite dev server
-    - https://portal.stoa.cab-i.com/*
+    - https://portal.gostoa.dev/*
   web_origins:
     - http://localhost:5173
-    - https://portal.stoa.cab-i.com
+    - https://portal.gostoa.dev
 
 Roles used:
   - stoa:read   (API Consumer access)
@@ -408,7 +408,7 @@ import { ReactKeycloakProvider } from '@react-keycloak/web';
 import Keycloak from 'keycloak-js';
 
 const keycloak = new Keycloak({
-  url: config.keycloak.url,       // https://auth.stoa.cab-i.com
+  url: config.keycloak.url,       // https://auth.gostoa.dev
   realm: config.keycloak.realm,   // stoa
   clientId: 'stoa-portal'
 });
@@ -419,10 +419,10 @@ const keycloak = new Keycloak({
 ### Environment Variables (Production)
 
 ```env
-VITE_BASE_DOMAIN=stoa.cab-i.com
-VITE_KEYCLOAK_URL=https://auth.stoa.cab-i.com
+VITE_BASE_DOMAIN=gostoa.dev
+VITE_KEYCLOAK_URL=https://auth.gostoa.dev
 VITE_KEYCLOAK_REALM=stoa
-VITE_API_URL=https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0
+VITE_API_URL=https://apis.gostoa.dev/gateway/Control-Plane-API/2.0
 VITE_PORTAL_MODE=production
 VITE_ENABLE_MCP_TOOLS=true
 VITE_ENABLE_API_CATALOG=true
@@ -630,15 +630,15 @@ The Developer Portal was implemented as a separate React application (`portal/`)
 
 | Application | Purpose | URL | Keycloak Client |
 |------------|---------|-----|-----------------|
-| Console UI | API Provider (DevOps, Admin) | https://console.stoa.cab-i.com | control-plane-ui |
-| Developer Portal | API Consumer (Browse, Subscribe, Test) | https://portal.stoa.cab-i.com | stoa-portal |
+| Console UI | API Provider (DevOps, Admin) | https://console.gostoa.dev | control-plane-ui |
+| Developer Portal | API Consumer (Browse, Subscribe, Test) | https://portal.gostoa.dev | stoa-portal |
 
 ### Key Implementation Details
 
 1. **Project Structure**: Located in `portal/` directory (not `developer-portal/`)
 2. **Vite Dev Server**: Port 5173 (not 3001 as originally planned)
 3. **Keycloak Client**: `stoa-portal` (not `developer-portal`)
-4. **API Access**: Via Gateway at `apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`
+4. **API Access**: Via Gateway at `apis.gostoa.dev/gateway/Control-Plane-API/2.0`
 5. **OpenAPI Viewer**: Custom component (not swagger-ui-react)
 6. **State Management**: React Query (TanStack Query) for server state
 
@@ -659,7 +659,7 @@ The Developer Portal was implemented as a separate React application (`portal/`)
 ### Future Enhancements
 
 - [ ] Dark mode theme
-- [ ] Non-production portal deployment (`portal.dev.stoa.cab-i.com`)
+- [ ] Non-production portal deployment (`portal.dev.gostoa.dev`)
 - [ ] API usage analytics dashboard
 - [ ] Webhook management
 - [ ] Team collaboration features

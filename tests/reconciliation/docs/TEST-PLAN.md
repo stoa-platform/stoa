@@ -109,7 +109,7 @@ export AWX_TOKEN="your-awx-token"
 # Optional (with defaults)
 export ENV="dev"
 export WM_GATEWAY_URL="http://apim-gateway:9072"
-export AWX_HOST="https://awx.stoa.cab-i.com"
+export AWX_HOST="https://awx.gostoa.dev"
 export AWX_JOB_TEMPLATE_ID="42"
 export GITOPS_REPO="/tmp/stoa-gitops"
 ```

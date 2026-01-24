@@ -117,7 +117,7 @@ export VAULT_TOKEN=$(kubectl get secret -n vault vault-root-token -o jsonpath='{
 export VAULT_TOKEN=$(kubectl get secret -n vault vault-init -o jsonpath='{.data.root_token}' | base64 -d)
 
 # Set Vault address
-export VAULT_ADDR="https://vault.stoa.cab-i.com"
+export VAULT_ADDR="https://vault.gostoa.dev"
 ```
 
 ### 5.2 Perform Restore
@@ -125,7 +125,7 @@ export VAULT_ADDR="https://vault.stoa.cab-i.com"
 ```bash
 # Using the restore script (recommended)
 export VAULT_TOKEN=<token>
-export VAULT_ADDR=https://vault.stoa.cab-i.com
+export VAULT_ADDR=https://vault.gostoa.dev
 ./scripts/backup/backup-vault.sh --restore s3://stoa-backups-{env}-eu-west-3/vault/2024-01-15/vault-snapshot-20240115_030000.snap --force
 
 # Or manually:
@@ -245,13 +245,13 @@ If restore fails, revert to pre-restore snapshot:
 1. **Verify All Integrations**
    ```bash
    # Keycloak
-   curl -s https://auth.stoa.cab-i.com/health/ready
+   curl -s https://auth.gostoa.dev/health/ready
 
    # API Gateway
-   curl -s https://gateway.stoa.cab-i.com/rest/apigateway/health
+   curl -s https://gateway.gostoa.dev/rest/apigateway/health
 
    # Control Plane API
-   curl -s https://api.stoa.cab-i.com/health
+   curl -s https://api.gostoa.dev/health
    ```
 
 2. **Rotate Root Token** (recommended after restore)

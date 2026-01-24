@@ -75,17 +75,17 @@ kubectl top pods -A | sort -k3 -h -r | head -20
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Console UI | https://console.stoa.cab-i.com | API Provider interface |
-| **Developer Portal** | https://portal.stoa.cab-i.com | API Consumer portal |
-| API Gateway Runtime | https://apis.stoa.cab-i.com | APIs via Gateway |
-| Gateway Admin | https://gateway.stoa.cab-i.com | Gateway console |
-| MCP Gateway | https://mcp.stoa.cab-i.com | AI-Native MCP endpoint |
-| Control Plane API | https://api.stoa.cab-i.com | REST API backend |
-| Keycloak | https://auth.stoa.cab-i.com | Identity Provider |
-| Grafana | https://grafana.stoa.cab-i.com | Monitoring |
-| AWX | https://awx.stoa.cab-i.com | Automation |
-| ArgoCD | https://argocd.stoa.cab-i.com | GitOps CD |
-| Vault | https://vault.stoa.cab-i.com | Secrets management |
+| Console UI | https://console.gostoa.dev | API Provider interface |
+| **Developer Portal** | https://portal.gostoa.dev | API Consumer portal |
+| API Gateway Runtime | https://apis.gostoa.dev | APIs via Gateway |
+| Gateway Admin | https://gateway.gostoa.dev | Gateway console |
+| MCP Gateway | https://mcp.gostoa.dev | AI-Native MCP endpoint |
+| Control Plane API | https://api.gostoa.dev | REST API backend |
+| Keycloak | https://auth.gostoa.dev | Identity Provider |
+| Grafana | https://grafana.gostoa.dev | Monitoring |
+| AWX | https://awx.gostoa.dev | Automation |
+| ArgoCD | https://argocd.gostoa.dev | GitOps CD |
+| Vault | https://vault.gostoa.dev | Secrets management |
 
 ---
 

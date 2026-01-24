@@ -162,7 +162,7 @@ spec:
 
   contact:
     team: "STOA Platform Team"
-    email: "platform@stoa.cab-i.com"
+    email: "platform@gostoa.dev"
 '
 
 if [[ "$DRY_RUN" == "false" ]]; then
@@ -202,7 +202,7 @@ for api_file in "$WEBMETHODS_DIR/apis"/*.yaml "$WEBMETHODS_DIR/apis"/*.yml; do
         else
             # Old format, wrap in new structure
             cat > "$api_target_file" << EOF
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: API
 metadata:
   name: $api_name

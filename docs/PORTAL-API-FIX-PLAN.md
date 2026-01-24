@@ -40,11 +40,11 @@ The STOA Developer Portal is experiencing multiple 404 errors because:
 Portal Application
 ├── apiClient (Control-Plane API)
 │   ├── APIs, Applications, Subscriptions (human management)
-│   └── Base: https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0
+│   └── Base: https://apis.gostoa.dev/gateway/Control-Plane-API/2.0
 │
 └── mcpClient (MCP Gateway)
     ├── MCP Tools (for AI agents)
-    └── Base: https://mcp.stoa.cab-i.com
+    └── Base: https://mcp.gostoa.dev
 ```
 
 ### MCP Gateway Purpose
@@ -68,7 +68,7 @@ The MCP Gateway is **not** for human tool browsing - it's for **AI agents to man
 | `tools.ts` | `GET /v1/tools/categories` | Control-Plane API | **WRONG** |
 | `tools.ts` | `POST /v1/tools/subscriptions` | Control-Plane API | **WRONG** |
 
-**Should call MCP Gateway (`mcp.stoa.cab-i.com`):**
+**Should call MCP Gateway (`mcp.gostoa.dev`):**
 
 | MCP Gateway Endpoint | Description |
 |----------------------|-------------|

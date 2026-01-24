@@ -14,7 +14,7 @@
 #   ./configure-keycloak-audience.sh
 #
 # Environment Variables:
-#   KEYCLOAK_URL        - Keycloak base URL (default: https://auth.stoa.cab-i.com)
+#   KEYCLOAK_URL        - Keycloak base URL (default: https://auth.gostoa.dev)
 #   KEYCLOAK_REALM      - Realm name (default: stoa)
 #   KEYCLOAK_ADMIN_USER - Admin username (default: admin)
 #   KEYCLOAK_ADMIN_PASS - Admin password (required)
@@ -33,7 +33,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.stoa.cab-i.com}"
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 KEYCLOAK_REALM="${KEYCLOAK_REALM:-stoa}"
 KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASS="${KEYCLOAK_ADMIN_PASS:-}"

@@ -70,16 +70,16 @@ jobs:
 
           case "$ENV" in
             dev)
-              echo "TARGET_URL=https://api.dev.stoa.cab-i.com" >> $GITHUB_ENV
-              echo "AUTH_URL=https://auth.dev.stoa.cab-i.com" >> $GITHUB_ENV
+              echo "TARGET_URL=https://api.dev.gostoa.dev" >> $GITHUB_ENV
+              echo "AUTH_URL=https://auth.dev.gostoa.dev" >> $GITHUB_ENV
               ;;
             staging)
-              echo "TARGET_URL=https://api.staging.stoa.cab-i.com" >> $GITHUB_ENV
-              echo "AUTH_URL=https://auth.staging.stoa.cab-i.com" >> $GITHUB_ENV
+              echo "TARGET_URL=https://api.staging.gostoa.dev" >> $GITHUB_ENV
+              echo "AUTH_URL=https://auth.staging.gostoa.dev" >> $GITHUB_ENV
               ;;
             prod)
-              echo "TARGET_URL=https://api.stoa.cab-i.com" >> $GITHUB_ENV
-              echo "AUTH_URL=https://auth.stoa.cab-i.com" >> $GITHUB_ENV
+              echo "TARGET_URL=https://api.gostoa.dev" >> $GITHUB_ENV
+              echo "AUTH_URL=https://auth.gostoa.dev" >> $GITHUB_ENV
               # Force baseline for production
               SCAN="baseline"
               ;;

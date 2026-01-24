@@ -1,6 +1,6 @@
 # STOA Developer Portal - User Guide
 
-> **URL**: https://portal.stoa.cab-i.com
+> **URL**: https://portal.gostoa.dev
 > **Status**: Production
 > **Last Updated**: January 2026
 
@@ -22,7 +22,7 @@ The STOA Developer Portal is the API Consumer interface for browsing, subscribin
 
 The portal uses **Keycloak OIDC** for authentication:
 
-1. Navigate to https://portal.stoa.cab-i.com
+1. Navigate to https://portal.gostoa.dev
 2. Click **"Sign in with SSO"**
 3. Enter your Keycloak credentials
 4. You'll be redirected to the portal dashboard
@@ -76,7 +76,7 @@ After subscribing, you'll see the **API Key Modal**:
 
 ```bash
 # Direct API call
-curl -X POST https://mcp.stoa.cab-i.com/mcp/v1/invoke \
+curl -X POST https://mcp.gostoa.dev/mcp/v1/invoke \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"tool": "tool_name", "args": {}}'
@@ -182,12 +182,12 @@ The portal is configured via environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VITE_KEYCLOAK_URL` | Keycloak base URL | https://auth.stoa.cab-i.com |
+| `VITE_KEYCLOAK_URL` | Keycloak base URL | https://auth.gostoa.dev |
 | `VITE_KEYCLOAK_REALM` | Keycloak realm | stoa |
 | `VITE_KEYCLOAK_CLIENT_ID` | OIDC client ID | stoa-portal |
-| `VITE_API_URL` | Control-Plane API URL | https://api.stoa.cab-i.com |
-| `VITE_MCP_GATEWAY_URL` | MCP Gateway URL | https://mcp.stoa.cab-i.com |
-| `VITE_CONSOLE_URL` | Console UI URL | https://console.stoa.cab-i.com |
+| `VITE_API_URL` | Control-Plane API URL | https://api.gostoa.dev |
+| `VITE_MCP_GATEWAY_URL` | MCP Gateway URL | https://mcp.gostoa.dev |
+| `VITE_CONSOLE_URL` | Console UI URL | https://console.gostoa.dev |
 
 ### Feature Flags
 

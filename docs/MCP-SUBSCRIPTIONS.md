@@ -329,7 +329,7 @@ DB_PASSWORD=xxx
 
 ```bash
 # Control-Plane API via WebMethods
-VITE_API_URL=https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0
+VITE_API_URL=https://apis.gostoa.dev/gateway/Control-Plane-API/2.0
 ```
 
 ## Security Considerations

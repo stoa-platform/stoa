@@ -288,7 +288,7 @@
 | CAB-123 | MCP-1204: Metering Pipeline (Kafka + ksqlDB) | ✅ Done |
 | CAB-124 | MCP-1205: Portal Integration - Tool Catalog | ✅ Done |
 | CAB-199 | MCP-1201b: Gateway Tests & Tools Implementation | ✅ Done |
-| CAB-237 | Rename devops.stoa.cab-i.com → console.stoa.cab-i.com | ✅ Done |
+| CAB-237 | Rename devops.gostoa.dev → console.gostoa.dev | ✅ Done |
 | CAB-245 | MCP-1206: Implement MCP Tool Subscription Flow (Backend + Portal) | ⬜ Backlog |
 | CAB-246 | MCP-1206a: Bootstrap Developer Portal UI | ⬜ Backlog |
 | CAB-247 | MCP-1206b: Subscription API Backend | ⬜ Backlog |
@@ -338,7 +338,7 @@
 | Issue | Title | Status |
 |-------|-------|--------|
 | CAB-196 | [Infra] Rebranding APIM → STOA (72 files) | ✅ Done |
-| CAB-197 | [Infra] DNS/TLS Migration to *.stoa.cab-i.com | ✅ Done |
+| CAB-197 | [Infra] DNS/TLS Migration to *.gostoa.dev | ✅ Done |
 | CAB-198 | [Infra] Centralized BASE_DOMAIN configuration architecture | ✅ Done |
 
 ---

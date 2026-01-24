@@ -10,10 +10,10 @@ Usage:
     python scripts/seed-demo-data.py
 
     # With custom API URL
-    CONTROL_PLANE_URL=https://api.stoa.cab-i.com python scripts/seed-demo-data.py
+    CONTROL_PLANE_URL=https://api.gostoa.dev python scripts/seed-demo-data.py
 
     # With authentication
-    KEYCLOAK_URL=https://auth.stoa.cab-i.com \
+    KEYCLOAK_URL=https://auth.gostoa.dev \
     ADMIN_USERNAME=e2e-admin \
     ADMIN_PASSWORD=Admin123! \
     python scripts/seed-demo-data.py

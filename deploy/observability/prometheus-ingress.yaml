@@ -7,7 +7,7 @@
 # - nginx ingress controller installed
 # - cert-manager installed with letsencrypt-prod ClusterIssuer
 #
-# Customize: Replace stoa.cab-i.com with your base domain
+# Customize: Replace gostoa.dev with your base domain
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -28,10 +28,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - prometheus.stoa.cab-i.com
+        - prometheus.gostoa.dev
       secretName: prometheus-tls
   rules:
-    - host: prometheus.stoa.cab-i.com
+    - host: prometheus.gostoa.dev
       http:
         paths:
           - path: /

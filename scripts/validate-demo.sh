@@ -18,7 +18,7 @@ set -euo pipefail
 # =============================================================================
 
 # Default URLs (production)
-BASE_DOMAIN="${BASE_DOMAIN:-stoa.cab-i.com}"
+BASE_DOMAIN="${BASE_DOMAIN:-gostoa.dev}"
 API_URL="${API_URL:-https://api.${BASE_DOMAIN}}"
 MCP_URL="${MCP_URL:-https://mcp.${BASE_DOMAIN}}"
 PORTAL_URL="${PORTAL_URL:-https://portal.${BASE_DOMAIN}}"

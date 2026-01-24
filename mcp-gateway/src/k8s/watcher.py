@@ -22,7 +22,7 @@ logger = structlog.get_logger(__name__)
 _watcher: "ToolWatcher | None" = None
 
 # CRD API Group and Version
-CRD_GROUP = "stoa.cab-i.com"
+CRD_GROUP = "gostoa.dev"
 CRD_VERSION = "v1alpha1"
 CRD_PLURAL_TOOLS = "tools"
 CRD_PLURAL_TOOLSETS = "toolsets"

@@ -40,7 +40,7 @@ spec:
         - name: API_VERSION
           value: "2.0"
         - name: KEYCLOAK_ISSUER
-          value: "https://auth.stoa.cab-i.com/realms/stoa"
+          value: "https://auth.gostoa.dev/realms/stoa"
         - name: API_AUDIENCE
           value: "control-plane-api"
         - name: BACKEND_PASSTHROUGH
@@ -48,7 +48,7 @@ spec:
         - name: APPLY_POLICIES
           value: "true"
         - name: CORS_ORIGINS
-          value: "https://console.stoa.cab-i.com,https://portal.stoa.cab-i.com,http://localhost:3000,http://localhost:5173"
+          value: "https://console.gostoa.dev,https://portal.gostoa.dev,http://localhost:3000,http://localhost:5173"
         command:
         - /bin/sh
         - -c

@@ -749,7 +749,7 @@ def register_routes(app: FastAPI) -> None:
         return {
             "issuer": keycloak_issuer,
             "authorization_endpoint": f"{keycloak_issuer}/protocol/openid-connect/auth",
-            # Use our proxy for token endpoint (Claude.ai may not reach auth.stoa.cab-i.com)
+            # Use our proxy for token endpoint (Claude.ai may not reach auth.gostoa.dev)
             "token_endpoint": f"{mcp_gateway_url}/oauth/token",
             "userinfo_endpoint": f"{keycloak_issuer}/protocol/openid-connect/userinfo",
             "jwks_uri": f"{keycloak_issuer}/protocol/openid-connect/certs",
@@ -816,17 +816,17 @@ def register_routes(app: FastAPI) -> None:
             "authorization_servers": [keycloak_issuer],
             "scopes_supported": ["openid", "profile", "email"],
             "bearer_methods_supported": ["header"],
-            "resource_documentation": "https://docs.stoa.cab-i.com/mcp",
+            "resource_documentation": "https://docs.gostoa.dev/mcp",
         }
 
     # OAuth Token Proxy - Proxies token requests to Keycloak
-    # This is needed because Claude.ai servers may not be able to reach auth.stoa.cab-i.com directly
+    # This is needed because Claude.ai servers may not be able to reach auth.gostoa.dev directly
     @app.post("/oauth/token", tags=["OAuth"])
     async def oauth_token_proxy(request: Request) -> JSONResponse:
         """Proxy OAuth token requests to Keycloak.
 
         This endpoint proxies token exchange requests to Keycloak's token endpoint.
-        Required because Claude.ai's backend servers may not have direct access to auth.stoa.cab-i.com.
+        Required because Claude.ai's backend servers may not have direct access to auth.gostoa.dev.
         """
         settings = get_settings()
         keycloak_token_url = f"{settings.keycloak_issuer}/protocol/openid-connect/token"

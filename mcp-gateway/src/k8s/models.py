@@ -91,7 +91,7 @@ class ToolCRMetadata(BaseModel):
 class ToolCR(BaseModel):
     """Complete Tool custom resource."""
 
-    apiVersion: str = "stoa.cab-i.com/v1alpha1"
+    apiVersion: str = "gostoa.dev/v1alpha1"
     kind: str = "Tool"
     metadata: ToolCRMetadata
     spec: ToolCRSpec
@@ -180,7 +180,7 @@ class ToolSetCRMetadata(BaseModel):
 class ToolSetCR(BaseModel):
     """Complete ToolSet custom resource."""
 
-    apiVersion: str = "stoa.cab-i.com/v1alpha1"
+    apiVersion: str = "gostoa.dev/v1alpha1"
     kind: str = "ToolSet"
     metadata: ToolSetCRMetadata
     spec: ToolSetCRSpec

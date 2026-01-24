@@ -158,7 +158,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
-      url: https://mcp.stoa.cab-i.com
+      url: https://mcp.gostoa.dev
 
     steps:
       - name: Checkout repository
@@ -223,7 +223,7 @@ jobs:
           echo ""
           echo "=== Security Test - Should return 401 ==="
           sleep 10
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://mcp.stoa.cab-i.com/mcp/v1/tools || echo "000")
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://mcp.gostoa.dev/mcp/v1/tools || echo "000")
           echo "HTTP Status Code: $HTTP_CODE"
           if [ "$HTTP_CODE" = "401" ]; then
             echo "Security check PASSED - endpoint requires authentication"

@@ -29,10 +29,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - mcp.stoa.cab-i.com
+        - mcp.gostoa.dev
       secretName: mcp-gateway-tls
   rules:
-    - host: mcp.stoa.cab-i.com
+    - host: mcp.gostoa.dev
       http:
         paths:
           - path: /
@@ -67,10 +67,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - mcp.stoa.cab-i.com
+        - mcp.gostoa.dev
       secretName: mcp-gateway-tls
   rules:
-    - host: mcp.stoa.cab-i.com
+    - host: mcp.gostoa.dev
       http:
         paths:
           - path: /

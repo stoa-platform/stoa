@@ -1,4 +1,4 @@
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: API
 metadata:
   name: crm-api

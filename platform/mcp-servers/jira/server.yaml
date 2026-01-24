@@ -1,7 +1,7 @@
 # Jira MCP Server
 # Atlassian Jira integration for project and issue management
 
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: MCPServer
 metadata:
   name: jira

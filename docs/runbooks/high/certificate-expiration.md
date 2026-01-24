@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `CertificateExpiringSoon` | `cert_expiry_days < 30` | [Certificates](https://grafana.stoa.cab-i.com/d/certs) |
-| `CertificateExpired` | `cert_expiry_days <= 0` | [Certificates](https://grafana.stoa.cab-i.com/d/certs) |
-| `TLSHandshakeFailing` | `tls_handshake_errors > 0` | [Ingress](https://grafana.stoa.cab-i.com/d/ingress) |
+| `CertificateExpiringSoon` | `cert_expiry_days < 30` | [Certificates](https://grafana.gostoa.dev/d/certs) |
+| `CertificateExpired` | `cert_expiry_days <= 0` | [Certificates](https://grafana.gostoa.dev/d/certs) |
+| `TLSHandshakeFailing` | `tls_handshake_errors > 0` | [Ingress](https://grafana.gostoa.dev/d/ingress) |
 
 ### Observed Behavior
 
@@ -40,8 +40,8 @@
 
 ```bash
 # 1. Check public endpoint certificates
-echo | openssl s_client -servername gateway.stoa.cab-i.com \
-  -connect gateway.stoa.cab-i.com:443 2>/dev/null | \
+echo | openssl s_client -servername gateway.gostoa.dev \
+  -connect gateway.gostoa.dev:443 2>/dev/null | \
   openssl x509 -noout -dates
 
 # 2. List all certificates in the cluster
@@ -133,7 +133,7 @@ kubectl describe challenge <challenge-name> -n <namespace>
 kubectl get ingress -A | grep acme
 
 # Manually test challenge
-curl -v http://gateway.stoa.cab-i.com/.well-known/acme-challenge/test
+curl -v http://gateway.gostoa.dev/.well-known/acme-challenge/test
 ```
 
 ### Case 4: DNS challenge failing (wildcard)
@@ -146,7 +146,7 @@ kubectl get secret route53-credentials -n cert-manager
 kubectl logs -n cert-manager deploy/cert-manager | grep dns
 
 # Test DNS resolution
-dig _acme-challenge.stoa.cab-i.com TXT
+dig _acme-challenge.gostoa.dev TXT
 
 # Check Route53 permissions
 aws route53 list-hosted-zones
@@ -161,7 +161,7 @@ aws route53 list-hosted-zones
 openssl req -new -newkey rsa:2048 -nodes \
   -keyout gateway.key \
   -out gateway.csr \
-  -subj "/CN=gateway.stoa.cab-i.com"
+  -subj "/CN=gateway.gostoa.dev"
 
 # After obtaining signed certificate
 kubectl create secret tls gateway-tls \
@@ -190,15 +190,15 @@ kubectl rollout restart deployment -n stoa apigateway
 
 ```bash
 # Check new certificate expiration
-echo | openssl s_client -servername gateway.stoa.cab-i.com \
-  -connect gateway.stoa.cab-i.com:443 2>/dev/null | \
+echo | openssl s_client -servername gateway.gostoa.dev \
+  -connect gateway.gostoa.dev:443 2>/dev/null | \
   openssl x509 -noout -dates -subject
 
 # Check all endpoints
 for host in gateway api auth devops portal vault awx; do
-  echo "=== ${host}.stoa.cab-i.com ==="
-  echo | openssl s_client -servername ${host}.stoa.cab-i.com \
-    -connect ${host}.stoa.cab-i.com:443 2>/dev/null | \
+  echo "=== ${host}.gostoa.dev ==="
+  echo | openssl s_client -servername ${host}.gostoa.dev \
+    -connect ${host}.gostoa.dev:443 2>/dev/null | \
     openssl x509 -noout -enddate
 done
 
@@ -227,13 +227,13 @@ kubectl get certificates -A -o wide
 # check-certificates.sh
 
 DOMAINS=(
-  "gateway.stoa.cab-i.com"
-  "api.stoa.cab-i.com"
-  "auth.stoa.cab-i.com"
-  "console.stoa.cab-i.com"
-  "portal.stoa.cab-i.com"
-  "vault.stoa.cab-i.com"
-  "awx.stoa.cab-i.com"
+  "gateway.gostoa.dev"
+  "api.gostoa.dev"
+  "auth.gostoa.dev"
+  "console.gostoa.dev"
+  "portal.gostoa.dev"
+  "vault.gostoa.dev"
+  "awx.gostoa.dev"
 )
 
 WARNING_DAYS=30

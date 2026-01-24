@@ -3,7 +3,7 @@
 #
 # Prerequisites:
 # 1. Create Keycloak client 'observability' in realm 'stoa'
-# 2. Set client as confidential with redirect URIs: https://grafana.stoa.cab-i.com/*
+# 2. Set client as confidential with redirect URIs: https://grafana.gostoa.dev/*
 # 3. Replace KEYCLOAK_CLIENT_SECRET below with actual secret
 
 grafana:
@@ -13,7 +13,7 @@ grafana:
   # Grafana configuration
   grafana.ini:
     server:
-      root_url: https://grafana.stoa.cab-i.com
+      root_url: https://grafana.gostoa.dev
 
     # Auth configuration
     auth:
@@ -31,9 +31,9 @@ grafana:
       client_id: observability
       client_secret: ${GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}
       scopes: openid profile email roles
-      auth_url: https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/auth
-      token_url: https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token
-      api_url: https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/userinfo
+      auth_url: https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth
+      token_url: https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token
+      api_url: https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/userinfo
       # Role mapping
       role_attribute_path: contains(realm_access.roles[*], 'admin') && 'Admin' || contains(realm_access.roles[*], 'cpi-admin') && 'Admin' || contains(realm_access.roles[*], 'editor') && 'Editor' || 'Viewer'
       # TLS verification (set to false if using self-signed certs)

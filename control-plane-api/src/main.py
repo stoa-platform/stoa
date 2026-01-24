@@ -174,7 +174,7 @@ API_DESCRIPTION = """
 1. **Get a token** from Keycloak (`POST /realms/stoa/protocol/openid-connect/token`)
 2. **Browse MCP servers** (`GET /v1/mcp/servers`)
 3. **Subscribe to a server** (`POST /v1/mcp/subscriptions`)
-4. **Use your API key** with MCP Gateway (`https://mcp.stoa.cab-i.com`)
+4. **Use your API key** with MCP Gateway (`https://mcp.gostoa.dev`)
 
 ### Authentication
 
@@ -189,8 +189,8 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 
 | Environment | Base URL |
 |-------------|----------|
-| Production | `https://api.stoa.cab-i.com` |
-| Via Gateway | `https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0` |
+| Production | `https://api.gostoa.dev` |
+| Via Gateway | `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0` |
 
 ### Changelog
 
@@ -245,7 +245,7 @@ app = FastAPI(
     ],
     contact={
         "name": "CAB Ingénierie",
-        "url": "https://stoa.cab-i.com",
+        "url": "https://gostoa.dev",
         "email": "support@cab-i.com",
     },
     license_info={

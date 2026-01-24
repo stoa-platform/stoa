@@ -7,14 +7,14 @@ kind: Kustomization
 metadata:
   name: demo-tenants
   annotations:
-    stoa.cab-i.com/created-by: cab-279
+    gostoa.dev/created-by: cab-279
 
 namespace: stoa-system
 
 # Labels applied to all resources
 commonLabels:
-  stoa.cab-i.com/demo: "true"
-  stoa.cab-i.com/environment: demo
+  gostoa.dev/demo: "true"
+  gostoa.dev/environment: demo
 
 # Resources to deploy
 resources:

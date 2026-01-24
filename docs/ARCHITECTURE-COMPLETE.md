@@ -52,14 +52,14 @@
 │           ▼                      ▼                      ▼                   │
 │  ┌────────────────────────────────────────────────────────────────┐        │
 │  │                         Keycloak                                │        │
-│  │                    (auth.stoa.cab-i.com)                       │        │
+│  │                    (auth.gostoa.dev)                       │        │
 │  └────────────────────────────────────────────────────────────────┘        │
 │           │                      │                      │                   │
 │           ▼                      ▼                      ▼                   │
 │  ┌─────────────────────────────────────┐    ┌─────────────────────┐        │
 │  │        Control-Plane API            │    │    MCP Gateway      │        │
 │  │        (FastAPI Backend)            │◄───┤   (AI-Native API)   │        │
-│  │   apis.stoa.cab-i.com/gateway/...   │    │ mcp.stoa.cab-i.com  │        │
+│  │   apis.gostoa.dev/gateway/...   │    │ mcp.gostoa.dev  │        │
 │  └──────────────┬──────────────────────┘    └──────────┬──────────┘        │
 │                 │                                      │                    │
 │      ┌──────────┼──────────┬───────────────────────────┤                   │
@@ -89,16 +89,16 @@
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Console UI | `https://console.stoa.cab-i.com` | Interface API Provider |
-| Developer Portal | `https://portal.stoa.cab-i.com` | Interface API Consumer |
-| API Gateway Runtime | `https://apis.stoa.cab-i.com` | Runtime des APIs (OIDC) |
-| Control-Plane API | `https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0` | Backend API |
-| MCP Gateway | `https://mcp.stoa.cab-i.com` | AI-Native API Gateway |
-| Keycloak | `https://auth.stoa.cab-i.com` | Identity Provider |
-| Gateway Admin | `https://gateway.stoa.cab-i.com` | webMethods Admin |
-| AWX | `https://awx.stoa.cab-i.com` | Automation |
-| ArgoCD | `https://argocd.stoa.cab-i.com` | GitOps |
-| Vault | `https://vault.stoa.cab-i.com` | Secrets Management |
+| Console UI | `https://console.gostoa.dev` | Interface API Provider |
+| Developer Portal | `https://portal.gostoa.dev` | Interface API Consumer |
+| API Gateway Runtime | `https://apis.gostoa.dev` | Runtime des APIs (OIDC) |
+| Control-Plane API | `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0` | Backend API |
+| MCP Gateway | `https://mcp.gostoa.dev` | AI-Native API Gateway |
+| Keycloak | `https://auth.gostoa.dev` | Identity Provider |
+| Gateway Admin | `https://gateway.gostoa.dev` | webMethods Admin |
+| AWX | `https://awx.gostoa.dev` | Automation |
+| ArgoCD | `https://argocd.gostoa.dev` | GitOps |
+| Vault | `https://vault.gostoa.dev` | Secrets Management |
 
 ---
 
@@ -455,7 +455,7 @@ mcp-gateway/
 │         │ 1. Create Tool CRD                                            │
 │         ▼                                                                │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │ apiVersion: stoa.cab-i.com/v1alpha1                             │    │
+│  │ apiVersion: gostoa.dev/v1alpha1                             │    │
 │  │ kind: Tool                                                       │    │
 │  │ metadata:                                                        │    │
 │  │   name: payment-search                                          │    │
@@ -562,7 +562,7 @@ mcp-gateway/
 
 ```yaml
 # Tool CRD - Enregistrement d'un outil MCP
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: payment-search
@@ -591,7 +591,7 @@ spec:
 
 ---
 # ToolSet CRD - Conversion OpenAPI vers MCP
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: ToolSet
 metadata:
   name: crm-api-tools
@@ -932,7 +932,7 @@ stoa-gitops/
 ### 8.2 Exemple tenant.yaml
 
 ```yaml
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tenant
 metadata:
   name: acme-corp
@@ -1176,7 +1176,7 @@ control-plane-api/alembic/versions/
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  Version: 10.15 (lean image)                                            │
-│  URL: https://gateway.stoa.cab-i.com                                    │
+│  URL: https://gateway.gostoa.dev                                    │
 │                                                                          │
 │  Configuration:                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
@@ -1302,7 +1302,7 @@ spec:
 │                      HashiCorp Vault                                     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  URL: https://vault.stoa.cab-i.com                                      │
+│  URL: https://vault.gostoa.dev                                      │
 │                                                                          │
 │  Secret Paths:                                                           │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
@@ -1601,7 +1601,7 @@ webmethods-gateway: "10.15"
 
 ```bash
 # Base configuration
-BASE_DOMAIN=stoa.cab-i.com
+BASE_DOMAIN=gostoa.dev
 
 # Keycloak
 KEYCLOAK_URL=https://auth.${BASE_DOMAIN}

@@ -4,12 +4,12 @@
 
 set -e
 
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.stoa.cab-i.com}"
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 KEYCLOAK_REALM="${KEYCLOAK_REALM:-stoa}"
 KEYCLOAK_ADMIN="${KEYCLOAK_ADMIN:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-Admin123!}"
 
-BASE_DOMAIN="${BASE_DOMAIN:-stoa.cab-i.com}"
+BASE_DOMAIN="${BASE_DOMAIN:-gostoa.dev}"
 
 echo "=== Setting up Keycloak Client for Observability ==="
 echo "Keycloak URL: $KEYCLOAK_URL"

@@ -1,7 +1,7 @@
 # Slack MCP Server
 # Slack integration for team communication and collaboration
 
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: MCPServer
 metadata:
   name: slack

@@ -41,10 +41,10 @@ kind: ClusterRole
 metadata:
   name: stoa-mcp-gateway-tools
 rules:
-  - apiGroups: ["stoa.cab-i.com"]
+  - apiGroups: ["gostoa.dev"]
     resources: ["tools", "toolsets"]
     verbs: ["get", "list", "watch"]
-  - apiGroups: ["stoa.cab-i.com"]
+  - apiGroups: ["gostoa.dev"]
     resources: ["tools/status", "toolsets/status"]
     verbs: ["get", "patch", "update"]
   - apiGroups: [""]
@@ -129,7 +129,7 @@ pkill -f "port-forward.*mcp-gateway"
 
 ```bash
 # Get token for team-alpha user
-TOKEN=$(curl -s -X POST "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token" \
+TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token" \
   -d "grant_type=password" \
   -d "client_id=stoa-portal" \
   -d "username=alpha-user" \
@@ -137,19 +137,19 @@ TOKEN=$(curl -s -X POST "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid
 
 # List available tools (should see only team-alpha tools)
 curl -H "Authorization: Bearer $TOKEN" \
-  https://mcp.stoa.cab-i.com/mcp/v1/tools
+  https://mcp.gostoa.dev/mcp/v1/tools
 
 # Invoke crm-search (should work)
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "team_alpha_crm_search", "arguments": {"query": "ACME"}}' \
-  https://mcp.stoa.cab-i.com/mcp/v1/tools/call
+  https://mcp.gostoa.dev/mcp/v1/tools/call
 
 # Try inventory-lookup (should be denied - team-beta only)
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "team_beta_inventory_lookup", "arguments": {"sku": "WIDGET-PRO-500"}}' \
-  https://mcp.stoa.cab-i.com/mcp/v1/tools/call
+  https://mcp.gostoa.dev/mcp/v1/tools/call
 # Expected: 403 Forbidden
 ```
 
@@ -157,7 +157,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 ```bash
 # Get token for team-beta user
-TOKEN=$(curl -s -X POST "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token" \
+TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token" \
   -d "grant_type=password" \
   -d "client_id=stoa-portal" \
   -d "username=beta-user" \
@@ -167,13 +167,13 @@ TOKEN=$(curl -s -X POST "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "team_beta_inventory_lookup", "arguments": {"sku": "WIDGET-PRO-500"}}' \
-  https://mcp.stoa.cab-i.com/mcp/v1/tools/call
+  https://mcp.gostoa.dev/mcp/v1/tools/call
 
 # Try crm-search (should be denied - team-alpha only)
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "team_alpha_crm_search", "arguments": {"query": "ACME"}}' \
-  https://mcp.stoa.cab-i.com/mcp/v1/tools/call
+  https://mcp.gostoa.dev/mcp/v1/tools/call
 # Expected: 403 Forbidden
 ```
 

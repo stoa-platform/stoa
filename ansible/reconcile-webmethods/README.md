@@ -221,7 +221,7 @@ spec:
 ## api.yaml Schema
 
 ```yaml
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: API
 metadata:
   name: my-api
@@ -288,11 +288,11 @@ If migrating from the old multi-source architecture:
 ```bash
 # Check APIs in Gateway
 curl -u Administrator:password \
-  "https://gateway.stoa.cab-i.com/rest/apigateway/apis" | \
+  "https://gateway.gostoa.dev/rest/apigateway/apis" | \
   jq '.apiResponse[] | {name: .api.apiName, tags: .api.tags}'
 
 # Check portal visibility
-curl "https://portal.stoa.cab-i.com/portal/rest/v1/apis" | \
+curl "https://portal.gostoa.dev/portal/rest/v1/apis" | \
   jq '.[].name'
 # stoa-platform APIs should NOT appear
 ```

@@ -187,17 +187,17 @@ jobs:
       - name: Check if EKS cluster exists
         id: cluster-check
         run: |
-          if aws eks describe-cluster --name stoa-dev-cluster --region eu-west-1 2>/dev/null; then
+          if aws eks describe-cluster --name apim-dev-cluster --region eu-west-1 2>/dev/null; then
             echo "CLUSTER_EXISTS=true" >> $GITHUB_OUTPUT
           else
             echo "CLUSTER_EXISTS=false" >> $GITHUB_OUTPUT
-            echo "⚠️ EKS cluster 'stoa-dev-cluster' not found. Skipping deployment."
+            echo "⚠️ EKS cluster 'apim-dev-cluster' not found. Skipping deployment."
           fi
 
       - name: Update kubeconfig
         if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
-          aws eks update-kubeconfig --name stoa-dev-cluster --region eu-west-1
+          aws eks update-kubeconfig --name apim-dev-cluster --region eu-west-1
 
       - name: Deploy to Kubernetes
         if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'

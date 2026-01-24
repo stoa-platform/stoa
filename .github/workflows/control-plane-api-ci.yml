@@ -116,8 +116,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -160,6 +159,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: docker
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      id-token: write
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
       url: https://api.gostoa.dev
@@ -177,8 +179,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Check if EKS cluster exists

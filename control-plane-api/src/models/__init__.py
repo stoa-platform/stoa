@@ -26,3 +26,6 @@ from .external_mcp_server import (
     ExternalMCPAuthType,
     ExternalMCPHealthStatus,
 )
+from .invite import Invite, InviteStatus
+from .prospect_event import ProspectEvent, EventType
+from .prospect_feedback import ProspectFeedback

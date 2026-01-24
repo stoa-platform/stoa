@@ -29,6 +29,7 @@ from ...models import (
     Tool,
     CoreTool,
     ProxiedTool,
+    ExternalTool,
 )
 
 # Public API exports
@@ -44,6 +45,7 @@ from .invocation import InvocationMixin
 from .core_routing import CoreRoutingMixin
 from .action_handlers import ActionHandlersMixin
 from .proxied import ProxiedMixin
+from .external import ExternalMixin
 from .legacy import LegacyMixin
 
 logger = structlog.get_logger(__name__)
@@ -57,6 +59,7 @@ class ToolRegistry(
     CoreRoutingMixin,
     ActionHandlersMixin,
     ProxiedMixin,
+    ExternalMixin,
     LegacyMixin,
 ):
     """Registry for MCP Tools.
@@ -84,6 +87,7 @@ class ToolRegistry(
         # CAB-603: Separate storage for core vs proxied tools
         self._core_tools: dict[str, CoreTool] = {}
         self._proxied_tools: dict[str, ProxiedTool] = {}  # Key: internal_key
+        self._external_tools: dict[str, ExternalTool] = {}  # External MCP servers (Linear, GitHub, etc.)
         self._tools: dict[str, Tool] = {}  # Legacy storage for backward compatibility
         self._http_client: httpx.AsyncClient | None = None
 

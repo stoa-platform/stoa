@@ -13,6 +13,7 @@ from ...models import (
     Tool,
     CoreTool,
     ProxiedTool,
+    ExternalTool,
     AnyTool,
     ListToolsResponse,
     ListCategoriesResponse,
@@ -32,6 +33,7 @@ class LookupMixin:
     # Type hints for attributes from ToolRegistry
     _core_tools: dict[str, CoreTool]
     _proxied_tools: dict[str, ProxiedTool]
+    _external_tools: dict[str, ExternalTool]
     _tools: dict[str, Tool]
 
     def get_core_tool(self, name: str) -> CoreTool | None:
@@ -140,6 +142,11 @@ class LookupMixin:
             if proxied:
                 return proxied
 
+        # External tools: check by name
+        external = self.get_external_tool(name)
+        if external:
+            return external
+
         # Legacy tools
         return self._tools.get(name)
 
@@ -205,6 +212,17 @@ class LookupMixin:
                         tags=proxied_tool.tags,
                         version=proxied_tool.version,
                     ))
+
+        # Add external tools (from external MCP servers like Linear, GitHub)
+        for external_tool in self._external_tools.values():
+            tools.append(Tool(
+                name=external_tool.name,
+                description=external_tool.description,
+                input_schema=external_tool.input_schema,
+                category=external_tool.category or "External",
+                tags=external_tool.tags + [f"server:{external_tool.server_name}"],
+                version=external_tool.version,
+            ))
 
         # Add legacy tools
         if include_legacy:
@@ -289,6 +307,11 @@ class LookupMixin:
             if tool.category:
                 category_counts[tool.category] = category_counts.get(tool.category, 0) + 1
 
+        # Count external tool categories
+        for tool in self._external_tools.values():
+            cat = tool.category or "External"
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+
         categories = [
             ToolCategory(name=name, count=count)
             for name, count in sorted(category_counts.items())
@@ -317,6 +340,14 @@ class LookupMixin:
         for tool in self._tools.values():
             for tag in tool.tags:
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        # Count external tool tags
+        for tool in self._external_tools.values():
+            for tag in tool.tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+            # Also add server tag
+            server_tag = f"server:{tool.server_name}"
+            tag_counts[server_tag] = tag_counts.get(server_tag, 0) + 1
 
         return ListTagsResponse(
             tags=sorted(tag_counts.keys()),
@@ -400,5 +431,20 @@ class LookupMixin:
                     "required": tool.input_schema.required,
                 },
             }
+
+        # Try external tools
+        for ext_tool in self._external_tools.values():
+            if ext_tool.name == tool_name:
+                return {
+                    "name": ext_tool.name,
+                    "description": ext_tool.description,
+                    "input_schema": {
+                        "type": "object",
+                        "properties": ext_tool.input_schema.properties if ext_tool.input_schema else {},
+                        "required": ext_tool.input_schema.required if ext_tool.input_schema else [],
+                    },
+                    "category": ext_tool.category or "External",
+                    "server_name": ext_tool.server_name,
+                }
 
         return None

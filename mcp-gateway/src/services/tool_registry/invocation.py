@@ -14,6 +14,7 @@ from ...models import (
     Tool,
     CoreTool,
     ProxiedTool,
+    ExternalTool,
     ToolType,
     ToolInvocation,
     ToolResult,
@@ -43,6 +44,7 @@ class InvocationMixin:
     resolve_tool: Any
     _invoke_core_tool: Any
     _invoke_proxied_tool: Any
+    _invoke_external_tool: Any
     _invoke_builtin: Any
     _invoke_api: Any
 
@@ -111,6 +113,8 @@ class InvocationMixin:
             # CAB-603: Route by tool type
             if isinstance(tool, CoreTool):
                 result = await self._invoke_core_tool(tool, arguments, user_claims)
+            elif isinstance(tool, ExternalTool):
+                result = await self._invoke_external_tool(tool, arguments, user_token)
             elif isinstance(tool, ProxiedTool):
                 result = await self._invoke_proxied_tool(tool, arguments, user_token)
             # Legacy: Handle built-in tools (backward compatibility)

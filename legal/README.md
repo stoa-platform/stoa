@@ -1,87 +1,85 @@
 # STOA Legal Templates
 
-Ce dossier contient les templates juridiques pour STOA Platform.
+This directory contains legal templates for STOA Platform.
 
-## Documents disponibles
+## Available Documents
 
-### NDA Design Partner — Individuel
+### NDA Design Partner - Individual
 
-Pour les contacts indépendants, consultants, développeurs qui testent STOA en tant que design partners.
+For independent contacts, consultants, and developers testing STOA as design partners.
 
-| Document | Langue | Usage |
-|----------|--------|-------|
-| [NDA_DESIGN_PARTNER_INDIVIDUAL_FR.md](./NDA_DESIGN_PARTNER_INDIVIDUAL_FR.md) | 🇫🇷 Français | Contacts francophones |
-| [NDA_DESIGN_PARTNER_INDIVIDUAL_EN.md](./NDA_DESIGN_PARTNER_INDIVIDUAL_EN.md) | 🇬🇧 English | International contacts |
+| Document | Usage |
+|----------|-------|
+| [NDA_DESIGN_PARTNER_INDIVIDUAL_EN.md](./NDA_DESIGN_PARTNER_INDIVIDUAL_EN.md) | Individual partners |
 
-**Points clés :**
-- Durée de confidentialité : 2 ans
-- Non-concurrence : 12 mois
-- Durée du programme : 6 mois (renouvelable)
+**Key Terms:**
+- Confidentiality duration: 2 years
+- Non-compete: 12 months
+- Program duration: 6 months (renewable)
 
-### Design Partner Agreement — Entreprise
+### Design Partner Agreement - Enterprise
 
-Pour les entreprises (banques, assurances, grands comptes) qui évaluent STOA Platform.
+For enterprises (banks, insurance companies, large accounts) evaluating STOA Platform.
 
-| Document | Langue | Usage |
-|----------|--------|-------|
-| [DESIGN_PARTNER_AGREEMENT_ENTERPRISE_FR.md](./DESIGN_PARTNER_AGREEMENT_ENTERPRISE_FR.md) | 🇫🇷 Français | Entreprises françaises |
-| [DESIGN_PARTNER_AGREEMENT_ENTERPRISE_EN.md](./DESIGN_PARTNER_AGREEMENT_ENTERPRISE_EN.md) | 🇬🇧 English | International companies |
+| Document | Usage |
+|----------|-------|
+| [DESIGN_PARTNER_AGREEMENT_ENTERPRISE_EN.md](./DESIGN_PARTNER_AGREEMENT_ENTERPRISE_EN.md) | Enterprise partners |
 
-**Points clés :**
-- Durée de confidentialité : 3 ans
-- Non-concurrence : 18 mois
-- Durée du programme : 6 mois (renouvelable)
-- Réduction commerciale : 20% si conversion dans les 6 mois post-GA
-- Clauses témoignage et logo incluses
+**Key Terms:**
+- Confidentiality duration: 3 years
+- Non-compete: 18 months
+- Program duration: 6 months (renewable)
+- Commercial discount: 20% if conversion within 6 months post-GA
+- Testimonial and logo clauses included
 
 ## Usage
 
-### Génération PDF
+### PDF Generation
 
-Pour convertir en PDF avec mise en page professionnelle :
+To convert to PDF with professional formatting:
 
 ```bash
-# Avec pandoc + LaTeX
-pandoc NDA_DESIGN_PARTNER_INDIVIDUAL_FR.md -o NDA_DESIGN_PARTNER_INDIVIDUAL_FR.pdf \
+# With pandoc + LaTeX
+pandoc NDA_DESIGN_PARTNER_INDIVIDUAL_EN.md -o NDA_DESIGN_PARTNER_INDIVIDUAL_EN.pdf \
   --pdf-engine=xelatex \
   -V geometry:margin=2.5cm \
   -V fontsize=11pt
 
-# Ou avec md-to-pdf (npm)
-npx md-to-pdf NDA_DESIGN_PARTNER_INDIVIDUAL_FR.md
+# Or with md-to-pdf (npm)
+npx md-to-pdf NDA_DESIGN_PARTNER_INDIVIDUAL_EN.md
 ```
 
-### Signature électronique
+### Electronic Signature
 
-Ces documents peuvent être signés via :
+These documents can be signed via:
 - DocuSign
-- Yousign (conforme eIDAS)
+- Yousign (eIDAS compliant)
 - HelloSign
-- Signature manuscrite scannée
+- Scanned handwritten signature
 
-## Avertissement juridique
+## Legal Disclaimer
 
-⚠️ **Ces templates sont fournis à titre indicatif.** 
+**These templates are provided for informational purposes only.**
 
-Il est recommandé de les faire valider par un conseil juridique avant utilisation, notamment pour :
-- Les entreprises du secteur financier (DORA, NIS2)
-- Les administrations publiques
-- Les engagements avec des partenaires stratégiques
+It is recommended to have them validated by legal counsel before use, particularly for:
+- Financial sector companies (DORA, NIS2)
+- Public administrations
+- Strategic partner engagements
 
-## Mises à jour
+## Updates
 
-| Version | Date | Changements |
-|---------|------|-------------|
-| 1.0 | 2026-01-23 | Création initiale |
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0 | 2026-01-23 | Initial creation |
+| 1.1 | 2026-01-24 | Converted to OSS templates |
 
 ---
 
 ## Contact
 
-Pour toute question juridique :
-- Email : legal@gostoa.dev
-- Contact commercial : christophe@gostoa.dev
+For legal questions:
+- Email: legal@gostoa.dev
 
 ---
 
-*Généré pour STOA Platform — HLFH / CAB Ingénierie*
+*Generated for STOA Platform*

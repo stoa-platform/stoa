@@ -306,4 +306,4 @@ mypy src
 
 ## License
 
-MIT - CAB Ingénierie
+MIT - STOA Platform

@@ -1,41 +1,41 @@
-# STOA Platform v2 - Architecture Complète
+# STOA Platform v2 - Complete Architecture
 
 > **Version:** 2.0 | **Date:** Janvier 2026 | **Phase actuelle:** Phase 12 (MCP Gateway)
 
 ---
 
-## Table des Matières
+## Table of Contents
 
-1. [Vue d'ensemble](#1-vue-densemble)
+1. [Overview](#1-vue-densemble)
 2. [Composants Principaux](#2-composants-principaux)
-3. [Flux de Données](#3-flux-de-données)
+3. [Data Flow](#3-data-flow)
 4. [Architecture Kubernetes](#4-architecture-kubernetes)
 5. [Authentification & Autorisation](#5-authentification--autorisation)
 6. [Event-Driven Architecture](#6-event-driven-architecture)
 7. [MCP Gateway](#7-mcp-gateway)
 8. [GitOps & CI/CD](#8-gitops--cicd)
-9. [Base de Données](#9-base-de-données)
-10. [Intégrations](#10-intégrations)
+9. [Database](#9-database)
+10. [Integrations](#10-integrations)
 11. [Endpoints API](#11-endpoints-api)
-12. [Observabilité](#12-observabilité)
-13. [Sécurité](#13-sécurité)
+12. [Observability](#12-observability)
+13. [Security](#13-security)
 14. [Stack Technologique](#14-stack-technologique)
 
 ---
 
-## 1. Vue d'ensemble
+## 1. Overview
 
 ### 1.1 Description
 
-**STOA Platform v2** est une plateforme de gestion d'API multi-tenant et event-driven conçue pour les environnements enterprise. Elle combine :
+**STOA Platform v2** is a multi-tenant and event-driven API management platform designed for enterprise environments. It combines:
 
 - **Control-Plane UI** - Console d'administration pour les API Providers
-- **Developer Portal** - Portail pour les API Consumers
-- **MCP Gateway** - Passerelle AI-native via Model Context Protocol
-- **GitOps Architecture** - GitLab comme source de vérité
-- **Event-Driven Pipeline** - Kafka/Redpanda pour le traitement asynchrone
+- **Developer Portal** - Portal for API Consumers
+- **MCP Gateway** - AI-native gateway via Model Context Protocol
+- **GitOps Architecture** - GitLab as source of truth
+- **Event-Driven Pipeline** - Kafka/Redpanda for asynchronous processing
 
-### 1.2 Diagramme d'Architecture Haut Niveau
+### 1.2 High-Level Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -85,12 +85,12 @@
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.3 URLs de Production
+### 1.3 Production URLs
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Console UI | `https://console.gostoa.dev` | Interface API Provider |
-| Developer Portal | `https://portal.gostoa.dev` | Interface API Consumer |
+| Console UI | `https://console.gostoa.dev` | API Provider Interface |
+| Developer Portal | `https://portal.gostoa.dev` | API Consumer Interface |
 | API Gateway Runtime | `https://apis.gostoa.dev` | Runtime des APIs (OIDC) |
 | Control-Plane API | `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0` | Backend API |
 | MCP Gateway | `https://mcp.gostoa.dev` | AI-Native API Gateway |
@@ -107,141 +107,141 @@
 ### 2.1 Control-Plane API (Backend FastAPI)
 
 **Emplacement:** `control-plane-api/`
-**Technologie:** Python 3.11, FastAPI, SQLAlchemy, Alembic
+**Technology:** Python 3.11, FastAPI, SQLAlchemy, Alembic
 
 ```
 control-plane-api/
 ├── src/
-│   ├── main.py                 # Point d'entrée FastAPI
+│   ├── main.py                 # FastAPI entry point
 │   ├── config.py               # Configuration (BASE_DOMAIN)
 │   ├── routers/
 │   │   ├── apis.py             # CRUD APIs (GitOps)
-│   │   ├── tenants.py          # Gestion multi-tenant
+│   │   ├── tenants.py          # Multi-tenant management
 │   │   ├── subscriptions.py    # Souscriptions & API keys
 │   │   ├── applications.py     # Applications consumer
-│   │   ├── deployments.py      # Déploiements (Kafka)
+│   │   ├── deployments.py      # Deployments (Kafka)
 │   │   ├── gateway.py          # Proxy webMethods
 │   │   ├── mcp.py              # MCP servers
 │   │   ├── mcp_admin.py        # MCP administration
-│   │   ├── portal.py           # Endpoints Developer Portal
-│   │   └── webhooks.py         # Webhooks événements
+│   │   ├── portal.py           # Developer Portal endpoints
+│   │   └── webhooks.py         # Event webhooks
 │   ├── services/
-│   │   ├── git_service.py      # Intégration GitLab
+│   │   ├── git_service.py      # GitLab integration
 │   │   ├── kafka_service.py    # Producer Kafka
 │   │   ├── awx_service.py      # Orchestration AWX
 │   │   ├── keycloak_service.py # IAM Keycloak
-│   │   ├── gateway_service.py  # Client webMethods API
+│   │   ├── gateway_service.py  # webMethods API client
 │   │   └── webhook_service.py  # Delivery webhooks
 │   └── models/
-│       ├── subscription.py     # Modèle souscriptions
-│       ├── mcp_server.py       # Modèles MCP
-│       └── webhook.py          # Modèles webhooks
-├── alembic/                    # Migrations DB
+│       ├── subscription.py     # Subscription model
+│       ├── mcp_server.py       # MCP models
+│       └── webhook.py          # Webhook models
+├── alembic/                    # DB migrations
 └── tests/
 ```
 
-**Responsabilités:**
-- Gestion du cycle de vie des APIs (CRUD via GitOps)
-- Gestion des souscriptions et API keys
-- Orchestration des déploiements via Kafka/AWX
+**Responsibilities:**
+- API lifecycle management (CRUD via GitOps)
+- Subscription and API key management
+- Deployment orchestration via Kafka/AWX
 - Proxy vers webMethods Gateway
-- Intégration Keycloak pour l'authentification
+- Keycloak integration for authentication
 
 ### 2.2 Control-Plane UI (Console React)
 
 **Emplacement:** `control-plane-ui/`
-**Technologie:** React 18, TypeScript, TailwindCSS, Keycloak-js
+**Technology:** React 18, TypeScript, TailwindCSS, Keycloak-js
 
 ```
 control-plane-ui/
 ├── src/
 │   ├── pages/
-│   │   ├── Dashboard.tsx       # Vue d'ensemble
-│   │   ├── Tenants.tsx         # Gestion tenants
-│   │   ├── APIs.tsx            # Gestion APIs
+│   │   ├── Dashboard.tsx       # Overview
+│   │   ├── Tenants.tsx         # Tenant management
+│   │   ├── APIs.tsx            # API management
 │   │   ├── Applications.tsx    # Applications
-│   │   ├── Deployments.tsx     # Historique déploiements
-│   │   ├── AITools.tsx         # Catalogue outils IA
+│   │   ├── Deployments.tsx     # Deployment history
+│   │   ├── AITools.tsx         # AI tools catalog
 │   │   └── ErrorSnapshots.tsx  # Snapshots d'erreurs (CAB-397)
 │   ├── components/
 │   ├── services/
-│   │   └── api.ts              # Client Control-Plane API
+│   │   └── api.ts              # Control-Plane API client
 │   └── auth/
 │       └── keycloak.ts         # Config Keycloak
 └── public/
 ```
 
-**Fonctionnalités:**
-- Tableau de bord avec métriques
+**Features:**
+- Dashboard with metrics
 - CRUD complet des APIs par tenant
-- Gestion des applications et souscriptions
-- Monitoring des déploiements
-- Catalogue d'outils IA
+- Application and subscription management
+- Deployment monitoring
+- AI tools catalog
 
 ### 2.3 Developer Portal (React + Vite)
 
 **Emplacement:** `portal/`
-**Technologie:** React 18, TypeScript, Vite, TailwindCSS, React Query
+**Technology:** React 18, TypeScript, Vite, TailwindCSS, React Query
 
 ```
 portal/
 ├── src/
 │   ├── pages/
 │   │   ├── ApiCatalog.tsx      # Browse APIs
-│   │   ├── ApiDetails.tsx      # Détails d'une API
+│   │   ├── ApiDetails.tsx      # API details
 │   │   ├── Subscriptions.tsx   # Mes souscriptions
 │   │   ├── Applications.tsx    # Mes applications
-│   │   ├── MCPTools.tsx        # Outils MCP
-│   │   ├── MCPServers.tsx      # Serveurs MCP
-│   │   ├── ApiTesting.tsx      # Sandbox de test
-│   │   └── UsageMetrics.tsx    # Métriques d'usage
+│   │   ├── MCPTools.tsx        # MCP Tools
+│   │   ├── MCPServers.tsx      # MCP Servers
+│   │   ├── ApiTesting.tsx      # Test sandbox
+│   │   └── UsageMetrics.tsx    # Usage metrics
 │   ├── components/
 │   │   ├── ApiCard.tsx
 │   │   ├── SubscriptionForm.tsx
 │   │   └── MCPToolCard.tsx
 │   ├── services/
-│   │   └── api.ts              # Client API (React Query)
-│   └── config.ts               # Configuration runtime
+│   │   └── api.ts              # API client (React Query)
+│   └── config.ts               # Runtime configuration
 ├── k8s/
 │   └── configmap.yaml          # Config Kubernetes
 └── Dockerfile
 ```
 
-**Fonctionnalités:**
-- Catalogue d'APIs avec filtres
+**Features:**
+- API catalog with filters
 - Souscription et gestion des API keys
-- Création d'applications consumer
-- Test d'APIs en sandbox
-- Métriques de consommation
-- Découverte des outils MCP
+- Consumer application creation
+- API testing in sandbox
+- Consumption metrics
+- MCP tools discovery
 
 ### 2.4 MCP Gateway (AI-Native Gateway)
 
 **Emplacement:** `mcp-gateway/`
-**Technologie:** Python 3.11, FastAPI, OPA, Kubernetes-asyncio
+**Technology:** Python 3.11, FastAPI, OPA, Kubernetes-asyncio
 
 ```
 mcp-gateway/
 ├── src/
-│   ├── main.py                 # Point d'entrée
+│   ├── main.py                 # Entry point
 │   ├── handlers/
-│   │   ├── mcp.py              # Protocole MCP (tools, resources)
-│   │   ├── mcp_sse.py          # Transport SSE bidirectionnel
+│   │   ├── mcp.py              # MCP Protocol (tools, resources)
+│   │   ├── mcp_sse.py          # Bidirectional SSE transport
 │   │   ├── subscriptions.py    # Souscriptions MCP
 │   │   └── servers.py          # Cycle de vie serveurs
 │   ├── auth/
-│   │   ├── keycloak.py         # Validation JWT
+│   │   ├── keycloak.py         # JWT validation
 │   │   └── opa.py              # Moteur de politiques OPA
 │   ├── registry/
 │   │   ├── tool_registry.py    # Registre des outils
 │   │   └── k8s_watcher.py      # Watcher CRDs Kubernetes
 │   ├── metering/
-│   │   └── kafka_metering.py   # Pipeline métriques Kafka
+│   │   └── kafka_metering.py   # Kafka metrics pipeline
 │   └── adapters/
 │       ├── rest_adapter.py     # Convertisseur REST/OpenAPI
 │       ├── graphql_adapter.py  # Support GraphQL
 │       └── grpc_adapter.py     # Support gRPC
-├── policies/                   # Politiques OPA (Rego)
+├── policies/                   # OPA policies (Rego)
 │   ├── rbac.rego
 │   └── rate_limit.rego
 └── tests/                      # 196 tests, 79% coverage
@@ -277,9 +277,9 @@ mcp-gateway/
 
 ---
 
-## 3. Flux de Données
+## 3. Data Flow
 
-### 3.1 Création et Publication d'API
+### 3.1 API Creation and Publication
 
 ```
 ┌──────────────┐
@@ -316,7 +316,7 @@ mcp-gateway/
     └────────┘ └────────┘ └────────┘
 ```
 
-### 3.2 Pipeline de Déploiement (Event-Driven)
+### 3.2 Deployment Pipeline (Event-Driven)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -561,7 +561,7 @@ mcp-gateway/
 ### 4.2 Custom Resource Definitions (CRDs)
 
 ```yaml
-# Tool CRD - Enregistrement d'un outil MCP
+# Tool CRD - MCP tool registration
 apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
@@ -686,7 +686,7 @@ charts/stoa-platform/
 
 ### 5.2 Matrice RBAC
 
-| Rôle | Tenants | APIs | Applications | Deploy | Users |
+| Role | Tenants | APIs | Applications | Deploy | Users |
 |------|---------|------|--------------|--------|-------|
 | **CPI Admin** | CRUD (tous) | CRUD (tous) | CRUD (tous) | Tous envs | Tous |
 | **Tenant Admin** | Read (own) | CRUD (own) | CRUD (own) | Tous envs | Own tenant |
@@ -707,13 +707,13 @@ allow {
     input.user.roles[_] == "cpi-admin"
 }
 
-# Tenant admin peut accéder aux outils de son tenant
+# Tenant admin can access tools in their tenant
 allow {
     input.user.roles[_] == "tenant-admin"
     input.tool.namespace == input.user.tenant_id
 }
 
-# Vérification rate limit
+# Rate limit verification
 rate_limit_exceeded {
     input.user.request_count > get_rate_limit(input.user.roles)
 }
@@ -758,13 +758,13 @@ get_rate_limit(roles) = limit {
 │                                                                          │
 │  Configuration:                                                          │
 │  - Retention: 7 jours                                                   │
-│  - Partitions: 3 (par défaut)                                           │
+│  - Partitions: 3 (default)                                           │
 │  - Replication Factor: 2                                                │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 6.2 Schema des Événements
+### 6.2 Event Schema
 
 ```json
 // api-created event
@@ -817,9 +817,9 @@ get_rate_limit(roles) = limit {
 
 ## 7. MCP Gateway
 
-### 7.1 Protocole MCP
+### 7.1 MCP Protocol
 
-Le **Model Context Protocol (MCP)** permet aux LLMs (comme Claude) d'interagir avec des APIs de manière standardisée.
+The **Model Context Protocol (MCP)** allows LLMs (like Claude) to interact with APIs in a standardized way.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -836,12 +836,12 @@ Le **Model Context Protocol (MCP)** permet aux LLMs (comme Claude) d'interagir a
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │                     Protocol Layer                               │    │
 │  │  Methods:                                                        │    │
-│  │  - tools/list       → Liste des outils disponibles              │    │
+│  │  - tools/list       → List of available tools              │    │
 │  │  - tools/call       → Invocation d'un outil                     │    │
-│  │  - resources/list   → Liste des ressources                      │    │
-│  │  - resources/read   → Lecture d'une ressource                   │    │
-│  │  - prompts/list     → Liste des prompts                         │    │
-│  │  - prompts/get      → Récupération d'un prompt                  │    │
+│  │  - resources/list   → List of resources                      │    │
+│  │  - resources/read   → Read a resource                   │    │
+│  │  - prompts/list     → List of prompts                         │    │
+│  │  - prompts/get      → Get a prompt                  │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
@@ -857,45 +857,45 @@ Le **Model Context Protocol (MCP)** permet aux LLMs (comme Claude) d'interagir a
 
 ### 7.2 Endpoints MCP Gateway
 
-| Endpoint | Méthode | Description |
+| Endpoint | Method | Description |
 |----------|---------|-------------|
 | `/health` | GET | Health check |
 | `/ready` | GET | Readiness probe |
 | `/metrics` | GET | Prometheus metrics |
 | `/mcp/sse` | POST | SSE bidirectionnel (MCP 2.0) |
-| `/mcp/v1/tools` | GET | Liste des outils |
-| `/mcp/v1/tools/{name}` | GET | Détails d'un outil |
+| `/mcp/v1/tools` | GET | List of tools |
+| `/mcp/v1/tools/{name}` | GET | Tool details |
 | `/mcp/v1/tools/{name}/invoke` | POST | Invocation |
 | `/api/tools` | GET | Alias REST |
-| `/api/apis` | GET | Liste des APIs |
+| `/api/apis` | GET | List of APIs |
 | `/.well-known/oauth-protected-resource/mcp/sse` | GET | OAuth metadata |
 
-### 7.3 Variables d'Environnement MCP Gateway
+### 7.3 MCP Gateway Environment Variables
 
-| Variable | Défaut | Description |
+| Variable | Default | Description |
 |----------|--------|-------------|
 | `OPA_ENABLED` | `true` | Activer OPA |
-| `OPA_EMBEDDED` | `true` | Évaluateur embarqué |
-| `METERING_ENABLED` | `true` | Activer métriques Kafka |
+| `OPA_EMBEDDED` | `true` | Embedded evaluator |
+| `METERING_ENABLED` | `true` | Enable Kafka metrics |
 | `K8S_WATCHER_ENABLED` | `false` | Watcher CRDs K8s |
 | `KEYCLOAK_URL` | - | URL Keycloak |
 | `KEYCLOAK_REALM` | `stoa` | Realm |
-| `KAFKA_BOOTSTRAP_SERVERS` | - | Serveurs Kafka |
+| `KAFKA_BOOTSTRAP_SERVERS` | - | Kafka servers |
 
 ---
 
 ## 8. GitOps & CI/CD
 
-### 8.1 Structure GitLab Repository
+### 8.1 GitLab Repository Structure
 
 ```
 stoa-gitops/
 ├── tenants/
 │   ├── acme-corp/
-│   │   ├── tenant.yaml           # Définition du tenant
+│   │   ├── tenant.yaml           # Tenant definition
 │   │   └── apis/
 │   │       ├── crm-api/
-│   │       │   ├── api.yaml      # Métadonnées API
+│   │       │   ├── api.yaml      # API metadata
 │   │       │   └── openapi.yaml  # Spec OpenAPI
 │   │       └── inventory-api/
 │   │           ├── api.yaml
@@ -1014,7 +1014,7 @@ e2e-tests:
 
 ---
 
-## 9. Base de Données
+## 9. Database
 
 ### 9.1 Schema PostgreSQL
 
@@ -1166,7 +1166,7 @@ control-plane-api/alembic/versions/
 
 ---
 
-## 10. Intégrations
+## 10. Integrations
 
 ### 10.1 webMethods Gateway
 
@@ -1339,63 +1339,63 @@ spec:
 ### 11.1 Control-Plane API
 
 #### Tenants
-| Endpoint | Méthode | Description |
+| Endpoint | Method | Description |
 |----------|---------|-------------|
 | `/v1/tenants` | GET | Liste des tenants |
-| `/v1/tenants` | POST | Créer un tenant |
-| `/v1/tenants/{id}` | GET | Détails d'un tenant |
-| `/v1/tenants/{id}` | PUT | Mettre à jour |
+| `/v1/tenants` | POST | Create a tenant |
+| `/v1/tenants/{id}` | GET | Tenant details |
+| `/v1/tenants/{id}` | PUT | Update |
 | `/v1/tenants/{id}` | DELETE | Supprimer |
 
 #### APIs
-| Endpoint | Méthode | Description |
+| Endpoint | Method | Description |
 |----------|---------|-------------|
-| `/v1/tenants/{tenant_id}/apis` | GET | Liste des APIs |
-| `/v1/tenants/{tenant_id}/apis` | POST | Créer une API |
-| `/v1/tenants/{tenant_id}/apis/{api_id}` | GET | Détails |
-| `/v1/tenants/{tenant_id}/apis/{api_id}` | PUT | Mettre à jour |
+| `/v1/tenants/{tenant_id}/apis` | GET | List of APIs |
+| `/v1/tenants/{tenant_id}/apis` | POST | Create an API |
+| `/v1/tenants/{tenant_id}/apis/{api_id}` | GET | Details |
+| `/v1/tenants/{tenant_id}/apis/{api_id}` | PUT | Update |
 | `/v1/tenants/{tenant_id}/apis/{api_id}` | DELETE | Supprimer |
 
 #### Subscriptions
-| Endpoint | Méthode | Description |
+| Endpoint | Method | Description |
 |----------|---------|-------------|
-| `/v1/subscriptions` | POST | Créer souscription |
+| `/v1/subscriptions` | POST | Create subscription |
 | `/v1/subscriptions/my` | GET | Mes souscriptions |
-| `/v1/subscriptions/{id}` | GET | Détails |
+| `/v1/subscriptions/{id}` | GET | Details |
 | `/v1/subscriptions/{id}` | DELETE | Annuler |
 | `/v1/subscriptions/{id}/approve` | POST | Approuver |
-| `/v1/subscriptions/{id}/revoke` | POST | Révoquer |
-| `/v1/subscriptions/{id}/rotate-key` | POST | Rotation clé |
-| `/v1/subscriptions/validate-key` | POST | Valider clé API |
+| `/v1/subscriptions/{id}/revoke` | POST | Revoke |
+| `/v1/subscriptions/{id}/rotate-key` | POST | Key rotation |
+| `/v1/subscriptions/validate-key` | POST | Validate API key |
 | `/v1/subscriptions/tenant/{tenant_id}/pending` | GET | Pending approvals |
 
 #### Deployments
-| Endpoint | Méthode | Description |
+| Endpoint | Method | Description |
 |----------|---------|-------------|
-| `/v1/deployments` | POST | Trigger déploiement |
+| `/v1/deployments` | POST | Trigger deployment |
 | `/v1/deployments/{id}` | GET | Statut |
 | `/v1/deployments/history` | GET | Historique |
 
 #### MCP
-| Endpoint | Méthode | Description |
+| Endpoint | Method | Description |
 |----------|---------|-------------|
 | `/v1/mcp/servers` | GET | Liste serveurs MCP |
 | `/v1/mcp/servers` | POST | Enregistrer serveur |
-| `/v1/mcp/servers/{id}` | GET | Détails |
+| `/v1/mcp/servers/{id}` | GET | Details |
 | `/v1/mcp/servers/{id}/tools` | GET | Outils du serveur |
 | `/v1/mcp/servers/{id}/subscriptions` | GET | Souscriptions |
 
 #### Portal
-| Endpoint | Méthode | Description |
+| Endpoint | Method | Description |
 |----------|---------|-------------|
 | `/v1/portal/apis` | GET | Catalogue APIs (public) |
-| `/v1/portal/apis/{id}` | GET | Détails API |
-| `/v1/portal/tools` | GET | Outils MCP disponibles |
+| `/v1/portal/apis/{id}` | GET | Details API |
+| `/v1/portal/tools` | GET | MCP Tools disponibles |
 | `/v1/portal/subscriptions` | GET | Mes souscriptions |
 
 ### 11.2 MCP Gateway
 
-| Endpoint | Méthode | Description |
+| Endpoint | Method | Description |
 |----------|---------|-------------|
 | `/health` | GET | Health check |
 | `/ready` | GET | Readiness |
@@ -1403,7 +1403,7 @@ spec:
 | `/metrics` | GET | Prometheus metrics |
 | `/mcp/sse` | POST | SSE bidirectionnel |
 | `/mcp/v1/tools` | GET | Liste outils |
-| `/mcp/v1/tools/{name}` | GET | Détails outil |
+| `/mcp/v1/tools/{name}` | GET | Details outil |
 | `/mcp/v1/tools/{name}/invoke` | POST | Invoquer outil |
 | `/api/tools` | GET | Alias REST tools |
 | `/api/apis` | GET | Liste APIs |
@@ -1413,7 +1413,7 @@ spec:
 
 ---
 
-## 12. Observabilité
+## 12. Observability
 
 ### 12.1 Stack de Monitoring
 
@@ -1456,7 +1456,7 @@ spec:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 12.2 Métriques Prometheus
+### 12.2 Prometheus Metrics
 
 ```
 # Control-Plane API
@@ -1480,9 +1480,9 @@ kafka_consumer_lag{topic, partition}
 
 ---
 
-## 13. Sécurité
+## 13. Security
 
-### 13.1 Mesures de Sécurité
+### 13.1 Mesures de Security
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -1549,9 +1549,9 @@ Storage:
 
 ## 14. Stack Technologique
 
-### 14.1 Résumé
+### 14.1 Summary
 
-| Couche | Technologie | Détails |
+| Layer | Technology | Details |
 |--------|-------------|---------|
 | **Frontend** | React 18 | TypeScript, TailwindCSS, React Router |
 | **Backend API** | FastAPI | Python 3.11, async/await, OpenAPI |
@@ -1668,4 +1668,4 @@ kubectl exec -it deployment/control-plane-api -n stoa-system -- /bin/sh
 
 ---
 
-*Document généré le 18 janvier 2026 - STOA Platform v2*
+*Document generated on January 18, 2026 - STOA Platform v2*

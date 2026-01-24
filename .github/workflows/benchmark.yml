@@ -1,0 +1,53 @@
+name: DX Benchmark
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual run'
+        required: false
+        default: 'Manual benchmark'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run Benchmark
+        id: benchmark
+        working-directory: stoa-quickstart
+        run: |
+          chmod +x benchmark.sh
+          ./benchmark.sh --ci | tee benchmark-output.txt
+
+          # Extract results for summary
+          echo "## DX Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat benchmark-output.txt >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: stoa-quickstart/benchmark-output.txt
+          retention-days: 90
+
+      - name: Check Benchmark Status
+        if: failure()
+        run: |
+          echo "::error::Benchmark failed to meet OSS Killer Standard targets"
+          exit 1

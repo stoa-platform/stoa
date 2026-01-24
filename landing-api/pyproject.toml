@@ -1,0 +1,41 @@
+[tool.poetry]
+name = "control-plane"
+version = "0.1.0"
+description = "STOA Platform Control Plane API"
+authors = ["CAB Ingenierie <contact@cabingenierie.com>"]
+readme = "README.md"
+packages = [{include = "control_plane", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.34.0"}
+sqlalchemy = {extras = ["asyncio"], version = "^2.0.0"}
+asyncpg = "^0.30.0"
+alembic = "^1.14.0"
+pydantic = {extras = ["email"], version = "^2.10.0"}
+pydantic-settings = "^2.7.0"
+structlog = "^24.4.0"
+slowapi = "^0.1.9"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+httpx = "^0.28.0"
+pytest-cov = "^6.0.0"
+ruff = "^0.8.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

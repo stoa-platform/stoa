@@ -18,6 +18,7 @@ const MySubscriptions = lazy(() => import('./pages/AITools').then(m => ({ defaul
 const UsageDashboard = lazy(() => import('./pages/AITools').then(m => ({ default: m.UsageDashboard })));
 const ExternalMCPServersList = lazy(() => import('./pages/ExternalMCPServers').then(m => ({ default: m.ExternalMCPServersList })));
 const ExternalMCPServerDetail = lazy(() => import('./pages/ExternalMCPServers').then(m => ({ default: m.ExternalMCPServerDetail })));
+const AdminProspects = lazy(() => import('./pages/AdminProspects').then(m => ({ default: m.AdminProspects })));
 
 // Loading spinner for lazy-loaded pages
 function PageLoader() {
@@ -214,6 +215,7 @@ function ProtectedRoutes() {
           <Route path="/mcp/errors" element={<ErrorSnapshots />} />
           <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
           <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
+          <Route path="/admin/prospects" element={<AdminProspects />} />
         </Routes>
       </Suspense>
     </Layout>

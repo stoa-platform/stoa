@@ -708,3 +708,115 @@ export interface SyncToolsResponse {
   removed_count: number;
   tools: ExternalMCPServerTool[];
 }
+
+// Admin Prospects types (CAB-911)
+// =============================================================================
+
+export type ProspectStatus = 'pending' | 'opened' | 'converted' | 'expired';
+export type NPSCategory = 'promoter' | 'passive' | 'detractor';
+
+export interface ProspectSummary {
+  id: string;
+  email: string;
+  company: string;
+  status: ProspectStatus;
+  source?: string;
+  created_at: string;
+  opened_at?: string;
+  last_activity_at?: string;
+  time_to_first_tool_seconds?: number;
+  nps_score?: number;
+  nps_category?: NPSCategory;
+  total_events: number;
+}
+
+export interface ProspectListMeta {
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ProspectListResponse {
+  data: ProspectSummary[];
+  meta: ProspectListMeta;
+}
+
+export interface ProspectEventDetail {
+  id: string;
+  event_type: string;
+  timestamp: string;
+  metadata: Record<string, unknown>;
+  is_first_tool_call: boolean;
+}
+
+export interface ProspectMetrics {
+  time_to_open_seconds?: number;
+  time_to_first_tool_seconds?: number;
+  tools_called_count: number;
+  pages_viewed_count: number;
+  errors_count: number;
+  session_duration_seconds?: number;
+}
+
+export interface ProspectDetail {
+  id: string;
+  email: string;
+  company: string;
+  status: ProspectStatus;
+  source?: string;
+  created_at: string;
+  opened_at?: string;
+  expires_at: string;
+  nps_score?: number;
+  nps_category?: NPSCategory;
+  nps_comment?: string;
+  metrics: ProspectMetrics;
+  timeline: ProspectEventDetail[];
+  errors: ProspectEventDetail[];
+}
+
+export interface ConversionFunnel {
+  total_invites: number;
+  pending: number;
+  opened: number;
+  converted: number;
+  expired: number;
+}
+
+export interface NPSDistribution {
+  promoters: number;
+  passives: number;
+  detractors: number;
+  no_response: number;
+  nps_score: number;
+  avg_score?: number;
+}
+
+export interface TimingMetrics {
+  avg_time_to_open_seconds?: number;
+  avg_time_to_first_tool_seconds?: number;
+}
+
+export interface CompanyStats {
+  company: string;
+  invite_count: number;
+  converted_count: number;
+}
+
+export interface ProspectsMetricsResponse {
+  total_invited: number;
+  total_active: number;
+  avg_time_to_tool?: number;
+  avg_nps?: number;
+  by_status: ConversionFunnel;
+  nps: NPSDistribution;
+  timing: TimingMetrics;
+  top_companies: CompanyStats[];
+}
+
+export interface ProspectsFilters {
+  company?: string;
+  status?: ProspectStatus;
+  date_from?: string;
+  date_to?: string;
+}

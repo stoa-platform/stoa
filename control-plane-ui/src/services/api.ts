@@ -6,7 +6,8 @@ import type {
   Application, ApplicationCreate,
   Deployment, DeploymentRequest,
   CommitInfo, MergeRequest,
-  TraceSummary, PipelineTrace, TraceTimeline, TraceStats
+  TraceSummary, PipelineTrace, TraceTimeline, TraceStats,
+  ProspectListResponse, ProspectsMetricsResponse, ProspectDetail,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -247,6 +248,45 @@ class ApiService {
     if (component) params.component = component;
     if (limit) params.limit = limit;
     const { data } = await this.client.get('/v1/platform/events', { params });
+    return data;
+  }
+
+  // Admin Prospects (CAB-911)
+  async getProspects(params: {
+    company?: string;
+    status?: string;
+    date_from?: string;
+    date_to?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<ProspectListResponse> {
+    const { data } = await this.client.get('/v1/admin/prospects', { params });
+    return data;
+  }
+
+  async getProspectsMetrics(params?: {
+    date_from?: string;
+    date_to?: string;
+  }): Promise<ProspectsMetricsResponse> {
+    const { data } = await this.client.get('/v1/admin/prospects/metrics', { params });
+    return data;
+  }
+
+  async getProspect(inviteId: string): Promise<ProspectDetail> {
+    const { data } = await this.client.get(`/v1/admin/prospects/${inviteId}`);
+    return data;
+  }
+
+  async exportProspectsCSV(params?: {
+    company?: string;
+    status?: string;
+    date_from?: string;
+    date_to?: string;
+  }): Promise<Blob> {
+    const { data } = await this.client.get('/v1/admin/prospects/export', {
+      params,
+      responseType: 'blob',
+    });
     return data;
   }
 }

@@ -245,8 +245,38 @@ class ProxiedTool(BaseTool):
         return v
 
 
+class ExternalTool(BaseTool):
+    """Tool from an external MCP server (Linear, GitHub, Slack, etc.).
+
+    External tools proxy requests to external MCP servers that STOA
+    manages with governance (policies, audit, rate limiting).
+
+    Naming convention: {server_prefix}__{original_name}
+    Example: linear__create_issue, github__list_repos
+    """
+
+    server_id: str = Field(..., description="External MCP server ID")
+    server_name: str = Field(..., description="External MCP server name/slug")
+    original_name: str = Field(..., description="Original tool name from external server")
+    base_url: str = Field(..., description="External server base URL")
+    transport: str = Field("sse", description="Transport protocol (sse, http, websocket)")
+    auth_type: str = Field("none", description="Auth type (none, api_key, bearer_token, oauth2)")
+    credentials: dict[str, Any] | None = Field(None, description="Decrypted credentials from Vault")
+
+    @property
+    def tool_type(self) -> ToolType:
+        """Return external tool type."""
+        # Reuse PROXIED type since external tools also proxy to backends
+        return ToolType.PROXIED
+
+    @property
+    def internal_key(self) -> str:
+        """Return internal storage key."""
+        return f"ext::{self.server_name}__{self.original_name}"
+
+
 # Type alias for polymorphic tool handling
-AnyTool = Tool | CoreTool | ProxiedTool
+AnyTool = Tool | CoreTool | ProxiedTool | ExternalTool
 
 
 class ToolInvocation(BaseModel):

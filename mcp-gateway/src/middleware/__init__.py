@@ -15,6 +15,7 @@ from .metrics import (
     record_backend_request,
     update_tools_registered,
 )
+from .shadow import ShadowMiddleware
 
 __all__ = [
     # Auth
@@ -30,4 +31,6 @@ __all__ = [
     "record_auth_attempt",
     "record_backend_request",
     "update_tools_registered",
+    # Shadow (Python → Rust Migration)
+    "ShadowMiddleware",
 ]

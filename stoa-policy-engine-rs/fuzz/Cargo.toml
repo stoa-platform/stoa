@@ -1,0 +1,30 @@
+[package]
+name = "stoa-policy-engine-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1.0"
+arbitrary = { version = "1", features = ["derive"] }
+
+[dependencies.stoa-policy-engine]
+path = ".."
+
+[[bin]]
+name = "policy_input"
+path = "fuzz_targets/policy_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "yaml_config"
+path = "fuzz_targets/yaml_config.rs"
+test = false
+doc = false
+bench = false

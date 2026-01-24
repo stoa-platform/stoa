@@ -2,7 +2,7 @@
  * My Subscriptions Page
  *
  * Lists user's MCP Tool and MCP Server subscriptions with usage statistics.
- * Uses MCP Gateway endpoints (mcp.stoa.cab-i.com)
+ * Uses MCP Gateway endpoints (mcp.gostoa.dev)
  *
  * Reference: Linear CAB-247
  */

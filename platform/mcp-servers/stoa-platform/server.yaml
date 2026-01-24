@@ -1,7 +1,7 @@
 # STOA Platform MCP Server
 # Native MCP interface for STOA platform management
 
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: MCPServer
 metadata:
   name: stoa-platform
@@ -16,10 +16,10 @@ spec:
   description: |
     Native MCP interface for STOA platform management.
     Provides tools for managing tenants, APIs, deployments, and platform configuration.
-  icon: https://portal.stoa.cab-i.com/stoa-icon.svg
+  icon: https://portal.gostoa.dev/stoa-icon.svg
   category: platform
   status: active
-  documentationUrl: https://docs.stoa.cab-i.com/mcp/stoa-platform
+  documentationUrl: https://docs.gostoa.dev/mcp/stoa-platform
 
   visibility:
     public: true
@@ -192,7 +192,7 @@ spec:
         requestsPerMinute: 60
 
   backend:
-    baseUrl: https://api.stoa.cab-i.com
+    baseUrl: https://api.gostoa.dev
     auth:
       type: oauth2
     timeout: 30s

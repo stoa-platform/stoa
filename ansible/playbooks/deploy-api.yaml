@@ -33,10 +33,10 @@
     use_oidc_mode: "{{ use_oidc | default(_use_oidc) | bool }}"
 
     # OIDC configuration defaults (use external HTTPS URLs for proper SSL)
-    _keycloak_url: "https://auth.{{ base_domain | default('stoa.cab-i.com') }}"
+    _keycloak_url: "https://auth.{{ base_domain | default('gostoa.dev') }}"
     _client_id: "awx-automation"
     _client_secret: ""
-    _gateway_proxy_url: "https://api.{{ base_domain | default('stoa.cab-i.com') }}/v1/gateway"
+    _gateway_proxy_url: "https://api.{{ base_domain | default('gostoa.dev') }}/v1/gateway"
 
     # Basic Auth fallback defaults
     _gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"

@@ -21,7 +21,7 @@
                            │ Bearer Token
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│           WEBMETHODS API GATEWAY (apis.stoa.cab-i.com)          │
+│           WEBMETHODS API GATEWAY (apis.gostoa.dev)          │
 ├─────────────────────────────────────────────────────────────────┤
 │  Route: /gateway/Control-Plane-API/2.0/*                        │
 │  Auth: OIDC Token Forwarding                                    │
@@ -65,7 +65,7 @@
 ### Points Importants
 
 1. **Portal → Control-Plane API via WebMethods Gateway**
-   - URL: `https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`
+   - URL: `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0`
    - Le contrat OpenAPI doit être mis à jour à chaque modification du Control-Plane API
 
 2. **MCP Gateway - Auth par défaut = OAuth2 JWT**
@@ -249,7 +249,7 @@ const response = await mcpSubscriptionsService.listSubscriptions();
 ### 3.3 Mise à jour du contrat OpenAPI
 
 Après modification du Control-Plane API:
-1. Récupérer le nouveau OpenAPI: `curl https://api.stoa.cab-i.com/openapi.json`
+1. Récupérer le nouveau OpenAPI: `curl https://api.gostoa.dev/openapi.json`
 2. Mettre à jour dans WebMethods API Gateway
 3. Republier l'API `Control-Plane-API v2.0`
 
@@ -323,12 +323,12 @@ alembic upgrade head
 ```yaml
 # Control-Plane API
 DATABASE_URL: "postgresql+asyncpg://stoa:stoa@control-plane-db:5432/stoa"
-VAULT_ADDR: "https://vault.stoa.cab-i.com"
+VAULT_ADDR: "https://vault.gostoa.dev"
 VAULT_MCP_KEYS_PATH: "secret/data/mcp-subscriptions"
 
 # MCP Gateway (même DB)
 DATABASE_URL: "postgresql+asyncpg://stoa:stoa@control-plane-db:5432/stoa"
-VAULT_ADDR: "https://vault.stoa.cab-i.com"
+VAULT_ADDR: "https://vault.gostoa.dev"
 
 # Tenant settings
 MCP_SUBSCRIPTION_REQUIRES_APPROVAL: "false"  # Activable par tenant
@@ -394,7 +394,7 @@ Le token JWT contient un claim `cnf` (confirmation) avec le thumbprint du certif
 ```json
 {
   "sub": "service-account-crm",
-  "iss": "https://auth.stoa.cab-i.com/realms/stoa",
+  "iss": "https://auth.gostoa.dev/realms/stoa",
   "cnf": {
     "x5t#S256": "sha256-thumbprint-du-certificat-client"
   }
@@ -470,10 +470,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - mcp.stoa.cab-i.com
+        - mcp.gostoa.dev
       secretName: mcp-gateway-tls
   rules:
-    - host: mcp.stoa.cab-i.com
+    - host: mcp.gostoa.dev
       http:
         paths:
           - path: /
@@ -492,7 +492,7 @@ spec:
 ```bash
 # Créer un rôle PKI pour les clients M2M
 vault write pki/roles/mcp-client \
-    allowed_domains="stoa.cab-i.com" \
+    allowed_domains="gostoa.dev" \
     allow_subdomains=true \
     max_ttl="8760h" \
     key_type="rsa" \
@@ -500,7 +500,7 @@ vault write pki/roles/mcp-client \
 
 # Émettre un certificat client
 vault write pki/issue/mcp-client \
-    common_name="service-account-crm.stoa.cab-i.com" \
+    common_name="service-account-crm.gostoa.dev" \
     ttl="720h"
 ```
 
@@ -534,7 +534,7 @@ class MCPServerSubscription(Base):
 1. **Stockage des API Keys** : Hash SHA-256 en DB pour validation rapide + clé chiffrée dans Vault
 2. **Auth MCP Gateway par défaut** : OAuth2 JWT (Bearer Token) - API Key est secondaire
 3. **Base de données** : PostgreSQL partagée entre Control-Plane API et MCP Gateway
-4. **Routing Portal** : Via WebMethods API Gateway (`apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`)
+4. **Routing Portal** : Via WebMethods API Gateway (`apis.gostoa.dev/gateway/Control-Plane-API/2.0`)
 5. **mTLS pour M2M** : Optionnel, avec Certificate-Bound Tokens (RFC 8705)
 
 ## Questions Ouvertes

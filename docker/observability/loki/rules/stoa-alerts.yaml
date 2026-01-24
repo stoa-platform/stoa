@@ -21,7 +21,7 @@ groups:
         annotations:
           summary: "High error rate in Control-Plane API"
           description: "Error rate is {{ $value | printf \"%.2f\" }} errors/sec over the last 5 minutes"
-          runbook_url: "https://docs.stoa.cab-i.com/runbooks/high-error-rate"
+          runbook_url: "https://docs.gostoa.dev/runbooks/high-error-rate"
 
       # Critical error rate (server errors)
       - alert: CriticalAPIErrorRate

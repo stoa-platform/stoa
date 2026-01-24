@@ -6,9 +6,9 @@
 import { test as setup, expect } from '@playwright/test';
 import { PERSONAS, PersonaKey, getAuthStatePath } from './personas';
 
-const KEYCLOAK_URL = process.env.KEYCLOAK_URL || 'https://auth.stoa.cab-i.com';
-const PORTAL_URL = process.env.STOA_PORTAL_URL || 'https://portal.stoa.cab-i.com';
-const CONSOLE_URL = process.env.STOA_CONSOLE_URL || 'https://console.stoa.cab-i.com';
+const KEYCLOAK_URL = process.env.KEYCLOAK_URL || 'https://auth.gostoa.dev';
+const PORTAL_URL = process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev';
+const CONSOLE_URL = process.env.STOA_CONSOLE_URL || 'https://console.gostoa.dev';
 
 /**
  * Setup authentication for each persona

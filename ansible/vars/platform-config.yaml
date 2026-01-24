@@ -9,7 +9,7 @@
 # ENVIRONMENT
 # =============================================================================
 environment: dev
-base_domain: stoa.cab-i.com
+base_domain: gostoa.dev
 platform_tenant_id: stoa
 
 # =============================================================================

@@ -85,7 +85,7 @@ MOCK_SERVERS: list[MCPServer] = [
         ],
         status=ServerStatus.ACTIVE,
         version="1.0.0",
-        documentation_url="https://docs.stoa.cab-i.com/platform-tools",
+        documentation_url="https://docs.gostoa.dev/platform-tools",
         created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
         updated_at=datetime(2026, 1, 10, tzinfo=timezone.utc),
     ),

@@ -200,13 +200,13 @@ logger.debug(
 
 ```bash
 # Test OAuth discovery
-curl https://mcp.stoa.cab-i.com/.well-known/oauth-protected-resource/mcp/sse
+curl https://mcp.gostoa.dev/.well-known/oauth-protected-resource/mcp/sse
 
 # Test tools endpoint (no auth required)
-curl https://mcp.stoa.cab-i.com/tools
+curl https://mcp.gostoa.dev/tools
 
 # Test MCP initialize with Bearer token
-curl -X POST https://mcp.stoa.cab-i.com/mcp/sse \
+curl -X POST https://mcp.gostoa.dev/mcp/sse \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer YOUR_TOKEN" \

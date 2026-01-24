@@ -110,11 +110,11 @@ jobs:
           ENV="${{ github.event.inputs.environment || 'dev' }}"
           echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
 
-          # Use stoa.cab-i.com as default since we only have one cluster
+          # Use gostoa.dev as default since we only have one cluster
           # Future: add separate dev/staging clusters with proper DNS
           case "$ENV" in
             dev|staging|prod)
-              echo "BASE_DOMAIN=stoa.cab-i.com" >> $GITHUB_OUTPUT
+              echo "BASE_DOMAIN=gostoa.dev" >> $GITHUB_OUTPUT
               ;;
           esac
 
@@ -164,7 +164,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
-      url: https://portal.stoa.cab-i.com
+      url: https://portal.gostoa.dev
 
     steps:
       - name: Checkout repository

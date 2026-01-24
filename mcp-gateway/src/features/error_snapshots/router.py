@@ -237,7 +237,7 @@ async def generate_replay(
     query_params = request.get("query_params", {})
 
     # Build URL with query params (properly encoded)
-    url = f"https://mcp.stoa.cab-i.com{path}"
+    url = f"https://mcp.gostoa.dev{path}"
     if query_params:
         url = f"{url}?{urlencode(query_params)}"
 

@@ -14,7 +14,7 @@ stages:
 variables:
   ENV: "dev"
   WM_GATEWAY_URL: "http://apim-gateway.stoa-system.svc:9072"
-  AWX_HOST: "https://awx.stoa.cab-i.com"
+  AWX_HOST: "https://awx.gostoa.dev"
   GITOPS_REPO: "${CI_PROJECT_DIR}"
 
 # =============================================================================

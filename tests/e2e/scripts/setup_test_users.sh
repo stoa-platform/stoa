@@ -14,7 +14,7 @@
 set -eo pipefail
 
 # Default configuration
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.stoa.cab-i.com}"
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 KEYCLOAK_REALM="${KEYCLOAK_REALM:-stoa}"
 AWS_REGION="${AWS_REGION:-eu-west-1}"
 SECRET_NAME="stoa/e2e-test-credentials"
@@ -185,10 +185,10 @@ EOF
 # Step 2: Create test users in Keycloak
 log_info "Creating test users in Keycloak..."
 
-create_user "e2e-admin" "$E2E_ADMIN_PASSWORD" "cpi-admin" "e2e-admin@test.stoa.cab-i.com"
-create_user "e2e-tenant-admin" "$E2E_TENANT_ADMIN_PASSWORD" "tenant-admin" "e2e-tenant-admin@test.stoa.cab-i.com"
-create_user "e2e-devops" "$E2E_DEVOPS_PASSWORD" "devops" "e2e-devops@test.stoa.cab-i.com"
-create_user "e2e-viewer" "$E2E_VIEWER_PASSWORD" "viewer" "e2e-viewer@test.stoa.cab-i.com"
+create_user "e2e-admin" "$E2E_ADMIN_PASSWORD" "cpi-admin" "e2e-admin@test.gostoa.dev"
+create_user "e2e-tenant-admin" "$E2E_TENANT_ADMIN_PASSWORD" "tenant-admin" "e2e-tenant-admin@test.gostoa.dev"
+create_user "e2e-devops" "$E2E_DEVOPS_PASSWORD" "devops" "e2e-devops@test.gostoa.dev"
+create_user "e2e-viewer" "$E2E_VIEWER_PASSWORD" "viewer" "e2e-viewer@test.gostoa.dev"
 
 # Step 3: Store credentials in AWS Secrets Manager
 log_info "Storing credentials in AWS Secrets Manager..."
@@ -198,22 +198,22 @@ SECRET_VALUE=$(cat <<EOF
     "admin": {
         "username": "e2e-admin",
         "password": "${E2E_ADMIN_PASSWORD}",
-        "email": "e2e-admin@test.stoa.cab-i.com"
+        "email": "e2e-admin@test.gostoa.dev"
     },
     "tenant_admin": {
         "username": "e2e-tenant-admin",
         "password": "${E2E_TENANT_ADMIN_PASSWORD}",
-        "email": "e2e-tenant-admin@test.stoa.cab-i.com"
+        "email": "e2e-tenant-admin@test.gostoa.dev"
     },
     "devops": {
         "username": "e2e-devops",
         "password": "${E2E_DEVOPS_PASSWORD}",
-        "email": "e2e-devops@test.stoa.cab-i.com"
+        "email": "e2e-devops@test.gostoa.dev"
     },
     "viewer": {
         "username": "e2e-viewer",
         "password": "${E2E_VIEWER_PASSWORD}",
-        "email": "e2e-viewer@test.stoa.cab-i.com"
+        "email": "e2e-viewer@test.gostoa.dev"
     }
 }
 EOF

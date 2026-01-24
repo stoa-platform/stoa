@@ -13,7 +13,7 @@ The E2E test suite validates critical user flows including authentication, autho
 | Test Framework | pytest |
 | Browser Automation | Playwright |
 | Authentication | Keycloak (OIDC) |
-| Target Application | console.stoa.cab-i.com |
+| Target Application | console.gostoa.dev |
 
 ## Directory Structure
 
@@ -35,8 +35,8 @@ tests/e2e/
 ### Prerequisites
 
 - Python 3.11+
-- Access to Keycloak (auth.stoa.cab-i.com)
-- Access to Console (console.stoa.cab-i.com)
+- Access to Keycloak (auth.gostoa.dev)
+- Access to Console (console.gostoa.dev)
 
 ### Setup
 
@@ -73,9 +73,9 @@ This creates 4 test users in Keycloak and stores their credentials in AWS Secret
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KEYCLOAK_URL` | `https://auth.stoa.cab-i.com` | Keycloak server URL |
+| `KEYCLOAK_URL` | `https://auth.gostoa.dev` | Keycloak server URL |
 | `KEYCLOAK_REALM` | `stoa` | Keycloak realm |
-| `CONSOLE_URL` | `https://console.stoa.cab-i.com` | Console application URL |
+| `CONSOLE_URL` | `https://console.gostoa.dev` | Console application URL |
 | `HEADLESS` | `true` | Run browser headlessly |
 | `SLOW_MO` | `0` | Milliseconds to slow down actions |
 | `AWS_REGION` | `eu-west-1` | AWS region for Secrets Manager |
@@ -239,7 +239,7 @@ class TestMyFeature:
         keycloak_login("admin")
 
         # 2. Navigate
-        page.goto("https://console.stoa.cab-i.com/my-feature")
+        page.goto("https://console.gostoa.dev/my-feature")
 
         # 3. Interact
         page.locator("#my-button").click()
@@ -265,8 +265,8 @@ e2e-tests:
   image: mcr.microsoft.com/playwright:v1.40.0-jammy
   variables:
     HEADLESS: "true"
-    KEYCLOAK_URL: "https://auth.stoa.cab-i.com"
-    CONSOLE_URL: "https://console.stoa.cab-i.com"
+    KEYCLOAK_URL: "https://auth.gostoa.dev"
+    CONSOLE_URL: "https://console.gostoa.dev"
   before_script:
     - pip install pytest playwright pytest-playwright
   script:

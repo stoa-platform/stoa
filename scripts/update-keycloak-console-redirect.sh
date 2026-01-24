@@ -1,11 +1,11 @@
 #!/bin/bash
 # =============================================================================
 # Update Keycloak control-plane-ui client redirectURIs
-# CAB-237: Rename devops.stoa.cab-i.com → console.stoa.cab-i.com
+# CAB-237: Rename devops.gostoa.dev → console.gostoa.dev
 # =============================================================================
 #
 # This script updates the control-plane-ui client in Keycloak to use
-# the new console.stoa.cab-i.com domain instead of devops.stoa.cab-i.com
+# the new console.gostoa.dev domain instead of devops.gostoa.dev
 #
 # Prerequisites:
 #   - kubectl configured with cluster access
@@ -15,13 +15,13 @@
 #   ./update-keycloak-console-redirect.sh [BASE_DOMAIN]
 #
 # Example:
-#   ./update-keycloak-console-redirect.sh stoa.cab-i.com
+#   ./update-keycloak-console-redirect.sh gostoa.dev
 # =============================================================================
 
 set -e
 
 # Configuration
-BASE_DOMAIN="${1:-stoa.cab-i.com}"
+BASE_DOMAIN="${1:-gostoa.dev}"
 NAMESPACE="${KEYCLOAK_NAMESPACE:-stoa-system}"
 REALM="${KEYCLOAK_REALM:-stoa}"
 CLIENT_ID="control-plane-ui"

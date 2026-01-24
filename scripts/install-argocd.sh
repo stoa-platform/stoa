@@ -4,7 +4,7 @@ set -e
 
 NAMESPACE="argocd"
 ARGOCD_VERSION="5.51.6"
-DOMAIN="${ARGOCD_DOMAIN:-argocd.stoa.cab-i.com}"
+DOMAIN="${ARGOCD_DOMAIN:-argocd.gostoa.dev}"
 
 echo "=== Installing ArgoCD for APIM Platform ==="
 

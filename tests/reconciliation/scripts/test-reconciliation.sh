@@ -29,7 +29,7 @@ WM_ADMIN_USER="${WM_ADMIN_USER:-Administrator}"
 WM_ADMIN_PASSWORD="${WM_ADMIN_PASSWORD:?WM_ADMIN_PASSWORD is required}"
 
 # AWX
-AWX_HOST="${AWX_HOST:-https://awx.stoa.cab-i.com}"
+AWX_HOST="${AWX_HOST:-https://awx.gostoa.dev}"
 AWX_TOKEN="${AWX_TOKEN:?AWX_TOKEN is required}"
 AWX_JOB_TEMPLATE_ID="${AWX_JOB_TEMPLATE_ID:-42}"
 

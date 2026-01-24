@@ -196,10 +196,10 @@ SELECT
 
 ```bash
 # Check Control-Plane API health
-curl -s https://api.stoa.cab-i.com/health | jq .
+curl -s https://api.gostoa.dev/health | jq .
 
 # Verify Keycloak integration
-curl -s https://api.stoa.cab-i.com/api/v1/tenants -H "Authorization: Bearer $TOKEN"
+curl -s https://api.gostoa.dev/api/v1/tenants -H "Authorization: Bearer $TOKEN"
 ```
 
 ### 6.4 Verification Checklist
@@ -250,13 +250,13 @@ S3_BUCKET=stoa-backups AWS_REGION=eu-west-1 \
 1. **Verify All Integrations**
    ```bash
    # Control-Plane API
-   curl -s https://api.stoa.cab-i.com/health
+   curl -s https://api.gostoa.dev/health
 
    # Console UI
-   curl -s https://console.stoa.cab-i.com
+   curl -s https://console.gostoa.dev
 
    # Developer Portal
-   curl -s https://portal.stoa.cab-i.com
+   curl -s https://portal.gostoa.dev
    ```
 
 2. **Clear API Cache** (if applicable)

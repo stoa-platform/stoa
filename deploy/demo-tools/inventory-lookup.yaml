@@ -7,21 +7,21 @@ kind: Namespace
 metadata:
   name: team-beta
   labels:
-    stoa.cab-i.com/tenant: team-beta
-    stoa.cab-i.com/environment: demo
+    gostoa.dev/tenant: team-beta
+    gostoa.dev/environment: demo
 ---
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: inventory-lookup
   namespace: team-beta
   labels:
-    stoa.cab-i.com/tenant: team-beta
-    stoa.cab-i.com/category: operations
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: team-beta
+    gostoa.dev/category: operations
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/owner: team-beta-admin
-    stoa.cab-i.com/created-by: cab-290
+    gostoa.dev/owner: team-beta-admin
+    gostoa.dev/created-by: cab-290
 spec:
   displayName: "Inventory Lookup"
   description: "Check stock levels and product availability across warehouses. Returns real-time inventory data including quantity, location, and reorder status."
@@ -79,8 +79,8 @@ metadata:
   name: inventory-lookup-mock-data
   namespace: team-beta
   labels:
-    stoa.cab-i.com/tenant: team-beta
-    stoa.cab-i.com/tool: inventory-lookup
+    gostoa.dev/tenant: team-beta
+    gostoa.dev/tool: inventory-lookup
 data:
   response.json: |
     {

@@ -49,7 +49,7 @@ class TestAuthenticationFlow:
         current_url = page.url
         assert keycloak_config["console_url"] in current_url
         assert "/login" not in current_url
-        assert "auth.stoa.cab-i.com" not in current_url
+        assert "auth.gostoa.dev" not in current_url
 
         # Verify user info
         assert result["role"] == "admin"
@@ -144,7 +144,7 @@ class TestAuthenticationFlow:
         assert "iss" in payload, "Token should contain 'iss' claim"
 
         # Verify issuer matches Keycloak
-        assert "auth.stoa.cab-i.com" in payload["iss"]
+        assert "auth.gostoa.dev" in payload["iss"]
 
 
 @pytest.mark.auth

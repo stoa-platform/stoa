@@ -57,7 +57,7 @@ class Settings(BaseSettings):
 
     # OpenSearch
     opensearch_host: str = Field(
-        default="https://opensearch.stoa.cab-i.com", alias="OPENSEARCH_HOST"
+        default="https://opensearch.gostoa.dev", alias="OPENSEARCH_HOST"
     )
     opensearch_user: str = Field(default="admin", alias="OPENSEARCH_USER")
     opensearch_password: str = Field(default="", alias="OPENSEARCH_PASSWORD")

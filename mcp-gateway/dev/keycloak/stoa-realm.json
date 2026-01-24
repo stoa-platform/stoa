@@ -89,15 +89,15 @@
       "directAccessGrantsEnabled": false,
       "protocol": "openid-connect",
       "redirectUris": [
-        "https://console.stoa.cab-i.com/*",
-        "https://console.dev.stoa.cab-i.com/*",
-        "https://console.staging.stoa.cab-i.com/*",
+        "https://console.gostoa.dev/*",
+        "https://console.dev.gostoa.dev/*",
+        "https://console.staging.gostoa.dev/*",
         "http://localhost:3000/*"
       ],
       "webOrigins": [
-        "https://console.stoa.cab-i.com",
-        "https://console.dev.stoa.cab-i.com",
-        "https://console.staging.stoa.cab-i.com",
+        "https://console.gostoa.dev",
+        "https://console.dev.gostoa.dev",
+        "https://console.staging.gostoa.dev",
         "http://localhost:3000"
       ],
       "defaultClientScopes": [
@@ -131,15 +131,15 @@
       "directAccessGrantsEnabled": false,
       "protocol": "openid-connect",
       "redirectUris": [
-        "https://portal.stoa.cab-i.com/*",
-        "https://portal.dev.stoa.cab-i.com/*",
-        "https://portal.staging.stoa.cab-i.com/*",
+        "https://portal.gostoa.dev/*",
+        "https://portal.dev.gostoa.dev/*",
+        "https://portal.staging.gostoa.dev/*",
         "http://localhost:3001/*"
       ],
       "webOrigins": [
-        "https://portal.stoa.cab-i.com",
-        "https://portal.dev.stoa.cab-i.com",
-        "https://portal.staging.stoa.cab-i.com",
+        "https://portal.gostoa.dev",
+        "https://portal.dev.gostoa.dev",
+        "https://portal.staging.gostoa.dev",
         "http://localhost:3001"
       ],
       "defaultClientScopes": [

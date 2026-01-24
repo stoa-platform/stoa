@@ -32,7 +32,7 @@
   "keycloak": {
     "realm": "stoa",
     "client_id": "stoa-console",
-    "auth_url": "https://auth.stoa.cab-i.com"
+    "auth_url": "https://auth.gostoa.dev"
   },
   "_comment": "Passwords are fetched from AWS Secrets Manager (stoa/e2e-test-credentials) or environment variables"
 }

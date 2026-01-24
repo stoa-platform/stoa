@@ -42,7 +42,7 @@ export interface ListTagsResponse {
 }
 
 /**
- * MCP Tools service - calls MCP Gateway at mcp.stoa.cab-i.com
+ * MCP Tools service - calls MCP Gateway at mcp.gostoa.dev
  */
 export const toolsService = {
   /**

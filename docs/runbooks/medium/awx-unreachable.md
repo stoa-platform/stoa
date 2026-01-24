@@ -13,13 +13,13 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `AWXDown` | `up{job="awx"} == 0` | [AWX Dashboard](https://grafana.stoa.cab-i.com/d/awx) |
-| `AWXWebUnhealthy` | `awx_web_status != 200` | [AWX Dashboard](https://grafana.stoa.cab-i.com/d/awx) |
-| `AWXTaskQueueHigh` | `awx_pending_jobs > 50` | [AWX Dashboard](https://grafana.stoa.cab-i.com/d/awx) |
+| `AWXDown` | `up{job="awx"} == 0` | [AWX Dashboard](https://grafana.gostoa.dev/d/awx) |
+| `AWXWebUnhealthy` | `awx_web_status != 200` | [AWX Dashboard](https://grafana.gostoa.dev/d/awx) |
+| `AWXTaskQueueHigh` | `awx_pending_jobs > 50` | [AWX Dashboard](https://grafana.gostoa.dev/d/awx) |
 
 ### Observed Behavior
 
-- AWX UI inaccessible (https://awx.stoa.cab-i.com)
+- AWX UI inaccessible (https://awx.gostoa.dev)
 - Control-Plane API fails to launch jobs
 - Automatic deployments not triggering
 - "connection refused" error in logs
@@ -56,7 +56,7 @@ kubectl get ingress -n awx
 kubectl describe ingress awx -n awx
 
 # 6. Test health check
-curl -s https://awx.stoa.cab-i.com/api/v2/ping/ | jq .
+curl -s https://awx.gostoa.dev/api/v2/ping/ | jq .
 ```
 
 ### Verification Points
@@ -75,7 +75,7 @@ curl -s https://awx.stoa.cab-i.com/api/v2/ping/ | jq .
 | awx-web pod crash | High | `kubectl get pods -n awx` |
 | Database connection lost | Medium | Logs "database" |
 | Redis down | Medium | `kubectl get pods -n awx -l app=redis` |
-| Invalid TLS certificate | Low | `curl -v https://awx.stoa.cab-i.com` |
+| Invalid TLS certificate | Low | `curl -v https://awx.gostoa.dev` |
 | Insufficient resources | Low | `kubectl top pods -n awx` |
 
 ---
@@ -203,20 +203,20 @@ kubectl rollout restart deployment -n stoa-system control-plane-api
 
 ```bash
 # API health check
-curl -s https://awx.stoa.cab-i.com/api/v2/ping/ | jq .
+curl -s https://awx.gostoa.dev/api/v2/ping/ | jq .
 
 # List job templates
 curl -s -H "Authorization: Bearer $AWX_TOKEN" \
-  https://awx.stoa.cab-i.com/api/v2/job_templates/ | jq '.results[].name'
+  https://awx.gostoa.dev/api/v2/job_templates/ | jq '.results[].name'
 
 # Test a job (dry-run)
 curl -s -H "Authorization: Bearer $AWX_TOKEN" \
   -X POST \
-  https://awx.stoa.cab-i.com/api/v2/job_templates/1/launch/ \
+  https://awx.gostoa.dev/api/v2/job_templates/1/launch/ \
   -d '{"check": true}'
 
 # Check from Control-Plane API
-curl -s https://api.stoa.cab-i.com/health | jq .awx
+curl -s https://api.gostoa.dev/health | jq .awx
 ```
 
 ---

@@ -3,7 +3,7 @@
 # Configures External Authorization Server, Strategy, Application, and API association
 #
 # Required variables:
-#   - keycloak_url: Keycloak base URL (e.g., https://auth.stoa.cab-i.com)
+#   - keycloak_url: Keycloak base URL (e.g., https://auth.gostoa.dev)
 #   - keycloak_realm: Keycloak realm name (e.g., stoa)
 #   - client_id: Keycloak client ID for the application
 #   - audience: Expected audience in JWT tokens (default: account)
@@ -28,7 +28,7 @@
 
   vars:
     gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
-    keycloak_url: "https://auth.{{ base_domain | default('stoa.cab-i.com') }}"
+    keycloak_url: "https://auth.{{ base_domain | default('gostoa.dev') }}"
     keycloak_realm: "stoa"
     client_id: "{{ client_id | default('control-plane-ui') }}"
     audience: "{{ audience | default('account') }}"

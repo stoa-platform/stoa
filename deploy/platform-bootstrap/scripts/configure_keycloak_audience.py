@@ -14,7 +14,7 @@ Usage:
     python configure_keycloak_audience.py
 
 Environment Variables:
-    KEYCLOAK_URL        - Keycloak base URL (default: https://auth.stoa.cab-i.com)
+    KEYCLOAK_URL        - Keycloak base URL (default: https://auth.gostoa.dev)
     KEYCLOAK_REALM      - Realm name (default: stoa)
     KEYCLOAK_ADMIN_USER - Admin username (default: admin)
     KEYCLOAK_ADMIN_PASS - Admin password (required)
@@ -61,7 +61,7 @@ class Config:
         )
 
         return cls(
-            keycloak_url=os.getenv("KEYCLOAK_URL", "https://auth.stoa.cab-i.com"),
+            keycloak_url=os.getenv("KEYCLOAK_URL", "https://auth.gostoa.dev"),
             realm=os.getenv("KEYCLOAK_REALM", "stoa"),
             admin_user=os.getenv("KEYCLOAK_ADMIN_USER", "admin"),
             admin_pass=admin_pass,

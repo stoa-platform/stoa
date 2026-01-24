@@ -12,7 +12,7 @@ In OAuth2/OIDC, the JWT token contains important claims:
 |-------|---------|---------|
 | `aud` (audience) | **Who should consume this token** (the API/Resource Server) | `control-plane-api` |
 | `azp` (authorized party) | **Who requested this token** (the client application) | `control-plane-ui` |
-| `iss` (issuer) | **Who issued this token** (the IdP) | `https://auth.stoa.cab-i.com/realms/stoa` |
+| `iss` (issuer) | **Who issued this token** (the IdP) | `https://auth.gostoa.dev/realms/stoa` |
 
 ### Current Issue
 
@@ -22,7 +22,7 @@ By default, Keycloak sets `aud` to the client ID that requested the token:
 {
   "aud": "control-plane-ui",  // Wrong: this is the client, not the API
   "azp": "control-plane-ui",
-  "iss": "https://auth.stoa.cab-i.com/realms/stoa"
+  "iss": "https://auth.gostoa.dev/realms/stoa"
 }
 ```
 
@@ -34,7 +34,7 @@ After configuring Audience Mappers:
 {
   "aud": "control-plane-api",  // Correct: the API that will validate this token
   "azp": "control-plane-ui",   // The client that requested the token
-  "iss": "https://auth.stoa.cab-i.com/realms/stoa"
+  "iss": "https://auth.gostoa.dev/realms/stoa"
 }
 ```
 
@@ -76,7 +76,7 @@ After configuring Audience Mappers:
 ### Option 1: Bash Script
 
 ```bash
-export KEYCLOAK_URL="https://auth.stoa.cab-i.com"
+export KEYCLOAK_URL="https://auth.gostoa.dev"
 export KEYCLOAK_REALM="stoa"
 export KEYCLOAK_ADMIN_USER="admin"
 export KEYCLOAK_ADMIN_PASS="your-admin-password"
@@ -92,7 +92,7 @@ DRY_RUN=false ./configure-keycloak-audience.sh
 ### Option 2: Python Script
 
 ```bash
-export KEYCLOAK_URL="https://auth.stoa.cab-i.com"
+export KEYCLOAK_URL="https://auth.gostoa.dev"
 export KEYCLOAK_REALM="stoa"
 export KEYCLOAK_ADMIN_USER="admin"
 export KEYCLOAK_ADMIN_PASS="your-admin-password"
@@ -112,7 +112,7 @@ DRY_RUN=false python configure_keycloak_audience.py
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KEYCLOAK_URL` | `https://auth.stoa.cab-i.com` | Keycloak base URL |
+| `KEYCLOAK_URL` | `https://auth.gostoa.dev` | Keycloak base URL |
 | `KEYCLOAK_REALM` | `stoa` | Keycloak realm |
 | `KEYCLOAK_ADMIN_USER` | `admin` | Admin username |
 | `KEYCLOAK_ADMIN_PASS` | (required) | Admin password |
@@ -127,7 +127,7 @@ DRY_RUN=false python configure_keycloak_audience.py
 ```bash
 # Using password grant (for testing only)
 TOKEN=$(curl -s -X POST \
-    'https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token' \
+    'https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token' \
     -d 'grant_type=password' \
     -d 'client_id=control-plane-ui' \
     -d 'username=your-user' \
@@ -148,7 +148,7 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq '{aud, azp, iss}'
 {
   "aud": "control-plane-api",
   "azp": "control-plane-ui",
-  "iss": "https://auth.stoa.cab-i.com/realms/stoa"
+  "iss": "https://auth.gostoa.dev/realms/stoa"
 }
 ```
 
@@ -157,11 +157,11 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq '{aud, azp, iss}'
 ```bash
 # Test via Gateway
 curl -H "Authorization: Bearer $TOKEN" \
-    https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/health/live
+    https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/health/live
 
 # Test direct API
 curl -H "Authorization: Bearer $TOKEN" \
-    https://api.stoa.cab-i.com/health/live
+    https://api.gostoa.dev/health/live
 ```
 
 ## Manual Configuration (UI)

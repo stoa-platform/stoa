@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `PostgresDown` | `pg_up == 0` | [RDS Dashboard](https://grafana.stoa.cab-i.com/d/rds) |
-| `PostgresConnectionsHigh` | `pg_stat_activity_count > 80% max` | [RDS Dashboard](https://grafana.stoa.cab-i.com/d/rds) |
-| `KeycloakDBError` | Keycloak logs "connection refused" | [Keycloak Dashboard](https://grafana.stoa.cab-i.com/d/keycloak) |
+| `PostgresDown` | `pg_up == 0` | [RDS Dashboard](https://grafana.gostoa.dev/d/rds) |
+| `PostgresConnectionsHigh` | `pg_stat_activity_count > 80% max` | [RDS Dashboard](https://grafana.gostoa.dev/d/rds) |
+| `KeycloakDBError` | Keycloak logs "connection refused" | [Keycloak Dashboard](https://grafana.gostoa.dev/d/keycloak) |
 
 ### Observed Behavior
 
@@ -207,7 +207,7 @@ kubectl run pg-test --rm -it --restart=Never \
   pg_isready -h <RDS_ENDPOINT> -p 5432
 
 # Test Keycloak
-curl -s https://auth.stoa.cab-i.com/realms/stoa/.well-known/openid-configuration | jq .issuer
+curl -s https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration | jq .issuer
 
 # Check connection metrics
 kubectl run pg-admin --rm -it --restart=Never \
@@ -266,7 +266,7 @@ kubectl run pg-admin --rm -it --restart=Never \
 
 ### Dashboards
 
-- [RDS Dashboard](https://grafana.stoa.cab-i.com/d/rds)
+- [RDS Dashboard](https://grafana.gostoa.dev/d/rds)
 - [AWS RDS Console](https://eu-west-1.console.aws.amazon.com/rds/home?region=eu-west-1#databases:)
 
 ---

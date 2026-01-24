@@ -7,21 +7,21 @@ kind: Namespace
 metadata:
   name: team-alpha
   labels:
-    stoa.cab-i.com/tenant: team-alpha
-    stoa.cab-i.com/environment: demo
+    gostoa.dev/tenant: team-alpha
+    gostoa.dev/environment: demo
 ---
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: crm-search
   namespace: team-alpha
   labels:
-    stoa.cab-i.com/tenant: team-alpha
-    stoa.cab-i.com/category: sales
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: team-alpha
+    gostoa.dev/category: sales
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/owner: team-alpha-admin
-    stoa.cab-i.com/created-by: cab-290
+    gostoa.dev/owner: team-alpha-admin
+    gostoa.dev/created-by: cab-290
 spec:
   displayName: "CRM Search"
   description: "Search customers in CRM database. Returns matching customer records based on query criteria including name, email, or company."
@@ -77,8 +77,8 @@ metadata:
   name: crm-search-mock-data
   namespace: team-alpha
   labels:
-    stoa.cab-i.com/tenant: team-alpha
-    stoa.cab-i.com/tool: crm-search
+    gostoa.dev/tenant: team-alpha
+    gostoa.dev/tool: crm-search
 data:
   response.json: |
     {

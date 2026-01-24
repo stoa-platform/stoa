@@ -40,7 +40,7 @@
     "pattern": "^stoa_sk_[a-f0-9]{32}$"
   },
   "mcp_gateway": {
-    "base_url": "https://mcp.stoa.cab-i.com",
+    "base_url": "https://mcp.gostoa.dev",
     "endpoints": {
       "subscriptions": "/mcp/v1/subscriptions",
       "validate_key": "/mcp/v1/subscriptions/validate-key",

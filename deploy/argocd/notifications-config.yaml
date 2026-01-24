@@ -17,7 +17,7 @@ metadata:
 data:
   # Webhook service for Control-Plane API
   service.webhook.control-plane: |
-    url: https://api.stoa.cab-i.com/v1/webhooks/argocd
+    url: https://api.gostoa.dev/v1/webhooks/argocd
     headers:
       - name: Content-Type
         value: application/json

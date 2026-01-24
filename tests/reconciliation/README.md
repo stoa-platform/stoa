@@ -61,7 +61,7 @@ tests/reconciliation/
 | `AWX_TOKEN` | Yes | - | AWX API token |
 | `ENV` | No | `dev` | Target environment |
 | `WM_GATEWAY_URL` | No | `http://apim-gateway:9072` | Gateway API URL |
-| `AWX_HOST` | No | `https://awx.stoa.cab-i.com` | AWX host |
+| `AWX_HOST` | No | `https://awx.gostoa.dev` | AWX host |
 | `AWX_JOB_TEMPLATE_ID` | No | `42` | AWX Job Template ID |
 | `GITOPS_REPO` | No | `/tmp/stoa-gitops` | GitOps repository path |
 
@@ -111,7 +111,7 @@ Configuration:
   Environment: dev
   Scenario: all
   Gateway URL: http://apim-gateway:9072
-  AWX Host: https://awx.stoa.cab-i.com
+  AWX Host: https://awx.gostoa.dev
 
 [INFO] Checking prerequisites...
 [OK] Gateway connectivity OK

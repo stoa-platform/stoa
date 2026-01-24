@@ -2,18 +2,18 @@
 # Tenant: team-beta
 # Purpose: Illustrate multi-tenant isolation with mock notification sending
 ---
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: notifications-send
   namespace: team-beta
   labels:
-    stoa.cab-i.com/tenant: team-beta
-    stoa.cab-i.com/category: communications
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: team-beta
+    gostoa.dev/category: communications
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/owner: team-beta-admin
-    stoa.cab-i.com/created-by: cab-290
+    gostoa.dev/owner: team-beta-admin
+    gostoa.dev/created-by: cab-290
 spec:
   displayName: "Send Notification"
   description: "Send notifications to users via multiple channels (email, SMS, push, Slack). Supports templated messages and delivery scheduling."
@@ -98,8 +98,8 @@ metadata:
   name: notifications-send-mock-data
   namespace: team-beta
   labels:
-    stoa.cab-i.com/tenant: team-beta
-    stoa.cab-i.com/tool: notifications-send
+    gostoa.dev/tenant: team-beta
+    gostoa.dev/tool: notifications-send
 data:
   response.json: |
     {

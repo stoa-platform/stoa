@@ -27,7 +27,7 @@
 
   vars:
     gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
-    keycloak_url: "https://auth.{{ base_domain | default('stoa.cab-i.com') }}"
+    keycloak_url: "https://auth.{{ base_domain | default('gostoa.dev') }}"
     keycloak_realm: "stoa"
     tenant_id: "{{ tenant_id | default('default') }}"
     api_name: "{{ api_name | default('test-api') }}"

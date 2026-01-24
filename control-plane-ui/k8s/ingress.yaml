@@ -12,10 +12,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - console.stoa.cab-i.com
+        - console.gostoa.dev
       secretName: control-plane-ui-tls
   rules:
-    - host: console.stoa.cab-i.com
+    - host: console.gostoa.dev
       http:
         paths:
           - path: /

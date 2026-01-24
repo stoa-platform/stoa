@@ -3,7 +3,7 @@
 # This creates a client in Keycloak for Grafana, Prometheus, and Loki authentication.
 # Apply this using Keycloak Admin API or via the Keycloak Admin Console.
 #
-# Manual steps in Keycloak Admin Console (https://auth.stoa.cab-i.com):
+# Manual steps in Keycloak Admin Console (https://auth.gostoa.dev):
 # 1. Login as admin
 # 2. Select realm: stoa
 # 3. Go to Clients > Create Client
@@ -15,9 +15,9 @@
 # Client Protocol: openid-connect
 # Access Type: confidential
 # Valid Redirect URIs:
-#   - https://grafana.stoa.cab-i.com/*
-#   - https://prometheus.stoa.cab-i.com/oauth2/callback
-#   - https://loki.stoa.cab-i.com/oauth2/callback
+#   - https://grafana.gostoa.dev/*
+#   - https://prometheus.gostoa.dev/oauth2/callback
+#   - https://loki.gostoa.dev/oauth2/callback
 # Web Origins: +
 #
 # After creation, go to Credentials tab and copy the Secret.

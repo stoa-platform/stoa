@@ -50,7 +50,7 @@ stoa-gitops/
 
 ```yaml
 # requests/prod/2024/12/PR-2024-0003.yaml
-apiVersion: stoa.cab-i.com/v1
+apiVersion: gostoa.dev/v1
 kind: PromotionRequest
 metadata:
   id: PR-2024-0003
@@ -549,7 +549,7 @@ class RequestMetadata(BaseModel):
     tenant: str
 
 class PromotionRequest(BaseModel):
-    apiVersion: str = "stoa.cab-i.com/v1"
+    apiVersion: str = "gostoa.dev/v1"
     kind: str = "PromotionRequest"
     metadata: RequestMetadata
     spec: dict  # Contains target, request, preChecks

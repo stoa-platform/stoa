@@ -74,9 +74,9 @@ Source of Truth for STOA Platform tenant configurations.
 
 ## Managed by
 
-- **Control Plane UI**: https://console.${BASE_DOMAIN:-stoa.cab-i.com}
-- **Control Plane API**: https://api.${BASE_DOMAIN:-stoa.cab-i.com}
-- **ArgoCD**: https://argocd.${BASE_DOMAIN:-stoa.cab-i.com}
+- **Control Plane UI**: https://console.${BASE_DOMAIN:-gostoa.dev}
+- **Control Plane API**: https://api.${BASE_DOMAIN:-gostoa.dev}
+- **ArgoCD**: https://argocd.${BASE_DOMAIN:-gostoa.dev}
 
 ## Variable Resolution
 

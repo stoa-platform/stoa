@@ -162,7 +162,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
-      url: https://api.stoa.cab-i.com
+      url: https://api.gostoa.dev
 
     steps:
       - name: Checkout repository
@@ -234,7 +234,7 @@ jobs:
           echo "=== Security Check - API endpoints should require auth ==="
 
           # Test protected endpoint (should return 401)
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/v1/tenants || echo "000")
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/v1/tenants || echo "000")
           echo "Protected endpoint (/v1/tenants): HTTP $HTTP_CODE"
           if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
             echo "Security check PASSED - endpoint requires authentication"

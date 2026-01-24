@@ -113,13 +113,13 @@ jobs:
           case "$ENV" in
             dev)
               # Note: dev environment currently uses prod domain (single cluster)
-              echo "BASE_DOMAIN=stoa.cab-i.com" >> $GITHUB_OUTPUT
+              echo "BASE_DOMAIN=gostoa.dev" >> $GITHUB_OUTPUT
               ;;
             staging)
-              echo "BASE_DOMAIN=staging.stoa.cab-i.com" >> $GITHUB_OUTPUT
+              echo "BASE_DOMAIN=staging.gostoa.dev" >> $GITHUB_OUTPUT
               ;;
             prod)
-              echo "BASE_DOMAIN=stoa.cab-i.com" >> $GITHUB_OUTPUT
+              echo "BASE_DOMAIN=gostoa.dev" >> $GITHUB_OUTPUT
               ;;
           esac
 
@@ -169,7 +169,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
-      url: https://console.stoa.cab-i.com
+      url: https://console.gostoa.dev
 
     steps:
       - name: Checkout repository

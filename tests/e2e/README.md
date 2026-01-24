@@ -28,9 +28,9 @@ playwright install chromium
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KEYCLOAK_URL` | `https://auth.stoa.cab-i.com` | Keycloak server URL |
+| `KEYCLOAK_URL` | `https://auth.gostoa.dev` | Keycloak server URL |
 | `KEYCLOAK_REALM` | `stoa` | Keycloak realm name |
-| `CONSOLE_URL` | `https://console.stoa.cab-i.com` | Console application URL |
+| `CONSOLE_URL` | `https://console.gostoa.dev` | Console application URL |
 | `HEADLESS` | `true` | Run browser in headless mode |
 | `SLOW_MO` | `0` | Slow down operations (ms) |
 
@@ -131,8 +131,8 @@ e2e-tests:
   image: mcr.microsoft.com/playwright:v1.40.0-jammy
   variables:
     HEADLESS: "true"
-    KEYCLOAK_URL: "https://auth.stoa.cab-i.com"
-    CONSOLE_URL: "https://console.stoa.cab-i.com"
+    KEYCLOAK_URL: "https://auth.gostoa.dev"
+    CONSOLE_URL: "https://console.gostoa.dev"
   script:
     - pip install pytest playwright pytest-playwright
     - cd tests/e2e && pytest --junitxml=report.xml

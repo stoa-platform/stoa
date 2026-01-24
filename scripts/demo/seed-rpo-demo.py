@@ -10,8 +10,8 @@ Usage:
     python scripts/demo/seed-rpo-demo.py
 
     # With custom URLs
-    CONTROL_PLANE_URL=https://api.stoa.cab-i.com \
-    KEYCLOAK_URL=https://auth.stoa.cab-i.com \
+    CONTROL_PLANE_URL=https://api.gostoa.dev \
+    KEYCLOAK_URL=https://auth.gostoa.dev \
     python scripts/demo/seed-rpo-demo.py
 
 Theme: Ready Player One
@@ -32,8 +32,8 @@ except ImportError:
     sys.exit(1)
 
 # Configuration
-API_URL = os.getenv("CONTROL_PLANE_URL", "https://api.stoa.cab-i.com")
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.stoa.cab-i.com")
+API_URL = os.getenv("CONTROL_PLANE_URL", "https://api.gostoa.dev")
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.gostoa.dev")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "stoa")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")

@@ -192,7 +192,7 @@ kubectl delete service mcp-gateway-python -n stoa-system
 2. Update primary ingress to point to Rust:
 ```bash
 kubectl patch ingress mcp-gateway-primary -n stoa-system \
-  -p '{"spec":{"rules":[{"host":"mcp.stoa.cab-i.com","http":{"paths":[{"path":"/","pathType":"Prefix","backend":{"service":{"name":"mcp-gateway-rust","port":{"number":8080}}}}]}}]}}'
+  -p '{"spec":{"rules":[{"host":"mcp.gostoa.dev","http":{"paths":[{"path":"/","pathType":"Prefix","backend":{"service":{"name":"mcp-gateway-rust","port":{"number":8080}}}}]}}]}}'
 ```
 
 3. Remove canary ingress:
@@ -230,7 +230,7 @@ kubectl logs -l app=mcp-gateway-python -n stoa-system | \
 2. Compare responses manually:
 ```bash
 # Python
-curl -X POST https://mcp.stoa.cab-i.com/mcp/v1/tools -H "Content-Type: application/json" -d '...'
+curl -X POST https://mcp.gostoa.dev/mcp/v1/tools -H "Content-Type: application/json" -d '...'
 
 # Rust (direct)
 kubectl port-forward svc/mcp-gateway-rust 8081:8080 -n stoa-system &

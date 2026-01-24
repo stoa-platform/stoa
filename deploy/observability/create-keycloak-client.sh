@@ -56,7 +56,7 @@ else
     -s implicitFlowEnabled=false \
     -s directAccessGrantsEnabled=true \
     -s serviceAccountsEnabled=false \
-    -s 'redirectUris=["https://grafana.stoa.cab-i.com/*","https://prometheus.stoa.cab-i.com/oauth2/callback","https://loki.stoa.cab-i.com/oauth2/callback"]' \
+    -s 'redirectUris=["https://grafana.gostoa.dev/*","https://prometheus.gostoa.dev/oauth2/callback","https://loki.gostoa.dev/oauth2/callback"]' \
     -s 'webOrigins=["+"]' \
     -s 'defaultClientScopes=["openid","profile","email","roles"]'
 

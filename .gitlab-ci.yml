@@ -9,13 +9,13 @@ stages:
   - e2e-test
 
 variables:
-  AWX_HOST: "https://awx.stoa.cab-i.com"
+  AWX_HOST: "https://awx.gostoa.dev"
   AWX_JOB_TEMPLATE_ID: "19"  # Template: "STOA - Reconcile webMethods Gateway"
   # E2E Test Configuration
-  KEYCLOAK_URL: "https://auth.stoa.cab-i.com"
+  KEYCLOAK_URL: "https://auth.gostoa.dev"
   KEYCLOAK_REALM: "stoa"
-  GATEWAY_URL: "https://gateway.stoa.cab-i.com"
-  PORTAL_URL: "https://portal.stoa.cab-i.com"
+  GATEWAY_URL: "https://gateway.gostoa.dev"
+  PORTAL_URL: "https://portal.gostoa.dev"
 
 # Validate webMethods YAML files
 validate-webmethods:
@@ -202,10 +202,10 @@ e2e-tests:
       echo "   Keycloak: ${KEYCLOAK_URL}"
       pytest tests/e2e/ -v --junitxml=report.xml -m "sync or rbac" --ignore=tests/e2e/scenarios/
   variables:
-    KEYCLOAK_URL: "https://auth.stoa.cab-i.com"
+    KEYCLOAK_URL: "https://auth.gostoa.dev"
     KEYCLOAK_REALM: "stoa"
-    GATEWAY_URL: "https://gateway.stoa.cab-i.com"
-    PORTAL_URL: "https://portal.stoa.cab-i.com"
+    GATEWAY_URL: "https://gateway.gostoa.dev"
+    PORTAL_URL: "https://portal.gostoa.dev"
     WEBMETHODS_APIS_PATH: "webmethods/apis"
   secrets:
     GATEWAY_ADMIN_PASSWORD:
@@ -234,10 +234,10 @@ e2e-tests-manual:
       echo "Running E2E Tests (manual)..."
       pytest tests/e2e/ -v --junitxml=report.xml -m "sync or rbac" --ignore=tests/e2e/scenarios/
   variables:
-    KEYCLOAK_URL: "https://auth.stoa.cab-i.com"
+    KEYCLOAK_URL: "https://auth.gostoa.dev"
     KEYCLOAK_REALM: "stoa"
-    GATEWAY_URL: "https://gateway.stoa.cab-i.com"
-    PORTAL_URL: "https://portal.stoa.cab-i.com"
+    GATEWAY_URL: "https://gateway.gostoa.dev"
+    PORTAL_URL: "https://portal.gostoa.dev"
     WEBMETHODS_APIS_PATH: "webmethods/apis"
   secrets:
     GATEWAY_ADMIN_PASSWORD:
@@ -266,10 +266,10 @@ e2e-smoke:
       echo "Running E2E Smoke Tests..."
       pytest tests/e2e/ -v --junitxml=smoke-report.xml -m "smoke" --ignore=tests/e2e/scenarios/
   variables:
-    KEYCLOAK_URL: "https://auth.stoa.cab-i.com"
+    KEYCLOAK_URL: "https://auth.gostoa.dev"
     KEYCLOAK_REALM: "stoa"
-    GATEWAY_URL: "https://gateway.stoa.cab-i.com"
-    PORTAL_URL: "https://portal.stoa.cab-i.com"
+    GATEWAY_URL: "https://gateway.gostoa.dev"
+    PORTAL_URL: "https://portal.gostoa.dev"
   secrets:
     GATEWAY_ADMIN_PASSWORD:
       vault: stoa/dev/gateway-admin/password@secrets

@@ -43,9 +43,9 @@ This document describes the observability setup for the STOA Platform, including
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Grafana | https://grafana.stoa.cab-i.com | Dashboards & Visualization |
-| Prometheus | https://prometheus.stoa.cab-i.com | Metrics & Alerting |
-| Loki | https://loki.stoa.cab-i.com | Log Aggregation |
+| Grafana | https://grafana.gostoa.dev | Dashboards & Visualization |
+| Prometheus | https://prometheus.gostoa.dev | Metrics & Alerting |
+| Loki | https://loki.gostoa.dev | Log Aggregation |
 
 ### Authentication
 
@@ -109,7 +109,7 @@ To enable Keycloak SSO for all observability endpoints:
 
 #### Step 1: Create Keycloak Client
 
-1. Go to https://auth.stoa.cab-i.com
+1. Go to https://auth.gostoa.dev
 2. Login as admin
 3. Select realm: `stoa`
 4. Go to **Clients** > **Create Client**
@@ -119,9 +119,9 @@ To enable Keycloak SSO for all observability endpoints:
    - Access Type: `confidential`
 6. Set **Valid Redirect URIs**:
    ```
-   https://grafana.stoa.cab-i.com/*
-   https://prometheus.stoa.cab-i.com/oauth2/callback
-   https://loki.stoa.cab-i.com/oauth2/callback
+   https://grafana.gostoa.dev/*
+   https://prometheus.gostoa.dev/oauth2/callback
+   https://loki.gostoa.dev/oauth2/callback
    ```
 7. Save and go to **Credentials** tab
 8. Copy the **Client Secret**
@@ -278,7 +278,7 @@ kubectl label configmap grafana-dashboard-slo -n stoa-monitoring grafana_dashboa
 
 ### Importing Dashboards Manually
 
-1. Open Grafana at https://grafana.stoa.cab-i.com
+1. Open Grafana at https://grafana.gostoa.dev
 2. Go to **Dashboards** > **Import**
 3. Upload JSON file or paste contents
 4. Select **Prometheus** as data source for metrics dashboards

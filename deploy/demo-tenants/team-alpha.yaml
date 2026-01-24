@@ -6,21 +6,21 @@ kind: Namespace
 metadata:
   name: team-alpha
   labels:
-    stoa.cab-i.com/tenant: team-alpha
-    stoa.cab-i.com/environment: demo
+    gostoa.dev/tenant: team-alpha
+    gostoa.dev/environment: demo
   annotations:
-    stoa.cab-i.com/description: "Team Alpha - Sales & Finance"
-    stoa.cab-i.com/created-by: cab-279
+    gostoa.dev/description: "Team Alpha - Sales & Finance"
+    gostoa.dev/created-by: cab-279
 ---
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tenant
 metadata:
   name: team-alpha
   namespace: stoa-system
   labels:
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/created-by: cab-279
+    gostoa.dev/created-by: cab-279
 spec:
   displayName: "Team Alpha - Sales & Finance"
   description: "Demo tenant for CRM and Billing tools"
@@ -68,7 +68,7 @@ metadata:
   name: team-alpha-config
   namespace: team-alpha
   labels:
-    stoa.cab-i.com/tenant: team-alpha
+    gostoa.dev/tenant: team-alpha
 data:
   tenant.json: |
     {

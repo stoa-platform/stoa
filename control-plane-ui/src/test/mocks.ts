@@ -29,7 +29,7 @@ export const mockTool: MCPTool = {
   tags: ['platform', 'apis'],
   version: '1.0.0',
   tenantId: 'acme-corp',
-  endpoint: 'https://api.stoa.cab-i.com/v1/apis',
+  endpoint: 'https://api.gostoa.dev/v1/apis',
 };
 
 export const mockTools: MCPTool[] = [

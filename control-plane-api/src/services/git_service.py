@@ -565,7 +565,7 @@ settings:
         try:
             # Build YAML content in Kubernetes-style format
             server_yaml = yaml.dump({
-                "apiVersion": "stoa.cab-i.com/v1",
+                "apiVersion": "gostoa.dev/v1",
                 "kind": "MCPServer",
                 "metadata": {
                     "name": server_name,

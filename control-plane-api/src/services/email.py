@@ -18,10 +18,10 @@ class EmailService:
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_user = os.getenv("SMTP_USER", "")
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.smtp_from = os.getenv("SMTP_FROM", "noreply@stoa.cab-i.com")
+        self.smtp_from = os.getenv("SMTP_FROM", "noreply@gostoa.dev")
         self.smtp_tls = os.getenv("SMTP_TLS", "true").lower() == "true"
         self.enabled = os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "false").lower() == "true"
-        self.portal_url = os.getenv("PORTAL_URL", "https://portal.stoa.cab-i.com")
+        self.portal_url = os.getenv("PORTAL_URL", "https://portal.gostoa.dev")
 
     async def send_email(
         self,

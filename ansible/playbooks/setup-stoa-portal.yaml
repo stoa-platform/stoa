@@ -23,7 +23,7 @@
     gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
 
     # Keycloak Configuration
-    keycloak_url: "https://auth.{{ base_domain | default('stoa.cab-i.com') }}"
+    keycloak_url: "https://auth.{{ base_domain | default('gostoa.dev') }}"
     keycloak_realm: "stoa"
 
     # Portal Configuration
@@ -35,15 +35,15 @@
 
     # Environment URLs (all environments)
     portal_redirect_uris:
-      - "https://portal.stoa.cab-i.com/*"
-      - "https://portal.dev.stoa.cab-i.com/*"
-      - "https://portal.staging.stoa.cab-i.com/*"
+      - "https://portal.gostoa.dev/*"
+      - "https://portal.dev.gostoa.dev/*"
+      - "https://portal.staging.gostoa.dev/*"
       - "http://localhost:3001/*"
 
     portal_web_origins:
-      - "https://portal.stoa.cab-i.com"
-      - "https://portal.dev.stoa.cab-i.com"
-      - "https://portal.staging.stoa.cab-i.com"
+      - "https://portal.gostoa.dev"
+      - "https://portal.dev.gostoa.dev"
+      - "https://portal.staging.gostoa.dev"
       - "http://localhost:3001"
 
   tasks:
@@ -352,5 +352,5 @@
           ========================================
           NEXT STEPS:
           1. Deploy stoa-portal to Kubernetes
-          2. Test login at https://portal.{{ base_domain | default('stoa.cab-i.com') }}
+          2. Test login at https://portal.{{ base_domain | default('gostoa.dev') }}
           ========================================

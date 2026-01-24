@@ -60,7 +60,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/PotoMitan/stoa"
-Documentation = "https://docs.stoa.cab-i.com"
+Documentation = "https://docs.gostoa.dev"
 Repository = "https://github.com/PotoMitan/stoa"
 
 [project.scripts]

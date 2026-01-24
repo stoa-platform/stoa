@@ -9,7 +9,7 @@ resources:
 
 # Secret must be created separately (contains sensitive data)
 # kubectl create secret generic awx-credentials \
-#   --from-literal=host=https://awx.stoa.cab-i.com \
+#   --from-literal=host=https://awx.gostoa.dev \
 #   --from-literal=token=YOUR_AWX_TOKEN \
 #   -n stoa-system
 

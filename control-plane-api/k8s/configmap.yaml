@@ -13,7 +13,7 @@ metadata:
     app.kubernetes.io/part-of: stoa-platform
 data:
   # Base domain for URL construction
-  BASE_DOMAIN: "stoa.cab-i.com"
+  BASE_DOMAIN: "gostoa.dev"
 
   # API Configuration
   VERSION: "2.0.0"
@@ -21,7 +21,7 @@ data:
   ENVIRONMENT: "production"
 
   # Keycloak Authentication
-  KEYCLOAK_URL: "https://auth.stoa.cab-i.com"
+  KEYCLOAK_URL: "https://auth.gostoa.dev"
   KEYCLOAK_REALM: "stoa"
   KEYCLOAK_CLIENT_ID: "control-plane-api"
   KEYCLOAK_VERIFY_SSL: "true"
@@ -43,24 +43,24 @@ data:
   KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
 
   # AWX Automation
-  AWX_URL: "https://awx.stoa.cab-i.com"
+  AWX_URL: "https://awx.gostoa.dev"
   AWX_VERIFY_SSL: "true"
 
   # API Gateway
-  GATEWAY_URL: "https://gateway.stoa.cab-i.com"
-  GATEWAY_ADMIN_PROXY_URL: "https://apis.stoa.cab-i.com/gateway/Gateway-Admin-API/1.0"
+  GATEWAY_URL: "https://gateway.gostoa.dev"
+  GATEWAY_ADMIN_PROXY_URL: "https://apis.gostoa.dev/gateway/Gateway-Admin-API/1.0"
   GATEWAY_USE_OIDC_PROXY: "true"
 
   # MCP Gateway (internal K8s service for reliable proxy)
   MCP_GATEWAY_URL: "http://mcp-gateway.stoa-system.svc.cluster.local:80"
 
   # ArgoCD
-  ARGOCD_URL: "https://argocd.stoa.cab-i.com"
+  ARGOCD_URL: "https://argocd.gostoa.dev"
   ARGOCD_VERIFY_SSL: "true"
   ARGOCD_PLATFORM_APPS: "control-plane-api,control-plane-ui,stoa-portal,mcp-gateway,devportal"
 
   # CORS
-  CORS_ORIGINS: "https://console.stoa.cab-i.com,https://portal.stoa.cab-i.com,http://localhost:3000,http://localhost:5173"
+  CORS_ORIGINS: "https://console.gostoa.dev,https://portal.gostoa.dev,http://localhost:3000,http://localhost:5173"
 
   # Logging
   LOG_LEVEL: "INFO"

@@ -163,11 +163,11 @@ Users can enable TOTP protection per subscription:
 
 ```bash
 # Enable TOTP requirement
-curl -X PATCH "https://mcp.stoa.cab-i.com/mcp/v1/subscriptions/{id}/totp?enabled=true" \
+curl -X PATCH "https://mcp.gostoa.dev/mcp/v1/subscriptions/{id}/totp?enabled=true" \
   -H "Authorization: Bearer $TOKEN"
 
 # Disable TOTP requirement
-curl -X PATCH "https://mcp.stoa.cab-i.com/mcp/v1/subscriptions/{id}/totp?enabled=false" \
+curl -X PATCH "https://mcp.gostoa.dev/mcp/v1/subscriptions/{id}/totp?enabled=false" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -175,7 +175,7 @@ curl -X PATCH "https://mcp.stoa.cab-i.com/mcp/v1/subscriptions/{id}/totp?enabled
 
 ```bash
 # Reveal API key (no TOTP)
-curl -X POST "https://mcp.stoa.cab-i.com/mcp/v1/subscriptions/{id}/reveal-key" \
+curl -X POST "https://mcp.gostoa.dev/mcp/v1/subscriptions/{id}/reveal-key" \
   -H "Authorization: Bearer $TOKEN"
 
 # Response
@@ -298,7 +298,7 @@ alembic current
 ### Create Subscription (Developer)
 
 ```bash
-curl -X POST https://api.stoa.cab-i.com/v1/subscriptions \
+curl -X POST https://api.gostoa.dev/v1/subscriptions \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -325,7 +325,7 @@ Response:
 ### Approve Subscription (Admin)
 
 ```bash
-curl -X POST https://api.stoa.cab-i.com/v1/subscriptions/550e8400-e29b-41d4-a716-446655440000/approve \
+curl -X POST https://api.gostoa.dev/v1/subscriptions/550e8400-e29b-41d4-a716-446655440000/approve \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -336,7 +336,7 @@ curl -X POST https://api.stoa.cab-i.com/v1/subscriptions/550e8400-e29b-41d4-a716
 ### Validate API Key (Gateway)
 
 ```bash
-curl -X POST https://api.stoa.cab-i.com/v1/subscriptions/validate-key \
+curl -X POST https://api.gostoa.dev/v1/subscriptions/validate-key \
   -H "Content-Type: application/json" \
   -d '"stoa_sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"'
 ```

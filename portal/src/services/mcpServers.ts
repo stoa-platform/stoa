@@ -243,7 +243,7 @@ export const MOCK_SERVERS: MCPServer[] = [
     ],
     status: 'active',
     version: '1.0.0',
-    documentation_url: 'https://docs.stoa.cab-i.com/platform-tools',
+    documentation_url: 'https://docs.gostoa.dev/platform-tools',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2026-01-10T00:00:00Z',
   },

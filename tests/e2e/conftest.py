@@ -1,6 +1,6 @@
 """
 E2E Test Fixtures for STOA Platform (CAB-238)
-Keycloak authentication fixtures for console.stoa.cab-i.com
+Keycloak authentication fixtures for console.gostoa.dev
 
 Updated for CAB-650/CAB-651: Added gateway and portal session fixtures
 """
@@ -16,11 +16,11 @@ import requests
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
 # Configuration
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.stoa.cab-i.com")
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.gostoa.dev")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "stoa")
-CONSOLE_URL = os.getenv("CONSOLE_URL", "https://console.stoa.cab-i.com")
-GATEWAY_URL = os.getenv("GATEWAY_URL", "https://gateway.stoa.cab-i.com")
-PORTAL_URL = os.getenv("PORTAL_URL", "https://portal.stoa.cab-i.com")
+CONSOLE_URL = os.getenv("CONSOLE_URL", "https://console.gostoa.dev")
+GATEWAY_URL = os.getenv("GATEWAY_URL", "https://gateway.gostoa.dev")
+PORTAL_URL = os.getenv("PORTAL_URL", "https://portal.gostoa.dev")
 KEYCLOAK_AUTH_URL = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect"
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
 E2E_CREDENTIALS_SECRET = os.getenv("E2E_CREDENTIALS_SECRET", "stoa/e2e-test-credentials")
@@ -218,7 +218,7 @@ def keycloak_login(page: Page, users_data: dict):
                 const url = window.location.href;
                 return url.startsWith('{CONSOLE_URL}') &&
                        !url.includes('/login') &&
-                       !url.includes('auth.stoa.cab-i.com');
+                       !url.includes('auth.gostoa.dev');
             }}""",
             timeout=15000
         )

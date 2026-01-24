@@ -31,7 +31,7 @@ type AuthMethod = 'apiKey' | 'oauth2';
 
 // STOA logo URL for Claude Desktop display
 const STOA_LOGO_URL = 'https://raw.githubusercontent.com/stoa-platform/stoa/main/docs/assets/logo.svg';
-const MCP_GATEWAY_URL = 'https://mcp.stoa.cab-i.com';
+const MCP_GATEWAY_URL = 'https://mcp.gostoa.dev';
 
 export function ExportConfigModal({
   subscription,

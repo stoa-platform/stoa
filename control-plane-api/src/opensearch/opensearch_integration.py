@@ -28,7 +28,7 @@ logger = logging.getLogger("stoa.opensearch")
 class OpenSearchSettings(BaseSettings):
     """OpenSearch configuration."""
 
-    opensearch_host: str = "https://opensearch.stoa.cab-i.com"
+    opensearch_host: str = "https://opensearch.gostoa.dev"
     opensearch_user: str = "admin"
     opensearch_password: str = ""
     opensearch_verify_certs: bool = True  # CAB-838: Enable SSL verification by default

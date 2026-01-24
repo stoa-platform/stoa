@@ -51,12 +51,12 @@ spec:
               cpu: "200m"
           env:
             - name: VITE_BASE_DOMAIN
-              value: "stoa.cab-i.com"
+              value: "gostoa.dev"
             - name: VITE_KEYCLOAK_URL
-              value: "https://auth.stoa.cab-i.com"
+              value: "https://auth.gostoa.dev"
             - name: VITE_KEYCLOAK_REALM
               value: "stoa"
             - name: VITE_KEYCLOAK_CLIENT_ID
               value: "control-plane-ui"
             - name: VITE_API_URL
-              value: "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0"
+              value: "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0"

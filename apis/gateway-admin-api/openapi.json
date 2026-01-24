@@ -14,7 +14,7 @@
   },
   "servers": [
     {
-      "url": "https://api.stoa.cab-i.com/v1/gateway",
+      "url": "https://api.gostoa.dev/v1/gateway",
       "description": "Production - via Control-Plane API"
     }
   ],

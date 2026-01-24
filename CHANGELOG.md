@@ -327,7 +327,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **E2E Test Framework** (`tests/e2e/`)
   - **Stack**: Playwright + pytest for browser automation
-  - **Authentication**: Keycloak OIDC integration with console.stoa.cab-i.com
+  - **Authentication**: Keycloak OIDC integration with console.gostoa.dev
 
   - **Test Fixtures** (`conftest.py`):
     - `keycloak_login` - Factory fixture for role-based login
@@ -399,7 +399,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     - `testing.requireSandboxConfirmation` - Production safety
 
   - **Portal Deployment**:
-    - URL: https://portal.stoa.cab-i.com
+    - URL: https://portal.gostoa.dev
     - Keycloak client: `stoa-portal`
     - CI/CD: `.github/workflows/stoa-portal-ci.yml`
 
@@ -529,7 +529,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed (2026-01-04) - CAB-237 Rename devops → console subdomain
 
 - **Control Plane UI Subdomain Rename**
-  - `devops.stoa.cab-i.com` → `console.stoa.cab-i.com`
+  - `devops.gostoa.dev` → `console.gostoa.dev`
   - Reflects UI unification: DevOps + Developers (AI Tools Portal)
 
 - **Configuration files updated**:
@@ -557,12 +557,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `scripts/verify-console-dns.sh` - Verifies/creates Route53 DNS
 
 - **Deployment completed**:
-  - Ingress `control-plane-ui` updated to `console.stoa.cab-i.com`
+  - Ingress `control-plane-ui` updated to `console.gostoa.dev`
   - TLS Certificate `stoa-console-tls` issued by Let's Encrypt
   - Keycloak client `control-plane-ui` redirectURIs updated
 
 - **Console UI Access**:
-  - URL: https://console.stoa.cab-i.com
+  - URL: https://console.gostoa.dev
   - Users: `admin@cab-i.com`, `demo@apim.local` (password: `demo`)
 
 ### Added (2026-01-04) - CAB-124 Portal Integration - Tool Catalog
@@ -646,7 +646,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **STOA MCP Gateway - Kubernetes CRDs for Tool Registry**
   - `charts/stoa-platform/crds/tool-crd.yaml` - Tool CRD:
-    - Kind: `Tool`, API Group: `stoa.cab-i.com/v1alpha1`
+    - Kind: `Tool`, API Group: `gostoa.dev/v1alpha1`
     - Spec: displayName, description, endpoint, method, inputSchema, tags
     - Authentication: type (none/apiKey/bearer/oauth2), secretRef
     - Status subresource: phase, invocationCount, errorCount, conditions
@@ -890,7 +890,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Complete project renaming** - APIM Platform becomes STOA Platform
   - GitHub Repository: `apim-aws` → `stoa`
   - GitLab Repository: `apim-gitops` → `stoa-gitops` (cab6961310/stoa-gitops)
-  - Domain: `apim.cab-i.com` → `stoa.cab-i.com`
+  - Domain: `apim.cab-i.com` → `gostoa.dev`
   - Kubernetes Namespace: `apim-system` → `stoa-system`
   - Keycloak realm: `apim` → `stoa`
   - Helm chart: `apim-platform` → `stoa-platform`
@@ -914,7 +914,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - URL: https://gitlab.com/cab6961310/stoa-gitops
 
 - **Complete AWS infrastructure migration**
-  - DNS: `*.stoa.cab-i.com` configured (Hostpapa CNAME)
+  - DNS: `*.gostoa.dev` configured (Hostpapa CNAME)
   - TLS Certificates Let's Encrypt generated for all subdomains
   - Kubernetes Ingresses updated (api, devops, auth, gateway, awx)
   - Keycloak: hostname corrected in deployment args
@@ -922,7 +922,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Control-Plane UI: rebuilt with new URLs
 
 - **URL hardcoding removal**
-  - Ansible playbooks: using `{{ base_domain | default('stoa.cab-i.com') }}`
+  - Ansible playbooks: using `{{ base_domain | default('gostoa.dev') }}`
   - Scripts: using environment variables with fallback
   - Centralized configuration in `ansible/vars/platform-config.yaml`
 
@@ -952,7 +952,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Helm chart `hashicorp/vault` v0.31.0 (Vault 1.20.4)
   - Namespace: `vault`
   - Storage: 5GB PVC (gp2)
-  - UI accessible: https://vault.stoa.cab-i.com
+  - UI accessible: https://vault.gostoa.dev
   - Unseal keys saved in AWS Secrets Manager (`stoa/vault/keys`)
 
 - **Vault Secrets Engine** - KV v2 for APIM secrets
@@ -1048,7 +1048,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **OIDC Playbooks** - Migration to OIDC authentication via Gateway-Admin-API proxy
   - All playbooks support 2 modes: OIDC (recommended) and Basic Auth (fallback)
-  - External HTTPS URLs: `https://auth.stoa.cab-i.com`, `https://api.stoa.cab-i.com/v1/gateway`
+  - External HTTPS URLs: `https://auth.gostoa.dev`, `https://api.gostoa.dev/v1/gateway`
   - Service account client `awx-automation` for AWX
   - Updated playbooks: `deploy-api.yaml`, `rollback.yaml`, `sync-gateway.yaml`, `promote-portal.yaml`
   - `bootstrap-platform.yaml`: Automatic creation of Keycloak client `awx-automation`
@@ -1142,7 +1142,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - ApplicationSets for multi-tenant auto-discovery
   - AppProjects with per-tenant RBAC
   - Installation scripts: `scripts/install-argocd.sh`
-  - URL: https://argocd.stoa.cab-i.com
+  - URL: https://argocd.gostoa.dev
 
 - **Init GitLab Script** - `scripts/init-gitlab-gitops.sh`
   - Initializes GitLab stoa-gitops repo
@@ -1167,20 +1167,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **AWX (Ansible Tower)** - Automation
   - AWX 24.6.1 via AWX Operator 2.19.1
-  - URL: https://awx.stoa.cab-i.com
+  - URL: https://awx.gostoa.dev
   - Job Templates: Deploy API, Sync Gateway, Promote Portal, Rollback API
 
 - **Control-Plane UI** - React Interface
   - Keycloak authentication with PKCE (Keycloak 25+)
   - Pages: Dashboard, Tenants, APIs, Applications, Deployments, Monitoring
-  - URL: https://console.stoa.cab-i.com
+  - URL: https://console.gostoa.dev
 
 - **Control-Plane API** - FastAPI Backend
   - Integrated Kafka Producer (events on CRUD)
   - Deployment Worker (consumer `deploy-requests`)
   - GitLab Webhook (Push, MR, Tag Push)
   - Pipeline Traces (in-memory store)
-  - URL: https://api.stoa.cab-i.com
+  - URL: https://api.gostoa.dev
 
 - **Variabilized Configuration**
   - UI: `VITE_*` variables for build-time config
@@ -1193,7 +1193,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 #### Fixed
 - PKCE Authentication - `response_type: 'code'` + `pkce_method: 'S256'`
-- Keycloak URLs - `auth.stoa.cab-i.com` instead of `keycloak.dev.stoa.cab-i.com`
+- Keycloak URLs - `auth.gostoa.dev` instead of `keycloak.dev.gostoa.dev`
 - OpenAPI Tags - Case harmonization (`Traces` instead of `traces`)
 
 ---
@@ -1219,7 +1219,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Elasticsearch 8.11 (for Gateway)
 
 - **Keycloak** - Identity Provider
-  - URL: https://auth.stoa.cab-i.com
+  - URL: https://auth.gostoa.dev
   - Realm: `stoa`
 
 ---
@@ -1258,7 +1258,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Phase 2.6: Cilium Network Foundation (Medium Priority)
 - [ ] Install Cilium on EKS (replaces AWS VPC CNI + kube-proxy)
 - [ ] Gateway API CRDs + Cilium GatewayClass
-- [ ] Migrate Nginx Ingress → Gateway API (*.stoa.cab-i.com)
+- [ ] Migrate Nginx Ingress → Gateway API (*.gostoa.dev)
 - [ ] CiliumNetworkPolicy - Default deny + tenant isolation
 - [ ] Hubble - Network observability
 - [ ] Cilium migration documentation & runbooks
@@ -1448,16 +1448,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 | Service | URL | Notes |
 |---------|-----|-------|
-| Control Plane UI | https://console.stoa.cab-i.com | React + Keycloak |
-| Control Plane API (direct) | https://api.stoa.cab-i.com | FastAPI (direct access) |
-| **API Gateway Runtime** | https://apis.stoa.cab-i.com | APIs via Gateway (OIDC auth) |
-| Keycloak | https://auth.stoa.cab-i.com | Realm: stoa |
-| AWX | https://awx.stoa.cab-i.com | admin/demo |
-| API Gateway Admin | https://gateway.stoa.cab-i.com | Administrator/manage |
-| ArgoCD | https://argocd.stoa.cab-i.com | GitOps CD |
-| Vault | https://vault.stoa.cab-i.com | Secrets Management |
-| **Grafana** | https://grafana.stoa.cab-i.com | Dashboards & Visualization |
-| **Prometheus** | https://prometheus.stoa.cab-i.com | Metrics & Alerting |
-| **Loki** | https://loki.stoa.cab-i.com | Log Aggregation |
+| Control Plane UI | https://console.gostoa.dev | React + Keycloak |
+| Control Plane API (direct) | https://api.gostoa.dev | FastAPI (direct access) |
+| **API Gateway Runtime** | https://apis.gostoa.dev | APIs via Gateway (OIDC auth) |
+| Keycloak | https://auth.gostoa.dev | Realm: stoa |
+| AWX | https://awx.gostoa.dev | admin/demo |
+| API Gateway Admin | https://gateway.gostoa.dev | Administrator/manage |
+| ArgoCD | https://argocd.gostoa.dev | GitOps CD |
+| Vault | https://vault.gostoa.dev | Secrets Management |
+| **Grafana** | https://grafana.gostoa.dev | Dashboards & Visualization |
+| **Prometheus** | https://prometheus.gostoa.dev | Metrics & Alerting |
+| **Loki** | https://loki.gostoa.dev | Log Aggregation |
 
-> **Architecture**: The UI calls the API via the Gateway (`apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0`) for centralized OIDC authentication.
+> **Architecture**: The UI calls the API via the Gateway (`apis.gostoa.dev/gateway/Control-Plane-API/2.0`) for centralized OIDC authentication.

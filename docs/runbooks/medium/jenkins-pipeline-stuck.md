@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `JenkinsBuildStuck` | `jenkins_build_duration > 1h` | [Jenkins Dashboard](https://grafana.stoa.cab-i.com/d/jenkins) |
-| `JenkinsQueueLong` | `jenkins_queue_size > 10` | [Jenkins Dashboard](https://grafana.stoa.cab-i.com/d/jenkins) |
-| `JenkinsAgentOffline` | `jenkins_agents_online == 0` | [Jenkins Dashboard](https://grafana.stoa.cab-i.com/d/jenkins) |
+| `JenkinsBuildStuck` | `jenkins_build_duration > 1h` | [Jenkins Dashboard](https://grafana.gostoa.dev/d/jenkins) |
+| `JenkinsQueueLong` | `jenkins_queue_size > 10` | [Jenkins Dashboard](https://grafana.gostoa.dev/d/jenkins) |
+| `JenkinsAgentOffline` | `jenkins_agents_online == 0` | [Jenkins Dashboard](https://grafana.gostoa.dev/d/jenkins) |
 
 ### Observed Behavior
 
@@ -47,15 +47,15 @@ kubectl logs -n jenkins deploy/jenkins --tail=100
 
 # 3. List builds in progress via API
 curl -s -u admin:$JENKINS_TOKEN \
-  "https://jenkins.stoa.cab-i.com/api/json?tree=jobs[name,builds[number,result,building]]" | jq .
+  "https://jenkins.gostoa.dev/api/json?tree=jobs[name,builds[number,result,building]]" | jq .
 
 # 4. Check queue
 curl -s -u admin:$JENKINS_TOKEN \
-  "https://jenkins.stoa.cab-i.com/queue/api/json" | jq '.items | length'
+  "https://jenkins.gostoa.dev/queue/api/json" | jq '.items | length'
 
 # 5. Check agents
 curl -s -u admin:$JENKINS_TOKEN \
-  "https://jenkins.stoa.cab-i.com/computer/api/json" | jq '.computer[] | {name, offline}'
+  "https://jenkins.gostoa.dev/computer/api/json" | jq '.computer[] | {name, offline}'
 ```
 
 ### Verification Points
@@ -85,11 +85,11 @@ curl -s -u admin:$JENKINS_TOKEN \
 ```bash
 # 1. Cancel stuck builds (via UI or API)
 curl -X POST -u admin:$JENKINS_TOKEN \
-  "https://jenkins.stoa.cab-i.com/job/<JOB_NAME>/<BUILD_NUMBER>/stop"
+  "https://jenkins.gostoa.dev/job/<JOB_NAME>/<BUILD_NUMBER>/stop"
 
 # 2. Clear queue
 curl -X POST -u admin:$JENKINS_TOKEN \
-  "https://jenkins.stoa.cab-i.com/queue/cancelItem?id=<ITEM_ID>"
+  "https://jenkins.gostoa.dev/queue/cancelItem?id=<ITEM_ID>"
 
 # 3. Restart Jenkins if necessary
 kubectl rollout restart deployment -n jenkins jenkins
@@ -121,7 +121,7 @@ kubectl delete pod -n jenkins -l app=jenkins-agent --field-selector status.phase
 
 # Update via API (example for GitLab token)
 curl -X POST -u admin:$JENKINS_TOKEN \
-  "https://jenkins.stoa.cab-i.com/credentials/store/system/domain/_/credential/gitlab-token/update" \
+  "https://jenkins.gostoa.dev/credentials/store/system/domain/_/credential/gitlab-token/update" \
   --data-urlencode "json={
     \"secret\": \"$NEW_GITLAB_TOKEN\"
   }"
@@ -194,16 +194,16 @@ kubectl patch deployment jenkins -n jenkins --type=json -p='[
 
 ```bash
 # Check Jenkins status
-curl -s https://jenkins.stoa.cab-i.com/api/json | jq .mode
+curl -s https://jenkins.gostoa.dev/api/json | jq .mode
 
 # Check agents
 curl -s -u admin:$JENKINS_TOKEN \
-  "https://jenkins.stoa.cab-i.com/computer/api/json" | \
+  "https://jenkins.gostoa.dev/computer/api/json" | \
   jq '.computer[] | select(.offline == false) | .displayName'
 
 # Trigger a test build
 curl -X POST -u admin:$JENKINS_TOKEN \
-  "https://jenkins.stoa.cab-i.com/job/test-pipeline/build"
+  "https://jenkins.gostoa.dev/job/test-pipeline/build"
 ```
 
 ---

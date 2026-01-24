@@ -2,16 +2,16 @@
 # Purpose: Pre-approved subscriptions for demo tenants
 ---
 # Team Alpha Subscriptions
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Subscription
 metadata:
   name: team-alpha-crm-search
   namespace: stoa-system
   labels:
-    stoa.cab-i.com/tenant: team-alpha
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: team-alpha
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/created-by: cab-279
+    gostoa.dev/created-by: cab-279
 spec:
   tenantId: team-alpha
   toolId: team_alpha_crm_search
@@ -29,16 +29,16 @@ spec:
     requestsPerDay: 1000
     requestsPerMinute: 60
 ---
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Subscription
 metadata:
   name: team-alpha-billing-invoice
   namespace: stoa-system
   labels:
-    stoa.cab-i.com/tenant: team-alpha
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: team-alpha
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/created-by: cab-279
+    gostoa.dev/created-by: cab-279
 spec:
   tenantId: team-alpha
   toolId: team_alpha_billing_invoice
@@ -57,16 +57,16 @@ spec:
     requestsPerMinute: 30
 ---
 # Team Beta Subscriptions
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Subscription
 metadata:
   name: team-beta-inventory-lookup
   namespace: stoa-system
   labels:
-    stoa.cab-i.com/tenant: team-beta
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: team-beta
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/created-by: cab-279
+    gostoa.dev/created-by: cab-279
 spec:
   tenantId: team-beta
   toolId: team_beta_inventory_lookup
@@ -84,16 +84,16 @@ spec:
     requestsPerDay: 2000
     requestsPerMinute: 120
 ---
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Subscription
 metadata:
   name: team-beta-notifications-send
   namespace: stoa-system
   labels:
-    stoa.cab-i.com/tenant: team-beta
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: team-beta
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/created-by: cab-279
+    gostoa.dev/created-by: cab-279
 spec:
   tenantId: team-beta
   toolId: team_beta_notifications_send

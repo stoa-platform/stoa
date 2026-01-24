@@ -46,10 +46,10 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - apis.stoa.cab-i.com
+    - apis.gostoa.dev
     secretName: apigateway-runtime-tls
   rules:
-  - host: apis.stoa.cab-i.com
+  - host: apis.gostoa.dev
     http:
       paths:
       - path: /
@@ -67,8 +67,8 @@ Create CNAME records pointing to the Load Balancer:
 
 | DNS | Target | Purpose |
 |-----|--------|---------|
-| `gateway.stoa.cab-i.com` | `<elb-hostname>` | Admin UI (port 9072) |
-| `apis.stoa.cab-i.com` | `<elb-hostname>` | API Runtime (port 5543) |
+| `gateway.gostoa.dev` | `<elb-hostname>` | Admin UI (port 9072) |
+| `apis.gostoa.dev` | `<elb-hostname>` | API Runtime (port 5543) |
 
 ## Sources & Documentation
 
@@ -556,11 +556,11 @@ curl -s -u Administrator:manage \
 ### Architecture Overview
 
 ```
-Client → apis.stoa.cab-i.com (HTTPS) → Ingress → Gateway:5543 → Backend
+Client → apis.gostoa.dev (HTTPS) → Ingress → Gateway:5543 → Backend
                                                       ↓
                                               OIDC Validation
                                                       ↓
-                                              Keycloak (auth.stoa.cab-i.com)
+                                              Keycloak (auth.gostoa.dev)
 ```
 
 ### Step 1: Create External Authorization Server (Keycloak)
@@ -579,13 +579,13 @@ curl -s -X POST \
     "type": "authServerAlias",
     "authServerType": "EXTERNAL",
     "localIntrospectionConfig": {
-      "issuer": "https://auth.stoa.cab-i.com/realms/stoa",
-      "jwksuri": "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/certs"
+      "issuer": "https://auth.gostoa.dev/realms/stoa",
+      "jwksuri": "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/certs"
     },
     "metadata": {
-      "authorizeURL": "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/auth",
-      "accessTokenURL": "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token",
-      "refreshTokenURL": "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token"
+      "authorizeURL": "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth",
+      "accessTokenURL": "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token",
+      "refreshTokenURL": "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token"
     },
     "scopes": [
       {"name": "openid", "description": "OpenID Connect scope"},
@@ -671,7 +671,7 @@ curl -s -X POST \
     "name": "control-plane-ui",
     "description": "DevOps UI Application for Control Plane",
     "contactEmails": ["admin@cab-i.com"],
-    "siteURLs": ["https://console.stoa.cab-i.com"]
+    "siteURLs": ["https://console.gostoa.dev"]
   }'
 ```
 
@@ -987,8 +987,8 @@ For the OIDC integration to work correctly, ensure these Keycloak settings:
 1. **Client `control-plane-ui`:**
    - Direct Access Grants Enabled: `true` (for password grant testing)
    - Standard Flow Enabled: `true`
-   - Valid Redirect URIs: `https://console.stoa.cab-i.com/*`
-   - Web Origins: `https://console.stoa.cab-i.com`
+   - Valid Redirect URIs: `https://console.gostoa.dev/*`
+   - Web Origins: `https://console.gostoa.dev`
 
 2. **Token Audience:**
    - By default, Keycloak sets `aud: account`
@@ -1005,7 +1005,7 @@ For the OIDC integration to work correctly, ensure these Keycloak settings:
 ```bash
 # Get token from Keycloak
 TOKEN=$(curl -s -X POST \
-  "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token" \
+  "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token" \
   -d "client_id=control-plane-ui" \
   -d "username=admin@stoa.local" \
   -d "password=demo" \
@@ -1013,7 +1013,7 @@ TOKEN=$(curl -s -X POST \
 
 # Call API via Gateway
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "https://apis.stoa.cab-i.com/gateway/Control-Plane-API/2.0/health"
+  "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0/health"
 ```
 
 ### Debugging OIDC Issues
@@ -1038,7 +1038,7 @@ The Gateway Admin REST API (`/rest/apigateway/*`) should NOT be exposed external
 
 Example Architecture:
 ```
-External:  https://apis.stoa.cab-i.com/admin/gateway/apis
+External:  https://apis.gostoa.dev/admin/gateway/apis
            ↓ OIDC (JWT validation)
 Gateway:   /gateway/GatewayAdmin/1.0/apis
            ↓ Alias routing

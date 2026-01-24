@@ -95,7 +95,7 @@ uv pip install -e ".[dev,k8s]"
 
 ```bash
 # Set environment variables
-export BASE_DOMAIN=stoa.cab-i.com
+export BASE_DOMAIN=gostoa.dev
 export DEBUG=true
 
 # Run the server
@@ -157,7 +157,7 @@ docker push <account>.dkr.ecr.eu-west-1.amazonaws.com/apim/mcp-gateway:latest
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BASE_DOMAIN` | `stoa.cab-i.com` | Base domain for STOA services |
+| `BASE_DOMAIN` | `gostoa.dev` | Base domain for STOA services |
 | `ENVIRONMENT` | `dev` | Environment (dev/staging/prod) |
 | `DEBUG` | `false` | Enable debug mode |
 | `PORT` | `8080` | Server port |
@@ -207,10 +207,10 @@ kind: ClusterRole
 metadata:
   name: stoa-mcp-gateway-tools
 rules:
-  - apiGroups: ["stoa.cab-i.com"]
+  - apiGroups: ["gostoa.dev"]
     resources: ["tools", "toolsets"]
     verbs: ["get", "list", "watch"]
-  - apiGroups: ["stoa.cab-i.com"]
+  - apiGroups: ["gostoa.dev"]
     resources: ["tools/status", "toolsets/status"]
     verbs: ["get", "patch", "update"]
   - apiGroups: [""]
@@ -236,7 +236,7 @@ The Helm chart (`charts/stoa-platform/templates/mcp-gateway-rbac.yaml`) creates 
 ### Tool CRD
 
 ```yaml
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: payment-search
@@ -257,7 +257,7 @@ spec:
 ### ToolSet CRD
 
 ```yaml
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: ToolSet
 metadata:
   name: petstore-api

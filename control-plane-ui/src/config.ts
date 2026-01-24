@@ -7,7 +7,7 @@
  * Environment Variables:
  * ----------------------
  * Core:
- * - VITE_BASE_DOMAIN: Base domain for all services (default: stoa.cab-i.com)
+ * - VITE_BASE_DOMAIN: Base domain for all services (default: gostoa.dev)
  * - VITE_ENVIRONMENT: Environment name (dev, staging, production)
  * - VITE_APP_TITLE: Application title
  *
@@ -33,7 +33,7 @@
  */
 
 // Base domain - used to construct default URLs for all services
-const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'stoa.cab-i.com';
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'gostoa.dev';
 
 // Environment detection
 const ENVIRONMENT = import.meta.env.VITE_ENVIRONMENT || 'production';

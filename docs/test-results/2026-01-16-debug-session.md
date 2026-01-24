@@ -49,7 +49,7 @@
 
 **Health Checks:**
 - Control Plane API (direct): `{"status": "healthy", "version": "2.0.0"}`
-- Keycloak: `https://auth.stoa.cab-i.com/realms/stoa`
+- Keycloak: `https://auth.gostoa.dev/realms/stoa`
 
 ### Phase 2: Utilisateurs de Test (Ready Player One)
 
@@ -133,9 +133,9 @@
 
 | UI | URL | Statut |
 |----|-----|--------|
-| Console UI | https://console.stoa.cab-i.com | HTTP 200 |
-| Developer Portal | https://portal.stoa.cab-i.com | HTTP 200 |
-| DevPortal (legacy) | https://devportal.stoa.cab-i.com | HTTP 404 |
+| Console UI | https://console.gostoa.dev | HTTP 200 |
+| Developer Portal | https://portal.gostoa.dev | HTTP 200 |
+| DevPortal (legacy) | https://devportal.gostoa.dev | HTTP 404 |
 
 ### Phase 10: Test Claude.ai Integration
 
@@ -235,11 +235,11 @@ logger.warning(
 ## Accès et Credentials
 
 ### URLs Production
-- Console UI: https://console.stoa.cab-i.com
-- Portal: https://portal.stoa.cab-i.com
-- MCP Gateway: https://mcp.stoa.cab-i.com/mcp/v1/
-- API: https://api.stoa.cab-i.com
-- Keycloak: https://auth.stoa.cab-i.com
+- Console UI: https://console.gostoa.dev
+- Portal: https://portal.gostoa.dev
+- MCP Gateway: https://mcp.gostoa.dev/mcp/v1/
+- API: https://api.gostoa.dev
+- Keycloak: https://auth.gostoa.dev
 
 ### Identifiants de Test
 - Admin: `admin@cab-i.com` / `demo`

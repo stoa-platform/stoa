@@ -108,7 +108,7 @@ class TestToolCRModels:
         )
 
         assert tool_cr.kind == "Tool"
-        assert tool_cr.apiVersion == "stoa.cab-i.com/v1alpha1"
+        assert tool_cr.apiVersion == "gostoa.dev/v1alpha1"
         assert tool_cr.metadata.name == "test-tool"
 
 
@@ -236,7 +236,7 @@ class TestToolWatcher:
         watcher = ToolWatcher()
 
         obj = {
-            "apiVersion": "stoa.cab-i.com/v1alpha1",
+            "apiVersion": "gostoa.dev/v1alpha1",
             "kind": "Tool",
             "metadata": {
                 "name": "test-tool",

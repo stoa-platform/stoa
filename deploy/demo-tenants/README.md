@@ -45,7 +45,7 @@ kubectl apply -k deploy/demo-tenants/
 
 # Verify tenants
 kubectl get tenants -n stoa-system
-kubectl get subscriptions -n stoa-system -l stoa.cab-i.com/demo=true
+kubectl get subscriptions -n stoa-system -l gostoa.dev/demo=true
 ```
 
 ### Option 2: Using Seed Script (Control-Plane API)
@@ -60,8 +60,8 @@ pip install httpx
 python scripts/seed-demo-data.py
 
 # Run with custom URLs (production)
-CONTROL_PLANE_URL=https://api.stoa.cab-i.com \
-KEYCLOAK_URL=https://auth.stoa.cab-i.com \
+CONTROL_PLANE_URL=https://api.gostoa.dev \
+KEYCLOAK_URL=https://auth.gostoa.dev \
 ADMIN_USERNAME=e2e-admin \
 ADMIN_PASSWORD=Admin123! \
 python scripts/seed-demo-data.py
@@ -106,7 +106,7 @@ python scripts/seed-demo-data.py
 kubectl port-forward -n stoa-system svc/stoa-mcp-gateway 8080:8080
 
 # Get auth token for team-alpha user
-TOKEN=$(curl -s -X POST "https://auth.stoa.cab-i.com/realms/stoa/protocol/openid-connect/token" \
+TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token" \
   -d "grant_type=password" \
   -d "client_id=stoa-portal" \
   -d "username=e2e-tenant-admin" \
@@ -137,10 +137,10 @@ curl -X POST "http://localhost:8080/mcp/v1/tools/team_beta_inventory_lookup/invo
 
 ```bash
 # Get tenants
-curl -H "Authorization: Bearer $TOKEN" https://api.stoa.cab-i.com/v1/tenants
+curl -H "Authorization: Bearer $TOKEN" https://api.gostoa.dev/v1/tenants
 
 # Get subscriptions for team-alpha
-curl -H "Authorization: Bearer $TOKEN" https://api.stoa.cab-i.com/v1/subscriptions?tenant_id=team-alpha
+curl -H "Authorization: Bearer $TOKEN" https://api.gostoa.dev/v1/subscriptions?tenant_id=team-alpha
 ```
 
 ## Cleanup
@@ -151,7 +151,7 @@ kubectl delete -k deploy/demo-tenants/
 
 # Or selectively
 kubectl delete tenant team-alpha team-beta -n stoa-system
-kubectl delete subscription -n stoa-system -l stoa.cab-i.com/demo=true
+kubectl delete subscription -n stoa-system -l gostoa.dev/demo=true
 kubectl delete namespace team-alpha team-beta
 ```
 

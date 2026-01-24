@@ -21,7 +21,7 @@
 #   API_NAME            - API name on Gateway (default: Control-Plane-API)
 #   API_VERSION         - API version (default: 2.0)
 #   DRY_RUN             - If set, don't apply changes (default: false)
-#   KEYCLOAK_ISSUER     - Keycloak issuer URL (default: https://auth.stoa.cab-i.com/realms/stoa)
+#   KEYCLOAK_ISSUER     - Keycloak issuer URL (default: https://auth.gostoa.dev/realms/stoa)
 #   APPLY_POLICIES      - Apply security policies after contract sync (default: true)
 #
 # =============================================================================
@@ -52,7 +52,7 @@ DRY_RUN="${DRY_RUN:-false}"
 
 # Policy configuration
 APPLY_POLICIES="${APPLY_POLICIES:-true}"
-KEYCLOAK_ISSUER="${KEYCLOAK_ISSUER:-https://auth.stoa.cab-i.com/realms/stoa}"
+KEYCLOAK_ISSUER="${KEYCLOAK_ISSUER:-https://auth.gostoa.dev/realms/stoa}"
 API_AUDIENCE="${API_AUDIENCE:-control-plane-api}"
 BACKEND_PASSTHROUGH="${BACKEND_PASSTHROUGH:-true}"
 

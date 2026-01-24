@@ -35,7 +35,7 @@ class VaultClient:
         """Initialize Vault client.
 
         Args:
-            vault_addr: Vault server URL (e.g., https://vault.stoa.cab-i.com)
+            vault_addr: Vault server URL (e.g., https://vault.gostoa.dev)
             vault_token: Vault token for authentication (dev mode)
             kubernetes_role: Kubernetes auth role name (production)
             mount_point: KV secrets engine mount point

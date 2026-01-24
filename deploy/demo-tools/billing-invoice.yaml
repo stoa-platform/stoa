@@ -2,18 +2,18 @@
 # Tenant: team-alpha
 # Purpose: Illustrate multi-tenant isolation with mock invoice generation
 ---
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: billing-invoice
   namespace: team-alpha
   labels:
-    stoa.cab-i.com/tenant: team-alpha
-    stoa.cab-i.com/category: finance
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/tenant: team-alpha
+    gostoa.dev/category: finance
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/owner: team-alpha-admin
-    stoa.cab-i.com/created-by: cab-290
+    gostoa.dev/owner: team-alpha-admin
+    gostoa.dev/created-by: cab-290
 spec:
   displayName: "Billing Invoice Generator"
   description: "Generate invoices for customers. Creates PDF invoices with line items, taxes, and payment terms based on customer orders."
@@ -81,8 +81,8 @@ metadata:
   name: billing-invoice-mock-data
   namespace: team-alpha
   labels:
-    stoa.cab-i.com/tenant: team-alpha
-    stoa.cab-i.com/tool: billing-invoice
+    gostoa.dev/tenant: team-alpha
+    gostoa.dev/tool: billing-invoice
 data:
   response.json: |
     {
@@ -122,7 +122,7 @@ data:
           "tax_rate": 0.20,
           "tax_amount": 690.00,
           "total": 4140.00,
-          "pdf_url": "https://billing.stoa.cab-i.com/invoices/INV-2026-00142.pdf"
+          "pdf_url": "https://billing.gostoa.dev/invoices/INV-2026-00142.pdf"
         }
       }
     }

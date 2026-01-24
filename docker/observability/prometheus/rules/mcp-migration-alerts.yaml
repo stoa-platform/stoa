@@ -42,7 +42,7 @@ spec:
               Rust gateway responses differ from Python gateway.
               Current mismatch rate: {{ $value | humanizePercentage }}
               Check logs for details: kubectl logs -l app=mcp-gateway-python -n stoa-system | grep "Shadow MISMATCH"
-            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+            runbook_url: "https://docs.gostoa.dev/runbooks/mcp-gateway-migration"
 
         - alert: MCPShadowErrorRateHigh
           expr: |
@@ -61,7 +61,7 @@ spec:
               Rust gateway is failing to process shadow requests.
               This may indicate network issues or Rust gateway problems.
               Error rate: {{ $value | humanizePercentage }}
-            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+            runbook_url: "https://docs.gostoa.dev/runbooks/mcp-gateway-migration"
 
         - alert: MCPShadowTimeoutRateHigh
           expr: |
@@ -80,7 +80,7 @@ spec:
               Rust gateway is timing out on shadow requests.
               Current timeout rate: {{ $value | humanizePercentage }}
               Consider increasing shadow timeout or investigating Rust gateway performance.
-            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+            runbook_url: "https://docs.gostoa.dev/runbooks/mcp-gateway-migration"
 
     - name: mcp-gateway-canary-mode
       interval: 30s
@@ -103,7 +103,7 @@ spec:
               Rust gateway is experiencing errors with real production traffic.
               Error rate: {{ $value | humanizePercentage }}
               Consider immediate rollback: ./scripts/canary-rollback.sh
-            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+            runbook_url: "https://docs.gostoa.dev/runbooks/mcp-gateway-migration"
 
         - alert: MCPRustGatewayLatencyHigh
           expr: |
@@ -120,7 +120,7 @@ spec:
               Rust gateway is slower than expected compared to Python.
               This should not happen - Rust should be faster or equal.
               Pause canary ramp-up and investigate.
-            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+            runbook_url: "https://docs.gostoa.dev/runbooks/mcp-gateway-migration"
 
         - alert: MCPRustGatewayDown
           expr: |
@@ -136,7 +136,7 @@ spec:
               Rust gateway is not responding to health checks.
               If canary weight > 0, some traffic is being dropped.
               Immediate rollback required: ./scripts/canary-rollback.sh
-            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+            runbook_url: "https://docs.gostoa.dev/runbooks/mcp-gateway-migration"
 
     - name: mcp-gateway-migration-slo
       interval: 1m

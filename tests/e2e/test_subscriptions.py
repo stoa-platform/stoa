@@ -19,9 +19,9 @@ import requests
 from playwright.sync_api import Page, expect
 
 # Configuration
-MCP_GATEWAY_URL = os.getenv("MCP_GATEWAY_URL", "https://mcp.stoa.cab-i.com")
-PORTAL_URL = os.getenv("PORTAL_URL", "https://portal.stoa.cab-i.com")
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.stoa.cab-i.com")
+MCP_GATEWAY_URL = os.getenv("MCP_GATEWAY_URL", "https://mcp.gostoa.dev")
+PORTAL_URL = os.getenv("PORTAL_URL", "https://portal.gostoa.dev")
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.gostoa.dev")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "stoa")
 # Use admin-cli for password grant (supports Direct Access Grants)
 # stoa-portal and stoa-console are browser-only clients
@@ -132,7 +132,7 @@ def portal_login(page: Page, users_data: dict):
                 const url = window.location.href;
                 return url.startsWith('{PORTAL_URL}') &&
                        !url.includes('/login') &&
-                       !url.includes('auth.stoa.cab-i.com');
+                       !url.includes('auth.gostoa.dev');
             }}""",
             timeout=15000
         )

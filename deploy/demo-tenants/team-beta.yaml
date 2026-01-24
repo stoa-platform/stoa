@@ -6,21 +6,21 @@ kind: Namespace
 metadata:
   name: team-beta
   labels:
-    stoa.cab-i.com/tenant: team-beta
-    stoa.cab-i.com/environment: demo
+    gostoa.dev/tenant: team-beta
+    gostoa.dev/environment: demo
   annotations:
-    stoa.cab-i.com/description: "Team Beta - Operations"
-    stoa.cab-i.com/created-by: cab-279
+    gostoa.dev/description: "Team Beta - Operations"
+    gostoa.dev/created-by: cab-279
 ---
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tenant
 metadata:
   name: team-beta
   namespace: stoa-system
   labels:
-    stoa.cab-i.com/demo: "true"
+    gostoa.dev/demo: "true"
   annotations:
-    stoa.cab-i.com/created-by: cab-279
+    gostoa.dev/created-by: cab-279
 spec:
   displayName: "Team Beta - Operations"
   description: "Demo tenant for Inventory and Notifications tools"
@@ -68,7 +68,7 @@ metadata:
   name: team-beta-config
   namespace: team-beta
   labels:
-    stoa.cab-i.com/tenant: team-beta
+    gostoa.dev/tenant: team-beta
 data:
   tenant.json: |
     {

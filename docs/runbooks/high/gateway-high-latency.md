@@ -13,9 +13,9 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `GatewayHighLatencyP95` | `histogram_quantile(0.95, gateway_request_duration) > 2s` | [Gateway Latency](https://grafana.stoa.cab-i.com/d/gateway-latency) |
-| `GatewayHighLatencyP99` | `histogram_quantile(0.99, gateway_request_duration) > 5s` | [Gateway Latency](https://grafana.stoa.cab-i.com/d/gateway-latency) |
-| `GatewaySlowBackend` | `backend_response_time > 3s` | [Backend Dashboard](https://grafana.stoa.cab-i.com/d/backends) |
+| `GatewayHighLatencyP95` | `histogram_quantile(0.95, gateway_request_duration) > 2s` | [Gateway Latency](https://grafana.gostoa.dev/d/gateway-latency) |
+| `GatewayHighLatencyP99` | `histogram_quantile(0.99, gateway_request_duration) > 5s` | [Gateway Latency](https://grafana.gostoa.dev/d/gateway-latency) |
+| `GatewaySlowBackend` | `backend_response_time > 3s` | [Backend Dashboard](https://grafana.gostoa.dev/d/backends) |
 
 ### Observed Behavior
 
@@ -229,7 +229,7 @@ kubectl exec -n stoa deploy/apigateway -- \
 # Latency test
 for i in {1..10}; do
   curl -w "Total: %{time_total}s\n" -o /dev/null -s \
-    https://gateway.stoa.cab-i.com/rest/apigateway/health
+    https://gateway.gostoa.dev/rest/apigateway/health
 done
 
 # Check percentiles
@@ -291,7 +291,7 @@ groups:
 ## 7. References
 
 - [Gateway Performance Tuning](docs/performance-tuning.md)
-- [Grafana Gateway Latency](https://grafana.stoa.cab-i.com/d/gateway-latency)
+- [Grafana Gateway Latency](https://grafana.gostoa.dev/d/gateway-latency)
 
 ---
 

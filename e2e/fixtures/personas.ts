@@ -80,7 +80,7 @@ const ioiPersonas = {
 const adminPersonas = {
   anorak: {
     name: 'Anorak',
-    username: process.env.ANORAK_USER || 'anorak@stoa.cab-i.com',
+    username: process.env.ANORAK_USER || 'anorak@gostoa.dev',
     password: process.env.ANORAK_PASSWORD || '',
     tenant: '*', // Access to all tenants
     role: 'cpi-admin' as const,

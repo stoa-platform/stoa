@@ -16,8 +16,8 @@
   gather_facts: false
 
   vars:
-    awx_host: "https://awx.stoa.cab-i.com"
-    keycloak_url: "https://auth.stoa.cab-i.com"
+    awx_host: "https://awx.gostoa.dev"
+    keycloak_url: "https://auth.gostoa.dev"
     keycloak_realm: "stoa"
     keycloak_client_id: "awx"
     # keycloak_client_secret: must be provided as extra var

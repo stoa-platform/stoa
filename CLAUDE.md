@@ -104,7 +104,7 @@ kubectl apply -f charts/stoa-platform/crds/
 ```bash
 # Register a tool via CRD
 kubectl apply -f - <<EOF
-apiVersion: stoa.cab-i.com/v1alpha1
+apiVersion: gostoa.dev/v1alpha1
 kind: Tool
 metadata:
   name: my-api-tool
@@ -121,16 +121,16 @@ kubectl get tools -n tenant-acme
 ```
 
 ## Key URLs (Production)
-- Console UI: https://console.stoa.cab-i.com (API Provider)
-- **Developer Portal**: https://portal.stoa.cab-i.com (API Consumer)
-- **Control-Plane-API**: https://api.stoa.cab-i.com (used by Console UI & Portal)
-- API Gateway Runtime: https://apis.stoa.cab-i.com (for external API consumers)
-- Gateway Admin: https://gateway.stoa.cab-i.com
-- MCP Gateway: https://mcp.stoa.cab-i.com
-- Keycloak: https://auth.stoa.cab-i.com
-- AWX: https://awx.stoa.cab-i.com
-- ArgoCD: https://argocd.stoa.cab-i.com
-- Vault: https://vault.stoa.cab-i.com
+- Console UI: https://console.gostoa.dev (API Provider)
+- **Developer Portal**: https://portal.gostoa.dev (API Consumer)
+- **Control-Plane-API**: https://api.gostoa.dev (used by Console UI & Portal)
+- API Gateway Runtime: https://apis.gostoa.dev (for external API consumers)
+- Gateway Admin: https://gateway.gostoa.dev
+- MCP Gateway: https://mcp.gostoa.dev
+- Keycloak: https://auth.gostoa.dev
+- AWX: https://awx.gostoa.dev
+- ArgoCD: https://argocd.gostoa.dev
+- Vault: https://vault.gostoa.dev
 
 ## Configuration
 The platform uses `BASE_DOMAIN` as single source of truth for all URLs.

@@ -13,8 +13,8 @@
 
 | Alert | Threshold | Dashboard |
 |-------|-----------|-----------|
-| `VaultSealed` | `vault_core_unsealed == 0` | [Vault Dashboard](https://grafana.stoa.cab-i.com/d/vault) |
-| `VaultDown` | `up{job="vault"} == 0` | [Vault Dashboard](https://grafana.stoa.cab-i.com/d/vault) |
+| `VaultSealed` | `vault_core_unsealed == 0` | [Vault Dashboard](https://grafana.gostoa.dev/d/vault) |
+| `VaultDown` | `up{job="vault"} == 0` | [Vault Dashboard](https://grafana.gostoa.dev/d/vault) |
 
 ### Observed Behavior
 
@@ -183,7 +183,7 @@ kubectl get externalsecrets -A
 kubectl get secrets -n stoa-system gateway-admin-secret -o yaml
 
 # Test Control-Plane API endpoint
-curl -s https://api.stoa.cab-i.com/health | jq .
+curl -s https://api.gostoa.dev/health | jq .
 ```
 
 ---
@@ -247,8 +247,8 @@ groups:
 
 ### Grafana Dashboards
 
-- [Vault Overview](https://grafana.stoa.cab-i.com/d/vault)
-- [Vault Audit Logs](https://grafana.stoa.cab-i.com/d/vault-audit)
+- [Vault Overview](https://grafana.gostoa.dev/d/vault)
+- [Vault Audit Logs](https://grafana.gostoa.dev/d/vault-audit)
 
 ### Previous Incidents
 

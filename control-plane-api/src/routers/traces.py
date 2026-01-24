@@ -168,7 +168,7 @@ async def create_demo_trace(
         ]),
         git_branch="main",
         git_author=random.choice(["alice", "bob", "charlie", "diana", "eve"]),
-        git_author_email="dev@stoa.cab-i.com",
+        git_author_email="dev@gostoa.dev",
         git_project=random.choice([
             "stoa/api-definitions",
             "stoa/customer-service",

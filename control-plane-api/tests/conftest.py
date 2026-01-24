@@ -146,7 +146,7 @@ def mock_user_cpi_admin():
     """Mock CPI Admin user with full platform access."""
     return User(
         id="admin-user-id",
-        email="admin@stoa.cab-i.com",
+        email="admin@gostoa.dev",
         username="cpi-admin",
         roles=["cpi-admin"],
         tenant_id=None,
@@ -208,7 +208,7 @@ def mock_keycloak_token() -> dict[str, Any]:
     """Mock Keycloak token payload."""
     return {
         "sub": "test-user-id",
-        "email": "test@stoa.cab-i.com",
+        "email": "test@gostoa.dev",
         "preferred_username": "test-user",
         "realm_access": {"roles": ["cpi-admin"]},
         "resource_access": {},

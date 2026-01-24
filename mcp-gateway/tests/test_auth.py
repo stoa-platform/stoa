@@ -34,7 +34,7 @@ def sample_claims() -> dict:
             },
         },
         "scope": "openid profile email",
-        "iss": "https://auth.stoa.cab-i.com/realms/stoa",
+        "iss": "https://auth.gostoa.dev/realms/stoa",
         "aud": "stoa-mcp-gateway",
         "exp": int(time.time()) + 3600,
         "iat": int(time.time()),

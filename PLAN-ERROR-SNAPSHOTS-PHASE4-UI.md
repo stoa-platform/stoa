@@ -250,7 +250,7 @@ import type {
   SnapshotResolutionStatus,
 } from '../types';
 
-const MCP_GATEWAY_URL = import.meta.env.VITE_MCP_GATEWAY_URL || 'https://mcp.stoa.cab-i.com';
+const MCP_GATEWAY_URL = import.meta.env.VITE_MCP_GATEWAY_URL || 'https://mcp.gostoa.dev';
 
 class ErrorSnapshotsService {
   private baseUrl = `${MCP_GATEWAY_URL}/mcp/v1/errors/snapshots`;

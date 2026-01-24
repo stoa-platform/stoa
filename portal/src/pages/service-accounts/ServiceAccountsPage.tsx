@@ -438,7 +438,7 @@ function NewAccountCreatedModal({
     const config = {
       mcpServers: {
         [`stoa-${account.name}`]: {
-          url: 'https://mcp.stoa.cab-i.com/mcp/sse',
+          url: 'https://mcp.gostoa.dev/mcp/sse',
           transport: 'sse',
           headers: {
             Authorization: `Basic ${btoa(`${account.client_id}:${account.client_secret}`)}`,

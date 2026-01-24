@@ -66,7 +66,7 @@ if [[ -z "${KEYCLOAK_ADMIN_PASSWORD}" ]]; then
 fi
 
 # Get Keycloak URL
-KEYCLOAK_URL="https://auth.stoa.cab-i.com"
+KEYCLOAK_URL="https://auth.gostoa.dev"
 if [[ "${ENV}" == "dev" ]]; then
     # For local development, use port-forward
     KEYCLOAK_URL="http://localhost:8180"

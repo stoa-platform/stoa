@@ -34,19 +34,19 @@
 
 ```bash
 # 1. Check deployment history via API
-curl -s https://api.stoa.cab-i.com/v1/deployments?api_id=<API_ID>&limit=5 | jq .
+curl -s https://api.gostoa.dev/v1/deployments?api_id=<API_ID>&limit=5 | jq .
 
 # 2. Check in GitLab
 git log --oneline -10 -- apis/<API_NAME>/
 
 # 3. Check in AWX
 curl -s -H "Authorization: Bearer $AWX_TOKEN" \
-  "https://awx.stoa.cab-i.com/api/v2/jobs/?job_template=1&order_by=-created" | \
+  "https://awx.gostoa.dev/api/v2/jobs/?job_template=1&order_by=-created" | \
   jq '.results[:5] | .[] | {id, status, created}'
 
 # 4. Check active version in Gateway
 curl -s -u $GATEWAY_USER:$GATEWAY_PASSWORD \
-  "https://gateway.stoa.cab-i.com/rest/apigateway/apis/<API_ID>" | \
+  "https://gateway.gostoa.dev/rest/apigateway/apis/<API_ID>" | \
   jq '.apiResponse.api.apiVersion'
 ```
 
@@ -63,7 +63,7 @@ curl -s -u $GATEWAY_USER:$GATEWAY_PASSWORD \
 
 ### Method 1: Via Control-Plane UI (Recommended)
 
-1. Go to https://console.stoa.cab-i.com
+1. Go to https://console.gostoa.dev
 2. Navigate to APIs > [API Name] > Deployments
 3. Find the previous deployment (status: success)
 4. Click "Rollback to this version"
@@ -76,7 +76,7 @@ curl -s -u $GATEWAY_USER:$GATEWAY_PASSWORD \
 curl -X POST \
   -H "Authorization: Bearer $JWT_TOKEN" \
   -H "Content-Type: application/json" \
-  https://api.stoa.cab-i.com/v1/deployments/rollback \
+  https://api.gostoa.dev/v1/deployments/rollback \
   -d '{
     "api_id": "<API_ID>",
     "target_version": "1.0.0",
@@ -86,7 +86,7 @@ curl -X POST \
 
 # Follow rollback status
 curl -s -H "Authorization: Bearer $JWT_TOKEN" \
-  https://api.stoa.cab-i.com/v1/deployments/<DEPLOYMENT_ID> | jq .
+  https://api.gostoa.dev/v1/deployments/<DEPLOYMENT_ID> | jq .
 ```
 
 ### Method 3: Via AWX Job Template
@@ -96,7 +96,7 @@ curl -s -H "Authorization: Bearer $JWT_TOKEN" \
 curl -X POST \
   -H "Authorization: Bearer $AWX_TOKEN" \
   -H "Content-Type: application/json" \
-  https://awx.stoa.cab-i.com/api/v2/job_templates/2/launch/ \
+  https://awx.gostoa.dev/api/v2/job_templates/2/launch/ \
   -d '{
     "extra_vars": {
       "api_id": "<API_ID>",
@@ -109,7 +109,7 @@ curl -X POST \
 
 # Follow job
 curl -s -H "Authorization: Bearer $AWX_TOKEN" \
-  https://awx.stoa.cab-i.com/api/v2/jobs/<JOB_ID>/ | jq '{status, failed}'
+  https://awx.gostoa.dev/api/v2/jobs/<JOB_ID>/ | jq '{status, failed}'
 ```
 
 ### Method 4: Manual Gateway Rollback (Emergency)
@@ -118,7 +118,7 @@ curl -s -H "Authorization: Bearer $AWX_TOKEN" \
 # 1. Deactivate current API
 curl -X PUT \
   -u $GATEWAY_USER:$GATEWAY_PASSWORD \
-  "https://gateway.stoa.cab-i.com/rest/apigateway/apis/<API_ID>/deactivate"
+  "https://gateway.gostoa.dev/rest/apigateway/apis/<API_ID>/deactivate"
 
 # 2. Restore previous version from Git
 git checkout HEAD~1 -- apis/<API_NAME>/openapi.yaml
@@ -127,13 +127,13 @@ git checkout HEAD~1 -- apis/<API_NAME>/openapi.yaml
 curl -X POST \
   -u $GATEWAY_USER:$GATEWAY_PASSWORD \
   -H "Content-Type: application/json" \
-  "https://gateway.stoa.cab-i.com/rest/apigateway/apis" \
+  "https://gateway.gostoa.dev/rest/apigateway/apis" \
   -d @apis/<API_NAME>/openapi.yaml
 
 # 4. Activate restored API
 curl -X PUT \
   -u $GATEWAY_USER:$GATEWAY_PASSWORD \
-  "https://gateway.stoa.cab-i.com/rest/apigateway/apis/<NEW_API_ID>/activate"
+  "https://gateway.gostoa.dev/rest/apigateway/apis/<NEW_API_ID>/activate"
 ```
 
 ### Method 5: GitOps Rollback (ArgoCD)
@@ -171,11 +171,11 @@ kubectl patch application <APP_NAME> -n argocd --type merge -p '{
 
 ```bash
 # Test API
-curl -s https://gateway.stoa.cab-i.com/gateway/<API_PATH>/health | jq .
+curl -s https://gateway.gostoa.dev/gateway/<API_PATH>/health | jq .
 
 # Check version
 curl -s -u $GATEWAY_USER:$GATEWAY_PASSWORD \
-  "https://gateway.stoa.cab-i.com/rest/apigateway/apis/<API_ID>" | \
+  "https://gateway.gostoa.dev/rest/apigateway/apis/<API_ID>" | \
   jq '.apiResponse.api | {name, apiVersion, isActive}'
 
 # Check metrics

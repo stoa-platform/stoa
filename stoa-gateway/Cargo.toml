@@ -1,0 +1,51 @@
+[package]
+name = "stoa-gateway"
+version = "0.1.0"
+edition = "2021"
+authors = ["STOA Platform Team"]
+license = "Apache-2.0"
+description = "High-performance API gateway with failover and shadow mode for STOA Platform"
+repository = "https://github.com/stoa-platform/stoa"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full", "signal"] }
+
+# HTTP server
+axum = "0.7"
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tower = { version = "0.4", features = ["timeout", "util"] }
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+
+# HTTP client (for proxying)
+reqwest = { version = "0.12", features = ["json"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Body handling (for shadow mode)
+bytes = "1"
+http-body-util = "0.1"
+
+# Metrics
+prometheus = "0.13"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Config
+envy = "0.4"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+# P1 additions (uncomment later):
+# prometheus = "0.13"
+# stoa_policy_engine = { path = "../stoa-policy-engine-rs" }

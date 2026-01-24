@@ -101,6 +101,16 @@ class Settings(BaseSettings):
     enable_demo_tools: bool = False  # Enable RPO Easter egg tools (demo environments only)
     use_tenant_scoped_tools: bool = False  # Phase 2: Tenant-scoped tool naming (removes tenant prefix)
 
+    # External MCP Servers (Linear, GitHub, Slack, etc.)
+    external_servers_enabled: bool = True  # Enable external MCP server proxying
+    external_server_poll_interval: int = 60  # Seconds between polling Control Plane API
+    external_server_api_key: str = ""  # API key for internal endpoint auth (optional)
+
+    # Shadow Mode Configuration (Python → Rust Migration)
+    shadow_mode_enabled: bool = False  # Enable shadow traffic to Rust gateway
+    shadow_rust_gateway_url: str = "http://mcp-gateway-rust:8080"  # Rust gateway URL
+    shadow_timeout_seconds: float = 5.0  # Timeout for shadow requests
+
     @model_validator(mode="after")
     def derive_urls_from_base_domain(self) -> "Settings":
         """Derive service URLs from base_domain if not explicitly set."""

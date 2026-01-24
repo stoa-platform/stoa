@@ -22,9 +22,10 @@ from starlette.responses import Response
 
 from .config import get_settings
 from .handlers import mcp_router, subscriptions_router, mcp_sse_router, sse_alias_router, servers_router
-from .middleware import MetricsMiddleware
+from .middleware import MetricsMiddleware, ShadowMiddleware
 from .services import get_tool_registry, shutdown_tool_registry, init_database, shutdown_database
 from .services.tool_handlers import init_tool_handlers, shutdown_tool_handlers
+from .services.external_server_loader import get_external_server_loader, shutdown_external_server_loader
 from .k8s import get_tool_watcher, shutdown_tool_watcher
 from .clients import init_core_api_client, shutdown_core_api_client
 from .features.error_snapshots import (
@@ -159,6 +160,18 @@ async def lifespan(app: FastAPI):
 
         logger.info("K8s watcher connected to tool registry")
 
+    # Initialize external MCP server loader (Linear, GitHub, Slack, etc.)
+    if settings.external_servers_enabled:
+        try:
+            external_loader = await get_external_server_loader()
+            await external_loader.startup()
+            logger.info(
+                "External MCP server loader started",
+                poll_interval=settings.external_server_poll_interval,
+            )
+        except Exception as e:
+            logger.warning("External server loader failed to start", error=str(e))
+
     app_state["ready"] = True
 
     logger.info(
@@ -175,6 +188,9 @@ async def lifespan(app: FastAPI):
 
     # Cleanup MCP error snapshot publisher
     await shutdown_snapshot_publisher()
+
+    # Cleanup external server loader
+    await shutdown_external_server_loader()
 
     # Cleanup K8s watcher
     await shutdown_tool_watcher()
@@ -205,6 +221,18 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.debug else None,
         lifespan=lifespan,
     )
+
+    # Shadow mode middleware for Python → Rust migration
+    if settings.shadow_mode_enabled:
+        app.add_middleware(
+            ShadowMiddleware,
+            rust_gateway_url=settings.shadow_rust_gateway_url,
+            timeout=settings.shadow_timeout_seconds,
+        )
+        logger.info(
+            "Shadow mode ENABLED",
+            rust_gateway_url=settings.shadow_rust_gateway_url,
+        )
 
     # MCP Error Snapshot middleware (captures errors for debugging)
     snapshot_settings = get_mcp_snapshot_settings()
@@ -502,6 +530,44 @@ def register_routes(app: FastAPI) -> None:
     async def api_status() -> dict[str, Any]:
         """API status endpoint (public)."""
         return await status_public()
+
+    # ============================================
+    # ADMIN ENDPOINTS
+    # ============================================
+
+    @app.post("/admin/reload-external-servers", tags=["Admin"])
+    async def reload_external_servers(request: Request) -> dict[str, Any]:
+        """Force reload external MCP server configurations.
+
+        Only accessible from internal cluster network.
+        Triggers immediate sync instead of waiting for next poll interval.
+        """
+        if not _is_internal_request(request):
+            raise HTTPException(status_code=403, detail="Forbidden - internal only")
+
+        settings = get_settings()
+        if not settings.external_servers_enabled:
+            return {"status": "disabled", "message": "External servers feature is disabled"}
+
+        loader = await get_external_server_loader()
+        result = await loader.reload()
+        return result
+
+    @app.get("/admin/external-servers/status", tags=["Admin"])
+    async def external_servers_status(request: Request) -> dict[str, Any]:
+        """Get external MCP server loader status.
+
+        Only accessible from internal cluster network.
+        """
+        if not _is_internal_request(request):
+            raise HTTPException(status_code=403, detail="Forbidden - internal only")
+
+        settings = get_settings()
+        if not settings.external_servers_enabled:
+            return {"enabled": False}
+
+        loader = await get_external_server_loader()
+        return loader.get_status()
 
     # ============================================
     # API DISCOVERY ENDPOINTS (Phase 2)

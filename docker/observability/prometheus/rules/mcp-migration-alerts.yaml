@@ -1,0 +1,176 @@
+# MCP Gateway Migration Alerting Rules
+# Monitors Python → Rust migration (Shadow Mode + Canary)
+#
+# Alert Categories:
+# 1. Shadow Mode - Response comparison between Python and Rust
+# 2. Canary Mode - Rust gateway performance when handling real traffic
+#
+# Usage:
+#   kubectl apply -f docker/observability/prometheus/rules/mcp-migration-alerts.yaml
+#
+# Or add to Prometheus configuration via ConfigMap/PrometheusRule CRD
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mcp-gateway-migration
+  namespace: stoa-system
+  labels:
+    app: mcp-gateway
+    prometheus: stoa
+    role: alert-rules
+spec:
+  groups:
+    - name: mcp-gateway-shadow-mode
+      interval: 30s
+      rules:
+        # Shadow Mode Alerts
+        - alert: MCPShadowMismatchRateHigh
+          expr: |
+            (
+              rate(mcp_shadow_match_total{result="mismatch"}[5m])
+              / rate(mcp_shadow_match_total[5m])
+            ) > 0.001
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            migration: python-to-rust
+          annotations:
+            summary: "MCP Shadow mismatch rate > 0.1%"
+            description: |
+              Rust gateway responses differ from Python gateway.
+              Current mismatch rate: {{ $value | humanizePercentage }}
+              Check logs for details: kubectl logs -l app=mcp-gateway-python -n stoa-system | grep "Shadow MISMATCH"
+            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+
+        - alert: MCPShadowErrorRateHigh
+          expr: |
+            (
+              rate(mcp_shadow_requests_total{status="error"}[5m])
+              / rate(mcp_shadow_requests_total[5m])
+            ) > 0.01
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            migration: python-to-rust
+          annotations:
+            summary: "MCP Shadow request error rate > 1%"
+            description: |
+              Rust gateway is failing to process shadow requests.
+              This may indicate network issues or Rust gateway problems.
+              Error rate: {{ $value | humanizePercentage }}
+            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+
+        - alert: MCPShadowTimeoutRateHigh
+          expr: |
+            (
+              rate(mcp_shadow_requests_total{status="timeout"}[5m])
+              / rate(mcp_shadow_requests_total[5m])
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            migration: python-to-rust
+          annotations:
+            summary: "MCP Shadow timeout rate > 5%"
+            description: |
+              Rust gateway is timing out on shadow requests.
+              Current timeout rate: {{ $value | humanizePercentage }}
+              Consider increasing shadow timeout or investigating Rust gateway performance.
+            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+
+    - name: mcp-gateway-canary-mode
+      interval: 30s
+      rules:
+        # Canary Mode Alerts - Critical for production traffic
+        - alert: MCPRustGatewayErrorRateHigh
+          expr: |
+            (
+              rate(mcp_request_errors_total{gateway="rust"}[5m])
+              / rate(mcp_requests_total{gateway="rust"}[5m])
+            ) > 0.001
+          for: 5m
+          labels:
+            severity: critical
+            team: platform
+            migration: python-to-rust
+          annotations:
+            summary: "Rust gateway error rate > 0.1%"
+            description: |
+              Rust gateway is experiencing errors with real production traffic.
+              Error rate: {{ $value | humanizePercentage }}
+              Consider immediate rollback: ./scripts/canary-rollback.sh
+            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+
+        - alert: MCPRustGatewayLatencyHigh
+          expr: |
+            histogram_quantile(0.99, rate(mcp_request_duration_seconds_bucket{gateway="rust"}[5m]))
+            > 1.5 * histogram_quantile(0.99, rate(mcp_request_duration_seconds_bucket{gateway="python"}[5m]))
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+            migration: python-to-rust
+          annotations:
+            summary: "Rust gateway p99 latency > 1.5x Python"
+            description: |
+              Rust gateway is slower than expected compared to Python.
+              This should not happen - Rust should be faster or equal.
+              Pause canary ramp-up and investigate.
+            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+
+        - alert: MCPRustGatewayDown
+          expr: |
+            up{job="mcp-gateway-rust"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+            migration: python-to-rust
+          annotations:
+            summary: "Rust gateway is down"
+            description: |
+              Rust gateway is not responding to health checks.
+              If canary weight > 0, some traffic is being dropped.
+              Immediate rollback required: ./scripts/canary-rollback.sh
+            runbook_url: "https://docs.stoa.cab-i.com/runbooks/mcp-gateway-migration"
+
+    - name: mcp-gateway-migration-slo
+      interval: 1m
+      rules:
+        # SLO Recording Rules for Migration
+        - record: mcp:shadow_match_rate:5m
+          expr: |
+            sum(rate(mcp_shadow_match_total{result="match"}[5m]))
+            / sum(rate(mcp_shadow_match_total[5m]))
+
+        - record: mcp:rust_gateway_error_rate:5m
+          expr: |
+            sum(rate(mcp_request_errors_total{gateway="rust"}[5m]))
+            / sum(rate(mcp_requests_total{gateway="rust"}[5m]))
+
+        - record: mcp:rust_gateway_p99_latency:5m
+          expr: |
+            histogram_quantile(0.99, sum(rate(mcp_request_duration_seconds_bucket{gateway="rust"}[5m])) by (le))
+
+        - record: mcp:python_gateway_p99_latency:5m
+          expr: |
+            histogram_quantile(0.99, sum(rate(mcp_request_duration_seconds_bucket{gateway="python"}[5m])) by (le))
+
+        # Migration readiness indicator
+        # Returns 1 if Rust gateway is ready for more traffic, 0 otherwise
+        - record: mcp:rust_gateway_ready_for_traffic
+          expr: |
+            (
+              # Shadow match rate > 99.9%
+              (mcp:shadow_match_rate:5m > 0.999 or absent(mcp:shadow_match_rate:5m))
+              and
+              # Error rate < 0.1%
+              (mcp:rust_gateway_error_rate:5m < 0.001 or absent(mcp:rust_gateway_error_rate:5m))
+              and
+              # Latency not significantly higher than Python
+              (mcp:rust_gateway_p99_latency:5m < 1.5 * mcp:python_gateway_p99_latency:5m or absent(mcp:rust_gateway_p99_latency:5m))
+            ) or vector(0)

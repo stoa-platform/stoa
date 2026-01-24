@@ -1,0 +1,23 @@
+# CAB-279: Demo Tenants Kustomization
+# Purpose: Deploy demo tenants and subscriptions for STOA MVP
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: demo-tenants
+  annotations:
+    gostoa.dev/created-by: cab-279
+
+namespace: stoa-system
+
+# Labels applied to all resources
+commonLabels:
+  gostoa.dev/demo: "true"
+  gostoa.dev/environment: demo
+
+# Resources to deploy
+resources:
+  - team-alpha.yaml
+  - team-beta.yaml
+  - subscriptions.yaml

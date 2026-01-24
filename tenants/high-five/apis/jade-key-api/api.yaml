@@ -1,0 +1,26 @@
+# Jade Key Quest API
+# Second of the three keys to find Halliday's Easter Egg
+id: jade-key-api
+name: jade-key-api
+display_name: "Jade Key Quest API"
+version: "1.0.0"
+description: |
+  Second Quest - Discover the Jade Key hidden in the realm of Zork.
+  
+  The Jade Key lies within the Great Underground Empire. Navigate the 
+  twisty little passages, all alike, and prove your worth as a true adventurer.
+  Only those who remember the classics will prevail.
+  
+  "The captain conceals the Jade Key in a dwelling long neglected..."
+backend_url: https://httpbin.org/anything
+status: active
+category: Quest
+tags:
+  - portal:published
+  - quest
+  - oasis
+  - rest
+  - second-gate
+deployments:
+  dev: true
+  staging: false

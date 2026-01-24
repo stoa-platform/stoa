@@ -1,0 +1,226 @@
+# Promtail Configuration for STOA Platform
+# CAB-281: Log Shipping to Loki
+# CAB-330: Enhanced label extraction for centralized logging
+#
+# Promtail is an agent that ships local logs to a Loki instance.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    tenant_id: stoa
+    batchwait: 1s
+    batchsize: 1048576  # 1MB
+    timeout: 10s
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+
+scrape_configs:
+  # =============================================================================
+  # Docker Container Logs (for docker-compose development)
+  # =============================================================================
+  - job_name: docker-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Keep only STOA platform containers
+      - source_labels: ['__meta_docker_container_name']
+        regex: '.*stoa.*|.*control-plane.*|.*mcp-gateway.*|.*keycloak.*|.*redpanda.*'
+        action: keep
+      # Extract container name
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/?(.*)'
+        target_label: container
+      # Extract service name from compose
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: service
+      # Extract compose project
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: project
+      # Extract container ID
+      - source_labels: ['__meta_docker_container_id']
+        target_label: container_id
+    pipeline_stages:
+      # Parse JSON logs (structlog format)
+      - json:
+          expressions:
+            level: level
+            message: event
+            msg: msg
+            timestamp: timestamp
+            logger: logger
+            logger_name: logger_name
+            # Request context (CAB-330)
+            request_id: request_id
+            trace_id: trace_id
+            span_id: span_id
+            tenant_id: tenant_id
+            user_id: user_id
+            # HTTP fields
+            endpoint: endpoint
+            path: path
+            method: method
+            status_code: status_code
+            duration_ms: duration_ms
+            client_ip: client_ip
+            # Application context
+            component: component
+            environment: environment
+            version: version
+            # Error fields
+            error: error
+            error_type: error_type
+            # Service fields
+            service_name: service_name
+            tool_name: tool_name
+      # Normalize message field
+      - template:
+          source: message
+          template: '{{ if .message }}{{ .message }}{{ else if .event }}{{ .event }}{{ else }}{{ .msg }}{{ end }}'
+      # Extract log level as label
+      - labels:
+          level:
+          logger:
+          tenant_id:
+          component:
+          environment:
+      # Set timestamp from log
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+          fallback_formats:
+            - RFC3339
+            - '2006-01-02T15:04:05.000Z'
+      # Output structured fields
+      - output:
+          source: message
+
+  # =============================================================================
+  # Kubernetes Pod Logs (for K8s deployment)
+  # =============================================================================
+  - job_name: kubernetes-pods
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      # Only scrape pods with annotation promtail.io/scrape: "true"
+      - source_labels: [__meta_kubernetes_pod_annotation_promtail_io_scrape]
+        action: keep
+        regex: true
+      # Keep only STOA namespace pods
+      - source_labels: [__meta_kubernetes_namespace]
+        regex: stoa-system|stoa-.*
+        action: keep
+      # Extract namespace
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      # Extract pod name
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      # Extract container name
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
+      # Extract app label
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+      # Extract component label
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+        target_label: component
+      # Set path for log file
+      - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+        target_label: __path__
+        separator: /
+        replacement: /var/log/pods/*$1/$2/*.log
+    pipeline_stages:
+      # Docker/CRI log format parsing
+      - cri: {}
+      # Parse JSON logs from applications (structlog format)
+      - json:
+          expressions:
+            level: level
+            message: event
+            msg: msg
+            timestamp: timestamp
+            time: time
+            logger: logger
+            logger_name: logger_name
+            # Request context (CAB-330)
+            request_id: request_id
+            trace_id: trace_id
+            span_id: span_id
+            tenant_id: tenant_id
+            user_id: user_id
+            # HTTP fields
+            endpoint: endpoint
+            path: path
+            method: method
+            status_code: status_code
+            duration_ms: duration_ms
+            client_ip: client_ip
+            slow_request: slow_request
+            # Application context
+            component: component
+            environment: environment
+            version: version
+            # Error fields
+            error: error
+            error_type: error_type
+            # Service fields
+            service_name: service_name
+            tool_name: tool_name
+            # Auth fields (CAB-330)
+            payload_keys: payload_keys
+            has_sub: has_sub
+      # Normalize log level
+      - template:
+          source: level
+          template: '{{ if .level }}{{ .level }}{{ else if .msg }}info{{ else }}unknown{{ end }}'
+      # Extract labels for indexing
+      - labels:
+          level:
+          logger:
+          tenant_id:
+          component:
+          environment:
+      # Handle structlog format (event vs message vs msg)
+      - template:
+          source: message
+          template: '{{ if .message }}{{ .message }}{{ else if .event }}{{ .event }}{{ else }}{{ .msg }}{{ end }}'
+      # Parse timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+          fallback_formats:
+            - RFC3339
+            - '2006-01-02T15:04:05.000Z'
+            - UnixMs
+      # Final output
+      - output:
+          source: message
+
+  # =============================================================================
+  # System Logs (optional - for node-level debugging)
+  # =============================================================================
+  - job_name: system-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: system
+          __path__: /var/log/syslog
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\w+\s+\d+\s+\d+:\d+:\d+)\s+(?P<host>\S+)\s+(?P<program>\S+?)(\[(?P<pid>\d+)\])?:\s+(?P<message>.*)$'
+      - labels:
+          host:
+          program:
+      - output:
+          source: message

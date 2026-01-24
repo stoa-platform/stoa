@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+
+# Auth storage states (contain sensitive tokens)
+fixtures/.auth/*.json
+!fixtures/.auth/.gitkeep
+
+# Generated test files
+.features-gen/
+
+# Reports
+reports/
+playwright-report/
+test-results/
+
+# Debug
+*.log
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build
+dist/

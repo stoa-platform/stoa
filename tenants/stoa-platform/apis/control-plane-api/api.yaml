@@ -1,0 +1,67 @@
+apiVersion: gostoa.dev/v1
+kind: API
+metadata:
+  name: control-plane-api
+  version: "2.0"
+  labels:
+    managed-by: gitops
+    tier: platform
+
+spec:
+  displayName: Control-Plane-API
+  description: |
+    STOA Control Plane API - Core administrative API for managing tenants,
+    APIs, applications, and platform configuration. Used by Console UI,
+    Developer Portal, and MCP Gateway.
+
+  status: published
+  category: platform
+
+  tags:
+    - rest
+    - internal
+    - admin
+    - control-plane
+
+  # Backend configuration
+  backend:
+    url: https://api.gostoa.dev
+    # Alternative: use alias for per-environment configuration
+    # alias: control-plane-backend
+
+  # Gateway routing
+  routing:
+    basePath: /gateway/Control-Plane-API/2.0
+    stripBasePath: true
+
+  # Security policies to apply
+  policies:
+    - jwt-validation
+    - cors-platform
+    - rate-limit-high
+    - audit-logging
+
+  # Environment deployments
+  deployments:
+    dev: true
+    staging: true
+    prod: true
+
+  # OpenAPI specification
+  documentation:
+    openapi: openapi.yaml
+    docsUrl: https://docs.gostoa.dev/api/control-plane
+
+  # Gateway-specific settings (webMethods)
+  gateway:
+    type: REST
+    isActive: true
+    maturityState: Production
+    # OIDC authentication
+    oauth2:
+      enabled: true
+      provider: keycloak
+      scopes:
+        - stoa:read
+        - stoa:write
+        - stoa:admin

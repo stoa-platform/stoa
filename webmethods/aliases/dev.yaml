@@ -1,0 +1,27 @@
+# Backend Aliases for DEV environment
+# These define the backend endpoints for APIs
+
+aliases:
+  control-plane-api:
+    url: https://api.gostoa.dev
+    description: "Control-Plane API Backend"
+    connectionTimeout: 30000
+    readTimeout: 30000
+    authType: passthrough
+    passthrough: true
+
+  keycloak:
+    url: https://auth.gostoa.dev
+    description: "Keycloak Authentication Server"
+    connectionTimeout: 10000
+    readTimeout: 30000
+    authType: none
+
+  gateway-admin:
+    url: http://apigateway.stoa-system.svc.cluster.local:5555
+    description: "webMethods Gateway Admin API (internal)"
+    connectionTimeout: 30000
+    readTimeout: 60000
+    authType: basic
+    username: Administrator
+    # password from Vault: secret/stoa/dev/gateway/admin-password

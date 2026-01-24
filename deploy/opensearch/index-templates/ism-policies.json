@@ -1,0 +1,144 @@
+{
+  "policies": [
+    {
+      "policy_id": "audit-policy",
+      "description": "Audit trail index lifecycle - 1 year retention",
+      "default_state": "hot",
+      "states": [
+        {
+          "name": "hot",
+          "actions": [
+            {
+              "rollover": {
+                "min_size": "10gb",
+                "min_index_age": "7d"
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "state_name": "warm",
+              "conditions": {
+                "min_index_age": "30d"
+              }
+            }
+          ]
+        },
+        {
+          "name": "warm",
+          "actions": [
+            {
+              "replica_count": {
+                "number_of_replicas": 0
+              }
+            },
+            {
+              "force_merge": {
+                "max_num_segments": 1
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "state_name": "cold",
+              "conditions": {
+                "min_index_age": "90d"
+              }
+            }
+          ]
+        },
+        {
+          "name": "cold",
+          "actions": [
+            {
+              "read_only": {}
+            }
+          ],
+          "transitions": [
+            {
+              "state_name": "delete",
+              "conditions": {
+                "min_index_age": "365d"
+              }
+            }
+          ]
+        },
+        {
+          "name": "delete",
+          "actions": [
+            {
+              "delete": {}
+            }
+          ],
+          "transitions": []
+        }
+      ],
+      "ism_template": {
+        "index_patterns": ["audit-*"],
+        "priority": 100
+      }
+    },
+    {
+      "policy_id": "analytics-policy",
+      "description": "Analytics index lifecycle - 90 days retention",
+      "default_state": "hot",
+      "states": [
+        {
+          "name": "hot",
+          "actions": [
+            {
+              "rollover": {
+                "min_size": "5gb",
+                "min_index_age": "1d"
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "state_name": "warm",
+              "conditions": {
+                "min_index_age": "7d"
+              }
+            }
+          ]
+        },
+        {
+          "name": "warm",
+          "actions": [
+            {
+              "replica_count": {
+                "number_of_replicas": 0
+              }
+            },
+            {
+              "force_merge": {
+                "max_num_segments": 1
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "state_name": "delete",
+              "conditions": {
+                "min_index_age": "90d"
+              }
+            }
+          ]
+        },
+        {
+          "name": "delete",
+          "actions": [
+            {
+              "delete": {}
+            }
+          ],
+          "transitions": []
+        }
+      ],
+      "ism_template": {
+        "index_patterns": ["analytics-*"],
+        "priority": 100
+      }
+    }
+  ]
+}

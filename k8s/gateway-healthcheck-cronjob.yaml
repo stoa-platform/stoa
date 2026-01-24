@@ -1,0 +1,120 @@
+---
+# Gateway Health Check CronJob
+# Checks Gateway health every 5 minutes and restarts if unhealthy
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gateway-healthcheck
+  namespace: stoa-system
+  labels:
+    app: gateway-healthcheck
+    component: monitoring
+spec:
+  # Run every 2 minutes for trial version with metering shutdown
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 300
+      template:
+        spec:
+          serviceAccountName: gateway-healthcheck
+          restartPolicy: Never
+          containers:
+            - name: healthcheck
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -e
+
+                  GATEWAY_URL="http://apigateway.stoa-system.svc.cluster.local:5555"
+                  MAX_RETRIES=3
+                  RETRY_DELAY=10
+
+                  echo "$(date) - Checking Gateway health at $GATEWAY_URL..."
+
+                  # Health check with retries
+                  for i in $(seq 1 $MAX_RETRIES); do
+                    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+                      -u "${GATEWAY_USER}:${GATEWAY_PASSWORD}" \
+                      --connect-timeout 10 \
+                      --max-time 30 \
+                      "$GATEWAY_URL/rest/apigateway/health" 2>/dev/null || echo "000")
+
+                    echo "Attempt $i: HTTP $HTTP_CODE"
+
+                    # 200 = healthy, 401 = reachable but auth issue (still alive)
+                    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
+                      echo "Gateway is healthy (HTTP $HTTP_CODE)"
+                      exit 0
+                    fi
+
+                    if [ $i -lt $MAX_RETRIES ]; then
+                      echo "Retrying in ${RETRY_DELAY}s..."
+                      sleep $RETRY_DELAY
+                    fi
+                  done
+
+                  # Gateway unhealthy - restart it
+                  echo "WARNING: Gateway unhealthy after $MAX_RETRIES attempts. Restarting deployment..."
+                  kubectl rollout restart deployment/apigateway -n stoa-system
+
+                  # Wait for rollout to complete
+                  echo "Waiting for rollout to complete..."
+                  kubectl rollout status deployment/apigateway -n stoa-system --timeout=300s
+
+                  echo "Gateway restarted successfully at $(date)"
+              env:
+                - name: GATEWAY_USER
+                  value: "Administrator"
+                - name: GATEWAY_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: gateway-admin-secret
+                      key: password
+                      optional: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gateway-healthcheck
+  namespace: stoa-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gateway-healthcheck
+  namespace: stoa-system
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/status"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gateway-healthcheck
+  namespace: stoa-system
+subjects:
+  - kind: ServiceAccount
+    name: gateway-healthcheck
+    namespace: stoa-system
+roleRef:
+  kind: Role
+  name: gateway-healthcheck
+  apiGroup: rbac.authorization.k8s.io

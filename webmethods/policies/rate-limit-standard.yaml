@@ -1,0 +1,50 @@
+# Standard Rate Limiting Policy
+# Protects APIs from abuse with token-based rate limiting
+apiVersion: stoa.io/v1
+kind: Policy
+metadata:
+  name: rate-limit-standard
+  description: "Standard rate limiting for platform APIs"
+  tags:
+    - traffic
+    - protection
+
+spec:
+  type: rate-limit
+  order: 20
+
+  config:
+    # Default limits
+    default:
+      requests: 100
+      window: 60  # seconds
+      by: token   # token | ip | application
+
+    # Per-role overrides
+    roleOverrides:
+      cpi-admin:
+        requests: 1000
+        window: 60
+      tenant-admin:
+        requests: 500
+        window: 60
+      service-account:
+        requests: 2000
+        window: 60
+
+    # Burst allowance
+    burst:
+      enabled: true
+      multiplier: 1.5
+
+    # Response headers
+    headers:
+      remaining: X-RateLimit-Remaining
+      limit: X-RateLimit-Limit
+      reset: X-RateLimit-Reset
+
+    # Exceeded response
+    exceeded:
+      status: 429
+      message: "Rate limit exceeded. Please retry after {reset} seconds."
+      retryAfter: true

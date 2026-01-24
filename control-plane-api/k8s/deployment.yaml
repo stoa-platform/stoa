@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stoa-control-plane-api
+  namespace: stoa-system
+  labels:
+    app: stoa-control-plane-api
+    app.kubernetes.io/name: stoa-control-plane-api
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: stoa-control-plane-api
+  template:
+    metadata:
+      labels:
+        app: stoa-control-plane-api
+        app.kubernetes.io/name: stoa-control-plane-api
+    spec:
+      containers:
+        - name: stoa-control-plane-api
+          image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-control-plane-api:dev-latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: stoa-control-plane-api-config
+            - secretRef:
+                name: stoa-control-plane-api-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # CAB-308: K8s-standard health probes
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30  # 5s * 30 = 150s max startup time
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+      securityContext:
+        fsGroup: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stoa-control-plane-api
+  namespace: stoa-system
+  labels:
+    app: stoa-control-plane-api
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: stoa-control-plane-api

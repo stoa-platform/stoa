@@ -1,0 +1,57 @@
+# MCP Gateway - OAuth2 Application
+# AI-Native API Gateway using Model Context Protocol
+# Note: MCP Gateway has direct OIDC access, not through API Gateway
+apiVersion: stoa.io/v1
+kind: Application
+metadata:
+  name: stoa-mcp-gateway
+  description: "STOA MCP Gateway - AI-Native API Access"
+  tags:
+    - platform
+    - backend
+    - mcp
+    - ai
+
+spec:
+  displayName: STOA MCP Gateway
+  type: service
+  public: false
+
+  # OAuth2 Configuration (matches Keycloak client)
+  oauth2:
+    clientId: stoa-mcp-gateway
+    grantTypes:
+      - client_credentials  # For service-to-service
+    # MCP Gateway validates tokens but doesn't need redirects
+    # It accepts tokens from users authenticated via Portal/Console
+    serviceAccountsEnabled: true
+
+  # Direct access to backend services (not through API Gateway)
+  # MCP Gateway will evolve into MCP Gateway + API Gateway
+  directAccess:
+    enabled: true
+    endpoints:
+      - name: control-plane-api
+        url: https://api.${BASE_DOMAIN}
+      - name: keycloak
+        url: https://auth.${BASE_DOMAIN}
+
+  # API Subscriptions - Internal platform access
+  subscriptions:
+    - apiName: Control-Plane-API
+      version: "2.0"
+      scopes:
+        - stoa:read
+      internal: true
+
+  # Rate limits (higher for backend service)
+  rateLimit:
+    requests: 5000
+    window: 60
+
+  # Permissions
+  permissions:
+    - validate-tokens
+    - list-tools
+    - execute-tools
+    - access-tenant-apis

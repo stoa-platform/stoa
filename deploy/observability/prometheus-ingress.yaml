@@ -1,0 +1,43 @@
+# Prometheus Ingress - Apply to stoa-monitoring namespace
+# kubectl apply -f prometheus-ingress.yaml -n stoa-monitoring
+#
+# Prerequisites:
+# - kube-prometheus-stack installed in stoa-monitoring namespace
+# - oauth2-proxy-prometheus deployed (for Keycloak auth)
+# - nginx ingress controller installed
+# - cert-manager installed with letsencrypt-prod ClusterIssuer
+#
+# Customize: Replace gostoa.dev with your base domain
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: stoa-platform
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - prometheus.gostoa.dev
+      secretName: prometheus-tls
+  rules:
+    - host: prometheus.gostoa.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: oauth2-proxy-prometheus
+                port:
+                  number: 4180

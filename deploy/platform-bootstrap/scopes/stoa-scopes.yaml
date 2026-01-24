@@ -1,0 +1,97 @@
+# STOA Platform OAuth2 Scopes
+# Defines the authorization scopes for the platform
+apiVersion: stoa.io/v1
+kind: ScopeDefinition
+metadata:
+  name: stoa-platform-scopes
+  description: "OAuth2 scopes for STOA platform"
+
+spec:
+  realm: stoa
+
+  scopes:
+    # Read-only access to platform resources
+    - name: stoa:read
+      displayName: "STOA Read Access"
+      description: "Read access to tenants, APIs, subscriptions, and analytics"
+      default: true
+      claims:
+        - tenant_id
+        - roles
+
+    # Write access to platform resources
+    - name: stoa:write
+      displayName: "STOA Write Access"
+      description: "Create, update, and delete APIs, applications, and subscriptions"
+      default: false
+      claims:
+        - tenant_id
+        - roles
+      requires:
+        - stoa:read
+
+    # Administrative access
+    - name: stoa:admin
+      displayName: "STOA Admin Access"
+      description: "Full administrative access including tenant management and gateway config"
+      default: false
+      claims:
+        - tenant_id
+        - roles
+        - is_admin
+      requires:
+        - stoa:read
+        - stoa:write
+
+  # Scope-to-role mappings
+  roleMappings:
+    # CPI Admin gets all scopes
+    - role: cpi-admin
+      scopes:
+        - stoa:read
+        - stoa:write
+        - stoa:admin
+
+    # Tenant Admin gets read/write for their tenant
+    - role: tenant-admin
+      scopes:
+        - stoa:read
+        - stoa:write
+
+    # DevOps gets read/write for deployments
+    - role: devops
+      scopes:
+        - stoa:read
+        - stoa:write
+
+    # Viewer gets read-only
+    - role: viewer
+      scopes:
+        - stoa:read
+
+  # Client scope configurations for Keycloak
+  clientScopes:
+    - name: stoa-api
+      description: "STOA API access scope"
+      protocol: openid-connect
+      attributes:
+        include.in.token.scope: "true"
+        display.on.consent.screen: "true"
+      protocolMappers:
+        - name: tenant_id
+          protocol: openid-connect
+          protocolMapper: oidc-usermodel-attribute-mapper
+          config:
+            user.attribute: tenant_id
+            claim.name: tenant_id
+            id.token.claim: "true"
+            access.token.claim: "true"
+
+        - name: roles
+          protocol: openid-connect
+          protocolMapper: oidc-usermodel-realm-role-mapper
+          config:
+            claim.name: roles
+            multivalued: "true"
+            id.token.claim: "true"
+            access.token.claim: "true"

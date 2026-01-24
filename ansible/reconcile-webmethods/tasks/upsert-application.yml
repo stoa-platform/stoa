@@ -1,0 +1,201 @@
+---
+# upsert-application.yml
+# Create or update a single Gateway application
+#
+# Expected variables:
+#   - app_file: File object with path to application YAML
+#   - app_def_name: Variable name containing the loaded definition
+#   - existing_apps: List of existing applications
+#   - strategy_map: Dict of strategy name -> ID
+#   - api_map: Dict of API name -> ID
+
+- name: "📖 Load application definition"
+  ansible.builtin.set_fact:
+    app_def: "{{ lookup('vars', app_def_name) }}"
+
+- name: "📋 Extract application configuration"
+  ansible.builtin.set_fact:
+    app_name: "{{ app_def.metadata.name }}"
+    app_description: "{{ app_def.metadata.description | default('') }}"
+    app_client_id: "{{ app_def.spec.clientId }}"
+    app_contact_email: "{{ app_def.spec.contactEmail | default('admin@cab-i.com') }}"
+    app_consuming_apis: "{{ app_def.spec.consumingAPIs | default([]) }}"
+    app_auth_strategy: "{{ app_def.spec.authStrategy | default('') }}"
+
+- name: "🔍 Check if application exists"
+  ansible.builtin.set_fact:
+    existing_app: "{{ existing_apps | selectattr('name', 'equalto', app_name) | list | first | default({}) }}"
+    app_exists: "{{ app_name in existing_app_names }}"
+
+- name: "🔗 Resolve API IDs from names"
+  ansible.builtin.set_fact:
+    resolved_api_ids: "{{ app_consuming_apis | map('extract', api_map) | select('defined') | list }}"
+  when: app_consuming_apis | length > 0
+
+- name: "🔗 Resolve strategy ID from name"
+  ansible.builtin.set_fact:
+    resolved_strategy_id: "{{ strategy_map[app_auth_strategy] | default('') }}"
+  when: app_auth_strategy | length > 0
+
+- name: "📋 Display application details"
+  ansible.builtin.debug:
+    msg: |
+      Application: {{ app_name }}
+      Client ID (azp): {{ app_client_id }}
+      Exists: {{ app_exists }}
+      API IDs: {{ resolved_api_ids | default([]) }}
+      Strategy ID: {{ resolved_strategy_id | default('') }}
+
+# CREATE new application
+- name: "➕ Create application"
+  when: not app_exists and not dry_run
+  block:
+    - name: "➕ POST new application"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/applications"
+        method: POST
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "{{ app_name }}"
+          description: "{{ app_description }}"
+          contactEmails:
+            - "{{ app_contact_email }}"
+          identifiers:
+            - name: "azp"
+              key: "openIdClaims"
+              value:
+                - "{{ app_client_id }}"
+          subscription: false
+        status_code: [200, 201]
+      register: create_result
+
+    - name: "📋 Store created application ID"
+      ansible.builtin.set_fact:
+        created_app_id: "{{ create_result.json.id }}"
+
+    - name: "🔗 Associate strategy with application"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/applications/{{ created_app_id }}"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "{{ app_name }}"
+          description: "{{ app_description }}"
+          contactEmails:
+            - "{{ app_contact_email }}"
+          identifiers:
+            - name: "azp"
+              key: "openIdClaims"
+              value:
+                - "{{ app_client_id }}"
+          subscription: false
+          authStrategyIds: "{{ [resolved_strategy_id] if resolved_strategy_id | default('') else [] }}"
+        status_code: [200]
+      when: resolved_strategy_id | default('') | length > 0
+
+    - name: "🔗 Associate APIs with application"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/applications/{{ created_app_id }}/apis"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          apiIDs: "{{ resolved_api_ids }}"
+        status_code: [200]
+      when: resolved_api_ids | default([]) | length > 0
+
+    - name: "✅ Application created"
+      ansible.builtin.debug:
+        msg: "Created application {{ app_name }} (ID: {{ created_app_id }})"
+
+# UPDATE existing application
+- name: "🔄 Update application"
+  when: app_exists and not dry_run
+  block:
+    - name: "📋 Get existing application details"
+      ansible.builtin.set_fact:
+        existing_app_id: "{{ existing_app.id }}"
+        existing_api_ids: "{{ existing_app.consumingAPIs | default([]) }}"
+        existing_strategy_ids: "{{ existing_app.authStrategyIds | default([]) }}"
+
+    - name: "🔄 PUT updated application"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/applications/{{ existing_app_id }}"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "{{ app_name }}"
+          description: "{{ app_description }}"
+          contactEmails:
+            - "{{ app_contact_email }}"
+          identifiers:
+            - name: "azp"
+              key: "openIdClaims"
+              value:
+                - "{{ app_client_id }}"
+          subscription: false
+          authStrategyIds: "{{ [resolved_strategy_id] if resolved_strategy_id | default('') else existing_strategy_ids }}"
+        status_code: [200]
+
+    - name: "🔗 Calculate new APIs to associate"
+      ansible.builtin.set_fact:
+        new_apis_to_add: "{{ resolved_api_ids | default([]) | difference(existing_api_ids) }}"
+
+    - name: "🔗 Associate new APIs"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/applications/{{ existing_app_id }}/apis"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          apiIDs: "{{ new_apis_to_add }}"
+        status_code: [200]
+      when: new_apis_to_add | length > 0
+
+    - name: "✅ Application updated"
+      ansible.builtin.debug:
+        msg: "Updated application {{ app_name }} (ID: {{ existing_app_id }})"
+
+# DRY-RUN mode
+- name: "⚠️ Dry-run: Would {{ 'create' if not app_exists else 'update' }} application"
+  ansible.builtin.debug:
+    msg: |
+      DRY-RUN: Would {{ 'create' if not app_exists else 'update' }} application:
+        Name: {{ app_name }}
+        Client ID: {{ app_client_id }}
+        APIs: {{ resolved_api_ids | default([]) }}
+        Strategy: {{ resolved_strategy_id | default('N/A') }}
+  when: dry_run

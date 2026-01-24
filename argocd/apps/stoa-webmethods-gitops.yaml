@@ -1,0 +1,43 @@
+---
+# stoa-webmethods-gitops.yaml
+# UNIFIED TENANT-BASED ARCHITECTURE
+# Single source: stoa-catalog/tenants (includes stoa-platform for admin APIs)
+#
+# This application syncs webMethods configs and triggers AWX reconciliation
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stoa-webmethods-gitops
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: stoa-webmethods-gitops
+    app.kubernetes.io/part-of: stoa-platform
+  annotations:
+    # Notifications on sync
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: stoa-alerts
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: stoa-alerts
+spec:
+  project: stoa-platform
+
+  # SINGLE SOURCE - stoa-catalog only
+  source:
+    repoURL: https://gitlab.com/cab6961310/stoa-catalog.git
+    targetRevision: main
+    path: tenants
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stoa-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

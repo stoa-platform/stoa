@@ -1,0 +1,312 @@
+---
+# tasks/sync-api-unified.yml
+# Create or update an API in webMethods Gateway using Swagger file upload
+#
+# Expected variables:
+#   - api_def: API definition with metadata (normalized format)
+#   - action: 'create' or 'update'
+#   - wm_gateway_url: Gateway URL
+#   - wm_admin_user: Gateway admin username
+#   - wm_admin_password: Gateway admin password
+#   - dry_run: Whether to simulate only
+#   - sync_results: Results tracking dict
+
+- name: "Extract API details"
+  ansible.builtin.set_fact:
+    api_name: "{{ api_def.metadata.name }}"
+    api_version: "{{ api_def.metadata.version | default('1.0') }}"
+    api_description: "{{ api_def.spec.description | default('') }}"
+    api_tenant: "{{ api_def._tenant }}"
+    api_visibility: "{{ api_def._portal_visibility }}"
+
+# Resolve backend URL
+- name: "Use direct backend URL"
+  ansible.builtin.set_fact:
+    backend_url: "{{ api_def.spec.backend.url }}"
+  when: api_def.spec.backend.url is defined
+
+- name: "Set default backend URL if none found"
+  ansible.builtin.set_fact:
+    backend_url: "http://localhost:8080"
+  when: backend_url is not defined or backend_url | length == 0
+
+- name: "Extract host from backend URL"
+  ansible.builtin.set_fact:
+    backend_host: "{{ backend_url | regex_replace('^https?://', '') | regex_replace('/.*$', '') }}"
+
+# Build paths from resources if defined
+- name: "Build paths dictionary from resources"
+  ansible.builtin.set_fact:
+    api_paths_list: "{{ api_def.spec.resources | default([]) }}"
+
+- name: "Create paths using Python"
+  ansible.builtin.shell: |
+    python3 << 'PYTHON'
+    import json
+    import re
+
+    resources = json.loads("""{{ api_paths_list | to_json }}""")
+
+    paths = {}
+    for res in resources:
+        path = res.get('path', '/')
+        methods = res.get('methods', ['GET'])
+        description = res.get('description', path)
+
+        if path not in paths:
+            paths[path] = {}
+
+        for method in methods:
+            m = method.lower()
+            op_id = re.sub(r'[/{}-]', '_', path)
+            op_id = re.sub(r'^_+|_+$', '', op_id)
+            op_id = re.sub(r'_+', '_', op_id)
+            op_id = f"{op_id}_{m}"
+
+            paths[path][m] = {
+                "operationId": op_id,
+                "summary": description,
+                "responses": {
+                    "200": {"description": "Successful response"},
+                    "400": {"description": "Bad request"},
+                    "401": {"description": "Unauthorized"},
+                    "404": {"description": "Not found"}
+                }
+            }
+
+            params = re.findall(r'\{(\w+)\}', path)
+            if params:
+                paths[path][m]["parameters"] = [
+                    {"name": p, "in": "path", "required": True, "type": "string"}
+                    for p in params
+                ]
+
+    if not paths:
+        paths["/"] = {
+            "get": {
+                "operationId": "default_get",
+                "summary": "Default endpoint",
+                "responses": {"200": {"description": "Successful response"}}
+            }
+        }
+
+    print(json.dumps(paths))
+    PYTHON
+  register: swagger_paths_result
+  changed_when: false
+
+- name: "Parse generated paths"
+  ansible.builtin.set_fact:
+    swagger_paths: "{{ swagger_paths_result.stdout | from_json }}"
+
+# Build complete Swagger spec
+- name: "Build complete Swagger spec"
+  ansible.builtin.set_fact:
+    swagger_spec:
+      swagger: "2.0"
+      info:
+        title: "{{ api_name }}"
+        version: "{{ api_version }}"
+        description: "{{ api_description | default('API managed by GitOps') }}"
+      host: "{{ backend_host }}"
+      basePath: "{{ api_def.spec.basePath | default('/') }}"
+      schemes:
+        - https
+        - http
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      paths: "{{ swagger_paths }}"
+
+# CREATE API
+- name: "Create API in Gateway"
+  when:
+    - action == 'create'
+    - not dry_run
+  block:
+    - name: "Write Swagger spec to temp file"
+      ansible.builtin.copy:
+        content: "{{ swagger_spec | to_nice_json }}"
+        dest: "/tmp/api-{{ api_name }}.json"
+        mode: '0644'
+
+    - name: "Create API {{ api_name }} on Gateway (file upload)"
+      ansible.builtin.shell: |
+        curl -s -X POST "{{ wm_gateway_url }}/rest/apigateway/apis" \
+          -u "{{ wm_admin_user }}:{{ wm_admin_password }}" \
+          -H "Accept: application/json" \
+          -F "file=@/tmp/api-{{ api_name }}.json;type=application/json"
+      register: create_result_raw
+
+    - name: "Parse create result"
+      ansible.builtin.set_fact:
+        create_result: "{{ create_result_raw.stdout | from_json }}"
+      when:
+        - create_result_raw is succeeded
+        - create_result_raw.stdout | length > 0
+
+    - name: "Display create result"
+      ansible.builtin.debug:
+        msg: "API creation result: {{ create_result_raw.stdout | default('empty') }}"
+
+    - name: "Clean up temp file"
+      ansible.builtin.file:
+        path: "/tmp/api-{{ api_name }}.json"
+        state: absent
+
+    - name: "Store created API ID"
+      ansible.builtin.set_fact:
+        created_api_id: "{{ create_result.apiResponse.api.id }}"
+      when:
+        - create_result is defined
+        - create_result.apiResponse is defined
+        - create_result.apiResponse.api is defined
+
+    - name: "Activate API {{ api_name }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ created_api_id }}/activate"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204]
+        timeout: 30
+      when: created_api_id is defined
+      ignore_errors: true
+
+    - name: "Add to sync_results.created"
+      ansible.builtin.set_fact:
+        sync_results: "{{ sync_results | combine({'created': sync_results.created + [api_name]}) }}"
+      when: created_api_id is defined
+
+    - name: "Log creation"
+      ansible.builtin.debug:
+        msg: "Created API {{ api_name }} with {{ swagger_paths | length }} paths (ID: {{ created_api_id | default('unknown') }})"
+
+# UPDATE API (delete + recreate approach)
+- name: "Update API in Gateway"
+  when:
+    - action == 'update'
+    - not dry_run
+  block:
+    - name: "Find API ID by name"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis?apiName={{ api_name | urlencode }}"
+        method: GET
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: find_result
+
+    - name: "Extract existing API ID"
+      ansible.builtin.set_fact:
+        existing_api_id: "{{ find_result.json.apiResponse[0].api.id }}"
+      when: find_result.json.apiResponse | length > 0
+
+    - name: "Deactivate API {{ api_name }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ existing_api_id }}/deactivate"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204, 500]
+        timeout: 30
+      when: existing_api_id is defined
+      ignore_errors: true
+
+    - name: "Delete existing API {{ api_name }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ existing_api_id }}?forceDelete=true"
+        method: DELETE
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204]
+        timeout: 30
+      when: existing_api_id is defined
+
+    - name: "Write Swagger spec to temp file"
+      ansible.builtin.copy:
+        content: "{{ swagger_spec | to_nice_json }}"
+        dest: "/tmp/api-{{ api_name }}.json"
+        mode: '0644'
+
+    - name: "Recreate API {{ api_name }} on Gateway"
+      ansible.builtin.shell: |
+        curl -s -X POST "{{ wm_gateway_url }}/rest/apigateway/apis" \
+          -u "{{ wm_admin_user }}:{{ wm_admin_password }}" \
+          -H "Accept: application/json" \
+          -F "file=@/tmp/api-{{ api_name }}.json;type=application/json"
+      register: recreate_result_raw
+
+    - name: "Parse recreate result"
+      ansible.builtin.set_fact:
+        recreate_result: "{{ recreate_result_raw.stdout | from_json }}"
+      when:
+        - recreate_result_raw is succeeded
+        - recreate_result_raw.stdout | length > 0
+
+    - name: "Clean up temp file"
+      ansible.builtin.file:
+        path: "/tmp/api-{{ api_name }}.json"
+        state: absent
+
+    - name: "Store recreated API ID"
+      ansible.builtin.set_fact:
+        recreated_api_id: "{{ recreate_result.apiResponse.api.id }}"
+      when:
+        - recreate_result is defined
+        - recreate_result.apiResponse is defined
+        - recreate_result.apiResponse.api is defined
+
+    - name: "Activate API {{ api_name }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ recreated_api_id }}/activate"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204]
+        timeout: 30
+      when: recreated_api_id is defined
+      ignore_errors: true
+
+    - name: "Add to sync_results.updated"
+      ansible.builtin.set_fact:
+        sync_results: "{{ sync_results | combine({'updated': sync_results.updated + [api_name]}) }}"
+      when: recreated_api_id is defined
+
+    - name: "Log update"
+      ansible.builtin.debug:
+        msg: "Updated API {{ api_name }} (delete+recreate) with {{ swagger_paths | length }} paths"
+
+# DRY-RUN
+- name: "Dry-run: Would {{ action }} API"
+  when: dry_run
+  ansible.builtin.debug:
+    msg: |
+      DRY-RUN: Would {{ action }} API:
+        Name: {{ api_name }}
+        Version: {{ api_version }}
+        Tenant: {{ api_tenant }}
+        Backend: {{ backend_url }}
+        Paths: {{ swagger_paths | length }}
+        Visibility: {{ api_visibility }}

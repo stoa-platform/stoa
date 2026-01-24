@@ -1,0 +1,92 @@
+# =============================================================================
+# OWASP ZAP Baseline Scan Configuration
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Baseline scan: Fast, safe for production (passive scanning only)
+# =============================================================================
+
+env:
+  contexts:
+    - name: "STOA Platform"
+      urls:
+        - "https://api.gostoa.dev"
+        - "https://console.gostoa.dev"
+        - "https://mcp.gostoa.dev"
+      includePaths:
+        - "https://api.gostoa.dev.*"
+        - "https://console.gostoa.dev.*"
+        - "https://mcp.gostoa.dev.*"
+      excludePaths:
+        - ".*\\.js$"
+        - ".*\\.css$"
+        - ".*\\.png$"
+        - ".*\\.jpg$"
+        - ".*\\.gif$"
+        - ".*\\.woff.*$"
+        - ".*\\.svg$"
+      authentication:
+        method: "json"
+        parameters:
+          loginPageUrl: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token"
+          loginRequestUrl: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token"
+          loginRequestBody: "grant_type=password&client_id=stoa-ui&username={%username%}&password={%password%}"
+        verification:
+          method: "response"
+          loggedInRegex: "access_token"
+          loggedOutRegex: "error"
+      sessionManagement:
+        method: "headers"
+        parameters:
+          - name: "Authorization"
+            value: "Bearer {%session%}"
+
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  # Spider the application
+  - type: spider
+    parameters:
+      context: "STOA Platform"
+      maxDuration: 5
+      maxDepth: 5
+      maxChildren: 10
+
+  # Passive scan only (safe for production)
+  - type: passiveScan-config
+    parameters:
+      maxAlertsPerRule: 10
+      scanOnlyInScope: true
+      maxBodySizeInBytesToScan: 10000
+
+  # Wait for passive scanning to complete
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 10
+
+  # Generate reports
+  - type: report
+    parameters:
+      template: "risk-confidence-html"
+      reportDir: "/zap/reports"
+      reportFile: "baseline-report"
+      reportTitle: "STOA Platform - Baseline Security Scan"
+      reportDescription: "OWASP ZAP Baseline Scan Results"
+      displayReport: false
+
+  # Alert filters - ignore known false positives
+  - type: alertFilter
+    rules:
+      # CSP headers handled by API Gateway
+      - ruleId: 10038
+        newRisk: "Info"
+        context: "STOA Platform"
+        urlRegex: ".*"
+
+      # X-Content-Type-Options handled by API Gateway
+      - ruleId: 10021
+        newRisk: "Info"
+        context: "STOA Platform"
+        urlRegex: ".*"

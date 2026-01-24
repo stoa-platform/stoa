@@ -1,0 +1,14 @@
+# STOA OpenSearch Sync Service Dependencies
+
+# Async PostgreSQL driver
+asyncpg>=0.29.0,<1.0.0
+
+# OpenSearch client with async support
+opensearch-py[async]>=2.4.0,<3.0.0
+
+# Configuration and validation
+pydantic>=2.5.0,<3.0.0
+pydantic-settings>=2.1.0,<3.0.0
+
+# Utilities
+python-dotenv>=1.0.0,<2.0.0

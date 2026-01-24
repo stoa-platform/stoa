@@ -1,0 +1,24 @@
+---
+# tasks/configure-aliases.yml
+# Configure backend aliases on webMethods Gateway
+# Aliases define backend endpoints with authentication credentials
+
+- name: "Initialize aliases counter"
+  ansible.builtin.set_fact:
+    aliases_configured: []
+
+- name: "Skip if no aliases defined"
+  ansible.builtin.debug:
+    msg: "No aliases defined for environment {{ env }}"
+  when: git_aliases is not defined or git_aliases.aliases is not defined
+
+- name: "Configure aliases"
+  when:
+    - git_aliases is defined
+    - git_aliases.aliases is defined
+  block:
+    - name: "Process each alias"
+      ansible.builtin.include_tasks: configure-single-alias.yml
+      loop: "{{ git_aliases.aliases | dict2items }}"
+      loop_control:
+        loop_var: alias_item

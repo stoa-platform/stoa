@@ -1,0 +1,230 @@
+---
+# tasks/update-single-api.yml
+# Update a single API on webMethods Gateway
+# Uses delete + recreate approach since webMethods PUT requires file upload
+
+- name: "Get Git definition for {{ api_name_to_update }}"
+  ansible.builtin.set_fact:
+    api_def: "{{ git_apis | selectattr('metadata.name', 'equalto', api_name_to_update) | first }}"
+
+- name: "Get Gateway API ID for {{ api_name_to_update }}"
+  ansible.builtin.set_fact:
+    api_key: "{{ api_def.metadata.name }}:{{ api_def.metadata.version | default('1.0.0') }}"
+
+- name: "Lookup API on Gateway"
+  ansible.builtin.set_fact:
+    gateway_api: "{{ gateway_api_lookup[api_key] }}"
+  when: api_key in gateway_api_lookup
+
+- name: "Skip if API not found on Gateway"
+  ansible.builtin.debug:
+    msg: "API {{ api_name_to_update }} not found on Gateway, skipping update"
+  when: gateway_api is not defined
+
+- name: "Update API on Gateway"
+  when:
+    - gateway_api is defined
+    - not dry_run
+  block:
+    # Step 1: Deactivate API for update (ignore errors if already inactive)
+    - name: "Deactivate API {{ api_name_to_update }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ gateway_api.id }}/deactivate"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204, 500]
+        timeout: 30
+      register: deactivate_result
+      ignore_errors: true
+
+    # Step 2: Delete the existing API (forceDelete=true to remove even with apps)
+    - name: "Delete existing API {{ api_name_to_update }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ gateway_api.id }}?forceDelete=true"
+        method: DELETE
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204]
+        timeout: 30
+      register: delete_result
+
+    # Step 3: Resolve backend URL
+    - name: "Resolve backend alias"
+      ansible.builtin.set_fact:
+        backend_url: "{{ git_aliases.aliases[api_def.spec.backend.alias].url }}"
+      when:
+        - git_aliases is defined
+        - api_def.spec.backend.alias is defined
+        - api_def.spec.backend.alias in git_aliases.aliases
+
+    - name: "Use direct backend URL"
+      ansible.builtin.set_fact:
+        backend_url: "{{ api_def.spec.backend.url }}"
+      when:
+        - backend_url is not defined
+        - api_def.spec.backend.url is defined
+
+    - name: "Set default backend URL if none found"
+      ansible.builtin.set_fact:
+        backend_url: "http://localhost:8080"
+      when: backend_url is not defined
+
+    - name: "Extract host from backend URL"
+      ansible.builtin.set_fact:
+        backend_host: "{{ backend_url | regex_replace('^https?://', '') | regex_replace('/.*$', '') }}"
+
+    # Step 4: Build paths dictionary from resources
+    - name: "Build paths dictionary from resources"
+      ansible.builtin.set_fact:
+        api_paths_list: "{{ api_def.spec.resources | default([]) }}"
+
+    - name: "Create paths using Python"
+      ansible.builtin.shell: |
+        python3 << 'PYTHON'
+        import json
+        import re
+
+        resources = json.loads("""{{ api_paths_list | to_json }}""")
+
+        paths = {}
+        for res in resources:
+            path = res.get('path', '/')
+            methods = res.get('methods', ['GET'])
+            description = res.get('description', path)
+
+            if path not in paths:
+                paths[path] = {}
+
+            for method in methods:
+                m = method.lower()
+                op_id = re.sub(r'[/{}-]', '_', path)
+                op_id = re.sub(r'^_+|_+$', '', op_id)
+                op_id = re.sub(r'_+', '_', op_id)
+                op_id = f"{op_id}_{m}"
+
+                paths[path][m] = {
+                    "operationId": op_id,
+                    "summary": description,
+                    "responses": {
+                        "200": {"description": "Successful response"},
+                        "400": {"description": "Bad request"},
+                        "401": {"description": "Unauthorized"},
+                        "404": {"description": "Not found"}
+                    }
+                }
+
+                params = re.findall(r'\{(\w+)\}', path)
+                if params:
+                    paths[path][m]["parameters"] = [
+                        {"name": p, "in": "path", "required": True, "type": "string"}
+                        for p in params
+                    ]
+
+        if not paths:
+            paths["/"] = {
+                "get": {
+                    "operationId": "default_get",
+                    "summary": "Default endpoint",
+                    "responses": {"200": {"description": "Successful response"}}
+                }
+            }
+
+        print(json.dumps(paths))
+        PYTHON
+      register: swagger_paths_result
+      changed_when: false
+
+    - name: "Parse generated paths"
+      ansible.builtin.set_fact:
+        swagger_paths: "{{ swagger_paths_result.stdout | from_json }}"
+
+    # Step 5: Build complete Swagger spec
+    - name: "Build complete Swagger spec for {{ api_name_to_update }}"
+      ansible.builtin.set_fact:
+        swagger_spec:
+          swagger: "2.0"
+          info:
+            title: "{{ api_def.metadata.name }}"
+            version: "{{ api_def.metadata.version | default('1.0.0') }}"
+            description: "{{ api_def.metadata.description | default('') }}"
+          host: "{{ backend_host }}"
+          basePath: "{{ api_def.spec.basePath | default('/') }}"
+          schemes:
+            - https
+            - http
+          consumes:
+            - application/json
+          produces:
+            - application/json
+          paths: "{{ swagger_paths }}"
+
+    - name: "Write Swagger spec to temp file"
+      ansible.builtin.copy:
+        content: "{{ swagger_spec | to_nice_json }}"
+        dest: "/tmp/api-{{ api_name_to_update }}.json"
+        mode: '0644'
+
+    # Step 6: Recreate API via file upload
+    - name: "Recreate API {{ api_name_to_update }} on Gateway"
+      ansible.builtin.shell: |
+        curl -s -X POST "{{ wm_gateway_url }}/rest/apigateway/apis" \
+          -u "{{ wm_admin_user }}:{{ wm_admin_password }}" \
+          -H "Accept: application/json" \
+          -F "file=@/tmp/api-{{ api_name_to_update }}.json;type=application/json"
+      register: create_result_raw
+
+    - name: "Parse create result"
+      ansible.builtin.set_fact:
+        create_result:
+          json: "{{ create_result_raw.stdout | from_json }}"
+      when:
+        - create_result_raw is succeeded
+        - create_result_raw.stdout | length > 0
+
+    - name: "Display update result"
+      ansible.builtin.debug:
+        msg: "API {{ api_name_to_update }} recreated with {{ swagger_paths | length }} paths"
+
+    - name: "Clean up temp file"
+      ansible.builtin.file:
+        path: "/tmp/api-{{ api_name_to_update }}.json"
+        state: absent
+
+    - name: "Store recreated API ID"
+      ansible.builtin.set_fact:
+        recreated_api_id: "{{ create_result.json.apiResponse.api.id }}"
+      when:
+        - create_result is defined
+        - create_result.json is defined
+        - create_result.json.apiResponse is defined
+        - create_result.json.apiResponse.api is defined
+
+    # Step 7: Activate API
+    - name: "Activate API {{ api_name_to_update }}"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ recreated_api_id }}/activate"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204]
+        timeout: 30
+      when: recreated_api_id is defined
+      ignore_errors: true
+
+    - name: "Record updated API"
+      ansible.builtin.set_fact:
+        apis_updated: "{{ apis_updated | default([]) + [api_name_to_update] }}"
+
+- name: "Log update {{ api_name_to_update }}"
+  ansible.builtin.debug:
+    msg: "API {{ api_name_to_update }} updated (delete+recreate){{ ' (dry-run)' if dry_run else '' }}"

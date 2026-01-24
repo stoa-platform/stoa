@@ -1,0 +1,279 @@
+---
+# reconcile-webmethods.yml
+# GitOps Reconciliation Playbook for webMethods Gateway
+#
+# UNIFIED TENANT-BASED ARCHITECTURE
+# All APIs (admin + business) come from a single source: stoa-catalog/tenants/
+#
+# Usage:
+#   # Standard sync (create/update only, no delete)
+#   ansible-playbook reconcile-webmethods.yml -e "env=dev"
+#
+#   # Full sync with orphan deletion
+#   ansible-playbook reconcile-webmethods.yml -e "env=dev" -e "delete_orphans=true"
+#
+#   # Dry-run mode
+#   ansible-playbook reconcile-webmethods.yml -e "env=prod" --check
+#
+#   # Scheduled daily sync (AWX)
+#   ansible-playbook reconcile-webmethods.yml -e "env=prod" -e "sync_mode=scheduled"
+#
+# Sync Modes:
+#   - sync_mode=default: Create/update APIs, no deletion (safe for frequent runs)
+#   - sync_mode=full: Create/update/delete - use for cleanup
+#   - sync_mode=scheduled: Same as full, intended for daily cron
+#
+# Triggered by:
+#   - ArgoCD PostSync hook (default mode)
+#   - AWX Job Template (configurable mode)
+#   - GitLab CI webhook
+#   - Cron/Scheduled job (full mode)
+
+- name: "Reconcile webMethods Gateway from Git"
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    # Single source: stoa-catalog
+    catalog_dir: "{{ lookup('env', 'CATALOG_DIR') | default(playbook_dir | dirname | dirname, true) }}"
+    tenants_dir: "{{ catalog_dir }}/tenants"
+
+    # Base domain for URL substitution
+    base_domain: "{{ lookup('env', 'BASE_DOMAIN') | default('gostoa.dev', true) }}"
+
+    # Target environment
+    env: "{{ lookup('env', 'STOA_ENV') | default('dev', true) }}"
+
+    # webMethods Gateway API
+    wm_gateway_url: "{{ lookup('env', 'WM_GATEWAY_URL') | default('http://apim-gateway:5555', true) }}"
+    wm_admin_user: "{{ lookup('env', 'WM_ADMIN_USER') | default('Administrator', true) }}"
+    wm_admin_password: "{{ lookup('env', 'WM_ADMIN_PASSWORD') }}"
+
+    # Portal Gateway ID for publish/unpublish
+    portal_gateway_id: "{{ lookup('env', 'PORTAL_GATEWAY_ID') | default('default', true) }}"
+
+    # Sync mode: default, full, scheduled
+    sync_mode: "{{ lookup('env', 'SYNC_MODE') | default('default', true) }}"
+
+    # Options
+    dry_run: "{{ ansible_check_mode | default(false) }}"
+    # delete_orphans: only true for 'full' or 'scheduled' modes (safe default)
+    delete_orphans: "{{ lookup('env', 'DELETE_ORPHANS') | default('false', true) | bool or sync_mode in ['full', 'scheduled'] }}"
+
+    # Initialize collections
+    all_tenants: []
+    all_apis: []
+    sync_results:
+      created: []
+      updated: []
+      deleted: []
+      published: []
+      unpublished: []
+      errors: []
+
+  pre_tasks:
+    - name: "Display parameters"
+      ansible.builtin.debug:
+        msg: |
+          === webMethods Reconciliation (Unified Tenant Architecture) ===
+          Environment: {{ env }}
+          Sync Mode: {{ sync_mode }}
+          Catalog Dir: {{ catalog_dir }}
+          Tenants Dir: {{ tenants_dir }}
+          Gateway URL: {{ wm_gateway_url }}
+          Dry Run: {{ dry_run }}
+          Delete Orphans: {{ delete_orphans }} ({{ 'ENABLED - will remove APIs not in Git' if delete_orphans else 'DISABLED - safe mode' }})
+
+    - name: "Verify tenants directory exists"
+      ansible.builtin.stat:
+        path: "{{ tenants_dir }}"
+      register: tenants_dir_check
+
+    - name: "Fail if tenants directory missing"
+      ansible.builtin.fail:
+        msg: "Tenants directory not found: {{ tenants_dir }}"
+      when: not tenants_dir_check.stat.exists
+
+    - name: "Verify Gateway connectivity"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/health"
+        method: GET
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200]
+        timeout: 10
+      register: health_check
+
+  tasks:
+    # =========================================================================
+    # PHASE 1: LOAD ALL TENANTS AND APIs
+    # =========================================================================
+    - name: "PHASE 1: Load tenants and APIs from Git"
+      block:
+        - name: "Find all tenant directories"
+          ansible.builtin.find:
+            paths: "{{ tenants_dir }}"
+            file_type: directory
+            recurse: false
+          register: tenant_dirs
+
+        - name: "Load each tenant"
+          ansible.builtin.include_tasks: tasks/load-tenant.yml
+          loop: "{{ tenant_dirs.files }}"
+          loop_control:
+            loop_var: tenant_dir
+            label: "{{ tenant_dir.path | basename }}"
+
+        - name: "Display loaded tenants summary"
+          ansible.builtin.debug:
+            msg: |
+              === Tenants Loaded ===
+              {% for tenant in all_tenants %}
+              - {{ tenant.name }}: {{ tenant.api_count }} APIs [{{ tenant.portal_visibility }}]
+              {% endfor %}
+
+              Total APIs: {{ all_apis | length }}
+              - Public (portal): {{ all_apis | selectattr('_portal_visibility', 'equalto', 'public') | list | length }}
+              - Internal: {{ all_apis | selectattr('_portal_visibility', 'equalto', 'internal') | list | length }}
+              - Hidden: {{ all_apis | selectattr('_portal_visibility', 'equalto', 'hidden') | list | length }}
+
+    # =========================================================================
+    # PHASE 2: FETCH CURRENT GATEWAY STATE
+    # =========================================================================
+    - name: "PHASE 2: Fetch current APIs from Gateway"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis"
+        method: GET
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: gateway_apis_response
+
+    - name: "Parse Gateway APIs"
+      ansible.builtin.set_fact:
+        gateway_apis: "{{ gateway_apis_response.json.apiResponse | default([]) }}"
+        gateway_api_names: "{{ gateway_apis_response.json.apiResponse | default([]) | map(attribute='api') | map(attribute='apiName') | list }}"
+
+    # =========================================================================
+    # PHASE 3: COMPUTE DIFF
+    # =========================================================================
+    - name: "PHASE 3: Compute diff (Git vs Gateway)"
+      block:
+        - name: "Build Git API names list"
+          ansible.builtin.set_fact:
+            git_api_names: "{{ all_apis | map(attribute='metadata.name') | list }}"
+
+        - name: "Identify APIs to create"
+          ansible.builtin.set_fact:
+            apis_to_create: "{{ all_apis | rejectattr('metadata.name', 'in', gateway_api_names) | list }}"
+
+        - name: "Identify APIs to delete (orphans)"
+          ansible.builtin.set_fact:
+            apis_to_delete: "{{ gateway_apis | selectattr('api.apiName', 'in', gateway_api_names | difference(git_api_names)) | list }}"
+          when: delete_orphans
+
+        - name: "Identify APIs to update"
+          ansible.builtin.set_fact:
+            apis_to_update: "{{ all_apis | selectattr('metadata.name', 'in', gateway_api_names) | list }}"
+
+        - name: "Display diff summary"
+          ansible.builtin.debug:
+            msg: |
+              === Diff Summary ===
+              APIs to CREATE: {{ apis_to_create | length }}
+              APIs to UPDATE: {{ apis_to_update | length }}
+              APIs to DELETE: {{ apis_to_delete | default([]) | length }}
+
+    # =========================================================================
+    # PHASE 4: SYNC APIs TO GATEWAY
+    # =========================================================================
+    - name: "PHASE 4: Sync APIs to Gateway"
+      block:
+        - name: "Create new APIs"
+          ansible.builtin.include_tasks: tasks/sync-api-unified.yml
+          loop: "{{ apis_to_create }}"
+          loop_control:
+            loop_var: api_def
+            label: "{{ api_def.metadata.name }}"
+          vars:
+            action: create
+          when: apis_to_create | length > 0
+
+        - name: "Update existing APIs"
+          ansible.builtin.include_tasks: tasks/sync-api-unified.yml
+          loop: "{{ apis_to_update }}"
+          loop_control:
+            loop_var: api_def
+            label: "{{ api_def.metadata.name }}"
+          vars:
+            action: update
+          when: apis_to_update | length > 0
+
+        - name: "Delete orphaned APIs"
+          ansible.builtin.include_tasks: tasks/delete-api.yml
+          loop: "{{ apis_to_delete | default([]) }}"
+          loop_control:
+            loop_var: api_to_delete
+            label: "{{ api_to_delete.api.apiName }}"
+          when:
+            - delete_orphans
+            - apis_to_delete | default([]) | length > 0
+
+    # =========================================================================
+    # PHASE 5: MANAGE PORTAL VISIBILITY
+    # =========================================================================
+    - name: "PHASE 5: Manage Portal visibility"
+      block:
+        - name: "Publish public APIs to portal"
+          ansible.builtin.include_tasks: tasks/publish-to-portal.yml
+          loop: "{{ all_apis | selectattr('_portal_visibility', 'equalto', 'public') | list }}"
+          loop_control:
+            loop_var: api_def
+            label: "{{ api_def.metadata.name }}"
+
+        - name: "Unpublish internal/hidden APIs from portal"
+          ansible.builtin.include_tasks: tasks/unpublish-from-portal.yml
+          loop: "{{ all_apis | rejectattr('_portal_visibility', 'equalto', 'public') | list }}"
+          loop_control:
+            loop_var: api_def
+            label: "{{ api_def.metadata.name }}"
+
+  post_tasks:
+    - name: "Reconciliation summary"
+      ansible.builtin.debug:
+        msg: |
+          === Reconciliation Summary ===
+
+          Source: {{ tenants_dir }}
+
+          Tenants:
+          {% for tenant in all_tenants %}
+          - {{ tenant.name }}: {{ tenant.api_count }} APIs [{{ tenant.portal_visibility }}]
+          {% endfor %}
+
+          Results:
+          - APIs created: {{ sync_results.created | length }}
+          - APIs updated: {{ sync_results.updated | length }}
+          - APIs deleted: {{ sync_results.deleted | length }}
+          - Published to portal: {{ sync_results.published | length }}
+          - Unpublished from portal: {{ sync_results.unpublished | length }}
+          - Errors: {{ sync_results.errors | length }}
+
+          {% if dry_run %}
+          DRY-RUN mode - No changes applied
+          {% endif %}
+
+    - name: "Report errors if any"
+      ansible.builtin.debug:
+        msg: "ERRORS: {{ sync_results.errors }}"
+      when: sync_results.errors | length > 0
+
+    - name: "Send notification (if configured)"
+      ansible.builtin.include_tasks: tasks/notify.yml
+      when: lookup('env', 'NOTIFY_WEBHOOK_URL') | length > 0

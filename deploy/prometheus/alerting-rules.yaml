@@ -1,0 +1,356 @@
+# CAB-310: STOA Platform Alerting Rules
+# Prometheus alerting rules for STOA components
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-alerts
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+  annotations:
+    gostoa.dev/created-by: cab-310
+spec:
+  groups:
+    # ============================================
+    # MCP Gateway Alerts
+    # ============================================
+    - name: stoa.mcp-gateway.rules
+      rules:
+        - alert: MCPGatewayHighErrorRate
+          expr: |
+            (
+              sum(rate(stoa_mcp_tool_invocations_total{status="error"}[5m]))
+              / sum(rate(stoa_mcp_tool_invocations_total[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            component: mcp-gateway
+          annotations:
+            summary: "MCP Gateway high error rate"
+            description: "MCP Gateway error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/mcp-gateway-errors.md"
+
+        - alert: MCPGatewayHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(stoa_mcp_gateway_http_request_duration_seconds_bucket[5m])) by (le)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+            component: mcp-gateway
+          annotations:
+            summary: "MCP Gateway high latency"
+            description: "MCP Gateway P95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/mcp-gateway-latency.md"
+
+        - alert: MCPGatewayDown
+          expr: |
+            up{job="mcp-gateway"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: mcp-gateway
+          annotations:
+            summary: "MCP Gateway is down"
+            description: "MCP Gateway has been down for more than 1 minute"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/mcp-gateway-down.md"
+
+        - alert: MCPGatewayToolInvocationErrors
+          expr: |
+            sum by (tool, tenant_id) (
+              rate(stoa_mcp_tool_invocations_total{status="error"}[5m])
+            ) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            component: mcp-gateway
+          annotations:
+            summary: "Tool invocation errors for {{ $labels.tool }}"
+            description: "Tool {{ $labels.tool }} in tenant {{ $labels.tenant_id }} has error rate {{ $value | humanize }}/s"
+
+    # ============================================
+    # Control-Plane API Alerts
+    # ============================================
+    - name: stoa.control-plane-api.rules
+      rules:
+        - alert: ControlPlaneAPIHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{job="control-plane-api", status=~"5.."}[5m]))
+              / sum(rate(http_requests_total{job="control-plane-api"}[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            component: control-plane-api
+          annotations:
+            summary: "Control-Plane API high error rate"
+            description: "Control-Plane API error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/control-plane-api-errors.md"
+
+        - alert: ControlPlaneAPIHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{job="control-plane-api"}[5m])) by (le)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+            component: control-plane-api
+          annotations:
+            summary: "Control-Plane API high latency"
+            description: "Control-Plane API P95 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/control-plane-api-latency.md"
+
+        - alert: ControlPlaneAPIDown
+          expr: |
+            up{job="control-plane-api"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: control-plane-api
+          annotations:
+            summary: "Control-Plane API is down"
+            description: "Control-Plane API has been down for more than 1 minute"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/control-plane-api-down.md"
+
+    # ============================================
+    # Database Alerts
+    # ============================================
+    - name: stoa.database.rules
+      rules:
+        - alert: DatabaseDown
+          expr: |
+            pg_up{job=~".*postgres.*|.*control-plane-db.*"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: database
+          annotations:
+            summary: "PostgreSQL database is down"
+            description: "PostgreSQL database {{ $labels.instance }} has been down for more than 1 minute"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/database-down.md"
+
+        - alert: DatabaseHighConnections
+          expr: |
+            pg_stat_activity_count{job=~".*postgres.*|.*control-plane-db.*"}
+            / pg_settings_max_connections{job=~".*postgres.*|.*control-plane-db.*"} > 0.8
+          for: 5m
+          labels:
+            severity: warning
+            component: database
+          annotations:
+            summary: "PostgreSQL high connection usage"
+            description: "PostgreSQL {{ $labels.instance }} connection usage is {{ $value | humanizePercentage }}"
+
+        - alert: DatabaseSlowQueries
+          expr: |
+            rate(pg_stat_statements_seconds_total{job=~".*postgres.*"}[5m]) > 1
+          for: 10m
+          labels:
+            severity: warning
+            component: database
+          annotations:
+            summary: "PostgreSQL slow queries detected"
+            description: "PostgreSQL {{ $labels.instance }} has slow queries averaging {{ $value | humanizeDuration }}"
+
+    # ============================================
+    # Kubernetes Pod Alerts
+    # ============================================
+    - name: stoa.kubernetes.rules
+      rules:
+        - alert: PodNotReady
+          expr: |
+            kube_pod_status_ready{namespace=~"stoa-system|team-alpha|team-beta", condition="true"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: kubernetes
+          annotations:
+            summary: "Pod {{ $labels.pod }} not ready"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been not ready for more than 5 minutes"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/pod-not-ready.md"
+
+        - alert: PodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total{namespace=~"stoa-system|team-alpha|team-beta"}[15m]) * 60 * 15 > 3
+          for: 5m
+          labels:
+            severity: critical
+            component: kubernetes
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash looping"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value | humanize }} times in the last 15 minutes"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/pod-crash-loop.md"
+
+        - alert: PodHighMemory
+          expr: |
+            container_memory_usage_bytes{namespace=~"stoa-system|team-alpha|team-beta", container!=""}
+            / container_spec_memory_limit_bytes{namespace=~"stoa-system|team-alpha|team-beta", container!=""} > 0.9
+          for: 5m
+          labels:
+            severity: warning
+            component: kubernetes
+          annotations:
+            summary: "Pod {{ $labels.pod }} high memory usage"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} memory usage is {{ $value | humanizePercentage }}"
+
+        - alert: PodHighCPU
+          expr: |
+            sum(rate(container_cpu_usage_seconds_total{namespace=~"stoa-system|team-alpha|team-beta", container!=""}[5m])) by (namespace, pod)
+            / sum(container_spec_cpu_quota{namespace=~"stoa-system|team-alpha|team-beta", container!=""} / container_spec_cpu_period{namespace=~"stoa-system|team-alpha|team-beta", container!=""}) by (namespace, pod) > 0.9
+          for: 5m
+          labels:
+            severity: warning
+            component: kubernetes
+          annotations:
+            summary: "Pod {{ $labels.pod }} high CPU usage"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} CPU usage is {{ $value | humanizePercentage }}"
+
+    # ============================================
+    # Disk Space Alerts
+    # ============================================
+    - name: stoa.disk.rules
+      rules:
+        - alert: DiskSpaceHigh
+          expr: |
+            (
+              node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+              / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
+            ) < 0.2
+          for: 5m
+          labels:
+            severity: warning
+            component: infrastructure
+          annotations:
+            summary: "Disk space low on {{ $labels.instance }}"
+            description: "Disk {{ $labels.mountpoint }} on {{ $labels.instance }} has only {{ $value | humanizePercentage }} free space"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/disk-space-low.md"
+
+        - alert: DiskSpaceCritical
+          expr: |
+            (
+              node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+              / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
+            ) < 0.1
+          for: 5m
+          labels:
+            severity: critical
+            component: infrastructure
+          annotations:
+            summary: "Disk space critically low on {{ $labels.instance }}"
+            description: "Disk {{ $labels.mountpoint }} on {{ $labels.instance }} has only {{ $value | humanizePercentage }} free space"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/disk-space-critical.md"
+
+        - alert: PVCSpaceHigh
+          expr: |
+            kubelet_volume_stats_available_bytes{namespace=~"stoa-system|stoa-monitoring"}
+            / kubelet_volume_stats_capacity_bytes{namespace=~"stoa-system|stoa-monitoring"} < 0.2
+          for: 5m
+          labels:
+            severity: warning
+            component: kubernetes
+          annotations:
+            summary: "PVC {{ $labels.persistentvolumeclaim }} running low on space"
+            description: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} has only {{ $value | humanizePercentage }} free space"
+
+    # ============================================
+    # Keycloak Alerts
+    # ============================================
+    - name: stoa.keycloak.rules
+      rules:
+        - alert: KeycloakDown
+          expr: |
+            up{job="keycloak"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: keycloak
+          annotations:
+            summary: "Keycloak is down"
+            description: "Keycloak authentication service has been down for more than 1 minute"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/keycloak-down.md"
+
+        - alert: KeycloakHighLoginFailures
+          expr: |
+            sum(rate(keycloak_login_error_total[5m]))
+            / sum(rate(keycloak_login_total[5m])) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            component: keycloak
+          annotations:
+            summary: "Keycloak high login failure rate"
+            description: "Keycloak login failure rate is {{ $value | humanizePercentage }}"
+
+    # ============================================
+    # Redpanda/Kafka Alerts
+    # ============================================
+    - name: stoa.redpanda.rules
+      rules:
+        - alert: RedpandaDown
+          expr: |
+            up{job=~".*redpanda.*"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: redpanda
+          annotations:
+            summary: "Redpanda is down"
+            description: "Redpanda event streaming service has been down for more than 1 minute"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/redpanda-down.md"
+
+        - alert: RedpandaConsumerLag
+          expr: |
+            kafka_consumer_group_lag{topic=~"stoa.*"} > 10000
+          for: 5m
+          labels:
+            severity: warning
+            component: redpanda
+          annotations:
+            summary: "Redpanda consumer lag high"
+            description: "Consumer group {{ $labels.consumer_group }} lag on topic {{ $labels.topic }} is {{ $value }}"
+
+    # ============================================
+    # SLO/Error Budget Alerts
+    # ============================================
+    - name: stoa.slo.rules
+      rules:
+        - alert: ErrorBudgetLow
+          expr: |
+            slo:error_budget:remaining_ratio < 0.2
+          for: 5m
+          labels:
+            severity: warning
+            component: slo
+          annotations:
+            summary: "Error budget running low"
+            description: "Monthly error budget is at {{ $value | humanizePercentage }} remaining"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/error-budget-low.md"
+
+        - alert: ErrorBudgetExhausted
+          expr: |
+            slo:error_budget:remaining_ratio < 0.05
+          for: 5m
+          labels:
+            severity: critical
+            component: slo
+          annotations:
+            summary: "Error budget nearly exhausted"
+            description: "Monthly error budget is at {{ $value | humanizePercentage }} - freeze non-critical deployments"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/error-budget-exhausted.md"
+
+        - alert: SLOAvailabilityBreach
+          expr: |
+            slo:api_availability:ratio < 0.999
+          for: 10m
+          labels:
+            severity: critical
+            component: slo
+          annotations:
+            summary: "SLO availability breach"
+            description: "Platform availability is {{ $value | humanizePercentage }} - below 99.9% SLO target"

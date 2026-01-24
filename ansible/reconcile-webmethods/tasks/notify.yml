@@ -1,0 +1,40 @@
+---
+# tasks/notify.yml
+# Send notification after reconciliation completes
+
+- name: "Build notification payload"
+  ansible.builtin.set_fact:
+    notification_payload:
+      event: "gateway-reconciliation"
+      environment: "{{ env }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+      summary:
+        apis_created: "{{ apis_created | default([]) | length }}"
+        apis_updated: "{{ apis_updated | default([]) | length }}"
+        apis_deleted: "{{ apis_deleted | default([]) | length }}"
+        policies_applied: "{{ policies_applied | default([]) | length }}"
+        aliases_configured: "{{ aliases_configured | default([]) | length }}"
+        applications_synced: "{{ applications_synced | default(0) }}"
+      dry_run: "{{ dry_run }}"
+      details:
+        created: "{{ apis_created | default([]) }}"
+        updated: "{{ apis_updated | default([]) }}"
+        deleted: "{{ apis_deleted | default([]) }}"
+
+- name: "Send webhook notification"
+  ansible.builtin.uri:
+    url: "{{ lookup('env', 'NOTIFY_WEBHOOK_URL') }}"
+    method: POST
+    headers:
+      Content-Type: "application/json"
+      X-Webhook-Secret: "{{ lookup('env', 'NOTIFY_WEBHOOK_SECRET') | default('') }}"
+    body: "{{ notification_payload | to_json }}"
+    body_format: json
+    status_code: [200, 201, 202, 204]
+    timeout: 30
+  register: notify_result
+  ignore_errors: true
+
+- name: "Log notification result"
+  ansible.builtin.debug:
+    msg: "Notification sent: {{ 'success' if notify_result is succeeded else 'failed' }}"

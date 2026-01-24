@@ -1,0 +1,13 @@
+# STOA Platform - staging Environment
+environment: staging
+domain: staging.gostoa.dev
+namespace: stoa-system
+
+gateway:
+  replicas: 1
+  
+keycloak:
+  realm: stoa
+  
+vault:
+  path: secret/stoa/staging

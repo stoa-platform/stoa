@@ -1,0 +1,82 @@
+# MCP Gateway Canary Ingress Configuration
+# Used for Python → Rust migration with weighted traffic splitting
+#
+# Usage:
+#   kubectl apply -f k8s/ingress/mcp-gateway-canary.yaml
+#
+# Update canary weight:
+#   ./scripts/canary-update.sh <weight>  # 0-100
+#
+# Rollback:
+#   ./scripts/canary-rollback.sh
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-gateway-primary
+  namespace: stoa-system
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+  labels:
+    app: mcp-gateway
+    component: ingress
+    migration: python-to-rust
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - mcp.gostoa.dev
+      secretName: mcp-gateway-tls
+  rules:
+    - host: mcp.gostoa.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-gateway-python
+                port:
+                  number: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-gateway-canary
+  namespace: stoa-system
+  annotations:
+    # Canary configuration
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "0"  # Start with 0%, use scripts to update
+    # TLS and proxy settings (must match primary)
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+  labels:
+    app: mcp-gateway
+    component: ingress
+    migration: python-to-rust
+    canary: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - mcp.gostoa.dev
+      secretName: mcp-gateway-tls
+  rules:
+    - host: mcp.gostoa.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-gateway-rust
+                port:
+                  number: 8080

@@ -1,0 +1,80 @@
+---
+# tasks/delete-api.yml
+# Delete an orphaned API from webMethods Gateway
+#
+# Expected variables:
+#   - api_to_delete: API object from gateway (contains api.apiName, api.id)
+#   - wm_gateway_url: Gateway URL
+#   - wm_admin_user: Gateway admin username
+#   - wm_admin_password: Gateway admin password
+#   - dry_run: Whether to simulate only
+#   - sync_results: Results tracking dict
+
+- name: "Extract API details"
+  ansible.builtin.set_fact:
+    delete_api_name: "{{ api_to_delete.api.apiName }}"
+    delete_api_id: "{{ api_to_delete.api.id }}"
+
+- name: "Delete API from Gateway"
+  when: not dry_run
+  block:
+    - name: "Deactivate API first"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ delete_api_id }}/deactivate"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200, 400]  # 400 if already inactive
+      register: deactivate_result
+      ignore_errors: true
+
+    - name: "Unpublish from portal first"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ delete_api_id }}/unpublish"
+        method: PUT
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          portalGatewayId: "{{ portal_gateway_id | default('default') }}"
+        status_code: [200, 400, 404]  # 400/404 if not published
+      register: unpublish_result
+      ignore_errors: true
+
+    - name: "DELETE API"
+      ansible.builtin.uri:
+        url: "{{ wm_gateway_url }}/rest/apigateway/apis/{{ delete_api_id }}"
+        method: DELETE
+        user: "{{ wm_admin_user }}"
+        password: "{{ wm_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200, 204]
+      register: delete_result
+
+    - name: "Add to sync_results.deleted"
+      ansible.builtin.set_fact:
+        sync_results: "{{ sync_results | combine({'deleted': sync_results.deleted + [delete_api_name]}) }}"
+
+    - name: "Log deletion"
+      ansible.builtin.debug:
+        msg: "Deleted orphaned API {{ delete_api_name }} (ID: {{ delete_api_id }})"
+
+- name: "Dry-run: Would delete API"
+  when: dry_run
+  ansible.builtin.debug:
+    msg: |
+      DRY-RUN: Would delete orphaned API:
+        Name: {{ delete_api_name }}
+        ID: {{ delete_api_id }}

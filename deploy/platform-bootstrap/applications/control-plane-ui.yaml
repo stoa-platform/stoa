@@ -1,0 +1,60 @@
+# Control-Plane UI (Console) - OAuth2 Application
+# Admin console for API providers to manage tenants, APIs, and deployments
+apiVersion: stoa.io/v1
+kind: Application
+metadata:
+  name: control-plane-ui
+  description: "STOA Console - API Provider Management Interface"
+  tags:
+    - platform
+    - frontend
+    - console
+    - admin
+
+spec:
+  displayName: STOA Console
+  type: web
+  public: false
+
+  # OAuth2 Configuration (matches Keycloak client)
+  oauth2:
+    clientId: control-plane-ui
+    grantTypes:
+      - authorization_code
+      - refresh_token
+      - password  # For legacy/testing
+    redirectUris:
+      - https://console.${BASE_DOMAIN}/*
+      - http://localhost:3000/*
+    webOrigins:
+      - https://console.${BASE_DOMAIN}
+      - http://localhost:3000
+    pkce: true
+    publicClient: true
+
+  # API Subscriptions - Full access to Control-Plane API
+  subscriptions:
+    - apiName: Control-Plane-API
+      version: "2.0"
+      scopes:
+        - stoa:read
+        - stoa:write
+        - stoa:admin
+
+  # Rate limits for the application
+  rateLimit:
+    requests: 1000
+    window: 60
+
+  # Allowed operations (based on user roles)
+  permissions:
+    - manage-tenants
+    - manage-apis
+    - manage-applications
+    - manage-deployments
+    - manage-subscriptions
+    - approve-subscriptions
+    - manage-gateway
+    - view-analytics
+    - manage-users
+    - manage-webhooks

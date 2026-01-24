@@ -1,0 +1,31 @@
+# STOA MCP Gateway - Development Dockerfile
+# Optimized for hot-reload and debugging
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dev dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir -e ".[dev]"
+
+# Copy application code (will be overridden by volume mount)
+COPY src/ ./src/
+COPY tests/ ./tests/
+
+# Environment for development
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBUG=true \
+    PORT=8080
+
+EXPOSE 8080
+
+# Run with hot reload
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]

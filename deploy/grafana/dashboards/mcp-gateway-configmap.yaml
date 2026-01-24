@@ -1,0 +1,633 @@
+# CAB-282: MCP Gateway Traceability Dashboard ConfigMap
+# Deploy to monitoring namespace for Grafana sidecar to pick up
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-mcp-gateway
+  namespace: stoa-monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: stoa-platform
+  annotations:
+    gostoa.dev/created-by: cab-282
+data:
+  mcp-gateway-traceability.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "CAB-282: MCP Gateway traceability dashboard with real-time logs, tenant metrics, and tool invocation tracking",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [
+        {
+          "asDropdown": false,
+          "icon": "external link",
+          "includeVars": false,
+          "keepTime": true,
+          "tags": ["stoa"],
+          "targetBlank": true,
+          "title": "STOA Dashboards",
+          "type": "dashboards"
+        }
+      ],
+      "liveNow": true,
+      "panels": [
+        {
+          "title": "MCP Calls - Real Time Logs",
+          "type": "logs",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+          "id": 1,
+          "datasource": { "type": "loki", "uid": "loki" },
+          "targets": [
+            {
+              "expr": "{app=\"mcp-gateway\"} |= \"$search\" | json | line_format \"{{.level}} [{{.tenant_id}}] {{.tool}} - {{.message}}\"",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "showLabels": true,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          }
+        },
+        {
+          "title": "Calls by Tenant (5m rate)",
+          "type": "barchart",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "id": 2,
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (tenant_id) (rate(stoa_mcp_tool_invocations_total{tenant_id=~\"$tenant\"}[5m]))",
+              "legendFormat": "{{tenant_id}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "Requests/sec",
+                "axisPlacement": "auto",
+                "fillOpacity": 80,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineWidth": 1,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "barRadius": 0.1,
+            "barWidth": 0.8,
+            "groupWidth": 0.7,
+            "legend": {
+              "calcs": ["mean", "max"],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "orientation": "horizontal",
+            "showValue": "auto",
+            "stacking": "none",
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            },
+            "xTickLabelRotation": 0
+          }
+        },
+        {
+          "title": "Latency P95 by Tool",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "id": 3,
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, tool) (rate(stoa_mcp_gateway_http_request_duration_seconds_bucket{tool=~\"$tool\"}[5m])))",
+              "legendFormat": "{{tool}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "Latency",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "line"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.5 },
+                  { "color": "red", "value": 1 }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": ["mean", "max", "p95"],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Error Rate",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 16 },
+          "id": 4,
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(stoa_mcp_tool_invocations_total{status=\"error\", tenant_id=~\"$tenant\"}[5m])) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.1 },
+                  { "color": "red", "value": 1 }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          }
+        },
+        {
+          "title": "Success Rate",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 16 },
+          "id": 5,
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "(sum(rate(stoa_mcp_tool_invocations_total{status=\"success\", tenant_id=~\"$tenant\"}[5m])) / sum(rate(stoa_mcp_tool_invocations_total{tenant_id=~\"$tenant\"}[5m])) * 100) or vector(100)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "max": 100,
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 95 },
+                  { "color": "green", "value": 99 }
+                ]
+              },
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          }
+        },
+        {
+          "title": "Total Calls Today",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
+          "id": 6,
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(increase(stoa_mcp_tool_invocations_total{tenant_id=~\"$tenant\"}[24h])) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "blue", "value": null }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          }
+        },
+        {
+          "title": "Calls by Tool",
+          "type": "piechart",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
+          "id": 7,
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (tool) (increase(stoa_mcp_tool_invocations_total{tenant_id=~\"$tenant\"}[24h]))",
+              "legendFormat": "{{tool}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "mappings": [],
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "displayLabels": ["name", "percent"],
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "values": ["value", "percent"]
+            },
+            "pieType": "donut",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "title": "Request Rate by Status",
+          "type": "timeseries",
+          "gridPos": { "h": 6, "w": 12, "x": 0, "y": 20 },
+          "id": 8,
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (status) (rate(stoa_mcp_tool_invocations_total{tenant_id=~\"$tenant\"}[5m]))",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "normal"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "success" },
+                "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "error" },
+                "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "calcs": ["mean", "sum"],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Top 10 Tools by Invocations",
+          "type": "table",
+          "gridPos": { "h": 6, "w": 12, "x": 12, "y": 20 },
+          "id": 9,
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "topk(10, sum by (tool, tenant_id) (increase(stoa_mcp_tool_invocations_total{tenant_id=~\"$tenant\"}[24h])))",
+              "format": "table",
+              "instant": true,
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "filterable": true,
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Value" },
+                "properties": [
+                  { "id": "displayName", "value": "Invocations (24h)" },
+                  { "id": "unit", "value": "short" }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "tool" },
+                "properties": [{ "id": "displayName", "value": "Tool" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "tenant_id" },
+                "properties": [{ "id": "displayName", "value": "Tenant" }]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Time" },
+                "properties": [{ "id": "custom.hidden", "value": true }]
+              }
+            ]
+          },
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": ["sum"],
+              "show": true
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": true,
+                "displayName": "Invocations (24h)"
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true
+                },
+                "indexByName": {},
+                "renameByName": {}
+              }
+            }
+          ]
+        }
+      ],
+      "refresh": "5s",
+      "schemaVersion": 38,
+      "style": "dark",
+      "tags": ["stoa", "mcp", "gateway", "traceability"],
+      "templating": {
+        "list": [
+          {
+            "current": {
+              "selected": true,
+              "text": ["All"],
+              "value": ["$__all"]
+            },
+            "datasource": { "type": "prometheus", "uid": "prometheus" },
+            "definition": "label_values(stoa_mcp_tool_invocations_total, tenant_id)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Tenant",
+            "multi": true,
+            "name": "tenant",
+            "options": [],
+            "query": {
+              "query": "label_values(stoa_mcp_tool_invocations_total, tenant_id)",
+              "refId": "StandardVariableQuery"
+            },
+            "refresh": 2,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "current": {
+              "selected": true,
+              "text": ["All"],
+              "value": ["$__all"]
+            },
+            "datasource": { "type": "prometheus", "uid": "prometheus" },
+            "definition": "label_values(stoa_mcp_tool_invocations_total, tool)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "Tool",
+            "multi": true,
+            "name": "tool",
+            "options": [],
+            "query": {
+              "query": "label_values(stoa_mcp_tool_invocations_total, tool)",
+              "refId": "StandardVariableQuery"
+            },
+            "refresh": 2,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "current": {
+              "selected": false,
+              "text": "",
+              "value": ""
+            },
+            "hide": 0,
+            "label": "Search Logs",
+            "name": "search",
+            "options": [
+              {
+                "selected": true,
+                "text": "",
+                "value": ""
+              }
+            ],
+            "query": "",
+            "skipUrlSync": false,
+            "type": "textbox"
+          }
+        ]
+      },
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {
+        "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"],
+        "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+      },
+      "timezone": "browser",
+      "title": "STOA MCP Gateway - Traceability",
+      "uid": "stoa-mcp-traceability",
+      "version": 1,
+      "weekStart": ""
+    }

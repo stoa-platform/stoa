@@ -1,0 +1,6 @@
+name: petstore
+version: "1.0.2"
+description: Petstore API - Webhook test successful
+status: active
+environment: dev
+last_updated: "2025-12-21T18:49:03Z"

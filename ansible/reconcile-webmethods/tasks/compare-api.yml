@@ -1,0 +1,28 @@
+---
+# tasks/compare-api.yml
+# Compare a single API between Git and Gateway to determine if update is needed
+
+- name: "Get Git definition for {{ api_name }}"
+  ansible.builtin.set_fact:
+    git_api_def: "{{ git_apis | selectattr('metadata.name', 'equalto', api_name) | first }}"
+
+- name: "Get Gateway definition for {{ api_name }}"
+  ansible.builtin.set_fact:
+    gw_api_def: "{{ gateway_api_lookup[api_name + ':' + (git_api_def.metadata.version | default('1.0.0'))] | default(none) }}"
+
+- name: "Compare API {{ api_name }}"
+  when: gw_api_def is not none
+  block:
+    - name: "Check if backend URL changed"
+      ansible.builtin.set_fact:
+        backend_changed: "{{ (git_api_def.spec.backend.url | default('')) != (gw_api_def.nativeEndpoint[0].uri | default('')) }}"
+      when: gw_api_def.nativeEndpoint is defined
+
+    - name: "Check if policies changed"
+      ansible.builtin.set_fact:
+        policies_changed: true  # Always reapply policies to ensure consistency
+
+    - name: "Mark API for update if changes detected"
+      ansible.builtin.set_fact:
+        apis_to_update: "{{ apis_to_update + [api_name] }}"
+      when: backend_changed | default(false) or policies_changed | default(false)

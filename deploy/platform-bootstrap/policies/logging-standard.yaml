@@ -1,0 +1,85 @@
+# Standard Logging Policy
+# Logs API requests for audit and debugging
+apiVersion: stoa.io/v1
+kind: Policy
+metadata:
+  name: logging-standard
+  description: "Standard logging for audit and debugging"
+  tags:
+    - observability
+    - audit
+
+spec:
+  type: logging
+  order: 100  # Execute last
+
+  config:
+    enabled: true
+
+    # Log destinations
+    destinations:
+      - type: stdout
+        format: json
+      - type: kafka
+        topic: stoa.api.access-logs
+        enabled: ${KAFKA_LOGGING_ENABLED:false}
+
+    # Fields to log
+    fields:
+      # Request info
+      - name: timestamp
+        source: system
+      - name: request_id
+        source: header
+        header: X-Request-ID
+      - name: method
+        source: request
+      - name: path
+        source: request
+      - name: query_params
+        source: request
+        redact: [api_key, token, secret]
+
+      # Client info
+      - name: client_ip
+        source: request
+      - name: user_agent
+        source: header
+        header: User-Agent
+
+      # Auth info
+      - name: user_id
+        source: header
+        header: X-User-ID
+      - name: tenant_id
+        source: header
+        header: X-Tenant-ID
+      - name: username
+        source: header
+        header: X-Username
+
+      # Response info
+      - name: status_code
+        source: response
+      - name: response_time_ms
+        source: system
+      - name: response_size
+        source: response
+
+    # Sampling (for high-traffic)
+    sampling:
+      enabled: false
+      rate: 1.0  # 100%
+
+    # Error logging (always log errors)
+    errors:
+      alwaysLog: true
+      includeStackTrace: false
+
+    # Sensitive data handling
+    redaction:
+      enabled: true
+      patterns:
+        - "Bearer [A-Za-z0-9-_.]+"
+        - "api[_-]?key[=:][A-Za-z0-9-_]+"
+        - "password[=:][^&\\s]+"

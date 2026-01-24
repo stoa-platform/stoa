@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-portal-config
+  namespace: stoa-system
+  labels:
+    app: stoa-portal
+data:
+  # These values are baked into the Docker image at build time
+  # This ConfigMap is for documentation/reference purposes
+  # To change values, rebuild the image with different build args
+
+  BASE_DOMAIN: "gostoa.dev"
+  ENVIRONMENT: "production"
+
+  # Keycloak Configuration
+  KEYCLOAK_URL: "https://auth.gostoa.dev"
+  KEYCLOAK_REALM: "stoa"
+  KEYCLOAK_CLIENT_ID: "stoa-portal"
+
+  # Service URLs
+  MCP_URL: "https://mcp.gostoa.dev"
+  API_URL: "https://api.gostoa.dev"
+  CONSOLE_URL: "https://console.gostoa.dev"
+  DOCS_URL: "https://docs.gostoa.dev"
+
+  # Feature Flags
+  ENABLE_MCP_TOOLS: "true"
+  ENABLE_SUBSCRIPTIONS: "true"
+  ENABLE_API_CATALOG: "true"

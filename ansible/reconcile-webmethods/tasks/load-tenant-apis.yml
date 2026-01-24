@@ -1,0 +1,54 @@
+---
+# tasks/load-tenant-apis.yml
+# Load APIs for a specific tenant from tenants/{tenant}/apis/
+#
+# Expected variables:
+#   - tenant_dir: Directory object containing tenant path
+#   - git_apis: List to append loaded APIs to
+
+- name: "Extract tenant ID"
+  ansible.builtin.set_fact:
+    current_tenant_id: "{{ tenant_dir.path | basename }}"
+
+- name: "Check if tenant has apis directory"
+  ansible.builtin.stat:
+    path: "{{ tenant_dir.path }}/apis"
+  register: tenant_apis_dir
+
+- name: "Load tenant APIs"
+  when: tenant_apis_dir.stat.exists | default(false)
+  block:
+    - name: "Find API directories for tenant {{ current_tenant_id }}"
+      ansible.builtin.find:
+        paths: "{{ tenant_dir.path }}/apis"
+        file_type: directory
+        recurse: false
+      register: tenant_api_dirs
+
+    - name: "Find API YAML files for tenant {{ current_tenant_id }}"
+      ansible.builtin.find:
+        paths: "{{ item.path }}"
+        patterns: "api.yaml,api.yml,*.yaml,*.yml"
+        excludes: "_*,openapi.yaml,openapi.yml"
+      loop: "{{ tenant_api_dirs.files }}"
+      register: tenant_api_files_nested
+
+    - name: "Flatten API files list"
+      ansible.builtin.set_fact:
+        tenant_api_files: "{{ tenant_api_files_nested.results | map(attribute='files') | flatten }}"
+
+    - name: "Load tenant API file contents"
+      ansible.builtin.slurp:
+        src: "{{ item.path }}"
+      loop: "{{ tenant_api_files }}"
+      register: tenant_api_contents
+
+    - name: "Parse tenant API YAML files"
+      ansible.builtin.set_fact:
+        git_apis: "{{ git_apis + [item.content | b64decode | from_yaml | combine({'_source': 'tenants', '_tenant': current_tenant_id})] }}"
+      loop: "{{ tenant_api_contents.results }}"
+      when: item.content is defined
+
+    - name: "Display APIs loaded for tenant {{ current_tenant_id }}"
+      ansible.builtin.debug:
+        msg: "Loaded {{ tenant_api_files | length }} APIs for tenant {{ current_tenant_id }}"

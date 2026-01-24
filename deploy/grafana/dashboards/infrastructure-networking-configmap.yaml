@@ -1,0 +1,579 @@
+# STOA Infrastructure Networking Dashboard ConfigMap
+# Deploy to monitoring namespace for Grafana sidecar to pick up
+# kubectl apply -f infrastructure-networking-configmap.yaml -n stoa-monitoring
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-infrastructure-networking-dashboard
+  namespace: stoa-monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: monitoring
+  annotations:
+    gostoa.dev/description: "Infrastructure Networking dashboard for STOA Platform"
+    grafana_folder: "STOA"
+data:
+  infrastructure-networking.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "STOA Platform Infrastructure - Network metrics for EKS cluster",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [
+        {
+          "asDropdown": true,
+          "icon": "external link",
+          "includeVars": true,
+          "keepTime": true,
+          "tags": ["stoa"],
+          "title": "STOA Dashboards",
+          "type": "dashboards"
+        }
+      ],
+      "panels": [
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 1,
+          "panels": [],
+          "title": "Cluster Network Overview",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisPlacement": "auto",
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "showPoints": "never",
+                "stacking": { "group": "A", "mode": "none" },
+                "spanNulls": false
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+              "unit": "binBps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+          "id": 2,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum by (instance) (rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|flannel.*|cali.*|cbr.*\"}[5m]))",
+              "legendFormat": "{{instance}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Node Network Receive (by Node)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisBorderShow": false,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "showPoints": "never",
+                "stacking": { "group": "A", "mode": "none" },
+                "spanNulls": false
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+              "unit": "binBps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+          "id": 3,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum by (instance) (rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|flannel.*|cali.*|cbr.*\"}[5m]))",
+              "legendFormat": "{{instance}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Node Network Transmit (by Node)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 100000000 }, { "color": "red", "value": 500000000 }] },
+              "unit": "binBps"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 9 },
+          "id": 4,
+          "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum(rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|flannel.*|cali.*|cbr.*\"}[5m]))",
+              "legendFormat": "Total RX",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Total Cluster RX",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 100000000 }, { "color": "red", "value": 500000000 }] },
+              "unit": "binBps"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 9 },
+          "id": 5,
+          "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum(rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|flannel.*|cali.*|cbr.*\"}[5m]))",
+              "legendFormat": "Total TX",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Total Cluster TX",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 100 }, { "color": "red", "value": 1000 }] },
+              "unit": "pps"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 9 },
+          "id": 6,
+          "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum(rate(node_network_receive_drop_total{device!~\"lo|veth.*|docker.*|flannel.*|cali.*|cbr.*\"}[5m]))",
+              "legendFormat": "RX Drops",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Network RX Drops",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 100 }, { "color": "red", "value": 1000 }] },
+              "unit": "pps"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 9 },
+          "id": 7,
+          "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum(rate(node_network_receive_errs_total{device!~\"lo|veth.*|docker.*|flannel.*|cali.*|cbr.*\"}[5m]))",
+              "legendFormat": "RX Errors",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Network RX Errors",
+          "type": "stat"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+          "id": 8,
+          "panels": [],
+          "title": "Pod Network I/O (STOA Namespaces)",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "showPoints": "never",
+                "stacking": { "group": "A", "mode": "none" },
+                "spanNulls": false
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+              "unit": "binBps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+          "id": 9,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "topk(10, sum by (pod, namespace) (rate(container_network_receive_bytes_total{namespace=~\"stoa-system|stoa-monitoring|team-alpha|team-beta\", pod!=\"\"}[5m])))",
+              "legendFormat": "{{namespace}}/{{pod}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Top 10 Pods - Network Receive",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "showPoints": "never",
+                "stacking": { "group": "A", "mode": "none" },
+                "spanNulls": false
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+              "unit": "binBps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+          "id": 10,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "topk(10, sum by (pod, namespace) (rate(container_network_transmit_bytes_total{namespace=~\"stoa-system|stoa-monitoring|team-alpha|team-beta\", pod!=\"\"}[5m])))",
+              "legendFormat": "{{namespace}}/{{pod}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Top 10 Pods - Network Transmit",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+          "id": 13,
+          "panels": [],
+          "title": "Network Errors & Drops",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+              "unit": "pps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+          "id": 14,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum by (pod, namespace) (rate(container_network_receive_errors_total{namespace=~\"stoa-system|stoa-monitoring|team-alpha|team-beta\", pod!=\"\"}[5m])) > 0",
+              "legendFormat": "RX {{namespace}}/{{pod}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum by (pod, namespace) (rate(container_network_transmit_errors_total{namespace=~\"stoa-system|stoa-monitoring|team-alpha|team-beta\", pod!=\"\"}[5m])) > 0",
+              "legendFormat": "TX {{namespace}}/{{pod}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Pod Network Errors (non-zero only)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "showPoints": "never",
+                "spanNulls": false
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+              "unit": "pps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+          "id": 15,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum by (pod, namespace) (rate(container_network_receive_packets_dropped_total{namespace=~\"stoa-system|stoa-monitoring|team-alpha|team-beta\", pod!=\"\"}[5m])) > 0",
+              "legendFormat": "RX Drop {{namespace}}/{{pod}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum by (pod, namespace) (rate(container_network_transmit_packets_dropped_total{namespace=~\"stoa-system|stoa-monitoring|team-alpha|team-beta\", pod!=\"\"}[5m])) > 0",
+              "legendFormat": "TX Drop {{namespace}}/{{pod}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Pod Packets Dropped (non-zero only)",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+          "id": 16,
+          "panels": [],
+          "title": "Network by Namespace",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "showPoints": "never",
+                "stacking": { "group": "A", "mode": "normal" },
+                "spanNulls": false
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+              "unit": "binBps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+          "id": 17,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum by (namespace) (rate(container_network_receive_bytes_total{namespace=~\"stoa-system|stoa-monitoring|team-alpha|team-beta\", pod!=\"\"}[5m]))",
+              "legendFormat": "{{namespace}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Network Receive by Namespace (Stacked)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "showPoints": "never",
+                "stacking": { "group": "A", "mode": "normal" },
+                "spanNulls": false
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+              "unit": "binBps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+          "id": 18,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum by (namespace) (rate(container_network_transmit_bytes_total{namespace=~\"stoa-system|stoa-monitoring|team-alpha|team-beta\", pod!=\"\"}[5m]))",
+              "legendFormat": "{{namespace}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Network Transmit by Namespace (Stacked)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "custom": {
+                "align": "auto",
+                "cellOptions": { "type": "auto" },
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+              "unit": "binBps"
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Pod" },
+                "properties": [{ "id": "custom.width", "value": 300 }]
+              }
+            ]
+          },
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 40 },
+          "id": 19,
+          "options": {
+            "cellHeight": "sm",
+            "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+            "showHeader": true,
+            "sortBy": [{ "desc": true, "displayName": "RX Rate" }]
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum by (namespace, pod) (rate(container_network_receive_bytes_total{namespace=~\"stoa-system|stoa-monitoring|team-alpha|team-beta\", pod!=\"\"}[5m]))",
+              "format": "table",
+              "instant": true,
+              "refId": "RX"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
+              "editorMode": "code",
+              "expr": "sum by (namespace, pod) (rate(container_network_transmit_bytes_total{namespace=~\"stoa-system|stoa-monitoring|team-alpha|team-beta\", pod!=\"\"}[5m]))",
+              "format": "table",
+              "instant": true,
+              "refId": "TX"
+            }
+          ],
+          "title": "All Pods Network Usage",
+          "transformations": [
+            { "id": "merge", "options": {} },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "Time": true },
+                "indexByName": { "Time": 0, "Value #RX": 3, "Value #TX": 4, "namespace": 1, "pod": 2 },
+                "renameByName": { "Value #RX": "RX Rate", "Value #TX": "TX Rate", "namespace": "Namespace", "pod": "Pod" }
+              }
+            },
+            { "id": "sortBy", "options": { "fields": {}, "sort": [{ "desc": true, "field": "RX Rate" }] } }
+          ],
+          "type": "table"
+        }
+      ],
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "tags": ["stoa", "infrastructure", "networking"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "timezone": "browser",
+      "title": "[STOA] Infrastructure - Networking",
+      "uid": "stoa-infra-networking",
+      "version": 2
+    }

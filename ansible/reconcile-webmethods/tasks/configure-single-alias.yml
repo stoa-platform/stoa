@@ -1,0 +1,84 @@
+---
+# tasks/configure-single-alias.yml
+# Configure a single backend alias on webMethods Gateway
+
+- name: "Build auth config for {{ alias_item.key }}"
+  ansible.builtin.set_fact:
+    alias_auth_config:
+      authType: "{{ alias_item.value.authType | default('none') }}"
+      # For basic auth
+      username: "{{ alias_item.value.username | default('') }}"
+      password: "{{ alias_item.value.password | default('') }}"
+      # For OAuth/JWT passthrough
+      passthrough: "{{ alias_item.value.passthrough | default(true) }}"
+
+- name: "Build alias payload for {{ alias_item.key }}"
+  ansible.builtin.set_fact:
+    alias_payload:
+      # webMethods Simple Alias format - type at root level
+      type: "simple"
+      name: "{{ alias_item.key }}"
+      description: "{{ alias_item.value.description | default('Backend alias for ' + alias_item.key) }}"
+      endPointURI: "{{ alias_item.value.url }}"
+      # Connection timeouts in ms
+      connectionTimeout: "{{ alias_item.value.connectionTimeout | default(30000) }}"
+      readTimeout: "{{ alias_item.value.readTimeout | default(30000) }}"
+
+- name: "Check if alias {{ alias_item.key }} exists"
+  ansible.builtin.uri:
+    url: "{{ wm_gateway_url }}/rest/apigateway/alias/{{ alias_item.key }}"
+    method: GET
+    user: "{{ wm_admin_user }}"
+    password: "{{ wm_admin_password }}"
+    force_basic_auth: true
+    headers:
+      Accept: "application/json"
+    status_code: [200, 404]
+    timeout: 30
+  register: alias_check
+
+- name: "Create alias {{ alias_item.key }}"
+  ansible.builtin.uri:
+    url: "{{ wm_gateway_url }}/rest/apigateway/alias"
+    method: POST
+    user: "{{ wm_admin_user }}"
+    password: "{{ wm_admin_password }}"
+    force_basic_auth: true
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body: "{{ alias_payload | to_json }}"
+    body_format: json
+    status_code: [200, 201]
+    timeout: 30
+  register: alias_create_result
+  when:
+    - alias_check.status == 404
+    - not dry_run
+
+- name: "Update alias {{ alias_item.key }}"
+  ansible.builtin.uri:
+    url: "{{ wm_gateway_url }}/rest/apigateway/alias/{{ alias_item.key }}"
+    method: PUT
+    user: "{{ wm_admin_user }}"
+    password: "{{ wm_admin_password }}"
+    force_basic_auth: true
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+    body: "{{ alias_payload | to_json }}"
+    body_format: json
+    status_code: [200]
+    timeout: 30
+  register: alias_update_result
+  when:
+    - alias_check.status == 200
+    - not dry_run
+
+- name: "Record configured alias"
+  ansible.builtin.set_fact:
+    aliases_configured: "{{ aliases_configured | default([]) + [alias_item.key] }}"
+
+- name: "Log alias configuration"
+  ansible.builtin.debug:
+    msg: "Alias {{ alias_item.key }} -> {{ alias_item.value.url }}{{ ' (dry-run)' if dry_run else '' }}"

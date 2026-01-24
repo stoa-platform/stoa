@@ -1,0 +1,1001 @@
+---
+# Playbook: Bootstrap STOA Platform
+# Initializes the platform with:
+#   1. Keycloak OIDC External Authorization Server in Gateway
+#   2. Control-Plane API registration and OIDC configuration
+#   3. Gateway-Admin API registration and OIDC configuration
+#   4. Platform admin application (control-plane-ui)
+#
+# This playbook should be run ONCE during initial platform setup.
+# It creates the foundational security configuration that enables
+# all subsequent API registrations to use OIDC instead of Basic Auth.
+#
+# Prerequisites:
+#   - Gateway deployed and accessible
+#   - Keycloak deployed with 'stoa' realm
+#   - control-plane-api and control-plane-ui clients configured in Keycloak
+#
+# Usage:
+#   ansible-playbook bootstrap-platform.yaml
+#
+# Environment variables required (via secrets.yaml):
+#   - GATEWAY_ADMIN_USER: Gateway admin username
+#   - GATEWAY_PASSWORD: Gateway admin password
+
+- name: Bootstrap STOA Platform
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../vars/secrets.yaml
+
+  vars:
+    # Gateway Configuration
+    gateway_url: "http://apigateway.stoa-system.svc.cluster.local:5555"
+
+    # Keycloak Configuration
+    keycloak_url: "https://auth.{{ base_domain | default('gostoa.dev') }}"
+    keycloak_realm: "stoa"
+
+    # Control-Plane API Configuration
+    control_plane_api_url: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+    control_plane_api_openapi: "{{ control_plane_api_url }}/openapi.json"
+
+    # Auth Server Configuration
+    auth_server_name: "KeycloakOIDC"
+
+    # Platform tenant (cross-tenant admin access)
+    platform_tenant_id: "stoa"
+
+  tasks:
+    - name: Display bootstrap info
+      debug:
+        msg: |
+          ========================================
+          STOA Platform Bootstrap
+          ========================================
+          Gateway: {{ gateway_url }}
+          Keycloak: {{ keycloak_url }}/realms/{{ keycloak_realm }}
+          Auth Server: {{ auth_server_name }}
+          ========================================
+
+    # =========================================================================
+    # STEP 1: Health Checks
+    # =========================================================================
+    - name: Check Gateway health
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/health"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 401]
+      register: gateway_health
+      ignore_errors: true
+
+    - name: Fail if Gateway unreachable
+      fail:
+        msg: "Gateway is not reachable at {{ gateway_url }}"
+      when: gateway_health.failed | default(true)
+
+    - name: Check Keycloak health
+      uri:
+        url: "{{ keycloak_url }}/realms/{{ keycloak_realm }}/.well-known/openid-configuration"
+        method: GET
+        validate_certs: false
+        status_code: [200]
+      register: keycloak_health
+      ignore_errors: true
+
+    - name: Fail if Keycloak unreachable
+      fail:
+        msg: "Keycloak is not reachable at {{ keycloak_url }}"
+      when: keycloak_health.failed | default(true)
+
+    - name: Extract Keycloak OIDC endpoints
+      set_fact:
+        oidc_config: "{{ keycloak_health.json }}"
+        issuer: "{{ keycloak_health.json.issuer }}"
+        authorization_endpoint: "{{ keycloak_health.json.authorization_endpoint }}"
+        token_endpoint: "{{ keycloak_health.json.token_endpoint }}"
+        jwks_uri: "{{ keycloak_health.json.jwks_uri }}"
+        userinfo_endpoint: "{{ keycloak_health.json.userinfo_endpoint }}"
+        introspection_endpoint: "{{ keycloak_health.json.introspection_endpoint | default(keycloak_health.json.token_endpoint | regex_replace('/token$', '/token/introspect')) }}"
+
+    - name: Display discovered OIDC endpoints
+      debug:
+        msg: |
+          Keycloak OIDC Endpoints:
+          - Issuer: {{ issuer }}
+          - Authorization: {{ authorization_endpoint }}
+          - Token: {{ token_endpoint }}
+          - JWKS: {{ jwks_uri }}
+          - Introspection: {{ introspection_endpoint }}
+
+    # =========================================================================
+    # STEP 2: Create External Authorization Server (KeycloakOIDC)
+    # =========================================================================
+    - name: Check if auth server already exists
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/alias"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_aliases
+
+    - name: Check if KeycloakOIDC already exists
+      set_fact:
+        auth_server_exists: "{{ existing_aliases.json.alias | default([]) | selectattr('name', 'equalto', auth_server_name) | list | length > 0 }}"
+
+    - name: Get existing auth server ID
+      set_fact:
+        existing_auth_server_id: "{{ (existing_aliases.json.alias | selectattr('name', 'equalto', auth_server_name) | list | first).id }}"
+      when: auth_server_exists
+
+    - name: Create External Authorization Server (KeycloakOIDC)
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/alias"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          alias:
+            name: "{{ auth_server_name }}"
+            description: "Keycloak OIDC Provider for STOA Platform"
+            type: "authServerAlias"
+            authServerType: "EXTERNAL"
+            tokenGeneratorConfig:
+              accessTokenExpInterval: 3600
+              authCodeExpInterval: 600
+              enforcePKCE: false
+            localIntrospectionConfig:
+              issuer: "{{ issuer }}"
+              jwksuri: "{{ jwks_uri }}"
+            metadata:
+              authorizeURL: "{{ authorization_endpoint }}"
+              accessTokenURL: "{{ token_endpoint }}"
+              refreshTokenURL: "{{ token_endpoint }}"
+            supportedGrantTypes:
+              - "authorization_code"
+              - "client_credentials"
+              - "refresh_token"
+            scopes: []
+        status_code: [200, 201, 409]
+      register: auth_server_create
+      when: not auth_server_exists
+
+    - name: Get auth server ID from creation
+      set_fact:
+        auth_server_id: "{{ auth_server_create.json.alias.id | default(existing_auth_server_id) }}"
+      when: auth_server_create is defined and auth_server_create.json is defined
+
+    - name: Use existing auth server ID
+      set_fact:
+        auth_server_id: "{{ existing_auth_server_id }}"
+      when: auth_server_exists
+
+    - name: Display auth server status
+      debug:
+        msg: "Auth Server '{{ auth_server_name }}' - ID: {{ auth_server_id | default('created/existing') }}"
+
+    # =========================================================================
+    # STEP 3: Import Control-Plane API
+    # =========================================================================
+    - name: Download Control-Plane API OpenAPI spec
+      uri:
+        url: "{{ control_plane_api_openapi }}"
+        method: GET
+        return_content: true
+        validate_certs: false
+      register: cpi_openapi_content
+
+    - name: Convert OpenAPI 3.1.0 to 3.0.3 for Gateway compatibility
+      copy:
+        content: "{{ cpi_openapi_content.content | regex_replace('\"openapi\":\\s*\"3\\.1\\.0\"', '\"openapi\": \"3.0.3\"') | regex_replace('\"servers\":\\s*\\[\\s*\\{\\s*\"url\":\\s*\"/\"\\s*\\}\\s*\\]', '\"servers\": [{\"url\": \"' + control_plane_api_url + '\"}]') }}"
+        dest: "/tmp/control-plane-api-openapi.json"
+
+    - name: Check if Control-Plane API already exists
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_apis
+
+    - name: Check if Control-Plane-API exists
+      set_fact:
+        cpi_api_exists: "{{ existing_apis.json.apiResponse | default([]) | map(attribute='api') | selectattr('apiName', 'equalto', 'Control-Plane-API') | list | length > 0 }}"
+
+    - name: Get existing Control-Plane-API ID
+      set_fact:
+        cpi_api_id: "{{ (existing_apis.json.apiResponse | map(attribute='api') | selectattr('apiName', 'equalto', 'Control-Plane-API') | list | first).id }}"
+      when: cpi_api_exists
+
+    - name: Import Control-Plane API
+      shell: |
+        curl -s -X POST \
+          -u "{{ gateway_user }}:{{ gateway_password }}" \
+          -H "Accept: application/json" \
+          -F "type=openapi" \
+          -F "apiName=Control-Plane-API" \
+          -F "apiVersion=2.0" \
+          -F "file=@/tmp/control-plane-api-openapi.json" \
+          "{{ gateway_url }}/rest/apigateway/apis"
+      register: cpi_import_result
+      when: not cpi_api_exists
+
+    - name: Parse Control-Plane API import result
+      set_fact:
+        cpi_api_id: "{{ (cpi_import_result.stdout | from_json).apiResponse.api.id }}"
+      when:
+        - not cpi_api_exists
+        - cpi_import_result is defined
+        - cpi_import_result.stdout is defined
+
+    - name: Display Control-Plane API status
+      debug:
+        msg: "Control-Plane-API ID: {{ cpi_api_id | default('FAILED') }}"
+
+    # =========================================================================
+    # STEP 4: Import Gateway-Admin API
+    # =========================================================================
+    - name: Check if Gateway-Admin-API exists
+      set_fact:
+        gwa_api_exists: "{{ existing_apis.json.apiResponse | default([]) | map(attribute='api') | selectattr('apiName', 'equalto', 'Gateway-Admin-API') | list | length > 0 }}"
+
+    - name: Get existing Gateway-Admin-API ID
+      set_fact:
+        gwa_api_id: "{{ (existing_apis.json.apiResponse | map(attribute='api') | selectattr('apiName', 'equalto', 'Gateway-Admin-API') | list | first).id }}"
+      when: gwa_api_exists
+
+    - name: Download Gateway-Admin API OpenAPI spec
+      uri:
+        url: "https://gitlab.com/api/v4/projects/77260481/repository/files/apis%2Fgateway-admin-api%2Fopenapi.json/raw?ref=main"
+        method: GET
+        return_content: true
+        validate_certs: true
+      register: gwa_openapi_content
+      when: not gwa_api_exists
+
+    - name: Save Gateway-Admin API OpenAPI spec
+      copy:
+        content: "{{ gwa_openapi_content.content }}"
+        dest: "/tmp/gateway-admin-api-openapi.json"
+      when: not gwa_api_exists
+
+    - name: Import Gateway-Admin API
+      shell: |
+        curl -s -X POST \
+          -u "{{ gateway_user }}:{{ gateway_password }}" \
+          -H "Accept: application/json" \
+          -F "type=openapi" \
+          -F "apiName=Gateway-Admin-API" \
+          -F "apiVersion=1.0" \
+          -F "file=@/tmp/gateway-admin-api-openapi.json" \
+          "{{ gateway_url }}/rest/apigateway/apis"
+      register: gwa_import_result
+      when: not gwa_api_exists
+
+    - name: Parse Gateway-Admin API import result
+      set_fact:
+        gwa_api_id: "{{ (gwa_import_result.stdout | from_json).apiResponse.api.id }}"
+      when:
+        - not gwa_api_exists
+        - gwa_import_result is defined
+        - gwa_import_result.stdout is defined
+
+    - name: Display Gateway-Admin API status
+      debug:
+        msg: "Gateway-Admin-API ID: {{ gwa_api_id | default('FAILED') }}"
+
+    # =========================================================================
+    # STEP 4b: Configure Gateway-Admin-API Routing with Outbound Basic Auth
+    # =========================================================================
+    # Gateway-Admin-API proxies to the internal Gateway Admin API
+    # It requires Basic Auth credentials in outbound requests
+
+    - name: Check if GatewayAdminInternal alias exists
+      set_fact:
+        gwa_internal_alias_exists: "{{ existing_aliases.json.alias | default([]) | selectattr('name', 'equalto', 'GatewayAdminInternal') | list | length > 0 }}"
+
+    - name: Get existing GatewayAdminInternal alias ID
+      set_fact:
+        gwa_internal_alias_id: "{{ (existing_aliases.json.alias | selectattr('name', 'equalto', 'GatewayAdminInternal') | list | first).id }}"
+      when: gwa_internal_alias_exists
+
+    - name: Create GatewayAdminInternal endpoint alias
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/alias"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "GatewayAdminInternal"
+          description: "Internal Gateway Admin API endpoint"
+          type: "endpoint"
+          endPointURI: "http://localhost:5555/rest/apigateway"
+          connectionTimeout: 30
+          readTimeout: 60
+          suspendDurationOnFailure: 0
+          optimizationTechnique: "None"
+          passSecurityHeaders: false
+        status_code: [200, 201]
+      register: gwa_internal_alias_create
+      when: not gwa_internal_alias_exists
+
+    - name: Set GatewayAdminInternal alias ID
+      set_fact:
+        gwa_internal_alias_id: "{{ gwa_internal_alias_create.json.alias.id }}"
+      when: not gwa_internal_alias_exists and gwa_internal_alias_create is defined
+
+    - name: Check if GatewayAdminInternalAuth alias exists
+      set_fact:
+        gwa_auth_alias_exists: "{{ existing_aliases.json.alias | default([]) | selectattr('name', 'equalto', 'GatewayAdminInternalAuth') | list | length > 0 }}"
+
+    - name: Get existing GatewayAdminInternalAuth alias ID
+      set_fact:
+        gwa_auth_alias_id: "{{ (existing_aliases.json.alias | selectattr('name', 'equalto', 'GatewayAdminInternalAuth') | list | first).id }}"
+      when: gwa_auth_alias_exists
+
+    - name: Create GatewayAdminInternalAuth (httpTransportSecurityAlias)
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/alias"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "GatewayAdminInternalAuth"
+          description: "HTTP Basic Auth for Gateway Admin API internal calls"
+          type: "httpTransportSecurityAlias"
+          authType: "HTTP_BASIC"
+          authMode: "NEW"
+          httpAuthCredentials:
+            userName: "{{ gateway_user }}"
+            # Password must be base64 encoded
+            password: "{{ gateway_password | b64encode }}"
+        status_code: [200, 201]
+      register: gwa_auth_alias_create
+      when: not gwa_auth_alias_exists
+
+    - name: Set GatewayAdminInternalAuth alias ID
+      set_fact:
+        gwa_auth_alias_id: "{{ gwa_auth_alias_create.json.alias.id }}"
+      when: not gwa_auth_alias_exists and gwa_auth_alias_create is defined
+
+    - name: Display Gateway-Admin aliases status
+      debug:
+        msg: |
+          Gateway-Admin-API Routing Aliases:
+            - GatewayAdminInternal (endpoint): {{ gwa_internal_alias_id | default('N/A') }}
+            - GatewayAdminInternalAuth (auth): {{ gwa_auth_alias_id | default('N/A') }}
+
+    # Create routing policy action for Gateway-Admin-API
+    - name: Create Straight Through Routing policy action
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policyActions"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policyAction:
+            names:
+              - value: "Straight Through Routing"
+                locale: "en"
+            templateKey: "straightThroughRouting"
+            parameters:
+              - templateKey: "endpointUri"
+                values:
+                  - "${GatewayAdminInternal}/${sys:resource_path}"
+              - templateKey: "method"
+                values:
+                  - "CUSTOM"
+            active: true
+        status_code: [200, 201]
+      register: gwa_routing_action
+      when: gwa_api_id is defined
+
+    - name: Set routing policy action ID
+      set_fact:
+        gwa_routing_action_id: "{{ gwa_routing_action.json.policyAction.id }}"
+      when: gwa_routing_action is defined and gwa_routing_action.json is defined
+
+    # Create outbound auth policy action
+    - name: Create Outbound Auth Transport policy action
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policyActions"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policyAction:
+            names:
+              - value: "Outbound Auth - Transport"
+                locale: "en"
+            templateKey: "outboundTransportAuthentication"
+            parameters:
+              - templateKey: "transportSecurity"
+                parameters:
+                  - templateKey: "authType"
+                    values:
+                      - "ALIAS"
+                  - templateKey: "authMode"
+                    values:
+                      - "NEW"
+                  - templateKey: "alias"
+                    values:
+                      - "${GatewayAdminInternalAuth}"
+            active: true
+        status_code: [200, 201]
+      register: gwa_outbound_auth_action
+      when: gwa_api_id is defined
+
+    - name: Set outbound auth policy action ID
+      set_fact:
+        gwa_outbound_auth_action_id: "{{ gwa_outbound_auth_action.json.policyAction.id }}"
+      when: gwa_outbound_auth_action is defined and gwa_outbound_auth_action.json is defined
+
+    - name: Display Gateway-Admin policy actions
+      debug:
+        msg: |
+          Gateway-Admin-API Policy Actions:
+            - Routing: {{ gwa_routing_action_id | default('N/A') }}
+            - Outbound Auth: {{ gwa_outbound_auth_action_id | default('N/A') }}
+
+    # Get Gateway-Admin-API policy to update it
+    - name: Get Gateway-Admin-API details
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ gwa_api_id }}"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: gwa_api_details
+      when: gwa_api_id is defined
+
+    - name: Extract Gateway-Admin-API policy ID
+      set_fact:
+        gwa_policy_id: "{{ gwa_api_details.json.apiResponse.api.policies[0] }}"
+      when: gwa_api_details is defined and gwa_api_details.json.apiResponse.api.policies | length > 0
+
+    - name: Get Gateway-Admin-API policy details
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policies/{{ gwa_policy_id }}"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: gwa_policy_details
+      when: gwa_policy_id is defined
+
+    # Update Gateway-Admin-API policy to include routing and outbound auth
+    - name: Update Gateway-Admin-API policy with routing and outbound auth
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/policies/{{ gwa_policy_id }}"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          policy:
+            id: "{{ gwa_policy_id }}"
+            names: "{{ gwa_policy_details.json.policy.names }}"
+            descriptions: "{{ gwa_policy_details.json.policy.descriptions }}"
+            scope: "{{ gwa_policy_details.json.policy.scope }}"
+            policyEnforcements:
+              - enforcements:
+                  - enforcementObjectId: "{{ gwa_routing_action_id }}"
+                    order: "0"
+                  - enforcementObjectId: "{{ gwa_outbound_auth_action_id }}"
+                    order: "1"
+                stageKey: "routing"
+              - enforcements: "{{ (gwa_policy_details.json.policy.policyEnforcements | selectattr('stageKey', 'equalto', 'IAM') | list | first).enforcements | default([]) }}"
+                stageKey: "IAM"
+              - enforcements: "{{ (gwa_policy_details.json.policy.policyEnforcements | selectattr('stageKey', 'equalto', 'transport') | list | first).enforcements | default([]) }}"
+                stageKey: "transport"
+            policyScope: "SERVICE"
+            systemPolicy: false
+            global: false
+            active: true
+        status_code: [200]
+      when:
+        - gwa_policy_id is defined
+        - gwa_routing_action_id is defined
+        - gwa_outbound_auth_action_id is defined
+
+    - name: Display Gateway-Admin-API routing configuration complete
+      debug:
+        msg: "Gateway-Admin-API configured with outbound Basic Auth to internal Gateway Admin API"
+
+    # =========================================================================
+    # STEP 5: Create OAuth Strategy
+    # =========================================================================
+    # NOTE: Strategy body must NOT be wrapped in "strategy" object
+    - name: Create OAuth2 Strategy for platform
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/strategies"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "stoa-platform-oauth2"
+          description: "OAuth2/OIDC strategy for STOA platform APIs"
+          type: "OAUTH2"
+          authServerAlias: "{{ auth_server_name }}"
+          clientId: "control-plane-ui"
+          audience: "account"
+        status_code: [200, 201, 409]
+      register: oauth_strategy_result
+      ignore_errors: true
+
+    - name: Get existing OAuth strategy
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/strategies"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_strategies
+
+    - name: Find platform OAuth strategy ID
+      set_fact:
+        oauth_strategy_id: "{{ (existing_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'stoa-platform-oauth2') | list | first).id }}"
+      when: existing_strategies.json.strategies | default([]) | selectattr('name', 'equalto', 'stoa-platform-oauth2') | list | length > 0
+      ignore_errors: true
+
+    - name: Display OAuth strategy status
+      debug:
+        msg: "OAuth Strategy ID: {{ oauth_strategy_id | default('created/existing') }}"
+
+    # =========================================================================
+    # STEP 6: Create Platform Application (control-plane-ui)
+    # =========================================================================
+    - name: Get existing applications
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications"
+        method: GET
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200]
+      register: existing_apps
+
+    - name: Check if control-plane-ui app exists
+      set_fact:
+        cpi_app_exists: "{{ existing_apps.json.applications | default([]) | selectattr('name', 'equalto', 'control-plane-ui') | list | length > 0 }}"
+
+    - name: Get existing control-plane-ui app ID
+      set_fact:
+        cpi_app_id: "{{ (existing_apps.json.applications | selectattr('name', 'equalto', 'control-plane-ui') | list | first).id }}"
+      when: cpi_app_exists
+
+    - name: Create platform application (if not exists)
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "control-plane-ui"
+          description: "STOA Control Plane UI Application"
+          contactEmails:
+            - "admin@cab-i.com"
+          identifiers:
+            - key: "openIdClaims"
+              name: "client_id"
+              value:
+                - "control-plane-ui"
+        status_code: [200, 201]
+      register: platform_app_create
+      when: not cpi_app_exists
+
+    - name: Get created app ID
+      set_fact:
+        cpi_app_id: "{{ platform_app_create.json.id }}"
+      when:
+        - not cpi_app_exists
+        - platform_app_create is defined
+        - platform_app_create.json is defined
+
+    # Associate OAuth strategy to application (via PUT)
+    - name: Associate OAuth strategy to control-plane-ui
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications/{{ cpi_app_id }}"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          name: "control-plane-ui"
+          description: "STOA Control Plane UI Application"
+          contactEmails:
+            - "admin@cab-i.com"
+          authStrategyIds:
+            - "{{ oauth_strategy_id }}"
+          identifiers:
+            - key: "openIdClaims"
+              name: "client_id"
+              value:
+                - "control-plane-ui"
+        status_code: [200, 201]
+      when:
+        - cpi_app_id is defined
+        - oauth_strategy_id is defined
+
+    - name: Associate APIs to application (POST /applications/{id}/apis)
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/applications/{{ cpi_app_id }}/apis"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          apiIDs:
+            - "{{ cpi_api_id }}"
+            - "{{ gwa_api_id }}"
+        status_code: [200, 201, 204]
+      when:
+        - cpi_app_id is defined
+        - cpi_api_id is defined
+        - gwa_api_id is defined
+
+    - name: Display app status
+      debug:
+        msg: "Application control-plane-ui (ID: {{ cpi_app_id | default('N/A') }}) - APIs associated: Control-Plane-API, Gateway-Admin-API"
+
+    # =========================================================================
+    # STEP 7: Create OAuth Scopes
+    # =========================================================================
+    - name: Create Control-Plane API scope
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/scopes"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          scope:
+            name: "{{ auth_server_name }}:{{ platform_tenant_id }}:control-plane:2.0:admin"
+            description: "Full admin access to Control-Plane API"
+            authServerAlias: "{{ auth_server_name }}"
+        status_code: [200, 201, 409]
+      ignore_errors: true
+
+    - name: Create Gateway-Admin API scope
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/scopes"
+        method: POST
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        body_format: json
+        body:
+          scope:
+            name: "{{ auth_server_name }}:{{ platform_tenant_id }}:gateway-admin:1.0:admin"
+            description: "Full admin access to Gateway Admin API"
+            authServerAlias: "{{ auth_server_name }}"
+        status_code: [200, 201, 409]
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 8: Create AWX Automation Client in Keycloak
+    # =========================================================================
+    # This client is used by AWX playbooks to authenticate via OIDC
+    # when calling the Gateway-Admin-API proxy
+
+    - name: Get Keycloak admin token
+      uri:
+        url: "{{ keycloak_url }}/realms/master/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          client_id: admin-cli
+          username: "{{ keycloak_admin_user | default('admin') }}"
+          password: "{{ keycloak_admin_password }}"
+        status_code: [200]
+        validate_certs: false
+      register: keycloak_admin_token
+      ignore_errors: true
+
+    - name: Check if awx-automation client exists
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId=awx-automation"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: existing_awx_client
+      when: keycloak_admin_token is defined and keycloak_admin_token.json is defined
+
+    - name: Set awx client exists fact
+      set_fact:
+        awx_client_exists: "{{ existing_awx_client.json | length > 0 }}"
+      when: existing_awx_client is defined and existing_awx_client.json is defined
+
+    - name: Generate client secret for awx-automation
+      set_fact:
+        awx_client_secret: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+      when: not (awx_client_exists | default(false))
+
+    - name: Create awx-automation client in Keycloak
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          clientId: "awx-automation"
+          name: "AWX Automation Service"
+          description: "Service account for AWX/Ansible playbooks to access Gateway Admin API via OIDC"
+          enabled: true
+          clientAuthenticatorType: "client-secret"
+          secret: "{{ awx_client_secret }}"
+          serviceAccountsEnabled: true
+          standardFlowEnabled: false
+          implicitFlowEnabled: false
+          directAccessGrantsEnabled: false
+          publicClient: false
+          protocol: "openid-connect"
+          attributes:
+            access.token.lifespan: "3600"
+        status_code: [201, 409]
+        validate_certs: false
+      register: awx_client_create
+      when:
+        - keycloak_admin_token is defined
+        - keycloak_admin_token.json is defined
+        - not (awx_client_exists | default(false))
+      ignore_errors: true
+
+    - name: Get awx-automation client ID
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId=awx-automation"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: awx_client_info
+      when: keycloak_admin_token is defined and keycloak_admin_token.json is defined
+
+    - name: Extract awx-automation client UUID
+      set_fact:
+        awx_client_uuid: "{{ awx_client_info.json[0].id }}"
+      when: awx_client_info is defined and awx_client_info.json | length > 0
+
+    - name: Get client secret (if client already existed)
+      uri:
+        url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients/{{ awx_client_uuid }}/client-secret"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+        validate_certs: false
+        status_code: [200]
+      register: awx_client_secret_info
+      when:
+        - awx_client_uuid is defined
+        - awx_client_exists | default(false)
+
+    - name: Set client secret from existing client
+      set_fact:
+        awx_client_secret: "{{ awx_client_secret_info.json.value }}"
+      when: awx_client_secret_info is defined and awx_client_secret_info.json is defined
+
+    - name: Assign realm-admin role to awx-automation service account
+      block:
+        - name: Get service account user
+          uri:
+            url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients/{{ awx_client_uuid }}/service-account-user"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+            validate_certs: false
+            status_code: [200]
+          register: service_account_user
+
+        - name: Get realm-management client
+          uri:
+            url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients?clientId=realm-management"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+            validate_certs: false
+          register: realm_mgmt_client
+
+        - name: Get realm-admin role
+          uri:
+            url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/clients/{{ realm_mgmt_client.json[0].id }}/roles/realm-admin"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+            validate_certs: false
+          register: realm_admin_role
+          ignore_errors: true
+
+        - name: Assign realm-admin role to service account
+          uri:
+            url: "{{ keycloak_url }}/admin/realms/{{ keycloak_realm }}/users/{{ service_account_user.json.id }}/role-mappings/clients/{{ realm_mgmt_client.json[0].id }}"
+            method: POST
+            headers:
+              Authorization: "Bearer {{ keycloak_admin_token.json.access_token }}"
+              Content-Type: "application/json"
+            body_format: json
+            body:
+              - "{{ realm_admin_role.json }}"
+            validate_certs: false
+            status_code: [204, 409]
+          when: realm_admin_role is defined and realm_admin_role.json is defined
+          ignore_errors: true
+      when: awx_client_uuid is defined
+
+    - name: Display AWX client info
+      debug:
+        msg: |
+          AWX Automation Client:
+            Client ID: awx-automation
+            Client Secret: {{ awx_client_secret | default('N/A') }}
+            UUID: {{ awx_client_uuid | default('N/A') }}
+
+          IMPORTANT: Save this secret in AWX credentials!
+          Configure AWX job templates with:
+            - client_id: awx-automation
+            - client_secret: {{ awx_client_secret | default('(see Keycloak)') }}
+      when: awx_client_secret is defined
+
+    # =========================================================================
+    # STEP 9: Activate APIs
+    # =========================================================================
+    - name: Activate Control-Plane API
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ cpi_api_id }}/activate"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 204]
+      when: cpi_api_id is defined
+
+    - name: Activate Gateway-Admin API
+      uri:
+        url: "{{ gateway_url }}/rest/apigateway/apis/{{ gwa_api_id }}/activate"
+        method: PUT
+        user: "{{ gateway_user }}"
+        password: "{{ gateway_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 204]
+      when: gwa_api_id is defined
+
+    # =========================================================================
+    # STEP 10: Summary
+    # =========================================================================
+    - name: Bootstrap summary
+      debug:
+        msg: |
+          ========================================
+          STOA Platform Bootstrap Complete
+          ========================================
+
+          Auth Server: {{ auth_server_name }}
+            ID: {{ auth_server_id | default('N/A') }}
+
+          APIs Registered:
+            - Control-Plane-API: {{ cpi_api_id | default('FAILED') }}
+            - Gateway-Admin-API: {{ gwa_api_id | default('FAILED') }}
+              Routing: ${GatewayAdminInternal} with Basic Auth outbound
+
+          OAuth Strategy: {{ oauth_strategy_id | default('N/A') }}
+
+          Applications:
+            - control-plane-ui (UI Application)
+            - awx-automation (Service Account)
+              Client Secret: {{ awx_client_secret | default('(configure in AWX)') }}
+
+          Scopes Created:
+            - {{ auth_server_name }}:{{ platform_tenant_id }}:control-plane:2.0:admin
+            - {{ auth_server_name }}:{{ platform_tenant_id }}:gateway-admin:1.0:admin
+
+          ========================================
+          NEXT STEPS:
+          1. Test login via https://console.{{ base_domain | default('gostoa.dev') }}
+          2. Verify APIs in Gateway UI
+          3. Configure AWX with awx-automation client secret
+          4. All subsequent API registrations will use OIDC
+          ========================================

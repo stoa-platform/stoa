@@ -1,0 +1,92 @@
+---
+# ArgoCD PostSync Hook - Triggers AWX reconciliation after sync
+#
+# This Job runs automatically after ArgoCD completes a sync operation.
+# It calls the AWX API to launch the webMethods reconciliation playbook.
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: reconcile-webmethods
+  namespace: stoa-system
+  annotations:
+    # ArgoCD hook configuration
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+  labels:
+    app.kubernetes.io/name: reconcile-webmethods
+    app.kubernetes.io/component: gitops-hook
+    app.kubernetes.io/part-of: stoa
+spec:
+  ttlSecondsAfterFinished: 3600  # Cleanup after 1 hour
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: reconcile-webmethods
+    spec:
+      serviceAccountName: argocd-hook-runner
+      restartPolicy: Never
+      containers:
+        - name: awx-trigger
+          image: curlimages/curl:8.5.0
+          env:
+            - name: AWX_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: awx-credentials
+                  key: host
+            - name: AWX_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: awx-credentials
+                  key: token
+            - name: AWX_JOB_TEMPLATE_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: awx-config
+                  key: webmethods-job-template-id
+            - name: STOA_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: stoa-config
+                  key: environment
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+
+              echo "Triggering AWX Job Template for webMethods reconciliation..."
+              echo "   Environment: ${STOA_ENV}"
+              echo "   AWX Host: ${AWX_HOST}"
+              echo "   Job Template ID: ${AWX_JOB_TEMPLATE_ID}"
+
+              # Launch AWX Job
+              RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+                "${AWX_HOST}/api/v2/job_templates/${AWX_JOB_TEMPLATE_ID}/launch/" \
+                -H "Authorization: Bearer ${AWX_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{\"extra_vars\": {\"env\": \"${STOA_ENV}\", \"delete_orphans\": true}}")
+
+              HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+
+              if [ "$HTTP_CODE" -eq 201 ]; then
+                JOB_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+                echo "AWX Job launched successfully!"
+                echo "   Job ID: ${JOB_ID}"
+                echo "   Monitor at: ${AWX_HOST}/#/jobs/playbook/${JOB_ID}"
+              else
+                echo "Failed to launch AWX Job"
+                echo "   HTTP Code: ${HTTP_CODE}"
+                echo "   Response: ${BODY}"
+                exit 1
+              fi
+          resources:
+            limits:
+              cpu: 100m
+              memory: 64Mi
+            requests:
+              cpu: 50m
+              memory: 32Mi

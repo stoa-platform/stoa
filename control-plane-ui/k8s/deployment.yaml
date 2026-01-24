@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane-ui
+  namespace: stoa-system
+  labels:
+    app: control-plane-ui
+    app.kubernetes.io/name: control-plane-ui
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: control-plane-ui
+  template:
+    metadata:
+      labels:
+        app: control-plane-ui
+        app.kubernetes.io/name: control-plane-ui
+    spec:
+      containers:
+        - name: control-plane-ui
+          image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/control-plane-ui:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          env:
+            - name: VITE_BASE_DOMAIN
+              value: "gostoa.dev"
+            - name: VITE_KEYCLOAK_URL
+              value: "https://auth.gostoa.dev"
+            - name: VITE_KEYCLOAK_REALM
+              value: "stoa"
+            - name: VITE_KEYCLOAK_CLIENT_ID
+              value: "control-plane-ui"
+            - name: VITE_API_URL
+              value: "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0"

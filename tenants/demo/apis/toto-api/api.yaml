@@ -1,0 +1,23 @@
+# API Configuration
+id: 905581fc-0ee8-4217-afac-bd3be6809675
+name: toto-api
+display_name: APIM Control-Plane API
+version: 2.0.0
+description: |
+  ## APIM Control-Plane API
+
+  Multi-tenant API Management Control Plane with GitOps integration.
+
+  ### Features
+
+  - **Multi-tenant Management**: Create and manage isolated API tenants
+  - **API Lifecycle**: Full CRUD operations for APIs with versioning
+  - **GitOps Integration**: Automatic sync with GitLab repositories
+  - **Event-Driven Architecture**: Kafka/Redpanda message bus for async operations
+  - **Pipeline Monitoring**: End-to-end tracing of deployments
+  - **RBAC**: Role-based access control via Keycloak
+backend_url: https://demo
+status: draft
+deployments:
+  dev: false
+  staging: false

@@ -1,0 +1,13 @@
+# STOA Platform - dev Environment
+environment: dev
+domain: dev.gostoa.dev
+namespace: stoa-system
+
+gateway:
+  replicas: 1
+  
+keycloak:
+  realm: stoa
+  
+vault:
+  path: secret/stoa/dev

@@ -1,0 +1,35 @@
+# ConsoleApp - webMethods Gateway Application
+# Admin Console for API providers (control-plane-ui)
+#
+# This application uses 'azp' (authorized party) claim from JWT tokens
+# to identify requests from the STOA Console UI.
+apiVersion: gostoa.dev/v1
+kind: GatewayApplication
+metadata:
+  name: ConsoleApp
+  description: "STOA Console - Admin UI for API providers"
+  labels:
+    app.kubernetes.io/component: console
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  # Keycloak client ID - matches JWT 'azp' claim
+  clientId: control-plane-ui
+
+  # Identifier configuration
+  identifierClaim: azp
+
+  # Contact information
+  contactEmail: admin@cab-i.com
+
+  # APIs this application can consume
+  consumingAPIs:
+    - Control-Plane-API
+
+  # OIDC authentication strategy (references KeycloakOIDC alias)
+  authStrategy: OIDC-ControlPlaneApp
+
+  # OAuth2 scopes (for documentation - enforced by backend)
+  scopes:
+    - stoa:read
+    - stoa:write
+    - stoa:admin

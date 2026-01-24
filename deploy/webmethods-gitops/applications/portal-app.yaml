@@ -1,0 +1,34 @@
+# PortalApp - webMethods Gateway Application
+# Developer Portal for API consumers (stoa-portal)
+#
+# This application uses 'azp' (authorized party) claim from JWT tokens
+# to identify requests from the STOA Developer Portal.
+apiVersion: gostoa.dev/v1
+kind: GatewayApplication
+metadata:
+  name: PortalApp
+  description: "STOA Developer Portal - Application for API consumers"
+  labels:
+    app.kubernetes.io/component: portal
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  # Keycloak client ID - matches JWT 'azp' claim
+  clientId: stoa-portal
+
+  # Identifier configuration
+  identifierClaim: azp
+
+  # Contact information
+  contactEmail: admin@cab-i.com
+
+  # APIs this application can consume
+  consumingAPIs:
+    - Control-Plane-API
+
+  # OIDC authentication strategy (references KeycloakOIDC alias)
+  authStrategy: OIDC-ControlPlaneApp
+
+  # OAuth2 scopes (for documentation - enforced by backend)
+  # Portal has read-only access, write operations require admin approval
+  scopes:
+    - stoa:read

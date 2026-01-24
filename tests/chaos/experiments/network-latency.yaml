@@ -1,0 +1,142 @@
+# =============================================================================
+# Chaos Experiment: Network Latency Injection
+# =============================================================================
+# STOA Platform - Phase 9.5 Production Readiness
+# Injects 500ms network latency to test timeout handling
+# Expected: Services handle gracefully with proper timeouts, no cascading failures
+# =============================================================================
+
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: network-latency
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: network
+    chaos-type: network-latency
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: stoa-system
+    applabel: "app.kubernetes.io/name=control-plane-api"
+    appkind: deployment
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-network-latency
+      spec:
+        components:
+          env:
+            # Latency configuration
+            - name: NETWORK_LATENCY
+              value: "500"  # 500ms latency
+            - name: JITTER
+              value: "100"  # 100ms jitter
+            - name: TOTAL_CHAOS_DURATION
+              value: "60"   # 60 seconds
+            - name: PODS_AFFECTED_PERC
+              value: "100"  # All pods
+
+            # Target configuration
+            - name: DESTINATION_IPS
+              value: ""     # Empty = all destinations
+            - name: DESTINATION_HOSTS
+              value: ""
+
+            # Container runtime
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          - name: "api-response-check"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://control-plane-api.stoa-system.svc:8000/v1/health"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+              responseTimeout: 2000  # 2s timeout (should pass with 500ms latency)
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 3
+              interval: 10
+              retry: 3
+              probePollingInterval: 5
+
+          - name: "latency-within-bounds"
+            type: "cmdProbe"
+            cmdProbe/inputs:
+              command: "curl -w '%{time_total}' -o /dev/null -s http://control-plane-api.stoa-system.svc:8000/v1/health | awk '{if ($1 < 2) exit 0; else exit 1}'"
+              source:
+                image: "curlimages/curl:latest"
+              comparator:
+                type: "int"
+                criteria: "=="
+                value: "0"
+            mode: "Edge"
+            runProperties:
+              probeTimeout: 5
+              interval: 5
+              retry: 2
+
+---
+# Network latency targeting MCP Gateway
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: mcp-network-latency
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: chaos-experiment
+    app.kubernetes.io/component: mcp-gateway
+    chaos-type: network-latency
+spec:
+  engineState: "active"
+
+  appinfo:
+    appns: stoa-system
+    applabel: "app.kubernetes.io/name=mcp-gateway"
+    appkind: deployment
+
+  chaosServiceAccount: litmus-admin
+
+  experiments:
+    - name: pod-network-latency
+      spec:
+        components:
+          env:
+            - name: NETWORK_LATENCY
+              value: "500"
+            - name: JITTER
+              value: "100"
+            - name: TOTAL_CHAOS_DURATION
+              value: "60"
+            - name: PODS_AFFECTED_PERC
+              value: "100"
+            - name: CONTAINER_RUNTIME
+              value: "containerd"
+            - name: SOCKET_PATH
+              value: "/run/containerd/containerd.sock"
+
+        probe:
+          - name: "mcp-response-check"
+            type: "httpProbe"
+            httpProbe/inputs:
+              url: "http://mcp-gateway.stoa-system.svc:8001/health"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+              responseTimeout: 2000
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 3
+              interval: 10
+              retry: 3
+              probePollingInterval: 5

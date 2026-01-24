@@ -1,0 +1,73 @@
+---
+# ConfigMap for stoa-control-plane-api
+# Contains non-sensitive configuration variables
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-control-plane-api-config
+  namespace: stoa-system
+  labels:
+    app: stoa-control-plane-api
+    app.kubernetes.io/name: stoa-control-plane-api
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: stoa-platform
+data:
+  # Base domain for URL construction
+  BASE_DOMAIN: "gostoa.dev"
+
+  # API Configuration
+  VERSION: "2.0.0"
+  DEBUG: "false"
+  ENVIRONMENT: "production"
+
+  # Keycloak Authentication
+  KEYCLOAK_URL: "https://auth.gostoa.dev"
+  KEYCLOAK_REALM: "stoa"
+  KEYCLOAK_CLIENT_ID: "control-plane-api"
+  KEYCLOAK_VERIFY_SSL: "true"
+
+  # GitLab Integration
+  GITLAB_URL: "https://gitlab.com"
+  GITLAB_DEFAULT_BRANCH: "main"
+
+  # stoa-catalog: Source of truth for APIs (Portal catalog)
+  GITLAB_CATALOG_PROJECT_ID: "47495759"
+  GITLAB_CATALOG_PROJECT_PATH: "cab6961310/stoa-catalog"
+
+  # stoa-gitops: Infrastructure configs, policies, Ansible playbooks
+  GITLAB_GITOPS_PROJECT_ID: "77260481"
+  GITLAB_GITOPS_PROJECT_PATH: "cab6961310/stoa-gitops"
+
+  # Kafka/Redpanda Event Streaming
+  KAFKA_BOOTSTRAP_SERVERS: "redpanda.stoa-system.svc.cluster.local:9092"
+  KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
+
+  # AWX Automation
+  AWX_URL: "https://awx.gostoa.dev"
+  AWX_VERIFY_SSL: "true"
+
+  # API Gateway
+  GATEWAY_URL: "https://gateway.gostoa.dev"
+  GATEWAY_ADMIN_PROXY_URL: "https://apis.gostoa.dev/gateway/Gateway-Admin-API/1.0"
+  GATEWAY_USE_OIDC_PROXY: "true"
+
+  # MCP Gateway (internal K8s service for reliable proxy)
+  MCP_GATEWAY_URL: "http://mcp-gateway.stoa-system.svc.cluster.local:80"
+
+  # ArgoCD
+  ARGOCD_URL: "https://argocd.gostoa.dev"
+  ARGOCD_VERIFY_SSL: "true"
+  ARGOCD_PLATFORM_APPS: "control-plane-api,control-plane-ui,stoa-portal,mcp-gateway,devportal"
+
+  # CORS
+  CORS_ORIGINS: "https://console.gostoa.dev,https://portal.gostoa.dev,http://localhost:3000,http://localhost:5173"
+
+  # Logging
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  LOG_HTTP_MIDDLEWARE_ENABLED: "true"
+  LOG_MASKING_ENABLED: "true"
+
+  # Database
+  DATABASE_POOL_SIZE: "5"
+  DATABASE_MAX_OVERFLOW: "10"

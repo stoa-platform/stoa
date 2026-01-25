@@ -14,10 +14,11 @@ import uuid
 from typing import Any, AsyncGenerator
 
 import structlog
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse, JSONResponse
 
 from ..middleware.auth import TokenClaims, get_optional_user
+from ..middleware.sse_limiter import sse_limiter, get_client_ip
 from ..services import get_tool_registry
 from ..config import get_settings
 from ..models.mcp import ToolInvocation
@@ -230,6 +231,7 @@ def _get_session_id_from_request(request: Request) -> str | None:
 async def mcp_sse_post_endpoint(
     request: Request,
     user: TokenClaims | None = Depends(get_optional_user),
+    x_forwarded_for: str | None = Header(None, alias="X-Forwarded-For"),
 ) -> Response:
     """
     MCP Streamable HTTP Transport endpoint (POST).
@@ -242,6 +244,19 @@ async def mcp_sse_post_endpoint(
     2. Server responds with SSE stream containing the response
     3. Session ID is returned in Mcp-Session-Id header
     """
+    # CAB-939: Connection limiting (rate check only, no tracking for POST)
+    settings = get_settings()
+    client_ip = get_client_ip(request, x_forwarded_for, settings)
+    tenant = user.tenant_id if user and user.tenant_id else "anonymous"
+
+    allowed, reason = await sse_limiter.check_allowed(client_ip, tenant, settings)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many connections: {reason}",
+            headers={"Retry-After": "60"},
+        )
+
     # Get or create session
     session_id = _get_session_id_from_request(request)
 
@@ -358,6 +373,7 @@ async def mcp_sse_post_endpoint(
 async def mcp_sse_get_endpoint(
     request: Request,
     user: TokenClaims | None = Depends(get_optional_user),
+    x_forwarded_for: str | None = Header(None, alias="X-Forwarded-For"),
 ) -> StreamingResponse:
     """
     MCP Server-Sent Events endpoint (GET).
@@ -367,6 +383,20 @@ async def mcp_sse_get_endpoint(
 
     The client sends messages via POST to /mcp/message with the session ID.
     """
+    # CAB-939: Connection limiting
+    settings = get_settings()
+    client_ip = get_client_ip(request, x_forwarded_for, settings)
+    tenant = user.tenant_id if user and user.tenant_id else "anonymous"
+    conn_id = f"{tenant}:{client_ip}:{uuid.uuid4().hex[:8]}"
+
+    allowed, reason = await sse_limiter.check_allowed(client_ip, tenant, settings)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many connections: {reason}",
+            headers={"Retry-After": "60"},
+        )
+
     # Check for existing session
     session_id = _get_session_id_from_request(request)
 
@@ -386,35 +416,36 @@ async def mcp_sse_get_endpoint(
 
     async def event_stream() -> AsyncGenerator[str, None]:
         """Generate SSE events."""
-        # Send endpoint event first (per MCP spec)
-        # This tells the client where to POST messages
-        settings = get_settings()
-        endpoint_url = f"https://mcp.{settings.base_domain}/mcp/sse"
-        yield f"event: endpoint\ndata: {endpoint_url}\n\n"
+        # CAB-939: Track connection for rate limiting
+        async with sse_limiter.track(conn_id, client_ip, tenant):
+            # Send endpoint event first (per MCP spec)
+            # This tells the client where to POST messages
+            endpoint_url = f"https://mcp.{settings.base_domain}/mcp/sse"
+            yield f"event: endpoint\ndata: {endpoint_url}\n\n"
 
-        # Keep connection alive
-        try:
-            while True:
-                # Check if client disconnected
-                if await request.is_disconnected():
-                    break
+            # Keep connection alive
+            try:
+                while True:
+                    # Check if client disconnected
+                    if await request.is_disconnected():
+                        break
 
-                # Check for queued messages to send
-                try:
-                    message = session.message_queue.get_nowait()
-                    yield f"event: message\ndata: {json.dumps(message)}\n\n"
-                except asyncio.QueueEmpty:
-                    pass
+                    # Check for queued messages to send
+                    try:
+                        message = session.message_queue.get_nowait()
+                        yield f"event: message\ndata: {json.dumps(message)}\n\n"
+                    except asyncio.QueueEmpty:
+                        pass
 
-                # Send keepalive ping every 30 seconds
-                yield ": keepalive\n\n"
+                    # Send keepalive ping every 30 seconds
+                    yield ": keepalive\n\n"
 
-                # Wait before next iteration
-                await asyncio.sleep(30)
-        finally:
-            # Cleanup session
-            _sessions.pop(session_id, None)
-            logger.info("MCP SSE session ended", session_id=session_id)
+                    # Wait before next iteration
+                    await asyncio.sleep(30)
+            finally:
+                # Cleanup session
+                _sessions.pop(session_id, None)
+                logger.info("MCP SSE session ended", session_id=session_id)
 
     return StreamingResponse(
         event_stream(),

@@ -1,5 +1,8 @@
 # STOA Platform - UI RBAC + GitOps + Kafka
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![DCO](https://img.shields.io/badge/DCO-1.1-green.svg)](CLA.md)
+
 Multi-tenant API Management Platform with Control-Plane UI, GitOps and Event-Driven Architecture.
 
 ## Related Repositories

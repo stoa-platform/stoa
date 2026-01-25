@@ -1,0 +1,21 @@
+name: DCO Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  dco:
+    name: Developer Certificate of Origin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required to access full commit history
+
+      - name: Check DCO sign-off
+        uses: tisonkun/actions-dco@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,320 @@
+{
+  "realm": "stoa",
+  "enabled": true,
+  "displayName": "STOA Platform",
+  "displayNameHtml": "<div class=\"kc-logo-text\"><span>STOA Platform</span></div>",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 3600,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "cpi-admin",
+        "description": "Full platform administrator - can manage all tenants and system settings"
+      },
+      {
+        "name": "tenant-admin",
+        "description": "Tenant administrator - can manage their own tenant's APIs and users"
+      },
+      {
+        "name": "devops",
+        "description": "DevOps engineer - can deploy and promote APIs"
+      },
+      {
+        "name": "viewer",
+        "description": "Read-only access to tenant resources"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "control-plane-api",
+      "name": "STOA Control Plane API",
+      "description": "Backend API Service",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "api-dev-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:8000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8000"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ]
+    },
+    {
+      "clientId": "control-plane-ui",
+      "name": "STOA Console",
+      "description": "Admin Console for API Providers",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:5173"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "protocolMappers": [
+        {
+          "name": "control-plane-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "control-plane-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "stoa-portal",
+      "name": "STOA Developer Portal",
+      "description": "Developer Portal for API Consumers",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:3001/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3001"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "protocolMappers": [
+        {
+          "name": "control-plane-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "control-plane-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "stoa-mcp-gateway",
+      "name": "STOA MCP Gateway",
+      "description": "MCP Gateway Service",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "mcp-dev-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:8081/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8081"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "halliday",
+      "email": "halliday@gregarious.games",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "James",
+      "lastName": "Halliday",
+      "attributes": {
+        "tenant": ["gregarious-games"],
+        "avatar": ["wizard"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "readyplayerone",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "cpi-admin"
+      ]
+    },
+    {
+      "username": "morrow",
+      "email": "morrow@gregarious.games",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Ogden",
+      "lastName": "Morrow",
+      "attributes": {
+        "tenant": ["gregarious-games"],
+        "avatar": ["og"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "ogdensmcguffin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "cpi-admin"
+      ]
+    },
+    {
+      "username": "parzival",
+      "email": "wade@gunters.oasis",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Wade",
+      "lastName": "Watts",
+      "attributes": {
+        "tenant": ["oasis-gunters"],
+        "avatar": ["parzival"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "copperkeystart",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "tenant-admin"
+      ]
+    },
+    {
+      "username": "art3mis",
+      "email": "art3mis@gunters.oasis",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Samantha",
+      "lastName": "Cook",
+      "attributes": {
+        "tenant": ["oasis-gunters"],
+        "avatar": ["art3mis"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "samantha2045",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "devops"
+      ]
+    },
+    {
+      "username": "aech",
+      "email": "aech@gunters.oasis",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Helen",
+      "lastName": "Harris",
+      "attributes": {
+        "tenant": ["oasis-gunters"],
+        "avatar": ["aech"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "helen2045",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "viewer"
+      ]
+    },
+    {
+      "username": "sorrento",
+      "email": "sorrento@ioi.corp",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Nolan",
+      "lastName": "Sorrento",
+      "attributes": {
+        "tenant": ["ioi-sixers"],
+        "avatar": ["corporate"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "ioi101",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "tenant-admin"
+      ]
+    },
+    {
+      "username": "sixer42",
+      "email": "sixer42@ioi.corp",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Sixer",
+      "lastName": "#42",
+      "attributes": {
+        "tenant": ["ioi-sixers"],
+        "avatar": ["sixer"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "loyalty2045",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "viewer"
+      ]
+    }
+  ]
+}

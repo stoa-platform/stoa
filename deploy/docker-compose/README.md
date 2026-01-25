@@ -27,6 +27,17 @@ docker compose logs -f
 
 Once you see `stoa-api` reporting healthy, the platform is ready!
 
+## Performance
+
+| Metric | Result |
+|--------|--------|
+| **Startup time** | ~45 seconds |
+| **RAM usage** | ~1.5GB (fits on 8GB machines) |
+| **First API call** | < 1 minute from clone |
+| **Image pull** | ~500MB total (multi-arch) |
+
+*Tested with pre-built GHCR images on Docker Desktop 4.x*
+
 ## Access the Platform
 
 | Service | URL | Credentials |

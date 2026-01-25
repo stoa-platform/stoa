@@ -1,18 +1,21 @@
 name: UAC Lint
 
 on:
+  workflow_dispatch:  # Allow manual trigger
   push:
     paths:
       - 'stoa-catalog/tenants/**/uac.yaml'
       - 'stoa-catalog/_templates/*.yaml'
       - 'stoa-catalog/schemas/*.json'
       - 'stoa-catalog/scripts/validate-uac.py'
+      - '.github/workflows/uac-lint.yml'
   pull_request:
     paths:
       - 'stoa-catalog/tenants/**/uac.yaml'
       - 'stoa-catalog/_templates/*.yaml'
       - 'stoa-catalog/schemas/*.json'
       - 'stoa-catalog/scripts/validate-uac.py'
+      - '.github/workflows/uac-lint.yml'
 
 jobs:
   validate:

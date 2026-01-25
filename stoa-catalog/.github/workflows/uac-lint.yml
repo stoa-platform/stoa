@@ -1,0 +1,110 @@
+name: UAC Lint
+
+on:
+  push:
+    paths:
+      - 'stoa-catalog/tenants/**/uac.yaml'
+      - 'stoa-catalog/_templates/*.yaml'
+      - 'stoa-catalog/schemas/*.json'
+      - 'stoa-catalog/scripts/validate-uac.py'
+  pull_request:
+    paths:
+      - 'stoa-catalog/tenants/**/uac.yaml'
+      - 'stoa-catalog/_templates/*.yaml'
+      - 'stoa-catalog/schemas/*.json'
+      - 'stoa-catalog/scripts/validate-uac.py'
+
+jobs:
+  validate:
+    name: Validate UAC Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml jsonschema
+
+      - name: Validate UAC templates
+        run: |
+          echo "=== Validating UAC templates ==="
+          for f in stoa-catalog/_templates/*.yaml; do
+            if [ -f "$f" ]; then
+              echo "Checking: $f"
+              python stoa-catalog/scripts/validate-uac.py "$f"
+            fi
+          done
+
+      - name: Validate tenant UAC files
+        run: |
+          echo "=== Validating tenant UAC files ==="
+          shopt -s nullglob
+          files=(stoa-catalog/tenants/*/uac.yaml)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No tenant UAC files found (this is OK for new repos)"
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            echo "Checking: $f"
+            python stoa-catalog/scripts/validate-uac.py "$f"
+          done
+
+      - name: Validate schema is valid JSON
+        run: |
+          echo "=== Validating schema file ==="
+          python -c "import json; json.load(open('stoa-catalog/schemas/uac.schema.json'))"
+          echo "✅ Schema is valid JSON"
+
+  schema-test:
+    name: Schema Regression Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml jsonschema
+
+      - name: Test valid files pass
+        run: |
+          echo "=== Testing that valid templates pass ==="
+          python stoa-catalog/scripts/validate-uac.py \
+            stoa-catalog/_templates/starter.yaml \
+            stoa-catalog/_templates/enterprise.yaml
+          echo "✅ All templates are valid"
+
+      - name: Test invalid file fails
+        run: |
+          echo "=== Testing that invalid file fails ==="
+          # Create a minimal invalid UAC (missing required fields)
+          cat > /tmp/invalid-uac.yaml << 'EOF'
+          apiVersion: stoa.io/v1
+          kind: UniversalAPIContract
+          metadata:
+            name: "test"
+            # missing tier
+          spec:
+            classifications: {}
+            # missing required sections
+          EOF
+
+          if python stoa-catalog/scripts/validate-uac.py /tmp/invalid-uac.yaml 2>/dev/null; then
+            echo "❌ FAIL: Invalid file should have failed validation"
+            exit 1
+          else
+            echo "✅ Invalid file correctly rejected"
+          fi

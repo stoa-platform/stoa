@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gostoa.dev/schemas/uac.schema.json",
+  "title": "Universal API Contract (UAC)",
+  "description": "Schema for STOA Platform Universal API Contract files",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "enum": ["stoa.io/v1"],
+      "description": "API version for the UAC"
+    },
+    "kind": {
+      "type": "string",
+      "const": "UniversalAPIContract",
+      "description": "Resource kind"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "tier"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Tenant name"
+        },
+        "tier": {
+          "type": "string",
+          "enum": ["starter", "enterprise"],
+          "description": "Subscription tier"
+        },
+        "created": {
+          "type": "string",
+          "description": "Creation date"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Additional labels"
+        }
+      },
+      "additionalProperties": true
+    },
+    "spec": {
+      "type": "object",
+      "required": [
+        "classifications",
+        "security",
+        "rateLimits",
+        "quotas",
+        "observability",
+        "sla",
+        "features",
+        "networking"
+      ],
+      "properties": {
+        "classifications": {
+          "type": "object",
+          "description": "API classification levels (H, VH, VVH)",
+          "properties": {
+            "H": { "$ref": "#/$defs/classification" },
+            "VH": { "$ref": "#/$defs/classification" },
+            "VVH": { "$ref": "#/$defs/classification" }
+          },
+          "additionalProperties": true
+        },
+        "security": {
+          "type": "object",
+          "description": "Security policies",
+          "properties": {
+            "authentication": {
+              "type": "object",
+              "properties": {
+                "required": { "type": "boolean" },
+                "methods": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": ["oauth2", "api_key", "mtls"]
+                  }
+                }
+              }
+            },
+            "authorization": {
+              "type": "object",
+              "properties": {
+                "rbac_enabled": { "type": "boolean" }
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "rateLimits": {
+          "type": "object",
+          "description": "Rate limiting configuration",
+          "properties": {
+            "global": { "type": "object" },
+            "per_api": { "type": "object" },
+            "per_consumer": { "type": "object" }
+          },
+          "additionalProperties": true
+        },
+        "quotas": {
+          "type": "object",
+          "description": "Usage quotas",
+          "properties": {
+            "monthly_requests": {
+              "type": "integer",
+              "description": "Monthly request limit (-1 for unlimited)"
+            },
+            "max_apis": {
+              "type": "integer",
+              "description": "Maximum APIs (-1 for unlimited)"
+            }
+          },
+          "additionalProperties": true
+        },
+        "observability": {
+          "type": "object",
+          "description": "Observability settings",
+          "properties": {
+            "logging": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "enum": ["debug", "info", "warn", "error"]
+                },
+                "retention_days": { "type": "integer" }
+              }
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" }
+              }
+            },
+            "tracing": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "sampling_rate": { "type": "number" }
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "sla": {
+          "type": "object",
+          "description": "Service Level Agreement",
+          "properties": {
+            "availability": {
+              "type": "number",
+              "description": "Uptime percentage (e.g., 99.95)"
+            },
+            "support": { "type": "object" }
+          },
+          "additionalProperties": true
+        },
+        "features": {
+          "type": "object",
+          "description": "Feature flags",
+          "properties": {
+            "custom_domains": { "type": "boolean" },
+            "developer_portal": { "type": "boolean" },
+            "mcp_gateway_access": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        },
+        "networking": {
+          "type": "object",
+          "description": "Networking configuration",
+          "properties": {
+            "cors": { "type": "object" },
+            "keepalive": { "type": "object" }
+          },
+          "additionalProperties": true
+        },
+        "compliance": {
+          "type": "object",
+          "description": "Compliance settings (optional, enterprise only)",
+          "properties": {
+            "gdpr": { "type": "object" },
+            "sox": { "type": "object" },
+            "pci_dss": { "type": "object" },
+            "hipaa": { "type": "object" },
+            "iso_27001": { "type": "object" },
+            "soc2": { "type": "object" }
+          },
+          "additionalProperties": true
+        },
+        "disaster_recovery": {
+          "type": "object",
+          "description": "Disaster recovery settings (optional, enterprise only)",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "classification": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "rate_limit": { "type": "integer" },
+        "burst": { "type": "integer" },
+        "timeout": { "type": "string" },
+        "retry_policy": { "type": "object" },
+        "circuit_breaker": { "type": "object" },
+        "priority": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

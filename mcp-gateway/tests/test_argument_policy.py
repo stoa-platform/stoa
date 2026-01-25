@@ -889,3 +889,235 @@ class TestPolicyPriority:
             assert result.policy_name == "high-priority"
 
             await engine.shutdown()
+
+
+# =============================================================================
+# CAB-875: Enhanced Marchemalo Tests
+# =============================================================================
+
+
+class TestMarchemaloEnhanced:
+    """Tests for CAB-875 Marchemalo enhancements."""
+
+    @pytest.fixture
+    async def engine_with_full_marchemalo(self, temp_policy_dir, mock_settings):
+        """Engine with all Marchemalo policies."""
+        policy_yaml = {
+            "policies": [
+                {
+                    "name": "marchemalo-cycle-required",
+                    "description": "P1/P2 issues must be in a cycle",
+                    "tool": "Linear:create_issue",
+                    "enabled": True,
+                    "priority": 100,
+                    "rules": [
+                        {
+                            "condition": {
+                                "all": [
+                                    {"field": "priority", "operator": "in", "value": [1, 2]},
+                                    {"field": "cycle", "operator": "is_null"},
+                                ]
+                            },
+                            "action": "deny",
+                            "message": "Marchemalo: Les tickets Urgent/High doivent etre dans un cycle",
+                        }
+                    ],
+                },
+                {
+                    "name": "marchemalo-p1-requires-estimate",
+                    "description": "P1 tickets should have a time estimate",
+                    "tool": "Linear:create_issue",
+                    "enabled": True,
+                    "priority": 90,
+                    "rules": [
+                        {
+                            "condition": {
+                                "all": [
+                                    {"field": "priority", "operator": "eq", "value": 1},
+                                    {"field": "estimate", "operator": "is_null"},
+                                ]
+                            },
+                            "action": "warn",
+                            "message": "Marchemalo: Les tickets P1 devraient avoir une estimation",
+                        }
+                    ],
+                },
+                {
+                    "name": "marchemalo-title-min-length",
+                    "description": "Issue titles must be descriptive",
+                    "tool": "Linear:create_issue",
+                    "enabled": True,
+                    "priority": 80,
+                    "rules": [
+                        {
+                            "condition": {
+                                "field": "title",
+                                "operator": "regex",
+                                "value": "^.{0,9}$",
+                            },
+                            "action": "deny",
+                            "message": "Marchemalo: Le titre doit contenir au moins 10 caracteres",
+                        }
+                    ],
+                },
+            ]
+        }
+        with open(temp_policy_dir / "marchemalo.yaml", "w") as f:
+            yaml.dump(policy_yaml, f)
+
+        mock_settings.argument_policy_path = str(temp_policy_dir)
+
+        with patch("src.policy.argument_engine.get_settings", return_value=mock_settings):
+            engine = ArgumentPolicyEngine(policy_path=str(temp_policy_dir))
+            await engine.startup()
+            yield engine
+            await engine.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_p1_without_estimate_warns(self, engine_with_full_marchemalo):
+        """P1 issue without estimate should warn but allow (cycle present)."""
+        result = engine_with_full_marchemalo.evaluate(
+            "Linear:create_issue",
+            {"title": "Critical production bug", "priority": 1, "cycle": "sprint-42"},
+        )
+        # Cycle is present, so cycle-required allows. But estimate missing triggers warn.
+        # Warn action continues evaluation, so this is allowed.
+        assert result.allowed is True
+
+    @pytest.mark.asyncio
+    async def test_p1_with_estimate_no_warn(self, engine_with_full_marchemalo):
+        """P1 issue with estimate should not warn."""
+        result = engine_with_full_marchemalo.evaluate(
+            "Linear:create_issue",
+            {"title": "Critical production bug", "priority": 1, "cycle": "sprint-42", "estimate": 4},
+        )
+        assert result.allowed is True
+        assert result.policy_name is None  # No matching rule
+
+    @pytest.mark.asyncio
+    async def test_short_title_denied(self, engine_with_full_marchemalo):
+        """Short title should be denied."""
+        result = engine_with_full_marchemalo.evaluate(
+            "Linear:create_issue",
+            {"title": "Bug", "priority": 3, "cycle": None},  # Only 3 chars
+        )
+        assert result.allowed is False
+        assert result.policy_name == "marchemalo-title-min-length"
+        assert "10 caracteres" in result.message
+
+    @pytest.mark.asyncio
+    async def test_exact_10_char_title_allowed(self, engine_with_full_marchemalo):
+        """Title with exactly 10 characters should be allowed."""
+        result = engine_with_full_marchemalo.evaluate(
+            "Linear:create_issue",
+            {"title": "1234567890", "priority": 3, "cycle": None},
+        )
+        assert result.allowed is True
+
+    @pytest.mark.asyncio
+    async def test_long_title_allowed(self, engine_with_full_marchemalo):
+        """Long descriptive title should be allowed."""
+        result = engine_with_full_marchemalo.evaluate(
+            "Linear:create_issue",
+            {"title": "Implement user authentication with OAuth2", "priority": 3},
+        )
+        assert result.allowed is True
+
+
+# =============================================================================
+# CAB-875: Audit Policy Tests
+# =============================================================================
+
+
+class TestAuditPolicies:
+    """Tests for CAB-875 audit policies."""
+
+    @pytest.fixture
+    async def engine_with_audit(self, temp_policy_dir, mock_settings):
+        """Engine with audit policies."""
+        policy_yaml = {
+            "policies": [
+                {
+                    "name": "audit-issue-deletion",
+                    "description": "Audit trail for issue deletions",
+                    "tool": "*:delete_issue",
+                    "enabled": True,
+                    "priority": 200,
+                    "rules": [
+                        {
+                            "condition": {"field": "issue_id", "operator": "not_null"},
+                            "action": "warn",
+                            "message": "AUDIT: Issue deletion operation detected",
+                        }
+                    ],
+                },
+                {
+                    "name": "audit-user-changes",
+                    "description": "Audit trail for user management",
+                    "tool": "*:*_user",
+                    "enabled": True,
+                    "priority": 200,
+                    "rules": [
+                        {
+                            "condition": {
+                                "any": [
+                                    {"field": "user_id", "operator": "not_null"},
+                                    {"field": "email", "operator": "not_null"},
+                                ]
+                            },
+                            "action": "warn",
+                            "message": "AUDIT: User management operation detected",
+                        }
+                    ],
+                },
+            ]
+        }
+        with open(temp_policy_dir / "audit.yaml", "w") as f:
+            yaml.dump(policy_yaml, f)
+
+        mock_settings.argument_policy_path = str(temp_policy_dir)
+
+        with patch("src.policy.argument_engine.get_settings", return_value=mock_settings):
+            engine = ArgumentPolicyEngine(policy_path=str(temp_policy_dir))
+            await engine.startup()
+            yield engine
+            await engine.shutdown()
+
+    @pytest.mark.asyncio
+    async def test_delete_issue_warns(self, engine_with_audit, caplog):
+        """Issue deletion should trigger audit warning (logged, not in result)."""
+        import logging
+        caplog.set_level(logging.WARNING)
+
+        result = engine_with_audit.evaluate(
+            "Linear:delete_issue",
+            {"issue_id": "ISSUE-123"},
+        )
+        # Warn allows and logs but doesn't populate result (continues evaluation)
+        assert result.allowed is True
+        # Check that warning was logged
+        assert any("AUDIT" in record.message or "audit-issue-deletion" in str(record) for record in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_user_management_warns(self, engine_with_audit, caplog):
+        """User management should trigger audit warning (logged, not in result)."""
+        import logging
+        caplog.set_level(logging.WARNING)
+
+        result = engine_with_audit.evaluate(
+            "Keycloak:create_user",
+            {"email": "user@example.com", "username": "testuser"},
+        )
+        assert result.allowed is True
+        # Check that warning was logged
+        assert any("AUDIT" in record.message or "audit-user-changes" in str(record) for record in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_unrelated_tool_no_audit(self, engine_with_audit):
+        """Unrelated tool should not trigger audit."""
+        result = engine_with_audit.evaluate(
+            "Linear:create_issue",
+            {"title": "A normal issue creation"},
+        )
+        assert result.allowed is True
+        assert result.policy_name is None  # No matching audit policy

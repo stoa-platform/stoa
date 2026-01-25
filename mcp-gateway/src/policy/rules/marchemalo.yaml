@@ -25,3 +25,34 @@ policies:
               operator: "is_null"
         action: "deny"
         message: "Marchemalo: Les tickets Urgent/High doivent etre dans un cycle"
+
+  # CAB-875: P1 issues should have a time estimate (warning, not blocking)
+  - name: marchemalo-p1-requires-estimate
+    description: "P1 tickets should have a time estimate for capacity planning"
+    tool: "Linear:create_issue"
+    enabled: true
+    priority: 90
+    rules:
+      - condition:
+          all:
+            - field: "priority"
+              operator: "eq"
+              value: 1
+            - field: "estimate"
+              operator: "is_null"
+        action: "warn"
+        message: "Marchemalo: Les tickets P1 devraient avoir une estimation de temps"
+
+  # CAB-875: Issue titles must be descriptive (min 10 characters)
+  - name: marchemalo-title-min-length
+    description: "Issue titles must be descriptive (min 10 characters)"
+    tool: "Linear:create_issue"
+    enabled: true
+    priority: 80
+    rules:
+      - condition:
+          field: "title"
+          operator: "regex"
+          value: "^.{0,9}$"
+        action: "deny"
+        message: "Marchemalo: Le titre doit contenir au moins 10 caracteres"

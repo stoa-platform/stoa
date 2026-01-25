@@ -1,0 +1,49 @@
+# Audit Policy Rules for CAB-875
+# These policies log audit events for compliance and security monitoring
+#
+# Audit policies use "warn" action to log events while still allowing the operation.
+# This provides an audit trail without blocking legitimate use cases.
+
+policies:
+  # Log all issue deletion operations
+  - name: audit-issue-deletion
+    description: "Audit trail for all issue deletion operations"
+    tool: "*:delete_issue"
+    enabled: true
+    priority: 200
+    rules:
+      - condition:
+          field: "issue_id"
+          operator: "not_null"
+        action: "warn"
+        message: "AUDIT: Issue deletion operation detected"
+
+  # Log user management operations
+  - name: audit-user-changes
+    description: "Audit trail for user management operations"
+    tool: "*:*_user"
+    enabled: true
+    priority: 200
+    rules:
+      - condition:
+          any:
+            - field: "user_id"
+              operator: "not_null"
+            - field: "email"
+              operator: "not_null"
+        action: "warn"
+        message: "AUDIT: User management operation detected"
+
+  # Warn on bulk creation (disabled by default, enable for high-security environments)
+  - name: warn-bulk-creation
+    description: "Warning for high-volume bulk operations"
+    tool: "*:bulk_create_*"
+    enabled: false
+    priority: 50
+    rules:
+      - condition:
+          field: "items"
+          operator: "gt"
+          value: 100
+        action: "warn"
+        message: "AUDIT: Bulk creation with >100 items detected"

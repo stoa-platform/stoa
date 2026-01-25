@@ -1,0 +1,745 @@
+# =============================================================================
+# STOA Platform - Universal API Contract (UAC) Template
+# Tier: ENTERPRISE
+# For: Large accounts (Engie, LVMH, BdF, CAC40 companies)
+# =============================================================================
+# This template defines the premium contract for enterprise-tier tenants.
+# Includes all features, highest limits, and dedicated support.
+# Replace all {{PLACEHOLDER}} values before applying.
+# =============================================================================
+
+apiVersion: stoa.io/v1
+kind: UniversalAPIContract
+metadata:
+  name: "{{TENANT_NAME}}"
+  tier: enterprise
+  created: "{{DATE}}"
+  labels:
+    tenant-id: "{{TENANT_ID}}"
+    admin-email: "{{ADMIN_EMAIL}}"
+    keycloak-realm: "{{KEYCLOAK_REALM}}"
+    # Enterprise-specific labels
+    account-manager: "{{ACCOUNT_MANAGER}}"
+    contract-id: "{{CONTRACT_ID}}"
+
+spec:
+  # ===========================================================================
+  # 1. API CLASSIFICATIONS
+  # ===========================================================================
+  # Define rate limits and policies based on API criticality level.
+  # Enterprise tier has high-capacity limits for production-grade workloads.
+  # ---------------------------------------------------------------------------
+  classifications:
+
+    H:  # High volume APIs (public endpoints, read-heavy operations)
+      description: "High-throughput APIs for public consumption"
+      rate_limit: 50000        # 50K requests per hour per consumer
+      burst: 5000              # high concurrency for peak loads
+      timeout: 30s             # standard timeout
+      retry_policy:
+        max_retries: 5         # more retries for resilience
+        backoff: exponential
+        initial_delay: 50ms    # faster initial retry
+        max_delay: 10s
+        jitter: true           # add randomization to prevent thundering herd
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 10  # higher threshold for high-volume
+        reset_timeout: 30s
+        half_open_requests: 5  # requests to test circuit
+      # Priority queue for fair scheduling
+      priority: normal
+      # Connection pooling
+      connection_pool:
+        max_connections: 1000
+        idle_timeout: 120s
+
+    VH:  # Very High criticality (business-critical operations)
+      description: "Business-critical APIs requiring high reliability and SLA"
+      rate_limit: 5000         # 5K requests/hour - balanced for criticality
+      burst: 500               # controlled burst capacity
+      timeout: 120s            # extended timeout for complex transactions
+      retry_policy:
+        max_retries: 3
+        backoff: exponential
+        initial_delay: 100ms
+        max_delay: 30s
+        retry_on:              # specific retry conditions
+          - 502
+          - 503
+          - 504
+          - connection_error
+          - timeout
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 5
+        reset_timeout: 60s
+        half_open_requests: 3
+      # Priority queue
+      priority: high
+      # Dedicated connection pool
+      connection_pool:
+        max_connections: 500
+        idle_timeout: 300s
+      # Request validation
+      strict_validation: true
+
+    VVH:  # Very Very High criticality (mission-critical transactions)
+      description: "Mission-critical APIs: payments, compliance, core business"
+      enabled: true            # Full VVH support in Enterprise
+      rate_limit: 1000         # 1K requests/hour - quality over quantity
+      burst: 100               # controlled concurrency
+      timeout: 300s            # 5 minutes for critical operations
+      retry_policy:
+        max_retries: 2         # limited retries, manual intervention preferred
+        backoff: exponential
+        initial_delay: 500ms
+        max_delay: 60s
+        retry_on:
+          - 503
+          - 504
+          - connection_error
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 3   # sensitive threshold
+        reset_timeout: 120s
+        half_open_requests: 1
+        notify_on_open: true   # alert when circuit opens
+      # Highest priority
+      priority: critical
+      # Dedicated resources
+      connection_pool:
+        max_connections: 100
+        idle_timeout: 600s
+      # Enhanced guarantees
+      strict_validation: true
+      idempotency_required: true
+      audit_logging: true
+      # SLA: 99.99% for VVH APIs
+      sla_override:
+        availability: 99.99
+
+  # ===========================================================================
+  # 2. SECURITY POLICIES
+  # ===========================================================================
+  # Comprehensive security configuration for enterprise requirements.
+  # Includes mTLS, advanced RBAC, and compliance features.
+  # ---------------------------------------------------------------------------
+  security:
+
+    authentication:
+      required: true
+      methods:
+        - oauth2               # Primary: OAuth2/OIDC via Keycloak
+        - api_key              # Secondary: API keys with enhanced security
+        - mtls                 # Enterprise: Mutual TLS for service-to-service
+      oauth2:
+        issuer: "https://auth.gostoa.dev/realms/{{KEYCLOAK_REALM}}"
+        audience: "{{TENANT_ID}}"
+        token_expiry: 1800     # 30 minutes for tighter security
+        refresh_enabled: true
+        refresh_expiry: 86400  # 24 hours refresh token
+        scopes_claim: "scope"
+        # Enterprise: Multiple identity providers
+        additional_issuers:
+          - "{{ENTERPRISE_IDP_URL}}"  # Customer's IdP (optional)
+      api_key:
+        header_name: "X-API-Key"
+        rotation_days: 30      # Stricter rotation for enterprise
+        max_keys_per_consumer: 10
+        # Enterprise: Key restrictions
+        restrictions:
+          ip_binding: true     # Keys can be bound to IPs
+          expiry_required: true
+      mtls:
+        enabled: true
+        ca_bundle: "{{MTLS_CA_BUNDLE}}"  # Customer CA certificates
+        verify_client: true
+        allow_expired: false
+        # Client certificate attributes for authorization
+        subject_mapping:
+          cn: consumer_id
+          ou: department
+
+    authorization:
+      rbac_enabled: true
+      default_scopes:
+        - read
+        - write
+        - admin                # Admin scope for enterprise
+      # Enterprise: Fine-grained permissions
+      abac_enabled: true       # Attribute-Based Access Control
+      policy_engine: opa       # OPA for complex policies
+      custom_scopes:
+        - "{{TENANT_NAME}}:read"
+        - "{{TENANT_NAME}}:write"
+        - "{{TENANT_NAME}}:admin"
+        - "{{TENANT_NAME}}:audit"
+
+    # Enterprise: IP allowlisting with CIDR support
+    ip_allowlist:
+      enabled: true
+      mode: audit              # audit|enforce - start with audit
+      cidrs: []                # Add customer IP ranges
+      # OPTIONAL: Geo-blocking
+      geo_blocking:
+        enabled: false
+        blocked_countries: []
+
+    # Request validation
+    request_validation:
+      enabled: true
+      max_body_size: 50mb      # Larger payloads for enterprise
+      content_types:
+        - application/json
+        - application/xml
+        - multipart/form-data
+        - application/octet-stream
+      # Enterprise: Schema validation
+      schema_validation:
+        enabled: true
+        strict_mode: true
+
+    # Enterprise: WAF configuration
+    waf:
+      enabled: true
+      mode: enforce            # audit|enforce
+      rules:
+        - owasp_crs            # OWASP Core Rule Set
+        - sql_injection
+        - xss
+        - path_traversal
+      custom_rules: []         # Add custom WAF rules
+
+    # Enterprise: Secrets management
+    secrets:
+      provider: vault
+      path: "secret/data/tenants/{{TENANT_ID}}"
+      rotation_enabled: true
+
+  # ===========================================================================
+  # 3. RATE LIMITING
+  # ===========================================================================
+  # High-capacity rate limits for enterprise workloads.
+  # Supports millions of requests with fine-grained control.
+  # ---------------------------------------------------------------------------
+  rateLimits:
+
+    global:  # Tenant-wide limits
+      requests_per_minute: 20000
+      requests_per_hour: 500000
+      requests_per_day: 1000000    # 1M requests/day
+      # Enterprise: Burst allowance
+      burst_allowance: 2.0         # 2x normal rate for bursts
+
+    per_api:
+      default: 10000               # 10K requests/hour per API
+      # Per-API overrides defined in API specs
+
+    per_consumer:
+      default: 5000                # 5K requests/hour per consumer
+      max_consumers: -1            # Unlimited consumers
+
+    # Rate limit response headers
+    headers:
+      enabled: true
+      include_remaining: true
+      include_reset: true
+      include_limit: true          # X-RateLimit-Limit header
+      include_policy: true         # X-RateLimit-Policy header
+
+    # Enterprise: Dynamic rate limiting
+    dynamic:
+      enabled: true
+      auto_scaling: true           # Scale limits based on load
+      fair_share: true             # Prevent single consumer monopoly
+
+    # Enterprise: Rate limit tiers per consumer
+    consumer_tiers:
+      bronze:
+        multiplier: 1.0
+      silver:
+        multiplier: 2.0
+      gold:
+        multiplier: 5.0
+      platinum:
+        multiplier: 10.0
+
+  # ===========================================================================
+  # 4. QUOTAS
+  # ===========================================================================
+  # Enterprise quotas - effectively unlimited with monitoring.
+  # ---------------------------------------------------------------------------
+  quotas:
+
+    monthly_requests: -1           # Unlimited (-1)
+    monthly_bandwidth_gb: 1000     # 1 TB data transfer/month
+
+    # Resource limits
+    max_apis: -1                   # Unlimited APIs
+    max_subscriptions: -1          # Unlimited subscriptions
+    max_consumers: -1              # Unlimited consumers
+    max_environments: -1           # Unlimited (dev, staging, prod, dr, etc.)
+
+    # Storage quotas
+    log_storage_gb: 100            # 100 GB log storage
+
+    # Usage tracking (even with unlimited, track for billing/reporting)
+    tracking:
+      enabled: true
+      granularity: hourly
+      export_enabled: true
+
+    # Alerting thresholds (for anomaly detection, not quota enforcement)
+    alerts:
+      anomaly_detection: true
+      baseline_window: 7d          # 7-day baseline for anomaly detection
+      deviation_threshold: 3.0     # Alert on 3x standard deviation
+      notify_channels:
+        - email: "{{ADMIN_EMAIL}}"
+        - slack: "{{SLACK_WEBHOOK}}"
+        - pagerduty: "{{PAGERDUTY_KEY}}"
+
+  # ===========================================================================
+  # 5. OBSERVABILITY
+  # ===========================================================================
+  # Full observability stack with long retention and advanced features.
+  # ---------------------------------------------------------------------------
+  observability:
+
+    logging:
+      level: debug                 # Full debug logging available
+      retention_days: 90           # 90 days log retention
+      format: json
+      # Extended logging
+      include_request_body: true   # Log request bodies (sanitized)
+      include_response_body: true  # Log response bodies (sanitized)
+      # PII handling
+      pii_masking: true
+      pii_fields:
+        - email
+        - phone
+        - ssn
+        - credit_card
+      # Enterprise: Log forwarding
+      forwarding:
+        enabled: true
+        destinations:
+          - type: splunk
+            endpoint: "{{SPLUNK_HEC_URL}}"
+            token: "{{SPLUNK_TOKEN}}"
+          # OPTIONAL: Additional destinations
+          # - type: datadog
+          #   api_key: "{{DATADOG_API_KEY}}"
+
+    metrics:
+      enabled: true
+      granularity: 1m              # 1-minute granularity
+      retention_days: 365          # 1 year metrics retention
+      # Full metrics suite
+      custom_metrics: true
+      business_metrics: true       # Custom business KPIs
+      # Enterprise: Metrics export
+      export:
+        enabled: true
+        format: prometheus
+        endpoint: "/metrics"
+      # Real-time dashboards
+      dashboards:
+        enabled: true
+        custom_dashboards: true
+
+    tracing:
+      enabled: true
+      sampling_rate: 1.0           # 100% sampling for full visibility
+      propagation: w3c
+      # Extended trace data
+      include_db_queries: true
+      include_cache_operations: true
+      include_external_calls: true
+      # Enterprise: Trace export
+      export:
+        enabled: true
+        destinations:
+          - type: jaeger
+            endpoint: "{{JAEGER_ENDPOINT}}"
+          # OPTIONAL: Additional APM
+          # - type: datadog
+          #   endpoint: "{{DATADOG_APM_ENDPOINT}}"
+
+    # Enterprise: Advanced alerting
+    alerting:
+      enabled: true
+      channels:
+        - type: email
+          target: "{{ADMIN_EMAIL}}"
+        - type: slack
+          webhook: "{{SLACK_WEBHOOK}}"
+        - type: pagerduty
+          routing_key: "{{PAGERDUTY_KEY}}"
+          severity_mapping:
+            critical: critical
+            warning: warning
+            info: info
+      # Pre-configured enterprise rules
+      rules:
+        - name: high_error_rate
+          condition: "error_rate > 1%"
+          window: 1m
+          severity: critical
+        - name: high_latency_p99
+          condition: "latency_p99 > 2s"
+          window: 5m
+          severity: warning
+        - name: circuit_breaker_open
+          condition: "circuit_breaker_state == 'open'"
+          window: 0s              # Immediate
+          severity: critical
+        - name: quota_anomaly
+          condition: "request_rate > baseline * 3"
+          window: 15m
+          severity: warning
+
+    # Enterprise: Audit logging
+    audit:
+      enabled: true
+      retention_days: 365          # 1 year for compliance
+      events:
+        - authentication
+        - authorization
+        - configuration_change
+        - api_access
+        - admin_action
+      tamper_proof: true           # Immutable audit logs
+      export:
+        enabled: true
+        destination: "{{AUDIT_LOG_DESTINATION}}"
+
+  # ===========================================================================
+  # 6. SLA (Service Level Agreement)
+  # ===========================================================================
+  # Enterprise-grade SLA with 99.95% uptime and 24/7 support.
+  # ---------------------------------------------------------------------------
+  sla:
+
+    availability: 99.95            # 99.95% uptime (~22 minutes downtime/month)
+
+    # Tiered availability by classification
+    availability_by_classification:
+      H: 99.9
+      VH: 99.95
+      VVH: 99.99
+
+    support:
+      response_hours: 4            # 4-hour initial response (P1)
+      response_by_severity:
+        P1_critical: 1             # 1 hour for critical issues
+        P2_high: 4                 # 4 hours for high priority
+        P3_medium: 8               # 8 hours for medium
+        P4_low: 24                 # 24 hours for low priority
+      channels:
+        - email
+        - phone                    # Dedicated phone support
+        - slack                    # Dedicated Slack channel
+        - video                    # Video call support
+      hours: 24x7                  # 24/7 support
+      # Enterprise: Dedicated resources
+      dedicated:
+        technical_account_manager: true
+        named_support_engineers: 2
+        quarterly_business_review: true
+
+    # Maintenance
+    maintenance:
+      scheduled_window: "Sunday 02:00-04:00 UTC"
+      advance_notice_hours: 168    # 7 days advance notice
+      customer_approval: true      # Require customer approval
+      rollback_sla: 30m            # 30-minute rollback guarantee
+
+    # SLA credits
+    credits:
+      enabled: true
+      tiers:
+        - availability_below: 99.95
+          credit_percent: 10
+        - availability_below: 99.9
+          credit_percent: 25
+        - availability_below: 99.0
+          credit_percent: 50
+
+    # Disaster recovery
+    disaster_recovery:
+      rpo: 1h                      # 1 hour Recovery Point Objective
+      rto: 4h                      # 4 hour Recovery Time Objective
+      geo_redundancy: true
+      failover_regions:
+        - eu-west-1
+        - eu-central-1
+
+  # ===========================================================================
+  # 7. FEATURES
+  # ===========================================================================
+  # Full feature set for enterprise requirements.
+  # ---------------------------------------------------------------------------
+  features:
+
+    # Domain & Routing
+    custom_domains: true           # Bring your own domain (api.customer.com)
+    wildcard_domains: true         # *.api.customer.com
+    path_based_routing: true
+    header_based_routing: true     # Route by headers
+
+    # API Management
+    api_versioning: true
+    api_deprecation: true
+    api_lifecycle_management: true # Full lifecycle (draft, active, deprecated, retired)
+    openapi_validation: true
+    graphql_support: true          # GraphQL APIs supported
+    grpc_support: true             # gRPC APIs supported
+    websocket_support: true        # WebSocket APIs supported
+
+    # Developer Experience
+    developer_portal: true
+    custom_portal_branding: true   # White-label portal
+    interactive_docs: true
+    sandbox_environment: true
+    mock_servers: true             # API mocking for development
+
+    # Notifications
+    webhook_notifications: true
+    email_notifications: true
+    slack_integration: true
+    teams_integration: true
+
+    # Analytics
+    basic_analytics: true
+    advanced_analytics: true       # Custom dashboards, exports
+    predictive_analytics: true     # ML-based forecasting
+    business_intelligence: true    # BI tool integration
+    data_export:
+      formats:
+        - csv
+        - json
+        - parquet
+      destinations:
+        - s3
+        - gcs
+        - azure_blob
+
+    # Security Features
+    waf_protection: true
+    ddos_protection: true
+    bot_protection: true           # Advanced bot detection
+    secrets_management: true       # Vault integration
+    encryption_at_rest: true
+    encryption_in_transit: true
+    key_management: true           # Customer-managed keys (BYOK)
+
+    # Automation
+    ci_cd_integration: true
+    terraform_provider: true
+    pulumi_provider: true
+    api_as_code: true              # GitOps for API definitions
+    automated_testing: true        # Automated API testing
+
+    # MCP Gateway (AI-Native)
+    mcp_gateway_access: true
+    mcp_tools_limit: -1            # Unlimited tools
+    mcp_advanced_features:
+      streaming: true
+      function_calling: true
+      context_caching: true
+
+    # Enterprise Integrations
+    sso_integration: true
+    ldap_integration: true
+    scim_provisioning: true        # Automated user provisioning
+    siem_integration: true         # Security event integration
+
+    # Compliance & Governance
+    api_governance: true           # Policy enforcement
+    change_management: true        # Approval workflows
+    audit_trails: true
+
+  # ===========================================================================
+  # 8. NETWORKING
+  # ===========================================================================
+  # Enterprise networking configuration with advanced features.
+  # ---------------------------------------------------------------------------
+  networking:
+
+    # Timeouts
+    connect_timeout: 10s
+    read_timeout: 120s
+    write_timeout: 120s
+    idle_timeout: 300s
+
+    # Keep-alive
+    keepalive:
+      enabled: true
+      timeout: 300s
+      max_requests: 10000
+
+    # Enterprise: Connection pooling
+    connection_pool:
+      enabled: true
+      max_idle_connections: 1000
+      max_connections_per_host: 500
+
+    # CORS
+    cors:
+      enabled: true
+      allowed_origins:
+        - "https://*.gostoa.dev"
+        - "https://*.{{CUSTOMER_DOMAIN}}"
+      allowed_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS
+        - HEAD
+      allowed_headers:
+        - Authorization
+        - Content-Type
+        - X-API-Key
+        - X-Request-ID
+        - X-Correlation-ID
+      expose_headers:
+        - X-Request-ID
+        - X-RateLimit-Remaining
+        - X-RateLimit-Reset
+      max_age: 86400               # 24 hours
+
+    # Enterprise: Private connectivity
+    private_connectivity:
+      enabled: true
+      options:
+        - type: vpc_peering
+          enabled: true
+        - type: private_link
+          enabled: true
+        - type: direct_connect
+          enabled: true
+
+    # Enterprise: Load balancing
+    load_balancing:
+      algorithm: round_robin       # round_robin, least_connections, ip_hash
+      health_check:
+        enabled: true
+        interval: 10s
+        timeout: 5s
+        healthy_threshold: 2
+        unhealthy_threshold: 3
+
+  # ===========================================================================
+  # 9. COMPLIANCE
+  # ===========================================================================
+  # Full compliance suite for regulated industries.
+  # ---------------------------------------------------------------------------
+  compliance:
+
+    # GDPR
+    gdpr:
+      enabled: true
+      data_residency: eu
+      right_to_erasure: true
+      data_portability: true
+      consent_management: true
+      dpo_contact: "{{DPO_EMAIL}}"
+
+    # SOX (Sarbanes-Oxley)
+    sox:
+      enabled: true
+      controls_testing: true
+      segregation_of_duties: true
+
+    # PCI-DSS (Payment Card Industry)
+    pci_dss:
+      enabled: true                # Enable for payment processing
+      level: 1                     # PCI Level 1
+      quarterly_scans: true
+      penetration_testing: true
+
+    # HIPAA (Healthcare)
+    hipaa:
+      enabled: false               # Enable if handling PHI
+      baa_signed: false            # Business Associate Agreement
+
+    # ISO 27001
+    iso_27001:
+      enabled: true
+      certification_date: "{{ISO_CERT_DATE}}"
+      next_audit: "{{ISO_NEXT_AUDIT}}"
+
+    # SOC 2
+    soc2:
+      enabled: true
+      type: 2                      # Type II
+      trust_principles:
+        - security
+        - availability
+        - confidentiality
+
+    # Industry-specific
+    # OPTIONAL: Enable based on customer industry
+    financial_services:
+      enabled: false
+      # MiFID II, DORA, etc.
+
+    banking:
+      enabled: false
+      # PSD2, Basel III, etc.
+
+  # ===========================================================================
+  # 10. DISASTER RECOVERY & BUSINESS CONTINUITY
+  # ===========================================================================
+  # Enterprise DR/BC configuration.
+  # ---------------------------------------------------------------------------
+  disaster_recovery:
+
+    enabled: true
+
+    backup:
+      enabled: true
+      frequency: hourly
+      retention_days: 90
+      encryption: true
+      cross_region: true
+      destinations:
+        - region: eu-west-1
+          type: primary
+        - region: eu-central-1
+          type: secondary
+
+    replication:
+      enabled: true
+      mode: async                  # sync for critical data
+      lag_threshold: 60s
+
+    failover:
+      automatic: false             # Manual approval for enterprise
+      approval_required: true
+      notification_channels:
+        - "{{ADMIN_EMAIL}}"
+        - "{{OPS_PAGERDUTY}}"
+
+    testing:
+      frequency: quarterly
+      last_test: "{{LAST_DR_TEST}}"
+      next_test: "{{NEXT_DR_TEST}}"
+
+# =============================================================================
+# END OF ENTERPRISE TEMPLATE
+# =============================================================================
+# Next steps after creating tenant UAC:
+# 1. Replace all {{PLACEHOLDER}} values
+# 2. Review with customer during onboarding call
+# 3. Configure customer-specific integrations (IdP, SIEM, etc.)
+# 4. Set up private connectivity if required
+# 5. Schedule kickoff with Technical Account Manager
+# 6. Apply with: kubectl apply -f tenants/{{TENANT_NAME}}/uac.yaml
+# 7. Verify with: kubectl get uac {{TENANT_NAME}} -o yaml
+# 8. Run compliance checklist validation
+# =============================================================================

@@ -1,0 +1,342 @@
+# =============================================================================
+# STOA Platform - Universal API Contract (UAC) Template
+# Tier: STARTER
+# For: POC, Startups, Small clients
+# =============================================================================
+# This template defines the baseline contract for starter-tier tenants.
+# Replace all {{PLACEHOLDER}} values before applying.
+# =============================================================================
+
+apiVersion: stoa.io/v1
+kind: UniversalAPIContract
+metadata:
+  name: "{{TENANT_NAME}}"
+  tier: starter
+  created: "{{DATE}}"
+  labels:
+    tenant-id: "{{TENANT_ID}}"
+    admin-email: "{{ADMIN_EMAIL}}"
+    keycloak-realm: "{{KEYCLOAK_REALM}}"
+
+spec:
+  # ===========================================================================
+  # 1. API CLASSIFICATIONS
+  # ===========================================================================
+  # Define rate limits and policies based on API criticality level.
+  # Starter tier has conservative limits suitable for development and small workloads.
+  # ---------------------------------------------------------------------------
+  classifications:
+
+    H:  # High volume APIs (public endpoints, read-heavy operations)
+      description: "Standard APIs with moderate traffic expectations"
+      rate_limit: 500          # requests per hour per consumer
+      burst: 50                # max concurrent requests allowed
+      timeout: 30s             # request timeout before cancellation
+      retry_policy:
+        max_retries: 3         # automatic retries on failure
+        backoff: exponential   # exponential backoff strategy
+        initial_delay: 100ms   # first retry delay
+        max_delay: 5s          # maximum retry delay cap
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 5   # failures before circuit opens
+        reset_timeout: 30s     # time before attempting reset
+
+    VH:  # Very High criticality (business-critical operations)
+      description: "Important business APIs requiring higher reliability"
+      rate_limit: 50           # lower rate to ensure stability
+      burst: 10                # controlled concurrency
+      timeout: 60s             # longer timeout for complex operations
+      retry_policy:
+        max_retries: 2
+        backoff: exponential
+        initial_delay: 200ms
+        max_delay: 10s
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 3
+        reset_timeout: 60s
+      # OPTIONAL: priority_queue for starter tier
+      priority: normal
+
+    VVH:  # Very Very High criticality (mission-critical) - DISABLED for Starter
+      description: "Mission-critical APIs - Not available in Starter tier"
+      enabled: false           # Upgrade to Enterprise for VVH support
+      rate_limit: 0
+      burst: 0
+      timeout: 0s
+      # Contact sales@gostoa.dev to enable VVH classification
+
+  # ===========================================================================
+  # 2. SECURITY POLICIES
+  # ===========================================================================
+  # Authentication and authorization settings for the tenant.
+  # Starter tier provides essential security with OAuth2 and API keys.
+  # ---------------------------------------------------------------------------
+  security:
+
+    authentication:
+      required: true           # All APIs require authentication
+      methods:
+        - oauth2               # Primary: OAuth2/OIDC via Keycloak
+        - api_key              # Secondary: API key for simple integrations
+        # mtls: NOT available in Starter tier (Enterprise only)
+      oauth2:
+        issuer: "https://auth.gostoa.dev/realms/{{KEYCLOAK_REALM}}"
+        audience: "{{TENANT_ID}}"
+        token_expiry: 3600     # 1 hour token validity
+        refresh_enabled: true
+      api_key:
+        header_name: "X-API-Key"
+        rotation_days: 90      # Recommended key rotation period
+        max_keys_per_consumer: 2
+
+    authorization:
+      rbac_enabled: true       # Role-Based Access Control
+      default_scopes:
+        - read                 # Basic read access
+        - write                # Write operations
+      # OPTIONAL: Custom scopes can be added per API
+      custom_scopes: []
+
+    # OPTIONAL: IP allowlisting (empty = allow all)
+    ip_allowlist: []
+
+    # OPTIONAL: Request validation
+    request_validation:
+      enabled: true
+      max_body_size: 1mb       # Maximum request body size
+      content_types:
+        - application/json
+        - application/xml
+
+  # ===========================================================================
+  # 3. RATE LIMITING
+  # ===========================================================================
+  # Global and per-API rate limits to protect platform resources.
+  # Starter limits are designed for development and small production workloads.
+  # ---------------------------------------------------------------------------
+  rateLimits:
+
+    global:  # Tenant-wide limits
+      requests_per_minute: 200
+      requests_per_hour: 5000
+      requests_per_day: 10000  # 10K requests/day included
+      # Overage: Contact support for temporary increases
+
+    per_api:
+      default: 100             # Default requests/hour per API
+      # Override per API in individual API specs
+
+    per_consumer:
+      default: 50              # Default requests/hour per consumer
+      max_consumers: 20        # Maximum API consumers allowed
+
+    # Rate limit response headers
+    headers:
+      enabled: true
+      include_remaining: true  # X-RateLimit-Remaining header
+      include_reset: true      # X-RateLimit-Reset header
+
+  # ===========================================================================
+  # 4. QUOTAS
+  # ===========================================================================
+  # Monthly usage quotas for the tenant subscription.
+  # Starter tier provides essential capacity for small-scale operations.
+  # ---------------------------------------------------------------------------
+  quotas:
+
+    monthly_requests: 100000   # 100K requests/month included
+    monthly_bandwidth_gb: 10   # 10 GB data transfer/month
+
+    # Resource limits
+    max_apis: 5                # Maximum APIs that can be registered
+    max_subscriptions: 20      # Maximum subscription plans
+    max_consumers: 50          # Maximum API consumers
+    max_environments: 2        # dev, prod only (no staging)
+
+    # Storage quotas
+    log_storage_gb: 1          # Log storage allocation
+
+    # OPTIONAL: Alerting thresholds
+    alerts:
+      quota_warning_percent: 80
+      quota_critical_percent: 95
+      notify_email: "{{ADMIN_EMAIL}}"
+
+  # ===========================================================================
+  # 5. OBSERVABILITY
+  # ===========================================================================
+  # Logging, metrics, and tracing configuration.
+  # Starter tier includes basic observability for troubleshooting.
+  # ---------------------------------------------------------------------------
+  observability:
+
+    logging:
+      level: info              # info level (debug available on demand)
+      retention_days: 7        # 7 days log retention
+      format: json             # Structured JSON logs
+      # OPTIONAL: Fields to exclude from logs
+      exclude_fields:
+        - authorization        # Don't log auth headers
+        - cookie
+      # PII masking enabled by default
+      pii_masking: true
+
+    metrics:
+      enabled: true
+      granularity: 5m          # 5-minute aggregation intervals
+      retention_days: 30       # 30 days metrics retention
+      # Available metrics: latency, throughput, errors, status_codes
+      custom_metrics: false    # Custom metrics not available in Starter
+
+    tracing:
+      enabled: true
+      sampling_rate: 0.1       # 10% of requests traced
+      propagation: w3c         # W3C Trace Context standard
+      # Full tracing available in Enterprise tier
+
+    # OPTIONAL: Alerting rules
+    alerting:
+      enabled: true
+      channels:
+        - type: email
+          target: "{{ADMIN_EMAIL}}"
+      rules:
+        - name: high_error_rate
+          condition: "error_rate > 5%"
+          window: 5m
+          severity: warning
+
+  # ===========================================================================
+  # 6. SLA (Service Level Agreement)
+  # ===========================================================================
+  # Uptime and support commitments for Starter tier.
+  # ---------------------------------------------------------------------------
+  sla:
+
+    availability: 99           # 99% uptime SLA (~7.3 hours downtime/month)
+
+    support:
+      response_hours: 48       # 48-hour initial response time
+      channels:
+        - email                # Email support only
+      hours: business          # Business hours support (9am-6pm CET)
+      # 24/7 support available in Enterprise tier
+
+    # Maintenance windows
+    maintenance:
+      scheduled_window: "Sunday 02:00-06:00 UTC"
+      advance_notice_hours: 48
+
+    # OPTIONAL: Credits for SLA breach
+    credits:
+      enabled: false           # SLA credits not included in Starter
+
+  # ===========================================================================
+  # 7. FEATURES
+  # ===========================================================================
+  # Feature flags indicating what's available in Starter tier.
+  # ---------------------------------------------------------------------------
+  features:
+
+    # Domain & Routing
+    custom_domains: false      # Use *.gostoa.dev subdomains only
+    path_based_routing: true   # /tenant/api/* routing
+
+    # API Management
+    api_versioning: true       # v1, v2, etc. versioning supported
+    api_deprecation: true      # Mark APIs as deprecated
+    openapi_validation: true   # Validate against OpenAPI specs
+
+    # Developer Experience
+    developer_portal: true     # Access to portal.gostoa.dev
+    interactive_docs: true     # Swagger UI / ReDoc
+    sandbox_environment: true  # Test environment included
+
+    # Notifications
+    webhook_notifications: false  # Webhooks not available in Starter
+    email_notifications: true     # Basic email notifications
+
+    # Analytics
+    basic_analytics: true      # Request counts, latency, errors
+    advanced_analytics: false  # Custom dashboards, exports - Enterprise only
+
+    # Security Features
+    waf_protection: true       # Basic WAF rules included
+    ddos_protection: true      # Platform-level DDoS protection
+    secrets_management: false  # Vault integration - Enterprise only
+
+    # Automation
+    ci_cd_integration: true    # GitLab CI integration
+    terraform_provider: false  # Terraform provider - Enterprise only
+
+    # MCP Gateway (AI-Native)
+    mcp_gateway_access: true   # MCP protocol support
+    mcp_tools_limit: 3         # Max 3 registered tools
+
+  # ===========================================================================
+  # 8. NETWORKING (OPTIONAL)
+  # ===========================================================================
+  # Network-level configurations.
+  # ---------------------------------------------------------------------------
+  # OPTIONAL: Remove this section if using defaults
+  networking:
+
+    # Timeouts
+    connect_timeout: 5s
+    read_timeout: 30s
+    write_timeout: 30s
+    idle_timeout: 60s
+
+    # Keep-alive
+    keepalive:
+      enabled: true
+      timeout: 60s
+      max_requests: 100
+
+    # CORS (defaults, can be overridden per API)
+    cors:
+      enabled: true
+      allowed_origins:
+        - "https://*.gostoa.dev"
+      allowed_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+      allowed_headers:
+        - Authorization
+        - Content-Type
+        - X-API-Key
+      max_age: 3600
+
+  # ===========================================================================
+  # 9. COMPLIANCE (OPTIONAL)
+  # ===========================================================================
+  # Regulatory compliance settings.
+  # ---------------------------------------------------------------------------
+  # OPTIONAL: Remove if no specific compliance requirements
+  compliance:
+
+    gdpr:
+      enabled: true
+      data_residency: eu       # EU data residency
+      right_to_erasure: true   # Support data deletion requests
+
+    # OPTIONAL: Additional compliance frameworks
+    # sox: false               # SOX compliance - Enterprise only
+    # hipaa: false             # HIPAA compliance - Enterprise only
+    # pci_dss: false           # PCI-DSS - Enterprise only
+
+# =============================================================================
+# END OF STARTER TEMPLATE
+# =============================================================================
+# Next steps after creating tenant UAC:
+# 1. Replace all {{PLACEHOLDER}} values
+# 2. Review rate limits and quotas for your use case
+# 3. Configure authentication methods
+# 4. Apply with: kubectl apply -f tenants/{{TENANT_NAME}}/uac.yaml
+# 5. Verify with: kubectl get uac {{TENANT_NAME}} -o yaml
+# =============================================================================

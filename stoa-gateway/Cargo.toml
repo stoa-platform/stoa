@@ -43,6 +43,18 @@ anyhow = "1"
 # Config
 envy = "0.4"
 
+# CAB-912: MCP Gateway
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+urlencoding = "2"
+serde_yaml = "0.9"
+
+# CAB-912 P2: OIDC/JWT Authentication
+jsonwebtoken = "9"
+moka = { version = "0.12", features = ["future"] }
+base64 = "0.22"
+
 [dev-dependencies]
 tokio-test = "0.4"
 

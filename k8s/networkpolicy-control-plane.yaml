@@ -1,0 +1,255 @@
+# CAB-945: Network Policy for Control Plane isolation
+# Apply with: kubectl apply -f k8s/networkpolicy-control-plane.yaml
+#
+# Restricts traffic to/from the control plane pods.
+# NOTE: Adjust the CIDR if your cluster uses a different IP range.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stoa-control-plane-isolation
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-945
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: control-plane
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow from MCP Gateway
+    - from:
+        - podSelector:
+            matchLabels:
+              app: stoa-mcp-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow from Portal
+    - from:
+        - podSelector:
+            matchLabels:
+              app: stoa-portal
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow from Ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # CAB-945 (Chucky fix): Health checks restricted to cluster network
+    # NOTE: Adjust CIDR to match your cluster's pod network (e.g., 10.100.0.0/16)
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/8  # EKS cluster CIDR (adjust if needed)
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  egress:
+    # Allow to PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgresql
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    # Allow to Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    # Allow to Keycloak
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: keycloak
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow to Vault
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: vault
+      ports:
+        - protocol: TCP
+          port: 8200
+
+    # Allow DNS (required for service discovery)
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow HTTPS to external services (Keycloak, etc.)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Network Policy for MCP Gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stoa-mcp-gateway-isolation
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-945
+spec:
+  podSelector:
+    matchLabels:
+      app: stoa-mcp-gateway
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow from Ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow health checks from cluster network
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  egress:
+    # Allow to Control Plane API
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: control-plane
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow to Keycloak (for token validation)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: keycloak
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow to Kafka/Redpanda (for metering)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: redpanda
+      ports:
+        - protocol: TCP
+          port: 9092
+
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow HTTPS to external services
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Network Policy for Portal
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stoa-portal-isolation
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-945
+spec:
+  podSelector:
+    matchLabels:
+      app: stoa-portal
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow from Ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow health checks from cluster network
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  egress:
+    # Portal only serves static files, minimal egress needed
+    # Allow DNS for any dynamic config
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

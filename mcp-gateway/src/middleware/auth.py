@@ -302,16 +302,29 @@ class OIDCAuthenticator:
                 )
 
             # Validate token
+            # CAB-938: Enable audience validation if configured
             payload = jwt.decode(
                 token,
                 rsa_key,
                 algorithms=["RS256"],
                 issuer=self.issuer,
+                audience=self.settings.allowed_audiences_list or None,
                 options={
-                    "verify_aud": False,  # Keycloak doesn't always set audience
+                    "verify_aud": bool(self.settings.allowed_audiences),
                     "verify_exp": True,
                 },
             )
+
+            # CAB-938: Log legacy audience usage for migration tracking
+            token_aud = payload.get("aud", [])
+            if isinstance(token_aud, str):
+                token_aud = [token_aud]
+            if "account" in token_aud:
+                logger.info(
+                    "CAB-938: Legacy audience 'account' used",
+                    subject=payload.get("sub"),
+                    audiences=token_aud,
+                )
 
             # Normalize tenant_id if it's an array (Keycloak user attributes)
             if "tenant_id" in payload and isinstance(payload["tenant_id"], list):

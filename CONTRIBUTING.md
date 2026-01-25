@@ -162,6 +162,17 @@ fix(api): handle null subscription gracefully
 docs: update API reference for v0.2
 ```
 
+### Developer Certificate of Origin (DCO)
+
+All contributions must be signed off to certify you have the right to submit the code under the project's open source license.
+
+**Sign your commits:**
+```bash
+git commit -s -m "feat(api): add new endpoint"
+```
+
+This adds a `Signed-off-by: Your Name <email>` line to your commit. See [CLA.md](CLA.md) for detailed instructions on signing commits, configuring automatic sign-off, and fixing unsigned commits.
+
 ### Code Style
 
 - **Python:** Follow PEP 8, use `ruff` for linting and `black` for formatting

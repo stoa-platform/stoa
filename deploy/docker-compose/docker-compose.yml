@@ -1,7 +1,10 @@
 # =============================================================================
 # STOA Platform - Quick Start Docker Compose
 # =============================================================================
-# Launch the full platform in < 5 minutes on 8GB RAM
+# Launch the full platform on 8GB RAM
+#
+# FIRST RUN: ~10-15 min (builds images from source)
+# SUBSEQUENT RUNS: ~3-4 min (uses cached images)
 #
 # Usage:
 #   cp .env.example .env
@@ -74,7 +77,9 @@ services:
   # Database Migrations (one-shot)
   # ==========================================================================
   db-migrate:
-    image: ghcr.io/gostoa/control-plane-api:latest
+    build:
+      context: ../../control-plane-api
+      dockerfile: Dockerfile
     container_name: stoa-db-migrate
     entrypoint: ["alembic", "upgrade", "head"]
     environment:
@@ -90,7 +95,9 @@ services:
   # Control Plane API
   # ==========================================================================
   control-plane-api:
-    image: ghcr.io/gostoa/control-plane-api:latest
+    build:
+      context: ../../control-plane-api
+      dockerfile: Dockerfile
     container_name: stoa-api
     ports:
       - "${PORT_API:-8000}:8000"
@@ -136,7 +143,9 @@ services:
   # Console UI
   # ==========================================================================
   control-plane-ui:
-    image: ghcr.io/gostoa/control-plane-ui:latest
+    build:
+      context: ../../control-plane-ui
+      dockerfile: Dockerfile
     container_name: stoa-console
     ports:
       - "${PORT_CONSOLE:-3000}:8080"

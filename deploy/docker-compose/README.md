@@ -1,6 +1,9 @@
 # STOA Platform - Quick Start
 
-Launch the STOA Platform in under 5 minutes with Docker Compose.
+Launch the STOA Platform with Docker Compose.
+
+> **First run**: ~10-15 minutes (builds images from source)
+> **Subsequent runs**: ~3-4 minutes (uses cached images)
 
 ## Prerequisites
 
@@ -18,10 +21,10 @@ cd stoa-platform/deploy/docker-compose
 # 2. Copy environment file
 cp .env.example .env
 
-# 3. Start all services
+# 3. Start all services (first run builds images - grab a coffee ☕)
 docker compose up -d
 
-# 4. Wait for services to be ready (~3-4 minutes)
+# 4. Watch the build progress
 docker compose logs -f
 ```
 

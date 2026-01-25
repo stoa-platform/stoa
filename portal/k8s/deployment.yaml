@@ -19,6 +19,8 @@ spec:
         app: stoa-portal
         app.kubernetes.io/name: stoa-portal
     spec:
+      # CAB-945: Don't mount service account token (not needed)
+      automountServiceAccountToken: false
       containers:
         - name: stoa-portal
           image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/stoa-portal:latest
@@ -46,13 +48,38 @@ spec:
               port: http
             initialDelaySeconds: 3
             periodSeconds: 5
+          # CAB-945: Container hardening
           securityContext:
             runAsNonRoot: true
             runAsUser: 101  # nginx user
-            readOnlyRootFilesystem: false
+            runAsGroup: 101
+            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          # CAB-945: Mount writable paths for nginx
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
+      # CAB-945: Pod-level security context
       securityContext:
+        runAsNonRoot: true
         fsGroup: 101
+      # CAB-945: EmptyDir volumes for nginx writable paths
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

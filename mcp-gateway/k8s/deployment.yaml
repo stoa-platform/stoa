@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/name: stoa-mcp-gateway
     spec:
       serviceAccountName: stoa-mcp-gateway
+      # CAB-945: Keep automountServiceAccountToken enabled (needed for CRD access)
+      automountServiceAccountToken: true
       containers:
         - name: stoa-mcp-gateway
           image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-mcp-gateway:dev-latest
@@ -64,12 +66,21 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 5
             failureThreshold: 3
+          # CAB-945: Container hardening
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
+            runAsGroup: 1000
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      # CAB-945: Pod-level security context
       securityContext:
+        runAsNonRoot: true
         fsGroup: 1000
 ---
 apiVersion: v1

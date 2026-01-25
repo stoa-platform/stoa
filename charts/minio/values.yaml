@@ -26,12 +26,14 @@ persistence:
   size: 10Gi
   storageClass: ""  # Use default storage class
 
-# Root credentials (override in production via secret)
-rootUser: "minioadmin"
-rootPassword: "minioadmin123"  # Change in production!
+# Root credentials - DO NOT HARDCODE IN PRODUCTION
+# Use existingSecret instead (see below)
+rootUser: ""
+rootPassword: ""
 
-# Use existing secret for credentials (recommended for prod)
-# existingSecret: minio-credentials
+# Use existing secret for credentials (REQUIRED for production)
+# Secret must contain keys: rootUser, rootPassword
+existingSecret: minio-credentials
 
 # Service
 service:

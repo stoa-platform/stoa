@@ -57,7 +57,7 @@ STOA_SNAPSHOTS_STORAGE_TYPE=minio
 STOA_SNAPSHOTS_STORAGE_ENDPOINT=minio.stoa-system:9000
 STOA_SNAPSHOTS_STORAGE_BUCKET=error-snapshots
 STOA_SNAPSHOTS_STORAGE_ACCESS_KEY=error-snapshots-user
-STOA_SNAPSHOTS_STORAGE_SECRET_KEY=error-snapshots-secret-key-change-me
+STOA_SNAPSHOTS_STORAGE_SECRET_KEY=${MINIO_SECRET_KEY}  # From Vault
 STOA_SNAPSHOTS_STORAGE_USE_SSL=false
 STOA_SNAPSHOTS_RETENTION_DAYS=30
 ```
@@ -116,7 +116,7 @@ kubectl logs -n stoa-system -l app=minio
 kubectl port-forward svc/minio 9000:9000 -n stoa-system
 
 # Use mc client
-mc alias set local http://localhost:9000 minioadmin minioadmin123
+mc alias set local http://localhost:9000 minioadmin "$MINIO_ROOT_PASSWORD"  # Get from Vault
 mc ls local/error-snapshots
 mc ilm ls local/error-snapshots
 ```

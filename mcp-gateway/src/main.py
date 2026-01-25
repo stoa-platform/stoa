@@ -244,13 +244,15 @@ def create_app() -> FastAPI:
     if settings.enable_metrics:
         app.add_middleware(MetricsMiddleware)
 
-    # CORS middleware
+    # CAB-950: Secured CORS configuration
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=settings.cors_allow_methods.split(","),
+        allow_headers=settings.cors_allow_headers.split(","),
+        expose_headers=settings.cors_expose_headers.split(","),
+        max_age=settings.cors_max_age,
     )
 
     # Register routes

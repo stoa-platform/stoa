@@ -71,8 +71,21 @@ class Settings(BaseSettings):
     mcp_enable_streaming: bool = True
 
     # Security
-    cors_origins: str = "*"
-    allowed_audiences: str = ""  # Comma-separated list
+    # CAB-950: CORS origins whitelist
+    # SECURITY: Never use "*" in production!
+    # Comma-separated list of allowed origins
+    cors_origins: str = "https://console.stoa.dev,https://portal.stoa.dev,https://console.gostoa.dev,https://portal.gostoa.dev"
+    # CAB-950: Additional CORS settings for defense in depth
+    cors_allow_methods: str = "GET,POST,PUT,DELETE,OPTIONS"
+    cors_allow_headers: str = "Authorization,Content-Type,X-Request-ID,X-Tenant-ID"
+    cors_expose_headers: str = "X-Request-ID,X-Trace-ID"
+    cors_max_age: int = 600  # Preflight cache: 10 minutes
+
+    # CAB-938: JWT Audience validation
+    # SECURITY: Set this to your MCP Gateway client ID in Keycloak
+    # If empty, audience validation is DISABLED (insecure for production!)
+    # Includes 'account' for Keycloak backwards compatibility
+    allowed_audiences: str = "stoa-mcp-gateway,account"
 
     # OPA Policy Engine (RBAC - who can call tools)
     opa_enabled: bool = True
@@ -111,6 +124,12 @@ class Settings(BaseSettings):
     shadow_rust_gateway_url: str = "http://mcp-gateway-rust:8080"  # Rust gateway URL
     shadow_timeout_seconds: float = 5.0  # Timeout for shadow requests
 
+    # CAB-939: SSE Connection Limits (Slowloris protection)
+    sse_limiter_enabled: bool = True  # Enable SSE rate limiting (set to false for rollback)
+    # SECURITY: Set to your ingress controller IPs, e.g., "10.100.0.0/16"
+    # Empty = trust nothing (safest default, uses direct client IP)
+    sse_trusted_proxies: str = ""
+
     @model_validator(mode="after")
     def derive_urls_from_base_domain(self) -> "Settings":
         """Derive service URLs from base_domain if not explicitly set."""
@@ -134,8 +153,16 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        """Return CORS origins as a list."""
+        """Return CORS origins as a list.
+
+        CAB-950: Logs warning if wildcard is used (insecure).
+        """
         if self.cors_origins == "*":
+            # CAB-950: Warn but don't break for dev environments
+            import logging
+            logging.getLogger(__name__).warning(
+                "CAB-950: CORS wildcard '*' is insecure! Set specific origins in production."
+            )
             return ["*"]
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 

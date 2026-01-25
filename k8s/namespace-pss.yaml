@@ -1,0 +1,27 @@
+# CAB-945: Pod Security Standards for stoa-system namespace
+# Apply with: kubectl apply -f k8s/namespace-pss.yaml
+#
+# This enforces restricted pod security standards.
+# Pods that don't comply will be rejected.
+#
+# If the namespace already exists, use kubectl label instead:
+#   kubectl label namespace stoa-system \
+#     pod-security.kubernetes.io/enforce=restricted \
+#     pod-security.kubernetes.io/audit=restricted \
+#     pod-security.kubernetes.io/warn=restricted \
+#     --overwrite
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stoa-system
+  labels:
+    # Pod Security Standards - Restricted (most secure)
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    # STOA labels
+    app.kubernetes.io/part-of: stoa-platform

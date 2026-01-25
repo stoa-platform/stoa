@@ -170,3 +170,151 @@ class TestAuthIntegration:
         assert token_claims.sub == "user-123"
         assert token_claims.has_role("viewer")
         assert token_claims.has_scope("openid")
+
+
+# =============================================================================
+# CAB-938: JWT Audience Validation Tests
+# =============================================================================
+
+
+class TestJWTAudienceValidation:
+    """Tests for CAB-938 JWT audience validation."""
+
+    def test_allowed_audiences_list_returns_list(self):
+        """Test allowed_audiences_list property returns parsed list."""
+        clear_settings_cache()
+        settings = Settings(
+            base_domain="test.local",
+            allowed_audiences="stoa-mcp-gateway,account",
+        )
+        assert settings.allowed_audiences_list == ["stoa-mcp-gateway", "account"]
+
+    def test_allowed_audiences_list_empty_returns_empty_list(self):
+        """Test empty allowed_audiences returns empty list."""
+        clear_settings_cache()
+        settings = Settings(
+            base_domain="test.local",
+            allowed_audiences="",
+        )
+        assert settings.allowed_audiences_list == []
+
+    def test_allowed_audiences_list_strips_whitespace(self):
+        """Test allowed_audiences_list strips whitespace from items."""
+        clear_settings_cache()
+        settings = Settings(
+            base_domain="test.local",
+            allowed_audiences="  stoa-mcp-gateway  ,  account  ",
+        )
+        assert settings.allowed_audiences_list == ["stoa-mcp-gateway", "account"]
+
+    def test_verify_aud_enabled_when_audiences_configured(self):
+        """Test verify_aud is True when allowed_audiences is set."""
+        clear_settings_cache()
+        settings = Settings(
+            base_domain="test.local",
+            allowed_audiences="stoa-mcp-gateway",
+        )
+        # The bool conversion should return True
+        assert bool(settings.allowed_audiences) is True
+
+    def test_verify_aud_disabled_when_no_audiences(self):
+        """Test verify_aud is False when allowed_audiences is empty."""
+        clear_settings_cache()
+        settings = Settings(
+            base_domain="test.local",
+            allowed_audiences="",
+        )
+        # The bool conversion should return False (empty string)
+        assert bool(settings.allowed_audiences) is False
+
+    def test_default_audiences_include_account(self):
+        """Test default allowed_audiences includes 'account' for Keycloak compatibility."""
+        clear_settings_cache()
+        settings = Settings(base_domain="test.local")
+        # Default should include both stoa-mcp-gateway and account
+        assert "account" in settings.allowed_audiences_list
+        assert "stoa-mcp-gateway" in settings.allowed_audiences_list
+
+
+# =============================================================================
+# CAB-950: CORS Configuration Tests
+# =============================================================================
+
+
+class TestCORSConfiguration:
+    """Tests for CAB-950 CORS configuration."""
+
+    def test_cors_origins_list_returns_list(self):
+        """Test cors_origins_list property returns parsed list."""
+        clear_settings_cache()
+        settings = Settings(
+            base_domain="test.local",
+            cors_origins="https://example.com,https://test.com",
+        )
+        assert settings.cors_origins_list == ["https://example.com", "https://test.com"]
+
+    def test_cors_origins_list_strips_whitespace(self):
+        """Test cors_origins_list strips whitespace from items."""
+        clear_settings_cache()
+        settings = Settings(
+            base_domain="test.local",
+            cors_origins="  https://example.com  ,  https://test.com  ",
+        )
+        assert settings.cors_origins_list == ["https://example.com", "https://test.com"]
+
+    def test_cors_wildcard_returns_wildcard_list(self):
+        """Test wildcard CORS returns ['*'] list."""
+        clear_settings_cache()
+        settings = Settings(
+            base_domain="test.local",
+            cors_origins="*",
+        )
+        assert settings.cors_origins_list == ["*"]
+
+    def test_default_cors_origins_not_wildcard(self):
+        """Test default cors_origins is NOT wildcard."""
+        clear_settings_cache()
+        settings = Settings(base_domain="test.local")
+        # Default should NOT be wildcard
+        assert settings.cors_origins != "*"
+        assert "*" not in settings.cors_origins_list
+
+    def test_default_cors_includes_stoa_domains(self):
+        """Test default cors_origins includes STOA domains."""
+        clear_settings_cache()
+        settings = Settings(base_domain="test.local")
+        origins = settings.cors_origins_list
+        # Should include console and portal for both stoa.dev and gostoa.dev
+        assert any("console" in o for o in origins)
+        assert any("portal" in o for o in origins)
+
+    def test_cors_allow_methods_configured(self):
+        """Test CORS allow methods are configured."""
+        clear_settings_cache()
+        settings = Settings(base_domain="test.local")
+        methods = settings.cors_allow_methods.split(",")
+        assert "GET" in methods
+        assert "POST" in methods
+        assert "OPTIONS" in methods
+
+    def test_cors_allow_headers_configured(self):
+        """Test CORS allow headers are configured."""
+        clear_settings_cache()
+        settings = Settings(base_domain="test.local")
+        headers = settings.cors_allow_headers.split(",")
+        assert "Authorization" in headers
+        assert "Content-Type" in headers
+
+    def test_cors_expose_headers_configured(self):
+        """Test CORS expose headers are configured."""
+        clear_settings_cache()
+        settings = Settings(base_domain="test.local")
+        headers = settings.cors_expose_headers.split(",")
+        assert "X-Request-ID" in headers
+        assert "X-Trace-ID" in headers
+
+    def test_cors_max_age_configured(self):
+        """Test CORS max_age is configured."""
+        clear_settings_cache()
+        settings = Settings(base_domain="test.local")
+        assert settings.cors_max_age == 600  # 10 minutes

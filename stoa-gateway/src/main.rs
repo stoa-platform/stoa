@@ -13,16 +13,25 @@ use tokio::sync::broadcast;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod auth;
 mod config;
+mod control_plane;
+mod git;
 mod handlers;
 mod health;
+mod mcp;
 mod metrics;
 mod proxy;
+mod rate_limit;
 mod router;
+mod uac;
 
+use auth::{AuthBuilder, AuthComponents, RbacPolicy};
 use config::Config;
 use handlers::{health_live, health_ready, health_startup, metrics_handler, AppState};
 use health::HealthChecker;
+use mcp::handlers::{mcp_router, mcp_router_with_auth, McpState};
+use mcp::tools::ToolRegistry;
 use metrics::Metrics;
 use router::{shadow_route_request, ShadowRouter};
 
@@ -109,6 +118,39 @@ async fn main() -> Result<()> {
         config.shadow_mode_enabled,
     );
 
+    // CAB-912: Create MCP tool registry
+    let tool_registry = ToolRegistry::new();
+    // Tools will be registered here when services are configured
+    // registry.register(StoaCreateApiTool::new(...));
+
+    // CAB-912 P2: Initialize auth if OIDC is configured
+    let oidc_enabled = std::env::var("OIDC_ISSUER_URL").is_ok();
+    let mcp_routes = if oidc_enabled {
+        let auth_components = AuthBuilder::from_env()
+            .with_rbac_policy(RbacPolicy::default())
+            .build();
+
+        tracing::info!(
+            issuer = %auth_components.config.issuer_url,
+            audience = %auth_components.config.audience,
+            "OIDC authentication enabled"
+        );
+
+        let mcp_state = McpState::with_rbac(
+            tool_registry,
+            auth_components.auth_state.clone(),
+            auth_components.rbac_enforcer,
+        );
+
+        mcp_router_with_auth(mcp_state)
+    } else {
+        tracing::warn!("OIDC not configured - MCP endpoints will be unauthenticated");
+        let mcp_state = McpState::new(tool_registry);
+        mcp_router(mcp_state)
+    };
+
+    tracing::info!("MCP gateway initialized");
+
     // Build application router
     let app = Router::new()
         // Health endpoints (no state needed for live/startup)
@@ -120,6 +162,8 @@ async fn main() -> Result<()> {
         )
         // Metrics endpoint
         .route("/metrics", get(metrics_handler).with_state(metrics.clone()))
+        // CAB-912: MCP endpoints (with or without auth)
+        .merge(mcp_routes)
         // Catch-all route for API proxying with shadow mode
         .fallback(any(shadow_route_request).with_state(shadow_router))
         // Add tracing layer

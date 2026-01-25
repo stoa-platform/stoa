@@ -1,0 +1,217 @@
+# =============================================================================
+# STOA Platform - Quick Start Docker Compose
+# =============================================================================
+# Launch the full platform in < 5 minutes on 8GB RAM
+#
+# Usage:
+#   cp .env.example .env
+#   docker compose up -d
+#
+# Services:
+#   - postgres:    Database (port 5432)
+#   - keycloak:    Authentication (port 8080)
+#   - api:         Control Plane API (port 8000)
+#   - console:     Console UI (port 3000)
+#   - prometheus:  Metrics (port 9090)
+#   - grafana:     Dashboards (port 3001)
+#
+# Total RAM: ~1.5GB (works on 8GB machines)
+# =============================================================================
+
+services:
+  # ==========================================================================
+  # Database
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: stoa-postgres
+    ports:
+      - "${PORT_DB:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-stoa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stoa-quickstart-2045}
+      POSTGRES_DB: ${POSTGRES_DB:-stoa_platform}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init/01-init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql:ro
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-stoa} -d ${POSTGRES_DB:-stoa_platform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Authentication (Keycloak)
+  # ==========================================================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: stoa-keycloak
+    command: start-dev --import-realm
+    ports:
+      - "${PORT_KEYCLOAK:-8080}:8080"
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /
+    volumes:
+      - ./init/keycloak-realm.json:/opt/keycloak/data/import/stoa-realm.json:ro
+      - keycloak-data:/opt/keycloak/data
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 1 cat <&3 | grep -q '200'"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Database Migrations (one-shot)
+  # ==========================================================================
+  db-migrate:
+    image: ghcr.io/gostoa/control-plane-api:latest
+    container_name: stoa-db-migrate
+    entrypoint: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stoa}:${POSTGRES_PASSWORD:-stoa-quickstart-2045}@postgres:5432/${POSTGRES_DB:-stoa_platform}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    restart: "no"
+
+  # ==========================================================================
+  # Control Plane API
+  # ==========================================================================
+  control-plane-api:
+    image: ghcr.io/gostoa/control-plane-api:latest
+    container_name: stoa-api
+    ports:
+      - "${PORT_API:-8000}:8000"
+    environment:
+      # Database
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stoa}:${POSTGRES_PASSWORD:-stoa-quickstart-2045}@postgres:5432/${POSTGRES_DB:-stoa_platform}
+      # Keycloak
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: stoa
+      KEYCLOAK_CLIENT_ID: control-plane-api
+      KEYCLOAK_VERIFY_SSL: "false"
+      # CORS
+      CORS_ORIGINS: http://localhost:3000,http://localhost:${PORT_CONSOLE:-3000}
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: text
+      ENVIRONMENT: development
+      # Disable optional integrations for quick start
+      KAFKA_BOOTSTRAP_SERVERS: ""
+      OPENSEARCH_HOST: ""
+      GITLAB_URL: ""
+      AWX_URL: ""
+      ENABLE_DEPLOYMENT_WORKER: "false"
+      ENABLE_SNAPSHOT_CONSUMER: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Console UI
+  # ==========================================================================
+  control-plane-ui:
+    image: ghcr.io/gostoa/control-plane-ui:latest
+    container_name: stoa-console
+    ports:
+      - "${PORT_CONSOLE:-3000}:8080"
+    environment:
+      # These are baked at build time, but we expose them for documentation
+      VITE_API_URL: http://localhost:${PORT_API:-8000}
+      VITE_KEYCLOAK_URL: http://localhost:${PORT_KEYCLOAK:-8080}
+    depends_on:
+      control-plane-api:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Prometheus (Metrics)
+  # ==========================================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: stoa-prometheus
+    ports:
+      - "${PORT_PROMETHEUS:-9090}:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+      - "--storage.tsdb.retention.time=7d"
+    networks:
+      - stoa-network
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Grafana (Dashboards)
+  # ==========================================================================
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: stoa-grafana
+    ports:
+      - "${PORT_GRAFANA:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/stoa-overview.json
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - stoa-network
+    restart: unless-stopped
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  stoa-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres-data:
+  keycloak-data:
+  prometheus-data:
+  grafana-data:

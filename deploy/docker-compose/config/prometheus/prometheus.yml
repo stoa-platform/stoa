@@ -1,0 +1,34 @@
+# =============================================================================
+# STOA Platform - Prometheus Configuration
+# =============================================================================
+# Scrapes metrics from the Control Plane API
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'quickstart'
+    platform: 'stoa'
+
+# Scrape configurations
+scrape_configs:
+  # -------------------------------------------------------------------------
+  # STOA Control Plane API
+  # -------------------------------------------------------------------------
+  - job_name: 'stoa-control-plane-api'
+    static_configs:
+      - targets: ['control-plane-api:8000']
+        labels:
+          service: 'control-plane-api'
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # -------------------------------------------------------------------------
+  # Prometheus self-monitoring
+  # -------------------------------------------------------------------------
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'

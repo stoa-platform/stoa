@@ -19,7 +19,7 @@ from .routers import tenants, apis, applications, deployments, git, events, webh
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
 from .routers.external_mcp_servers import admin_router as external_mcp_servers_admin_router, internal_router as external_mcp_servers_internal_router
-from .routers import portal, mcp_gitops, mcp_proxy, platform, portal_applications, catalog_admin, admin_prospects
+from .routers import portal, mcp_gitops, mcp_proxy, mcp_policy_proxy, platform, portal_applications, catalog_admin, admin_prospects
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service, argocd_service, metrics_service
 # Note: These are now imported as instances, not modules
@@ -326,6 +326,9 @@ app.include_router(mcp_gitops.router)
 
 # MCP Tools proxy router (proxies to MCP Gateway)
 app.include_router(mcp_proxy.router)
+
+# MCP Policy proxy router (CAB-875 - proxies policy management to MCP Gateway)
+app.include_router(mcp_policy_proxy.router)
 
 # API Monitoring
 app.include_router(monitoring.router)

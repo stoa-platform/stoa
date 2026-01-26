@@ -1,0 +1,154 @@
+# CAB-940: Hardened Keycloak Ingress
+# Apply with: kubectl apply -f k8s/ingress/keycloak-hardened.yaml
+#
+# Two ingress resources:
+# 1. keycloak-public: OIDC endpoints only (rate-limited, security headers)
+# 2. keycloak-admin: Admin console (VPN-only access)
+#
+# PRE-REQUISITE: TLS cert must include auth-admin.gostoa.dev
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-public
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: auth
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-940
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Rate limiting: 2 rps, burst 5 (anti-credential-stuffing)
+    nginx.ingress.kubernetes.io/limit-rps: "2"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+    nginx.ingress.kubernetes.io/limit-connections: "5"
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+      more_set_headers "Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+    # Block admin/master/account endpoints from public access
+    nginx.ingress.kubernetes.io/server-snippet: |
+      # Block admin console from public
+      location ~ ^/admin {
+        return 403;
+      }
+      # Block master realm entirely
+      location ~ ^/realms/master {
+        return 403;
+      }
+      # Block account self-service
+      location ~ ^/realms/[^/]+/account {
+        return 403;
+      }
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - auth.gostoa.dev
+      secretName: keycloak-tls
+  rules:
+    - host: auth.gostoa.dev
+      http:
+        paths:
+          # OIDC Discovery - Required for clients
+          - path: /realms/stoa/.well-known
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+          # Token/auth endpoints - Required for auth flows
+          - path: /realms/stoa/protocol/openid-connect
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+          # Login forms - Required for browser auth
+          - path: /realms/stoa/login-actions
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+          # Resources (CSS, JS for login page)
+          - path: /resources
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+          # Realm root for redirects
+          - path: /realms/stoa
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+---
+# Admin Ingress - VPN access only
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-admin
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: admin
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-940
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # VPN CIDR whitelist - ONLY these IPs can access admin
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.100.0.0/16"
+    # Security headers for admin
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - auth-admin.gostoa.dev
+      secretName: keycloak-admin-tls
+  rules:
+    - host: auth-admin.gostoa.dev
+      http:
+        paths:
+          # Admin console
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+          # Resources for admin UI
+          - path: /resources
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+          # Realm management
+          - path: /realms
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080

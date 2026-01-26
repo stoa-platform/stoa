@@ -116,30 +116,38 @@ jobs:
         run: |
           TEST_SUITE="${{ github.event.inputs.test_suite || 'smoke' }}"
 
+          # Always run auth-setup first to generate storage state files
+          echo "Running auth-setup to generate storage state..."
+          npx playwright test --project=auth-setup || {
+            echo "Auth setup failed - check Keycloak credentials"
+            exit 1
+          }
+
+          # Then run the filtered tests
           case "$TEST_SUITE" in
             "all")
               npm run test:e2e
               ;;
             "smoke")
-              npm run test:smoke
+              npx playwright test --grep @smoke
               ;;
             "critical")
-              npm run test:critical
+              npx playwright test --grep @critical
               ;;
             "portal")
-              npm run test:portal
+              npx playwright test --grep @portal
               ;;
             "console")
-              npm run test:console
+              npx playwright test --grep @console
               ;;
             "gateway")
-              npm run test:gateway
+              npx playwright test --grep @gateway
               ;;
             "rpo")
-              npm run test:rpo
+              npx playwright test --grep @rpo
               ;;
             *)
-              npm run test:smoke
+              npx playwright test --grep @smoke
               ;;
           esac
 

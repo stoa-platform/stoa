@@ -41,6 +41,7 @@ export default defineConfig({
     // Auth setup - runs first to create storage states for all personas
     {
       name: 'auth-setup',
+      testDir: './fixtures',
       testMatch: /auth\.setup\.ts/,
       use: {
         headless: true,

@@ -35,11 +35,25 @@ STOA Platform v2 - Multi-tenant API Management with:
 - **control-plane-ui/**: Console UI (React) - API Provider interface for tenant/API management
 - **portal/**: Developer Portal (React + Vite) - API Consumer portal for browse, subscribe, test APIs
 - **control-plane-api/**: FastAPI backend with Keycloak auth
-- **mcp-gateway/**: MCP Gateway for AI-Native API access
+- **mcp-gateway/**: STOA Gateway (edge-mcp mode) - AI-Native API access via MCP protocol
+- **stoa-gateway/**: STOA Gateway (Rust) - Emerging implementation for all 4 modes
 - **charts/stoa-platform/**: Helm chart for K8s deployment
 - **terraform/**: AWS infrastructure (EKS, RDS, etc.)
 
-### MCP Gateway Features (Phase 12)
+### STOA Gateway (Unified Architecture - ADR-024)
+
+The gateway component implements 4 deployment modes under a unified architecture:
+- **edge-mcp** (current): MCP protocol, SSE, tools/call - Python implementation in `mcp-gateway/`
+- **sidecar** (planned Q2): Behind 3rd-party gateways (Kong, Envoy, Apigee)
+- **proxy** (planned Q3): Inline policy enforcement, rate limiting
+- **shadow** (deferred): Passive traffic capture, UAC auto-generation
+
+See [ADR-024](https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes) for the full architecture decision.
+
+**Current**: Python/FastAPI (`mcp-gateway/`) - production
+**Target**: Rust/Tokio (`stoa-gateway/`) - Q4 2026
+
+### Edge-MCP Mode Features (Phase 12)
 - **Tool Registry**: Dynamic tool registration from CRDs
 - **OPA Policy Engine**: Fine-grained RBAC (CAB-122)
 - **Metering Pipeline**: Kafka-based usage tracking (CAB-123)

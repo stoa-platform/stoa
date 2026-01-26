@@ -1,5 +1,9 @@
 # STOA MCP Gateway
 
+> **Note**: This component implements `edge-mcp` mode of the unified STOA Gateway architecture.
+> See [ADR-024](https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes) for the
+> complete vision. The Python implementation remains in production while the Rust port is developed.
+
 > Model Context Protocol Gateway for AI-Native API Management
 
 ## Overview

@@ -1,6 +1,44 @@
 # STOA Platform Helm Values
 # =========================
 
+# Gateway Configuration (CAB-958: Unified Gateway Architecture)
+# See ADR-024: https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes
+# Currently runs Python mcp-gateway. Will migrate to Rust stoa-gateway Q4 2026.
+gateway:
+  # Current production image (Python mcp-gateway)
+  image:
+    repository: ghcr.io/hlfh/mcp-gateway
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  # Future: mode selection (not active yet, prepared for Rust gateway)
+  # mode: edge-mcp  # edge-mcp | sidecar | proxy | shadow
+
+  # Mode-specific configuration (prepared for future use)
+  edgeMcp:
+    enabled: true
+    port: 3001
+    mcpTimeout: 30s
+    maxToolsPerRequest: 100
+
+  sidecar:
+    enabled: false
+    primaryGateway: ""  # kong | envoy | apigee | webmethods
+    metricsEnabled: true
+    meteringEnabled: true
+
+  proxy:
+    enabled: false
+    upstream: ""
+    opaEndpoint: ""
+    rateLimitEnabled: true
+
+  shadow:
+    enabled: false  # DEFERRED - requires security review (ADR-024)
+    # targetBackend: ""
+    # piiMaskingEnabled: true
+    # retentionDays: 30
+
 # Gateway OpenAPI Sync Configuration
 # Automatically syncs OpenAPI spec from Control-Plane-API to webMethods Gateway
 gatewaySync:

@@ -22,14 +22,14 @@ if ! command -v kcadm.sh &> /dev/null; then
     exit 1
 fi
 
-# Token lifespans (15 min access, 8h session max)
+# Token lifespans (5 min access, 8h session max) - CAB-940 hardening
 echo "[1/6] Setting token lifespans..."
-kcadm.sh update realms/${REALM} -s accessTokenLifespan=900
-kcadm.sh update realms/${REALM} -s accessTokenLifespanForImplicitFlow=900
+kcadm.sh update realms/${REALM} -s accessTokenLifespan=300
+kcadm.sh update realms/${REALM} -s accessTokenLifespanForImplicitFlow=300
 kcadm.sh update realms/${REALM} -s ssoSessionMaxLifespan=28800
 kcadm.sh update realms/${REALM} -s clientSessionIdleTimeout=1800
 kcadm.sh update realms/${REALM} -s clientSessionMaxLifespan=28800
-echo "    Access token: 900s (15 min)"
+echo "    Access token: 300s (5 min)"
 echo "    SSO max: 28800s (8 hours)"
 
 # Refresh token security
@@ -60,11 +60,17 @@ echo "    History: 5 passwords"
 
 # Disable self-registration and self-service (belt + suspenders)
 echo "[5/6] Disabling self-service features..."
+kcadm.sh update realms/${REALM} -s sslRequired=all
 kcadm.sh update realms/${REALM} -s registrationAllowed=false
 kcadm.sh update realms/${REALM} -s registrationEmailAsUsername=false
 kcadm.sh update realms/${REALM} -s editUsernameAllowed=false
+kcadm.sh update realms/${REALM} -s rememberMe=false
+kcadm.sh update realms/${REALM} -s verifyEmail=true
+echo "    SSL required: all"
 echo "    Self-registration: disabled"
 echo "    Edit username: disabled"
+echo "    Remember me: disabled"
+echo "    Verify email: enabled"
 
 # Audit logging
 echo "[6/6] Enabling audit logging..."

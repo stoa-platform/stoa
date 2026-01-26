@@ -41,7 +41,7 @@ echo "Realm: ${REALM}"
 echo ""
 
 # Test 1: Admin console should be blocked (403)
-echo -n "[1/7] Admin console blocked... "
+echo -n "[1/8] Admin console blocked... "
 ADMIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${KEYCLOAK_URL}/admin/" 2>/dev/null || echo "000")
 if [[ "${ADMIN_STATUS}" == "403" ]]; then
     pass "(HTTP 403)"
@@ -52,7 +52,7 @@ else
 fi
 
 # Test 2: Master realm should be blocked (403)
-echo -n "[2/7] Master realm blocked... "
+echo -n "[2/8] Master realm blocked... "
 MASTER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${KEYCLOAK_URL}/realms/master/.well-known/openid-configuration" 2>/dev/null || echo "000")
 if [[ "${MASTER_STATUS}" == "403" ]]; then
     pass "(HTTP 403)"
@@ -63,7 +63,7 @@ else
 fi
 
 # Test 3: Account self-service should be blocked (403)
-echo -n "[3/7] Account self-service blocked... "
+echo -n "[3/8] Account self-service blocked... "
 ACCOUNT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${KEYCLOAK_URL}/realms/${REALM}/account/" 2>/dev/null || echo "000")
 if [[ "${ACCOUNT_STATUS}" == "403" ]]; then
     pass "(HTTP 403)"
@@ -74,7 +74,7 @@ else
 fi
 
 # Test 4: OIDC discovery should work (200)
-echo -n "[4/7] OIDC discovery accessible... "
+echo -n "[4/8] OIDC discovery accessible... "
 OIDC_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${KEYCLOAK_URL}/realms/${REALM}/.well-known/openid-configuration" 2>/dev/null || echo "000")
 if [[ "${OIDC_STATUS}" == "200" ]]; then
     pass "(HTTP 200)"
@@ -85,7 +85,7 @@ else
 fi
 
 # Test 5: JWKS endpoint should work (200) - Critical for MCP Gateway
-echo -n "[5/7] JWKS endpoint accessible... "
+echo -n "[5/8] JWKS endpoint accessible... "
 JWKS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/certs" 2>/dev/null || echo "000")
 if [[ "${JWKS_STATUS}" == "200" ]]; then
     pass "(HTTP 200) - MCP Gateway OK"
@@ -96,7 +96,7 @@ else
 fi
 
 # Test 6: Token endpoint should be reachable (400/401 without creds is expected)
-echo -n "[6/7] Token endpoint accessible... "
+echo -n "[6/8] Token endpoint accessible... "
 TOKEN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" -d "" 2>/dev/null || echo "000")
 if [[ "${TOKEN_STATUS}" == "400" || "${TOKEN_STATUS}" == "401" || "${TOKEN_STATUS}" == "415" ]]; then
     pass "(HTTP ${TOKEN_STATUS}) - Endpoint reachable"
@@ -106,8 +106,28 @@ else
     fail "(HTTP ${TOKEN_STATUS}, expected 400/401/415)"
 fi
 
-# Test 7: Security headers present
-echo -n "[7/7] Security headers present... "
+# Test 7: Token lifespan check (via test token if credentials available)
+echo -n "[7/8] Token lifespan ≤ 300s... "
+if [[ -n "${TEST_CLIENT_SECRET:-}" ]]; then
+    # Get a token and check expires_in
+    TOKEN_RESPONSE=$(curl -s -X POST "${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token" \
+        -d "grant_type=client_credentials" \
+        -d "client_id=${TEST_CLIENT_ID:-stoa-mcp-gateway}" \
+        -d "client_secret=${TEST_CLIENT_SECRET}" 2>/dev/null || echo "{}")
+    EXPIRES_IN=$(echo "${TOKEN_RESPONSE}" | jq -r '.expires_in // 0' 2>/dev/null || echo "0")
+    if [[ "${EXPIRES_IN}" -gt 0 && "${EXPIRES_IN}" -le 300 ]]; then
+        pass "(expires_in=${EXPIRES_IN}s)"
+    elif [[ "${EXPIRES_IN}" -gt 300 ]]; then
+        fail "(expires_in=${EXPIRES_IN}s > 300s MAX)"
+    else
+        warn "(Could not obtain token to verify)"
+    fi
+else
+    warn "(Set TEST_CLIENT_SECRET to verify token lifespan)"
+fi
+
+# Test 8: Security headers present
+echo -n "[8/8] Security headers present... "
 HEADERS=$(curl -s -I "${KEYCLOAK_URL}/realms/${REALM}/.well-known/openid-configuration" 2>/dev/null)
 
 HEADERS_OK=true

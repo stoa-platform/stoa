@@ -16,6 +16,44 @@ jobs:
           fetch-depth: 0  # Required to access full commit history
 
       - name: Check DCO sign-off
-        uses: tisonkun/actions-dco@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get commits in this PR
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          echo "Checking commits from $BASE_SHA to $HEAD_SHA"
+
+          FAILED=0
+          while read -r COMMIT; do
+            if [ -z "$COMMIT" ]; then
+              continue
+            fi
+
+            # Check if commit has Signed-off-by line
+            if ! git log -1 --format=%B "$COMMIT" | grep -iq "^Signed-off-by:"; then
+              echo "❌ Commit $COMMIT is missing DCO sign-off"
+              git log -1 --format="   Author: %an <%ae>%n   Message: %s" "$COMMIT"
+              echo ""
+              FAILED=1
+            else
+              echo "✅ Commit $COMMIT has DCO sign-off"
+            fi
+          done < <(git rev-list "$BASE_SHA".."$HEAD_SHA")
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo ""
+            echo "=========================================="
+            echo "DCO check failed!"
+            echo ""
+            echo "Please sign off your commits with:"
+            echo "  git commit --amend --signoff"
+            echo ""
+            echo "Or for all commits in this branch:"
+            echo "  git rebase --signoff HEAD~N"
+            echo "  (where N is the number of commits)"
+            echo "=========================================="
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All commits have DCO sign-off"

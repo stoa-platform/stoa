@@ -13,7 +13,7 @@ python-gitlab==4.4.0
 pyyaml==6.0.1
 sse-starlette==1.8.2
 aiocache==0.12.2
-prometheus-client==0.19.0
+prometheus-client==0.24.1
 structlog==24.1.0
 # Database
 sqlalchemy[asyncio]==2.0.25

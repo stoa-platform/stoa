@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Service for managing pipeline traces in PostgreSQL."""
 import logging
 import uuid

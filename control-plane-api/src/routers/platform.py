@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Platform Status API Router - GitOps Observability (CAB-654)
 
 Provides endpoints for monitoring platform component status via Argo CD.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 //! RBAC (Role-Based Access Control)
 //!
 //! CAB-912 P2: Role-based access control with tenant isolation.

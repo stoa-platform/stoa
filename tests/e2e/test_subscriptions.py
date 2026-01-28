@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """
 E2E Subscription Tests (CAB-291)
 Tests for MCP Tool subscription flows including:

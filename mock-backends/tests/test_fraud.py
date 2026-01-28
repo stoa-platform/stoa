@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Tests for Fraud Detection API.
 
 CAB-1018: Mock APIs for Central Bank Demo

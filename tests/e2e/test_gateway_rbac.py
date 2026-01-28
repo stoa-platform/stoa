@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """
 E2E Gateway RBAC Tests (CAB-651)
 Verify scope-based RBAC on webMethods Gateway

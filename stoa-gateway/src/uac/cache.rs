@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 //! Versioned Policy Cache
 //!
 //! CAB-912: Cache for UAC policies with Git version checking.

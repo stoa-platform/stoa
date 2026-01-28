@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Tests for error snapshot models.
 
 CAB-397: Validates Pydantic model behavior.

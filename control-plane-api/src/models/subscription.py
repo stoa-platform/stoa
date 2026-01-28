@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Subscription SQLAlchemy model for API subscriptions"""
 from sqlalchemy import Column, String, DateTime, Enum as SQLEnum, Text, Index, Integer
 from sqlalchemy.dialects.postgresql import UUID

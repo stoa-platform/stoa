@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 import { NavLink } from 'react-router-dom';
 import { Home, CreditCard, BookOpen, User, X, AppWindow, Webhook, BarChart3, Shield, Wrench, ExternalLink, FileCode2, LucideIcon } from 'lucide-react';
 import { config } from '../../config';

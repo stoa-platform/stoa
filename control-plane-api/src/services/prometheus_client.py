@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Prometheus client for PromQL queries (CAB-840)
 
 Provides access to Prometheus metrics for usage statistics.

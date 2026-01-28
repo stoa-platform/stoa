@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Kafka consumer for error snapshots from webMethods Gateway.
 
 CAB-485: Consumes error snapshots published by webMethods Gateway

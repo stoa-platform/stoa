@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Variable Resolver Service for GitOps templates
 
 Resolves ${VARIABLE} placeholders in API configurations using:

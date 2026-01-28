@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 use serde_json::json;
 use stoa_policy_engine::mcp::ToolCall;
 use stoa_policy_engine::policy::PolicyEngine;

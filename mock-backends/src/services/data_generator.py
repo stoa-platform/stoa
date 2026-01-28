@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Data generator for synthetic fraud detection data.
 
 CAB-1018: Mock APIs for Central Bank Demo

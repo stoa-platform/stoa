@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 import { useState, ReactNode } from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';

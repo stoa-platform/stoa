@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 import { User, Mail, Building, Key, Shield } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 

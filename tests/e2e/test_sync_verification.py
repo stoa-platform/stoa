@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """
 E2E Sync Verification Tests (CAB-650)
 Verify that Git = Gateway = Portal after Argo CD sync

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """MCP Server models for server-based subscriptions.
 
 Servers are grouped collections of tools with unified subscription management

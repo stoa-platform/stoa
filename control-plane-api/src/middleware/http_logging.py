@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """HTTP Request/Response Logging Middleware.
 
 CAB-330: Middleware for detailed HTTP logging to support troubleshooting.

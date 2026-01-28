@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 /**
  * Console step definitions for STOA E2E Tests
  * Steps specific to the Console UI (API Provider)

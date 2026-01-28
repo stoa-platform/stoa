@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 //! UAC (Unified Access Control) Module
 //!
 //! CAB-912: Policy enforcement with versioned caching and safe mode.

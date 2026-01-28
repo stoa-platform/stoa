@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """CAB-660: SQLAlchemy ORM Models for Tool Handlers.
 
 Database models for the STOA platform MCP Gateway.

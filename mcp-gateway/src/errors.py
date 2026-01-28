@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """CAB-659: STOA Standard Error Code System.
 
 Standardized error codes and exception classes for the MCP Gateway.

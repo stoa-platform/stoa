@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 /**
  * Common step definitions for STOA E2E Tests
  * Shared steps for navigation, authentication, and basic assertions

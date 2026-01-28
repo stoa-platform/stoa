@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Loki client for LogQL queries (CAB-840)
 
 Provides access to Loki logs for call history and activity feeds.

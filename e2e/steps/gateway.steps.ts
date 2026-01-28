@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 /**
  * Gateway step definitions for STOA E2E Tests
  * Steps for testing API Gateway access control and runtime behavior

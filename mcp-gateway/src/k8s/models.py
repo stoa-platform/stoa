@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Kubernetes Custom Resource models for STOA MCP Gateway.
 
 Pydantic models representing Tool and ToolSet CRDs.

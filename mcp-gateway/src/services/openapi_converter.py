@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """OpenAPI to MCP Tool Converter.
 
 Transforms OpenAPI specifications into MCP Tool definitions.

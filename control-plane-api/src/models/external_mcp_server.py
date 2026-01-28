@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """External MCP Server SQLAlchemy models.
 
 Models for registering and managing external MCP servers

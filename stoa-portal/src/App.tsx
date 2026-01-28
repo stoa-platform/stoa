@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';

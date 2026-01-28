@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Demo headers middleware - adds X-Demo-Mode and X-Data-Classification headers.
 
 CAB-1018: Mock APIs for Central Bank Demo

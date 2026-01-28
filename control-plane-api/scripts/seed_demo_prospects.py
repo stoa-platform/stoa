@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Seed demo prospects for Feb 26 demo (CAB-911).
 
 Creates 12 demo prospects with various statuses, events, and NPS feedback

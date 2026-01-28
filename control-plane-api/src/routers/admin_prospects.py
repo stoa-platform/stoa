@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Admin Prospects API Router - Dashboard for conversion tracking (CAB-911).
 
 Provides endpoints for the admin prospects dashboard:

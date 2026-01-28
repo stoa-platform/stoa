@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 import { memo } from 'react';
 import { Wrench, Tag, ExternalLink, Zap } from 'lucide-react';
 import type { MCPTool } from '../../types';

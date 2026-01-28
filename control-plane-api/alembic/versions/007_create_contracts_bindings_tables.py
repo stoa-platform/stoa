@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Create contracts and protocol bindings tables
 
 Revision ID: 007_contracts_bindings

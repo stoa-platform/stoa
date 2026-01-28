@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 import { ChevronDown, ChevronRight, Circle, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import type { ToolInputSchema, ToolPropertySchema } from '../../types';

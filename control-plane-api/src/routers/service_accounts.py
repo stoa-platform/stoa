@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Service Accounts Router for MCP Access.
 
 Allows users to create OAuth2 Service Accounts for MCP tool access.

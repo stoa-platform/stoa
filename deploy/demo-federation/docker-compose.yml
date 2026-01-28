@@ -1,0 +1,160 @@
+# =============================================================================
+# STOA Platform - Multi-IAM Federation Demo (ADR-026)
+# =============================================================================
+# Proves Zero User Storage federation with 3 protocol types:
+#   - OIDC (Keycloak-to-Keycloak broker)
+#   - SAML 2.0 (Keycloak SAML IdP broker)
+#   - LDAP (OpenLDAP user federation)
+#
+# Usage:
+#   cp .env.example .env
+#   docker compose up -d
+#
+# Services:
+#   - keycloak:      5 realms (2 source + 3 tenant) (port 8080)
+#   - openldap:      LDAP backend for gamma org (port 1389)
+#   - mock-gateway:  JWT issuer/audience validator (port 9000)
+#   - opa:           Federation isolation policy (port 8181)
+#
+# Demo: see scripts/demo-federation/README.md
+# =============================================================================
+
+services:
+  # ==========================================================================
+  # OpenLDAP - Identity source for Org Gamma
+  # ==========================================================================
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: stoa-federation-ldap
+    ports:
+      - "${PORT_LDAP:-1389}:389"
+    command: ["--copy-service"]
+    environment:
+      LDAP_ORGANISATION: "Demo Org Gamma"
+      LDAP_DOMAIN: "demo.stoa"
+      LDAP_ADMIN_PASSWORD: "${LDAP_ADMIN_PASSWORD:-admin-password}"
+    volumes:
+      - ./openldap:/ldif-seed:ro
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
+    networks:
+      - federation-network
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost:389", "-b", "", "-s", "base", "namingContexts"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Keycloak - Federation Hub (5 realms)
+  # ==========================================================================
+  # Realms:
+  #   idp-source-alpha  - OIDC identity source (alice-alpha, bob-alpha)
+  #   idp-source-beta   - SAML identity source (carol-beta, dave-beta)
+  #   demo-org-alpha    - Tenant realm, federated via OIDC
+  #   demo-org-beta     - Tenant realm, federated via SAML
+  #   demo-org-gamma    - Tenant realm, federated via LDAP
+  # ==========================================================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: stoa-federation-keycloak
+    command: start-dev --import-realm
+    ports:
+      - "${PORT_KEYCLOAK:-8080}:8080"
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_SPI_REALM_DEFAULT__SSL__REQUIRED: "none"
+      KC_FEATURES: "token-exchange,admin-fine-grained-authz"
+    volumes:
+      - ./keycloak/idp-source-alpha.json:/opt/keycloak/data/import/01-idp-source-alpha.json:ro
+      - ./keycloak/idp-source-beta.json:/opt/keycloak/data/import/02-idp-source-beta.json:ro
+      - ./keycloak/demo-org-alpha.json:/opt/keycloak/data/import/03-demo-org-alpha.json:ro
+      - ./keycloak/demo-org-beta.json:/opt/keycloak/data/import/04-demo-org-beta.json:ro
+      - ./keycloak/demo-org-gamma.json:/opt/keycloak/data/import/05-demo-org-gamma.json:ro
+      - keycloak-data:/opt/keycloak/data
+    depends_on:
+      openldap:
+        condition: service_healthy
+    networks:
+      - federation-network
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && timeout 1 cat <&3 | grep -q '200'"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Mock Gateway - JWT issuer/audience isolation validator
+  # ==========================================================================
+  mock-gateway:
+    image: python:3.11-slim
+    container_name: stoa-federation-gateway
+    ports:
+      - "${PORT_GATEWAY:-9000}:9000"
+    environment:
+      KEYCLOAK_INTERNAL_URL: "http://keycloak:8080"
+      KEYCLOAK_URL: "http://localhost:${PORT_KEYCLOAK:-8080}"
+    volumes:
+      - ./gateway/server.py:/app/server.py:ro
+    command: ["python", "/app/server.py"]
+    networks:
+      - federation-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # OPA - Federation isolation policy engine
+  # ==========================================================================
+  opa:
+    image: openpolicyagent/opa:0.60.0
+    platform: linux/amd64
+    container_name: stoa-federation-opa
+    ports:
+      - "${PORT_OPA:-8181}:8181"
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--set=decision_logs.console=true"
+      - "/policies"
+    volumes:
+      - ./gateway/policy.rego:/policies/federation.rego:ro
+    networks:
+      - federation-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8181/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  federation-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  keycloak-data:
+  ldap-data:
+  ldap-config:

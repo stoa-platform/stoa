@@ -1,0 +1,85 @@
+# CODEOWNERS - Code ownership for review requirements
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ============================================
+# Default Owner (All files)
+# ============================================
+* @stoa-platform/maintainers
+
+# ============================================
+# Security-Critical Paths (require security review)
+# ============================================
+
+# Authentication & Authorization
+/control-plane-api/src/auth/ @stoa-platform/maintainers
+/mcp-gateway/src/auth/ @stoa-platform/maintainers
+/stoa-gateway/src/auth/ @stoa-platform/maintainers
+
+# Policy Engines
+/mcp-gateway/src/policy/ @stoa-platform/maintainers
+/stoa-policy-engine-rs/ @stoa-platform/maintainers
+/deploy/platform-bootstrap/policies/ @stoa-platform/maintainers
+
+# Secrets & External Secrets
+/deploy/external-secrets/ @stoa-platform/maintainers
+/deploy/config/ @stoa-platform/maintainers
+
+# CI/CD Workflows
+/.github/workflows/ @stoa-platform/maintainers
+
+# Infrastructure
+/Dockerfile* @stoa-platform/maintainers
+/**/Dockerfile @stoa-platform/maintainers
+/docker-compose*.yml @stoa-platform/maintainers
+/**/docker-compose*.yml @stoa-platform/maintainers
+/charts/ @stoa-platform/maintainers
+/argocd/ @stoa-platform/maintainers
+/ansible/ @stoa-platform/maintainers
+
+# Kubernetes Manifests
+/**/k8s/ @stoa-platform/maintainers
+
+# ============================================
+# Core Components
+# ============================================
+
+# Control Plane API (FastAPI backend)
+/control-plane-api/ @stoa-platform/maintainers
+
+# MCP Gateway (Python - production)
+/mcp-gateway/ @stoa-platform/maintainers
+
+# STOA Gateway (Rust - emerging)
+/stoa-gateway/ @stoa-platform/maintainers
+
+# Console UI (React - API Provider interface)
+/control-plane-ui/ @stoa-platform/maintainers
+
+# Developer Portal (React - API Consumer)
+/portal/ @stoa-platform/maintainers
+/stoa-portal/ @stoa-platform/maintainers
+
+# ============================================
+# Services
+# ============================================
+/services/ @stoa-platform/maintainers
+/landing-api/ @stoa-platform/maintainers
+/keycloak/ @stoa-platform/maintainers
+
+# ============================================
+# Deployment & Configuration
+# ============================================
+/deploy/ @stoa-platform/maintainers
+/environments/ @stoa-platform/maintainers
+/platform-config/ @stoa-platform/maintainers
+
+# ============================================
+# Testing
+# ============================================
+/e2e/ @stoa-platform/maintainers
+/tests/ @stoa-platform/maintainers
+
+# ============================================
+# Documentation
+# ============================================
+/docs/ @stoa-platform/maintainers

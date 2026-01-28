@@ -1,0 +1,90 @@
+{
+  "realm": "idp-source-alpha",
+  "enabled": true,
+  "displayName": "IdP Source Alpha (OIDC)",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 1800,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "clients": [
+    {
+      "clientId": "org-alpha-broker",
+      "name": "Alpha Broker Client",
+      "description": "Used by demo-org-alpha to broker identities via OIDC",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "alpha-broker-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:8080/realms/demo-org-alpha/broker/alpha-oidc/endpoint/*",
+        "http://keycloak:8080/realms/demo-org-alpha/broker/alpha-oidc/endpoint/*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice-alpha",
+      "email": "alice@alpha.demo",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Alpha",
+      "attributes": {
+        "org": [
+          "alpha"
+        ],
+        "department": [
+          "engineering"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "bob-alpha",
+      "email": "bob@alpha.demo",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Alpha",
+      "attributes": {
+        "org": [
+          "alpha"
+        ],
+        "department": [
+          "operations"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ]
+    }
+  ],
+  "sslRequired": "none"
+}

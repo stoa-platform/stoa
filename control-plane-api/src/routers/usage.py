@@ -28,6 +28,7 @@ from ..schemas.usage import (
     DashboardStats,
     DashboardActivityResponse,
 )
+from ..services.prometheus_client import PrometheusClient
 
 logger = logging.getLogger(__name__)
 
@@ -215,3 +216,135 @@ async def get_dashboard_activity(
             status_code=503,
             detail="Activity feed temporarily unavailable"
         )
+
+
+# ============================================================
+# GET /v1/usage/tokens - Token consumption (CAB-881)
+# ============================================================
+
+@router.get("/tokens")
+async def get_token_usage(
+    time_range: str = Query(default="24h", description="Time range: 1h, 6h, 24h, 7d, 30d"),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Return token consumption for the authenticated tenant.
+
+    Queries Prometheus for stoa_mcp_gateway_tokens_by_tenant metrics.
+    Used by `stoactl token-usage`.
+
+    CAB-881: Tenant-scoped — only returns data for the caller's tenant.
+    """
+    tenant_id = current_user.tenant_id or "default"
+
+    logger.info(f"Fetching token usage for tenant={tenant_id} range={time_range}")
+
+    prom = PrometheusClient()
+    if not prom.is_enabled:
+        raise HTTPException(status_code=503, detail="Prometheus not available")
+
+    try:
+        tenant_id = prom._validate_identifier(tenant_id, "tenant_id")
+        time_range = prom._validate_time_range(time_range)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Query total tokens by tool for this tenant
+    prefix = "stoa_mcp_gateway"
+    query = f'sum by (tool_name) (increase({prefix}_tokens_by_tenant{{tenant_id="{tenant_id}"}}[{time_range}]))'
+
+    try:
+        result = await prom._query(query)
+    except Exception as e:
+        logger.error(f"Prometheus query failed: {e}")
+        raise HTTPException(status_code=503, detail="Metrics temporarily unavailable")
+
+    # Parse Prometheus result into structured response
+    tools = {}
+    total_tokens = 0
+    for item in result:
+        tool_name = item.get("metric", {}).get("tool_name", "unknown")
+        value = float(item.get("value", [0, "0"])[1])
+        tools[tool_name] = int(value)
+        total_tokens += int(value)
+
+    return {
+        "tenant_id": tenant_id,
+        "time_range": time_range,
+        "total_tokens": total_tokens,
+        "by_tool": tools,
+    }
+
+
+# ============================================================
+# GET /v1/usage/tokens/compare - Before/after optimization (CAB-881)
+# ============================================================
+
+@router.get("/tokens/compare")
+async def get_token_usage_compare(
+    time_range: str = Query(default="24h", description="Time range: 1h, 6h, 24h, 7d, 30d"),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Compare token consumption before and after transformation.
+
+    Uses the transformer_reduction_ratio metric to compute savings.
+    Used by `stoactl token-usage --compare`.
+    """
+    tenant_id = current_user.tenant_id or "default"
+
+    prom = PrometheusClient()
+    if not prom.is_enabled:
+        raise HTTPException(status_code=503, detail="Prometheus not available")
+
+    try:
+        tenant_id = prom._validate_identifier(tenant_id, "tenant_id")
+        time_range = prom._validate_time_range(time_range)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    prefix = "stoa_mcp_gateway"
+
+    # Total tokens (after transformation — what was actually sent)
+    query_after = f'sum by (tool_name) (increase({prefix}_tokens_by_tenant{{tenant_id="{tenant_id}"}}[{time_range}]))'
+    # Avg reduction ratio per tool
+    query_ratio = f'avg by (tool_name) ({prefix}_transformer_reduction_ratio{{}})'
+
+    try:
+        result_after = await prom._query(query_after)
+        result_ratio = await prom._query(query_ratio)
+    except Exception as e:
+        logger.error(f"Prometheus query failed: {e}")
+        raise HTTPException(status_code=503, detail="Metrics temporarily unavailable")
+
+    # Build ratio lookup
+    ratios = {}
+    for item in result_ratio:
+        tool_name = item.get("metric", {}).get("tool_name", "unknown")
+        ratios[tool_name] = float(item.get("value", [0, "0"])[1])
+
+    # Calculate before/after per tool
+    tools = {}
+    total_after = 0
+    total_before = 0
+    for item in result_after:
+        tool_name = item.get("metric", {}).get("tool_name", "unknown")
+        after = int(float(item.get("value", [0, "0"])[1]))
+        ratio = ratios.get(tool_name, 0.0)
+        # before = after / (1 - ratio), if ratio > 0
+        before = int(after / (1 - ratio)) if ratio < 1.0 and ratio > 0 else after
+        tools[tool_name] = {
+            "before": before,
+            "after": after,
+            "saved": before - after,
+            "reduction_pct": f"{ratio * 100:.1f}%",
+        }
+        total_after += after
+        total_before += before
+
+    return {
+        "tenant_id": tenant_id,
+        "time_range": time_range,
+        "total_before": total_before,
+        "total_after": total_after,
+        "total_saved": total_before - total_after,
+        "by_tool": tools,
+    }

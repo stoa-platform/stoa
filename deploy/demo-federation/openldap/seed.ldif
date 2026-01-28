@@ -1,0 +1,21 @@
+dn: ou=users,dc=demo,dc=stoa
+objectClass: organizationalUnit
+ou: users
+
+dn: uid=eve-gamma,ou=users,dc=demo,dc=stoa
+objectClass: inetOrgPerson
+uid: eve-gamma
+cn: Eve Gamma
+sn: Gamma
+givenName: Eve
+mail: eve@gamma.demo
+userPassword: demo
+
+dn: uid=frank-gamma,ou=users,dc=demo,dc=stoa
+objectClass: inetOrgPerson
+uid: frank-gamma
+cn: Frank Gamma
+sn: Gamma
+givenName: Frank
+mail: frank@gamma.demo
+userPassword: demo

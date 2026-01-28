@@ -1,0 +1,147 @@
+{
+  "realm": "demo-org-alpha",
+  "enabled": true,
+  "displayName": "Demo Org Alpha (OIDC Federation)",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 1800,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "api-consumer",
+        "description": "Can consume APIs subscribed by this organization"
+      },
+      {
+        "name": "api-publisher",
+        "description": "Can publish APIs on behalf of this organization"
+      }
+    ]
+  },
+  "identityProviders": [
+    {
+      "alias": "alpha-oidc",
+      "displayName": "Org Alpha SSO (OIDC)",
+      "providerId": "oidc",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "authorizationUrl": "http://keycloak:8080/realms/idp-source-alpha/protocol/openid-connect/auth",
+        "tokenUrl": "http://keycloak:8080/realms/idp-source-alpha/protocol/openid-connect/token",
+        "logoutUrl": "http://keycloak:8080/realms/idp-source-alpha/protocol/openid-connect/logout",
+        "userInfoUrl": "http://keycloak:8080/realms/idp-source-alpha/protocol/openid-connect/userinfo",
+        "issuer": "http://keycloak:8080/realms/idp-source-alpha",
+        "jwksUrl": "http://keycloak:8080/realms/idp-source-alpha/protocol/openid-connect/certs",
+        "clientId": "org-alpha-broker",
+        "clientSecret": "alpha-broker-secret",
+        "clientAuthMethod": "client_secret_post",
+        "defaultScope": "openid profile email",
+        "validateSignature": "true",
+        "useJwksUrl": "true",
+        "syncMode": "FORCE"
+      }
+    }
+  ],
+  "identityProviderMappers": [
+    {
+      "name": "alpha-role-mapper",
+      "identityProviderAlias": "alpha-oidc",
+      "identityProviderMapper": "hardcoded-role-idp-mapper",
+      "config": {
+        "role": "api-consumer",
+        "syncMode": "INHERIT"
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "federation-demo",
+      "name": "Federation Demo Client",
+      "description": "Confidential client for token exchange and direct grant",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "alpha-demo-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "attributes": {
+        "oauth2.token.exchange.grant.enabled": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "stoa-federation-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-claim-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "stoa_realm",
+            "claim.value": "demo-org-alpha",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "demo-alpha",
+      "email": "demo@alpha.demo",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Alpha",
+      "attributes": {
+        "org": [
+          "alpha"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "api-consumer"
+      ]
+    }
+  ],
+  "sslRequired": "none"
+}

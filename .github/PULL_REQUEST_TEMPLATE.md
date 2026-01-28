@@ -1,45 +1,75 @@
-## Description
+## Summary
 
-<!-- Describe your changes in a few sentences -->
+<!-- Brief description of what this PR does -->
+
+## Linked Issues
+
+<!-- Use "Closes CAB-XXX" to auto-close issues -->
+- Closes CAB-
+
+## Changes
+
+<!-- List main changes -->
+- 
 
 ## Type of Change
 
-- [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
-- [ ] ✨ New feature (non-breaking change that adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to change)
+- [ ] 🐛 Bug fix (non-breaking change fixing an issue)
+- [ ] ✨ New feature (non-breaking change adding functionality)
+- [ ] 💥 Breaking change (fix or feature causing existing functionality to change)
 - [ ] 📚 Documentation update
 - [ ] 🔧 Refactoring (no functional changes)
-- [ ] 🧪 Tests (adding or updating tests)
+- [ ] 🧪 Tests only
 
-## Related Issues
+## Security Checklist
 
-<!-- Link related issues using "Closes #123" or "Fixes #123" -->
+<!-- Required for security-related changes. Delete if not applicable. -->
 
-Closes #
+- [ ] No secrets in code or logs
+- [ ] Input validation implemented
+- [ ] Tenant isolation enforced
+- [ ] Rate limiting considered
+- [ ] Error messages don't leak internals
 
-## How Has This Been Tested?
+## Testing
 
-<!-- Describe how you tested your changes -->
+<!-- How to test this PR -->
 
-- [ ] Unit tests
-- [ ] Integration tests
-- [ ] Manual testing
+```bash
+# Run tests
+pytest tests/test_XXX.py -v
+```
 
-## Checklist
+## Migration
 
-- [ ] My code follows the project's code style
-- [ ] I have performed a self-review of my code
-- [ ] I have commented my code where necessary
-- [ ] I have updated the documentation accordingly
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix/feature works
-- [ ] New and existing tests pass locally
-- [ ] All commits are signed off (`git commit -s`) per [DCO requirements](../CLA.md)
+<!-- Required if DB changes. Delete if not applicable. -->
 
-## Screenshots (if applicable)
+```bash
+alembic upgrade head
+```
 
-<!-- Add screenshots to help explain your changes -->
+## Review Checklist
 
-## Additional Notes
+- [ ] Tests pass locally
+- [ ] Code follows project patterns
+- [ ] Documentation updated (if needed)
+- [ ] No console.log / print statements left
+- [ ] Commit messages follow convention
 
-<!-- Any additional information reviewers should know -->
+## Screenshots
+
+<!-- If UI changes, add before/after screenshots. Delete if not applicable. -->
+
+---
+
+<details>
+<summary>Standard Marchemalo Score (if applicable)</summary>
+
+| Reviewer | Score |
+|----------|-------|
+| Archi 50x50 | /10 |
+| Team Coca | /10 |
+| OSS Killer | /10 |
+
+**Iterations:** X/3
+</details>

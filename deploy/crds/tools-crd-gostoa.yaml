@@ -1,0 +1,257 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  labels:
+    app.kubernetes.io/component: mcp-gateway
+    app.kubernetes.io/name: stoa-platform
+  name: tools.gostoa.dev
+spec:
+  conversion:
+    strategy: None
+  group: gostoa.dev
+  names:
+    categories:
+    - stoa
+    - mcp
+    kind: Tool
+    listKind: ToolList
+    plural: tools
+    shortNames:
+    - tl
+    singular: tool
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - jsonPath: .spec.method
+      name: Method
+      type: string
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              apiRef:
+                description: Reference to the source API
+                properties:
+                  name:
+                    description: API name or identifier
+                    type: string
+                  operationId:
+                    description: OpenAPI operationId
+                    type: string
+                  version:
+                    description: API version
+                    type: string
+                type: object
+              authentication:
+                description: Authentication configuration for the endpoint
+                properties:
+                  headerName:
+                    default: Authorization
+                    description: Header name for API key authentication
+                    type: string
+                  secretRef:
+                    description: Reference to a Secret containing credentials
+                    properties:
+                      key:
+                        default: token
+                        description: Key within the secret
+                        type: string
+                      name:
+                        description: Secret name
+                        type: string
+                    type: object
+                  type:
+                    default: bearer
+                    description: Authentication type
+                    enum:
+                    - none
+                    - bearer
+                    - basic
+                    - apiKey
+                    - oauth2
+                    type: string
+                type: object
+              description:
+                description: Detailed description of what the tool does
+                maxLength: 1024
+                minLength: 1
+                type: string
+              displayName:
+                description: Human-readable name for the tool
+                maxLength: 64
+                minLength: 1
+                type: string
+              enabled:
+                default: true
+                description: Whether the tool is enabled
+                type: boolean
+              endpoint:
+                description: HTTP endpoint URL for API-backed tools
+                format: uri
+                pattern: ^https?://
+                type: string
+              inputSchema:
+                description: JSON Schema for tool input parameters
+                properties:
+                  properties:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  required:
+                    items:
+                      type: string
+                    type: array
+                  type:
+                    default: object
+                    type: string
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              method:
+                default: POST
+                description: HTTP method for the endpoint
+                enum:
+                - GET
+                - POST
+                - PUT
+                - PATCH
+                - DELETE
+                type: string
+              rateLimit:
+                description: Rate limiting configuration
+                properties:
+                  burst:
+                    default: 10
+                    maximum: 1000
+                    minimum: 1
+                    type: integer
+                  requestsPerMinute:
+                    default: 60
+                    maximum: 10000
+                    minimum: 1
+                    type: integer
+                type: object
+              tags:
+                description: Tags for categorization and filtering
+                items:
+                  maxLength: 32
+                  minLength: 1
+                  type: string
+                maxItems: 10
+                type: array
+              timeout:
+                default: 30s
+                description: Request timeout duration
+                pattern: ^\d+(s|m)$
+                type: string
+              version:
+                default: 1.0.0
+                description: Tool version (semver)
+                pattern: ^\d+\.\d+\.\d+(-[a-zA-Z0-9]+)?$
+                type: string
+            required:
+            - displayName
+            - description
+            type: object
+          status:
+            properties:
+              conditions:
+                items:
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    reason:
+                      type: string
+                    status:
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: Condition type
+                      type: string
+                  required:
+                  - type
+                  - status
+                  type: object
+                type: array
+              errorCount:
+                default: 0
+                description: Number of errors
+                type: integer
+              invocationCount:
+                default: 0
+                description: Number of invocations
+                type: integer
+              lastError:
+                description: Last error message
+                type: string
+              lastSyncedAt:
+                description: Last successful sync time
+                format: date-time
+                type: string
+              phase:
+                description: Current phase of the tool
+                enum:
+                - Pending
+                - Registered
+                - Error
+                - Disabled
+                type: string
+              registeredAt:
+                description: When the tool was registered
+                format: date-time
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    categories:
+    - stoa
+    - mcp
+    kind: Tool
+    listKind: ToolList
+    plural: tools
+    shortNames:
+    - tl
+    singular: tool
+  conditions:
+  - lastTransitionTime: "2026-01-07T10:57:39Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2026-01-07T10:57:39Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1alpha1

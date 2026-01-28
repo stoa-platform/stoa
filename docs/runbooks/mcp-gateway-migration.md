@@ -4,7 +4,7 @@
 
 This runbook documents the progressive migration from the Python MCP Gateway to the Rust implementation using shadow mode and canary deployment strategies.
 
-**Objective**: Zero-downtime migration with instant rollback capability.
+**Objective**: Designed for zero-downtime migration with instant rollback capability.
 
 ## Architecture
 

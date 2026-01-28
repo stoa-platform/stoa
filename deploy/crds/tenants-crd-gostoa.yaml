@@ -1,0 +1,150 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apiextensions.k8s.io/v1","kind":"CustomResourceDefinition","metadata":{"annotations":{},"labels":{"app.kubernetes.io/part-of":"stoa-platform"},"name":"tenants.gostoa.dev"},"spec":{"group":"gostoa.dev","names":{"kind":"Tenant","listKind":"TenantList","plural":"tenants","shortNames":["ten"],"singular":"tenant"},"scope":"Namespaced","versions":[{"additionalPrinterColumns":[{"jsonPath":".spec.displayName","name":"Display Name","type":"string"},{"jsonPath":".status.phase","name":"Status","type":"string"},{"jsonPath":".spec.users","name":"Users","priority":1,"type":"integer"},{"jsonPath":".metadata.creationTimestamp","name":"Age","type":"date"}],"name":"v1alpha1","schema":{"openAPIV3Schema":{"properties":{"spec":{"properties":{"allowedTools":{"items":{"type":"string"},"type":"array"},"contact":{"properties":{"email":{"format":"email","type":"string"},"name":{"type":"string"}},"type":"object"},"description":{"description":"Tenant description","type":"string"},"displayName":{"description":"Human-readable tenant name","type":"string"},"enabled":{"default":true,"type":"boolean"},"namespaces":{"items":{"type":"string"},"type":"array"},"quota":{"properties":{"maxRequestsPerDay":{"minimum":1,"type":"integer"},"maxSubscriptions":{"minimum":1,"type":"integer"},"maxToolsPerNamespace":{"minimum":1,"type":"integer"}},"type":"object"},"rateLimit":{"properties":{"burst":{"minimum":1,"type":"integer"},"requestsPerMinute":{"minimum":1,"type":"integer"}},"type":"object"},"users":{"items":{"properties":{"email":{"type":"string"},"role":{"enum":["admin","viewer","devops"],"type":"string"},"userId":{"type":"string"}},"required":["userId","role"],"type":"object"},"type":"array"}},"required":["displayName"],"type":"object"},"status":{"properties":{"activeSubscriptions":{"type":"integer"},"lastUpdated":{"format":"date-time","type":"string"},"phase":{"enum":["Pending","Active","Suspended","Terminated"],"type":"string"}},"type":"object"}},"type":"object"}},"served":true,"storage":true,"subresources":{"status":{}}}]}}
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+  name: tenants.gostoa.dev
+spec:
+  conversion:
+    strategy: None
+  group: gostoa.dev
+  names:
+    kind: Tenant
+    listKind: TenantList
+    plural: tenants
+    shortNames:
+    - ten
+    singular: tenant
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .spec.users
+      name: Users
+      priority: 1
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              allowedTools:
+                items:
+                  type: string
+                type: array
+              contact:
+                properties:
+                  email:
+                    format: email
+                    type: string
+                  name:
+                    type: string
+                type: object
+              description:
+                description: Tenant description
+                type: string
+              displayName:
+                description: Human-readable tenant name
+                type: string
+              enabled:
+                default: true
+                type: boolean
+              namespaces:
+                items:
+                  type: string
+                type: array
+              quota:
+                properties:
+                  maxRequestsPerDay:
+                    minimum: 1
+                    type: integer
+                  maxSubscriptions:
+                    minimum: 1
+                    type: integer
+                  maxToolsPerNamespace:
+                    minimum: 1
+                    type: integer
+                type: object
+              rateLimit:
+                properties:
+                  burst:
+                    minimum: 1
+                    type: integer
+                  requestsPerMinute:
+                    minimum: 1
+                    type: integer
+                type: object
+              users:
+                items:
+                  properties:
+                    email:
+                      type: string
+                    role:
+                      enum:
+                      - admin
+                      - viewer
+                      - devops
+                      type: string
+                    userId:
+                      type: string
+                  required:
+                  - userId
+                  - role
+                  type: object
+                type: array
+            required:
+            - displayName
+            type: object
+          status:
+            properties:
+              activeSubscriptions:
+                type: integer
+              lastUpdated:
+                format: date-time
+                type: string
+              phase:
+                enum:
+                - Pending
+                - Active
+                - Suspended
+                - Terminated
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: Tenant
+    listKind: TenantList
+    plural: tenants
+    shortNames:
+    - ten
+    singular: tenant
+  conditions:
+  - lastTransitionTime: "2026-01-07T15:57:58Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2026-01-07T15:57:58Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1alpha1

@@ -343,7 +343,7 @@
 
 ## Estimated Availability
 
-**Assumption:** ~8h/week available for STOA (excluding BDF)
+**Assumption:** ~8h/week available for STOA (excluding a major central bank deployment)
 
 | Month | Weeks | Available Hours | Day Equivalent |
 |-------|-------|-----------------|----------------|

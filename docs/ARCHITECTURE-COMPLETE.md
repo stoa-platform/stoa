@@ -1527,7 +1527,7 @@ kafka_consumer_lag{topic, partition}
 │  │ • Complete audit trail via Kafka                                │    │
 │  │ • Event sourcing for traceability                               │    │
 │  │ • 7-day event retention                                         │    │
-│  │ • GDPR-compliant data handling                                  │    │
+│  │ • Designed for GDPR compliance                                  │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘

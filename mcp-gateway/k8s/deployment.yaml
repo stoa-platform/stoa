@@ -10,6 +10,13 @@ metadata:
     app.kubernetes.io/part-of: stoa-platform
 spec:
   replicas: 2
+  # CAB-957: Anti-Zombie rolling update strategy
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0  # Never reduce capacity during deploy
+      maxSurge: 1
+  minReadySeconds: 30    # Wait 30s after ready before accepting traffic
   selector:
     matchLabels:
       app: stoa-mcp-gateway
@@ -22,6 +29,8 @@ spec:
       serviceAccountName: stoa-mcp-gateway
       # CAB-945: Keep automountServiceAccountToken enabled (needed for CRD access)
       automountServiceAccountToken: true
+      # CAB-957: Allow graceful shutdown
+      terminationGracePeriodSeconds: 60
       containers:
         - name: stoa-mcp-gateway
           image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-mcp-gateway:dev-latest
@@ -58,14 +67,21 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+          # CAB-957: Deep readiness probe with anti-zombie pattern
           readinessProbe:
             httpGet:
               path: /health/ready
               port: http
-            initialDelaySeconds: 0
+            initialDelaySeconds: 10   # Give time for deep checks to initialize
             periodSeconds: 5
             timeoutSeconds: 5
             failureThreshold: 3
+            successThreshold: 2       # 2 consecutive OK before ready
+          # CAB-957: Graceful shutdown lifecycle
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]  # Allow LB to drain
           # CAB-945: Container hardening
           securityContext:
             runAsNonRoot: true

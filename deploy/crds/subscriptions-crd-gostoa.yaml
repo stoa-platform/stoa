@@ -1,0 +1,157 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apiextensions.k8s.io/v1","kind":"CustomResourceDefinition","metadata":{"annotations":{},"labels":{"app.kubernetes.io/part-of":"stoa-platform"},"name":"subscriptions.gostoa.dev"},"spec":{"group":"gostoa.dev","names":{"kind":"Subscription","listKind":"SubscriptionList","plural":"subscriptions","shortNames":["sub"],"singular":"subscription"},"scope":"Namespaced","versions":[{"additionalPrinterColumns":[{"jsonPath":".spec.tenantId","name":"Tenant","type":"string"},{"jsonPath":".spec.toolName","name":"Tool","type":"string"},{"jsonPath":".spec.status","name":"Status","type":"string"},{"jsonPath":".spec.subscriberId","name":"Subscriber","priority":1,"type":"string"},{"jsonPath":".metadata.creationTimestamp","name":"Age","type":"date"}],"name":"v1alpha1","schema":{"openAPIV3Schema":{"properties":{"spec":{"properties":{"applicationId":{"description":"Application ID for grouping subscriptions","type":"string"},"applicationName":{"description":"Human-readable application name","type":"string"},"approvedAt":{"format":"date-time","type":"string"},"approvedBy":{"description":"User who approved the subscription","type":"string"},"expiresAt":{"format":"date-time","type":"string"},"plan":{"default":"standard","description":"Subscription plan (e.g., standard, premium)","type":"string"},"quota":{"properties":{"requestsPerDay":{"minimum":1,"type":"integer"},"requestsPerMinute":{"minimum":1,"type":"integer"}},"type":"object"},"revokedAt":{"format":"date-time","type":"string"},"revokedBy":{"type":"string"},"revokedReason":{"type":"string"},"status":{"default":"pending","enum":["pending","active","suspended","revoked","expired"],"type":"string"},"subscriberEmail":{"format":"email","type":"string"},"subscriberId":{"description":"User ID of the subscriber","type":"string"},"tenantId":{"description":"ID of the tenant this subscription belongs to","type":"string"},"toolId":{"description":"Full tool ID (namespace_toolname)","type":"string"},"toolName":{"description":"Tool name without namespace prefix","type":"string"},"toolNamespace":{"description":"Namespace where the tool is deployed","type":"string"}},"required":["tenantId","toolId","subscriberId"],"type":"object"},"status":{"properties":{"apiKeyPrefix":{"description":"First 8 chars of API key for identification","type":"string"},"lastUsed":{"format":"date-time","type":"string"},"phase":{"enum":["Pending","Active","Suspended","Revoked","Expired"],"type":"string"},"usageToday":{"type":"integer"}},"type":"object"}},"type":"object"}},"served":true,"storage":true,"subresources":{"status":{}}}]}}
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+  name: subscriptions.gostoa.dev
+spec:
+  conversion:
+    strategy: None
+  group: gostoa.dev
+  names:
+    kind: Subscription
+    listKind: SubscriptionList
+    plural: subscriptions
+    shortNames:
+    - sub
+    singular: subscription
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.tenantId
+      name: Tenant
+      type: string
+    - jsonPath: .spec.toolName
+      name: Tool
+      type: string
+    - jsonPath: .spec.status
+      name: Status
+      type: string
+    - jsonPath: .spec.subscriberId
+      name: Subscriber
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              applicationId:
+                description: Application ID for grouping subscriptions
+                type: string
+              applicationName:
+                description: Human-readable application name
+                type: string
+              approvedAt:
+                format: date-time
+                type: string
+              approvedBy:
+                description: User who approved the subscription
+                type: string
+              expiresAt:
+                format: date-time
+                type: string
+              plan:
+                default: standard
+                description: Subscription plan (e.g., standard, premium)
+                type: string
+              quota:
+                properties:
+                  requestsPerDay:
+                    minimum: 1
+                    type: integer
+                  requestsPerMinute:
+                    minimum: 1
+                    type: integer
+                type: object
+              revokedAt:
+                format: date-time
+                type: string
+              revokedBy:
+                type: string
+              revokedReason:
+                type: string
+              status:
+                default: pending
+                enum:
+                - pending
+                - active
+                - suspended
+                - revoked
+                - expired
+                type: string
+              subscriberEmail:
+                format: email
+                type: string
+              subscriberId:
+                description: User ID of the subscriber
+                type: string
+              tenantId:
+                description: ID of the tenant this subscription belongs to
+                type: string
+              toolId:
+                description: Full tool ID (namespace_toolname)
+                type: string
+              toolName:
+                description: Tool name without namespace prefix
+                type: string
+              toolNamespace:
+                description: Namespace where the tool is deployed
+                type: string
+            required:
+            - tenantId
+            - toolId
+            - subscriberId
+            type: object
+          status:
+            properties:
+              apiKeyPrefix:
+                description: First 8 chars of API key for identification
+                type: string
+              lastUsed:
+                format: date-time
+                type: string
+              phase:
+                enum:
+                - Pending
+                - Active
+                - Suspended
+                - Revoked
+                - Expired
+                type: string
+              usageToday:
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: Subscription
+    listKind: SubscriptionList
+    plural: subscriptions
+    shortNames:
+    - sub
+    singular: subscription
+  conditions:
+  - lastTransitionTime: "2026-01-07T15:58:00Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2026-01-07T15:58:00Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1alpha1

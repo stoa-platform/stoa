@@ -177,6 +177,17 @@ class Settings(BaseSettings):
     DATABASE_POOL_SIZE: int = 5
     DATABASE_MAX_OVERFLOW: int = 10
 
+    # Certificate Provider (CAB-865)
+    CERTIFICATE_PROVIDER: str = "mock"  # "mock" or "vault"
+    VAULT_PKI_ENABLED: bool = False  # P1: Enable Vault PKI provider
+    VAULT_PKI_URL: str = f"https://vault.{_BASE_DOMAIN}"
+    VAULT_PKI_TOKEN: str = ""  # Token for Vault auth (dev only)
+    VAULT_PKI_MOUNT: str = "pki"
+    VAULT_PKI_ROLE: str = "stoa-client"
+    CERTIFICATE_DEFAULT_VALIDITY_DAYS: int = 365
+    CERTIFICATE_DEFAULT_KEY_SIZE: int = 4096
+    CERTIFICATE_RATE_LIMIT_PER_HOUR: int = 10
+
     @property
     def database_url_sync(self) -> str:
         """Return sync database URL for Alembic migrations"""

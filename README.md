@@ -2,16 +2,29 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![DCO](https://img.shields.io/badge/DCO-1.1-green.svg)](CLA.md)
+[![Security Scan](https://github.com/hlfh/stoa-platform/actions/workflows/security-scan.yml/badge.svg)](https://github.com/hlfh/stoa-platform/actions/workflows/security-scan.yml)
+[![SBOM](https://img.shields.io/badge/SBOM-CycloneDX-green.svg)](docs/security.md)
 
 Multi-tenant API Management Platform with Control-Plane UI, GitOps and Event-Driven Architecture.
+
+## Table of Contents
+
+- [Related Repositories](#related-repositories)
+- [Architecture](#architecture)
+- [Components](#components)
+- [RBAC Roles](#rbac-roles)
+- [Project Structure](#project-structure)
+- [Deployment](#deployment)
+- [URLs](#urls)
+- [Current State vs Target Architecture](#current-state-vs-target-architecture)
 
 ## Related Repositories
 
 | Repository | Purpose | URL |
 |------------|---------|-----|
-| **stoa** (this repo) | Application source code | [github.com/PotoMitan/stoa](https://github.com/PotoMitan/stoa) |
-| **stoa-infra** | Infrastructure & Helm charts | [github.com/PotoMitan/stoa-infra](https://github.com/PotoMitan/stoa-infra) |
-| **stoa-gitops** | Runtime configuration & GitOps | [github.com/PotoMitan/stoa-gitops](https://github.com/PotoMitan/stoa-gitops) |
+| **stoa** (this repo) | Application source code | [github.com/stoa-platform/stoa](https://github.com/stoa-platform/stoa) |
+| **stoa-infra** | Infrastructure & Helm charts | [github.com/stoa-platform/stoa-infra](https://github.com/stoa-platform/stoa-infra) |
+| **stoa-gitops** | Runtime configuration & GitOps | [github.com/stoa-platform/stoa-gitops](https://github.com/stoa-platform/stoa-gitops) |
 
 ## Architecture
 
@@ -249,7 +262,7 @@ kubectl create secret docker-registry ecr-secret \
 # Control Plane API
 helm upgrade --install control-plane-api ./charts/control-plane-api \
   --namespace stoa \
-  --set secrets.KEYCLOAK_CLIENT_SECRET=xxx
+  --set secrets.KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
 
 # Control Plane UI
 helm upgrade --install control-plane-ui ./charts/control-plane-ui \
@@ -290,8 +303,8 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 | Keycloak (Auth) | https://auth.gostoa.dev | Identity Provider (OIDC) |
 | Keycloak Admin | https://auth.gostoa.dev/admin/ | Keycloak admin console |
 | API Gateway UI | https://gateway.gostoa.dev/apigatewayui/ | Gateway console (admin: Administrator/manage) |
-| **ArgoCD** | https://argocd.gostoa.dev | GitOps CD (admin/demo) |
-| **AWX (Ansible)** | https://awx.gostoa.dev | Automation (admin/demo) |
+| **ArgoCD** | https://argocd.gostoa.dev | GitOps CD |
+| **AWX (Ansible)** | https://awx.gostoa.dev | Automation |
 | Vault | https://vault.gostoa.dev | HashiCorp Vault (secrets) |
 | Redpanda Console | `kubectl port-forward svc/redpanda-console 8080:8080 -n stoa-system` | Kafka administration (internal) |
 | **GitLab GitOps** | https://gitlab.com/cab6961310/stoa-gitops | Source of Truth (tenants)
@@ -307,21 +320,9 @@ docker push 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-ui:latest
 | Keycloak | https://auth.staging.gostoa.dev |
 | API Gateway | https://gateway.staging.gostoa.dev |
 
-## Default Users (DEMO Instance)
+## Default Users
 
-### Keycloak Admin Console
-
-| Username | Password | Role | Description |
-|----------|----------|------|-------------|
-| `admin` | `demo` | Super Admin | Full access to Keycloak console |
-
-### Control Plane UI
-
-| Username | Password | Role | Description |
-|----------|----------|------|-------------|
-| `admin@stoa.local` | `demo` | CPI Admin | Full platform access |
-
-> **Note**: These credentials are for the demo instance. In production, use strong passwords stored in AWS Secrets Manager.
+> Credentials are managed via Vault. See [`docs/deployment/credentials.md`](docs/deployment/credentials.md) for access details.
 
 ## Estimated AWS Costs
 
@@ -587,7 +588,7 @@ Gateway and Portal pods are isolated from external network via NetworkPolicies:
 4. **AWX (Ansible Tower)** ✅ DEPLOYED + CONFIGURED
    - AWX 24.6.1 via AWX Operator 2.19.1
    - URL: https://awx.gostoa.dev
-   - Login: admin / demo
+   - Login: See Vault or `docs/deployment/credentials.md`
    - Database: RDS PostgreSQL (shared with Keycloak)
 
    **Job Templates Configured** ✅:
@@ -3553,7 +3554,7 @@ module "tags" {
 }
 
 resource "aws_instance" "example" {
-  ami           = "ami-xxxxx"
+  ami           = "ami-xxxxxxxxxxxxxxxxx"  # Replace with your AMI ID
   instance_type = "t3.medium"
 
   tags = module.tags.tags

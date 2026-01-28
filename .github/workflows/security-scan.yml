@@ -1,219 +1,236 @@
 # =============================================================================
-# GitHub Actions: Security Scanning
+# GitHub Actions: Security Scanning — CAB-979 CI Security Showcase
 # =============================================================================
-# STOA Platform - Phase 9.5 Production Readiness
-# Runs OWASP ZAP and Trivy security scans
+# STOA Platform — "Trust the compiler and the CI, not me."
+# 9 security jobs: SAST, dependency audit, secrets, SBOM, container scan
+# SLSA & Cosign deferred to CAB-400
 # =============================================================================
 
 name: Security Scan
 
 on:
-  # Weekly scheduled scan
-  schedule:
-    - cron: '0 4 * * 0'  # Sunday 4:00 AM UTC
-
-  # Manual trigger
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Target environment'
-        required: true
-        default: 'staging'
-        type: choice
-        options:
-          - dev
-          - staging
-          - prod
-      scan_type:
-        description: 'Scan type'
-        required: true
-        default: 'baseline'
-        type: choice
-        options:
-          - baseline
-          - api
-          - full
-
-  # Trigger on PR to main (baseline only)
+  push:
+    branches: [main, develop]
   pull_request:
-    branches:
-      - main
-    paths:
-      - 'control-plane-api/**'
-      - 'mcp-gateway/**'
-      - 'control-plane-ui/**'
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * *' # Daily 6:00 AM UTC
+  workflow_dispatch:
 
-env:
-  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:stable
-  TRIVY_VERSION: 0.48.3
+permissions:
+  contents: read
+  security-events: write
+  actions: read
 
 jobs:
   # ==========================================================================
-  # OWASP ZAP Dynamic Application Security Testing (DAST)
+  # 1. Verify Signed Commits (warning only)
   # ==========================================================================
-  zap-scan:
-    name: OWASP ZAP Scan
+  verify-signatures:
+    name: Verify Signed Commits
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-      issues: write
+    continue-on-error: true # Warning only
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      - name: Verify commit signatures
+        run: |
+          echo "## Commit Signature Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          UNSIGNED=0
+          TOTAL=0
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            COMMITS=$(git log --format="%H" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          else
+            COMMITS=$(git log --format="%H" -10)
+          fi
+
+          for COMMIT in $COMMITS; do
+            TOTAL=$((TOTAL + 1))
+            if git verify-commit "$COMMIT" 2>/dev/null; then
+              echo "| \`${COMMIT:0:8}\` | :white_check_mark: Signed |" >> $GITHUB_STEP_SUMMARY
+            else
+              UNSIGNED=$((UNSIGNED + 1))
+              echo "| \`${COMMIT:0:8}\` | :warning: Unsigned |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**$UNSIGNED/$TOTAL commits unsigned**" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$UNSIGNED" -gt 0 ]; then
+            echo "::warning::$UNSIGNED out of $TOTAL commits are not signed"
+          fi
+
+  # ==========================================================================
+  # 2. SAST — Rust (Clippy strict)
+  # ==========================================================================
+  sast-rust:
+    name: SAST Rust (Clippy)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: stoa-gateway
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set environment variables
-        run: |
-          ENV="${{ github.event.inputs.environment || 'staging' }}"
-          SCAN="${{ github.event.inputs.scan_type || 'baseline' }}"
-
-          case "$ENV" in
-            dev)
-              echo "TARGET_URL=https://api.dev.gostoa.dev" >> $GITHUB_ENV
-              echo "AUTH_URL=https://auth.dev.gostoa.dev" >> $GITHUB_ENV
-              ;;
-            staging)
-              echo "TARGET_URL=https://api.staging.gostoa.dev" >> $GITHUB_ENV
-              echo "AUTH_URL=https://auth.staging.gostoa.dev" >> $GITHUB_ENV
-              ;;
-            prod)
-              echo "TARGET_URL=https://api.gostoa.dev" >> $GITHUB_ENV
-              echo "AUTH_URL=https://auth.gostoa.dev" >> $GITHUB_ENV
-              # Force baseline for production
-              SCAN="baseline"
-              ;;
-          esac
-
-          echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
-          echo "SCAN_TYPE=$SCAN" >> $GITHUB_ENV
-
-      - name: Create report directory
-        run: mkdir -p zap-reports
-
-      - name: Run ZAP Baseline Scan
-        if: env.SCAN_TYPE == 'baseline'
-        uses: zaproxy/action-baseline@v0.10.0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          target: ${{ env.TARGET_URL }}
-          rules_file_name: 'tests/security/zap/api-scan-rules.conf'
-          cmd_options: '-I'
-          issue_title: 'ZAP Baseline Scan Report - ${{ env.ENVIRONMENT }}'
-          fail_action: false
-          allow_issue_writing: true
-          artifact_name: zap-baseline-report
+          components: clippy
 
-      - name: Run ZAP API Scan
-        if: env.SCAN_TYPE == 'api'
-        uses: zaproxy/action-api-scan@v0.5.0
+      - name: Cache Cargo
+        uses: actions/cache@v4
         with:
-          target: '${{ env.TARGET_URL }}/openapi.json'
-          rules_file_name: 'tests/security/zap/api-scan-rules.conf'
-          cmd_options: '-I'
-          issue_title: 'ZAP API Scan Report - ${{ env.ENVIRONMENT }}'
-          fail_action: false
-          allow_issue_writing: true
-          artifact_name: zap-api-report
-
-      - name: Run ZAP Full Scan
-        if: env.SCAN_TYPE == 'full' && env.ENVIRONMENT != 'prod'
-        uses: zaproxy/action-full-scan@v0.8.0
-        with:
-          target: ${{ env.TARGET_URL }}
-          rules_file_name: 'tests/security/zap/api-scan-rules.conf'
-          cmd_options: '-I'
-          issue_title: 'ZAP Full Scan Report - ${{ env.ENVIRONMENT }}'
-          fail_action: false
-          allow_issue_writing: true
-          artifact_name: zap-full-report
-
-      - name: Upload ZAP Reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: zap-reports-${{ env.ENVIRONMENT }}
           path: |
-            zap_*.html
-            zap_*.json
-            zap-reports/
-          retention-days: 30
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            stoa-gateway/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('stoa-gateway/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run Clippy (strict)
+        run: |
+          cargo clippy --all-targets --all-features -- \
+            -D warnings \
+            -D clippy::unwrap_used \
+            -D clippy::expect_used \
+            -D clippy::panic \
+            -D clippy::todo \
+            -D clippy::unimplemented \
+            -D clippy::dbg_macro \
+            -W clippy::nursery \
+            -W clippy::pedantic
 
   # ==========================================================================
-  # Trivy Container Scanning
+  # 3. SAST — Python (Bandit)
   # ==========================================================================
-  trivy-scan:
-    name: Container Scan
+  sast-python:
+    name: SAST Python (Bandit)
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-
     strategy:
       fail-fast: false
       matrix:
-        image:
-          - control-plane-api
-          - mcp-gateway
-          - portal
-
+        project: [control-plane-api, mcp-gateway]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Docker image
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Bandit
+        run: pip install bandit[toml]
+
+      - name: Run Bandit
         run: |
-          if [ -f "${{ matrix.image }}/Dockerfile" ]; then
-            docker build -t stoa/${{ matrix.image }}:scan ${{ matrix.image }}/
-          else
-            echo "No Dockerfile found for ${{ matrix.image }}, skipping..."
-            echo "SKIP_SCAN=true" >> $GITHUB_ENV
-          fi
+          bandit -r ${{ matrix.project }}/ \
+            -ll \
+            -f json \
+            -o bandit-${{ matrix.project }}.json \
+            --exit-zero || true
 
-      - name: Run Trivy vulnerability scanner
-        if: env.SKIP_SCAN != 'true'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'stoa/${{ matrix.image }}:scan'
-          format: 'sarif'
-          output: 'trivy-${{ matrix.image }}.sarif'
-          severity: 'CRITICAL,HIGH'
-          vuln-type: 'os,library'
-          ignore-unfixed: true
+          # Fail on MEDIUM+
+          bandit -r ${{ matrix.project }}/ -ll --severity-level medium
 
-      - name: Upload Trivy scan results to GitHub Security tab
-        if: env.SKIP_SCAN != 'true'
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Bandit results
+        uses: actions/upload-artifact@v4
+        if: always()
         with:
-          sarif_file: 'trivy-${{ matrix.image }}.sarif'
-          category: 'trivy-${{ matrix.image }}'
-
-      - name: Run Trivy with table output
-        if: env.SKIP_SCAN != 'true'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'stoa/${{ matrix.image }}:scan'
-          format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          vuln-type: 'os,library'
-          ignore-unfixed: true
+          name: bandit-${{ matrix.project }}
+          path: bandit-${{ matrix.project }}.json
+          retention-days: 30
 
   # ==========================================================================
-  # Dependency Scanning
+  # 4. SAST — JavaScript (ESLint Security)
+  # ==========================================================================
+  sast-javascript:
+    name: SAST JavaScript (ESLint)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [control-plane-ui, portal]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check project exists
+        id: check
+        run: |
+          if [ -f "${{ matrix.project }}/package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::No package.json found in ${{ matrix.project }}/, skipping"
+          fi
+
+      - name: Set up Node.js
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.project }}/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
+        working-directory: ${{ matrix.project }}
+        run: npm ci
+
+      - name: Install ESLint security plugin
+        if: steps.check.outputs.exists == 'true'
+        working-directory: ${{ matrix.project }}
+        run: npm install --no-save eslint-plugin-security
+
+      - name: Run ESLint with security rules
+        if: steps.check.outputs.exists == 'true'
+        working-directory: ${{ matrix.project }}
+        run: |
+          npx eslint . \
+            --plugin security \
+            --rule '{"security/detect-object-injection": "error", "security/detect-non-literal-regexp": "error", "security/detect-unsafe-regex": "error", "security/detect-buffer-noassert": "error", "security/detect-eval-with-expression": "error", "security/detect-no-csrf-before-method-override": "error", "security/detect-possible-timing-attacks": "error"}' \
+            --max-warnings 0 \
+            --format json --output-file eslint-security.json || true
+
+          # Fail on errors
+          npx eslint . \
+            --plugin security \
+            --rule '{"security/detect-eval-with-expression": "error", "security/detect-unsafe-regex": "error"}' \
+            --quiet
+
+  # ==========================================================================
+  # 5. Dependency Scan (cargo/pip/npm audit)
   # ==========================================================================
   dependency-scan:
     name: Dependency Scan
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Python dependencies (control-plane-api, mcp-gateway)
+      # --- Rust ---
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Cargo audit
+        working-directory: stoa-gateway
+        run: cargo audit
+
+      # --- Python ---
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -222,53 +239,44 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
 
-      - name: Audit Control-Plane API dependencies
-        continue-on-error: true
+      - name: Pip audit — control-plane-api
         run: |
           if [ -f "control-plane-api/requirements.txt" ]; then
-            pip-audit -r control-plane-api/requirements.txt -o pip-audit-api.json -f json || true
+            pip-audit -r control-plane-api/requirements.txt --desc
           fi
 
-      - name: Audit MCP Gateway dependencies
-        continue-on-error: true
+      - name: Pip audit — mcp-gateway
         run: |
           if [ -f "mcp-gateway/requirements.txt" ]; then
-            pip-audit -r mcp-gateway/requirements.txt -o pip-audit-mcp.json -f json || true
+            pip-audit -r mcp-gateway/requirements.txt --desc
+          else
+            cd mcp-gateway && pip install -e . && pip-audit --desc
           fi
 
-      # JavaScript dependencies (control-plane-ui)
+      # --- JavaScript ---
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Audit UI dependencies
-        continue-on-error: true
+      - name: NPM audit — control-plane-ui
         run: |
-          if [ -d "control-plane-ui" ]; then
-            cd control-plane-ui
-            npm audit --json > ../npm-audit-ui.json || true
+          if [ -f "control-plane-ui/package-lock.json" ]; then
+            cd control-plane-ui && npm audit --audit-level=high
           fi
 
-      - name: Upload dependency scan results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: dependency-scan-results
-          path: |
-            pip-audit-*.json
-            npm-audit-*.json
-          retention-days: 30
+      - name: NPM audit — portal
+        run: |
+          if [ -f "portal/package-lock.json" ]; then
+            cd portal && npm audit --audit-level=high
+          fi
 
   # ==========================================================================
-  # Secret Scanning
+  # 6. Secret Scan (Gitleaks)
   # ==========================================================================
   secret-scan:
-    name: Secret Scan
+    name: Secret Scan (Gitleaks)
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -279,81 +287,188 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_COMMENTS: true
 
   # ==========================================================================
-  # Summary and Notification
+  # 7. License Compliance (Trivy SPDX)
   # ==========================================================================
-  notify:
-    name: Notify Results
+  license-compliance:
+    name: License Compliance
     runs-on: ubuntu-latest
-    needs: [zap-scan, trivy-scan, dependency-scan, secret-scan]
-    if: always()
-
+    continue-on-error: true # Warning only for copyleft
     steps:
-      - name: Check results
-        id: results
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-trivy-
+
+      - name: Scan licenses
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'spdx-json'
+          output: 'licenses.spdx.json'
+          scanners: 'license'
+
+      - name: Check for copyleft licenses
         run: |
-          if [[ "${{ needs.zap-scan.result }}" == "failure" ]] || \
-             [[ "${{ needs.trivy-scan.result }}" == "failure" ]] || \
-             [[ "${{ needs.dependency-scan.result }}" == "failure" ]] || \
-             [[ "${{ needs.secret-scan.result }}" == "failure" ]]; then
-            echo "status=failure" >> $GITHUB_OUTPUT
-          else
-            echo "status=success" >> $GITHUB_OUTPUT
+          echo "## License Compliance" >> $GITHUB_STEP_SUMMARY
+          if [ -f licenses.spdx.json ]; then
+            COPYLEFT=$(cat licenses.spdx.json | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          copyleft = ['GPL-2.0', 'GPL-3.0', 'AGPL-3.0', 'LGPL-2.1', 'LGPL-3.0', 'SSPL-1.0', 'EUPL-1.2']
+          pkgs = data.get('packages', [])
+          found = []
+          for p in pkgs:
+            lic = p.get('licenseDeclared', '') or p.get('licenseConcluded', '')
+            for c in copyleft:
+              if c in lic:
+                found.append(f\"{p.get('name', '?')}: {lic}\")
+          for f in found:
+            print(f)
+          " 2>/dev/null || echo "")
+            if [ -n "$COPYLEFT" ]; then
+              echo "::warning::Copyleft licenses detected:"
+              echo "$COPYLEFT"
+              echo "$COPYLEFT" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "No copyleft licenses detected :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+            fi
           fi
 
-      - name: Send Slack notification
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
         if: always()
-        continue-on-error: true
-        uses: slackapi/slack-github-action@v1.24.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
-          payload: |
-            {
-              "attachments": [
-                {
-                  "color": "${{ steps.results.outputs.status == 'success' && 'good' || 'danger' }}",
-                  "title": "Security Scan ${{ steps.results.outputs.status == 'success' && 'Passed' || 'Failed' }}",
-                  "fields": [
-                    {
-                      "title": "ZAP Scan",
-                      "value": "${{ needs.zap-scan.result }}",
-                      "short": true
-                    },
-                    {
-                      "title": "Trivy Scan",
-                      "value": "${{ needs.trivy-scan.result }}",
-                      "short": true
-                    },
-                    {
-                      "title": "Dependency Scan",
-                      "value": "${{ needs.dependency-scan.result }}",
-                      "short": true
-                    },
-                    {
-                      "title": "Secret Scan",
-                      "value": "${{ needs.secret-scan.result }}",
-                      "short": true
-                    }
-                  ],
-                  "footer": "STOA Security Scanner",
-                  "ts": "${{ github.event.head_commit.timestamp }}"
-                }
-              ]
-            }
+          name: license-report
+          path: licenses.spdx.json
+          retention-days: 30
 
-      - name: Print summary
-        if: always()
+  # ==========================================================================
+  # 8. SBOM Generation (Trivy CycloneDX + SPDX)
+  # ==========================================================================
+  sbom-generation:
+    name: SBOM Generation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-trivy-
+
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'cyclonedx'
+          output: 'sbom-cyclonedx.json'
+
+      - name: Generate SPDX SBOM
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'spdx-json'
+          output: 'sbom-spdx.json'
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: |
+            sbom-cyclonedx.json
+            sbom-spdx.json
+          retention-days: 90
+
+      - name: SBOM summary
         run: |
-          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "## SBOM Generation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Scan | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| ZAP Scan | ${{ needs.zap-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trivy Scan | ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Dependency Scan | ${{ needs.dependency-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Secret Scan | ${{ needs.secret-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Overall Status:** ${{ steps.results.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Format | File |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| CycloneDX | sbom-cyclonedx.json |" >> $GITHUB_STEP_SUMMARY
+          echo "| SPDX | sbom-spdx.json |" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # 9. Container Scan (Trivy image)
+  # ==========================================================================
+  container-scan:
+    name: Container Scan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: control-plane-api
+            path: control-plane-api
+          - name: mcp-gateway
+            path: mcp-gateway
+          - name: portal
+            path: portal
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Dockerfile exists
+        id: check
+        run: |
+          if [ -f "${{ matrix.image.path }}/Dockerfile" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::No Dockerfile for ${{ matrix.image.name }}, skipping"
+          fi
+
+      - name: Cache Trivy DB
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-trivy-
+
+      - name: Build image for scanning
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          docker build -t stoa/${{ matrix.image.name }}:scan ${{ matrix.image.path }}/
+
+      - name: Run Trivy (SARIF)
+        if: steps.check.outputs.exists == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'stoa/${{ matrix.image.name }}:scan'
+          format: 'sarif'
+          output: 'trivy-${{ matrix.image.name }}.sarif'
+          severity: 'CRITICAL,HIGH'
+          vuln-type: 'os,library'
+          ignore-unfixed: true
+
+      - name: Upload to GitHub Security
+        if: steps.check.outputs.exists == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-${{ matrix.image.name }}.sarif'
+          category: 'trivy-${{ matrix.image.name }}'
+
+      - name: Run Trivy (fail on HIGH+)
+        if: steps.check.outputs.exists == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'stoa/${{ matrix.image.name }}:scan'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          vuln-type: 'os,library'
+          ignore-unfixed: true
+          exit-code: '1'

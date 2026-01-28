@@ -1,0 +1,124 @@
+# STOA Universal API Contract - Fraud Detection API
+# CAB-1018: Mock APIs for Central Bank Demo
+---
+apiVersion: stoa.io/v1
+kind: UniversalAPIContract
+metadata:
+  name: fraud-detection-api
+  version: "1.0.0"
+  owner: risk-management-team
+  contact: risk-ops@example.bank
+  tags:
+    - fraud
+    - risk
+    - real-time
+    - circuit-breaker
+spec:
+  description: >-
+    Real-time transaction fraud scoring API. Analyzes transaction patterns,
+    amounts, and cross-border indicators to produce risk scores and decisions
+    (ALLOW, REVIEW, DENY). Implements circuit breaker pattern for resilience.
+  classification: CONFIDENTIAL
+  retention: 7 years
+  data_residency: EU
+
+  sla:
+    availability: 99.95%
+    latency_p50: 50ms
+    latency_p95: 100ms
+    latency_p99: 200ms
+    error_budget: 0.05%
+
+  policies:
+    rate_limit:
+      requests_per_second: 1000
+      burst: 1500
+      scope: per_client
+
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      failure_window: 60s
+      recovery_timeout: 30s
+      half_open_requests: 3
+      fallback: allow_with_flag
+      fallback_decision: ALLOW
+      fallback_flag: fallback_used
+
+    retry:
+      enabled: true
+      max_attempts: 3
+      backoff: exponential
+      initial_delay: 100ms
+      max_delay: 2s
+      retryable_codes: [502, 503, 504]
+
+    timeout:
+      request: 500ms
+      connect: 100ms
+
+    audit:
+      enabled: true
+      retention: 7 years
+      fields:
+        - transaction_id
+        - amount
+        - currency
+        - score
+        - decision
+        - risk_factors
+        - processing_time_ms
+
+  endpoints:
+    - path: /v1/transactions/score
+      method: POST
+      description: Score a transaction for fraud risk
+      timeout: 500ms
+      request:
+        content_type: application/json
+        required_fields:
+          - transaction_id
+          - amount
+          - currency
+          - sender_iban
+          - receiver_iban
+      response:
+        content_type: application/json
+        fields:
+          - transaction_id
+          - score
+          - decision
+          - risk_factors
+          - processing_time_ms
+          - circuit_state
+          - fallback_used
+      error_codes:
+        - 400: Invalid request payload
+        - 422: Validation error
+        - 503: Circuit breaker open (fallback response)
+
+  monitoring:
+    metrics:
+      - name: stoa_fraud_requests_total
+        type: counter
+        labels: [decision, circuit_state]
+      - name: stoa_fraud_latency_seconds
+        type: histogram
+        buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
+      - name: stoa_fraud_circuit_state
+        type: gauge
+        description: "0=CLOSED, 1=OPEN, 2=HALF_OPEN"
+      - name: stoa_fraud_score_distribution
+        type: histogram
+        buckets: [10, 20, 30, 50, 70, 90, 100]
+
+    alerts:
+      - name: FraudAPIHighLatency
+        condition: latency_p95 > 200ms for 5m
+        severity: warning
+      - name: FraudAPICircuitOpen
+        condition: circuit_state == OPEN for 1m
+        severity: critical
+      - name: FraudAPIHighErrorRate
+        condition: error_rate > 1% for 5m
+        severity: warning

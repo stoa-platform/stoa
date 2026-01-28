@@ -2,8 +2,8 @@ apiVersion: v2
 name: stoa-platform
 description: STOA Platform - AI-Native API Management
 type: application
-version: 0.1.0
-appVersion: "2.0.0"
+version: 0.2.0
+appVersion: "0.2.0"
 maintainers:
   - name: CAB Ingénierie
     email: support@cab-i.com

@@ -119,6 +119,16 @@ class Settings(BaseSettings):
     external_server_poll_interval: int = 60  # Seconds between polling Control Plane API
     external_server_api_key: str = ""  # API key for internal endpoint auth (optional)
 
+    # Token Optimization (CAB-881)
+    token_counter_enabled: bool = True  # Enable token counting middleware
+    token_counter_queue_size: int = 10_000  # Max queue size before dropping
+    response_transformer_enabled: bool = True  # Enable response transformer middleware
+    semantic_cache_enabled: bool = True  # Enable semantic cache middleware
+    semantic_cache_ttl_seconds: int = 300  # Cache TTL (5 minutes)
+    semantic_cache_similarity: float = 0.95  # Cosine similarity threshold
+    semantic_cache_cleanup_interval: int = 60  # Cleanup interval in seconds
+    semantic_cache_gdpr_max_age_hours: int = 24  # GDPR hard-delete age
+
     # Shadow Mode Configuration (Python → Rust Migration)
     shadow_mode_enabled: bool = False  # Enable shadow traffic to Rust gateway
     shadow_rust_gateway_url: str = "http://mcp-gateway-rust:8080"  # Rust gateway URL

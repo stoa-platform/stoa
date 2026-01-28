@@ -553,3 +553,273 @@ async def check_platform_health(
     if components:
         return await checker.check_components(components)
     return await checker.check_all()
+
+
+# =============================================================================
+# Deep Readiness Checker — CAB-957 Anti-Zombie Node Pattern
+# =============================================================================
+
+
+class ReadinessResult(BaseModel):
+    """Result of deep readiness check."""
+    ready: bool
+    checks: dict[str, ComponentHealth]
+    failed_checks: list[str] = Field(default_factory=list)
+    checked_at: str
+    cached: bool = False
+
+
+class DeepReadinessChecker:
+    """Deep readiness checker for K8s readiness probe.
+
+    CAB-957: Anti-Zombie Node Pattern
+
+    Unlike shallow health checks that just verify "process alive",
+    this checker validates actual routability:
+    - Database connection (can we persist/query?)
+    - Keycloak reachability (can we validate tokens?)
+    - Core API connectivity (can we fetch config?)
+
+    Features:
+    - 3-second timeout per component (fast fail)
+    - 1-second TTL cache (avoid probe storms)
+    - Parallel checks for performance
+    - Structured result for diagnostics
+
+    Usage:
+        checker = DeepReadinessChecker(settings)
+        result = await checker.check()
+        if not result.ready:
+            # Node should be marked not-ready
+            logger.warning("readiness_failed", failed=result.failed_checks)
+    """
+
+    def __init__(
+        self,
+        database_url: str = "",
+        keycloak_url: str = "",
+        keycloak_realm: str = "stoa",
+        core_api_url: str = "",
+        timeout_seconds: float = 3.0,
+        cache_ttl_seconds: float = 1.0,
+    ):
+        """Initialize deep readiness checker.
+
+        Args:
+            database_url: PostgreSQL connection URL
+            keycloak_url: Keycloak base URL
+            keycloak_realm: Keycloak realm name
+            core_api_url: Control Plane API URL
+            timeout_seconds: Timeout per check (default 3s)
+            cache_ttl_seconds: Cache TTL to avoid probe storms (default 1s)
+        """
+        self.database_url = database_url
+        self.keycloak_url = keycloak_url
+        self.keycloak_realm = keycloak_realm
+        self.core_api_url = core_api_url
+        self.timeout = timeout_seconds
+        self.cache_ttl = cache_ttl_seconds
+
+        # Cache for readiness result
+        self._cached_result: Optional[ReadinessResult] = None
+        self._cache_timestamp: float = 0.0
+
+    async def check(self) -> ReadinessResult:
+        """Perform deep readiness check.
+
+        Returns cached result if within TTL to avoid probe storms.
+
+        Returns:
+            ReadinessResult with ready=True only if ALL critical checks pass
+        """
+        from datetime import datetime, timezone
+
+        # Check cache
+        now = time.perf_counter()
+        if self._cached_result and (now - self._cache_timestamp) < self.cache_ttl:
+            # Return cached result with cached=True flag
+            cached = self._cached_result.model_copy()
+            cached.cached = True
+            return cached
+
+        # Run checks in parallel
+        checks: dict[str, ComponentHealth] = {}
+        failed_checks: list[str] = []
+
+        # Build list of checks to run
+        check_tasks = []
+        check_names = []
+
+        if self.database_url:
+            check_tasks.append(self._check_database())
+            check_names.append("database")
+
+        if self.keycloak_url:
+            check_tasks.append(self._check_keycloak())
+            check_names.append("keycloak")
+
+        if self.core_api_url:
+            check_tasks.append(self._check_core_api())
+            check_names.append("core_api")
+
+        # Execute checks in parallel
+        if check_tasks:
+            results = await asyncio.gather(*check_tasks, return_exceptions=True)
+
+            for name, result in zip(check_names, results):
+                if isinstance(result, Exception):
+                    checks[name] = ComponentHealth(
+                        status=HealthStatus.DOWN,
+                        error=f"Check failed: {str(result)}"
+                    )
+                    failed_checks.append(name)
+                else:
+                    checks[name] = result
+                    if result.status == HealthStatus.DOWN:
+                        failed_checks.append(name)
+
+        # Determine overall readiness
+        # Ready only if ALL configured checks pass (not DOWN)
+        ready = len(failed_checks) == 0 and len(checks) > 0
+
+        result = ReadinessResult(
+            ready=ready,
+            checks=checks,
+            failed_checks=failed_checks,
+            checked_at=datetime.now(timezone.utc).isoformat(),
+            cached=False,
+        )
+
+        # Update cache
+        self._cached_result = result
+        self._cache_timestamp = now
+
+        return result
+
+    async def _check_database(self) -> ComponentHealth:
+        """Check PostgreSQL connectivity with timeout."""
+        start = time.perf_counter()
+        try:
+            conn = await asyncio.wait_for(
+                asyncpg.connect(self.database_url),
+                timeout=self.timeout
+            )
+            try:
+                result = await asyncio.wait_for(
+                    conn.fetchval("SELECT 1"),
+                    timeout=self.timeout
+                )
+                latency_ms = (time.perf_counter() - start) * 1000
+
+                if result == 1:
+                    return ComponentHealth(
+                        status=HealthStatus.HEALTHY,
+                        latency_ms=round(latency_ms, 2),
+                        description="PostgreSQL Database"
+                    )
+                else:
+                    return ComponentHealth(
+                        status=HealthStatus.DOWN,
+                        latency_ms=round(latency_ms, 2),
+                        error="Unexpected query result",
+                        description="PostgreSQL Database"
+                    )
+            finally:
+                await conn.close()
+        except asyncio.TimeoutError:
+            return ComponentHealth(
+                status=HealthStatus.DOWN,
+                error=f"Connection timeout ({self.timeout}s)",
+                description="PostgreSQL Database"
+            )
+        except Exception as e:
+            latency_ms = (time.perf_counter() - start) * 1000
+            return ComponentHealth(
+                status=HealthStatus.DOWN,
+                latency_ms=round(latency_ms, 2) if latency_ms < self.timeout * 1000 else None,
+                error=str(e),
+                description="PostgreSQL Database"
+            )
+
+    async def _check_keycloak(self) -> ComponentHealth:
+        """Check Keycloak OIDC discovery endpoint."""
+        start = time.perf_counter()
+        url = f"{self.keycloak_url}/realms/{self.keycloak_realm}/.well-known/openid-configuration"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(url)
+                latency_ms = (time.perf_counter() - start) * 1000
+
+                if response.status_code == 200:
+                    return ComponentHealth(
+                        status=HealthStatus.HEALTHY,
+                        latency_ms=round(latency_ms, 2),
+                        description="Keycloak Auth Server"
+                    )
+                else:
+                    return ComponentHealth(
+                        status=HealthStatus.DOWN,
+                        latency_ms=round(latency_ms, 2),
+                        error=f"HTTP {response.status_code}",
+                        description="Keycloak Auth Server"
+                    )
+        except httpx.TimeoutException:
+            return ComponentHealth(
+                status=HealthStatus.DOWN,
+                error=f"Connection timeout ({self.timeout}s)",
+                description="Keycloak Auth Server"
+            )
+        except Exception as e:
+            latency_ms = (time.perf_counter() - start) * 1000
+            return ComponentHealth(
+                status=HealthStatus.DOWN,
+                latency_ms=round(latency_ms, 2) if latency_ms < self.timeout * 1000 else None,
+                error=str(e),
+                description="Keycloak Auth Server"
+            )
+
+    async def _check_core_api(self) -> ComponentHealth:
+        """Check Control Plane API connectivity."""
+        start = time.perf_counter()
+        # Use health endpoint of control-plane-api
+        url = f"{self.core_api_url}/health"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(url)
+                latency_ms = (time.perf_counter() - start) * 1000
+
+                if response.status_code == 200:
+                    return ComponentHealth(
+                        status=HealthStatus.HEALTHY,
+                        latency_ms=round(latency_ms, 2),
+                        description="Control Plane API"
+                    )
+                else:
+                    return ComponentHealth(
+                        status=HealthStatus.DOWN,
+                        latency_ms=round(latency_ms, 2),
+                        error=f"HTTP {response.status_code}",
+                        description="Control Plane API"
+                    )
+        except httpx.TimeoutException:
+            return ComponentHealth(
+                status=HealthStatus.DOWN,
+                error=f"Connection timeout ({self.timeout}s)",
+                description="Control Plane API"
+            )
+        except Exception as e:
+            latency_ms = (time.perf_counter() - start) * 1000
+            return ComponentHealth(
+                status=HealthStatus.DOWN,
+                latency_ms=round(latency_ms, 2) if latency_ms < self.timeout * 1000 else None,
+                error=str(e),
+                description="Control Plane API"
+            )
+
+    def invalidate_cache(self) -> None:
+        """Invalidate cached readiness result.
+
+        Call this when you know state has changed (e.g., after reconnection).
+        """
+        self._cached_result = None
+        self._cache_timestamp = 0.0

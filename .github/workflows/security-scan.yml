@@ -8,9 +8,9 @@
 name: Security Scan
 
 on:
-  # Weekly scheduled scan
+  # Weekly scheduled scan (Sunday 3:00 AM UTC)
   schedule:
-    - cron: '0 4 * * 0'  # Sunday 4:00 AM UTC
+    - cron: '0 3 * * 0'
 
   # Manual trigger
   workflow_dispatch:
@@ -18,11 +18,9 @@ on:
       environment:
         description: 'Target environment'
         required: true
-        default: 'staging'
+        default: 'prod'
         type: choice
         options:
-          - dev
-          - staging
           - prod
       scan_type:
         description: 'Scan type'
@@ -33,15 +31,6 @@ on:
           - baseline
           - api
           - full
-
-  # Trigger on PR to main (baseline only)
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'control-plane-api/**'
-      - 'mcp-gateway/**'
-      - 'control-plane-ui/**'
 
 env:
   ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:stable
@@ -65,27 +54,16 @@ jobs:
 
       - name: Set environment variables
         run: |
-          ENV="${{ github.event.inputs.environment || 'staging' }}"
+          ENV="${{ github.event.inputs.environment || 'prod' }}"
           SCAN="${{ github.event.inputs.scan_type || 'baseline' }}"
 
-          case "$ENV" in
-            dev)
-              echo "TARGET_URL=https://api.dev.gostoa.dev" >> $GITHUB_ENV
-              echo "AUTH_URL=https://auth.dev.gostoa.dev" >> $GITHUB_ENV
-              ;;
-            staging)
-              echo "TARGET_URL=https://api.staging.gostoa.dev" >> $GITHUB_ENV
-              echo "AUTH_URL=https://auth.staging.gostoa.dev" >> $GITHUB_ENV
-              ;;
-            prod)
-              echo "TARGET_URL=https://api.gostoa.dev" >> $GITHUB_ENV
-              echo "AUTH_URL=https://auth.gostoa.dev" >> $GITHUB_ENV
-              # Force baseline for production
-              SCAN="baseline"
-              ;;
-          esac
+          # Only prod environment available currently
+          echo "TARGET_URL=https://api.gostoa.dev" >> $GITHUB_ENV
+          echo "AUTH_URL=https://auth.gostoa.dev" >> $GITHUB_ENV
+          # Force baseline for production
+          SCAN="baseline"
 
-          echo "ENVIRONMENT=$ENV" >> $GITHUB_ENV
+          echo "ENVIRONMENT=prod" >> $GITHUB_ENV
           echo "SCAN_TYPE=$SCAN" >> $GITHUB_ENV
 
       - name: Create report directory
@@ -279,6 +257,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
           GITLEAKS_ENABLE_COMMENTS: true
 
   # ==========================================================================

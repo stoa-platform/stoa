@@ -1,0 +1,119 @@
+# CAB-940: Network Policy for Keycloak isolation
+# Apply with: kubectl apply -f k8s/networkpolicy-keycloak.yaml
+#
+# Restricts traffic to/from Keycloak pods.
+# Only allows traffic from authorized services (MCP Gateway, Control Plane, Ingress).
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-isolation
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-940
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: keycloak
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow from MCP Gateway (JWKS + token validation)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: stoa-mcp-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow from Control Plane API
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: control-plane
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow from Portal (browser auth redirects)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: stoa-portal
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow from Console UI (browser auth redirects)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: control-plane-ui
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow from Ingress controller (public OIDC endpoints)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow from VPN CIDR (admin access)
+    - from:
+        - ipBlock:
+            cidr: 10.100.0.0/16
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Allow health checks from cluster network
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  egress:
+    # Allow to PostgreSQL (Keycloak DB)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgresql
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    # Allow DNS (required for service discovery)
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow HTTPS to external services (LDAP federation, email)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 636  # LDAPS

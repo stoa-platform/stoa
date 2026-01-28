@@ -1,0 +1,278 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  labels:
+    app.kubernetes.io/component: mcp-gateway
+    app.kubernetes.io/name: stoa-platform
+  name: toolsets.gostoa.dev
+spec:
+  conversion:
+    strategy: None
+  group: gostoa.dev
+  names:
+    categories:
+    - stoa
+    - mcp
+    kind: ToolSet
+    listKind: ToolSetList
+    plural: toolsets
+    shortNames:
+    - ts
+    singular: toolset
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - jsonPath: .status.toolCount
+      name: Tools
+      type: integer
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              baseURL:
+                description: Override base URL for all generated tools
+                format: uri
+                type: string
+              description:
+                description: Description of the toolset
+                maxLength: 1024
+                type: string
+              displayName:
+                description: Human-readable name for the toolset
+                maxLength: 64
+                minLength: 1
+                type: string
+              enabled:
+                default: true
+                description: Whether the toolset is enabled
+                type: boolean
+              naming:
+                description: Tool naming configuration
+                properties:
+                  prefix:
+                    description: Prefix for all tool names
+                    pattern: ^[a-z][a-z0-9_]*$
+                    type: string
+                  suffix:
+                    description: Suffix for all tool names
+                    type: string
+                  useOperationId:
+                    default: true
+                    description: Use operationId as tool name if available
+                    type: boolean
+                type: object
+              openAPISpec:
+                description: OpenAPI specification source
+                properties:
+                  configMapRef:
+                    description: ConfigMap containing OpenAPI spec
+                    properties:
+                      key:
+                        default: openapi.yaml
+                        type: string
+                      name:
+                        type: string
+                    type: object
+                  inline:
+                    description: Inline OpenAPI spec (JSON or YAML)
+                    type: string
+                  refreshInterval:
+                    default: 1h
+                    description: How often to refresh the spec
+                    pattern: ^\d+(s|m|h)$
+                    type: string
+                  secretRef:
+                    description: Secret containing OpenAPI spec (for private APIs)
+                    properties:
+                      key:
+                        default: openapi.yaml
+                        type: string
+                      name:
+                        type: string
+                    type: object
+                  url:
+                    description: URL to fetch OpenAPI spec
+                    format: uri
+                    type: string
+                type: object
+              selector:
+                description: Filter which operations to include
+                properties:
+                  excludeTags:
+                    description: Exclude operations with these tags
+                    items:
+                      type: string
+                    type: array
+                  methods:
+                    description: Only include these HTTP methods
+                    items:
+                      enum:
+                      - GET
+                      - POST
+                      - PUT
+                      - PATCH
+                      - DELETE
+                      type: string
+                    type: array
+                  operationIds:
+                    description: Only include these specific operationIds
+                    items:
+                      type: string
+                    type: array
+                  pathPrefix:
+                    description: Only include paths starting with this prefix
+                    type: string
+                  tags:
+                    description: Only include operations with these tags
+                    items:
+                      type: string
+                    type: array
+                type: object
+              toolDefaults:
+                description: Default values for generated tools
+                properties:
+                  authentication:
+                    properties:
+                      secretRef:
+                        properties:
+                          key:
+                            default: token
+                            type: string
+                          name:
+                            type: string
+                        type: object
+                      type:
+                        default: bearer
+                        enum:
+                        - none
+                        - bearer
+                        - basic
+                        - apiKey
+                        - oauth2
+                        type: string
+                    type: object
+                  rateLimit:
+                    properties:
+                      burst:
+                        default: 10
+                        type: integer
+                      requestsPerMinute:
+                        default: 60
+                        type: integer
+                    type: object
+                  tags:
+                    description: Additional tags to add to all tools
+                    items:
+                      type: string
+                    type: array
+                  timeout:
+                    default: 30s
+                    type: string
+                type: object
+            required:
+            - displayName
+            type: object
+          status:
+            properties:
+              conditions:
+                items:
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    reason:
+                      type: string
+                    status:
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - type
+                  - status
+                  type: object
+                type: array
+              lastError:
+                description: Last error message
+                type: string
+              lastSyncedAt:
+                description: Last successful sync time
+                format: date-time
+                type: string
+              phase:
+                description: Current phase of the toolset
+                enum:
+                - Pending
+                - Syncing
+                - Ready
+                - Error
+                - Disabled
+                type: string
+              specHash:
+                description: Hash of the OpenAPI spec for change detection
+                type: string
+              toolCount:
+                default: 0
+                description: Number of tools generated
+                type: integer
+              tools:
+                description: List of generated tool names
+                items:
+                  type: string
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    categories:
+    - stoa
+    - mcp
+    kind: ToolSet
+    listKind: ToolSetList
+    plural: toolsets
+    shortNames:
+    - ts
+    singular: toolset
+  conditions:
+  - lastTransitionTime: "2026-01-07T10:57:39Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2026-01-07T10:57:39Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1alpha1

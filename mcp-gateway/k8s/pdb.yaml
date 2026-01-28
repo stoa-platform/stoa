@@ -1,0 +1,24 @@
+# CAB-957: PodDisruptionBudget for Anti-Zombie Node Pattern
+#
+# Ensures at least 1 pod is always available during:
+# - Node drains
+# - Cluster upgrades
+# - Voluntary disruptions
+#
+# Combined with maxUnavailable: 0 in Deployment, this guarantees
+# zero downtime during maintenance operations.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stoa-mcp-gateway
+  namespace: stoa-system
+  labels:
+    app: stoa-mcp-gateway
+    app.kubernetes.io/name: stoa-mcp-gateway
+    app.kubernetes.io/component: mcp-gateway
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: stoa-mcp-gateway

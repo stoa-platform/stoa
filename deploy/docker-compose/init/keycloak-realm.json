@@ -4,14 +4,66 @@
   "displayName": "STOA Platform",
   "displayNameHtml": "<div class=\"kc-logo-text\"><span>STOA Platform</span></div>",
   "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
-  "bruteForceProtected": true,
-  "accessTokenLifespan": 3600,
+
+  "_comment_security": "CAB-940: Keycloak Hardening",
+
+  "sslRequired": "all",
+  "rememberMe": false,
+  "verifyEmail": true,
+
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 300,
   "ssoSessionIdleTimeout": 1800,
-  "ssoSessionMaxLifespan": 36000,
+  "ssoSessionMaxLifespan": 28800,
+  "clientSessionIdleTimeout": 1800,
+  "clientSessionMaxLifespan": 28800,
+
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+
+  "passwordPolicy": "length(12) and digits(1) and upperCase(1) and lowerCase(1) and specialChars(1) and notUsername and passwordHistory(5)",
+
+  "eventsEnabled": true,
+  "eventsExpiration": 604800,
+  "eventsListeners": ["jboss-logging"],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "enabledEventTypes": [
+    "LOGIN", "LOGIN_ERROR", "LOGOUT", "LOGOUT_ERROR",
+    "CODE_TO_TOKEN", "CODE_TO_TOKEN_ERROR",
+    "CLIENT_LOGIN", "CLIENT_LOGIN_ERROR",
+    "REFRESH_TOKEN", "REFRESH_TOKEN_ERROR",
+    "REGISTER", "REGISTER_ERROR",
+    "UPDATE_PASSWORD", "UPDATE_PASSWORD_ERROR",
+    "SEND_RESET_PASSWORD", "SEND_RESET_PASSWORD_ERROR",
+    "REVOKE_GRANT", "REMOVE_TOTP", "UPDATE_TOTP",
+    "CLIENT_REGISTER", "CLIENT_DELETE"
+  ],
+
+  "browserSecurityHeaders": {
+    "contentSecurityPolicyReportOnly": "",
+    "xContentTypeOptions": "nosniff",
+    "xRobotsTag": "none",
+    "xFrameOptions": "DENY",
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'none'; object-src 'none';",
+    "xXSSProtection": "1; mode=block",
+    "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+  },
+
   "roles": {
     "realm": [
       {

@@ -16,6 +16,7 @@ from .metrics import (
     update_tools_registered,
 )
 from .shadow import ShadowMiddleware
+from .last_gasp import LastGaspMiddleware, record_request_rejected
 
 __all__ = [
     # Auth
@@ -33,4 +34,7 @@ __all__ = [
     "update_tools_registered",
     # Shadow (Python → Rust Migration)
     "ShadowMiddleware",
+    # Last Gasp (CAB-957 Anti-Zombie)
+    "LastGaspMiddleware",
+    "record_request_rejected",
 ]

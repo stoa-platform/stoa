@@ -22,8 +22,9 @@ from starlette.responses import Response
 
 from .config import get_settings
 from .handlers import mcp_router, subscriptions_router, mcp_sse_router, sse_alias_router, servers_router, policy_router
-from .middleware import MetricsMiddleware, ShadowMiddleware
+from .middleware import MetricsMiddleware, ShadowMiddleware, LastGaspMiddleware
 from .services import get_tool_registry, shutdown_tool_registry, init_database, shutdown_database
+from .services.health import DeepReadinessChecker, ReadinessResult
 from .services.tool_handlers import init_tool_handlers, shutdown_tool_handlers
 from .services.external_server_loader import get_external_server_loader, shutdown_external_server_loader
 from .k8s import get_tool_watcher, shutdown_tool_watcher
@@ -57,6 +58,7 @@ logger = structlog.get_logger(__name__)
 app_state: dict[str, Any] = {
     "ready": False,
     "started_at": None,
+    "readiness_checker": None,  # CAB-957: DeepReadinessChecker instance
 }
 
 
@@ -172,6 +174,17 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("External server loader failed to start", error=str(e))
 
+    # CAB-957: Initialize DeepReadinessChecker for anti-zombie pattern
+    app_state["readiness_checker"] = DeepReadinessChecker(
+        database_url=settings.database_url or "",
+        keycloak_url=settings.keycloak_url,
+        keycloak_realm=settings.keycloak_realm,
+        core_api_url=settings.control_plane_api_url,
+        timeout_seconds=3.0,  # Fast fail for probes
+        cache_ttl_seconds=1.0,  # Avoid probe storms
+    )
+    logger.info("DeepReadinessChecker initialized (CAB-957)")
+
     app_state["ready"] = True
 
     logger.info(
@@ -254,6 +267,11 @@ def create_app() -> FastAPI:
         expose_headers=settings.cors_expose_headers.split(","),
         max_age=settings.cors_max_age,
     )
+
+    # CAB-957: Last Gasp Middleware — MUST be added LAST (executed FIRST)
+    # Rejects requests with 503 + diagnostic headers when node is not ready
+    app.add_middleware(LastGaspMiddleware, app_state=app_state)
+    logger.info("LastGaspMiddleware enabled (CAB-957 Anti-Zombie)")
 
     # Register routes
     register_routes(app)
@@ -372,7 +390,12 @@ def register_routes(app: FastAPI) -> None:
 
     @app.get("/health/ready", tags=["Health"])
     async def health_ready(request: Request) -> JSONResponse:
-        """Readiness probe - ready to accept traffic (CAB-308).
+        """Readiness probe - ready to accept traffic (CAB-308, CAB-957).
+
+        CAB-957: Deep readiness check validates actual routability:
+        - Database connection (can we persist/query?)
+        - Keycloak reachability (can we validate tokens?)
+        - Core API connectivity (can we fetch config?)
 
         K8s will remove pod from service if this fails.
         Only accessible from internal cluster network.
@@ -382,10 +405,57 @@ def register_routes(app: FastAPI) -> None:
 
         settings = get_settings()
 
-        checks: dict[str, Any] = {
-            "app_ready": app_state["ready"],
-        }
+        # Basic app state check
+        if not app_state["ready"]:
+            return JSONResponse(
+                content={
+                    "status": "unhealthy",
+                    "version": settings.app_version,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "checks": {"app_ready": False},
+                    "message": "Application not yet initialized",
+                },
+                status_code=503,
+            )
 
+        # CAB-957: Deep readiness check
+        readiness_checker = app_state.get("readiness_checker")
+        if readiness_checker:
+            result: ReadinessResult = await readiness_checker.check()
+
+            checks: dict[str, Any] = {
+                "app_ready": app_state["ready"],
+            }
+            # Add component checks
+            for name, health in result.checks.items():
+                checks[name] = health.status == "healthy"
+
+            response = {
+                "status": "healthy" if result.ready else "unhealthy",
+                "version": settings.app_version,
+                "timestamp": result.checked_at,
+                "checks": checks,
+                "cached": result.cached,
+            }
+
+            if not result.ready:
+                response["failed_checks"] = result.failed_checks
+                response["details"] = {
+                    name: {
+                        "status": health.status,
+                        "latency_ms": health.latency_ms,
+                        "error": health.error,
+                    }
+                    for name, health in result.checks.items()
+                }
+
+            return JSONResponse(
+                content=response,
+                status_code=200 if result.ready else 503,
+            )
+
+        # Fallback if no checker configured (basic check only)
+        checks = {"app_ready": app_state["ready"]}
         is_ready = all(checks.values())
 
         response = {

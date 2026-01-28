@@ -106,6 +106,10 @@ class Settings(BaseSettings):
     LOKI_TIMEOUT_SECONDS: int = 30
     LOKI_ENABLED: bool = True
 
+    # Circuit Breaker Settings (CAB-840) - for resilient service calls
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 5  # Open circuit after N failures
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT: int = 30  # Seconds before trying again
+
     # CORS - comma-separated list of allowed origins
     CORS_ORIGINS: str = f"https://console.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
 

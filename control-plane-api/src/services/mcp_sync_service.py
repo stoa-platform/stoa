@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """MCP Server GitOps Sync Service.
 
 Synchronizes MCP Server definitions from GitLab to PostgreSQL.

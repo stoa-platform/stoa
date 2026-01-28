@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """HashiCorp Vault Client for Secure API Key Storage.
 
 Provides secure storage and retrieval of API keys using HashiCorp Vault.

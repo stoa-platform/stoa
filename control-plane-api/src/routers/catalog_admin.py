@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Catalog Admin API Router - Admin endpoints for catalog sync operations (CAB-682).
 
 Provides endpoints for managing the catalog cache synchronization.

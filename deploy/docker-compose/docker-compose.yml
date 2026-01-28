@@ -8,12 +8,13 @@
 #   docker compose up -d
 #
 # Services:
-#   - postgres:    Database (port 5432)
-#   - keycloak:    Authentication (port 8080)
-#   - api:         Control Plane API (port 8000)
-#   - console:     Console UI (port 3000)
-#   - prometheus:  Metrics (port 9090)
-#   - grafana:     Dashboards (port 3001)
+#   - postgres:       Database (port 5432)
+#   - keycloak:       Authentication (port 8080)
+#   - api:            Control Plane API (port 8000)
+#   - console:        Console UI (port 3000)
+#   - prometheus:     Metrics (port 9090)
+#   - grafana:        Dashboards (port 3001)
+#   - mock-backends:  Mock APIs for Demo (port 8090) - CAB-1018
 #
 # Total RAM: ~1.5GB (works on 8GB machines)
 # =============================================================================
@@ -198,6 +199,36 @@ services:
       - prometheus
     networks:
       - stoa-network
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Mock Backends (CAB-1018: Central Bank Demo)
+  # ==========================================================================
+  mock-backends:
+    build:
+      context: ../../mock-backends
+      dockerfile: Dockerfile
+    container_name: stoa-mock-backends
+    ports:
+      - "${PORT_MOCK_BACKENDS:-8090}:8090"
+    environment:
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ENVIRONMENT: development
+      # Demo configuration
+      DEMO_MODE: "true"
+      AUTH_ENABLED: "false"
+      DEMO_SCENARIOS_ENABLED: "true"
+      # Metrics
+      METRICS_ENABLED: "true"
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
 # =============================================================================

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 //! MCP Protocol Types
 //!
 //! Model Context Protocol (MCP) types for tools/list and tools/call endpoints.

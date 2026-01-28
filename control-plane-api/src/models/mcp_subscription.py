@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """MCP Server Subscription SQLAlchemy models.
 
 Models for MCP Server subscriptions with per-tool access control

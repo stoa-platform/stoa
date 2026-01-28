@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 //! STOA Policy Engine - High-performance policy evaluation for MCP Gateway
 //!
 //! This crate provides a policy engine that evaluates tool calls against

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Webhooks router - GitLab webhook handlers for GitOps with full tracing"""
 import hmac
 import logging

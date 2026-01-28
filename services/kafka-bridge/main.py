@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Kafka Bridge - HTTP to Kafka relay for webMethods Gateway.
 
 CAB-485: Receives error snapshots via HTTP POST and publishes to Kafka.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth as useOidcAuth, hasAuthParams } from 'react-oidc-context';
 import type { User } from '../types';

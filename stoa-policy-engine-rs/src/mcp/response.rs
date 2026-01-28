@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 use super::types::{ContentBlock, ToolResult};
 
 /// Builder for constructing MCP-compliant responses

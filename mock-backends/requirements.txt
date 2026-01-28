@@ -1,0 +1,20 @@
+# CAB-1018: Mock APIs for Central Bank Demo
+# FastAPI + Prometheus + Structured Logging
+
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+
+# Validation & Settings
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Observability
+prometheus-client==0.19.0
+structlog==24.1.0
+
+# Data Generation
+faker==22.0.0
+
+# HTTP Client (for health checks)
+httpx==0.26.0

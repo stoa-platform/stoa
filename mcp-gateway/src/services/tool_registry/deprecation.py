@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Deprecation management mixin.
 
 CAB-841: Extracted from tool_registry.py for modularity.

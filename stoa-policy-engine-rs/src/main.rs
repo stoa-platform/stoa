@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 //! STOA Policy Engine CLI
 //!
 //! A command-line interface for validating tool calls against policies.

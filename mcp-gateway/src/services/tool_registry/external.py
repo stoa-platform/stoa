@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """External tool registration and invocation mixin.
 
 Handles tools from external MCP servers (Linear, GitHub, Slack, etc.)

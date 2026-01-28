@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Argument-based Policy Engine for tool invocation validation.
 
 CAB-876: Validates tool arguments against YAML-defined business rules

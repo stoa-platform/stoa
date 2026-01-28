@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Catalog sync service for syncing API and MCP tools from GitLab to PostgreSQL (CAB-682)"""
 import logging
 from datetime import datetime, timezone

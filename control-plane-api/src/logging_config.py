@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Structured Logging Configuration for Control-Plane API.
 
 CAB-281: Standardized JSON logging for Loki integration.

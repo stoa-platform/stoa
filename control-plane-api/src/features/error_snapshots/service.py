@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Error Snapshot business logic service.
 
 CAB-397: Handles capture, enrichment, and retrieval of error snapshots.

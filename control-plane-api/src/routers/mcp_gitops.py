@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """MCP GitOps Router - Endpoints for GitOps synchronization.
 
 Provides endpoints for triggering MCP server syncs from GitLab and

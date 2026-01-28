@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Webhook SQLAlchemy models for subscription event notifications (CAB-315)"""
 from sqlalchemy import Column, String, DateTime, Boolean, Text, Index, Integer, JSON
 from sqlalchemy.dialects.postgresql import UUID, ARRAY

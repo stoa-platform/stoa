@@ -1,0 +1,99 @@
+{{- if .Values.demo.enabled }}
+# CAB-1018: Demo Ingress for Central Bank Demo
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stoa-demo-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: demo-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/app-root: /docs
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - {{ .Values.demo.host }}
+      secretName: {{ .Values.demo.host | replace "." "-" }}-tls
+  rules:
+    - host: {{ .Values.demo.host }}
+      http:
+        paths:
+          # Mock APIs - Fraud Detection
+          - path: /v1/transactions
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-mock-backends
+                port:
+                  number: 8090
+          # Mock APIs - Settlement
+          - path: /v1/settlements
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-mock-backends
+                port:
+                  number: 8090
+          # Mock APIs - Sanctions Screening
+          - path: /v1/screening
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-mock-backends
+                port:
+                  number: 8090
+          # Demo Trigger Endpoints
+          - path: /demo
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-mock-backends
+                port:
+                  number: 8090
+          # Health Check
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-mock-backends
+                port:
+                  number: 8090
+          # Prometheus Metrics
+          - path: /metrics
+            pathType: Exact
+            backend:
+              service:
+                name: {{ .Release.Name }}-mock-backends
+                port:
+                  number: 8090
+          # Swagger Documentation
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-mock-backends
+                port:
+                  number: 8090
+          # ReDoc Documentation
+          - path: /redoc
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-mock-backends
+                port:
+                  number: 8090
+          # OpenAPI JSON
+          - path: /openapi.json
+            pathType: Exact
+            backend:
+              service:
+                name: {{ .Release.Name }}-mock-backends
+                port:
+                  number: 8090
+{{- end }}

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 //! JWT Claims
 //!
 //! CAB-912 P2: JWT claims structure for Keycloak OIDC tokens.

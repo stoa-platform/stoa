@@ -6,6 +6,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.2.0] - 2026-01-28
+
+### Added - Mock APIs for Central Bank Demo (CAB-1018)
+
+> **Related Ticket**: CAB-1018 - Mock APIs Banque Centrale
+> **Demo Date**: 26/02/2026 | **Audience**: DPI, DSI, Architectes
+
+#### Mock Backends Service (`mock-backends/`)
+- **Fraud Detection API** (`POST /v1/transactions/score`)
+  - Real-time transaction fraud scoring
+  - Circuit breaker pattern with fallback
+  - Risk factors: amount thresholds, cross-border, velocity
+  - SLA: 99.95% availability, 100ms p95 latency
+
+- **Settlement API** (`POST /v1/settlements`)
+  - Interbank settlement processing
+  - Idempotency pattern with `Idempotency-Key` header
+  - Saga orchestration with full compensation (rollback)
+  - Steps: validate_funds → reserve_funds → execute_transfer → confirm_settlement
+  - SLA: 99.99% availability, 500ms p95 latency
+
+- **Sanctions Screening API** (`POST /v1/screening/check`)
+  - Entity screening against OFAC, EU, UN sanctions lists
+  - Semantic cache with normalized keys (case-insensitive, hyphen handling)
+  - Results: HIT, PARTIAL_MATCH, NO_HIT with confidence scores
+  - SLA: 99.9% availability, 200ms p95 latency
+
+#### Demo Features
+- `X-Demo-Mode: true` header on all responses
+- `X-Data-Classification: SYNTHETIC` header
+- `/demo/trigger/*` endpoints for live scenario control:
+  - `/demo/trigger/spike` - Circuit breaker latency spike
+  - `/demo/trigger/circuit-open` - Force circuit breaker open
+  - `/demo/trigger/rollback` - Force saga rollback
+  - `/demo/trigger/cache-clear` - Clear semantic cache
+  - `/demo/trigger/reset` - Reset all demo state
+
+#### UAC Contracts (`mock-backends/contracts/`)
+- `fraud-detection.uac.yaml` - Circuit breaker policies, SLA definitions
+- `settlement.uac.yaml` - Idempotency, saga compensation policies
+- `sanctions-screening.uac.yaml` - Semantic cache, regulatory compliance
+
+#### Infrastructure
+- Multi-stage Dockerfile with non-root user (UID 1000)
+- Health checks: `/health` (liveness), `/health/ready` (readiness)
+- Prometheus metrics: `stoa_mock_*`, `stoa_fraud_*`, `stoa_settlement_*`, `stoa_sanctions_*`
+- Structured JSON logging with trace IDs (structlog)
+
+#### Helm Chart Updates
+- `values-demo.yaml` - Demo environment configuration
+- `mock-backends-deployment.yaml` - Kubernetes deployment
+- `mock-backends-service.yaml` - Kubernetes service
+
+#### Docker Compose Updates
+- Added `mock-backends` service on port 8090
+- Prometheus scrape configuration for mock-backends
+
+### Documentation
+- Comprehensive README with demo scenarios and curl examples
+- UAC contract specifications with owner/contact fields
+
+---
+
 ## [Unreleased]
 
 ### Added (2026-01-08) - Portal Integration Subscription API (CAB-292)

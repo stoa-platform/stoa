@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """MCP Client Service for External Server Communication.
 
 Provides connectivity testing and tool discovery for external MCP servers.

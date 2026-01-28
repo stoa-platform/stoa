@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """CAB-605 Phase 3: Consolidated Action-Based Tools.
 
 Reduces tool count by using action enum parameters instead of separate tools.

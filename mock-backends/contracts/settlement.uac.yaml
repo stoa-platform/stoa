@@ -1,0 +1,188 @@
+# STOA Universal API Contract - Settlement API
+# CAB-1018: Mock APIs for Central Bank Demo
+---
+apiVersion: stoa.io/v1
+kind: UniversalAPIContract
+metadata:
+  name: settlement-api
+  version: "1.0.0"
+  owner: payments-team
+  contact: payments-ops@example.bank
+  tags:
+    - settlement
+    - payments
+    - saga
+    - idempotency
+    - critical
+spec:
+  description: >-
+    Interbank settlement processing API with saga orchestration pattern.
+    Handles fund validation, reservation, transfer execution, and confirmation.
+    Implements idempotency for safe retries and full compensation (rollback)
+    on failures.
+  classification: RESTRICTED
+  retention: 10 years
+  data_residency: EU
+  regulatory:
+    frameworks:
+      - PSD2
+      - SEPA
+    audit_required: true
+
+  sla:
+    availability: 99.99%
+    latency_p50: 200ms
+    latency_p95: 500ms
+    latency_p99: 1000ms
+    error_budget: 0.01%
+    recovery_time_objective: 15m
+    recovery_point_objective: 0
+
+  policies:
+    rate_limit:
+      requests_per_second: 500
+      burst: 750
+      scope: per_client
+
+    idempotency:
+      enabled: true
+      required: true
+      header: Idempotency-Key
+      ttl: 3600s
+      storage: in_memory
+      collision_response: 409
+
+    saga:
+      enabled: true
+      pattern: orchestration
+      compensation: full_rollback
+      timeout: 30s
+      steps:
+        - name: validate_funds
+          timeout: 5s
+          compensation: null
+        - name: reserve_funds
+          timeout: 5s
+          compensation: release_funds
+        - name: execute_transfer
+          timeout: 10s
+          compensation: reverse_transfer
+        - name: confirm_settlement
+          timeout: 5s
+          compensation: null
+
+    retry:
+      enabled: true
+      max_attempts: 3
+      backoff: exponential
+      initial_delay: 200ms
+      max_delay: 5s
+      retryable_codes: [502, 503, 504]
+
+    timeout:
+      request: 5000ms
+      connect: 500ms
+
+    audit:
+      enabled: true
+      retention: 10 years
+      immutable: true
+      fields:
+        - settlement_id
+        - amount
+        - currency
+        - debtor_iban
+        - creditor_iban
+        - status
+        - steps
+        - idempotency_key
+        - created_at
+        - updated_at
+
+  endpoints:
+    - path: /v1/settlements
+      method: POST
+      description: Create a new settlement (idempotent)
+      timeout: 5000ms
+      idempotency_required: true
+      request:
+        content_type: application/json
+        required_fields:
+          - settlement_id
+          - amount
+          - debtor_iban
+          - creditor_iban
+        headers:
+          - name: Idempotency-Key
+            required: true
+            description: Unique key for idempotent request handling
+      response:
+        content_type: application/json
+        status_codes:
+          201: Settlement created successfully
+          409: Idempotency key conflict
+        fields:
+          - settlement_id
+          - status
+          - steps
+          - amount
+          - currency
+          - idempotency_key
+          - idempotency_hit
+          - created_at
+          - updated_at
+      error_codes:
+        - 400: Invalid request payload
+        - 409: Idempotency key conflict (different payload)
+        - 422: Validation error (missing Idempotency-Key header)
+
+    - path: /v1/settlements/{id}/status
+      method: GET
+      description: Get settlement status with audit trail
+      timeout: 500ms
+      response:
+        content_type: application/json
+        fields:
+          - settlement_id
+          - status
+          - steps
+          - audit_trail
+          - amount
+          - currency
+          - created_at
+          - updated_at
+      error_codes:
+        - 404: Settlement not found
+
+  monitoring:
+    metrics:
+      - name: stoa_settlement_requests_total
+        type: counter
+        labels: [status, idempotency_hit]
+      - name: stoa_settlement_latency_seconds
+        type: histogram
+        buckets: [0.1, 0.25, 0.5, 1.0, 2.0, 5.0]
+      - name: stoa_settlement_saga_state
+        type: gauge
+        labels: [settlement_id, step]
+        description: "Saga step execution state"
+      - name: stoa_settlement_rollback_total
+        type: counter
+        description: "Total rollback/compensation count"
+      - name: stoa_settlement_idempotency_hits_total
+        type: counter
+        description: "Idempotency cache hit count"
+
+    alerts:
+      - name: SettlementAPIHighLatency
+        condition: latency_p95 > 1000ms for 5m
+        severity: warning
+      - name: SettlementAPIHighRollbackRate
+        condition: rollback_rate > 5% for 10m
+        severity: warning
+      - name: SettlementAPIUnavailable
+        condition: availability < 99.99% for 5m
+        severity: critical
+      - name: SettlementAPISagaTimeout
+        condition: saga_timeout_count > 0 for 5m
+        severity: critical

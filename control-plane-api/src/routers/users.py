@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """User profile and permissions endpoint.
 
 CAB-XXX: Single source of truth for user permissions.

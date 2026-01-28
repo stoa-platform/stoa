@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Metering event models for STOA MCP Gateway.
 
 Defines the schema for metering events that are sent to Kafka

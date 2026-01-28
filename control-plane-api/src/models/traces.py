@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Pipeline trace models for end-to-end monitoring"""
 from pydantic import BaseModel, Field
 from typing import Optional, List

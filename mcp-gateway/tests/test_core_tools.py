@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Tests for Core Tools (CAB-603, CAB-605).
 
 CAB-605 Phase 3: Consolidated to 12 action-based tools.

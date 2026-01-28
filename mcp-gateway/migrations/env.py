@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Alembic environment configuration for async migrations.
 
 CAB-660: Real Tool Handlers - Database migrations.

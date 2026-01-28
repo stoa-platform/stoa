@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use serde_json::json;
 use stoa_policy_engine::mcp::ToolCall;

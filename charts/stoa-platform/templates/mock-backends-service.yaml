@@ -1,0 +1,25 @@
+{{- if .Values.mockBackends.enabled }}
+# CAB-1018: Mock APIs for Central Bank Demo
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-mock-backends
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mock-backends
+    app.kubernetes.io/name: mock-backends
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8090"
+    prometheus.io/path: "/metrics"
+spec:
+  type: {{ .Values.mockBackends.service.type | default "ClusterIP" }}
+  ports:
+    - port: {{ .Values.mockBackends.service.port | default 8090 }}
+      targetPort: 8090
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: mock-backends
+{{- end }}

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Prospect event model for tracking user actions (read-only mapping to landing-api tables).
 
 This model maps to the existing stoa.prospect_events table created by landing-api.

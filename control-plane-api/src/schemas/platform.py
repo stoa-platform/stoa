@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Pydantic schemas for Platform Status endpoints (CAB-654).
 
 Provides models for GitOps observability and platform health status.

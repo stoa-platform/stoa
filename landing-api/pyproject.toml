@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "STOA Platform Control Plane API"
 authors = ["CAB Ingenierie <contact@cabingenierie.com>"]
 readme = "README.md"
+license = "Apache-2.0"
 packages = [{include = "control_plane", from = "src"}]
 
 [tool.poetry.dependencies]

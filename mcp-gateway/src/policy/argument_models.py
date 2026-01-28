@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Pydantic models for YAML-based argument policy schema.
 
 CAB-876: Models for validating tool call arguments against business rules.

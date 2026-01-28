@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """Tests for CAB-604: OAuth2 Scopes and Persona Authorization.
 
 Tests the 12 granular OAuth2 scopes and 6 personas for MCP RBAC Phase 2.

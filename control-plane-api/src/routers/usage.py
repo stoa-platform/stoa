@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """
 Usage API Router - CAB-280 / CAB-840
 Endpoints pour le Dashboard Usage Consumer (Portal)

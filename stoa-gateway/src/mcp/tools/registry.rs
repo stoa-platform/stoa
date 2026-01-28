@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 //! Tool Registry
 //!
 //! CAB-912: Registry for MCP tools with async execution.

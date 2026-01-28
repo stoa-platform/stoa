@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 //! API Classifications
 //!
 //! CAB-912: H/VH/VVH classification definitions with required policies and rate limits.

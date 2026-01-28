@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2024-2026 CAB Ingénierie / Christophe ABOULICAM
 """External MCP Server Loader.
 
 Polls Control Plane API to fetch external MCP server configurations

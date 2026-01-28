@@ -1,0 +1,192 @@
+# STOA Universal API Contract - Sanctions Screening API
+# CAB-1018: Mock APIs for Central Bank Demo
+---
+apiVersion: stoa.io/v1
+kind: UniversalAPIContract
+metadata:
+  name: sanctions-screening-api
+  version: "1.0.0"
+  owner: compliance-team
+  contact: compliance-ops@example.bank
+  tags:
+    - sanctions
+    - compliance
+    - aml
+    - kyc
+    - screening
+    - semantic-cache
+spec:
+  description: >-
+    Entity screening API against OFAC, EU, and UN consolidated sanctions lists.
+    Implements semantic caching using normalized entity names for efficient
+    repeated lookups. Returns match results with confidence scores and
+    list sources.
+  classification: RESTRICTED
+  retention: 10 years
+  data_residency: EU
+
+  regulatory:
+    frameworks:
+      - OFAC
+      - EU_SANCTIONS
+      - UN_CONSOLIDATED
+      - AML_DIRECTIVE_6
+    audit_required: true
+    reporting_required: true
+
+  sla:
+    availability: 99.9%
+    latency_p50: 100ms
+    latency_p95: 200ms
+    latency_p99: 500ms
+    error_budget: 0.1%
+
+  policies:
+    rate_limit:
+      requests_per_second: 500
+      burst: 750
+      scope: per_client
+
+    cache:
+      enabled: true
+      type: semantic
+      key_strategy: entity_normalized
+      normalization:
+        - lowercase
+        - trim_whitespace
+        - replace_hyphens_with_spaces
+        - collapse_multiple_spaces
+      ttl: 3600s
+      max_entries: 100000
+      invalidation:
+        - on_list_update
+        - on_ttl_expiry
+        - on_manual_clear
+
+    retry:
+      enabled: true
+      max_attempts: 2
+      backoff: linear
+      initial_delay: 100ms
+      max_delay: 500ms
+      retryable_codes: [502, 503, 504]
+
+    timeout:
+      request: 1000ms
+      connect: 200ms
+
+    audit:
+      enabled: true
+      retention: 10 years
+      immutable: true
+      pii_masking: false
+      fields:
+        - request_id
+        - entity_name
+        - entity_type
+        - country
+        - result
+        - confidence
+        - matches
+        - list_sources
+        - cached
+        - processing_time_ms
+
+  endpoints:
+    - path: /v1/screening/check
+      method: POST
+      description: Screen an entity against sanctions lists
+      timeout: 1000ms
+      request:
+        content_type: application/json
+        required_fields:
+          - entity_name
+          - entity_type
+        optional_fields:
+          - country
+          - date_of_birth
+          - national_id
+      response:
+        content_type: application/json
+        fields:
+          - request_id
+          - entity_name
+          - entity_type
+          - result
+          - confidence
+          - matches
+          - cached
+          - cache_key
+          - processing_time_ms
+          - screened_at
+      result_values:
+        - HIT: "Exact match found in sanctions list"
+        - PARTIAL_MATCH: "Partial or fuzzy match found"
+        - NO_HIT: "No match found"
+      error_codes:
+        - 400: Invalid request payload
+        - 422: Validation error
+
+    - path: /v1/screening/lists/version
+      method: GET
+      description: Get current sanctions list versions
+      timeout: 500ms
+      cache: true
+      cache_ttl: 300s
+      response:
+        content_type: application/json
+        fields:
+          - lists
+          - lists[].name
+          - lists[].version
+          - lists[].last_updated
+          - lists[].entry_count
+
+  sanctions_lists:
+    - name: OFAC
+      description: US Office of Foreign Assets Control
+      update_frequency: daily
+      source: https://sanctionssearch.ofac.treas.gov/
+    - name: EU_SANCTIONS
+      description: European Union Consolidated List
+      update_frequency: daily
+      source: https://data.europa.eu/
+    - name: UN_CONSOLIDATED
+      description: UN Security Council Consolidated List
+      update_frequency: weekly
+      source: https://scsanctions.un.org/
+
+  monitoring:
+    metrics:
+      - name: stoa_sanctions_requests_total
+        type: counter
+        labels: [result, entity_type, cached]
+      - name: stoa_sanctions_latency_seconds
+        type: histogram
+        buckets: [0.01, 0.025, 0.05, 0.1, 0.2, 0.5, 1.0]
+      - name: stoa_sanctions_cache_hits_total
+        type: counter
+        description: "Semantic cache hit count"
+      - name: stoa_sanctions_cache_hit_ratio
+        type: gauge
+        description: "Cache hit ratio (0.0 - 1.0)"
+      - name: stoa_sanctions_cache_size
+        type: gauge
+        description: "Current cache entry count"
+      - name: stoa_sanctions_matches_total
+        type: counter
+        labels: [list_name, result]
+
+    alerts:
+      - name: SanctionsAPIHighLatency
+        condition: latency_p95 > 500ms for 5m
+        severity: warning
+      - name: SanctionsAPILowCacheHitRatio
+        condition: cache_hit_ratio < 0.5 for 15m
+        severity: info
+      - name: SanctionsAPIListStale
+        condition: list_age > 48h
+        severity: warning
+      - name: SanctionsAPIHighErrorRate
+        condition: error_rate > 0.5% for 5m
+        severity: critical

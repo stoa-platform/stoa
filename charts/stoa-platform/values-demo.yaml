@@ -1,0 +1,208 @@
+# STOA Platform - Demo Configuration
+# ===================================
+# CAB-1018: Mock APIs for Central Bank Demo
+#
+# Usage:
+#   helm install stoa ./charts/stoa-platform -f values-demo.yaml
+#   helm upgrade stoa ./charts/stoa-platform -f values-demo.yaml
+#
+# Demo URL: https://demo.gostoa.dev
+# Docs: https://docs.gostoa.dev
+
+global:
+  environment: demo
+  domain: demo.gostoa.dev
+
+# -----------------------------------------------------------------------------
+# Control Plane API
+# -----------------------------------------------------------------------------
+controlPlaneApi:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/stoa-platform/control-plane-api
+    tag: "v0.2.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    LOG_LEVEL: INFO
+    ENVIRONMENT: demo
+    AUTH_ENABLED: "false"  # Demo mode - auth bypassed
+
+# -----------------------------------------------------------------------------
+# MCP Gateway
+# -----------------------------------------------------------------------------
+mcpGateway:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/stoa-platform/mcp-gateway
+    tag: "v0.2.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    LOG_LEVEL: INFO
+    ENVIRONMENT: demo
+    OPA_ENABLED: "true"
+    METERING_ENABLED: "false"  # Simplified for demo
+
+# -----------------------------------------------------------------------------
+# Mock Backends (CAB-1018: Central Bank Demo)
+# -----------------------------------------------------------------------------
+mockBackends:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/stoa-platform/mock-backends
+    tag: "v0.2.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8090
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    DEMO_MODE: "true"
+    AUTH_ENABLED: "false"
+    DEMO_SCENARIOS_ENABLED: "true"
+    LOG_LEVEL: INFO
+    ENVIRONMENT: demo
+    METRICS_ENABLED: "true"
+  # Probes
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8090
+    initialDelaySeconds: 10
+    periodSeconds: 30
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: 8090
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+# -----------------------------------------------------------------------------
+# Landing API
+# -----------------------------------------------------------------------------
+landingApi:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/stoa-platform/landing-api
+    tag: "v0.2.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# -----------------------------------------------------------------------------
+# Observability
+# -----------------------------------------------------------------------------
+prometheus:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+grafana:
+  enabled: true
+  adminPassword: "demo-admin-2026"  # Demo only - NOT for production
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# -----------------------------------------------------------------------------
+# Ingress
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+  hosts:
+    - host: demo.gostoa.dev
+      paths:
+        - path: /
+          pathType: Prefix
+          service: control-plane-ui
+        - path: /api
+          pathType: Prefix
+          service: control-plane-api
+        - path: /mcp
+          pathType: Prefix
+          service: mcp-gateway
+        - path: /mock
+          pathType: Prefix
+          service: mock-backends
+  tls:
+    - secretName: demo-gostoa-dev-tls
+      hosts:
+        - demo.gostoa.dev
+
+# -----------------------------------------------------------------------------
+# Database (embedded for demo)
+# -----------------------------------------------------------------------------
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "demo-postgres-2026"  # Demo only - NOT for production
+    database: stoa
+  primary:
+    persistence:
+      enabled: true
+      size: 1Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+# -----------------------------------------------------------------------------
+# Gateway Configuration (inherited from base values.yaml)
+# -----------------------------------------------------------------------------
+gateway:
+  image:
+    repository: ghcr.io/stoa-platform/mcp-gateway
+    tag: "v0.2.0"
+    pullPolicy: IfNotPresent
+  edgeMcp:
+    enabled: true
+    port: 3001
+
+# Disable gateway sync for demo (no webMethods gateway)
+gatewaySync:
+  enabled: false

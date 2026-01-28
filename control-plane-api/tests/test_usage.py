@@ -320,7 +320,11 @@ class TestPrometheusClient:
 
     @pytest.mark.asyncio
     async def test_query_timeout(self):
-        """Test graceful handling of timeout."""
+        """Test that timeout raises exception (circuit breaker counts it).
+
+        With circuit breaker pattern, exceptions are re-raised so the circuit
+        can count failures. Graceful degradation happens at MetricsService level.
+        """
         from src.services.prometheus_client import PrometheusClient
         import httpx
 
@@ -335,9 +339,8 @@ class TestPrometheusClient:
             mock_client_instance.__aexit__ = AsyncMock(return_value=None)
             mock_httpx.return_value = mock_client_instance
 
-            result = await client.query("test_query")
-
-            assert result is None  # Graceful degradation
+            with pytest.raises(httpx.TimeoutException):
+                await client.query("test_query")
 
     @pytest.mark.asyncio
     async def test_query_disabled(self):
@@ -419,7 +422,11 @@ class TestLokiClient:
 
     @pytest.mark.asyncio
     async def test_query_range_timeout(self):
-        """Test graceful handling of timeout."""
+        """Test that timeout raises exception (circuit breaker counts it).
+
+        With circuit breaker pattern, exceptions are re-raised so the circuit
+        can count failures. Graceful degradation happens at MetricsService level.
+        """
         from src.services.loki_client import LokiClient
         import httpx
 
@@ -434,13 +441,12 @@ class TestLokiClient:
             mock_client_instance.__aexit__ = AsyncMock(return_value=None)
             mock_httpx.return_value = mock_client_instance
 
-            result = await client.query_range(
-                "{job='test'}",
-                datetime.utcnow() - timedelta(hours=1),
-                datetime.utcnow()
-            )
-
-            assert result is None  # Graceful degradation
+            with pytest.raises(httpx.TimeoutException):
+                await client.query_range(
+                    "{job='test'}",
+                    datetime.utcnow() - timedelta(hours=1),
+                    datetime.utcnow()
+                )
 
     def test_format_call_entries(self):
         """Test formatting of log entries to call objects."""
@@ -553,3 +559,254 @@ class TestMetricsService:
         assert len(result) == 7
         for stat in result:
             assert stat.calls == 0
+
+
+# ============== CAB-840: Security Tests ==============
+
+class TestInputValidation:
+    """Tests for tenant ID and input validation (CAB-840 Security)."""
+
+    def test_valid_tenant_id_accepted(self):
+        """Valid tenant IDs pass validation."""
+        from src.services.prometheus_client import PrometheusClient
+
+        client = PrometheusClient()
+
+        # Valid patterns
+        valid_ids = [
+            "acme",
+            "tenant-123",
+            "my_tenant",
+            "TenantA",
+            "a" * 64,  # Max length
+        ]
+
+        for tenant_id in valid_ids:
+            # Should not raise
+            result = client._validate_identifier(tenant_id, "tenant_id")
+            assert result == tenant_id
+
+    def test_invalid_tenant_id_rejected(self):
+        """Invalid tenant IDs are rejected."""
+        from src.services.prometheus_client import PrometheusClient
+
+        client = PrometheusClient()
+
+        # Invalid patterns
+        invalid_ids = [
+            "",  # Empty
+            "a" * 65,  # Too long
+            "tenant@evil",  # Invalid character
+            "tenant;drop",  # Injection attempt
+            "tenant\ninjection",  # Newline
+            'tenant"injection',  # Quote
+        ]
+
+        for tenant_id in invalid_ids:
+            with pytest.raises(ValueError, match="Invalid tenant_id format"):
+                client._validate_identifier(tenant_id, "tenant_id")
+
+    def test_valid_time_range_accepted(self):
+        """Valid time ranges pass validation."""
+        from src.services.prometheus_client import PrometheusClient
+
+        client = PrometheusClient()
+
+        valid_ranges = ["1h", "6h", "12h", "24h", "1d", "7d", "14d", "30d", "90d"]
+
+        for time_range in valid_ranges:
+            result = client._validate_time_range(time_range)
+            assert result == time_range
+
+    def test_invalid_time_range_rejected(self):
+        """Invalid time ranges are rejected."""
+        from src.services.prometheus_client import PrometheusClient
+
+        client = PrometheusClient()
+
+        invalid_ranges = [
+            "36500d",  # Too long - removed from allowlist
+            "100y",  # Not in allowlist
+            "1m",  # Minutes not allowed
+            "invalid",  # Garbage
+        ]
+
+        for time_range in invalid_ranges:
+            with pytest.raises(ValueError, match="Invalid time_range"):
+                client._validate_time_range(time_range)
+
+    def test_promql_injection_blocked(self):
+        """PromQL injection attempts are blocked by validation."""
+        from src.services.prometheus_client import PrometheusClient
+
+        client = PrometheusClient()
+
+        # Injection attempts
+        injection_attempts = [
+            'acme"} or 1==1 or {x="',  # Label injection
+            "acme}[1d]) + ignoring()",  # Query injection
+            "acme\n{__name__=~'.*'}",  # Multiline injection
+        ]
+
+        for attempt in injection_attempts:
+            with pytest.raises(ValueError):
+                client._validate_identifier(attempt, "tenant_id")
+
+
+class TestPIISanitization:
+    """Tests for PII filtering in Loki logs (CAB-840 Security)."""
+
+    def test_email_redacted(self):
+        """Email addresses are replaced with [EMAIL]."""
+        from src.services.loki_client import LokiClient
+
+        client = LokiClient()
+
+        log_with_email = "User john.doe@example.com called API"
+        sanitized = client._sanitize_log_entry(log_with_email)
+
+        assert "john.doe@example.com" not in sanitized
+        assert "[EMAIL]" in sanitized
+
+    def test_ip_address_redacted(self):
+        """IP addresses are replaced with [IP]."""
+        from src.services.loki_client import LokiClient
+
+        client = LokiClient()
+
+        log_with_ip = "Request from 192.168.1.100 to server"
+        sanitized = client._sanitize_log_entry(log_with_ip)
+
+        assert "192.168.1.100" not in sanitized
+        assert "[IP]" in sanitized
+
+    def test_jwt_token_redacted(self):
+        """JWT tokens are replaced with [JWT]."""
+        from src.services.loki_client import LokiClient
+
+        client = LokiClient()
+
+        # Real JWT format (header.payload.signature)
+        jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        log_with_jwt = f"Auth token: {jwt}"
+        sanitized = client._sanitize_log_entry(log_with_jwt)
+
+        assert jwt not in sanitized
+        assert "[JWT]" in sanitized
+
+    def test_bearer_token_redacted(self):
+        """Bearer tokens are replaced with [BEARER_TOKEN]."""
+        from src.services.loki_client import LokiClient
+
+        client = LokiClient()
+
+        log_with_bearer = "Authorization: Bearer sk-proj-1234567890abcdefghij"
+        sanitized = client._sanitize_log_entry(log_with_bearer)
+
+        assert "sk-proj-1234567890abcdefghij" not in sanitized
+        assert "[BEARER_TOKEN]" in sanitized
+
+    def test_password_redacted(self):
+        """Passwords in logs are replaced with [REDACTED]."""
+        from src.services.loki_client import LokiClient
+
+        client = LokiClient()
+
+        log_with_password = 'Login attempt with password="supersecret123"'
+        sanitized = client._sanitize_log_entry(log_with_password)
+
+        assert "supersecret123" not in sanitized
+        assert "[REDACTED]" in sanitized
+
+    def test_multiple_pii_types_redacted(self):
+        """Multiple PII types in one log are all redacted."""
+        from src.services.loki_client import LokiClient
+
+        client = LokiClient()
+
+        complex_log = 'User alice@acme.com from 10.0.0.5 with api_key="secret123abc" failed auth'
+        sanitized = client._sanitize_log_entry(complex_log)
+
+        assert "alice@acme.com" not in sanitized
+        assert "10.0.0.5" not in sanitized
+        assert "secret123abc" not in sanitized
+
+
+class TestCircuitBreaker:
+    """Tests for circuit breaker behavior (CAB-840 Security)."""
+
+    @pytest.mark.asyncio
+    async def test_degraded_flag_when_prometheus_down(self):
+        """Degraded flag is set when Prometheus circuit opens."""
+        from circuitbreaker import CircuitBreakerError, CircuitBreaker
+        from src.services.metrics_service import MetricsService
+
+        # Create a proper circuit breaker for the error
+        mock_cb = CircuitBreaker(name="test_cb")
+        cb_error = CircuitBreakerError(mock_cb)
+
+        mock_prometheus = MagicMock()
+        mock_prometheus.get_request_count = AsyncMock(side_effect=cb_error)
+        mock_prometheus.get_success_count = AsyncMock(side_effect=cb_error)
+        mock_prometheus.get_error_count = AsyncMock(side_effect=cb_error)
+        mock_prometheus.get_avg_latency_ms = AsyncMock(side_effect=cb_error)
+        mock_prometheus.get_top_tools = AsyncMock(side_effect=cb_error)
+        mock_prometheus.get_daily_calls = AsyncMock(side_effect=cb_error)
+
+        mock_loki = MagicMock()
+
+        service = MetricsService(prometheus=mock_prometheus, loki=mock_loki)
+        result = await service.get_usage_summary("user-123", "tenant-abc")
+
+        assert result.degraded is True
+        assert "prometheus" in result.degraded_services
+
+    @pytest.mark.asyncio
+    async def test_graceful_degradation_returns_empty_data(self):
+        """Service returns empty but valid data when backends are down."""
+        from circuitbreaker import CircuitBreakerError, CircuitBreaker
+        from src.services.metrics_service import MetricsService
+
+        mock_cb = CircuitBreaker(name="test_cb")
+        cb_error = CircuitBreakerError(mock_cb)
+
+        mock_prometheus = MagicMock()
+        mock_prometheus.get_request_count = AsyncMock(side_effect=cb_error)
+        mock_prometheus.get_success_count = AsyncMock(side_effect=cb_error)
+        mock_prometheus.get_error_count = AsyncMock(side_effect=cb_error)
+        mock_prometheus.get_avg_latency_ms = AsyncMock(side_effect=cb_error)
+        mock_prometheus.get_top_tools = AsyncMock(side_effect=cb_error)
+        mock_prometheus.get_daily_calls = AsyncMock(side_effect=cb_error)
+
+        mock_loki = MagicMock()
+
+        service = MetricsService(prometheus=mock_prometheus, loki=mock_loki)
+        result = await service.get_usage_summary("user-123", "tenant-abc")
+
+        # Should return valid structure with zeros
+        assert result.today.total_calls == 0
+        assert result.today.success_rate == 100.0
+        assert result.top_tools == []
+        assert len(result.daily_calls) == 7  # Empty fallback
+
+    @pytest.mark.asyncio
+    async def test_mcp_metrics_degraded_state(self):
+        """MCP metrics returns degraded state when Prometheus is down."""
+        from circuitbreaker import CircuitBreakerError, CircuitBreaker
+        from src.services.metrics_service import MetricsService
+
+        mock_cb = CircuitBreaker(name="test_cb")
+        cb_error = CircuitBreakerError(mock_cb)
+
+        mock_prometheus = MagicMock()
+        mock_prometheus.get_mcp_metrics = AsyncMock(side_effect=cb_error)
+
+        mock_loki = MagicMock()
+
+        service = MetricsService(prometheus=mock_prometheus, loki=mock_loki)
+        result = await service.get_mcp_metrics("tenant-abc", "24h")
+
+        assert result.degraded is True
+        assert "prometheus" in result.degraded_services
+        assert result.total_tool_calls == 0
+        assert result.error_rate == 0.0

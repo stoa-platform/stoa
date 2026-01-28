@@ -150,6 +150,23 @@ class Client(Base):
         comment="Vault PKI serial for revocation API"
     )
 
+    # CAB-866: Keycloak sync fields
+    keycloak_client_id = Column(
+        String(255),
+        nullable=True,
+        comment="Keycloak client UUID if synced"
+    )
+    keycloak_sync_status = Column(
+        String(50),
+        nullable=True,
+        comment="Keycloak sync status: synced|failed|pending"
+    )
+    keycloak_synced_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When client was synced to Keycloak"
+    )
+
     # Audit trail
     created_at = Column(
         DateTime(timezone=True),

@@ -2,6 +2,10 @@ from .kafka_service import KafkaService, kafka_service
 from .git_service import GitLabService, git_service
 from .awx_service import AWXService, awx_service
 from .keycloak_service import KeycloakService, keycloak_service
+from .keycloak_cert_sync_service import (
+    KeycloakCertificateSyncService,
+    get_keycloak_cert_sync_service,
+)
 from .variable_resolver import VariableResolver
 from .iam_sync_service import IAMSyncService
 from .gateway_service import GatewayAdminService, gateway_service
@@ -19,6 +23,8 @@ __all__ = [
     "awx_service",
     "KeycloakService",
     "keycloak_service",
+    "KeycloakCertificateSyncService",
+    "get_keycloak_cert_sync_service",
     "VariableResolver",
     "IAMSyncService",
     "GatewayAdminService",

@@ -225,6 +225,25 @@ async def create_client(
                 detail=str(e)
             )
 
+        # CAB-866: Synchronous Keycloak sync for mTLS clients
+        from src.services.keycloak_cert_sync_service import get_keycloak_cert_sync_service
+
+        try:
+            sync_service = get_keycloak_cert_sync_service()
+            sync_result = await sync_service.sync_mtls_client_create(
+                stoa_client_id=str(client.id),
+                client_name=client.name,
+                tenant_id=tenant_id,
+                certificate_pem=bundle.certificate_pem,
+            )
+            client.keycloak_client_id = sync_result.keycloak_id
+            client.keycloak_sync_status = sync_result.status.value
+            client.keycloak_synced_at = datetime.now(timezone.utc) if sync_result.keycloak_id else None
+        except RuntimeError as e:
+            # Keycloak not connected - log warning but continue
+            logger.warning(f"Keycloak sync skipped: {e}")
+            client.keycloak_sync_status = "pending"
+
     # Save to database
     db.add(client)
     await db.flush()

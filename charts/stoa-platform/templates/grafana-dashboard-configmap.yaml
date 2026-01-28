@@ -1,0 +1,15 @@
+{{- if .Values.demo.enabled }}
+# CAB-1018: Grafana Dashboard ConfigMap for Executive Demo
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-dashboard-executive
+  namespace: stoa-monitoring
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+    app.kubernetes.io/component: grafana-dashboard
+data:
+  stoa-executive-demo.json: |-
+{{ .Files.Get "dashboards/stoa-executive-demo.json" | indent 4 }}
+{{- end }}

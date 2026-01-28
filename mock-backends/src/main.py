@@ -80,13 +80,24 @@ All data is 100% synthetic. Auth is bypassed for demo purposes.
 )
 
 # Add middleware (order matters - executed in reverse order)
-# 1. CORS (outermost)
+# 1. CORS (outermost) - CAB-1018: Whitelist origins
+DEMO_ALLOWED_ORIGINS = [
+    "https://gostoa.dev",
+    "https://demo.gostoa.dev",
+    "https://console.gostoa.dev",
+    "https://portal.gostoa.dev",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8080",
+    "http://localhost:8090",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Demo: allow all origins
+    allow_origins=DEMO_ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID", "Idempotency-Key"],
 )
 
 # 2. Metrics middleware

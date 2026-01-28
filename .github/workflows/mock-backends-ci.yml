@@ -1,0 +1,229 @@
+# =============================================================================
+# GitHub Actions: Mock Backends CI/CD
+# =============================================================================
+# STOA Platform - CAB-1018
+# Build, test, and deploy the Mock APIs for Central Bank Demo
+# =============================================================================
+
+name: Mock Backends CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mock-backends/**'
+      - '.github/workflows/mock-backends-ci.yml'
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'mock-backends/**'
+      - '.github/workflows/mock-backends-ci.yml'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'demo'
+        type: choice
+        options:
+          - demo
+          - dev
+
+env:
+  PYTHON_VERSION: '3.11'
+  AWS_REGION: eu-west-1
+  ECR_REGISTRY: 848853684735.dkr.ecr.eu-west-1.amazonaws.com
+  ECR_REPOSITORY: apim/mock-backends
+
+jobs:
+  # ==========================================================================
+  # Lint and Test
+  # ==========================================================================
+  test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: mock-backends
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov ruff mypy httpx
+
+      - name: Run linter (ruff)
+        working-directory: mock-backends
+        run: |
+          ruff check src/ tests/ || true
+
+      - name: Run type checker (mypy)
+        working-directory: mock-backends
+        run: |
+          mypy src/ --ignore-missing-imports || true
+
+      - name: Run tests with coverage
+        working-directory: mock-backends
+        run: |
+          pytest tests/ -v --tb=short \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=70
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: mock-backends/coverage.xml
+          flags: mock-backends
+          name: mock-backends-coverage
+          fail_ci_if_error: false
+
+  # ==========================================================================
+  # Build Docker Image and Push to ECR
+  # ==========================================================================
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      id-token: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=raw,value=v0.2.0
+            type=raw,value=demo-latest
+            type=raw,value=latest
+            type=sha,prefix=sha-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./mock-backends
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=mock-backends
+          cache-to: type=gha,mode=max,scope=mock-backends
+
+      - name: Output image info
+        run: |
+          echo "### Mock Backends Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # Deploy to Kubernetes (Demo)
+  # ==========================================================================
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'demo' }}
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: ${{ github.event.inputs.environment || 'demo' }}
+      url: https://demo.gostoa.dev
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check if EKS cluster exists
+        id: cluster-check
+        run: |
+          if aws eks describe-cluster --name apim-dev-cluster --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "CLUSTER_EXISTS=true" >> $GITHUB_OUTPUT
+          else
+            echo "CLUSTER_EXISTS=false" >> $GITHUB_OUTPUT
+            echo "⚠️ EKS cluster 'apim-dev-cluster' not found. Skipping deployment."
+          fi
+
+      - name: Update kubeconfig
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: |
+          aws eks update-kubeconfig --name apim-dev-cluster --region ${{ env.AWS_REGION }}
+
+      - name: Deploy mock-backends
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: |
+          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:demo-latest"
+
+          echo "Deploying mock-backends with image: $IMAGE"
+
+          # Check if deployment exists
+          if kubectl get deployment mock-backends -n stoa-system 2>/dev/null; then
+            kubectl set image deployment/mock-backends \
+              mock-backends=$IMAGE \
+              -n stoa-system
+            kubectl rollout restart deployment/mock-backends -n stoa-system
+            kubectl rollout status deployment/mock-backends -n stoa-system --timeout=300s
+          else
+            echo "Deployment mock-backends not found. Deploy via Helm first."
+          fi
+
+      - name: Verify deployment
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployment mock-backends -n stoa-system || echo "Not deployed yet"
+
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n stoa-system -l app.kubernetes.io/name=mock-backends || echo "No pods found"

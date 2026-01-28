@@ -14,6 +14,19 @@ global:
   domain: demo.gostoa.dev
 
 # -----------------------------------------------------------------------------
+# Demo Configuration (CAB-1018)
+# -----------------------------------------------------------------------------
+demo:
+  enabled: true
+  host: demo.gostoa.dev
+
+# -----------------------------------------------------------------------------
+# Monitoring Configuration
+# -----------------------------------------------------------------------------
+monitoring:
+  enabled: true
+
+# -----------------------------------------------------------------------------
 # Control Plane API
 # -----------------------------------------------------------------------------
 controlPlaneApi:
@@ -65,7 +78,7 @@ mockBackends:
   enabled: true
   replicaCount: 1
   image:
-    repository: ghcr.io/stoa-platform/mock-backends
+    repository: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/mock-backends
     tag: "v0.2.0"
     pullPolicy: IfNotPresent
   service:

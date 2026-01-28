@@ -114,7 +114,7 @@ jobs:
           echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
           aws-region: ${{ env.AWS_REGION }}
@@ -177,7 +177,7 @@ jobs:
           echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
           aws-region: ${{ env.AWS_REGION }}

@@ -1,0 +1,25 @@
+{{- if and .Values.mockBackends.enabled (.Values.monitoring).enabled }}
+# CAB-1018: ServiceMonitor for Mock Backends
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}-mock-backends
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mock-backends
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: mock-backends
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+{{- end }}

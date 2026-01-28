@@ -33,13 +33,24 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-# Configure CORS
+# Configure CORS - CAB-1018: Restrict origins for security
+ALLOWED_ORIGINS = [
+    "https://gostoa.dev",
+    "https://demo.gostoa.dev",
+    "https://console.gostoa.dev",
+    "https://portal.gostoa.dev",
+    "https://api.gostoa.dev",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8080",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
 )
 
 # Configure rate limiter

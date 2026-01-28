@@ -15,7 +15,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .logging_config import configure_logging, get_logger
-from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring, users
+from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring, users, clients
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
 from .routers.external_mcp_servers import admin_router as external_mcp_servers_admin_router, internal_router as external_mcp_servers_internal_router
@@ -242,6 +242,7 @@ app = FastAPI(
         {"name": "MCP GitOps", "description": "GitOps synchronization for MCP servers"},
         {"name": "MCP Tools", "description": "MCP tools discovery and invocation (proxy to MCP Gateway)"},
         {"name": "Platform", "description": "Platform status and GitOps observability (CAB-654)"},
+        {"name": "Clients", "description": "API clients with mTLS certificate provisioning (CAB-865)"},
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -344,6 +345,9 @@ app.include_router(admin_prospects.router)
 
 # User profile and permissions (Single Source of Truth for RBAC)
 app.include_router(users.router)
+
+# API Clients with mTLS certificate provisioning (CAB-865)
+app.include_router(clients.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

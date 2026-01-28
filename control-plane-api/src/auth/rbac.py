@@ -31,6 +31,12 @@ class Permission:
     USERS_MANAGE = "users:manage"
     AUDIT_READ = "audit:read"
 
+    # Client permissions (CAB-865)
+    CLIENTS_CREATE = "clients:create"
+    CLIENTS_READ = "clients:read"
+    CLIENTS_UPDATE = "clients:update"
+    CLIENTS_DELETE = "clients:delete"
+
 ROLE_PERMISSIONS = {
     "cpi-admin": [
         Permission.TENANTS_CREATE, Permission.TENANTS_READ,
@@ -41,6 +47,8 @@ ROLE_PERMISSIONS = {
         Permission.APPS_CREATE, Permission.APPS_READ,
         Permission.APPS_UPDATE, Permission.APPS_DELETE,
         Permission.USERS_MANAGE, Permission.AUDIT_READ,
+        Permission.CLIENTS_CREATE, Permission.CLIENTS_READ,
+        Permission.CLIENTS_UPDATE, Permission.CLIENTS_DELETE,
     ],
     "tenant-admin": [
         Permission.TENANTS_READ,
@@ -50,6 +58,8 @@ ROLE_PERMISSIONS = {
         Permission.APPS_CREATE, Permission.APPS_READ,
         Permission.APPS_UPDATE, Permission.APPS_DELETE,
         Permission.USERS_MANAGE, Permission.AUDIT_READ,
+        Permission.CLIENTS_CREATE, Permission.CLIENTS_READ,
+        Permission.CLIENTS_UPDATE, Permission.CLIENTS_DELETE,
     ],
     "devops": [
         Permission.TENANTS_READ,
@@ -57,12 +67,14 @@ ROLE_PERMISSIONS = {
         Permission.APIS_DEPLOY, Permission.APIS_PROMOTE,
         Permission.APPS_CREATE, Permission.APPS_READ, Permission.APPS_UPDATE,
         Permission.AUDIT_READ,
+        Permission.CLIENTS_CREATE, Permission.CLIENTS_READ, Permission.CLIENTS_UPDATE,
     ],
     "viewer": [
         Permission.TENANTS_READ,
         Permission.APIS_READ,
         Permission.APPS_READ,
         Permission.AUDIT_READ,
+        Permission.CLIENTS_READ,
     ],
 }
 

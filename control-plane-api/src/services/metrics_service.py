@@ -2,10 +2,15 @@
 
 Combines data from Prometheus, Loki, and PostgreSQL for usage endpoints.
 Implements graceful degradation when external services are unavailable.
+
+Security Features (CAB-840):
+- Circuit breaker error handling with degraded state reporting
+- All responses include degraded flag for client awareness
 """
 import logging
 from typing import Optional, List
 from datetime import datetime, timedelta
+from circuitbreaker import CircuitBreakerError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -30,6 +35,8 @@ from ..schemas.usage import (
     RecentActivityItem,
     CallStatus,
     ActivityType,
+    MCPMetricsResponse,
+    SubscriptionMetricsResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,27 +77,49 @@ class MetricsService:
         user_id: str,
         tenant_id: str,
     ) -> UsageSummary:
-        """Get comprehensive usage summary for a user.
+        """Get comprehensive usage summary for a user with degraded state tracking.
 
         Args:
             user_id: User ID
             tenant_id: Tenant ID
 
         Returns:
-            UsageSummary with period stats, top tools, and daily calls
+            UsageSummary with period stats, top tools, daily calls, and degraded state
         """
-        # Fetch period stats (today, week, month)
-        today_stats = await self._get_period_stats(user_id, tenant_id, "1d", "today")
-        week_stats = await self._get_period_stats(user_id, tenant_id, "7d", "week")
-        month_stats = await self._get_period_stats(user_id, tenant_id, "30d", "month")
+        degraded_services: List[str] = []
+
+        # Fetch period stats (today, week, month) - track Prometheus degradation
+        try:
+            today_stats = await self._get_period_stats(user_id, tenant_id, "1d", "today")
+            week_stats = await self._get_period_stats(user_id, tenant_id, "7d", "week")
+            month_stats = await self._get_period_stats(user_id, tenant_id, "30d", "month")
+        except (CircuitBreakerError, ValueError) as e:
+            logger.warning(f"Prometheus degraded for usage summary: {e}")
+            if "prometheus" not in degraded_services:
+                degraded_services.append("prometheus")
+            today_stats = self._empty_period_stats("today")
+            week_stats = self._empty_period_stats("week")
+            month_stats = self._empty_period_stats("month")
 
         # Get top tools
-        top_tools_raw = await self._prometheus.get_top_tools(user_id, tenant_id, limit=5)
-        top_tools = await self._enrich_tool_stats(top_tools_raw, user_id, tenant_id)
+        try:
+            top_tools_raw = await self._prometheus.get_top_tools(user_id, tenant_id, limit=5)
+            top_tools = await self._enrich_tool_stats(top_tools_raw, user_id, tenant_id)
+        except (CircuitBreakerError, ValueError) as e:
+            logger.warning(f"Prometheus degraded for top tools: {e}")
+            if "prometheus" not in degraded_services:
+                degraded_services.append("prometheus")
+            top_tools = []
 
         # Get daily calls for chart
-        daily_raw = await self._prometheus.get_daily_calls(user_id, tenant_id, days=7)
-        daily_calls = [DailyCallStat(date=d["date"], calls=d["calls"]) for d in daily_raw]
+        try:
+            daily_raw = await self._prometheus.get_daily_calls(user_id, tenant_id, days=7)
+            daily_calls = [DailyCallStat(date=d["date"], calls=d["calls"]) for d in daily_raw]
+        except (CircuitBreakerError, ValueError) as e:
+            logger.warning(f"Prometheus degraded for daily calls: {e}")
+            if "prometheus" not in degraded_services:
+                degraded_services.append("prometheus")
+            daily_calls = []
 
         # Fallback to empty if no data
         if not daily_calls:
@@ -104,6 +133,19 @@ class MetricsService:
             this_month=month_stats,
             top_tools=top_tools,
             daily_calls=daily_calls,
+            degraded=bool(degraded_services),
+            degraded_services=degraded_services,
+        )
+
+    def _empty_period_stats(self, period: str) -> UsagePeriodStats:
+        """Return empty period stats for degraded mode."""
+        return UsagePeriodStats(
+            period=period,
+            total_calls=0,
+            success_count=0,
+            error_count=0,
+            success_rate=100.0,
+            avg_latency_ms=0,
         )
 
     async def _get_period_stats(
@@ -276,9 +318,10 @@ class MetricsService:
         subscriptions = []
         for sub, server in result.all():
             # Get call count from Prometheus (or use DB value as fallback)
+            # Use 90d as max time range per CAB-840 security review
             call_count = await self._prometheus.get_request_count(
                 subscription_id=str(sub.id),
-                time_range="36500d"  # All time (100 years)
+                time_range="90d"
             )
             # Use DB usage_count as fallback if Prometheus returns 0
             if call_count == 0:
@@ -404,6 +447,138 @@ class MetricsService:
                 continue
 
         return activities
+
+    # ===== CAB-840: New Metrics Methods =====
+
+    async def get_mcp_metrics(
+        self,
+        tenant_id: str,
+        time_range: str = "24h"
+    ) -> MCPMetricsResponse:
+        """Get MCP Gateway metrics for a tenant with degraded state tracking.
+
+        Args:
+            tenant_id: Tenant ID
+            time_range: Time range for metrics (default: 24h)
+
+        Returns:
+            MCPMetricsResponse with tool call stats and degraded state
+        """
+        degraded_services: List[str] = []
+
+        try:
+            metrics = await self._prometheus.get_mcp_metrics(tenant_id, time_range)
+
+            return MCPMetricsResponse(
+                total_tool_calls=metrics.get("total_tool_calls", 0),
+                tool_calls_by_name=metrics.get("tool_calls_by_name", {}),
+                avg_execution_time_ms=metrics.get("avg_execution_time_ms", 0),
+                error_rate=metrics.get("error_rate", 0.0),
+                active_sessions=metrics.get("active_sessions", 0),
+                time_range=time_range,
+                degraded=False,
+                degraded_services=[],
+            )
+        except (CircuitBreakerError, ValueError) as e:
+            logger.warning(f"Prometheus degraded for MCP metrics: {e}")
+            degraded_services.append("prometheus")
+
+            return MCPMetricsResponse(
+                total_tool_calls=0,
+                tool_calls_by_name={},
+                avg_execution_time_ms=0,
+                error_rate=0.0,
+                active_sessions=0,
+                time_range=time_range,
+                degraded=True,
+                degraded_services=degraded_services,
+            )
+
+    async def get_subscription_metrics(
+        self,
+        subscription_id: str,
+        user_id: str,
+        tenant_id: str,
+        time_range: str = "30d"
+    ) -> SubscriptionMetricsResponse:
+        """Get per-subscription usage metrics with degraded state tracking.
+
+        Args:
+            subscription_id: Subscription ID
+            user_id: User ID (for validation)
+            tenant_id: Tenant ID (for validation)
+            time_range: Time range for metrics (default: 30d)
+
+        Returns:
+            SubscriptionMetricsResponse with usage stats and degraded state
+        """
+        degraded_services: List[str] = []
+
+        try:
+            # Get total calls for subscription
+            total_calls = await self._prometheus.get_request_count(
+                subscription_id=subscription_id,
+                time_range=time_range
+            )
+
+            # Get success count for rate calculation
+            success_count = await self._prometheus.get_success_count(
+                subscription_id=subscription_id,
+                time_range=time_range
+            )
+
+            # Calculate success rate
+            success_rate = (success_count / total_calls * 100) if total_calls > 0 else 100.0
+
+            # Get average latency
+            avg_latency_ms = await self._prometheus.get_avg_latency_ms(
+                subscription_id=subscription_id,
+                time_range=time_range
+            )
+
+            # Get daily breakdown (use 7 days for chart)
+            end = datetime.utcnow()
+            start = end - timedelta(days=7)
+            daily_query = f'sum(increase(mcp_requests_total{{subscription_id="{subscription_id}"}}[1d]))'
+            daily_result = await self._prometheus.query_range(daily_query, start, end, step="1d")
+
+            daily_breakdown = []
+            if daily_result:
+                for item in daily_result.get("result", []):
+                    for timestamp, value in item.get("values", []):
+                        date = datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d")
+                        raw_value = float(value)
+                        if raw_value != raw_value:  # NaN check
+                            raw_value = 0
+                        daily_breakdown.append(DailyCallStat(date=date, calls=int(raw_value)))
+
+            if not daily_breakdown:
+                daily_breakdown = self._generate_empty_daily_calls(7)
+
+            return SubscriptionMetricsResponse(
+                subscription_id=subscription_id,
+                total_calls=total_calls,
+                success_rate=round(success_rate, 1),
+                avg_latency_ms=avg_latency_ms,
+                daily_breakdown=daily_breakdown,
+                time_range=time_range,
+                degraded=False,
+                degraded_services=[],
+            )
+        except (CircuitBreakerError, ValueError) as e:
+            logger.warning(f"Prometheus degraded for subscription metrics: {e}")
+            degraded_services.append("prometheus")
+
+            return SubscriptionMetricsResponse(
+                subscription_id=subscription_id,
+                total_calls=0,
+                success_rate=100.0,
+                avg_latency_ms=0,
+                daily_breakdown=self._generate_empty_daily_calls(7),
+                time_range=time_range,
+                degraded=True,
+                degraded_services=degraded_services,
+            )
 
     # ===== Helper Methods =====
 

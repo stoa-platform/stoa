@@ -1,9 +1,12 @@
 """
-Pydantic schemas for Usage API endpoints - CAB-280
+Pydantic schemas for Usage API endpoints - CAB-280 / CAB-840
 Dashboard Usage Consumer pour DevOps/CPI
+
+Security: CAB-840 adds degraded flag for graceful degradation
+when Prometheus/Loki backends are unavailable.
 """
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 from enum import Enum
 
@@ -66,7 +69,7 @@ class DailyCallStat(BaseModel):
 
 
 class UsageSummary(BaseModel):
-    """Complete usage summary for a user"""
+    """Complete usage summary for a user with degraded state support (CAB-840)"""
     tenant_id: str = Field(..., description="User's tenant ID")
     user_id: str = Field(..., description="User identifier")
     today: UsagePeriodStats = Field(..., description="Today's statistics")
@@ -79,6 +82,15 @@ class UsageSummary(BaseModel):
     daily_calls: List[DailyCallStat] = Field(
         default_factory=list,
         description="Call counts for the last 7 days"
+    )
+    # CAB-840: Graceful degradation support
+    degraded: bool = Field(
+        default=False,
+        description="True if data may be incomplete due to backend unavailability"
+    )
+    degraded_services: List[str] = Field(
+        default_factory=list,
+        description="List of unavailable services (prometheus, loki)"
     )
 
     model_config = ConfigDict(
@@ -116,7 +128,9 @@ class UsageSummary(BaseModel):
                 "daily_calls": [
                     {"date": "2026-01-06", "calls": 120},
                     {"date": "2026-01-07", "calls": 135}
-                ]
+                ],
+                "degraded": False,
+                "degraded_services": []
             }
         }
     )
@@ -255,3 +269,173 @@ class RecentActivityItem(BaseModel):
 class DashboardActivityResponse(BaseModel):
     """Response for dashboard activity endpoint"""
     activity: List[RecentActivityItem] = Field(..., description="List of recent activities")
+
+
+# ============ CAB-840: New Response Types for Metrics Endpoints ============
+
+class MCPMetricsResponse(BaseModel):
+    """MCP Gateway metrics response with degraded state support"""
+    total_tool_calls: int = Field(..., ge=0, description="Total tool invocations")
+    tool_calls_by_name: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Tool invocation counts by tool name"
+    )
+    avg_execution_time_ms: int = Field(..., ge=0, description="Average tool execution time in ms")
+    error_rate: float = Field(..., ge=0, le=1, description="Error rate (0.0-1.0)")
+    active_sessions: int = Field(default=0, ge=0, description="Approximate active session count")
+    time_range: str = Field(..., description="Time range for metrics")
+    # Graceful degradation
+    degraded: bool = Field(
+        default=False,
+        description="True if data may be incomplete due to backend unavailability"
+    )
+    degraded_services: List[str] = Field(
+        default_factory=list,
+        description="List of unavailable services"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "total_tool_calls": 1250,
+                "tool_calls_by_name": {"crm-search": 500, "document-gen": 350},
+                "avg_execution_time_ms": 145,
+                "error_rate": 0.02,
+                "active_sessions": 15,
+                "time_range": "24h",
+                "degraded": False,
+                "degraded_services": []
+            }
+        }
+    )
+
+
+class SubscriptionMetricsResponse(BaseModel):
+    """Per-subscription metrics response with degraded state support"""
+    subscription_id: str = Field(..., description="Subscription identifier")
+    total_calls: int = Field(..., ge=0, description="Total API calls")
+    success_rate: float = Field(..., ge=0, le=100, description="Success rate percentage")
+    avg_latency_ms: int = Field(..., ge=0, description="Average latency in milliseconds")
+    daily_breakdown: List[DailyCallStat] = Field(
+        default_factory=list,
+        description="Daily call statistics"
+    )
+    time_range: str = Field(..., description="Time range for metrics")
+    # Graceful degradation
+    degraded: bool = Field(
+        default=False,
+        description="True if data may be incomplete due to backend unavailability"
+    )
+    degraded_services: List[str] = Field(
+        default_factory=list,
+        description="List of unavailable services"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "subscription_id": "sub-001",
+                "total_calls": 1250,
+                "success_rate": 98.5,
+                "avg_latency_ms": 120,
+                "daily_breakdown": [
+                    {"date": "2026-01-06", "calls": 180},
+                    {"date": "2026-01-07", "calls": 195}
+                ],
+                "time_range": "30d",
+                "degraded": False,
+                "degraded_services": []
+            }
+        }
+    )
+
+
+class APIStatisticsResponse(BaseModel):
+    """Aggregate API statistics response with degraded state support"""
+    total_requests: int = Field(..., ge=0, description="Total request count")
+    success_rate: float = Field(..., ge=0, le=1, description="Success rate (0.0-1.0)")
+    avg_latency_ms: int = Field(..., ge=0, description="Average latency in milliseconds")
+    requests_by_status_code: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Request counts by HTTP status code"
+    )
+    time_range: str = Field(..., description="Time range for statistics")
+    generated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="When statistics were generated"
+    )
+    # Graceful degradation
+    degraded: bool = Field(
+        default=False,
+        description="True if data may be incomplete due to backend unavailability"
+    )
+    degraded_services: List[str] = Field(
+        default_factory=list,
+        description="List of unavailable services"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "total_requests": 12500,
+                "success_rate": 0.985,
+                "avg_latency_ms": 145,
+                "requests_by_status_code": {"200": 12000, "400": 250, "500": 250},
+                "time_range": "24h",
+                "generated_at": "2026-01-28T10:00:00Z",
+                "degraded": False,
+                "degraded_services": []
+            }
+        }
+    )
+
+
+class ErrorLogEntry(BaseModel):
+    """A single error log entry (PII sanitized)"""
+    id: str = Field(..., description="Error log identifier")
+    timestamp: datetime = Field(..., description="When the error occurred")
+    level: str = Field(..., description="Log level (error, warn)")
+    message: str = Field(..., description="Sanitized error message")
+    service: str = Field(..., description="Source service name")
+    api_id: Optional[str] = Field(None, description="Related API ID")
+    subscription_id: Optional[str] = Field(None, description="Related subscription ID")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "err-0001",
+                "timestamp": "2026-01-12T10:30:00Z",
+                "level": "error",
+                "message": "Connection timeout to backend service",
+                "service": "mcp-gateway",
+                "api_id": "api-123",
+                "subscription_id": "sub-456"
+            }
+        }
+    )
+
+
+class ErrorLogsResponse(BaseModel):
+    """Response for error logs endpoint with degraded state support"""
+    errors: List[ErrorLogEntry] = Field(..., description="List of error entries")
+    total: int = Field(..., ge=0, description="Total error count")
+    # Graceful degradation
+    degraded: bool = Field(
+        default=False,
+        description="True if data may be incomplete due to backend unavailability"
+    )
+    degraded_services: List[str] = Field(
+        default_factory=list,
+        description="List of unavailable services"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "errors": [],
+                "total": 0,
+                "degraded": False,
+                "degraded_services": []
+            }
+        }
+    )

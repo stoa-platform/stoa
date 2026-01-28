@@ -1,0 +1,320 @@
+{
+  "results": [
+    {
+      "object": "page",
+      "id": "page-uuid-001",
+      "created_time": "2026-01-15T08:00:00.000Z",
+      "last_edited_time": "2026-01-28T12:30:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "user-uuid-bob",
+        "name": "Bob Builder",
+        "avatar_url": "https://s3.us-west-2.amazonaws.com/secure.notion-static.com/avatar-bob.png",
+        "type": "person",
+        "person": {
+          "email": "bob@stoa.dev"
+        }
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "user-uuid-bob",
+        "name": "Bob Builder",
+        "avatar_url": "https://s3.us-west-2.amazonaws.com/secure.notion-static.com/avatar-bob.png",
+        "type": "person",
+        "person": {
+          "email": "bob@stoa.dev"
+        }
+      },
+      "cover": {
+        "type": "external",
+        "external": {
+          "url": "https://images.unsplash.com/photo-1234567890?w=2000"
+        }
+      },
+      "icon": {
+        "type": "emoji",
+        "emoji": "📋"
+      },
+      "parent": {
+        "type": "database_id",
+        "database_id": "db-uuid-sprints",
+        "title": "Sprint Planning"
+      },
+      "archived": false,
+      "in_trash": false,
+      "url": "https://www.notion.so/stoa/Sprint-12-Planning-page-uuid-001",
+      "title": "Sprint 12 — Token Optimization Planning",
+      "type": "page",
+      "properties": {
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Sprint 12 — Token Optimization Planning",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "Sprint 12 — Token Optimization Planning",
+              "href": null
+            }
+          ]
+        },
+        "Status": {
+          "id": "status-prop",
+          "type": "select",
+          "select": {
+            "id": "status-active",
+            "name": "Active",
+            "color": "green",
+            "description": "Currently being worked on"
+          }
+        },
+        "Assignee": {
+          "id": "assignee-prop",
+          "type": "people",
+          "people": [
+            {
+              "object": "user",
+              "id": "user-uuid-alice",
+              "name": "Alice Wonderland",
+              "avatar_url": "https://s3.us-west-2.amazonaws.com/secure.notion-static.com/avatar-alice.png",
+              "type": "person",
+              "person": {
+                "email": "alice@stoa.dev"
+              }
+            }
+          ]
+        },
+        "Sprint": {
+          "id": "sprint-prop",
+          "type": "select",
+          "select": {
+            "id": "sprint-12",
+            "name": "Sprint 12",
+            "color": "blue",
+            "description": null
+          }
+        },
+        "Priority": {
+          "id": "priority-prop",
+          "type": "select",
+          "select": {
+            "id": "priority-high",
+            "name": "🔴 High",
+            "color": "red",
+            "description": null
+          }
+        },
+        "Story Points": {
+          "id": "points-prop",
+          "type": "number",
+          "number": 34
+        },
+        "Tags": {
+          "id": "tags-prop",
+          "type": "multi_select",
+          "multi_select": [
+            {
+              "id": "tag-perf",
+              "name": "performance",
+              "color": "orange",
+              "description": null
+            },
+            {
+              "id": "tag-ai",
+              "name": "ai-native",
+              "color": "purple",
+              "description": null
+            }
+          ]
+        },
+        "Due Date": {
+          "id": "due-prop",
+          "type": "date",
+          "date": {
+            "start": "2026-02-07",
+            "end": null,
+            "time_zone": null
+          }
+        },
+        "Description": {
+          "id": "desc-prop",
+          "type": "rich_text",
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "This sprint focuses on implementing the Token Optimization Engine (CAB-881). The engine consists of 4 pipeline stages: Token Counter for baseline metrics, Response Transformer for field selection and truncation, Adapters for Linear and Notion specific optimizations, and Semantic Cache for embedding-based deduplication. The target is 80% reduction in token consumption across all MCP tool invocations. Key architectural decisions are documented in ADR-015 including the choice of pgvector over OpenSearch for the semantic cache, inline UAC configuration over separate config files, and the async queue-based architecture for zero-latency token counting.",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "This sprint focuses on implementing the Token Optimization Engine (CAB-881). The engine consists of 4 pipeline stages: Token Counter for baseline metrics, Response Transformer for field selection and truncation, Adapters for Linear and Notion specific optimizations, and Semantic Cache for embedding-based deduplication. The target is 80% reduction in token consumption across all MCP tool invocations. Key architectural decisions are documented in ADR-015 including the choice of pgvector over OpenSearch for the semantic cache, inline UAC configuration over separate config files, and the async queue-based architecture for zero-latency token counting.",
+              "href": null
+            }
+          ]
+        },
+        "Created": {
+          "id": "created-prop",
+          "type": "created_time",
+          "created_time": "2026-01-15T08:00:00.000Z"
+        },
+        "Last Edited": {
+          "id": "edited-prop",
+          "type": "last_edited_time",
+          "last_edited_time": "2026-01-28T12:30:00.000Z"
+        },
+        "Created By": {
+          "id": "created-by-prop",
+          "type": "created_by",
+          "created_by": {
+            "object": "user",
+            "id": "user-uuid-bob",
+            "name": "Bob Builder",
+            "avatar_url": "https://s3.us-west-2.amazonaws.com/secure.notion-static.com/avatar-bob.png",
+            "type": "person",
+            "person": {
+              "email": "bob@stoa.dev"
+            }
+          }
+        },
+        "Relation": {
+          "id": "relation-prop",
+          "type": "relation",
+          "relation": [
+            {
+              "id": "page-uuid-adr-015"
+            }
+          ],
+          "has_more": false
+        },
+        "Rollup": {
+          "id": "rollup-prop",
+          "type": "rollup",
+          "rollup": {
+            "type": "number",
+            "number": 4,
+            "function": "count"
+          }
+        }
+      },
+      "content": "# Sprint 12 — Token Optimization\n\n## Goals\n\n1. Implement Token Counter middleware with Prometheus metrics\n2. Build Response Transformer with field selection and truncation\n3. Create Linear Lite and Notion Lite adapters\n4. Deploy Semantic Cache with pgvector\n\n## Metrics\n\n| Metric | Target | Current |\n|--------|--------|---------|\n| Token reduction | 80% | N/A |\n| Cache hit rate | 60% | N/A |\n| Added latency | <10ms | N/A |\n\n## Dependencies\n\n- ADR-015 ✅\n- pgvector extension ✅\n- Prometheus/Grafana ✅\n\n## Risks\n\n1. Cross-tenant data leakage in semantic cache — mitigated by RLS + tenant_id WHERE clause\n2. Cache poisoning — mitigated by TTL 5min + SHA-256 hash\n3. Embedding model availability — fallback to exact match\n\n## Daily Standups\n\n### Day 1 (Jan 27)\n- Alice: Started Token Counter middleware, async queue architecture\n- Bob: ADR-015 review, pgvector setup\n\n### Day 2 (Jan 28)\n- Alice: Token Counter complete, starting Response Transformer\n- Bob: Grafana dashboard for token metrics\n\n## Retrospective Notes\n\n(To be filled at end of sprint)\n\n---\n\n*Last updated: 2026-01-28 by Bob Builder*",
+      "description": "Sprint planning document for the Token Optimization Engine implementation. Contains goals, metrics targets, dependency tracking, risk assessment, and daily standup notes.",
+      "public_url": null,
+      "request_id": "req-uuid-12345"
+    },
+    {
+      "object": "page",
+      "id": "page-uuid-002",
+      "created_time": "2026-01-10T10:00:00.000Z",
+      "last_edited_time": "2026-01-25T16:45:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "user-uuid-carol",
+        "name": "Carol Danvers",
+        "avatar_url": null,
+        "type": "person",
+        "person": {
+          "email": "carol@stoa.dev"
+        }
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "user-uuid-carol",
+        "name": "Carol Danvers",
+        "avatar_url": null,
+        "type": "person",
+        "person": {
+          "email": "carol@stoa.dev"
+        }
+      },
+      "cover": null,
+      "icon": {
+        "type": "emoji",
+        "emoji": "🏗️"
+      },
+      "parent": {
+        "type": "database_id",
+        "database_id": "db-uuid-adrs",
+        "title": "Architecture Decisions"
+      },
+      "archived": false,
+      "in_trash": false,
+      "url": "https://www.notion.so/stoa/ADR-015-Token-Optimization-page-uuid-002",
+      "title": "ADR-015: Token Optimization Architecture",
+      "type": "page",
+      "properties": {
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "ADR-015: Token Optimization Architecture",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "ADR-015: Token Optimization Architecture",
+              "href": null
+            }
+          ]
+        },
+        "Status": {
+          "id": "status-prop",
+          "type": "select",
+          "select": {
+            "id": "status-accepted",
+            "name": "Accepted",
+            "color": "green",
+            "description": null
+          }
+        },
+        "Tags": {
+          "id": "tags-prop",
+          "type": "multi_select",
+          "multi_select": [
+            {
+              "id": "tag-arch",
+              "name": "architecture",
+              "color": "blue",
+              "description": null
+            }
+          ]
+        }
+      },
+      "content": "See the full ADR document in stoa-docs repository.",
+      "description": null,
+      "public_url": null,
+      "request_id": "req-uuid-67890"
+    }
+  ],
+  "has_more": false,
+  "next_cursor": null,
+  "type": "page_or_database",
+  "page_or_database": {},
+  "request_id": "req-uuid-search-001"
+}

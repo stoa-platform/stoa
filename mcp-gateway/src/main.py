@@ -22,7 +22,8 @@ from starlette.responses import Response
 
 from .config import get_settings
 from .handlers import mcp_router, subscriptions_router, mcp_sse_router, sse_alias_router, servers_router, policy_router
-from .middleware import MetricsMiddleware, ShadowMiddleware
+from .middleware import MetricsMiddleware, ShadowMiddleware, TokenCounterMiddleware, token_counter_worker, ResponseTransformerMiddleware, SemanticCacheMiddleware
+from .cache.cleanup import cache_cleanup_worker
 from .services import get_tool_registry, shutdown_tool_registry, init_database, shutdown_database
 from .services.tool_handlers import init_tool_handlers, shutdown_tool_handlers
 from .services.external_server_loader import get_external_server_loader, shutdown_external_server_loader
@@ -172,6 +173,16 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("External server loader failed to start", error=str(e))
 
+    # Start token counter background worker (CAB-881)
+    if settings.token_counter_enabled:
+        await token_counter_worker.start()
+        logger.info("Token counter worker started")
+
+    # Start semantic cache cleanup worker (CAB-881 Step 4)
+    if settings.semantic_cache_enabled:
+        await cache_cleanup_worker.start()
+        logger.info("Semantic cache cleanup worker started")
+
     app_state["ready"] = True
 
     logger.info(
@@ -185,6 +196,12 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down STOA MCP Gateway")
     app_state["ready"] = False
+
+    # Cleanup semantic cache worker (CAB-881 Step 4)
+    await cache_cleanup_worker.stop()
+
+    # Cleanup token counter worker (CAB-881)
+    await token_counter_worker.stop()
 
     # Cleanup MCP error snapshot publisher
     await shutdown_snapshot_publisher()
@@ -239,6 +256,18 @@ def create_app() -> FastAPI:
     if snapshot_settings.enabled:
         app.add_middleware(MCPErrorSnapshotMiddleware)
         logger.info("MCP error snapshot middleware enabled")
+
+    # Semantic cache middleware (CAB-881 Step 4 — cache before transform)
+    if settings.semantic_cache_enabled:
+        app.add_middleware(SemanticCacheMiddleware)
+
+    # Response transformer middleware (CAB-881 Step 2 — transforms before token counting)
+    if settings.response_transformer_enabled:
+        app.add_middleware(ResponseTransformerMiddleware)
+
+    # Token counter middleware (CAB-881 — must be before Metrics to capture full payload)
+    if settings.token_counter_enabled:
+        app.add_middleware(TokenCounterMiddleware)
 
     # Metrics middleware (must be added first to capture all requests)
     if settings.enable_metrics:

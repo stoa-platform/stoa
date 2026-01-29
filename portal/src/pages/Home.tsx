@@ -1,12 +1,12 @@
 /**
- * Home Page - Dashboard (CAB-299)
+ * Home Page - Dashboard (CAB-299, CAB-691)
  *
  * Main landing page with stats, quick actions, and recent activity.
+ * Uses React Query for caching (CAB-691).
  */
 
-import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { dashboardService } from '../services/dashboard';
+import { useDashboardStats, useDashboardActivity } from '../hooks/useDashboard';
 import {
   WelcomeHeader,
   DashboardStats,
@@ -15,33 +15,13 @@ import {
   FeaturedAPIs,
   FeaturedAITools,
 } from '../components/dashboard';
-import type { DashboardStats as DashboardStatsType, RecentActivityItem } from '../types';
 
 export function HomePage() {
-  const { user, isAuthenticated, accessToken } = useAuth();
-  const [stats, setStats] = useState<DashboardStatsType | null>(null);
-  const [activity, setActivity] = useState<RecentActivityItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const { data: activity, isLoading: activityLoading } = useDashboardActivity();
 
-  useEffect(() => {
-    // Wait for both authentication AND token to be available
-    if (!isAuthenticated || !accessToken) return;
-
-    async function loadDashboard() {
-      setIsLoading(true);
-      try {
-        const data = await dashboardService.getDashboard();
-        setStats(data.stats);
-        setActivity(data.recent_activity);
-      } catch (error) {
-        console.error('Failed to load dashboard:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadDashboard();
-  }, [isAuthenticated, accessToken]);
+  const isLoading = statsLoading || activityLoading;
 
   return (
     <div className="space-y-8">
@@ -49,7 +29,7 @@ export function HomePage() {
       <WelcomeHeader user={user} />
 
       {/* Stats Cards */}
-      <DashboardStats stats={stats} isLoading={isLoading} />
+      <DashboardStats stats={stats ?? null} isLoading={isLoading} />
 
       {/* Quick Actions */}
       <QuickActions />
@@ -61,7 +41,7 @@ export function HomePage() {
       </div>
 
       {/* Recent Activity */}
-      <RecentActivity activity={activity} isLoading={isLoading} />
+      <RecentActivity activity={activity ?? []} isLoading={isLoading} />
     </div>
   );
 }

@@ -1,26 +1,14 @@
 /**
- * FeaturedAPIs Component
+ * FeaturedAPIs Component (CAB-691)
  *
  * Shows a preview of available APIs on the homepage.
+ * Uses React Query via useFeaturedAPIs hook for caching.
  */
 
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, ArrowRight, Globe, Lock, Tag } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useFeaturedAPIs } from '../../hooks/useDashboard';
 import { config } from '../../config';
-
-interface APIPreview {
-  id: string;
-  name: string;
-  displayName: string;
-  description: string;
-  version: string;
-  status: string;
-  category: string;
-  tags: string[];
-  visibility?: 'public' | 'internal';
-}
 
 function APISkeleton() {
   return (
@@ -38,34 +26,7 @@ function APISkeleton() {
 }
 
 export function FeaturedAPIs() {
-  const { accessToken } = useAuth();
-  const [apis, setApis] = useState<APIPreview[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    if (!accessToken) return;
-
-    async function loadAPIs() {
-      setIsLoading(true);
-      try {
-        const response = await fetch(`${config.api.baseUrl}/v1/portal/apis?limit=4`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setApis(data.apis || []);
-        }
-      } catch (error) {
-        console.error('Failed to load APIs:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadAPIs();
-  }, [accessToken]);
+  const { data: apis = [], isLoading } = useFeaturedAPIs();
 
   if (!config.features.enableAPICatalog) {
     return null;

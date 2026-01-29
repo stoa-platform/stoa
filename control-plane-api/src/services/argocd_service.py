@@ -3,14 +3,18 @@
 Provides access to Argo CD Application status for platform monitoring.
 Uses OIDC authentication - forwards user's Keycloak token to ArgoCD.
 """
+import asyncio
 import logging
-from typing import Optional, List
+from typing import Any, Optional, List
 from datetime import datetime
 import httpx
 
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+# CAB-687: Explicit timeout for all ArgoCD calls (Council obligation #1)
+ARGOCD_CALL_TIMEOUT = 5.0
 
 
 class ArgoCDService:
@@ -44,7 +48,7 @@ class ArgoCDService:
                 "Authorization": f"Bearer {auth_token}",
                 "Content-Type": "application/json",
             },
-            timeout=30.0,
+            timeout=ARGOCD_CALL_TIMEOUT,
             verify=settings.ARGOCD_VERIFY_SSL,
         ) as client:
             response = await client.request(method, path, **kwargs)
@@ -61,7 +65,7 @@ class ArgoCDService:
                     "Authorization": f"Bearer {auth_token}",
                     "Content-Type": "application/json",
                 },
-                timeout=10.0,
+                timeout=ARGOCD_CALL_TIMEOUT,
                 verify=settings.ARGOCD_VERIFY_SSL,
             ) as client:
                 response = await client.get("/api/version")
@@ -125,7 +129,7 @@ class ArgoCDService:
             "conditions": status.get("conditions", []),
         }
 
-    async def get_platform_status(self, auth_token: str, app_names: Optional[List[str]] = None) -> dict:
+    async def get_platform_status(self, auth_token: str, app_names: Optional[List[str]] = None, include_events: bool = False) -> dict:
         """
         Get aggregated platform status for multiple applications.
 
@@ -133,6 +137,7 @@ class ArgoCDService:
             auth_token: User's OIDC token
             app_names: List of application names to check.
                       If None, uses default STOA platform apps.
+            include_events: If True, extract events from fetched apps (avoids extra calls)
 
         Returns:
             Platform status summary
@@ -140,13 +145,64 @@ class ArgoCDService:
         if app_names is None:
             app_names = settings.argocd_platform_apps_list
 
+        # CAB-687: Fetch all applications in parallel
+        results = await asyncio.gather(
+            *[self.get_application(auth_token, name) for name in app_names],
+            return_exceptions=True,
+        )
+
         components = []
+        app_events = {}  # app_name -> events (when include_events=True)
         overall_healthy = True
         overall_synced = True
 
-        for app_name in app_names:
-            try:
-                app = await self.get_application(auth_token, app_name)
+        for app_name, result in zip(app_names, results):
+            if isinstance(result, httpx.HTTPStatusError):
+                if result.response.status_code == 404:
+                    components.append({
+                        "name": app_name,
+                        "display_name": app_name,
+                        "sync_status": "NotFound",
+                        "health_status": "Unknown",
+                        "revision": "",
+                        "last_sync": None,
+                        "message": "Application not found",
+                    })
+                elif result.response.status_code in (401, 403):
+                    components.append({
+                        "name": app_name,
+                        "display_name": app_name,
+                        "sync_status": "Error",
+                        "health_status": "Unknown",
+                        "revision": "",
+                        "last_sync": None,
+                        "message": "Access denied - check ArgoCD RBAC",
+                    })
+                else:
+                    components.append({
+                        "name": app_name,
+                        "display_name": app_name,
+                        "sync_status": "Error",
+                        "health_status": "Unknown",
+                        "revision": "",
+                        "last_sync": None,
+                        "message": str(result),
+                    })
+                overall_healthy = False
+            elif isinstance(result, Exception):
+                logger.warning(f"Failed to get status for {app_name}: {result}")
+                components.append({
+                    "name": app_name,
+                    "display_name": app_name,
+                    "sync_status": "Error",
+                    "health_status": "Unknown",
+                    "revision": "",
+                    "last_sync": None,
+                    "message": str(result),
+                })
+                overall_healthy = False
+            else:
+                app = result
                 status = app.get("status", {})
                 spec = app.get("spec", {})
 
@@ -171,43 +227,16 @@ class ArgoCDService:
                     "message": health_status if health_status != "Healthy" else None,
                 })
 
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
-                    components.append({
-                        "name": app_name,
-                        "display_name": app_name,
-                        "sync_status": "NotFound",
-                        "health_status": "Unknown",
-                        "revision": "",
-                        "last_sync": None,
-                        "message": "Application not found",
-                    })
-                    overall_healthy = False
-                elif e.response.status_code in (401, 403):
-                    components.append({
-                        "name": app_name,
-                        "display_name": app_name,
-                        "sync_status": "Error",
-                        "health_status": "Unknown",
-                        "revision": "",
-                        "last_sync": None,
-                        "message": "Access denied - check ArgoCD RBAC",
-                    })
-                    overall_healthy = False
-                else:
-                    raise
-            except Exception as e:
-                logger.warning(f"Failed to get status for {app_name}: {e}")
-                components.append({
-                    "name": app_name,
-                    "display_name": app_name,
-                    "sync_status": "Error",
-                    "health_status": "Unknown",
-                    "revision": "",
-                    "last_sync": None,
-                    "message": str(e),
-                })
-                overall_healthy = False
+                if include_events:
+                    app_events[app_name] = self._extract_events(app, limit=5)
+
+        # CAB-687: Log partial failures summary (Council obligation #2)
+        failed = [c["name"] for c in components if c["sync_status"] in ("Error", "NotFound")]
+        if failed:
+            logger.warning(
+                f"Platform status partial failure: {len(failed)}/{len(app_names)} apps failed: "
+                + ", ".join(failed)
+            )
 
         if overall_healthy and overall_synced:
             overall_status = "healthy"
@@ -216,11 +245,14 @@ class ArgoCDService:
         else:
             overall_status = "syncing"
 
-        return {
+        result = {
             "status": overall_status,
             "components": components,
             "checked_at": datetime.utcnow().isoformat() + "Z",
         }
+        if include_events:
+            result["events"] = app_events
+        return result
 
     async def get_application_events(self, auth_token: str, app_name: str, limit: int = 20) -> List[dict]:
         """
@@ -235,6 +267,10 @@ class ArgoCDService:
             List of event objects
         """
         app = await self.get_application(auth_token, app_name)
+        return self._extract_events(app, limit)
+
+    def _extract_events(self, app: dict, limit: int = 20) -> List[dict]:
+        """Extract events from an already-fetched application object."""
         history = app.get("status", {}).get("history", [])
 
         events = []

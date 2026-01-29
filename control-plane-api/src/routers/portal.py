@@ -19,7 +19,7 @@ from ..database import get_db as get_async_db
 from ..models.mcp_subscription import MCPServer, MCPServerStatus
 from ..repositories.catalog import CatalogRepository
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,7 @@ class PortalMCPServersResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    synced_at: Optional[datetime] = None  # CAB-689: Obligation #4
 
 
 # ============================================================================
@@ -268,9 +269,11 @@ async def list_portal_mcp_servers(
     """
     List all MCP servers available in the Portal catalog.
 
-    Source: PostgreSQL (synced from GitLab via GitOps)
+    Source: PostgreSQL cache (synced from GitLab via GitOps — CAB-689)
 
     Returns only active servers that the user can see based on visibility rules.
+    Includes synced_at timestamp for cache freshness tracking.
+    Falls back to Git sync if cache is empty (Obligation #3).
     """
     try:
         # Build query
@@ -292,7 +295,23 @@ async def list_portal_mcp_servers(
         result = await db.execute(query)
         all_servers = result.scalars().all()
 
-        # Filter by visibility
+        # CAB-689 Obligation #3: Fallback if cache is empty
+        if not all_servers:
+            logger.warning("MCP servers cache empty, falling back to Git sync")
+            try:
+                from ..services.catalog_sync_service import CatalogSyncService
+                from ..services.git_service import git_service
+                sync_service = CatalogSyncService(db, git_service)
+                await sync_service.sync_mcp_servers()
+                await db.commit()
+
+                # Re-query after sync
+                result = await db.execute(query)
+                all_servers = result.scalars().all()
+            except Exception as sync_err:
+                logger.error(f"Fallback Git sync failed: {sync_err}")
+
+        # Filter by visibility (Obligation #6)
         visible_servers = []
         user_roles = set(user.roles or [])
 
@@ -333,6 +352,12 @@ async def list_portal_mcp_servers(
         # Sort by name
         visible_servers.sort(key=lambda s: s.display_name or s.name)
 
+        # CAB-689 Obligation #4: Get last synced_at
+        synced_at_result = await db.execute(
+            select(func.max(MCPServer.last_synced_at))
+        )
+        last_synced_at = synced_at_result.scalar_one_or_none()
+
         # Paginate
         total = len(visible_servers)
         start = (page - 1) * page_size
@@ -361,6 +386,7 @@ async def list_portal_mcp_servers(
             total=total,
             page=page,
             page_size=page_size,
+            synced_at=last_synced_at,
         )
 
     except Exception as e:

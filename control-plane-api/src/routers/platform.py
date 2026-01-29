@@ -5,6 +5,7 @@ Enables the Console to display real-time sync status and health.
 
 Uses OIDC authentication - forwards user's Keycloak token to ArgoCD.
 """
+import asyncio
 import logging
 from typing import List, Optional
 from datetime import datetime
@@ -15,7 +16,11 @@ from pydantic import BaseModel
 from ..auth.dependencies import get_current_user, User
 from ..auth.rbac import require_role
 from ..services.argocd_service import argocd_service
+from ..services.cache_service import TTLCache
 from ..config import settings
+
+# CAB-687: In-memory cache for platform status (Council obligation #3 - 30s TTL)
+_platform_status_cache = TTLCache(default_ttl_seconds=30, max_size=10)
 
 security = HTTPBearer()
 
@@ -118,39 +123,50 @@ async def get_platform_status(
             logger.warning("ArgoCD service not configured")
             return _get_mock_status()
 
-        # Verify ArgoCD is reachable with user's token
-        if not await argocd_service.health_check(auth_token):
+        # CAB-687: Check in-memory cache first (Council obligation #3)
+        cached = await _platform_status_cache.get("platform:status")
+        if cached is not None:
+            return cached
+
+        # CAB-687: Run health check and platform status in parallel
+        # include_events=True avoids redundant API calls for events
+        health_result, status_data = await asyncio.gather(
+            argocd_service.health_check(auth_token),
+            argocd_service.get_platform_status(auth_token, include_events=True),
+            return_exceptions=True,
+        )
+
+        # Handle health check failure
+        if isinstance(health_result, Exception) or not health_result:
             logger.warning("ArgoCD health check failed")
             return _get_mock_status(error="ArgoCD not reachable")
 
-        # Get platform status from ArgoCD
-        status_data = await argocd_service.get_platform_status(auth_token)
+        # Handle status fetch failure
+        if isinstance(status_data, Exception):
+            logger.error(f"Failed to get platform status: {status_data}")
+            return _get_mock_status(error=str(status_data))
 
-        # Get recent events for the first few apps
+        # Build events from already-fetched app data (no extra API calls)
         events = []
+        app_events_map = status_data.get("events", {})
         for component in status_data.get("components", [])[:3]:
-            try:
-                app_events = await argocd_service.get_application_events(
-                    auth_token, component["name"], limit=5
-                )
-                for event in app_events[:2]:  # Max 2 events per component
-                    events.append(PlatformEvent(
-                        id=event.get("id"),
-                        component=component["name"],
-                        event_type="sync",
-                        status="success" if component["sync_status"] == "Synced" else "in_progress",
-                        revision=event.get("revision", ""),
-                        message=None,
-                        timestamp=event.get("deployed_at", datetime.utcnow().isoformat() + "Z"),
-                        actor=None,
-                    ))
-            except Exception as e:
-                logger.debug(f"Could not get events for {component['name']}: {e}")
+            comp_events = app_events_map.get(component["name"], [])
+            for event in comp_events[:2]:  # Max 2 events per component
+                events.append(PlatformEvent(
+                    id=event.get("id"),
+                    component=component["name"],
+                    event_type="sync",
+                    status="success" if component["sync_status"] == "Synced" else "in_progress",
+                    revision=event.get("revision", ""),
+                    message=None,
+                    timestamp=event.get("deployed_at", datetime.utcnow().isoformat() + "Z"),
+                    actor=None,
+                ))
 
         # Sort events by timestamp (most recent first)
         events.sort(key=lambda x: x.timestamp, reverse=True)
 
-        return PlatformStatusResponse(
+        response = PlatformStatusResponse(
             gitops=GitOpsStatus(
                 status=status_data["status"],
                 components=[
@@ -167,6 +183,11 @@ async def get_platform_status(
             ),
             timestamp=datetime.utcnow().isoformat() + "Z",
         )
+
+        # Cache successful response for 30s
+        await _platform_status_cache.set("platform:status", response)
+
+        return response
 
     except Exception as e:
         logger.error(f"Failed to get platform status: {e}")
@@ -273,25 +294,30 @@ async def list_platform_events(
     auth_token = credentials.credentials
 
     try:
-        events = []
         app_names = [component] if component else settings.argocd_platform_apps_list
 
-        for app_name in app_names:
-            try:
-                app_events = await argocd_service.get_application_events(auth_token, app_name, limit=limit)
-                for event in app_events:
-                    events.append(PlatformEvent(
-                        id=event.get("id"),
-                        component=app_name,
-                        event_type="sync",
-                        status="success",
-                        revision=event.get("revision", ""),
-                        message=None,
-                        timestamp=event.get("deployed_at", datetime.utcnow().isoformat() + "Z"),
-                        actor=None,
-                    ))
-            except Exception as e:
-                logger.debug(f"Could not get events for {app_name}: {e}")
+        # CAB-687: Fetch events for all apps in parallel
+        results = await asyncio.gather(
+            *[argocd_service.get_application_events(auth_token, name, limit=limit) for name in app_names],
+            return_exceptions=True,
+        )
+
+        events = []
+        for app_name, result in zip(app_names, results):
+            if isinstance(result, Exception):
+                logger.debug(f"Could not get events for {app_name}: {result}")
+                continue
+            for event in result:
+                events.append(PlatformEvent(
+                    id=event.get("id"),
+                    component=app_name,
+                    event_type="sync",
+                    status="success",
+                    revision=event.get("revision", ""),
+                    message=None,
+                    timestamp=event.get("deployed_at", datetime.utcnow().isoformat() + "Z"),
+                    actor=None,
+                ))
 
         # Sort by timestamp and limit
         events.sort(key=lambda x: x.timestamp, reverse=True)

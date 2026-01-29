@@ -51,6 +51,7 @@ export function ServiceAccountsPage() {
       const res = await apiClient.get('/v1/service-accounts');
       return res.data;
     },
+    staleTime: 30 * 1000,
   });
 
   // Create mutation

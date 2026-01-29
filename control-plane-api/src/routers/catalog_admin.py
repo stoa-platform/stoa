@@ -81,6 +81,43 @@ async def trigger_catalog_sync(
         raise HTTPException(status_code=500, detail=f"Failed to trigger sync: {str(e)}")
 
 
+@router.post("/sync/mcp-servers", response_model=SyncTriggerResponse)
+async def trigger_mcp_servers_sync(
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+    tenant_id: Optional[str] = Query(None, description="Sync specific tenant only"),
+):
+    """
+    Trigger MCP servers synchronization from GitLab.
+
+    CAB-689: Syncs server.yaml files from Git to the mcp_servers table.
+    Runs in the background.
+
+    Requires: cpi-admin or tenant-admin role
+    """
+    _require_admin(user)
+
+    try:
+        async def run_sync():
+            from ..database import get_db as get_async_db_gen
+            async for session in get_async_db_gen():
+                service = CatalogSyncService(session, git_service)
+                await service.sync_mcp_servers(tenant_id)
+
+        background_tasks.add_task(run_sync)
+
+        logger.info(f"MCP servers sync triggered by user {user.id}")
+        return SyncTriggerResponse(
+            status="sync_started",
+            message=f"MCP servers sync triggered{f' for tenant {tenant_id}' if tenant_id else ''}",
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to trigger MCP servers sync: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger sync: {str(e)}")
+
+
 @router.post("/sync/tenant/{tenant_id}", response_model=SyncTriggerResponse)
 async def trigger_tenant_sync(
     tenant_id: str,

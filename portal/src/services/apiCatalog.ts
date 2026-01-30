@@ -14,9 +14,15 @@ export interface ListAPIsParams {
   pageSize?: number;
   search?: string;
   category?: string;
+  universe?: string;
   status?: 'published' | 'deprecated' | 'draft';
   tags?: string[];
   includeUnpromoted?: boolean; // Include APIs not promoted to Portal (for admin view)
+}
+
+export interface Universe {
+  id: string;
+  label: string;
 }
 
 // Portal API response format
@@ -78,6 +84,7 @@ export const apiCatalogService = {
           page_size: params?.pageSize || 20,
           search: params?.search,
           category: params?.category,
+          universe: params?.universe,
           status: params?.status,
           include_unpromoted: params?.includeUnpromoted || false,
         },
@@ -140,6 +147,19 @@ export const apiCatalogService = {
       return response.data;
     } catch (error) {
       console.warn('Failed to fetch categories:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get available universes (CAB-848)
+   */
+  getUniverses: async (): Promise<Universe[]> => {
+    try {
+      const response = await apiClient.get<Universe[]>('/v1/portal/api-universes');
+      return response.data;
+    } catch (error) {
+      console.warn('Failed to fetch universes:', error);
       return [];
     }
   },

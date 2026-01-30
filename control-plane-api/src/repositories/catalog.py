@@ -25,6 +25,7 @@ class CatalogRepository:
         search: Optional[str] = None,
         status: Optional[str] = None,
         tenant_id: Optional[str] = None,
+        tenant_ids: Optional[List[str]] = None,
         include_unpublished: bool = False,
         page: int = 1,
         page_size: int = 20,
@@ -53,8 +54,10 @@ class CatalogRepository:
         if status:
             query = query.where(APICatalog.status == status)
 
-        # Filter by tenant_id
-        if tenant_id:
+        # Filter by tenant_id (single) or tenant_ids (multiple)
+        if tenant_ids:
+            query = query.where(APICatalog.tenant_id.in_(tenant_ids))
+        elif tenant_id:
             query = query.where(APICatalog.tenant_id == tenant_id)
 
         # Filter by tags (any tag match using JSONB contains)

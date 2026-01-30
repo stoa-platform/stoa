@@ -5,7 +5,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { apiCatalogService, ListAPIsParams } from '../services/apiCatalog';
+import { apiCatalogService, ListAPIsParams, Universe } from '../services/apiCatalog';
 import type { API, PaginatedResponse } from '../types';
 
 /**
@@ -51,6 +51,17 @@ export function useAPICategories() {
     queryKey: ['api-categories'],
     queryFn: () => apiCatalogService.getCategories(),
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Hook to get available universes (CAB-848)
+ */
+export function useUniverses() {
+  return useQuery<Universe[]>({
+    queryKey: ['api-universes'],
+    queryFn: () => apiCatalogService.getUniverses(),
+    staleTime: 5 * 60 * 1000,
   });
 }
 

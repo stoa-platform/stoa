@@ -25,6 +25,20 @@ from sqlalchemy.orm import selectinload
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/portal", tags=["Portal"])
 
+# ============================================================================
+# Universe Mapping (CAB-848: OASIS vs Enterprise separation)
+# ============================================================================
+
+UNIVERSE_TENANTS = {
+    "oasis": ["high-five", "oasis", "ioi"],
+    "enterprise": ["demo"],
+}
+
+UNIVERSE_LABELS = {
+    "oasis": "OASIS",
+    "enterprise": "Enterprise",
+}
+
 
 # ============================================================================
 # Response Models
@@ -103,6 +117,7 @@ async def list_portal_apis(
     category: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     include_unpromoted: bool = Query(False, description="Include APIs not promoted to Portal"),
+    universe: Optional[str] = Query(None, description="Filter by universe: oasis, enterprise"),
 ):
     """
     List all promoted APIs available in the Portal catalog.
@@ -118,10 +133,12 @@ async def list_portal_apis(
     """
     try:
         repo = CatalogRepository(db)
+        tenant_ids = UNIVERSE_TENANTS.get(universe) if universe else None
         apis, total = await repo.get_portal_apis(
             category=category,
             search=search,
             status=status,
+            tenant_ids=tenant_ids,
             include_unpublished=include_unpromoted,
             page=page,
             page_size=page_size,
@@ -414,6 +431,23 @@ async def get_api_categories(
     except Exception as e:
         logger.warning(f"Failed to get categories from DB, using defaults: {e}")
         return ["platform", "integration", "data", "ai", "utility"]
+
+
+class UniverseResponse(BaseModel):
+    """Universe metadata for Portal filtering (CAB-848)."""
+    id: str
+    label: str
+
+
+@router.get("/api-universes", response_model=List[UniverseResponse])
+async def get_api_universes(
+    user: User = Depends(get_current_user),
+):
+    """Get available API universes for filtering (CAB-848)."""
+    return [
+        UniverseResponse(id=uid, label=label)
+        for uid, label in UNIVERSE_LABELS.items()
+    ]
 
 
 @router.get("/api-tags", response_model=List[str])

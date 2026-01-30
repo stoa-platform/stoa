@@ -26,12 +26,12 @@ const healthConfig = {
 const fallbackHealth = { bg: 'bg-gray-100', text: 'text-gray-800', icon: AlertCircle, label: 'Unknown' };
 
 function StatusBadge({ status }: { status: string }) {
-  const config = healthConfig[status as keyof typeof healthConfig] || fallbackHealth;
-  const Icon = config.icon;
+  const cfg = healthConfig[status as keyof typeof healthConfig] || fallbackHealth;
+  const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
       <Icon className="w-3 h-3 mr-1" />
-      {config.label}
+      {cfg.label}
     </span>
   );
 }

@@ -1,0 +1,17 @@
+# Keycloak OIDC Auth Server Alias for webMethods API Gateway.
+# Managed by STOA Gateway Adapter — do not edit manually.
+apiVersion: stoa.io/v1
+kind: AuthServerAlias
+metadata:
+  name: KeycloakOIDC
+spec:
+  type: authServerAlias
+  discoveryURL: https://auth.${BASE_DOMAIN}/realms/stoa/.well-known/openid-configuration
+  introspectionURL: https://auth.${BASE_DOMAIN}/realms/stoa/protocol/openid-connect/token/introspect
+  clientId: apigateway
+  clientSecret: vault:secret/stoa/${ENV}/gateway/keycloak-client-secret
+  scopes:
+    - openid
+    - profile
+    - email
+    - roles

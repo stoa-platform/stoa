@@ -140,6 +140,31 @@
               - Hidden: {{ all_apis | selectattr('_portal_visibility', 'equalto', 'hidden') | list | length }}
 
     # =========================================================================
+    # PHASE 1.5: SYNC POLICIES (Gateway Adapter Pattern)
+    # =========================================================================
+    - name: "PHASE 1.5: Sync policies from Git"
+      ansible.builtin.include_tasks: tasks/sync-policies.yml
+      vars:
+        gateway_url: "{{ wm_gateway_url }}"
+        gateway_auth:
+          user: "{{ wm_admin_user }}"
+          password: "{{ wm_admin_password }}"
+        policies_dir: "{{ catalog_dir }}/../webmethods/policies"
+
+    # =========================================================================
+    # PHASE 1.7: SYNC OIDC CONFIGURATION (Gateway Adapter Pattern)
+    # =========================================================================
+    - name: "PHASE 1.7: Sync OIDC configuration"
+      ansible.builtin.include_tasks: tasks/sync-oidc.yml
+      vars:
+        gateway_url: "{{ wm_gateway_url }}"
+        gateway_auth:
+          user: "{{ wm_admin_user }}"
+          password: "{{ wm_admin_password }}"
+        oidc_dir: "{{ catalog_dir }}/../webmethods/oidc"
+        git_apis: "{{ all_apis }}"
+
+    # =========================================================================
     # PHASE 2: FETCH CURRENT GATEWAY STATE
     # =========================================================================
     - name: "PHASE 2: Fetch current APIs from Gateway"
@@ -243,6 +268,42 @@
           loop_control:
             loop_var: api_def
             label: "{{ api_def.metadata.name }}"
+
+    # =========================================================================
+    # PHASE 4.5: SYNC APPLICATIONS (Gateway Adapter Pattern)
+    # =========================================================================
+    - name: "PHASE 4.5: Sync applications"
+      ansible.builtin.include_tasks: tasks/sync-applications.yml
+      vars:
+        gateway_url: "{{ wm_gateway_url }}"
+        gateway_auth:
+          user: "{{ wm_admin_user }}"
+          password: "{{ wm_admin_password }}"
+        applications_dir: "{{ catalog_dir }}/../webmethods/applications"
+
+    # =========================================================================
+    # PHASE 6: SYNC GATEWAY CONFIGURATION (Gateway Adapter Pattern)
+    # =========================================================================
+    - name: "PHASE 6: Sync gateway configuration"
+      ansible.builtin.include_tasks: tasks/sync-gateway-config.yml
+      vars:
+        gateway_url: "{{ wm_gateway_url }}"
+        gateway_auth:
+          user: "{{ wm_admin_user }}"
+          password: "{{ wm_admin_password }}"
+        config_file: "{{ catalog_dir }}/../webmethods/config/gateway-config.yaml"
+
+    # =========================================================================
+    # PHASE 7: BACKUP/ARCHIVE (Gateway Adapter Pattern)
+    # =========================================================================
+    - name: "PHASE 7: Export gateway archive"
+      ansible.builtin.include_tasks: tasks/backup-gateway.yml
+      vars:
+        gateway_url: "{{ wm_gateway_url }}"
+        gateway_auth:
+          user: "{{ wm_admin_user }}"
+          password: "{{ wm_admin_password }}"
+        backup_dir: "{{ lookup('env', 'BACKUP_DIR') | default('/tmp/gateway-backups', true) }}"
 
   post_tasks:
     - name: "Reconciliation summary"

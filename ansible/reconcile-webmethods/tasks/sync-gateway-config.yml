@@ -1,0 +1,72 @@
+---
+# Phase 6: Sync global gateway configuration from Git to webMethods.
+# Covers error processing, callback settings, JWT issuer, and keystores.
+#
+# Required vars: gateway_url, gateway_auth, config_file
+
+- name: "CONFIG | Load gateway configuration"
+  ansible.builtin.include_vars:
+    file: "{{ config_file | default('webmethods/config/gateway-config.yaml') }}"
+    name: gw_config
+
+- name: "CONFIG | Apply error processing configuration"
+  ansible.builtin.uri:
+    url: "{{ gateway_url }}/rest/apigateway/configurations/errorProcessing"
+    method: PUT
+    user: "{{ gateway_auth.user | default(omit) }}"
+    password: "{{ gateway_auth.password | default(omit) }}"
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+      Authorization: "{{ gateway_auth.token | default(omit) }}"
+    body_format: json
+    body: "{{ gw_config.errorProcessing }}"
+    status_code: [200]
+  when: gw_config.errorProcessing is defined
+
+- name: "CONFIG | Apply callback settings"
+  ansible.builtin.uri:
+    url: "{{ gateway_url }}/rest/apigateway/configurations/apiCallBackSettings"
+    method: PUT
+    user: "{{ gateway_auth.user | default(omit) }}"
+    password: "{{ gateway_auth.password | default(omit) }}"
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+      Authorization: "{{ gateway_auth.token | default(omit) }}"
+    body_format: json
+    body: "{{ gw_config.callbackSettings }}"
+    status_code: [200]
+  when: gw_config.callbackSettings is defined
+
+- name: "CONFIG | Apply JWT issuer configuration"
+  ansible.builtin.uri:
+    url: "{{ gateway_url }}/rest/apigateway/configurations/jsonWebToken"
+    method: PUT
+    user: "{{ gateway_auth.user | default(omit) }}"
+    password: "{{ gateway_auth.password | default(omit) }}"
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+      Authorization: "{{ gateway_auth.token | default(omit) }}"
+    body_format: json
+    body: "{{ gw_config.jwt }}"
+    status_code: [200]
+  when: gw_config.jwt is defined
+
+- name: "CONFIG | Upload keystore/truststore certificates"
+  ansible.builtin.uri:
+    url: "{{ gateway_url }}/rest/apigateway/configurations/keystore"
+    method: PUT
+    user: "{{ gateway_auth.user | default(omit) }}"
+    password: "{{ gateway_auth.password | default(omit) }}"
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+      Authorization: "{{ gateway_auth.token | default(omit) }}"
+    body_format: json
+    body: "{{ item }}"
+    status_code: [200]
+  loop: "{{ gw_config.keystores | default([]) }}"
+  loop_control:
+    label: "{{ item.name | default('keystore') }}"

@@ -1,0 +1,31 @@
+# webMethods API Gateway global configuration.
+# Managed by STOA Gateway Adapter — do not edit manually.
+# Applied via PUT /rest/apigateway/configurations/*
+
+errorProcessing:
+  errorTemplate: |
+    {
+      "error": {
+        "code": "$ERROR_CODE",
+        "message": "$ERROR_MESSAGE",
+        "correlationId": "$CORRELATION_ID"
+      }
+    }
+  contentType: application/json
+
+callbackSettings:
+  url: https://api.${BASE_DOMAIN}/webhooks/gateway
+  method: POST
+  headers:
+    Content-Type: application/json
+  events:
+    - apiCreated
+    - apiUpdated
+    - apiDeleted
+    - applicationCreated
+    - applicationDeleted
+
+jwt:
+  issuer: https://auth.${BASE_DOMAIN}/realms/stoa
+  audience: control-plane-api
+  clockSkew: 30

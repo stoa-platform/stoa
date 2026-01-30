@@ -1,0 +1,40 @@
+---
+# Phase 7: Export full gateway state as a portable archive.
+# Creates a timestamped ZIP backup of all APIs, applications, policies, and aliases.
+#
+# Required vars: gateway_url, gateway_auth, backup_dir
+
+- name: "BACKUP | Create backup directory"
+  ansible.builtin.file:
+    path: "{{ backup_dir | default('/tmp/gateway-backups') }}"
+    state: directory
+    mode: "0755"
+
+- name: "BACKUP | Generate timestamp"
+  ansible.builtin.set_fact:
+    backup_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+
+- name: "BACKUP | Export gateway archive"
+  ansible.builtin.uri:
+    url: "{{ gateway_url }}/rest/apigateway/archive"
+    method: GET
+    user: "{{ gateway_auth.user | default(omit) }}"
+    password: "{{ gateway_auth.password | default(omit) }}"
+    headers:
+      Accept: application/zip
+      Authorization: "{{ gateway_auth.token | default(omit) }}"
+    dest: "{{ backup_dir | default('/tmp/gateway-backups') }}/gateway-backup-{{ backup_timestamp }}.zip"
+    status_code: [200]
+  register: backup_result
+
+- name: "BACKUP | Log backup result"
+  ansible.builtin.debug:
+    msg: "Gateway backup saved to {{ backup_result.dest }} ({{ backup_result.content_length | default('unknown') }} bytes)"
+
+- name: "BACKUP | Clean old backups (keep last 10)"
+  ansible.builtin.shell: |
+    ls -t {{ backup_dir | default('/tmp/gateway-backups') }}/gateway-backup-*.zip | tail -n +11 | xargs -r rm
+  args:
+    warn: false
+  changed_when: false
+  ignore_errors: true

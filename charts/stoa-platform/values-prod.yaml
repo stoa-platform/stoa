@@ -1,0 +1,45 @@
+# Production environment overrides
+global:
+  environment: prod
+  domain: gostoa.dev
+
+replicaCount: 3
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+postgresql:
+  primary:
+    persistence:
+      size: 20Gi
+  readReplicas:
+    replicaCount: 1
+
+keycloak:
+  replicas: 3
+
+observability:
+  prometheus:
+    retention: 30d
+  loki:
+    retention: 90d
+
+ingress:
+  tls:
+    enabled: true
+    issuer: letsencrypt-prod
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70

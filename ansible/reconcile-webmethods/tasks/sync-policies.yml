@@ -1,0 +1,28 @@
+---
+# Phase 1.5: Sync policies from Git to webMethods Gateway
+# Reads policy YAML files from webmethods/policies/ and upserts them via REST API.
+#
+# Required vars: gateway_url, gateway_auth, base_domain, policies_dir
+
+- name: "POLICIES | Find all policy YAML files"
+  ansible.builtin.find:
+    paths: "{{ policies_dir | default('webmethods/policies') }}"
+    patterns: "*.yaml,*.yml"
+    recurse: false
+  register: policy_files
+
+- name: "POLICIES | Load policy definitions"
+  ansible.builtin.include_vars:
+    file: "{{ item.path }}"
+    name: "policy_{{ item.path | basename | regex_replace('\\.ya?ml$', '') }}"
+  loop: "{{ policy_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+- name: "POLICIES | Sync each policy"
+  ansible.builtin.include_tasks: sync-single-policy.yml
+  loop: "{{ policy_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  vars:
+    policy_file: "{{ item.path }}"

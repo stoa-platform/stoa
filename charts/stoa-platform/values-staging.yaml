@@ -1,0 +1,33 @@
+# Staging environment overrides
+global:
+  environment: staging
+  domain: staging.gostoa.dev
+
+replicaCount: 2
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+postgresql:
+  primary:
+    persistence:
+      size: 5Gi
+
+keycloak:
+  replicas: 2
+
+observability:
+  prometheus:
+    retention: 7d
+  loki:
+    retention: 14d
+
+ingress:
+  tls:
+    enabled: true
+    issuer: letsencrypt-staging

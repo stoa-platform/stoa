@@ -1,0 +1,78 @@
+---
+# Upsert a single policy in webMethods Gateway via REST API.
+# Called by sync-policies.yml for each policy YAML file.
+#
+# Required vars: policy_file, gateway_url, gateway_auth, base_domain
+
+- name: "POLICY | Load policy spec from {{ policy_file | basename }}"
+  ansible.builtin.include_vars:
+    file: "{{ policy_file }}"
+    name: policy_spec
+
+- name: "POLICY | Resolve variables in policy spec"
+  ansible.builtin.set_fact:
+    resolved_spec: "{{ policy_spec | to_json | regex_replace('\\$\\{BASE_DOMAIN\\}', base_domain) | from_json }}"
+
+- name: "POLICY | Search existing policy by name"
+  ansible.builtin.uri:
+    url: "{{ gateway_url }}/rest/apigateway/policies"
+    method: GET
+    user: "{{ gateway_auth.user | default(omit) }}"
+    password: "{{ gateway_auth.password | default(omit) }}"
+    headers:
+      Accept: application/json
+      Authorization: "{{ gateway_auth.token | default(omit) }}"
+    status_code: [200]
+  register: existing_policies
+
+- name: "POLICY | Find matching policy"
+  ansible.builtin.set_fact:
+    existing_policy: >-
+      {{ existing_policies.json.policies
+         | default([])
+         | selectattr('policyName', 'equalto', resolved_spec.metadata.name | default(resolved_spec.name))
+         | list
+         | first
+         | default(None) }}
+
+- name: "POLICY | Build policy action payload"
+  ansible.builtin.set_fact:
+    policy_action_payload:
+      policyActionName: "{{ resolved_spec.metadata.name | default(resolved_spec.name) }}"
+      type: "{{ resolved_spec.spec.type }}"
+      parameters: "{{ resolved_spec.spec.config }}"
+
+- name: "POLICY | Create new policy action"
+  ansible.builtin.uri:
+    url: "{{ gateway_url }}/rest/apigateway/policyActions"
+    method: POST
+    user: "{{ gateway_auth.user | default(omit) }}"
+    password: "{{ gateway_auth.password | default(omit) }}"
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+      Authorization: "{{ gateway_auth.token | default(omit) }}"
+    body_format: json
+    body: "{{ policy_action_payload }}"
+    status_code: [200, 201]
+  register: create_result
+  when: existing_policy is none
+
+- name: "POLICY | Update existing policy action"
+  ansible.builtin.uri:
+    url: "{{ gateway_url }}/rest/apigateway/policyActions/{{ existing_policy.id }}"
+    method: PUT
+    user: "{{ gateway_auth.user | default(omit) }}"
+    password: "{{ gateway_auth.password | default(omit) }}"
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+      Authorization: "{{ gateway_auth.token | default(omit) }}"
+    body_format: json
+    body: "{{ policy_action_payload }}"
+    status_code: [200]
+  when: existing_policy is not none
+
+- name: "POLICY | Log result"
+  ansible.builtin.debug:
+    msg: "Policy '{{ resolved_spec.metadata.name | default(resolved_spec.name) }}' {{ 'updated' if existing_policy is not none else 'created' }}"

@@ -1,7 +1,8 @@
 """Provisioning service for gateway auto-provisioning on subscription approval (CAB-800).
 
-Orchestrates application creation/deletion in webMethods when subscriptions
-are approved or revoked. Runs provisioning asynchronously with retry logic.
+Orchestrates application creation/deletion via the Gateway Adapter Pattern.
+The adapter abstracts the underlying gateway (webMethods, Kong, etc.) so this
+service remains gateway-agnostic. Runs provisioning asynchronously with retry logic.
 """
 import asyncio
 import logging
@@ -10,13 +11,19 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.subscription import Subscription, ProvisioningStatus
-from .gateway_service import gateway_service
+from ..adapters.webmethods import WebMethodsGatewayAdapter
 
 logger = logging.getLogger(__name__)
 
 # Retry configuration
 MAX_RETRIES = 3
 RETRY_DELAYS = [5, 15, 45]  # seconds
+
+# Gateway adapter instance — swap this to change gateway implementation
+gateway_adapter = WebMethodsGatewayAdapter()
+
+# Backward-compatible alias used by tests that patch 'gateway_service'
+gateway_service = gateway_adapter._svc
 
 
 async def provision_on_approval(

@@ -17,7 +17,8 @@ This document explains the technology choices for the STOA stack and why each co
 | **GitOps K8s** | ArgoCD | Flux, Jenkins, Spinnaker | UI, multi-cluster, adoption |
 | **Non-K8s Automation** | AWX (Ansible) | Terraform, scripts | Idempotent, auditable, UI |
 | **Gateway v1** | webMethods | Kong, APISIX, Gravitee | Existing expertise, legacy |
-| **Gateway v2** | Rust + eBPF | Go, C++ | Performance, safety, modern |
+| **MCP Gateway** | Python + FastAPI + OPA | — | Current production gateway |
+| **Gateway v2 (Future)** | Rust + eBPF | Go, C++ | Target Q4 2026, performance |
 | **Search** | OpenSearch | Elasticsearch, Meilisearch | Free fork, AWS-free |
 
 ---
@@ -194,7 +195,9 @@ This document explains the technology choices for the STOA stack and why each co
 
 ---
 
-## Gateway v2: Rust + eBPF vs Go vs C++
+## Gateway v2 (Future Vision — Target Q4 2026): Rust + eBPF vs Go vs C++
+
+> **Note**: The current MCP Gateway in production uses **Python 3.11 + FastAPI + OPA**. The Rust + eBPF implementation below is the **target architecture** for the `stoa-gateway/` component, planned for Q4 2026.
 
 | Criteria | Rust | Go | C++ |
 |----------|------|-----|-----|

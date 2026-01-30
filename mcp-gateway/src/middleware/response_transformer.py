@@ -22,6 +22,7 @@ from prometheus_client import Counter, Histogram
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from ..config import get_settings
+from ..transformer.capper import CapEngine, CapResult
 from ..transformer.config import TransformConfig
 from ..transformer.engine import TransformEngine
 from ..transformer.registry import get_adapter, get_config_for_tool
@@ -46,6 +47,12 @@ TRANSFORMER_APPLIED_TOTAL = Counter(
     f"{prefix}_transformer_applied_total",
     "Total transformations applied",
     ["tool_name", "result"],  # result: "transformed", "passthrough", "error"
+)
+
+RESPONSE_CAPPED_TOTAL = Counter(
+    f"{prefix}_response_capped_total",
+    "Total responses capped by token limit (CAB-874)",
+    ["tool_name"],
 )
 
 
@@ -156,6 +163,13 @@ class ResponseTransformerMiddleware(BaseHTTPMiddleware):
         try:
             # Transform the response content
             transformed = self._transform_response(payload, tool_name, config)
+
+            # CAB-874: Apply token capping after transformation
+            cap_result = self._apply_capping(transformed, tool_name, config)
+            if cap_result.was_capped:
+                transformed = cap_result.payload
+                RESPONSE_CAPPED_TOTAL.labels(tool_name=tool_name).inc()
+
             transformed_body = json.dumps(transformed, separators=(",", ":")).encode("utf-8")
             transformed_size = len(transformed_body)
 
@@ -177,15 +191,21 @@ class ResponseTransformerMiddleware(BaseHTTPMiddleware):
                 original_size=original_size,
                 transformed_size=transformed_size,
                 reduction_pct=f"{ratio * 100:.1f}%",
+                capped=cap_result.was_capped,
                 tenant_hash=hashlib.sha256(
                     _extract_tenant_id(request).encode()
                 ).hexdigest()[:12],
             )
 
+            headers_dict = dict(response.headers)
+            if cap_result.was_capped:
+                headers_dict["X-Stoa-Truncated"] = "true"
+                headers_dict["X-Stoa-Original-Tokens"] = str(cap_result.original_tokens)
+
             return Response(
                 content=transformed_body,
                 status_code=response.status_code,
-                headers=dict(response.headers),
+                headers=headers_dict,
                 media_type="application/json",
             )
 
@@ -244,3 +264,56 @@ class ResponseTransformerMiddleware(BaseHTTPMiddleware):
 
         # Direct JSON response (non-MCP envelope)
         return TransformEngine.apply(payload, config)
+
+    def _apply_capping(
+        self,
+        payload: Any,
+        tool_name: str,
+        config: TransformConfig,
+    ) -> CapResult:
+        """Apply token capping to transformed payload (CAB-874).
+
+        Resolves max_tokens from per-tool config or global setting.
+        Handles MCP envelope by capping inner content[].text JSON.
+        """
+        max_tokens = config.max_response_tokens or settings.max_response_tokens
+
+        # Handle MCP envelope: cap inner JSON in content[].text
+        if isinstance(payload, dict) and "content" in payload:
+            content = payload.get("content", [])
+            if isinstance(content, list):
+                capped_content = []
+                was_capped = False
+                original_tokens = 0
+
+                for item in content:
+                    if (isinstance(item, dict)
+                            and item.get("type") == "text"
+                            and isinstance(item.get("text"), str)):
+                        try:
+                            inner = json.loads(item["text"])
+                            result = CapEngine.cap_response(
+                                inner, max_tokens, tool_name
+                            )
+                            was_capped = was_capped or result.was_capped
+                            original_tokens = max(original_tokens, result.original_tokens)
+                            capped_content.append({
+                                "type": "text",
+                                "text": json.dumps(
+                                    result.payload, separators=(",", ":")
+                                ),
+                            })
+                        except (json.JSONDecodeError, ValueError):
+                            capped_content.append(item)
+                    else:
+                        capped_content.append(item)
+
+                return CapResult(
+                    payload={**payload, "content": capped_content},
+                    was_capped=was_capped,
+                    original_tokens=original_tokens,
+                    final_tokens=max_tokens if was_capped else original_tokens,
+                )
+
+        # Direct JSON response (non-MCP envelope)
+        return CapEngine.cap_response(payload, max_tokens, tool_name)

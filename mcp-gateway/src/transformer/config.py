@@ -76,6 +76,7 @@ class TransformConfig(BaseModel):
     max_depth: int = 3
     max_items: int = 50
     truncate: dict[str, TruncateConfig] = {}
+    max_response_tokens: int | None = None  # CAB-874: None = use global default
 
     @field_validator("max_depth")
     @classmethod
@@ -89,6 +90,13 @@ class TransformConfig(BaseModel):
     def items_range(cls, v: int) -> int:
         if v < 1 or v > 1000:
             raise ValueError("max_items must be between 1 and 1000")
+        return v
+
+    @field_validator("max_response_tokens")
+    @classmethod
+    def tokens_positive(cls, v: int | None) -> int | None:
+        if v is not None and v < 1:
+            raise ValueError("max_response_tokens must be >= 1")
         return v
 
     @model_validator(mode="after")

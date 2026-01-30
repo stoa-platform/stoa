@@ -27,6 +27,7 @@ const navigation = [
   { name: 'APIs', href: '/apis', icon: Layers, permission: 'apis:read' },
   { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read' },
   { name: 'External MCP Servers', href: '/external-mcp-servers', icon: Server, permission: 'admin:servers' },
+  { name: 'Gateway', href: '/gateway', icon: Server, permission: 'apis:read' },
   { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
   { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
   { name: 'API Monitoring', href: '/monitoring', icon: Activity, permission: 'apis:read' },

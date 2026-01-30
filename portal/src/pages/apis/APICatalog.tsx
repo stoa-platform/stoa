@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { BookOpen, Grid3X3, List, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
-import { useAPIs, useAPICategories } from '../../hooks/useAPIs';
+import { useAPIs, useAPICategories, useUniverses } from '../../hooks/useAPIs';
 import { APICard } from '../../components/apis/APICard';
 import { APIFilters } from '../../components/apis/APIFilters';
 import type { API } from '../../types';
@@ -34,6 +34,7 @@ function useDebounce<T>(value: T, delay: number): T {
 export function APICatalog() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [universe, setUniverse] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [page, setPage] = useState(1);
   const pageSize = 12;
@@ -51,12 +52,14 @@ export function APICatalog() {
   } = useAPIs({
     search: debouncedSearch || undefined,
     category: category || undefined,
+    universe: universe || undefined,
     page,
     pageSize,
   });
 
-  // Fetch available categories
+  // Fetch available categories and universes
   const { data: categories = [], isLoading: categoriesLoading } = useAPICategories();
+  const { data: universes = [] } = useUniverses();
 
   // Extract APIs from response - server-side filtering is sufficient
   const apis = apisResponse?.items || [];
@@ -71,6 +74,11 @@ export function APICatalog() {
 
   const handleCategoryChange = (value: string) => {
     setCategory(value);
+    setPage(1);
+  };
+
+  const handleUniverseChange = (value: string) => {
+    setUniverse(value);
     setPage(1);
   };
 
@@ -129,6 +137,9 @@ export function APICatalog() {
         category={category}
         onCategoryChange={handleCategoryChange}
         categories={categories}
+        universe={universe}
+        onUniverseChange={handleUniverseChange}
+        universes={universes}
         isLoading={categoriesLoading}
       />
 
@@ -142,7 +153,7 @@ export function APICatalog() {
           ) : (
             `${totalCount} APIs available`
           )}
-          {(search || category) && ` matching your filters`}
+          {(search || category || universe) && ` matching your filters`}
         </div>
       )}
 
@@ -183,15 +194,16 @@ export function APICatalog() {
           </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">No APIs Found</h2>
           <p className="text-gray-500 max-w-md mx-auto">
-            {search || category
+            {search || category || universe
               ? 'No APIs match your current filters. Try adjusting your search criteria.'
               : 'There are no published APIs available yet. Check back later!'}
           </p>
-          {(search || category) && (
+          {(search || category || universe) && (
             <button
               onClick={() => {
                 setSearch('');
                 setCategory('');
+                setUniverse('');
               }}
               className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >

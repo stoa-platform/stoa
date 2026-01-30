@@ -6,12 +6,20 @@
 
 import { Search, Filter, X } from 'lucide-react';
 
+interface UniverseOption {
+  id: string;
+  label: string;
+}
+
 interface APIFiltersProps {
   search: string;
   onSearchChange: (value: string) => void;
   category: string;
   onCategoryChange: (value: string) => void;
   categories: string[];
+  universe: string;
+  onUniverseChange: (value: string) => void;
+  universes: UniverseOption[];
   isLoading?: boolean;
 }
 
@@ -21,14 +29,18 @@ export function APIFilters({
   category,
   onCategoryChange,
   categories,
+  universe,
+  onUniverseChange,
+  universes,
   isLoading,
 }: APIFiltersProps) {
   const clearFilters = () => {
     onSearchChange('');
     onCategoryChange('');
+    onUniverseChange('');
   };
 
-  const hasFilters = search || category;
+  const hasFilters = search || category || universe;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
@@ -44,6 +56,26 @@ export function APIFilters({
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
           />
         </div>
+
+        {/* Universe filter (CAB-848) */}
+        {universes.length > 0 && (
+          <div className="relative sm:w-44">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <select
+              value={universe}
+              onChange={(e) => onUniverseChange(e.target.value)}
+              disabled={isLoading}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm appearance-none bg-white cursor-pointer"
+            >
+              <option value="">All Universes</option>
+              {universes.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Category filter */}
         <div className="relative sm:w-48">
@@ -83,6 +115,14 @@ export function APIFilters({
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary-50 text-primary-700 text-xs rounded-full">
               Search: "{search}"
               <button onClick={() => onSearchChange('')} className="hover:text-primary-900">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+          {universe && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary-50 text-primary-700 text-xs rounded-full">
+              {universes.find((u) => u.id === universe)?.label || universe}
+              <button onClick={() => onUniverseChange('')} className="hover:text-primary-900">
                 <X className="h-3 w-3" />
               </button>
             </span>

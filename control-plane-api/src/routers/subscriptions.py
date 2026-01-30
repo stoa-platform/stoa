@@ -1,6 +1,8 @@
 """Subscriptions router - API subscription management"""
+import asyncio
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+import uuid as uuid_mod
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from uuid import UUID
@@ -30,10 +32,19 @@ from ..services.webhook_service import (
     emit_subscription_revoked,
     emit_subscription_key_rotated,
 )
+from ..services.provisioning_service import provision_on_approval, deprovision_on_revocation
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/subscriptions", tags=["Subscriptions"])
+
+
+def _extract_auth_token(request: Request) -> Optional[str]:
+    """Extract Bearer token from Authorization header if present."""
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:]
+    return None
 
 
 def _has_tenant_access(user: User, tenant_id: str) -> bool:
@@ -415,6 +426,7 @@ async def list_pending_subscriptions(
 async def approve_subscription(
     subscription_id: UUID,
     request: SubscriptionApprove,
+    raw_request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -460,6 +472,13 @@ async def approve_subscription(
     except Exception as e:
         logger.warning(f"Failed to emit subscription.approved webhook: {e}")
 
+    # Auto-provision gateway application (CAB-800)
+    correlation_id = str(uuid_mod.uuid4())
+    auth_token = _extract_auth_token(raw_request)
+    asyncio.create_task(
+        provision_on_approval(db, subscription, auth_token, correlation_id)
+    )
+
     return SubscriptionResponse.model_validate(subscription)
 
 
@@ -467,6 +486,7 @@ async def approve_subscription(
 async def revoke_subscription(
     subscription_id: UUID,
     request: SubscriptionRevoke,
+    raw_request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -504,6 +524,13 @@ async def revoke_subscription(
         await emit_subscription_revoked(db, subscription)
     except Exception as e:
         logger.warning(f"Failed to emit subscription.revoked webhook: {e}")
+
+    # Auto-deprovision gateway application (CAB-800)
+    correlation_id = str(uuid_mod.uuid4())
+    auth_token = _extract_auth_token(raw_request)
+    asyncio.create_task(
+        deprovision_on_revocation(db, subscription, auth_token, correlation_id)
+    )
 
     return SubscriptionResponse.model_validate(subscription)
 

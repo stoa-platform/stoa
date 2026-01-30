@@ -105,6 +105,8 @@ class LokiClient:
         status: Optional[str] = None,
         from_date: Optional[datetime] = None,
         to_date: Optional[datetime] = None,
+        search: Optional[str] = None,
+        level: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Get recent API calls from logs.
 
@@ -116,6 +118,8 @@ class LokiClient:
             status: Optional status filter (success, error, timeout)
             from_date: Optional start date
             to_date: Optional end date
+            search: Optional free-text search (CAB-793)
+            level: Optional log level filter (CAB-793)
 
         Returns:
             List of call entries
@@ -131,6 +135,11 @@ class LokiClient:
             line_filters += f' | tool_id="{tool_id}"'
         if status:
             line_filters += f' | status="{status}"'
+        if level:
+            line_filters += f' | level="{level}"'
+        if search:
+            escaped = search.replace('"', '\\"')
+            line_filters += f' |~ "{escaped}"'
 
         query = f'{stream_selector} {line_filters}'
 

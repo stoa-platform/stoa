@@ -153,7 +153,9 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 [optional footer(s)]
 ```
 
-**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`
+
+**Scopes (optional):** `api`, `ui`, `portal`, `mcp`, `gateway`, `helm`, `ci`, `docs`, `deps`, `security`, `demo`
 
 **Examples:**
 ```
@@ -161,6 +163,8 @@ feat(gateway): add rate limiting per tenant
 fix(api): handle null subscription gracefully
 docs: update API reference for v0.2
 ```
+
+> Commits are validated automatically by [commitlint](https://commitlint.js.org/) via a Husky git hook. Invalid commit messages will be rejected locally.
 
 ### Developer Certificate of Origin (DCO)
 

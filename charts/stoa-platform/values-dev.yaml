@@ -1,0 +1,33 @@
+# Dev environment overrides
+global:
+  environment: dev
+  domain: dev.gostoa.dev
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+postgresql:
+  primary:
+    persistence:
+      size: 1Gi
+
+keycloak:
+  replicas: 1
+
+observability:
+  prometheus:
+    retention: 1d
+  loki:
+    retention: 3d
+
+ingress:
+  tls:
+    enabled: true
+    issuer: letsencrypt-staging

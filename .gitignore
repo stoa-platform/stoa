@@ -60,6 +60,7 @@ control-plane-api/venv/
 tmp/
 temp/
 *.tmp
+node_modules/
 portal/node_modules/node_modules_CLAUDE_OFF/
 deploy/demo-federation/.env
 scripts/demo-federation/.tokens/

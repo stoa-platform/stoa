@@ -91,7 +91,7 @@
     <g transform="translate(15, 95)">
       <rect x="0" y="0" width="170" height="45" rx="8" fill="#6ee7b7"/>
       <text x="85" y="20" font-family="Inter, sans-serif" font-size="11" font-weight="500" fill="#047857" text-anchor="middle">MCP Gateway</text>
-      <text x="85" y="35" font-family="Inter, sans-serif" font-size="9" fill="#059669" text-anchor="middle">Rust • Tokio • Hyper</text>
+      <text x="85" y="35" font-family="Inter, sans-serif" font-size="9" fill="#059669" text-anchor="middle">Python • FastAPI • OPA</text>
     </g>
   </g>
 
@@ -124,8 +124,8 @@
     </g>
     <g transform="translate(15, 85)">
       <rect x="0" y="0" width="150" height="35" rx="6" fill="#fde68a"/>
-      <text x="75" y="15" font-family="Inter, sans-serif" font-size="10" font-weight="500" fill="#b45309" text-anchor="middle">Redis</text>
-      <text x="75" y="28" font-family="Inter, sans-serif" font-size="8" fill="#d97706" text-anchor="middle">Cache • Sessions • Rate Limit</text>
+      <text x="75" y="15" font-family="Inter, sans-serif" font-size="10" font-weight="500" fill="#b45309" text-anchor="middle">Kafka/Redpanda</text>
+      <text x="75" y="28" font-family="Inter, sans-serif" font-size="8" fill="#d97706" text-anchor="middle">Events • Metering • Streaming</text>
     </g>
   </g>
 
@@ -214,7 +214,7 @@
     
     <g transform="translate(20, 45)">
       <rect x="0" y="0" width="12" height="12" rx="2" fill="#10b981"/>
-      <text x="20" y="10" font-family="Inter, sans-serif" font-size="10" fill="#374151">Rust + Tokio (Gateway)</text>
+      <text x="20" y="10" font-family="Inter, sans-serif" font-size="10" fill="#374151">Python + FastAPI (Gateway)</text>
     </g>
     <g transform="translate(20, 65)">
       <rect x="0" y="0" width="12" height="12" rx="2" fill="#6366f1"/>
@@ -226,7 +226,7 @@
     </g>
     <g transform="translate(20, 105)">
       <rect x="0" y="0" width="12" height="12" rx="2" fill="#f59e0b"/>
-      <text x="20" y="10" font-family="Inter, sans-serif" font-size="10" fill="#374151">PostgreSQL + Redis (Data)</text>
+      <text x="20" y="10" font-family="Inter, sans-serif" font-size="10" fill="#374151">PostgreSQL + Kafka/Redpanda (Data)</text>
     </g>
     <g transform="translate(20, 125)">
       <rect x="0" y="0" width="12" height="12" rx="2" fill="#f43f5e"/>

@@ -19,7 +19,7 @@ from .routers import tenants, apis, applications, deployments, git, events, webh
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
 from .routers.external_mcp_servers import admin_router as external_mcp_servers_admin_router, internal_router as external_mcp_servers_internal_router
-from .routers import portal, mcp_gitops, mcp_proxy, mcp_policy_proxy, platform, portal_applications, catalog_admin, admin_prospects
+from .routers import portal, mcp_gitops, mcp_proxy, mcp_policy_proxy, platform, portal_applications, catalog_admin, admin_prospects, self_service_logs
 from .opensearch import search_router, AuditMiddleware, setup_opensearch
 from .services import kafka_service, git_service, awx_service, keycloak_service, argocd_service, metrics_service
 # Note: These are now imported as instances, not modules
@@ -344,6 +344,9 @@ app.include_router(admin_prospects.router)
 
 # User profile and permissions (Single Source of Truth for RBAC)
 app.include_router(users.router)
+
+# Self-Service Logs (CAB-793 - Consumer log access with PII masking)
+app.include_router(self_service_logs.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

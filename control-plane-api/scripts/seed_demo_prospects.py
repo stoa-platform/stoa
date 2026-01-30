@@ -28,102 +28,102 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 
 # Demo prospect data
 DEMO_PROSPECTS = [
-    # ENGIE - 3 prospects
+    # Nexora Energy - 3 prospects
     {
-        "company": "ENGIE",
-        "email": "pierre.martin@engie.fr",
+        "company": "Nexora Energy",
+        "email": "pierre.martin@nexora-energy.com",
         "status": "converted",
         "nps_score": 9,
         "nps_comment": "Le MCP Gateway m'a bluffé ! Exactement ce qu'il nous faut.",
         "events": ["invite_opened", "page_viewed", "tool_called", "tool_called", "tool_called"],
     },
     {
-        "company": "ENGIE",
-        "email": "marie.dupont@engie.fr",
+        "company": "Nexora Energy",
+        "email": "marie.dupont@nexora-energy.com",
         "status": "opened",
         "nps_score": None,
         "nps_comment": None,
         "events": ["invite_opened", "page_viewed"],
     },
     {
-        "company": "ENGIE",
-        "email": "jean.bernard@engie.fr",
+        "company": "Nexora Energy",
+        "email": "jean.bernard@nexora-energy.com",
         "status": "pending",
         "nps_score": None,
         "nps_comment": None,
         "events": [],
     },
-    # LVMH - 3 prospects
+    # Maison Aurèle - 3 prospects
     {
-        "company": "LVMH",
-        "email": "sophie.laurent@lvmh.com",
+        "company": "Maison Aurèle",
+        "email": "sophie.laurent@maison-aurele.com",
         "status": "converted",
         "nps_score": 10,
         "nps_comment": "Excellent ! On passe en POC la semaine prochaine.",
         "events": ["invite_opened", "page_viewed", "tool_called", "tool_called", "error_encountered", "tool_called"],
     },
     {
-        "company": "LVMH",
-        "email": "paul.moreau@lvmh.com",
+        "company": "Maison Aurèle",
+        "email": "paul.moreau@maison-aurele.com",
         "status": "converted",
         "nps_score": 8,
         "nps_comment": "Très prometteur, quelques ajustements à faire.",
         "events": ["invite_opened", "page_viewed", "tool_called"],
     },
     {
-        "company": "LVMH",
-        "email": "claire.petit@lvmh.com",
+        "company": "Maison Aurèle",
+        "email": "claire.petit@maison-aurele.com",
         "status": "expired",
         "nps_score": None,
         "nps_comment": None,
         "events": [],
     },
-    # TotalEnergies - 2 prospects
+    # Helios Power - 2 prospects
     {
-        "company": "TotalEnergies",
-        "email": "marc.lefebvre@totalenergies.com",
+        "company": "Helios Power",
+        "email": "marc.lefebvre@helios-power.com",
         "status": "converted",
         "nps_score": 9,
         "nps_comment": "Impressionnant la vitesse d'intégration.",
         "events": ["invite_opened", "page_viewed", "tool_called", "tool_called"],
     },
     {
-        "company": "TotalEnergies",
-        "email": "anne.robert@totalenergies.com",
+        "company": "Helios Power",
+        "email": "anne.robert@helios-power.com",
         "status": "opened",
         "nps_score": 7,
         "nps_comment": "Bien mais besoin de plus de documentation.",
         "events": ["invite_opened", "page_viewed", "page_viewed"],
     },
-    # BNP Paribas - 2 prospects
+    # Atlas Finance - 2 prospects
     {
-        "company": "BNP Paribas",
-        "email": "thomas.girard@bnpparibas.com",
+        "company": "Atlas Finance",
+        "email": "thomas.girard@atlas-finance.com",
         "status": "converted",
         "nps_score": 6,
         "nps_comment": "Intéressant mais questions sur la sécurité.",
         "events": ["invite_opened", "page_viewed", "tool_called", "error_encountered"],
     },
     {
-        "company": "BNP Paribas",
-        "email": "julie.simon@bnpparibas.com",
+        "company": "Atlas Finance",
+        "email": "julie.simon@atlas-finance.com",
         "status": "pending",
         "nps_score": None,
         "nps_comment": None,
         "events": [],
     },
-    # Orange - 2 prospects
+    # Prism Telecom - 2 prospects
     {
-        "company": "Orange",
-        "email": "david.michel@orange.fr",
+        "company": "Prism Telecom",
+        "email": "david.michel@prism-telecom.com",
         "status": "converted",
         "nps_score": 10,
         "nps_comment": "Fantastique ! On veut être early adopter.",
         "events": ["invite_opened", "page_viewed", "tool_called", "tool_called", "tool_called", "tool_called"],
     },
     {
-        "company": "Orange",
-        "email": "laura.blanc@orange.fr",
+        "company": "Prism Telecom",
+        "email": "laura.blanc@prism-telecom.com",
         "status": "expired",
         "nps_score": None,
         "nps_comment": None,

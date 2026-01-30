@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from ..auth import get_current_user, User
 from ..database import get_db
 from ..services.metrics_service import metrics_service
+from ..services.cache_service import TTLCache
 from ..schemas.usage import (
     UsageSummary,
     UsageCallsResponse,
@@ -36,6 +37,9 @@ router = APIRouter(prefix="/v1/usage", tags=["Usage"])
 
 # Also create dashboard router
 dashboard_router = APIRouter(prefix="/v1/dashboard", tags=["Dashboard"])
+
+# CAB-691: In-memory cache for dashboard stats (30s TTL)
+_dashboard_cache = TTLCache(default_ttl_seconds=30, max_size=100)
 
 
 # ============================================================
@@ -180,8 +184,16 @@ async def get_dashboard_stats(
 
     logger.info(f"Fetching dashboard stats for user={user_id} tenant={tenant_id}")
 
+    # CAB-691: Check cache first (keyed per tenant)
+    cache_key = f"dashboard_stats:{tenant_id}"
+    cached = await _dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
-        return await metrics_service.get_dashboard_stats(user_id, tenant_id, db)
+        result = await metrics_service.get_dashboard_stats(user_id, tenant_id, db)
+        await _dashboard_cache.set(cache_key, result, ttl_seconds=30)
+        return result
     except Exception as e:
         logger.error(f"Failed to fetch dashboard stats: {e}")
         raise HTTPException(

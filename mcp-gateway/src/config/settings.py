@@ -128,6 +128,7 @@ class Settings(BaseSettings):
     semantic_cache_similarity: float = 0.95  # Cosine similarity threshold
     semantic_cache_cleanup_interval: int = 60  # Cleanup interval in seconds
     semantic_cache_gdpr_max_age_hours: int = 24  # GDPR hard-delete age
+    max_response_tokens: int = 8000  # CAB-874: max tokens before capping
 
     # Shadow Mode Configuration (Python → Rust Migration)
     shadow_mode_enabled: bool = False  # Enable shadow traffic to Rust gateway

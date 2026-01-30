@@ -284,6 +284,94 @@ class GatewayAdminService:
         logger.info(f"Created application {name}")
         return result
 
+    async def provision_application(
+        self,
+        subscription_id: str,
+        application_name: str,
+        api_id: str,
+        tenant_id: str,
+        subscriber_email: str,
+        correlation_id: str,
+        auth_token: Optional[str] = None,
+    ) -> dict:
+        """Provision a gateway application for a subscription (CAB-800).
+
+        Creates an application in webMethods and associates it with the API.
+
+        Args:
+            subscription_id: STOA subscription ID
+            application_name: Name for the application
+            api_id: Gateway API ID to associate
+            tenant_id: Tenant identifier
+            subscriber_email: Subscriber contact email
+            correlation_id: Request correlation ID for tracing
+            auth_token: JWT token for OIDC proxy mode
+
+        Returns:
+            dict with 'app_id' and 'application' keys
+        """
+        # 1. Create the application
+        app_name = f"stoa-{tenant_id}-{application_name}-{subscription_id[:8]}"
+        app_result = await self.create_application(
+            name=app_name,
+            description=f"STOA subscription {subscription_id} for API {api_id}",
+            contact_emails=[subscriber_email],
+            auth_token=auth_token,
+        )
+
+        app_id = app_result.get("id", "")
+        if not app_id:
+            # Try nested response structure
+            app_id = app_result.get("applications", [{}])[0].get("id", "") if app_result.get("applications") else ""
+
+        if not app_id:
+            raise RuntimeError(f"Failed to extract app_id from gateway response: {app_result}")
+
+        # 2. Associate the application with the API
+        try:
+            await self._request(
+                "PUT",
+                f"/applications/{app_id}/apis",
+                auth_token=auth_token,
+                json={"apiIDs": [api_id]},
+            )
+        except Exception:
+            # Cleanup: delete the application if association fails
+            try:
+                await self._request("DELETE", f"/applications/{app_id}", auth_token=auth_token)
+            except Exception:
+                pass
+            raise
+
+        logger.info(
+            f"Provisioned application {app_id} for subscription {subscription_id}",
+            extra={"correlation_id": correlation_id, "tenant_id": tenant_id},
+        )
+        return {"app_id": app_id, "application": app_result}
+
+    async def deprovision_application(
+        self,
+        app_id: str,
+        correlation_id: str,
+        auth_token: Optional[str] = None,
+    ) -> bool:
+        """Remove a provisioned application from the gateway (CAB-800).
+
+        Args:
+            app_id: Gateway application ID to delete
+            correlation_id: Request correlation ID for tracing
+            auth_token: JWT token for OIDC proxy mode
+
+        Returns:
+            True if successful
+        """
+        await self._request("DELETE", f"/applications/{app_id}", auth_token=auth_token)
+        logger.info(
+            f"Deprovisioned application {app_id}",
+            extra={"correlation_id": correlation_id},
+        )
+        return True
+
     # =========================================================================
     # Alias Operations
     # =========================================================================

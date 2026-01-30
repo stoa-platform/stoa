@@ -1,6 +1,8 @@
 """GitLab service for GitOps operations"""
+import asyncio
 import logging
-from typing import Optional
+import re
+from typing import Any, Callable, Optional
 import yaml
 import gitlab
 from gitlab.v4.objects import Project
@@ -8,6 +10,50 @@ from gitlab.v4.objects import Project
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+# ============================================================
+# CAB-688: Protection for parallel GitLab calls
+# Obligation #1: Semaphore(10) max concurrent
+# Obligation #2: Retry exponential backoff on 429
+# Obligation #3: Timeout 5s per call
+# ============================================================
+GITLAB_SEMAPHORE = asyncio.Semaphore(10)
+GITLAB_TIMEOUT = 5.0
+GITLAB_MAX_RETRIES = 3
+
+
+class GitLabRateLimitError(Exception):
+    """GitLab 429 rate limit exceeded"""
+    pass
+
+
+async def _fetch_with_protection(
+    coro_factory: Callable[[], Any],
+    name: str,
+    timeout: float = GITLAB_TIMEOUT,
+    max_retries: int = GITLAB_MAX_RETRIES,
+) -> Any:
+    """Execute GitLab call with semaphore, timeout, and retry on 429."""
+    async with GITLAB_SEMAPHORE:
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                async with asyncio.timeout(timeout):
+                    return await coro_factory()
+            except asyncio.TimeoutError:
+                logger.warning(f"GitLab call '{name}' timed out (attempt {attempt + 1}/{max_retries})")
+                last_error = TimeoutError(f"{name} timed out")
+            except Exception as e:
+                if "429" in str(e) or "rate limit" in str(e).lower():
+                    wait_time = 2 ** attempt
+                    logger.warning(f"GitLab rate limit hit for '{name}', waiting {wait_time}s (attempt {attempt + 1})")
+                    await asyncio.sleep(wait_time)
+                    last_error = GitLabRateLimitError(str(e))
+                else:
+                    logger.error(f"GitLab call '{name}' failed: {e}")
+                    last_error = e
+                    break
+        raise last_error or Exception(f"Failed after {max_retries} attempts: {name}")
 
 
 def _normalize_api_data(raw_data: dict) -> dict:
@@ -332,6 +378,82 @@ settings:
 
         except gitlab.exceptions.GitlabGetError:
             return []
+
+    # ============================================================
+    # CAB-688: Parallel fetch methods
+    # ============================================================
+
+    async def list_apis_parallel(self, tenant_id: str) -> list[dict]:
+        """List APIs for a tenant with parallel fetching (CAB-688)."""
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+
+        try:
+            tree = self._project.repository_tree(
+                path=f"{self._get_tenant_path(tenant_id)}/apis",
+                ref="main"
+            )
+        except gitlab.exceptions.GitlabGetError:
+            return []
+
+        api_dirs = [item["name"] for item in tree if item["type"] == "tree" and item["name"] != ".gitkeep"]
+
+        async def fetch_api(api_id: str) -> Optional[dict]:
+            try:
+                return await _fetch_with_protection(
+                    lambda aid=api_id: self.get_api(tenant_id, aid),
+                    f"api:{tenant_id}/{api_id}"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to fetch API {tenant_id}/{api_id}: {e}")
+                return None
+
+        results = await asyncio.gather(*[fetch_api(aid) for aid in api_dirs])
+        return [api for api in results if api is not None]
+
+    async def get_all_openapi_specs_parallel(
+        self,
+        tenant_id: str,
+        api_ids: list[str]
+    ) -> dict[str, Optional[dict]]:
+        """Fetch OpenAPI specs for multiple APIs in parallel (CAB-688)."""
+        async def fetch_spec(api_id: str) -> tuple[str, Optional[dict]]:
+            try:
+                spec = await _fetch_with_protection(
+                    lambda aid=api_id: self.get_api_openapi_spec(tenant_id, aid),
+                    f"openapi:{tenant_id}/{api_id}"
+                )
+                return (api_id, spec)
+            except Exception as e:
+                logger.warning(f"Failed to fetch OpenAPI spec {tenant_id}/{api_id}: {e}")
+                return (api_id, None)
+
+        results = await asyncio.gather(*[fetch_spec(aid) for aid in api_ids])
+        return dict(results)
+
+    async def get_full_tree_recursive(self, path: str = "tenants") -> list[dict]:
+        """Get full repository tree in ONE call (CAB-688 obligation #5)."""
+        if not self._project:
+            raise RuntimeError("GitLab not connected")
+        return self._project.repository_tree(
+            path=path, ref="main", recursive=True, per_page=1000, all=True
+        )
+
+    def parse_tree_to_tenant_apis(self, tree: list[dict]) -> dict[str, list[str]]:
+        """Parse recursive tree into {tenant_id: [api_ids]} structure."""
+        tenant_apis: dict[str, list[str]] = {}
+        pattern = re.compile(r"^tenants/([^/]+)/apis/([^/]+)/api\.yaml$")
+
+        for item in tree:
+            if item["type"] == "blob":
+                match = pattern.match(item["path"])
+                if match:
+                    tenant_id, api_id = match.groups()
+                    if tenant_id not in tenant_apis:
+                        tenant_apis[tenant_id] = []
+                    tenant_apis[tenant_id].append(api_id)
+
+        return tenant_apis
 
     async def update_api(self, tenant_id: str, api_name: str, api_data: dict) -> bool:
         """Update API configuration in GitLab"""

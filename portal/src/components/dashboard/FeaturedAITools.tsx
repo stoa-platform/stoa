@@ -1,24 +1,14 @@
 /**
- * FeaturedAITools Component
+ * FeaturedAITools Component (CAB-691)
  *
  * Shows a preview of available AI Tools on the homepage.
+ * Uses React Query via useFeaturedAITools hook for caching.
  */
 
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Wrench, ArrowRight, Settings, Users, Globe } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useFeaturedAITools } from '../../hooks/useDashboard';
 import { config } from '../../config';
-
-interface AIToolPreview {
-  id: string;
-  name: string;
-  displayName: string;
-  description: string;
-  category: 'platform' | 'tenant' | 'public';
-  status: string;
-  tools: { id: string; displayName: string }[];
-}
 
 function ToolSkeleton() {
   return (
@@ -35,41 +25,14 @@ function ToolSkeleton() {
   );
 }
 
-const categoryIcons = {
+const categoryIcons: Record<string, typeof Settings> = {
   platform: Settings,
   tenant: Users,
   public: Globe,
 };
 
 export function FeaturedAITools() {
-  const { accessToken } = useAuth();
-  const [tools, setTools] = useState<AIToolPreview[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    if (!accessToken) return;
-
-    async function loadTools() {
-      setIsLoading(true);
-      try {
-        const response = await fetch(`${config.api.baseUrl}/v1/portal/mcp-servers?limit=4`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setTools(data.servers || []);
-        }
-      } catch (error) {
-        console.error('Failed to load AI tools:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadTools();
-  }, [accessToken]);
+  const { data: tools = [], isLoading } = useFeaturedAITools();
 
   if (!config.features.enableMCPTools) {
     return null;

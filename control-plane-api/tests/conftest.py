@@ -279,6 +279,11 @@ def sample_subscription_data(sample_subscription_id):
         "previous_key_expires_at": None,
         "last_rotated_at": None,
         "rotation_count": 0,
+        # Gateway provisioning (CAB-800)
+        "provisioning_status": "none",
+        "gateway_app_id": None,
+        "provisioning_error": None,
+        "provisioned_at": None,
     }
 
 

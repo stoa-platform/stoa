@@ -15,6 +15,17 @@ class SubscriptionStatusEnum(str, Enum):
     EXPIRED = "expired"
 
 
+class ProvisioningStatusEnum(str, Enum):
+    """Gateway provisioning status for API responses (CAB-800)"""
+    NONE = "none"
+    PENDING = "pending"
+    PROVISIONING = "provisioning"
+    READY = "ready"
+    FAILED = "failed"
+    DEPROVISIONING = "deprovisioning"
+    DEPROVISIONED = "deprovisioned"
+
+
 class SubscriptionCreate(BaseModel):
     """Schema for creating a new subscription request"""
     application_id: str = Field(..., min_length=1, max_length=255)
@@ -65,6 +76,12 @@ class SubscriptionResponse(BaseModel):
     revoked_at: Optional[datetime]
     approved_by: Optional[str]
     revoked_by: Optional[str]
+
+    # Gateway provisioning (CAB-800)
+    provisioning_status: Optional[ProvisioningStatusEnum] = None
+    gateway_app_id: Optional[str] = None
+    provisioning_error: Optional[str] = None
+    provisioned_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -14,8 +14,8 @@ class TestCreateInvite:
         response = await client.post(
             "/api/v1/invites",
             json={
-                "email": "pierre.dupont@engie.com",
-                "company": "ENGIE",
+                "email": "pierre.dupont@nexora-energy.com",
+                "company": "Nexora Energy",
                 "source": "demo-26-jan",
             },
         )
@@ -23,8 +23,8 @@ class TestCreateInvite:
         assert response.status_code == 201
         data = response.json()
 
-        assert data["email"] == "pierre.dupont@engie.com"
-        assert data["company"] == "ENGIE"
+        assert data["email"] == "pierre.dupont@nexora-energy.com"
+        assert data["company"] == "Nexora Energy"
         assert data["source"] == "demo-26-jan"
         assert data["status"] == "pending"
         assert "token" in data

@@ -25,8 +25,8 @@ class TestAdminProspectsRouter:
     def _create_mock_invite(
         self,
         status: str = "converted",
-        company: str = "ENGIE",
-        email: str = "pierre@engie.fr",
+        company: str = "Nexora Energy",
+        email: str = "pierre@nexora-energy.com",
     ) -> MagicMock:
         """Create a mock Invite object."""
         mock = MagicMock()
@@ -161,7 +161,7 @@ class TestAdminProspectsRouter:
             with TestClient(app_with_cpi_admin) as client:
                 response = client.get(
                     "/v1/admin/prospects",
-                    params={"company": "ENGIE", "status": "converted"},
+                    params={"company": "Nexora Energy", "status": "converted"},
                 )
                 assert response.status_code == 200
                 data = response.json()
@@ -171,7 +171,7 @@ class TestAdminProspectsRouter:
                 # Verify filter was passed to service
                 mock_list.assert_called_once()
                 call_kwargs = mock_list.call_args.kwargs
-                assert call_kwargs["company"] == "ENGIE"
+                assert call_kwargs["company"] == "Nexora Energy"
                 assert call_kwargs["status"] == "converted"
 
     def test_list_prospects_pagination(
@@ -211,8 +211,8 @@ class TestAdminProspectsRouter:
         ) as mock_detail:
             mock_detail.return_value = MagicMock(
                 id=invite_id,
-                email="pierre@engie.fr",
-                company="ENGIE",
+                email="pierre@nexora-energy.com",
+                company="Nexora Energy",
                 status="converted",
                 source="demo",
                 created_at=datetime.now(timezone.utc),
@@ -305,8 +305,8 @@ class TestAdminProspectsRouter:
                     avg_time_to_first_tool_seconds=52.0,
                 ),
                 top_companies=[
-                    MagicMock(company="ENGIE", invite_count=4, converted_count=3),
-                    MagicMock(company="LVMH", invite_count=3, converted_count=2),
+                    MagicMock(company="Nexora Energy", invite_count=4, converted_count=3),
+                    MagicMock(company="Maison Aurèle", invite_count=3, converted_count=2),
                 ],
             )
 
@@ -326,7 +326,7 @@ class TestAdminProspectsRouter:
         with patch(
             "src.routers.admin_prospects.prospects_service.export_prospects_csv"
         ) as mock_export:
-            mock_export.return_value = "ID,Email,Company\n1,test@test.com,ENGIE"
+            mock_export.return_value = "ID,Email,Company\n1,test@test.com,Nexora Energy"
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.get("/v1/admin/prospects/export")
@@ -346,13 +346,13 @@ class TestAdminProspectsRouter:
             with TestClient(app_with_cpi_admin) as client:
                 response = client.get(
                     "/v1/admin/prospects/export",
-                    params={"company": "ENGIE", "status": "converted"},
+                    params={"company": "Nexora Energy", "status": "converted"},
                 )
                 assert response.status_code == 200
 
                 mock_export.assert_called_once()
                 call_kwargs = mock_export.call_args.kwargs
-                assert call_kwargs["company"] == "ENGIE"
+                assert call_kwargs["company"] == "Nexora Energy"
                 assert call_kwargs["status"] == "converted"
 
     # ============== Date Filter Tests ==============

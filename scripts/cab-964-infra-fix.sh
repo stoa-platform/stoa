@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #===============================================================================
 # CAB-964: Infrastructure Fix & Validation Script
-# STOA Platform - Pre-ENGIE Demo (Wed 29 Jan 2026)
+# STOA Platform - Pre-client Demo (Wed 29 Jan 2026)
 #===============================================================================
 # "The European Agent Gateway doesn't go down before demos."
 #===============================================================================
@@ -89,7 +89,7 @@ print_banner() {
   |____/  |_| \___/_/   \_\
 
   Infrastructure Recovery Script v2
-  CAB-964 | Pre-ENGIE Demo Fix
+  CAB-964 | Pre-client Demo Fix
 EOF
     echo -e "${NC}"
 
@@ -494,7 +494,7 @@ generate_warmup_script() {
 #!/bin/bash
 # Copyright 2026 STOA Platform Authors
 # SPDX-License-Identifier: Apache-2.0
-# STOA Demo Warm-up Script - Run 5 minutes before ENGIE demo
+# STOA Demo Warm-up Script - Run 5 minutes before client demo
 
 set -euo pipefail
 
@@ -517,7 +517,7 @@ for i in {1..3}; do
     sleep 2
 done
 
-echo "Warm-up complete. Platform is hot and ready for ENGIE demo."
+echo "Warm-up complete. Platform is hot and ready for client demo."
 WARMUP
 
     chmod +x "$warmup_path"
@@ -531,7 +531,7 @@ show_usage() {
     cat << EOF
 Usage: $0 [OPTIONS] [MODE]
 
-Infrastructure fix script for CAB-964 (Pre-ENGIE Demo)
+Infrastructure fix script for CAB-964 (Pre-client Demo)
 
 MODES:
   full       Run complete fix workflow (default)
@@ -662,7 +662,7 @@ EOF
   |   [OK] MCP Tests: Executed                                |
   |   [OK] Warm-up Script: Ready                              |
   |                                                           |
-  |   Ready for ENGIE demo on Wednesday!                      |
+  |   Ready for client demo on Wednesday!                      |
   |                                                           |
   +-----------------------------------------------------------+
 EOF

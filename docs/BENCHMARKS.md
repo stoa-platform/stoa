@@ -109,7 +109,7 @@ When submitting PRs that affect startup time or API performance:
 ### Services Started
 
 - PostgreSQL 16
-- Redis 7
+- Redpanda (Kafka-compatible)
 - Keycloak 22
 - Control Plane (FastAPI)
 

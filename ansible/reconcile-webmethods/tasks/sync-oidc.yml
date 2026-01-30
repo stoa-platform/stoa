@@ -1,0 +1,86 @@
+---
+# Phase 1.7: Sync OIDC configuration (auth server, strategies, scopes) to webMethods.
+#
+# Sequence:
+# 1. Upsert auth server alias (Keycloak)
+# 2. For each API with auth.type=oidc: upsert strategy, application, associations, scopes
+#
+# Required vars: gateway_url, gateway_auth, base_domain, oidc_dir, git_apis
+
+- name: "OIDC | Find auth server YAML files"
+  ansible.builtin.find:
+    paths: "{{ oidc_dir | default('webmethods/oidc') }}"
+    patterns: "*.yaml,*.yml"
+    recurse: false
+  register: oidc_files
+
+- name: "OIDC | Process each auth server definition"
+  ansible.builtin.include_tasks: sync-oidc-auth-server.yml
+  loop: "{{ oidc_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  vars:
+    oidc_file: "{{ item.path }}"
+
+# --- Strategies & Scopes for OIDC-enabled APIs ---
+
+- name: "OIDC | Filter APIs with OIDC auth"
+  ansible.builtin.set_fact:
+    oidc_apis: >-
+      {{ git_apis | default([])
+         | selectattr('spec.auth.type', 'defined')
+         | selectattr('spec.auth.type', 'equalto', 'oidc')
+         | list }}
+
+- name: "OIDC | Upsert strategy for each OIDC API"
+  ansible.builtin.uri:
+    url: "{{ gateway_url }}/rest/apigateway/strategies"
+    method: POST
+    user: "{{ gateway_auth.user | default(omit) }}"
+    password: "{{ gateway_auth.password | default(omit) }}"
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+      Authorization: "{{ gateway_auth.token | default(omit) }}"
+    body_format: json
+    body:
+      name: "OIDC-{{ item.tenant_id }}-{{ item.api_name }}"
+      description: "OIDC strategy for {{ item.api_name }} - Tenant {{ item.tenant_id }}"
+      type: "OAUTH2"
+      authServerAlias: "{{ item.spec.auth.authServerAlias | default('KeycloakOIDC') }}"
+      clientId: "{{ item.spec.auth.clientId | default('apigateway') }}"
+      audience: "{{ item.spec.auth.audience | default('control-plane-api') }}"
+    status_code: [200, 201, 409]
+  loop: "{{ oidc_apis }}"
+  loop_control:
+    label: "OIDC-{{ item.tenant_id }}-{{ item.api_name }}"
+  register: strategy_results
+  ignore_errors: true
+
+- name: "OIDC | Create scope mappings for each OIDC API"
+  ansible.builtin.uri:
+    url: "{{ gateway_url }}/rest/apigateway/scopes"
+    method: POST
+    user: "{{ gateway_auth.user | default(omit) }}"
+    password: "{{ gateway_auth.password | default(omit) }}"
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+      Authorization: "{{ gateway_auth.token | default(omit) }}"
+    body_format: json
+    body:
+      scopeName: "{{ item.1.authServerAlias | default('KeycloakOIDC') }}:{{ item.0.tenant_id }}:{{ item.0.api_name }}:{{ item.0.api_version }}:{{ item.1.name }}"
+      scopeDescription: "{{ item.1.name | capitalize }} scope for {{ item.0.api_name }}"
+      audience: "{{ item.0.spec.auth.audience | default('control-plane-api') }}"
+      apiScopes: ["{{ item.0.gateway_api_id | default('') }}"]
+      requiredAuthScopes:
+        - authServerAlias: "{{ item.1.authServerAlias | default('KeycloakOIDC') }}"
+          scopeName: "{{ item.1.name }}"
+    status_code: [200, 201, 409]
+  with_subelements:
+    - "{{ oidc_apis }}"
+    - "spec.auth.scopes"
+    - skip_missing: true
+  loop_control:
+    label: "scope-{{ item.0.api_name }}-{{ item.1.name }}"
+  ignore_errors: true

@@ -98,7 +98,7 @@ jobs:
 
       - name: Build and push ${{ matrix.service }}
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./${{ matrix.service }}
           platforms: linux/amd64,linux/arm64

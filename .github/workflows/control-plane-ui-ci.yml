@@ -207,6 +207,9 @@ jobs:
             control-plane-ui=${{ needs.docker.outputs.image_tag }} \
             -n stoa-system
 
+          # Force rollout restart to ensure new image is pulled
+          kubectl rollout restart deployment/control-plane-ui -n stoa-system
+
           # Wait for rollout
           kubectl rollout status deployment/control-plane-ui -n stoa-system --timeout=300s
 

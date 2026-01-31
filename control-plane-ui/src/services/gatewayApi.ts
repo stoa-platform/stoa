@@ -47,16 +47,20 @@ export async function getGatewayApplications(): Promise<GatewayApplicationRespon
 }
 
 export async function getGatewayStatus(): Promise<GatewayStatusResponse> {
-  const [health, apis, applications] = await Promise.all([
+  const [healthResult, apisResult, appsResult] = await Promise.allSettled([
     getGatewayHealth(),
     getGatewayAPIs(),
     getGatewayApplications(),
   ]);
 
+  const health: GatewayHealthResponse = healthResult.status === 'fulfilled'
+    ? healthResult.value
+    : { status: 'unhealthy', proxy_mode: false, error: String((healthResult as PromiseRejectedResult).reason) };
+
   return {
     health,
-    apis,
-    applications,
+    apis: apisResult.status === 'fulfilled' ? apisResult.value : [],
+    applications: appsResult.status === 'fulfilled' ? appsResult.value : [],
     fetchedAt: new Date().toISOString(),
   };
 }

@@ -1,0 +1,103 @@
+# =============================================================================
+# STOA Platform - Universal API Contract (UAC)
+# Tenant: ACME Corporation (Demo)
+# Tier: Enterprise
+# =============================================================================
+
+apiVersion: stoa.io/v1
+kind: UniversalAPIContract
+metadata:
+  name: acme
+  tier: enterprise
+  created: "2026-01-15"
+  labels:
+    tenant-id: acme
+    admin-email: admin@acme-corp.com
+    keycloak-realm: stoa
+
+spec:
+  # ---------------------------------------------------------------------------
+  # Security
+  # ---------------------------------------------------------------------------
+  security:
+    authentication:
+      required: true
+      methods:
+        - oauth2
+        - mtls
+      oauth2:
+        issuer: "https://auth.gostoa.dev/realms/stoa"
+        audience: acme
+        token_expiry: 1800
+        refresh_enabled: true
+        scopes_claim: scope
+      mtls:
+        enabled: true
+        ca_bundle: "/etc/ssl/certs/acme-ca.pem"
+        verify_client: true
+        allow_expired: false
+        # RFC 8705 Certificate Binding (ADR-028)
+        cert_binding:
+          enabled: true
+          header_name: "X-SSL-Client-Cert-SHA256"
+          fingerprint_format: hex
+          jwt_claim: "cnf.x5t#S256"
+          strict_mode: true
+
+    authorization:
+      rbac_enabled: true
+      default_scopes:
+        - read
+        - write
+      policy_engine: opa
+
+  # ---------------------------------------------------------------------------
+  # Rate Limiting
+  # ---------------------------------------------------------------------------
+  rateLimits:
+    global:
+      requests_per_minute: 20000
+      requests_per_hour: 500000
+      requests_per_day: 1000000
+    per_consumer:
+      default: 5000
+
+  # ---------------------------------------------------------------------------
+  # Observability
+  # ---------------------------------------------------------------------------
+  observability:
+    logging:
+      level: info
+      retention_days: 90
+      format: json
+      pii_masking: true
+    metrics:
+      enabled: true
+      granularity: 1m
+      retention_days: 365
+      export:
+        enabled: true
+        format: prometheus
+        endpoint: "/metrics"
+    tracing:
+      enabled: true
+      sampling_rate: 0.1
+      propagation: w3c
+
+  # ---------------------------------------------------------------------------
+  # Quotas
+  # ---------------------------------------------------------------------------
+  quotas:
+    monthly_requests: -1
+    monthly_bandwidth_gb: 1000
+    max_apis: -1
+    max_consumers: -1
+
+  # ---------------------------------------------------------------------------
+  # SLA
+  # ---------------------------------------------------------------------------
+  sla:
+    availability: 99.95
+    support:
+      response_hours: 4
+      hours: 24x7

@@ -47,20 +47,26 @@ export async function getGatewayApplications(): Promise<GatewayApplicationRespon
 }
 
 export async function getGatewayStatus(): Promise<GatewayStatusResponse> {
-  const [healthResult, apisResult, appsResult] = await Promise.allSettled([
-    getGatewayHealth(),
-    getGatewayAPIs(),
-    getGatewayApplications(),
-  ]);
+  const fallbackHealth: GatewayHealthResponse = { status: 'unhealthy', proxy_mode: false };
 
-  const health: GatewayHealthResponse = healthResult.status === 'fulfilled'
-    ? healthResult.value
-    : { status: 'unhealthy', proxy_mode: false, error: String((healthResult as PromiseRejectedResult).reason) };
+  try {
+    const [healthResult, apisResult, appsResult] = await Promise.allSettled([
+      getGatewayHealth(),
+      getGatewayAPIs(),
+      getGatewayApplications(),
+    ]);
 
-  return {
-    health,
-    apis: apisResult.status === 'fulfilled' ? apisResult.value : [],
-    applications: appsResult.status === 'fulfilled' ? appsResult.value : [],
-    fetchedAt: new Date().toISOString(),
-  };
+    return {
+      health: healthResult.status === 'fulfilled'
+        ? healthResult.value
+        : { ...fallbackHealth, error: String((healthResult as PromiseRejectedResult).reason) },
+      apis: apisResult.status === 'fulfilled' ? apisResult.value : [],
+      applications: appsResult.status === 'fulfilled' ? appsResult.value : [],
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch {
+    // Defensive: should never reach here with Promise.allSettled,
+    // but guarantees the dashboard always renders.
+    return { health: fallbackHealth, apis: [], applications: [], fetchedAt: new Date().toISOString() };
+  }
 }

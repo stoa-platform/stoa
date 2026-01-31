@@ -15,7 +15,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .logging_config import configure_logging, get_logger
-from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring, users
+from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring, users, clients
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
 from .routers.external_mcp_servers import admin_router as external_mcp_servers_admin_router, internal_router as external_mcp_servers_internal_router
@@ -299,6 +299,7 @@ app.include_router(gateway.router)
 app.include_router(subscriptions.router)
 app.include_router(tenant_webhooks.router)
 app.include_router(certificates.router)
+app.include_router(clients.router)
 app.include_router(search_router, prefix="/v1/search", tags=["Search"])
 app.include_router(usage.router)
 app.include_router(usage.dashboard_router)

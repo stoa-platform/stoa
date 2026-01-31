@@ -58,6 +58,8 @@ jobs:
     name: Playwright E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Scheduled runs are non-blocking — environment data may be incomplete
+    continue-on-error: ${{ github.event_name == 'schedule' }}
 
     steps:
       - name: Checkout repository

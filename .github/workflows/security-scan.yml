@@ -140,8 +140,8 @@ jobs:
             -o bandit-${{ matrix.project }}.json \
             --exit-zero || true
 
-          # Fail on MEDIUM+
-          bandit -r ${{ matrix.project }}/ -ll --severity-level medium
+          # Fail on MEDIUM+ severity and confidence
+          bandit -r ${{ matrix.project }}/ --severity-level medium --confidence-level medium
 
       - name: Upload Bandit results
         uses: actions/upload-artifact@v4

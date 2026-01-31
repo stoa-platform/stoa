@@ -131,7 +131,7 @@ async def list_gateway_apis(
         ]
     except Exception as e:
         logger.error(f"Failed to list Gateway APIs: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
+        return []
 
 
 @router.post("/apis", response_model=ImportAPIResponse)
@@ -296,7 +296,7 @@ async def list_gateway_applications(
         ]
     except Exception as e:
         logger.error(f"Failed to list Gateway applications: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
+        return []
 
 
 # ============================================================================

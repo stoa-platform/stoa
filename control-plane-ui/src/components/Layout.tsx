@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Activity,
   Server,
+  ShieldCheck,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Tenants', href: '/tenants', icon: Building2, permission: 'tenants:read' },
   { name: 'APIs', href: '/apis', icon: Layers, permission: 'apis:read' },
+  { name: 'Clients', href: '/clients', icon: ShieldCheck, permission: 'clients:read' },
   { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read' },
   { name: 'External MCP Servers', href: '/external-mcp-servers', icon: Server, permission: 'admin:servers' },
   { name: 'Gateway', href: '/gateway', icon: Server, permission: 'apis:read' },

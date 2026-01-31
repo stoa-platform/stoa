@@ -1,0 +1,44 @@
+{{- if .Values.keycloak.x509.enabled }}
+# =============================================================================
+# Keycloak Trusted Proxy NetworkPolicy (CAB-867)
+# =============================================================================
+# Restricts which sources may send X509 certificate headers to Keycloak.
+# Without this, any pod could spoof SSL_CLIENT_CERT headers.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-keycloak-trusted-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keycloak
+spec:
+  podSelector:
+    matchLabels:
+      app: keycloak
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from ingress controller namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow from trusted proxy CIDR (F5 in production)
+    - from:
+        - ipBlock:
+            cidr: {{ .Values.keycloak.trustedProxyCIDR | default "10.0.0.0/8" }}
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow health checks from within namespace
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
+{{- end }}

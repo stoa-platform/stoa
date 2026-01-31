@@ -113,6 +113,7 @@ class Settings(BaseSettings):
     CERTIFICATE_PROVIDER: str = "mock"  # mock | vault
     CERTIFICATE_KEY_SIZE: int = 4096
     CERTIFICATE_VALIDITY_DAYS: int = 365
+    CERTIFICATE_GRACE_PERIOD_HOURS: int = 24  # CAB-869: grace period for rotation
 
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100

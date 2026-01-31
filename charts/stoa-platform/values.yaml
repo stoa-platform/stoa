@@ -39,6 +39,16 @@ gateway:
     # piiMaskingEnabled: true
     # retentionDays: 30
 
+# Keycloak X509 Header Authentication (CAB-867)
+# Configures NetworkPolicy for trusted proxy access.
+# Keycloak itself is deployed externally; only the network policy is managed here.
+keycloak:
+  x509:
+    enabled: true
+    provider: nginx
+    headerName: SSL_CLIENT_CERT
+  trustedProxyCIDR: "10.0.0.0/8"  # F5 load balancer CIDR in production
+
 # Gateway OpenAPI Sync Configuration
 # Automatically syncs OpenAPI spec from Control-Plane-API to webMethods Gateway
 gatewaySync:

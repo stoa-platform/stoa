@@ -5,7 +5,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Enum as SQLEnum, Index, String, Text
+from sqlalchemy import Column, DateTime, Enum as SQLEnum, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 
 from src.database import Base
@@ -32,6 +32,19 @@ class Client(Base):
     status = Column(SQLEnum(ClientStatus), default=ClientStatus.ACTIVE, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Rotation fields (CAB-869)
+    certificate_fingerprint_previous = Column(String(255), nullable=True)
+    previous_cert_expires_at = Column(DateTime(timezone=True), nullable=True)
+    last_rotated_at = Column(DateTime(timezone=True), nullable=True)
+    rotation_count = Column(Integer, default=0, nullable=False)
+
+    @property
+    def is_in_grace_period(self) -> bool:
+        """Check if currently in rotation grace period."""
+        if not self.previous_cert_expires_at:
+            return False
+        return datetime.now(timezone.utc) < self.previous_cert_expires_at
 
     __table_args__ = (
         Index("ix_clients_tenant_cn", "tenant_id", "certificate_cn", unique=True),

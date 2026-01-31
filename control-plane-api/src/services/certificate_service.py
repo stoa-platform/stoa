@@ -93,6 +93,7 @@ class CertificateService:
             tenant_id=tenant_id,
             common_name=cn,
             certificate_serial=result.serial_number,
+            certificate_fingerprint=result.fingerprint_sha256,
             created_at=datetime.now(timezone.utc),
         ))
 
@@ -104,6 +105,8 @@ class CertificateService:
         tenant_id: str,
         common_name: str,
         old_serial: str,
+        old_fingerprint: str = "",
+        grace_expires_at: datetime | None = None,
     ) -> CertificateResult:
         """Rotate: revoke old cert + generate new one."""
         try:
@@ -123,7 +126,10 @@ class CertificateService:
             tenant_id=tenant_id,
             old_serial=old_serial,
             new_serial=result.serial_number,
+            old_fingerprint=old_fingerprint,
+            new_fingerprint=result.fingerprint_sha256,
             rotated_at=datetime.now(timezone.utc),
+            grace_expires_at=grace_expires_at,
         ))
 
         return result

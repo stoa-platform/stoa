@@ -26,6 +26,10 @@ class Topics:
     MCP_SYNC_REQUESTS = "mcp-sync-requests"     # Manual sync trigger requests
     MCP_SYNC_RESULTS = "mcp-sync-results"       # Sync completion results
 
+    # Certificate lifecycle events (CAB-866)
+    CERT_EVENTS = "cert-events"                 # Certificate create/rotate/revoke
+    CERT_EVENTS_DLQ = "cert-events-dlq"         # Dead letter queue for failed sync
+
 class KafkaService:
     """Service for Kafka/Redpanda message handling"""
 

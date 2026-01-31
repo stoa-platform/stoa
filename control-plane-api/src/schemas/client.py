@@ -38,6 +38,12 @@ class ClientResponse(BaseModel):
     status: ClientStatusEnum
     created_at: datetime
     updated_at: datetime
+    # Rotation fields (CAB-869)
+    certificate_fingerprint_previous: Optional[str] = None
+    previous_cert_expires_at: Optional[datetime] = None
+    is_in_grace_period: bool = False
+    last_rotated_at: Optional[datetime] = None
+    rotation_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,8 +51,10 @@ class ClientResponse(BaseModel):
 class ClientWithCertificate(ClientResponse):
     """Client with private key — returned ONE TIME only at creation/rotation."""
     private_key_pem: str = Field(..., description="PEM-encoded private key. Save immediately — not retrievable again.")
+    grace_period_ends: Optional[datetime] = None
 
 
 class CertificateRotateRequest(BaseModel):
     """Request to rotate a client certificate."""
     reason: str = Field(default="rotation", max_length=255, description="Reason for rotation")
+    grace_period_hours: Optional[int] = Field(None, ge=1, le=168, description="Grace period in hours (default from config)")

@@ -87,6 +87,10 @@ class Settings(BaseSettings):
     # Includes 'account' for Keycloak backwards compatibility
     allowed_audiences: str = "stoa-mcp-gateway,account"
 
+    # Certificate Binding — RFC 8705 (CAB-868)
+    cert_binding_enabled: bool = False  # Feature flag for progressive rollout
+    cert_binding_header: str = "X-SSL-Client-Cert-SHA256"  # Header from F5/nginx
+
     # OPA Policy Engine (RBAC - who can call tools)
     opa_enabled: bool = True
     opa_url: str = "http://127.0.0.1:8181"  # OPA sidecar URL

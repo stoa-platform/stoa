@@ -6,6 +6,7 @@ Private key returned ONE TIME only at creation/rotation.
 Rate limited: 10 requests/hour/tenant for write operations.
 """
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import List
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import User, get_current_user
 from src.auth.rbac import Permission, require_permission
+from src.config import settings
 from src.database import get_db
 from src.middleware.rate_limit import limiter
 from src.models.client import Client, ClientStatus
@@ -186,15 +188,30 @@ async def rotate_certificate(
         raise HTTPException(status_code=400, detail="Cannot rotate certificate for non-active client")
 
     old_serial = client.certificate_serial
+    old_fingerprint = client.certificate_fingerprint
+
+    # Calculate grace period (CAB-869)
+    now = datetime.now(timezone.utc)
+    grace_hours = body.grace_period_hours or settings.CERTIFICATE_GRACE_PERIOD_HOURS
+    grace_expires_at = now + timedelta(hours=grace_hours)
+
     try:
         result = await certificate_service.rotate_certificate(
             client_id=str(client.id),
             tenant_id=client.tenant_id,
             common_name=client.certificate_cn,
             old_serial=old_serial or "",
+            old_fingerprint=old_fingerprint or "",
+            grace_expires_at=grace_expires_at,
         )
     except CertificateServiceError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    # Store previous fingerprint and rotation metadata (CAB-869)
+    client.certificate_fingerprint_previous = old_fingerprint
+    client.previous_cert_expires_at = grace_expires_at
+    client.last_rotated_at = now
+    client.rotation_count = (client.rotation_count or 0) + 1
 
     client.certificate_serial = result.serial_number
     client.certificate_fingerprint = result.fingerprint_sha256
@@ -203,6 +220,14 @@ async def rotate_certificate(
     client.certificate_not_after = result.not_after
     await db.flush()
     await db.refresh(client)
+
+    # Schedule grace period cleanup
+    from src.services.grace_period_service import grace_period_service
+    grace_period_service.schedule_cleanup(
+        client_id=str(client.id),
+        tenant_id=client.tenant_id,
+        expires_at=grace_expires_at,
+    )
 
     return ClientWithCertificate(
         id=client.id,
@@ -218,6 +243,12 @@ async def rotate_certificate(
         created_at=client.created_at,
         updated_at=client.updated_at,
         private_key_pem=result.private_key_pem,
+        certificate_fingerprint_previous=client.certificate_fingerprint_previous,
+        previous_cert_expires_at=client.previous_cert_expires_at,
+        is_in_grace_period=client.is_in_grace_period,
+        last_rotated_at=client.last_rotated_at,
+        rotation_count=client.rotation_count,
+        grace_period_ends=grace_expires_at,
     )
 
 

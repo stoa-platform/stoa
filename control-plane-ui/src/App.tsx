@@ -19,6 +19,8 @@ const UsageDashboard = lazy(() => import('./pages/AITools').then(m => ({ default
 const ExternalMCPServersList = lazy(() => import('./pages/ExternalMCPServers').then(m => ({ default: m.ExternalMCPServersList })));
 const ExternalMCPServerDetail = lazy(() => import('./pages/ExternalMCPServers').then(m => ({ default: m.ExternalMCPServerDetail })));
 const AdminProspects = lazy(() => import('./pages/AdminProspects').then(m => ({ default: m.AdminProspects })));
+const Clients = lazy(() => import('./pages/Clients').then(m => ({ default: m.Clients })));
+const ClientDetail = lazy(() => import('./pages/ClientDetail').then(m => ({ default: m.ClientDetail })));
 const GatewayStatus = lazy(() => import('./pages/GatewayStatus'));
 
 // Loading spinner for lazy-loaded pages
@@ -206,6 +208,8 @@ function ProtectedRoutes() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/tenants" element={<Tenants />} />
           <Route path="/apis" element={<APIs />} />
+          <Route path="/clients" element={<Clients />} />
+          <Route path="/clients/:id" element={<ClientDetail />} />
           <Route path="/ai-tools" element={<ToolCatalog />} />
           <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
           <Route path="/ai-tools/usage" element={<UsageDashboard />} />

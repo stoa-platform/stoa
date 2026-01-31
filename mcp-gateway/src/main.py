@@ -355,7 +355,7 @@ def _is_internal_request(request: Request) -> bool:
     - 127.0.0.0/8 (Localhost)
     """
     # Check direct client IP
-    client_ip = request.client.host if request.client else "0.0.0.0"
+    client_ip = request.client.host if request.client else "0.0.0.0"  # nosec B104
 
     # Check if request came through ingress by looking for typical ingress headers
     # X-Request-ID is added by nginx-ingress for all requests

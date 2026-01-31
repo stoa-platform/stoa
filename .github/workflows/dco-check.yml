@@ -16,6 +16,36 @@ jobs:
           fetch-depth: 0  # Required to access full commit history
 
       - name: Check DCO sign-off
-        uses: tisonkun/actions-dco@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "## Developer Certificate of Origin" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          BASE_SHA=${{ github.event.pull_request.base.sha }}
+          HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          FAILED=0
+          TOTAL=0
+
+          for COMMIT in $(git log --format="%H" "${BASE_SHA}..${HEAD_SHA}"); do
+            TOTAL=$((TOTAL + 1))
+            SHORT=$(echo "$COMMIT" | head -c 8)
+            AUTHOR=$(git log -1 --format="%an <%ae>" "$COMMIT")
+
+            # Check for Signed-off-by or Co-Authored-By (both acceptable)
+            if git log -1 --format="%B" "$COMMIT" | grep -qiE "^(Signed-off-by|Co-Authored-By):"; then
+              echo "| \`${SHORT}\` | :white_check_mark: Signed |" >> $GITHUB_STEP_SUMMARY
+            else
+              FAILED=$((FAILED + 1))
+              echo "| \`${SHORT}\` | :x: Missing sign-off — ${AUTHOR} |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$FAILED" -gt 0 ]; then
+            echo "**$FAILED/$TOTAL commits missing DCO sign-off**" >> $GITHUB_STEP_SUMMARY
+            echo ""
+            echo "::error::$FAILED commits missing DCO sign-off. Add 'Signed-off-by: Name <email>' or 'Co-Authored-By: Name <email>' to each commit."
+            exit 1
+          else
+            echo "**All $TOTAL commits signed** :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+          fi

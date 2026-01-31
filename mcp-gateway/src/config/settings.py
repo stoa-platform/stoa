@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Server
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 — bind all interfaces in container
     port: int = 8080
     workers: int = 1
 

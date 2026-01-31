@@ -17,6 +17,9 @@ COPY static/ ./static/
 COPY migrations/ ./migrations/
 COPY alembic.ini ./
 
+# Install CPU-only PyTorch first (avoids pulling ~2GB CUDA version)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
 # Install dependencies using pip (including k8s extras for CRD watcher)
 RUN pip install --no-cache-dir hatchling && \
     pip install --no-cache-dir ".[k8s]"

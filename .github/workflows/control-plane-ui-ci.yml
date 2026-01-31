@@ -98,7 +98,7 @@ jobs:
       id-token: write
 
     outputs:
-      image_tag: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.env.outputs.ENVIRONMENT }}-latest
+      image_tag: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.env.outputs.ENVIRONMENT }}-${{ github.sha }}
       image_digest: ${{ steps.build.outputs.digest }}
 
     steps:

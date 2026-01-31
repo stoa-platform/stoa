@@ -8,6 +8,7 @@ export function useGatewayStatus() {
     queryFn: getGatewayStatus,
     refetchInterval: 30000,
     staleTime: 10000,
+    retry: false, // getGatewayStatus never throws; no need to retry
   });
 }
 

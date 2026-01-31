@@ -17,6 +17,39 @@ metadata:
 
 spec:
   # ---------------------------------------------------------------------------
+  # Classifications
+  # ---------------------------------------------------------------------------
+  classifications:
+    H:
+      description: "High-throughput APIs"
+      rate_limit: 50000
+      burst: 5000
+      timeout: 30s
+      retry_policy:
+        max_retries: 5
+        backoff: exponential
+        initial_delay: 50ms
+        max_delay: 10s
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 10
+        reset_timeout: 30s
+    VH:
+      description: "Business-critical APIs"
+      rate_limit: 5000
+      burst: 500
+      timeout: 120s
+      retry_policy:
+        max_retries: 3
+        backoff: exponential
+        initial_delay: 100ms
+        max_delay: 30s
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 5
+        reset_timeout: 60s
+
+  # ---------------------------------------------------------------------------
   # Security
   # ---------------------------------------------------------------------------
   security:
@@ -101,3 +134,36 @@ spec:
     support:
       response_hours: 4
       hours: 24x7
+
+  # ---------------------------------------------------------------------------
+  # Features
+  # ---------------------------------------------------------------------------
+  features:
+    custom_domains: true
+    api_versioning: true
+    developer_portal: true
+    webhook_notifications: true
+    basic_analytics: true
+    advanced_analytics: true
+    mcp_gateway_access: true
+    mcp_tools_limit: -1
+
+  # ---------------------------------------------------------------------------
+  # Networking
+  # ---------------------------------------------------------------------------
+  networking:
+    connect_timeout: 10s
+    read_timeout: 120s
+    write_timeout: 120s
+    idle_timeout: 300s
+    cors:
+      enabled: true
+      allowed_origins:
+        - "https://*.gostoa.dev"
+      allowed_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS

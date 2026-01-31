@@ -26,6 +26,7 @@ def map_policy_to_webmethods(policy_spec: dict) -> dict:
         "logging": "logInvocationPolicy",
         "jwt": "jwtPolicy",
         "ip_filter": "ipFilterPolicy",
+        "cert_binding": "requestProcessing",
     }
 
     wm_type = type_mapping.get(policy_type, policy_type)
@@ -60,7 +61,26 @@ def _map_policy_config(wm_type: str, config: dict) -> dict:
             "logRequestPayload": config.get("logRequest", True),
             "logResponsePayload": config.get("logResponse", True),
         }
+    if wm_type == "requestProcessing":
+        return _map_cert_binding_config(config)
     return config
+
+
+def _map_cert_binding_config(config: dict) -> dict:
+    """Map cert_binding config to webMethods requestProcessing parameters."""
+    if not config.get("enabled", False):
+        return {"enabled": False}
+    return {
+        "serviceName": "stoa.security:validateCertBinding",
+        "inputMapping": {
+            "headerName": config.get("header_name", "X-SSL-Client-Cert-SHA256"),
+            "headerFormat": config.get("header_format", "hex"),
+            "jwtClaim": config.get("jwt_claim", "cnf.x5t#S256"),
+            "jwtFormat": "base64url",
+            "strictMode": str(config.get("strict_mode", True)).lower(),
+            "allowMissingCnf": str(config.get("allow_missing_cnf", True)).lower(),
+        },
+    }
 
 
 def map_alias_to_webmethods(alias_spec: dict) -> dict:

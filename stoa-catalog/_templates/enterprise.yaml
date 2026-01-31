@@ -156,6 +156,13 @@ spec:
         ca_bundle: "{{MTLS_CA_BUNDLE}}"  # Customer CA certificates
         verify_client: true
         allow_expired: false
+        # RFC 8705 Certificate Binding (CAB-1024)
+        cert_binding:
+          enabled: true
+          header_name: "X-SSL-Client-Cert-SHA256"  # Header from F5/Nginx
+          fingerprint_format: hex                   # hex | base64url | hex_colons
+          jwt_claim: "cnf.x5t#S256"                # JWT claim path
+          strict_mode: true                         # Reject if cnf present but no header
         # Client certificate attributes for authorization
         subject_mapping:
           cn: consumer_id

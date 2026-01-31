@@ -20,8 +20,9 @@ Security requirements (Council):
 
 import base64
 import json
+import re
 import secrets
-from typing import Callable
+from typing import Callable, Optional
 
 import structlog
 from fastapi import Request, Response
@@ -31,6 +32,33 @@ from starlette.responses import JSONResponse
 from ..config import get_settings
 
 logger = structlog.get_logger(__name__)
+
+_HEX_RE = re.compile(r"^[a-fA-F0-9]+$")
+
+
+def _normalize_fingerprint(fp: str, fmt: str = "hex") -> Optional[str]:
+    """Normalize a fingerprint to lowercase hex for comparison.
+
+    Supports formats: hex, hex_colons, base64url.
+    Returns None on invalid input.
+    """
+    if not fp or not fp.strip():
+        return None
+    fp = fp.strip()
+    try:
+        if fmt == "hex_colons" or ":" in fp:
+            return fp.replace(":", "").lower()
+        if fmt == "hex" or _HEX_RE.match(fp):
+            return fp.lower()
+        # base64url
+        standard = fp.replace("-", "+").replace("_", "/")
+        pad = 4 - len(standard) % 4
+        if pad != 4:
+            standard += "=" * pad
+        return base64.b64decode(standard).hex()
+    except Exception:
+        return None
+
 
 # Paths exempt from certificate binding validation
 _EXEMPT_PREFIXES = (
@@ -136,10 +164,14 @@ class CertBindingMiddleware(BaseHTTPMiddleware):
                 f"Certificate binding required but {settings.cert_binding_header} header missing"
             )
 
-        # Timing-safe, case-insensitive comparison
-        if not secrets.compare_digest(
-            jwt_fingerprint.lower().encode("ascii"),
-            header_fingerprint.strip().lower().encode("ascii"),
+        # Normalize both fingerprints to hex lowercase (CAB-1024)
+        norm_jwt = _normalize_fingerprint(jwt_fingerprint, "base64url")
+        norm_header = _normalize_fingerprint(
+            header_fingerprint, settings.cert_binding_format
+        )
+
+        if not norm_jwt or not norm_header or not secrets.compare_digest(
+            norm_jwt, norm_header
         ):
             CERT_BINDING_FAILURES_TOTAL.labels(reason="mismatch").inc()
             logger.warning(

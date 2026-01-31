@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     # Certificate Binding — RFC 8705 (CAB-868)
     cert_binding_enabled: bool = False  # Feature flag for progressive rollout
     cert_binding_header: str = "X-SSL-Client-Cert-SHA256"  # Header from F5/nginx
+    cert_binding_format: str = "hex"  # Fingerprint format: hex | base64url | hex_colons
 
     # OPA Policy Engine (RBAC - who can call tools)
     opa_enabled: bool = True

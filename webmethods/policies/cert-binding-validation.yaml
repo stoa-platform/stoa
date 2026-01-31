@@ -1,0 +1,39 @@
+apiVersion: stoa.io/v1
+kind: Policy
+metadata:
+  name: cert-binding-validation
+  description: >
+    RFC 8705 Certificate Binding Validation.
+    Compares the certificate fingerprint from the TLS-terminating proxy header
+    against the JWT cnf.x5t#S256 claim. Header name and fingerprint format are
+    configurable per deployment via UAC security.authentication.mtls.cert_binding.
+  tags:
+    - security
+    - mtls
+    - rfc8705
+
+spec:
+  type: cert_binding
+  order: 200  # After JWT validation (100), before routing (300)
+  config:
+    # Feature flag — disable for progressive rollout
+    enabled: ${CERT_BINDING_ENABLED:false}
+
+    # Header set by F5/Nginx/ALB containing client certificate fingerprint
+    header_name: ${CERT_BINDING_HEADER:X-SSL-Client-Cert-SHA256}
+
+    # Format of the fingerprint in the header
+    # - hex: 84b99532f8e79829... (F5/Nginx default)
+    # - base64url: hLmVMvjnmCm_I4d8... (RFC 8705 native)
+    # - hex_colons: 84:B9:95:32:F8:E7:... (OpenSSL output)
+    header_format: ${CERT_BINDING_FORMAT:hex}
+
+    # JWT claim path containing the expected fingerprint (always base64url per RFC)
+    jwt_claim: ${CERT_BINDING_JWT_CLAIM:cnf.x5t#S256}
+    jwt_format: base64url  # RFC 8705 mandates base64url
+
+    # If true, reject when cnf claim is present but cert header is missing
+    strict_mode: ${CERT_BINDING_STRICT:true}
+
+    # If true, allow tokens without cnf claim (non-mTLS flows like client_secret)
+    allow_missing_cnf: ${CERT_BINDING_ALLOW_MISSING:true}

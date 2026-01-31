@@ -80,6 +80,55 @@
                     "type": "string",
                     "enum": ["oauth2", "api_key", "mtls"]
                   }
+                },
+                "mtls": {
+                  "type": "object",
+                  "description": "Mutual TLS configuration (Enterprise only)",
+                  "properties": {
+                    "enabled": { "type": "boolean" },
+                    "ca_bundle": { "type": "string" },
+                    "verify_client": { "type": "boolean" },
+                    "allow_expired": { "type": "boolean" },
+                    "cert_binding": {
+                      "type": "object",
+                      "description": "RFC 8705 Certificate Binding configuration",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "default": true,
+                          "description": "Enable cert binding validation"
+                        },
+                        "header_name": {
+                          "type": "string",
+                          "default": "X-SSL-Client-Cert-SHA256",
+                          "description": "Header from TLS-terminating proxy containing certificate fingerprint"
+                        },
+                        "fingerprint_format": {
+                          "type": "string",
+                          "enum": ["base64url", "hex", "hex_colons"],
+                          "default": "hex",
+                          "description": "Format of fingerprint in header"
+                        },
+                        "jwt_claim": {
+                          "type": "string",
+                          "default": "cnf.x5t#S256",
+                          "description": "JWT claim containing expected fingerprint"
+                        },
+                        "strict_mode": {
+                          "type": "boolean",
+                          "default": true,
+                          "description": "Reject if cnf present but cert header absent"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "subject_mapping": {
+                      "type": "object",
+                      "description": "Map certificate subject fields to authorization attributes",
+                      "additionalProperties": { "type": "string" }
+                    }
+                  },
+                  "additionalProperties": true
                 }
               }
             },

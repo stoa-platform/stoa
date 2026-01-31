@@ -27,13 +27,15 @@ from pathlib import Path
 
 # Add project paths
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_PROJECT_ROOT / "control-plane-api"))
+sys.path.insert(0, str(_SCRIPT_DIR))
 
 import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from scripts.demo_mtls.mock_jwt import (  # noqa: E402
+from mock_jwt import (  # noqa: E402
     generate_demo_token,
     generate_mismatched_token,
     generate_no_cnf_token,

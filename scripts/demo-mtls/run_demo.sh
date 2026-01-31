@@ -46,9 +46,7 @@ banner() {
 
 seed_clients() {
     log "Seeding 100 demo clients..."
-    cd "$PROJECT_ROOT/control-plane-api"
-    "$PYTHON" -m scripts.seed_demo_clients
-    cd "$PROJECT_ROOT"
+    "$PYTHON" "$PROJECT_ROOT/control-plane-api/scripts/seed_demo_clients.py"
 }
 
 run_traffic() {

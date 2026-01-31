@@ -201,7 +201,7 @@ jobs:
         if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
           ENV="${{ steps.env.outputs.ENVIRONMENT }}"
-          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${ENV}-latest"
+          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${ENV}-${{ github.sha }}"
 
           echo "Updating control-plane-api to image: $IMAGE"
 

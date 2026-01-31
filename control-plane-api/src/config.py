@@ -109,6 +109,12 @@ class Settings(BaseSettings):
     # CORS - comma-separated list of allowed origins
     CORS_ORIGINS: str = f"https://console.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
 
+    # Certificate Provisioning (CAB-865)
+    CERTIFICATE_PROVIDER: str = "mock"  # mock | vault
+    CERTIFICATE_KEY_SIZE: int = 4096
+    CERTIFICATE_VALIDITY_DAYS: int = 365
+    CERTIFICATE_GRACE_PERIOD_HOURS: int = 24  # CAB-869: grace period for rotation
+
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60

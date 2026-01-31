@@ -1,0 +1,27 @@
+{
+  "realm": "stoa",
+  "authenticationFlows": [
+    {
+      "alias": "x509-client-credentials",
+      "description": "Client credentials with X509 certificate validation (CAB-867). X509 is tried first; falls back to client_secret.",
+      "providerId": "client-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "client-x509",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10
+        },
+        {
+          "authenticator": "client-secret",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 20
+        }
+      ]
+    }
+  ],
+  "clientAuthenticationFlow": "x509-client-credentials"
+}

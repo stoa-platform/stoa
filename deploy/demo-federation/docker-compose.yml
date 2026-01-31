@@ -11,10 +11,11 @@
 #   docker compose up -d
 #
 # Services:
-#   - keycloak:      5 realms (2 source + 3 tenant) (port 8080)
-#   - openldap:      LDAP backend for gamma org (port 1389)
-#   - mock-gateway:  JWT issuer/audience validator (port 9000)
-#   - opa:           Federation isolation policy (port 8181)
+#   - keycloak:        5 realms (2 source + 3 tenant) (port 8080)
+#   - keycloak-proxy:  Nginx mTLS proxy for X509 header auth (port 8443) [CAB-867]
+#   - openldap:        LDAP backend for gamma org (port 1389)
+#   - mock-gateway:    JWT issuer/audience validator (port 9000)
+#   - opa:             Federation isolation policy (port 8181)
 #
 # Demo: see scripts/demo-federation/README.md
 # =============================================================================
@@ -73,12 +74,18 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_SPI_REALM_DEFAULT__SSL__REQUIRED: "none"
       KC_FEATURES: "token-exchange,admin-fine-grained-authz"
+      # X509 Certificate Lookup SPI (CAB-867)
+      KC_SPI_X509CERT_LOOKUP_PROVIDER: nginx
+      KC_SPI_X509CERT_LOOKUP_NGINX_SSL_CLIENT_CERT: SSL_CLIENT_CERT
+      KC_SPI_X509CERT_LOOKUP_NGINX_SSL_CERT_CHAIN_PREFIX: SSL_CLIENT_CERT_CHAIN
+      KC_SPI_X509CERT_LOOKUP_NGINX_CERTIFICATE_CHAIN_LENGTH: "1"
     volumes:
       - ./keycloak/idp-source-alpha.json:/opt/keycloak/data/import/01-idp-source-alpha.json:ro
       - ./keycloak/idp-source-beta.json:/opt/keycloak/data/import/02-idp-source-beta.json:ro
       - ./keycloak/demo-org-alpha.json:/opt/keycloak/data/import/03-demo-org-alpha.json:ro
       - ./keycloak/demo-org-beta.json:/opt/keycloak/data/import/04-demo-org-beta.json:ro
       - ./keycloak/demo-org-gamma.json:/opt/keycloak/data/import/05-demo-org-gamma.json:ro
+      - ../keycloak/realm-x509-flow.json:/opt/keycloak/data/import/06-realm-x509-flow.json:ro
       - keycloak-data:/opt/keycloak/data
     depends_on:
       openldap:
@@ -91,6 +98,33 @@ services:
       timeout: 10s
       retries: 20
       start_period: 60s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Keycloak X509 Proxy - mTLS termination for header-based auth (CAB-867)
+  # ==========================================================================
+  # Mimics F5 behavior: terminates client mTLS and injects SSL_CLIENT_CERT
+  # header for Keycloak's x509cert-lookup SPI.
+  # ==========================================================================
+  keycloak-proxy:
+    image: nginx:alpine
+    container_name: stoa-federation-keycloak-proxy
+    ports:
+      - "${PORT_KEYCLOAK_PROXY:-8443}:8443"
+    volumes:
+      - ../nginx/keycloak-x509-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks:
+      - federation-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "--no-check-certificate", "https://localhost:8443/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   # ==========================================================================

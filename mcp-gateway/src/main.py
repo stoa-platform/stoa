@@ -23,6 +23,7 @@ from starlette.responses import Response
 from .config import get_settings
 from .handlers import mcp_router, subscriptions_router, mcp_sse_router, sse_alias_router, servers_router, policy_router
 from .middleware import MetricsMiddleware, ShadowMiddleware, TokenCounterMiddleware, token_counter_worker, ResponseTransformerMiddleware, SemanticCacheMiddleware
+from .middleware.cert_binding import CertBindingMiddleware
 from .cache.cleanup import cache_cleanup_worker
 from .services import get_tool_registry, shutdown_tool_registry, init_database, shutdown_database
 from .services.tool_handlers import init_tool_handlers, shutdown_tool_handlers
@@ -250,6 +251,11 @@ def create_app() -> FastAPI:
             "Shadow mode ENABLED",
             rust_gateway_url=settings.shadow_rust_gateway_url,
         )
+
+    # Certificate Binding middleware (CAB-868: RFC 8705)
+    if settings.cert_binding_enabled:
+        app.add_middleware(CertBindingMiddleware)
+        logger.info("Certificate binding middleware ENABLED")
 
     # MCP Error Snapshot middleware (captures errors for debugging)
     snapshot_settings = get_mcp_snapshot_settings()

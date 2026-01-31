@@ -86,6 +86,19 @@ BACKEND_REQUEST_DURATION_SECONDS = Histogram(
     buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
 )
 
+# Certificate Binding Metrics (CAB-868)
+CERT_BINDING_VALIDATIONS_TOTAL = Counter(
+    f"{prefix}_cert_binding_validations_total",
+    "Total certificate binding validations",
+    ["status"],
+)
+
+CERT_BINDING_FAILURES_TOTAL = Counter(
+    f"{prefix}_cert_binding_failures_total",
+    "Certificate binding validation failures",
+    ["reason"],  # invalid_cnf, missing_header, mismatch
+)
+
 # Service Info
 SERVICE_INFO = Info(
     f"{prefix}_service",

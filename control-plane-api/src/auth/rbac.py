@@ -30,6 +30,9 @@ class Permission:
     APPS_DELETE = "apps:delete"
     USERS_MANAGE = "users:manage"
     AUDIT_READ = "audit:read"
+    CLIENTS_READ = "clients:read"
+    CLIENTS_WRITE = "clients:write"
+    CLIENTS_ADMIN = "clients:admin"
 
 ROLE_PERMISSIONS = {
     "cpi-admin": [
@@ -41,6 +44,7 @@ ROLE_PERMISSIONS = {
         Permission.APPS_CREATE, Permission.APPS_READ,
         Permission.APPS_UPDATE, Permission.APPS_DELETE,
         Permission.USERS_MANAGE, Permission.AUDIT_READ,
+        Permission.CLIENTS_READ, Permission.CLIENTS_WRITE, Permission.CLIENTS_ADMIN,
     ],
     "tenant-admin": [
         Permission.TENANTS_READ,
@@ -50,6 +54,7 @@ ROLE_PERMISSIONS = {
         Permission.APPS_CREATE, Permission.APPS_READ,
         Permission.APPS_UPDATE, Permission.APPS_DELETE,
         Permission.USERS_MANAGE, Permission.AUDIT_READ,
+        Permission.CLIENTS_READ, Permission.CLIENTS_WRITE,
     ],
     "devops": [
         Permission.TENANTS_READ,
@@ -57,12 +62,14 @@ ROLE_PERMISSIONS = {
         Permission.APIS_DEPLOY, Permission.APIS_PROMOTE,
         Permission.APPS_CREATE, Permission.APPS_READ, Permission.APPS_UPDATE,
         Permission.AUDIT_READ,
+        Permission.CLIENTS_READ,
     ],
     "viewer": [
         Permission.TENANTS_READ,
         Permission.APIS_READ,
         Permission.APPS_READ,
         Permission.AUDIT_READ,
+        Permission.CLIENTS_READ,
     ],
 }
 

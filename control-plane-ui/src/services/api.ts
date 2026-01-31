@@ -9,6 +9,7 @@ import type {
   TraceSummary, PipelineTrace, TraceTimeline, TraceStats,
   ProspectListResponse, ProspectsMetricsResponse, ProspectDetail,
 } from '../types';
+import type { Client, ClientCreate, ClientWithCertificate, RotateRequest } from '../types/client';
 
 const API_BASE_URL = config.api.baseUrl;
 
@@ -288,6 +289,31 @@ class ApiService {
       responseType: 'blob',
     });
     return data;
+  }
+
+  // Clients (CAB-870)
+  async getClients(): Promise<Client[]> {
+    const { data } = await this.client.get('/v1/clients');
+    return data;
+  }
+
+  async getClient(clientId: string): Promise<Client> {
+    const { data } = await this.client.get(`/v1/clients/${clientId}`);
+    return data;
+  }
+
+  async createClient(body: ClientCreate): Promise<ClientWithCertificate> {
+    const { data } = await this.client.post('/v1/clients', body);
+    return data;
+  }
+
+  async rotateClient(clientId: string, body: RotateRequest): Promise<ClientWithCertificate> {
+    const { data } = await this.client.post(`/v1/clients/${clientId}/rotate`, body);
+    return data;
+  }
+
+  async revokeClient(clientId: string): Promise<void> {
+    await this.client.delete(`/v1/clients/${clientId}`);
   }
 }
 

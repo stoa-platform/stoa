@@ -15,7 +15,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .logging_config import configure_logging, get_logger
-from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring, users
+from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring, users, clients
 from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
 from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
 from .routers.external_mcp_servers import admin_router as external_mcp_servers_admin_router, internal_router as external_mcp_servers_internal_router
@@ -30,6 +30,7 @@ from .services.gateway_service import gateway_service
 from .workers.deployment_worker import deployment_worker
 from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .features.error_snapshots import add_error_snapshot_middleware, connect_error_snapshots
+from .services.kafka_cert_consumer import cert_event_consumer
 
 # Configure structured logging (CAB-281)
 configure_logging()
@@ -38,6 +39,7 @@ logger = get_logger(__name__)
 # Flag to control worker startup (can be disabled for dev/testing)
 ENABLE_WORKER = os.getenv("ENABLE_DEPLOYMENT_WORKER", "true").lower() == "true"
 ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
+ENABLE_CERT_CONSUMER = os.getenv("ENABLE_CERT_CONSUMER", "true").lower() == "true"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -122,6 +124,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start error snapshot consumer", error=str(e))
 
+    # Start certificate event consumer for Keycloak sync (CAB-866)
+    cert_consumer_task = None
+    if ENABLE_CERT_CONSUMER:
+        try:
+            cert_consumer_task = asyncio.create_task(cert_event_consumer.start())
+            logger.info("Certificate event consumer started")
+        except Exception as e:
+            logger.warning("Failed to start certificate event consumer", error=str(e))
+
     yield
 
     # Shutdown
@@ -142,6 +153,15 @@ async def lifespan(app: FastAPI):
         snapshot_consumer_task.cancel()
         try:
             await snapshot_consumer_task
+        except asyncio.CancelledError:
+            pass
+
+    # Stop certificate event consumer (CAB-866)
+    if ENABLE_CERT_CONSUMER and cert_consumer_task:
+        await cert_event_consumer.stop()
+        cert_consumer_task.cancel()
+        try:
+            await cert_consumer_task
         except asyncio.CancelledError:
             pass
 
@@ -299,6 +319,7 @@ app.include_router(gateway.router)
 app.include_router(subscriptions.router)
 app.include_router(tenant_webhooks.router)
 app.include_router(certificates.router)
+app.include_router(clients.router)
 app.include_router(search_router, prefix="/v1/search", tags=["Search"])
 app.include_router(usage.router)
 app.include_router(usage.dashboard_router)

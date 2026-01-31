@@ -202,6 +202,9 @@ jobs:
             stoa-portal=${{ needs.docker.outputs.image_tag }} \
             -n stoa-system
 
+          # Force rollout restart to ensure new image is pulled
+          kubectl rollout restart deployment/stoa-portal -n stoa-system
+
           # Wait for rollout
           kubectl rollout status deployment/stoa-portal -n stoa-system --timeout=300s
 

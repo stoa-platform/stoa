@@ -61,7 +61,7 @@
 | CAB-126 | [Phase 2.6] Cilium Network Foundation | ⬜ Backlog |
 | CAB-127 | APIM-261: Install Cilium on EKS (replaces aws-vpc-cni + kube-proxy) | ⬜ Backlog |
 | CAB-128 | APIM-262: Gateway API CRDs + Cilium GatewayClass | ⬜ Backlog |
-| CAB-129 | APIM-263: Migrate Nginx Ingress → Gateway API (*.apim.cab-i.com) | ⬜ Backlog |
+| CAB-129 | APIM-263: Migrate Nginx Ingress → Gateway API (*.gostoa.dev) | ⬜ Backlog |
 | CAB-130 | APIM-264: CiliumNetworkPolicy - Default deny + tenant isolation | ⬜ Backlog |
 | CAB-131 | APIM-265: Hubble - Network Observability | ⬜ Backlog |
 | CAB-132 | APIM-266: Cilium Migration Documentation & Runbooks | ⬜ Backlog |

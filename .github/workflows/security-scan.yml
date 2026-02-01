@@ -461,7 +461,7 @@ jobs:
       - name: Build image for scanning
         if: steps.check.outputs.exists == 'true'
         run: |
-          docker build -t stoa/${{ matrix.image.name }}:scan ${{ matrix.image.path }}/
+          docker build --pull -t stoa/${{ matrix.image.name }}:scan ${{ matrix.image.path }}/
 
       - name: Run Trivy (SARIF)
         if: steps.check.outputs.exists == 'true'

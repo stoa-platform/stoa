@@ -890,7 +890,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Complete project renaming** - APIM Platform becomes STOA Platform
   - GitHub Repository: `apim-aws` → `stoa`
   - GitLab Repository: `apim-gitops` → `stoa-gitops` (cab6961310/stoa-gitops)
-  - Domain: `apim.cab-i.com` → `gostoa.dev`
+  - Domain: `gostoa.dev` → `gostoa.dev`
   - Kubernetes Namespace: `apim-system` → `stoa-system`
   - Keycloak realm: `apim` → `stoa`
   - Helm chart: `apim-platform` → `stoa-platform`

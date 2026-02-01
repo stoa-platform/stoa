@@ -16,27 +16,27 @@ COPY . .
 # Example: docker build --build-arg VITE_BASE_DOMAIN=staging.example.com .
 
 # Core Configuration
-ARG VITE_BASE_DOMAIN=stoa.cab-i.com
+ARG VITE_BASE_DOMAIN=gostoa.dev
 ARG VITE_ENVIRONMENT=production
 ARG VITE_APP_TITLE="STOA Developer Portal"
 ARG VITE_APP_VERSION=1.0.0
 
 # MCP Gateway Configuration
-ARG VITE_MCP_URL=https://mcp.stoa.cab-i.com
+ARG VITE_MCP_URL=https://mcp.gostoa.dev
 ARG VITE_MCP_TIMEOUT=30000
 
 # API Configuration (direct connection to Control-Plane-API)
-ARG VITE_API_URL=https://api.stoa.cab-i.com
+ARG VITE_API_URL=https://api.gostoa.dev
 ARG VITE_API_TIMEOUT=30000
 
 # Keycloak Authentication - DIFFERENT CLIENT from Console
-ARG VITE_KEYCLOAK_URL=https://auth.stoa.cab-i.com
+ARG VITE_KEYCLOAK_URL=https://auth.gostoa.dev
 ARG VITE_KEYCLOAK_REALM=stoa
 ARG VITE_KEYCLOAK_CLIENT_ID=stoa-portal
 
 # External Services
-ARG VITE_CONSOLE_URL=https://console.stoa.cab-i.com
-ARG VITE_DOCS_URL=https://docs.stoa.cab-i.com
+ARG VITE_CONSOLE_URL=https://console.gostoa.dev
+ARG VITE_DOCS_URL=https://docs.gostoa.dev
 
 # Feature Flags
 ARG VITE_ENABLE_MCP_TOOLS=true

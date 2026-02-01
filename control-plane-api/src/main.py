@@ -374,6 +374,10 @@ from .lifecycle import lifecycle_router, lifecycle_admin_router
 app.include_router(lifecycle_router)
 app.include_router(lifecycle_admin_router)
 
+# Portal Executions (CAB-432 - Consumer execution view with error taxonomy)
+from .features.portal_executions import setup_portal_executions
+setup_portal_executions(app)
+
 
 # Legacy health endpoint - redirect to new /health/live
 @app.get("/health", include_in_schema=False)

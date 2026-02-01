@@ -29,3 +29,4 @@ from .external_mcp_server import (
 from .invite import Invite, InviteStatus
 from .prospect_event import ProspectEvent, EventType
 from .prospect_feedback import ProspectFeedback
+from src.lifecycle.models import TenantLifecycleNotification, TenantLifecycleState

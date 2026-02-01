@@ -369,6 +369,11 @@ app.include_router(users.router)
 # Self-Service Logs (CAB-793 - Consumer log access with PII masking)
 app.include_router(self_service_logs.router)
 
+# Tenant Lifecycle Management (CAB-409 - Demo tenant auto-cleanup & notifications)
+from .lifecycle import lifecycle_router, lifecycle_admin_router
+app.include_router(lifecycle_router)
+app.include_router(lifecycle_admin_router)
+
 
 # Legacy health endpoint - redirect to new /health/live
 @app.get("/health", include_in_schema=False)

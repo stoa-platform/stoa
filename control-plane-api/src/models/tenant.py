@@ -7,6 +7,7 @@ from sqlalchemy.sql import func
 import enum
 
 from src.database import Base
+from src.lifecycle.models import TenantLifecycleMixin
 
 
 class TenantStatus(str, enum.Enum):
@@ -16,8 +17,20 @@ class TenantStatus(str, enum.Enum):
     ARCHIVED = "archived"
 
 
-class Tenant(Base):
-    """Tenant model - represents an organization/tenant in the platform."""
+class Tenant(TenantLifecycleMixin, Base):
+    """Tenant model - represents an organization/tenant in the platform.
+
+    Lifecycle invariant (CAB-409):
+        status          = operational state (active | suspended | archived)
+        lifecycle_state = trial timeline  (active | warning | expired | deleted | converted)
+
+        Mapping:
+        - lifecycle_state in (active, warning, converted) -> status MUST be 'active'
+        - lifecycle_state == expired                      -> status MUST be 'suspended' (read-only)
+        - lifecycle_state == deleted                      -> status MUST be 'archived'
+
+        The lifecycle service enforces this invariant on every state transition.
+    """
     __tablename__ = "tenants"
 
     # Primary key - slug-style identifier (e.g., "oasis-gunters")

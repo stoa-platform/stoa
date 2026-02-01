@@ -29,14 +29,14 @@ RUN chown -R stoa:stoa /app
 # Override at runtime via docker run -e or Kubernetes ConfigMap/Secrets
 
 # Core Configuration
-ENV BASE_DOMAIN=stoa.cab-i.com \
+ENV BASE_DOMAIN=gostoa.dev \
     ENVIRONMENT=production \
     DEBUG=false \
     LOG_LEVEL=INFO \
     LOG_FORMAT=json
 
 # Keycloak Authentication
-ENV KEYCLOAK_URL=https://auth.stoa.cab-i.com \
+ENV KEYCLOAK_URL=https://auth.gostoa.dev \
     KEYCLOAK_REALM=stoa \
     KEYCLOAK_CLIENT_ID=control-plane-api \
     KEYCLOAK_CLIENT_SECRET="" \
@@ -57,17 +57,17 @@ ENV KAFKA_BOOTSTRAP_SERVERS=redpanda.stoa-system.svc.cluster.local:9092 \
     KAFKA_SASL_PASSWORD=""
 
 # AWX Automation
-ENV AWX_URL=https://awx.stoa.cab-i.com \
+ENV AWX_URL=https://awx.gostoa.dev \
     AWX_TOKEN="" \
     AWX_VERIFY_SSL=true
 
 # API Gateway
-ENV GATEWAY_URL=https://gateway.stoa.cab-i.com \
+ENV GATEWAY_URL=https://gateway.gostoa.dev \
     GATEWAY_ADMIN_USER=Administrator \
     GATEWAY_ADMIN_PASSWORD=""
 
 # CORS
-ENV CORS_ORIGINS=https://console.stoa.cab-i.com,http://localhost:3000,http://localhost:5173
+ENV CORS_ORIGINS=https://console.gostoa.dev,http://localhost:3000,http://localhost:5173
 
 # Rate Limiting
 ENV RATE_LIMIT_REQUESTS=100 \

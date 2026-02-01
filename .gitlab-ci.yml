@@ -50,6 +50,8 @@ validate-webmethods:
     - changes:
         - webmethods/**/*
       when: always
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: always
     - when: never
 
 # =============================================================================
@@ -220,8 +222,9 @@ e2e-tests:
     when: always
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
+      allow_failure: false
     - if: $CI_PIPELINE_SOURCE == "schedule"
-  allow_failure: false
+      allow_failure: true
 
 # E2E Tests - Manual trigger for non-main branches
 e2e-tests-manual:

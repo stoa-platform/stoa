@@ -1,0 +1,37 @@
+{
+  "dashboard": {
+    "title": "STOA Demo Tenant Lifecycle",
+    "description": "CAB-409: Monitor demo tenant lifecycle states, conversions, and cleanup",
+    "tags": ["stoa", "demo", "lifecycle", "cab-409"],
+    "timezone": "utc",
+    "refresh": "5m",
+    "panels": [
+      {
+        "title": "Tenants by Lifecycle State",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+        "targets": [{"expr": "stoa_demo_tenants_by_state", "legendFormat": "{{state}}"}],
+        "fieldConfig": {
+          "overrides": [
+            {"matcher": {"id": "byName", "options": "active"}, "properties": [{"id": "color", "value": {"fixedColor": "green"}}]},
+            {"matcher": {"id": "byName", "options": "warning"}, "properties": [{"id": "color", "value": {"fixedColor": "orange"}}]},
+            {"matcher": {"id": "byName", "options": "expired"}, "properties": [{"id": "color", "value": {"fixedColor": "red"}}]},
+            {"matcher": {"id": "byName", "options": "converted"}, "properties": [{"id": "color", "value": {"fixedColor": "blue"}}]}
+          ]
+        }
+      },
+      {"title": "Conversions (30d)", "type": "stat", "gridPos": {"h": 4, "w": 3, "x": 6, "y": 0}, "targets": [{"expr": "increase(stoa_demo_conversions_total[30d])"}]},
+      {"title": "Trial Extensions (30d)", "type": "stat", "gridPos": {"h": 4, "w": 3, "x": 9, "y": 0}, "targets": [{"expr": "increase(stoa_demo_trial_extensions_total[30d])"}]},
+      {"title": "Cleanup Errors (24h)", "type": "stat", "gridPos": {"h": 4, "w": 3, "x": 6, "y": 4}, "targets": [{"expr": "increase(stoa_demo_cleanup_errors_total[24h])"}]},
+      {"title": "Last Cron Run", "type": "stat", "gridPos": {"h": 4, "w": 3, "x": 9, "y": 4}, "targets": [{"expr": "time() - stoa_demo_lifecycle_last_cron_run_timestamp"}]},
+      {"title": "Notifications Sent Over Time", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "targets": [{"expr": "increase(stoa_demo_notifications_sent_total[1d])", "legendFormat": "{{type}} ({{channel}})"}]},
+      {"title": "Tenant Lifetime Distribution", "type": "histogram", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}, "targets": [{"expr": "stoa_demo_tenant_lifetime_days_bucket"}]},
+      {"title": "Conversion Funnel", "type": "barchart", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}, "targets": [
+        {"expr": "stoa_demo_tenants_by_state{state='active'}", "legendFormat": "Active"},
+        {"expr": "stoa_demo_tenants_by_state{state='warning'}", "legendFormat": "Warning"},
+        {"expr": "stoa_demo_tenants_by_state{state='expired'}", "legendFormat": "Expired"},
+        {"expr": "increase(stoa_demo_conversions_total[30d])", "legendFormat": "Converted"}
+      ]}
+    ]
+  }
+}

@@ -3,6 +3,8 @@ import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { Footer } from './Footer';
 import { UACSpotlight, useUACSpotlight } from '../uac';
+import { TrialWarningBanner } from '../TrialWarningBanner';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface LayoutProps {
   children: ReactNode;
@@ -11,10 +13,14 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { showSpotlight, dismissSpotlight } = useUACSpotlight();
+  const { user } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header onMenuClick={() => setSidebarOpen(true)} />
+
+      {/* CAB-409: Trial lifecycle warning banner */}
+      <TrialWarningBanner tenantId={user?.tenant_id} />
 
       <div className="flex flex-1">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />

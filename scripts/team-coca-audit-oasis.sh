@@ -10,8 +10,8 @@
 set -uo pipefail  # Removed -e for offline testing resilience
 
 # Configuration
-MCP_GATEWAY="https://mcp.stoa.cab-i.com"
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.stoa.cab-i.com}"
+MCP_GATEWAY="https://mcp.gostoa.dev"
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 REPORT_FILE="audit-report-$(date +%Y%m%d-%H%M%S).md"
 
 # Couleurs
@@ -263,7 +263,7 @@ audit_gh0st() {
     echo "  3. Add SPF, DKIM, DMARC on all domains"
     echo "  4. Require 2FA for all password operations"
     echo "  5. Implement email enumeration protection"
-    echo "  6. Consider using @stoa.cab-i.com subdomains for demo"
+    echo "  6. Consider using @gostoa.dev subdomains for demo"
 }
 
 # ============================================================================

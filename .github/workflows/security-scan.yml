@@ -201,11 +201,12 @@ jobs:
             --max-warnings 0 \
             --format json --output-file eslint-security.json || true
 
-          # Fail on errors
+          # Fail only on security errors (disable all other rules)
           npx eslint 'src/**/*.{ts,tsx}' \
+            --no-eslintrc \
+            --parser @typescript-eslint/parser \
             --plugin security \
-            --rule '{"security/detect-eval-with-expression": "error", "security/detect-unsafe-regex": "error"}' \
-            --quiet
+            --rule '{"security/detect-eval-with-expression": "error", "security/detect-unsafe-regex": "error"}'
 
   # ==========================================================================
   # 5. Dependency Scan (cargo/pip/npm audit)

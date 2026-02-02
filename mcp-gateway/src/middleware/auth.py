@@ -307,18 +307,31 @@ class OIDCAuthenticator:
                 )
 
             # Validate token
-            # CAB-938: Enable audience validation if configured
+            # CAB-938: Audience validation — python-jose only accepts audience
+            # as a single string, so we disable verify_aud in jwt.decode and
+            # check manually after decoding to support multiple allowed audiences.
             payload = jwt.decode(
                 token,
                 rsa_key,
                 algorithms=["RS256"],
                 issuer=self.issuer,
-                audience=self.settings.allowed_audiences_list or None,
                 options={
-                    "verify_aud": bool(self.settings.allowed_audiences),
+                    "verify_aud": False,
                     "verify_exp": True,
                 },
             )
+
+            # CAB-938: Manual audience validation for multi-audience support
+            allowed = self.settings.allowed_audiences_list
+            if allowed:
+                token_aud = payload.get("aud", [])
+                if isinstance(token_aud, str):
+                    token_aud = [token_aud]
+                if not any(aud in allowed for aud in token_aud):
+                    raise HTTPException(
+                        status_code=401,
+                        detail=f"Invalid audience. Expected one of: {allowed}",
+                    )
 
             # CAB-938: Log legacy audience usage for migration tracking
             token_aud = payload.get("aud", [])

@@ -62,9 +62,9 @@ class SSEConnectionLimiter:
     MAX_PER_IP: int = 10
     MAX_PER_TENANT: int = 100
     MAX_TOTAL: int = 5000
-    IDLE_TIMEOUT: int = 30
+    IDLE_TIMEOUT: int = 120       # 2 min (was 30s — too aggressive for reconnection)
     MAX_DURATION: int = 3600
-    RATE_LIMIT_PER_MIN: int = 5
+    RATE_LIMIT_PER_MIN: int = 30  # was 5 — too aggressive, blocked Claude.ai reconnection
 
     def __init__(self):
         self._connections: dict[str, ConnectionInfo] = {}

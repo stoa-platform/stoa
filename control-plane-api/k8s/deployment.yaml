@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/component: backend
     app.kubernetes.io/part-of: stoa-platform
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: stoa-control-plane-api

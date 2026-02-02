@@ -329,9 +329,10 @@ class OIDCAuthenticator:
             )
 
             # CAB-938: Manual audience validation for multi-audience support
+            # Skip validation if token has no audience (e.g. dynamically registered OAuth clients)
             allowed = self.settings.allowed_audiences_list
-            if allowed:
-                token_aud = payload.get("aud", [])
+            token_aud = payload.get("aud")
+            if allowed and token_aud is not None:
                 if isinstance(token_aud, str):
                     token_aud = [token_aud]
                 if not any(aud in allowed for aud in token_aud):

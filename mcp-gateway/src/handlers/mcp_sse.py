@@ -366,6 +366,16 @@ async def mcp_sse_post_endpoint(
 
     print(f"[MCP-AUTH] POST /sse - session={session_id[:8]}... new={is_new} user={user.subject if user else 'None'}", flush=True)
 
+    # MCP OAuth flow: if no auth token provided, return 401 to trigger OAuth discovery.
+    # Per MCP spec, the client should then check /.well-known/oauth-protected-resource
+    # and complete the OAuth flow before retrying with a Bearer token.
+    if user is None and settings.keycloak_url:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": 'Bearer resource_metadata="/.well-known/oauth-protected-resource"'},
+        )
+
     # Parse the JSON-RPC message
     try:
         body = await request.json()

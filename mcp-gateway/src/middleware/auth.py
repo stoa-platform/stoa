@@ -277,6 +277,13 @@ class OIDCAuthenticator:
             # Decode without verification first to get the key ID
             unverified_header = jwt.get_unverified_header(token)
             kid = unverified_header.get("kid")
+            print(f"[AUTH-DEBUG] Token header: alg={unverified_header.get('alg')} kid={kid} typ={unverified_header.get('typ')}", flush=True)
+            # Also peek at unverified claims for issuer
+            try:
+                unverified_claims = jwt.get_unverified_claims(token)
+                print(f"[AUTH-DEBUG] Token claims (unverified): iss={unverified_claims.get('iss')} aud={unverified_claims.get('aud')} azp={unverified_claims.get('azp')} exp={unverified_claims.get('exp')}", flush=True)
+            except Exception:
+                print("[AUTH-DEBUG] Could not decode unverified claims", flush=True)
 
             if not kid:
                 raise HTTPException(
@@ -632,7 +639,14 @@ async def get_optional_user(
 
     # Try Bearer token
     if bearer and bearer.credentials:
-        return await authenticator.validate_token(bearer.credentials)
+        print(f"[AUTH-DEBUG] get_optional_user: Bearer token present, len={len(bearer.credentials)}, prefix={bearer.credentials[:40]}...", flush=True)
+        try:
+            result = await authenticator.validate_token(bearer.credentials)
+            print(f"[AUTH-DEBUG] validate_token succeeded: sub={result.subject}", flush=True)
+            return result
+        except HTTPException as e:
+            print(f"[AUTH-DEBUG] validate_token FAILED: status={e.status_code} detail={e.detail}", flush=True)
+            raise
 
     # Try Basic Auth (client credentials)
     if basic and basic.username and basic.password:

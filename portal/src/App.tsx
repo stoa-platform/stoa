@@ -110,7 +110,7 @@ function ProtectedRoute({
   role,
   scope,
 }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, hasPermission, hasAnyPermission, hasAllPermissions, hasRole, hasScope } = useAuth();
+  const { isAuthenticated, isLoading, isReady, hasPermission, hasAnyPermission, hasAllPermissions, hasRole, hasScope } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -119,6 +119,12 @@ function ProtectedRoute({
 
   if (!isAuthenticated) {
     return <LoginScreen />;
+  }
+
+  // Wait for permissions to be loaded before evaluating RBAC checks
+  const hasRbacCheck = !!(permission || (permissions && permissions.length > 0) || role || scope);
+  if (hasRbacCheck && !isReady) {
+    return <LoadingScreen />;
   }
 
   // Check single permission

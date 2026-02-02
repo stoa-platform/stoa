@@ -877,6 +877,9 @@ def register_routes(app: FastAPI) -> None:
         form_data = await request.form()
         form_dict = {key: value for key, value in form_data.items()}
 
+        print(f"[OAUTH-TOKEN] Received token request: grant_type={form_dict.get('grant_type')} client_id={form_dict.get('client_id')} redirect_uri={form_dict.get('redirect_uri')}", flush=True)
+        print(f"[OAUTH-TOKEN] Form keys: {list(form_dict.keys())}", flush=True)
+
         logger.info(
             "Proxying token request to Keycloak",
             grant_type=form_dict.get("grant_type"),
@@ -890,6 +893,8 @@ def register_routes(app: FastAPI) -> None:
         if "Authorization" in request.headers:
             headers["Authorization"] = request.headers["Authorization"]
 
+        print(f"[OAUTH-TOKEN] Proxying to {keycloak_token_url}", flush=True)
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
@@ -897,6 +902,8 @@ def register_routes(app: FastAPI) -> None:
                     data=form_dict,
                     headers=headers,
                 )
+
+                print(f"[OAUTH-TOKEN] Keycloak response: status={response.status_code} body={response.text[:500]}", flush=True)
 
                 logger.info(
                     "Keycloak token response",

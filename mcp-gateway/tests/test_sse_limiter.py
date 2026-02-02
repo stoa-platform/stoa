@@ -169,16 +169,16 @@ class TestSSEConnectionLimiter:
     async def test_rate_limit_enforced(
         self, limiter: SSEConnectionLimiter, settings_enabled: Settings
     ):
-        """Test 6th connection in 1 minute from same IP is rejected."""
+        """Test (RATE_LIMIT_PER_MIN+1)th connection in 1 minute from same IP is rejected."""
         ip = "1.2.3.4"
         tenant = "test-tenant"
 
-        # Simulate 5 recent connections
+        # Simulate RATE_LIMIT_PER_MIN recent connections
         import time
         now = time.time()
-        limiter._recent_by_ip[ip] = [now - 10, now - 20, now - 30, now - 40, now - 50]
+        limiter._recent_by_ip[ip] = [now - i for i in range(limiter.RATE_LIMIT_PER_MIN)]
 
-        # 6th should be rejected
+        # Next should be rejected
         allowed, reason = await limiter.check_allowed(ip, tenant, settings_enabled)
 
         assert allowed is False

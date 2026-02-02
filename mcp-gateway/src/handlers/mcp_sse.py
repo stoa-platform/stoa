@@ -10,6 +10,7 @@ Supports both:
 
 import asyncio
 import json
+import time
 import uuid
 from typing import Any, AsyncGenerator
 
@@ -27,6 +28,10 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/mcp", tags=["MCP SSE"])
 
+# Session TTL for POST-based sessions (no persistent SSE connection)
+_SESSION_TTL_SECONDS = 3600  # 1 hour
+_SESSION_CLEANUP_INTERVAL = 300  # 5 minutes
+
 
 class MCPSession:
     """Manages an MCP session over SSE."""
@@ -36,6 +41,20 @@ class MCPSession:
         self.user = user
         self.initialized = False
         self.message_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self.created_at: float = time.time()
+        self.last_used: float = time.time()
+
+    def touch(self):
+        """Update last-used timestamp."""
+        self.last_used = time.time()
+
+    def notify_tools_changed(self):
+        """Queue a tools/list_changed notification for this session."""
+        notification = {
+            "jsonrpc": "2.0",
+            "method": "notifications/tools/list_changed",
+        }
+        self.message_queue.put_nowait(notification)
 
     async def handle_message(self, message: dict[str, Any]) -> dict[str, Any] | None:
         """Handle incoming JSON-RPC message and return response."""
@@ -220,11 +239,95 @@ class MCPSession:
 
 # Active sessions by session ID
 _sessions: dict[str, MCPSession] = {}
+_last_cleanup: float = 0.0
 
 
 def _get_session_id_from_request(request: Request) -> str | None:
     """Extract session ID from request headers."""
     return request.headers.get("Mcp-Session-Id") or request.headers.get("X-MCP-Session-Id")
+
+
+def _cleanup_expired_sessions() -> int:
+    """Remove expired POST sessions. Returns count of removed sessions."""
+    global _last_cleanup
+    now = time.time()
+
+    # Don't clean up more often than the configured interval
+    if now - _last_cleanup < _SESSION_CLEANUP_INTERVAL:
+        return 0
+
+    _last_cleanup = now
+    expired = [
+        sid for sid, s in _sessions.items()
+        if (now - s.last_used) > _SESSION_TTL_SECONDS
+    ]
+    for sid in expired:
+        _sessions.pop(sid, None)
+
+    if expired:
+        logger.info("Cleaned up expired MCP sessions", count=len(expired))
+    return len(expired)
+
+
+def _get_or_create_session(
+    session_id: str | None,
+    user: TokenClaims | None,
+) -> tuple[MCPSession, str, bool]:
+    """Get existing session or create a new one.
+
+    Key fix: when a client reconnects with a session ID that no longer exists
+    (e.g. after pod restart), we reuse that same session ID so the client's
+    subsequent requests will find the session.
+
+    Returns:
+        (session, session_id, is_new)
+    """
+    # Opportunistic cleanup
+    _cleanup_expired_sessions()
+
+    # Try to resume existing session
+    if session_id and session_id in _sessions:
+        session = _sessions[session_id]
+        session.touch()
+        # Update user token if provided (may have new/refreshed token)
+        if user and user.raw_token:
+            session.user = user
+            logger.info("Resuming MCP session with updated token", session_id=session_id, user=user.subject)
+        else:
+            logger.info("Resuming MCP session", session_id=session_id)
+        return session, session_id, False
+
+    # Create new session — reuse client-provided ID if any, so reconnection works
+    new_id = session_id if session_id else str(uuid.uuid4())
+    session = MCPSession(new_id, user)
+    _sessions[new_id] = session
+    logger.info(
+        "Created new MCP session",
+        session_id=new_id,
+        reused_id=bool(session_id),
+        user=user.subject if user else "anonymous",
+    )
+    return session, new_id, True
+
+
+def broadcast_tools_changed() -> int:
+    """Push notifications/tools/list_changed to all active MCP sessions.
+
+    Called by the K8s watcher when CRD tools are added, modified, or removed.
+    GET SSE clients receive the notification immediately via their event stream.
+    POST (Streamable HTTP) clients receive it piggybacked on their next SSE response.
+
+    Returns:
+        Number of sessions notified.
+    """
+    count = 0
+    for session in _sessions.values():
+        session.notify_tools_changed()
+        count += 1
+
+    if count:
+        logger.info("Broadcast tools/list_changed", sessions_notified=count)
+    return count
 
 
 @router.post("/sse")
@@ -257,29 +360,11 @@ async def mcp_sse_post_endpoint(
             headers={"Retry-After": "60"},
         )
 
-    # Get or create session
-    session_id = _get_session_id_from_request(request)
+    # Get or create session (reuses client session ID on reconnection)
+    requested_session_id = _get_session_id_from_request(request)
+    session, session_id, is_new = _get_or_create_session(requested_session_id, user)
 
-    # Debug: Check what auth info we received
-    auth_header = request.headers.get("Authorization", "")[:50] if request.headers.get("Authorization") else "None"
-    print(f"[MCP-AUTH] POST /sse - Auth header: {auth_header}..., user={user.subject if user else 'None'}, has_token={bool(user and user.raw_token)}", flush=True)
-
-    if session_id and session_id in _sessions:
-        session = _sessions[session_id]
-        # Update user token if provided (may have new/refreshed token)
-        if user and user.raw_token:
-            session.user = user
-            print(f"[MCP-AUTH] Session {session_id[:8]}... updated with user {user.subject}", flush=True)
-            logger.info("Resuming MCP session with updated token", session_id=session_id, user=user.subject)
-        else:
-            print(f"[MCP-AUTH] Session {session_id[:8]}... resumed, session.user={session.user.subject if session.user else 'None'}", flush=True)
-            logger.info("Resuming MCP session", session_id=session_id)
-    else:
-        session_id = str(uuid.uuid4())
-        session = MCPSession(session_id, user)
-        _sessions[session_id] = session
-        print(f"[MCP-AUTH] New session {session_id[:8]}... created with user={user.subject if user else 'None'}", flush=True)
-        logger.info("Created new MCP session", session_id=session_id, user=user.subject if user else "anonymous")
+    print(f"[MCP-AUTH] POST /sse - session={session_id[:8]}... new={is_new} user={user.subject if user else 'None'}", flush=True)
 
     # Parse the JSON-RPC message
     try:
@@ -344,6 +429,14 @@ async def mcp_sse_post_endpoint(
             # Send the JSON-RPC response as SSE data
             yield f"data: {json.dumps(response)}\n\n"
 
+            # Drain any pending notifications (e.g. tools/list_changed)
+            while not session.message_queue.empty():
+                try:
+                    notification = session.message_queue.get_nowait()
+                    yield f"data: {json.dumps(notification)}\n\n"
+                except asyncio.QueueEmpty:
+                    break
+
         return StreamingResponse(
             sse_response_stream(),
             media_type="text/event-stream",
@@ -397,22 +490,9 @@ async def mcp_sse_get_endpoint(
             headers={"Retry-After": "60"},
         )
 
-    # Check for existing session
-    session_id = _get_session_id_from_request(request)
-
-    if session_id and session_id in _sessions:
-        session = _sessions[session_id]
-        # Update user token if provided (may have new/refreshed token)
-        if user and user.raw_token:
-            session.user = user
-            logger.info("Resuming MCP SSE session with updated token", session_id=session_id, user=user.subject)
-        else:
-            logger.info("Resuming MCP SSE session", session_id=session_id)
-    else:
-        session_id = str(uuid.uuid4())
-        session = MCPSession(session_id, user)
-        _sessions[session_id] = session
-        logger.info("MCP SSE session started", session_id=session_id, user=user.subject if user else "anonymous")
+    # Get or create session (reuses client session ID on reconnection)
+    requested_session_id = _get_session_id_from_request(request)
+    session, session_id, is_new = _get_or_create_session(requested_session_id, user)
 
     async def event_stream() -> AsyncGenerator[str, None]:
         """Generate SSE events."""
@@ -437,11 +517,12 @@ async def mcp_sse_get_endpoint(
                     except asyncio.QueueEmpty:
                         pass
 
-                    # Send keepalive ping every 30 seconds
+                    # Send keepalive ping every 15 seconds
+                    # (must be well under idle timeout to avoid race)
                     yield ": keepalive\n\n"
 
                     # Wait before next iteration
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(15)
             finally:
                 # Cleanup session
                 _sessions.pop(session_id, None)
@@ -492,17 +573,9 @@ async def mcp_message_endpoint(
     """
     body = await request.json()
 
-    # Get or create session
-    session_id = _get_session_id_from_request(request) or body.pop("_session_id", None)
-
-    if not session_id:
-        session_id = str(uuid.uuid4())
-
-    if session_id in _sessions:
-        session = _sessions[session_id]
-    else:
-        session = MCPSession(session_id, user)
-        _sessions[session_id] = session
+    # Get or create session (reuses client session ID on reconnection)
+    requested_id = _get_session_id_from_request(request) or body.pop("_session_id", None)
+    session, session_id, _ = _get_or_create_session(requested_id, user)
 
     # Handle message
     response = await session.handle_message(body)

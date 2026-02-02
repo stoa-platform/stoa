@@ -15,7 +15,19 @@ paths = [
   '''.*SUBSCRIPTIONS\.md''',
   '''.*README\.md''',
   '''.*\.example''',
-  '''tests/.*'''
+  '''tests/.*''',
+  # Docker compose files with local-only credentials
+  '''deploy/docker-compose/.*''',
+  # External Secrets manifests (references, not actual secrets)
+  '''deploy/external-secrets/.*''',
+  # Jenkins pipeline files with variable references
+  '''jenkins/.*''',
+  # UI quickstart guide with curl examples
+  '''control-plane-ui/src/components/tools/QuickStartGuide\.tsx''',
+  # Schema definitions (field names, not actual keys)
+  '''control-plane-api/src/schemas/client\.py''',
+  # Plan documents
+  '''PLAN_DETAILLE\.md''',
 ]
 
 regexes = [

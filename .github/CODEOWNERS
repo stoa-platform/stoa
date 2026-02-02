@@ -1,0 +1,20 @@
+# STOA Platform — Code Owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default — all changes require maintainer review
+* @stoa-platform/maintainers
+
+# Security-critical paths
+/control-plane-api/src/auth/          @stoa-platform/maintainers
+/control-plane-api/src/core/security/ @stoa-platform/maintainers
+/mcp-gateway/src/auth/                @stoa-platform/maintainers
+
+# CI/CD — prevent workflow tampering
+/.github/workflows/ @stoa-platform/maintainers
+
+# Helm / Infrastructure
+/charts/            @stoa-platform/maintainers
+/deploy/            @stoa-platform/maintainers
+
+# Documentation
+/docs/              @stoa-platform/maintainers

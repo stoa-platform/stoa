@@ -114,9 +114,13 @@ async def lifespan(app: FastAPI):
 
         # CAB-605: Define callbacks to connect watcher to registry
         # Use register_proxied_tool for ProxiedTool instances from K8s CRDs
+        # Import broadcast to notify SSE clients when tools change
+        from .handlers.mcp_sse import broadcast_tools_changed
+
         async def on_proxied_added(tool):
             """Register ProxiedTool from K8s CRD."""
             registry.register_proxied_tool(tool)
+            broadcast_tools_changed()
             logger.info(
                 "K8s proxied tool registered",
                 tool_name=tool.name,
@@ -128,6 +132,7 @@ async def lifespan(app: FastAPI):
         async def on_proxied_removed(tool_key):
             """Unregister ProxiedTool by key."""
             removed = registry.unregister_proxied_tool(tool_key)
+            broadcast_tools_changed()
             if removed:
                 logger.info("K8s proxied tool unregistered", tool_key=tool_key)
             else:
@@ -136,14 +141,17 @@ async def lifespan(app: FastAPI):
         # Legacy callbacks for backward compatibility (non-ProxiedTool)
         async def on_tool_added(tool):
             registry.register(tool)
+            broadcast_tools_changed()
             logger.info("K8s tool registered", tool_name=tool.name)
 
         async def on_tool_removed(tool_name):
             registry.unregister(tool_name)
+            broadcast_tools_changed()
             logger.info("K8s tool unregistered", tool_name=tool_name)
 
         async def on_tool_modified(tool):
             registry.register(tool)  # Register overwrites existing
+            broadcast_tools_changed()
             logger.info("K8s tool updated", tool_name=tool.name)
 
         # Set callbacks BEFORE starting to catch initial events

@@ -163,14 +163,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check project exists
+      - name: Check project has ESLint configured
         id: check
         run: |
-          if [ -f "${{ matrix.project }}/package.json" ]; then
+          if [ -f "${{ matrix.project }}/package.json" ] && grep -q '"eslint"' "${{ matrix.project }}/package.json"; then
             echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "::warning::No package.json found in ${{ matrix.project }}/, skipping"
+            echo "::warning::No ESLint config in ${{ matrix.project }}/, skipping"
           fi
 
       - name: Set up Node.js
@@ -288,7 +288,7 @@ jobs:
           sudo mv gitleaks /usr/local/bin/
 
       - name: Run Gitleaks
-        run: gitleaks detect --source . --verbose --redact
+        run: gitleaks detect --source . --config .gitleaks.toml --verbose --redact
 
   # ==========================================================================
   # 7. License Compliance (Trivy SPDX)

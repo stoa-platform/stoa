@@ -245,6 +245,7 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.debug else None,
         openapi_url="/openapi.json" if settings.debug else None,
         lifespan=lifespan,
+        redirect_slashes=False,  # CAB-1040: Prevent 307 redirects that break MCP clients
     )
 
     # Shadow mode middleware for Python → Rust migration

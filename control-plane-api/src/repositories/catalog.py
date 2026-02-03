@@ -12,6 +12,16 @@ from datetime import datetime
 from src.models.catalog import APICatalog, MCPToolsCatalog, CatalogSyncStatus
 
 
+def escape_like(value: str) -> str:
+    """Escape special SQL LIKE characters: %, _, \\"""
+    return (
+        value
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+
+
 class CatalogRepository:
     """Repository for cached API catalog database operations."""
 
@@ -69,14 +79,17 @@ class CatalogRepository:
             ]
             query = query.where(or_(*tag_conditions))
 
-        # Search filter (name, description, tags)
-        if search:
-            search_lower = f"%{search.lower()}%"
+        # Search filter (name, description, api_id) - CAB-1044: escape LIKE wildcards
+        if search and search.strip():
+            search_term = escape_like(search.strip().lower())
+            search_pattern = f"%{search_term}%"
             query = query.where(
                 or_(
-                    func.lower(APICatalog.api_name).like(search_lower),
-                    func.lower(func.cast(APICatalog.api_metadata['description'], JSONB)).astext.like(search_lower),
-                    APICatalog.api_id.ilike(search_lower),
+                    func.lower(APICatalog.api_name).like(search_pattern, escape="\\"),
+                    func.lower(
+                        func.coalesce(APICatalog.api_metadata['description'].astext, '')
+                    ).like(search_pattern, escape="\\"),
+                    func.lower(APICatalog.api_id).like(search_pattern, escape="\\"),
                 )
             )
 
@@ -245,13 +258,15 @@ class MCPToolsCatalogRepository:
         if tenant_id:
             query = query.where(MCPToolsCatalog.tenant_id == tenant_id)
 
-        if search:
-            search_lower = f"%{search.lower()}%"
+        # CAB-1044: escape LIKE wildcards
+        if search and search.strip():
+            search_term = escape_like(search.strip().lower())
+            search_pattern = f"%{search_term}%"
             query = query.where(
                 or_(
-                    func.lower(MCPToolsCatalog.tool_name).like(search_lower),
-                    func.lower(MCPToolsCatalog.display_name).like(search_lower),
-                    func.lower(MCPToolsCatalog.description).like(search_lower),
+                    func.lower(MCPToolsCatalog.tool_name).like(search_pattern, escape="\\"),
+                    func.lower(func.coalesce(MCPToolsCatalog.display_name, '')).like(search_pattern, escape="\\"),
+                    func.lower(func.coalesce(MCPToolsCatalog.description, '')).like(search_pattern, escape="\\"),
                 )
             )
 

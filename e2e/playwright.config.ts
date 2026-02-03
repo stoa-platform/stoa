@@ -48,6 +48,17 @@ export default defineConfig({
       },
     },
 
+    // TTFTC test — Alex Freelance fresh onboarding (no pre-auth)
+    {
+      name: 'ttftc',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev',
+      },
+      dependencies: ['auth-setup'],
+      testMatch: /alex-ttftc/,
+    },
+
     // Portal tests
     {
       name: 'portal-chromium',

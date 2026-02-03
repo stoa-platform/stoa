@@ -877,6 +877,9 @@ def register_routes(app: FastAPI) -> None:
         form_data = await request.form()
         form_dict = {key: value for key, value in form_data.items()}
 
+        print(f"[OAUTH-TOKEN] Received token request: grant_type={form_dict.get('grant_type')} client_id={form_dict.get('client_id')} redirect_uri={form_dict.get('redirect_uri')}", flush=True)
+        print(f"[OAUTH-TOKEN] Form keys: {list(form_dict.keys())}", flush=True)
+
         logger.info(
             "Proxying token request to Keycloak",
             grant_type=form_dict.get("grant_type"),
@@ -890,6 +893,8 @@ def register_routes(app: FastAPI) -> None:
         if "Authorization" in request.headers:
             headers["Authorization"] = request.headers["Authorization"]
 
+        print(f"[OAUTH-TOKEN] Proxying to {keycloak_token_url}", flush=True)
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
@@ -897,6 +902,8 @@ def register_routes(app: FastAPI) -> None:
                     data=form_dict,
                     headers=headers,
                 )
+
+                print(f"[OAUTH-TOKEN] Keycloak response: status={response.status_code} body={response.text[:500]}", flush=True)
 
                 logger.info(
                     "Keycloak token response",
@@ -1007,10 +1014,33 @@ def register_routes(app: FastAPI) -> None:
 
                 admin_token = admin_token_response.json().get("access_token")
 
-                # Step 3: Get the full client configuration first
+                # Step 3: Look up the internal Keycloak UUID for this client
+                # Admin API uses internal 'id', not the OAuth 'client_id'
+                lookup_response = await client.get(
+                    f"{keycloak_admin_url}/clients",
+                    params={"clientId": client_id},
+                    headers={
+                        "Authorization": f"Bearer {admin_token}",
+                    },
+                )
+
+                if lookup_response.status_code != 200 or not lookup_response.json():
+                    logger.warning(
+                        "Failed to look up client by clientId",
+                        client_id=client_id,
+                        status_code=lookup_response.status_code,
+                    )
+                    print(f"[OAUTH-DCR] Client lookup failed: status={lookup_response.status_code} body={lookup_response.text[:300]}", flush=True)
+                    return JSONResponse(content=response_data, status_code=201)
+
+                clients_list = lookup_response.json()
+                internal_id = clients_list[0]["id"]
+                print(f"[OAUTH-DCR] Resolved clientId={client_id} to internal id={internal_id}", flush=True)
+
+                # Step 3b: Get the full client configuration
                 # Keycloak Admin API PUT replaces the entire resource, so we need the full config
                 get_client_response = await client.get(
-                    f"{keycloak_admin_url}/clients/{client_id}",
+                    f"{keycloak_admin_url}/clients/{internal_id}",
                     headers={
                         "Authorization": f"Bearer {admin_token}",
                     },
@@ -1020,6 +1050,7 @@ def register_routes(app: FastAPI) -> None:
                     logger.warning(
                         "Failed to get client for patching",
                         client_id=client_id,
+                        internal_id=internal_id,
                         status_code=get_client_response.status_code,
                     )
                     return JSONResponse(content=response_data, status_code=201)
@@ -1040,7 +1071,7 @@ def register_routes(app: FastAPI) -> None:
 
                 # Step 5: PUT the modified client back
                 patch_response = await client.put(
-                    f"{keycloak_admin_url}/clients/{client_id}",
+                    f"{keycloak_admin_url}/clients/{internal_id}",
                     json=full_client,
                     headers={
                         "Authorization": f"Bearer {admin_token}",

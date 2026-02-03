@@ -13,7 +13,7 @@ export interface Persona {
   defaultApp: 'portal' | 'console';
 }
 
-export type PersonaKey = 'parzival' | 'art3mis' | 'aech' | 'sorrento' | 'i-r0k' | 'anorak';
+export type PersonaKey = 'parzival' | 'art3mis' | 'aech' | 'sorrento' | 'i-r0k' | 'anorak' | 'alex';
 
 /**
  * HIGH-FIVE Personas (Tenant: high-five)
@@ -75,6 +75,22 @@ const ioiPersonas = {
 };
 
 /**
+ * Freelance Persona (Independent developer)
+ * Alex discovers the OASIS platform for the first time — TTFTC benchmark
+ */
+const freelancePersonas = {
+  alex: {
+    name: 'Alex Freelance',
+    username: process.env.ALEX_USER || 'alex@freelance.dev',
+    password: process.env.ALEX_PASSWORD || '',
+    tenant: 'oasis',
+    role: 'viewer' as const,
+    scopes: ['stoa:catalog:read', 'stoa:subscriptions:read'],
+    defaultApp: 'portal' as const,
+  },
+};
+
+/**
  * Admin Persona (Platform-wide)
  */
 const adminPersonas = {
@@ -95,6 +111,7 @@ const adminPersonas = {
 export const PERSONAS: Record<PersonaKey, Persona> = {
   ...highFivePersonas,
   ...ioiPersonas,
+  ...freelancePersonas,
   ...adminPersonas,
 };
 

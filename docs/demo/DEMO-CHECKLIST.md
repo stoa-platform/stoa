@@ -40,8 +40,14 @@ curl -s -o /dev/null -w "%{http_code}" https://auth.gostoa.dev       # Keycloak
 ### Seed Data
 
 ```bash
+# Obtenir un token (necessaire pour les endpoints portal)
+TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token" \
+  -d "grant_type=password&client_id=control-plane-ui&username=anorak&password=demo" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
+
 # Verifier que les APIs demo sont dans le catalogue
-curl -s https://api.gostoa.dev/v1/portal/apis?search=petstore | python3 -m json.tool | head -5
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://api.gostoa.dev/v1/portal/apis?search=petstore" | python3 -m json.tool | head -5
 ```
 
 - [ ] Petstore API visible dans le catalogue
@@ -137,8 +143,8 @@ Si aucune souscription active n'existe pour la demo :
 ### Commande curl de secours
 
 ```bash
-# Test direct Petstore API (pas besoin de la plateforme)
-curl -s https://petstore3.swagger.io/api/v3/pet/findByStatus?status=available | python3 -m json.tool | head -20
+# Test direct via httpbin (toujours disponible, retourne 200)
+curl -s https://httpbin.org/anything/pets?status=available | python3 -m json.tool | head -20
 ```
 
 ---

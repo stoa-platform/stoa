@@ -3,13 +3,19 @@
 Provides endpoints for managing the catalog cache synchronization.
 These endpoints require admin role (cpi-admin or tenant-admin).
 """
+import json
 import logging
-from typing import Optional
+from datetime import datetime, timezone
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from pydantic import BaseModel
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import get_current_user, User
 from ..database import get_db as get_async_db
+from ..models.catalog import APICatalog
 from ..services.catalog_sync_service import CatalogSyncService
 from ..services.git_service import git_service
 from ..repositories.catalog import CatalogRepository
@@ -288,3 +294,128 @@ async def invalidate_cache(
         "status": "ok",
         "message": "Cache invalidated. Use POST /sync to refresh data from GitLab."
     }
+
+
+# ============================================================================
+# Direct Catalog Seed (offline mode — bypasses GitLab)
+# ============================================================================
+
+class CatalogSeedAPIEntry(BaseModel):
+    """Single API entry for direct catalog seeding."""
+    name: str
+    display_name: str
+    version: str = "1.0.0"
+    description: str = ""
+    backend_url: str = ""
+    tags: List[str] = []
+    category: Optional[str] = None
+    openapi_spec: Optional[str] = None  # JSON string
+
+
+class CatalogSeedRequest(BaseModel):
+    """Request to seed APIs directly into catalog (bypasses GitLab)."""
+    tenant_id: str
+    apis: List[CatalogSeedAPIEntry]
+
+
+class CatalogSeedResponse(BaseModel):
+    """Response from catalog seed operation."""
+    seeded: int
+    failed: int
+    results: dict
+
+
+@router.post("/seed")
+async def seed_catalog_directly(
+    data: CatalogSeedRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Seed APIs directly into the catalog cache (bypasses GitLab).
+
+    Use this when GitLab is not connected (e.g., demo environments,
+    local development). Inserts or updates entries in the api_catalog table.
+
+    Requires: cpi-admin role
+    """
+    if "cpi-admin" not in user.roles:
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+
+    seeded = 0
+    failed = 0
+    results = {}
+
+    for api_entry in data.apis:
+        api_id = api_entry.name
+        tags = api_entry.tags
+        promotion_tags = {"portal:published", "promoted:portal", "portal-promoted"}
+        portal_published = any(tag.lower() in promotion_tags for tag in tags)
+
+        # Build metadata dict (same shape as GitLab api.yaml)
+        api_metadata = {
+            "name": api_entry.name,
+            "display_name": api_entry.display_name,
+            "version": api_entry.version,
+            "description": api_entry.description,
+            "backend_url": api_entry.backend_url,
+            "tags": tags,
+            "status": "active",
+            "deployments": {"dev": True, "staging": False},
+        }
+
+        # Parse openapi_spec from JSON string if provided
+        openapi_spec = None
+        if api_entry.openapi_spec:
+            try:
+                openapi_spec = json.loads(api_entry.openapi_spec)
+            except (json.JSONDecodeError, TypeError):
+                openapi_spec = None
+
+        try:
+            stmt = insert(APICatalog).values(
+                tenant_id=data.tenant_id,
+                api_id=api_id,
+                api_name=api_entry.display_name,
+                version=api_entry.version,
+                status="active",
+                category=api_entry.category,
+                tags=tags,
+                portal_published=portal_published,
+                api_metadata=api_metadata,
+                openapi_spec=openapi_spec,
+                git_path=None,
+                git_commit_sha=None,
+                synced_at=datetime.now(timezone.utc),
+                deleted_at=None,
+            ).on_conflict_do_update(
+                index_elements=["tenant_id", "api_id"],
+                set_={
+                    "api_name": api_entry.display_name,
+                    "version": api_entry.version,
+                    "status": "active",
+                    "category": api_entry.category,
+                    "tags": tags,
+                    "portal_published": portal_published,
+                    "api_metadata": api_metadata,
+                    "openapi_spec": openapi_spec,
+                    "synced_at": datetime.now(timezone.utc),
+                    "deleted_at": None,
+                },
+            )
+            await db.execute(stmt)
+            seeded += 1
+            results[api_id] = "seeded"
+        except Exception as e:
+            logger.error(f"Failed to seed API {api_id}: {e}")
+            failed += 1
+            results[api_id] = f"failed: {str(e)[:100]}"
+
+    await db.commit()
+
+    logger.info(
+        f"Catalog seed by {user.username}: {seeded} seeded, {failed} failed "
+        f"(tenant: {data.tenant_id})"
+    )
+
+    return CatalogSeedResponse(seeded=seeded, failed=failed, results=results)

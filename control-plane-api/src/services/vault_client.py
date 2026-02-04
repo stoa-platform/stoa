@@ -18,6 +18,13 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 
+class VaultSealedException(VaultError):
+    """Raised when Vault is sealed and cannot serve requests."""
+
+    def __init__(self) -> None:
+        super().__init__("Vault is sealed — credentials unavailable. Check auto-unseal or unseal manually.")
+
+
 class VaultClient:
     """HashiCorp Vault client for external MCP server credentials.
 
@@ -78,6 +85,19 @@ class VaultClient:
 
         raise VaultError("Failed to authenticate with Vault")
 
+    def _ensure_unsealed(self) -> None:
+        """Check Vault seal status before operations. Raises VaultSealedException if sealed."""
+        try:
+            client = self._get_client()
+            status = client.sys.read_health_status(method="GET")
+            if status.get("sealed", True):
+                logger.error("Vault is sealed — credential operations will fail")
+                raise VaultSealedException()
+        except VaultSealedException:
+            raise
+        except Exception as e:
+            logger.warning(f"Could not verify Vault seal status: {e}")
+
     async def store_credential(
         self,
         server_id: str,
@@ -91,7 +111,11 @@ class VaultClient:
 
         Returns:
             The Vault path where credentials are stored
+
+        Raises:
+            VaultSealedException: If Vault is sealed
         """
+        self._ensure_unsealed()
         client = self._get_client()
         path = f"external-mcp-servers/{server_id}"
 
@@ -124,7 +148,11 @@ class VaultClient:
 
         Returns:
             Credentials dict if found, None otherwise
+
+        Raises:
+            VaultSealedException: If Vault is sealed
         """
+        self._ensure_unsealed()
         client = self._get_client()
         path = f"external-mcp-servers/{server_id}"
 
@@ -165,7 +193,11 @@ class VaultClient:
 
         Returns:
             True if deleted, False if not found
+
+        Raises:
+            VaultSealedException: If Vault is sealed
         """
+        self._ensure_unsealed()
         client = self._get_client()
         path = f"external-mcp-servers/{server_id}"
 

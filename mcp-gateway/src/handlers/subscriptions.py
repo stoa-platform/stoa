@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..middleware.auth import TokenClaims, get_current_user
 from ..models.subscription import SubscriptionModel, SubscriptionStatus
 from ..services.database import get_session, get_session_factory
-from ..services.vault_client import get_vault_client, VaultClient
+from ..services.vault_client import get_vault_client, VaultClient, VaultSealedException
 
 logger = structlog.get_logger(__name__)
 
@@ -380,6 +380,11 @@ async def create_subscription(
                         },
                     )
                     logger.info("API key stored in Vault", subscription_id=subscription_id)
+                except VaultSealedException:
+                    logger.error(
+                        "Vault is sealed — API key not stored, shown once only",
+                        subscription_id=subscription_id,
+                    )
                 except Exception as e:
                     logger.warning("Vault storage failed, key only shown once", error=str(e))
 

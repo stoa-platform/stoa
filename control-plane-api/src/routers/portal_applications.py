@@ -89,7 +89,7 @@ def _get_user_applications(user: User) -> List[dict]:
     """Get all applications owned by the user."""
     return [
         app for app in _applications.values()
-        if app.get("owner_id") == user.sub or app.get("owner_id") == user.username
+        if app.get("owner_id") == user.id or app.get("owner_id") == user.username
     ]
 
 
@@ -168,7 +168,7 @@ async def get_application(
         raise HTTPException(status_code=404, detail=f"Application {app_id} not found")
 
     # Check ownership
-    if app.get("owner_id") not in [user.sub, user.username]:
+    if app.get("owner_id") not in [user.id, user.username]:
         raise HTTPException(status_code=403, detail="Access denied")
 
     return ApplicationResponse(
@@ -212,7 +212,7 @@ async def create_application(
             "client_id": client_id,
             "client_secret_hash": "hashed",  # In real impl, store hash
             "tenant_id": data.tenant_id,
-            "owner_id": user.sub or user.username,
+            "owner_id": user.id or user.username,
             "status": "active",
             "redirect_uris": data.redirect_uris,
             "api_subscriptions": [],
@@ -258,7 +258,7 @@ async def update_application(
         raise HTTPException(status_code=404, detail=f"Application {app_id} not found")
 
     # Check ownership
-    if app.get("owner_id") not in [user.sub, user.username]:
+    if app.get("owner_id") not in [user.id, user.username]:
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Update fields
@@ -301,7 +301,7 @@ async def delete_application(
         raise HTTPException(status_code=404, detail=f"Application {app_id} not found")
 
     # Check ownership
-    if app.get("owner_id") not in [user.sub, user.username]:
+    if app.get("owner_id") not in [user.id, user.username]:
         raise HTTPException(status_code=403, detail="Access denied")
 
     del _applications[app_id]
@@ -328,7 +328,7 @@ async def regenerate_secret(
         raise HTTPException(status_code=404, detail=f"Application {app_id} not found")
 
     # Check ownership
-    if app.get("owner_id") not in [user.sub, user.username]:
+    if app.get("owner_id") not in [user.id, user.username]:
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Generate new secret

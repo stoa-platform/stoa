@@ -1,0 +1,54 @@
+# Copyright 2026 STOA Platform Authors
+# SPDX-License-Identifier: Apache-2.0
+
+name: "\u2753 Question"
+description: Ask a question about STOA usage or configuration
+title: "[Question] "
+labels: ["type:question"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **Tip**: For quicker responses, consider asking on our [Discord](https://discord.gg/j8tHSSes) where the community can help!
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of STOA is your question about?
+      options:
+        - control-plane-api (FastAPI backend)
+        - portal (Developer Portal)
+        - control-plane-ui (Console UI)
+        - mcp-gateway (MCP Gateway)
+        - helm (Charts / Kubernetes)
+        - deployment / infrastructure
+        - general / getting started
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to know?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What are you trying to achieve? What have you tried so far?
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Relevant configuration or environment info (if applicable).
+      render: yaml
+    validations:
+      required: false

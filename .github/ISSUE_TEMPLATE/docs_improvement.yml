@@ -1,0 +1,57 @@
+# Copyright 2026 STOA Platform Authors
+# SPDX-License-Identifier: Apache-2.0
+
+name: "\U0001F4DA Documentation Improvement"
+description: Suggest improvements or report issues in the documentation
+title: "[Docs] "
+labels: ["type:docs", "status:triage"]
+
+body:
+  - type: input
+    id: page_url
+    attributes:
+      label: Documentation Page
+      description: Link to the page or section that needs improvement.
+      placeholder: "https://docs.gostoa.dev/..."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: issue_type
+    attributes:
+      label: What's the Issue?
+      options:
+        - label: Outdated information
+        - label: Missing information
+        - label: Unclear explanation
+        - label: Broken links
+        - label: Typo or grammar
+        - label: Code example doesn't work
+        - label: Other
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Improvement
+      description: A clear description of what should be changed or added.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Content
+      description: If you have specific wording or content to suggest.
+      render: markdown
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to contribute this change?
+      options:
+        - "Yes, I'd like to submit a PR"
+        - "No, I'm just reporting the issue"
+    validations:
+      required: true

@@ -1,0 +1,97 @@
+# Copyright 2026 STOA Platform Authors
+# SPDX-License-Identifier: Apache-2.0
+
+name: "\u2728 Feature Request"
+description: Suggest a new feature or enhancement for STOA
+title: "[Feature] "
+labels: ["type:feature", "status:triage"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe the problem and your proposed solution.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component would this feature affect?
+      options:
+        - control-plane-api (FastAPI backend)
+        - portal (Developer Portal)
+        - control-plane-ui (Console UI)
+        - mcp-gateway (MCP Gateway)
+        - stoa-gateway (Rust gateway)
+        - helm (Charts / Kubernetes)
+        - docs (Documentation)
+        - platform-wide
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: "I'm always frustrated when... / Currently there's no way to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see implemented.
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example Usage
+      description: Show how this feature would be used (config snippet, API call, CLI command, etc.).
+      render: yaml
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What alternative solutions or workarounds have you considered?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Who Benefits
+      description: Who would primarily benefit from this feature?
+      options:
+        - API Providers (tenant admins)
+        - API Consumers (developers)
+        - Platform Operators (DevOps)
+        - AI Agents (MCP clients)
+        - Everyone
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Related issues, similar features in other tools, links, screenshots.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues to ensure this hasn't been requested
+          required: true
+        - label: This feature aligns with STOA's goals (cloud-native, open source, AI-native API management)
+          required: true

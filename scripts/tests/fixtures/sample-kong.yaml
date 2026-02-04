@@ -1,0 +1,198 @@
+_format_version: "3.0"
+
+services:
+  - name: petstore-service
+    url: https://petstore.swagger.io/v2
+    protocol: https
+    host: petstore-upstream
+    port: 443
+    path: /v2
+    retries: 5
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    tags:
+      - petstore
+      - rest
+    routes:
+      - name: petstore-route
+        paths:
+          - /petstore
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: true
+        preserve_host: false
+        protocols:
+          - https
+        tags:
+          - petstore
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          hour: 5000
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+      - name: cors
+        config:
+          origins:
+            - "https://portal.example.com"
+            - "https://console.example.com"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - Authorization
+            - Content-Type
+          max_age: 3600
+          credentials: true
+
+  - name: crm-api-service
+    url: https://crm.acme-corp.com/api/v2
+    protocol: https
+    host: crm.acme-corp.com
+    port: 443
+    path: /api/v2
+    tags:
+      - crm
+      - internal
+    routes:
+      - name: crm-api-route
+        paths:
+          - /crm/v2
+        methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+        strip_path: true
+        protocols:
+          - https
+      - name: crm-search-route
+        paths:
+          - /crm/search
+        methods:
+          - GET
+          - POST
+        strip_path: true
+        protocols:
+          - https
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - apikey
+            - X-API-Key
+          hide_credentials: true
+      - name: rate-limiting
+        config:
+          minute: 60
+          hour: 2000
+          policy: local
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "X-Forwarded-By:kong"
+
+  - name: payment-gateway
+    url: https://payments.internal.com/api/v1
+    protocol: https
+    host: payments.internal.com
+    port: 443
+    path: /api/v1
+    tags:
+      - payments
+      - critical
+    routes:
+      - name: payment-route
+        paths:
+          - /payments
+        methods:
+          - POST
+        strip_path: true
+        protocols:
+          - https
+        tags:
+          - critical
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - Authorization
+      - name: rate-limiting
+        config:
+          minute: 30
+          hour: 500
+      - name: ip-restriction
+        config:
+          allow:
+            - 10.0.0.0/8
+            - 192.168.0.0/16
+
+upstreams:
+  - name: petstore-upstream
+    algorithm: round-robin
+    hash_on: none
+    healthchecks:
+      active:
+        healthy:
+          interval: 10
+          successes: 3
+        unhealthy:
+          interval: 10
+          http_failures: 3
+        http_path: /health
+    targets:
+      - target: petstore1.internal:8080
+        weight: 100
+      - target: petstore2.internal:8080
+        weight: 100
+
+  - name: crm-upstream
+    algorithm: least-connections
+    targets:
+      - target: crm1.internal:8080
+        weight: 70
+      - target: crm2.internal:8080
+        weight: 30
+
+consumers:
+  - username: acme-corp
+    custom_id: tenant-acme
+    tags:
+      - premium
+    keyauth_credentials:
+      - key: acme-api-key-001
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 500
+          hour: 20000
+
+  - username: beta-team
+    custom_id: tenant-beta
+    tags:
+      - standard
+    keyauth_credentials:
+      - key: beta-api-key-001
+
+  - username: monitoring-bot
+    custom_id: svc-monitoring
+    tags:
+      - service-account
+
+plugins:
+  - name: prometheus
+    config:
+      per_consumer: true
+  - name: file-log
+    config:
+      path: /var/log/kong/access.log

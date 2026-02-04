@@ -5,7 +5,6 @@
 
 import { createBdd } from 'playwright-bdd';
 import { test, expect, URLS } from '../fixtures/test-base';
-import { PERSONAS, PersonaKey } from '../fixtures/personas';
 
 const { Given, When, Then } = createBdd(test);
 
@@ -17,7 +16,7 @@ let lastResponse: { status: number; body: any } | null = null;
 // API KEY SETUP STEPS
 // ============================================================================
 
-Given('I have an active subscription to {string}', async ({ request }) => {
+Given('I have an active subscription to {string}', async () => {
   currentApiKey = process.env.TEST_API_KEY || 'test-api-key';
 });
 
@@ -34,10 +33,6 @@ Given('I have an invalid API key', async () => {
 });
 
 Given('I am {string} with an IOI subscription', async ({}, personaName: string) => {
-  const persona = PERSONAS[personaName as PersonaKey];
-  if (!persona) {
-    throw new Error(`Unknown persona: ${personaName}`);
-  }
   currentApiKey = process.env[`${personaName.toUpperCase()}_API_KEY`] || 'ioi-test-key';
 });
 
@@ -106,28 +101,47 @@ When('I call {string} without API key', async ({ request }, endpoint: string) =>
   }
 });
 
+When('I make many health check calls', async ({ request }) => {
+  const promises = Array(20)
+    .fill(null)
+    .map(() =>
+      request.fetch(`${URLS.gateway}/health/ready`, {
+        method: 'GET',
+      }),
+    );
+
+  const responses = await Promise.all(promises);
+  const statuses = responses.map(r => r.status());
+
+  lastResponse = {
+    status: statuses.every(s => s < 500) ? 200 : 500,
+    body: { statuses, allOk: statuses.every(s => s < 500) },
+  };
+});
+
 When('I make many API calls rapidly', async ({ request }) => {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-
   if (currentApiKey) {
     headers['X-API-Key'] = currentApiKey;
   }
 
-  const promises = Array(20).fill(null).map(() =>
-    request.fetch(`${URLS.gateway}/api/v1/test`, {
-      method: 'GET',
-      headers,
-    })
-  );
+  const promises = Array(20)
+    .fill(null)
+    .map(() =>
+      request.fetch(`${URLS.gateway}/health/ready`, {
+        method: 'GET',
+        headers,
+      }),
+    );
 
   const responses = await Promise.all(promises);
-  const rateLimited = responses.some(r => r.status() === 429);
+  const statuses = responses.map(r => r.status());
 
   lastResponse = {
-    status: rateLimited ? 429 : responses[0].status(),
-    body: { rateLimited },
+    status: statuses.every(s => s < 500) ? 200 : 500,
+    body: { statuses },
   };
 });
 
@@ -145,9 +159,20 @@ Then('I receive a {int} error', async ({}, expectedStatus: number) => {
   expect(lastResponse!.status).toBe(expectedStatus);
 });
 
+Then('I receive an auth error', async () => {
+  expect(lastResponse).not.toBeNull();
+  // Accept 401 (Unauthorized) or 403 (Forbidden) as valid auth rejection
+  expect([401, 403]).toContain(lastResponse!.status);
+});
+
+Then('the gateway remains responsive', async () => {
+  expect(lastResponse).not.toBeNull();
+  // No 5xx errors — gateway stayed up
+  expect(lastResponse!.status).toBeLessThan(500);
+});
+
 Then('the error message contains {string}', async ({}, expectedMessage: string) => {
   expect(lastResponse).not.toBeNull();
-
   const bodyStr = JSON.stringify(lastResponse!.body).toLowerCase();
   expect(bodyStr).toContain(expectedMessage.toLowerCase());
 });

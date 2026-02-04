@@ -157,3 +157,136 @@ See `deploy/config/{dev,staging,prod}.env` for environment-specific configuratio
 | `OPA_EMBEDDED` | `true` | Use embedded evaluator |
 | `METERING_ENABLED` | `true` | Enable Kafka metering |
 | `K8S_WATCHER_ENABLED` | `false` | Enable CRD watcher |
+
+## Runtime Versions
+
+| Tool   | Version | Notes                          |
+|--------|---------|--------------------------------|
+| Python | 3.11    | control-plane-api, mcp-gateway |
+| Python | 3.12    | landing-api                    |
+| Node   | 20      | portal, control-plane-ui       |
+
+## Code Style
+
+### Python (ruff + black + isort)
+- **Line length**: 100 (mcp-gateway, landing-api), 120 (control-plane-api)
+- **Ruff rules**: E, W, F, I, B, C4, UP, ARG, SIM, S, DTZ, LOG, RUF
+- **Type checking**: mypy with `disallow_untyped_defs = true`
+- **First-party package**: `src`
+- Run: `ruff check . && black --check . && mypy src/`
+
+### TypeScript / React (eslint + prettier)
+- **Line length**: 100
+- **Prettier**: semicolons, single quotes, trailing commas (es5), LF
+- **Path alias**: `@/*` maps to `src/*`
+- **Unused args**: prefix with `_` (e.g., `_unused`)
+- **Max warnings**: 0 (control-plane-ui), 20 (portal)
+- Run: `npm run lint && npm run format:check`
+
+## Testing Standards
+
+### Python (pytest)
+- Framework: pytest + pytest-asyncio (asyncio_mode = "auto")
+- Test paths: `tests/`
+- File naming: `test_*.py` or `*_test.py`
+- Markers: `@slow`, `@integration`, `@unit`
+- **Coverage minimum: 70%** (`fail_under = 70`)
+- Run: `pytest --cov=src --cov-fail-under=70`
+
+### TypeScript (vitest)
+- Framework: **vitest** (NOT Jest) + React Testing Library
+- Coverage: v8 provider
+- Run: `npm run test` or `npm run test:coverage`
+
+### E2E (Playwright + BDD)
+- Location: `e2e/`
+- Framework: Playwright + playwright-bdd (Gherkin `.feature` files)
+- Test projects: `auth-setup`, `portal-chromium`, `console-chromium`, `gateway`, `ttftc`
+- Markers: `@smoke`, `@critical`, `@portal`, `@console`, `@gateway`, `@rpo`
+- Auth: persona-based storage states in `fixtures/.auth/`
+- Run: `npx playwright test` (from `e2e/`)
+
+## Commit & Branch Conventions
+
+### Commit Messages (commitlint enforced via husky)
+- Format: `<type>(<scope>): <subject>` (max 72 chars subject, 100 chars header)
+- **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`
+- **Scopes**: `api`, `ui`, `portal`, `mcp`, `gateway`, `helm`, `ci`, `docs`, `deps`, `security`, `demo`
+- Example: `fix(api): escape LIKE wildcards in portal search (CAB-1044)`
+
+### Branch Naming
+- `feat/<ticket-id>-<description>` for new features
+- `fix/<ticket-id>-<description>` for bug fixes
+- Example: `fix/cab-1044-search-escape`
+
+## Project Structure
+
+```
+stoa/
+├── control-plane-api/     # FastAPI backend (Python 3.11)
+├── control-plane-ui/      # Console UI - API Provider (React/TS)
+├── portal/                # Developer Portal - API Consumer (React/Vite/TS)
+├── mcp-gateway/           # MCP Gateway - edge-mcp mode (Python/FastAPI)
+├── stoa-gateway/          # Future Rust gateway (Tokio)
+├── landing-api/           # Landing page backend (Python 3.12, Poetry)
+├── e2e/                   # Playwright BDD E2E tests
+├── apis/                  # OpenAPI specs (per component)
+├── charts/                # Helm charts
+├── terraform/             # AWS IaC (EKS, RDS, etc.)
+├── ansible/               # AWX playbooks
+├── argocd/                # GitOps manifests
+├── webmethods/            # webMethods gateway configs
+├── docker/                # Docker / observability configs
+└── deploy/                # Docker Compose, env configs
+```
+
+No workspace tool — each component has independent dependencies and CI.
+
+## CI/CD (GitHub Actions)
+
+- **Path-based triggers**: each component has its own workflow, triggered only on relevant file changes
+- **Python CI**: ruff lint, mypy, pytest, bandit/safety audit
+- **Node CI**: npm install, lint, format check, vitest, coverage
+- **Security pipeline** (CAB-979): SAST, dependency audit, gitleaks, SBOM, container scan, DCO check
+- **Dependabot**: weekly (Monday), max 5 PRs/ecosystem, prefix `chore(deps)`
+
+## Database Migrations
+
+- Tool: **Alembic** (in `control-plane-api/alembic/`)
+- Create migration: `alembic revision --autogenerate -m "description"`
+- Apply: `alembic upgrade head`
+
+## Security Checklist
+
+- **Gitleaks**: configured at `.gitleaks.toml` with allowlist for docs/examples
+- **Bandit**: Python SAST — run `bandit -r src/`
+- **Safety / pip-audit**: dependency vulnerability scanning
+- **Signed commits**: verified in CI (warning-only)
+- **Never commit**: `.env*`, `*.pem`, `*.key`, `*credentials*`, `*.tfvars`
+
+## Workflow AI-Native
+
+### Nouvelle Feature
+
+1. **Nouvelle session** Claude Code (contexte frais)
+2. **Explorer** : "Propose 3 options pour `<feature>`, ne code pas"
+3. **Choisir** une option → "Plan en 5 étapes max, ne code pas"
+4. **Valider** le plan → "Go"
+5. **Vérifier** : tests green → commit
+
+### Review (Décisions Importantes)
+
+| Session | Rôle | Objectif |
+|---------|------|----------|
+| Session 1 | Architecte | Produire le plan d'implémentation |
+| Session 2 (fresh) | Staff Engineer | Review critique du plan |
+| Session 3 (fresh, optionnel) | Security Engineer | Review sécurité |
+
+**Verdict binaire** : `Go` / `Fix` / `Refaire` — pas de "peut-être".
+
+### Règles
+
+- **1 chose à la fois** — ne jamais mélanger feature + refactor + fix
+- **Ne jamais coder sans plan validé**
+- **Red flags** (tests cassés, dette technique, faille sécu) → fix avant de continuer
+- **Si > 10 min à structurer manuellement** → STOP, lance Claude Code

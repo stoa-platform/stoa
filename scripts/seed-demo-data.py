@@ -65,7 +65,7 @@ PETSTORE_SPEC = json.dumps({
         "version": "1.0.0",
         "description": "Classic pet management API — browse, add, and manage pets in the store.",
     },
-    "servers": [{"url": "https://petstore3.swagger.io/api/v3"}],
+    "servers": [{"url": "https://httpbin.org/anything"}],
     "paths": {
         "/pets": {
             "get": {
@@ -510,7 +510,7 @@ DEMO_APIS = [
             "Classic pet management API \u2014 browse, add, and manage pets in the store. "
             "Ideal starter API for testing subscriptions and playground."
         ),
-        "backend_url": "https://petstore3.swagger.io/api/v3",
+        "backend_url": "https://httpbin.org/anything",
         "tags": ["portal:published", "rest", "demo", "public"],
         "openapi_spec": PETSTORE_SPEC,
     },
@@ -599,14 +599,12 @@ def create_client(token: str | None) -> httpx.Client:
 
 
 # =============================================================================
-# Phase 1: Seed APIs (via GitOps endpoint + catalog sync)
+# Phase 1: Seed APIs (GitOps first, offline fallback to catalog/seed)
 # =============================================================================
 
-def seed_apis(client: httpx.Client) -> dict[str, bool]:
-    """Create 3 demo APIs in the target tenant."""
+def seed_apis_via_gitops(client: httpx.Client) -> dict[str, bool]:
+    """Try creating APIs via GitOps endpoint. Returns {name: success}."""
     results = {}
-
-    print(f"\n=== Phase 1: Creating APIs in tenant '{DEMO_TENANT}' ===")
     for api in DEMO_APIS:
         name = api["name"]
         payload = {
@@ -621,19 +619,73 @@ def seed_apis(client: httpx.Client) -> dict[str, bool]:
         try:
             resp = client.post(f"/v1/tenants/{DEMO_TENANT}/apis", json=payload)
             if resp.status_code in (200, 201):
-                print(f"  [+] API '{name}' created")
+                print(f"  [+] API '{name}' created (GitOps)")
                 results[name] = True
             elif resp.status_code == 409:
                 print(f"  [=] API '{name}' already exists (idempotent)")
                 results[name] = True
             else:
-                print(f"  [-] API '{name}' failed: {resp.status_code} \u2014 {resp.text[:120]}")
+                print(f"  [-] API '{name}' failed: {resp.status_code} — {resp.text[:120]}")
                 results[name] = False
         except Exception as e:
             print(f"  [-] API '{name}' error: {e}")
             results[name] = False
-
     return results
+
+
+def seed_apis_offline(client: httpx.Client) -> dict[str, bool]:
+    """Seed APIs directly into catalog (bypasses GitLab). Offline mode."""
+    print("  [~] Switching to OFFLINE mode (direct catalog seed)...")
+    payload = {
+        "tenant_id": DEMO_TENANT,
+        "apis": [
+            {
+                "name": api["name"],
+                "display_name": api["display_name"],
+                "version": api["version"],
+                "description": api["description"],
+                "backend_url": api["backend_url"],
+                "tags": api["tags"],
+                "openapi_spec": api["openapi_spec"],
+                "category": "Demo",
+            }
+            for api in DEMO_APIS
+        ],
+    }
+    try:
+        resp = client.post("/v1/admin/catalog/seed", json=payload)
+        if resp.status_code in (200, 201):
+            data = resp.json()
+            seeded = data.get("seeded", 0)
+            failed = data.get("failed", 0)
+            results_map = data.get("results", {})
+            print(f"  [+] Offline seed: {seeded} seeded, {failed} failed")
+            return {name: (results_map.get(name, "") == "seeded") for name in results_map}
+        print(f"  [-] Offline seed failed: {resp.status_code} — {resp.text[:200]}")
+        return {api["name"]: False for api in DEMO_APIS}
+    except Exception as e:
+        print(f"  [-] Offline seed error: {e}")
+        return {api["name"]: False for api in DEMO_APIS}
+
+
+def seed_apis(client: httpx.Client) -> tuple[dict[str, bool], bool]:
+    """Create 3 demo APIs. Returns (results, used_offline_mode)."""
+    print(f"\n=== Phase 1: Creating APIs in tenant '{DEMO_TENANT}' ===")
+
+    # Try GitOps first
+    results = seed_apis_via_gitops(client)
+
+    # If any failed (likely "GitLab not connected"), fall back to offline seed
+    if not all(results.values()):
+        failed_names = [n for n, ok in results.items() if not ok]
+        print(f"  [!] {len(failed_names)} APIs failed via GitOps — trying offline seed")
+        offline_results = seed_apis_offline(client)
+        # Merge: keep GitOps successes, override failures with offline results
+        for name in failed_names:
+            results[name] = offline_results.get(name, False)
+        return results, True
+
+    return results, False
 
 
 def trigger_catalog_sync(client: httpx.Client) -> bool:
@@ -645,7 +697,7 @@ def trigger_catalog_sync(client: httpx.Client) -> bool:
             data = resp.json()
             print(f"  [+] Sync triggered: {data.get('message', 'OK')}")
             return True
-        print(f"  [-] Sync trigger failed: {resp.status_code} \u2014 {resp.text[:120]}")
+        print(f"  [-] Sync trigger failed: {resp.status_code} — {resp.text[:120]}")
         return False
     except Exception as e:
         print(f"  [-] Sync trigger error: {e}")
@@ -957,14 +1009,17 @@ def main() -> int:
 
     try:
         # Phase 1: APIs
-        apis = seed_apis(client)
+        apis, used_offline = seed_apis(client)
 
-        # Phase 2: Catalog sync
-        any_new = any(apis.values())
-        if any_new:
-            sync_ok = trigger_catalog_sync(client)
-            if sync_ok:
-                wait_for_sync(client)
+        # Phase 2: Catalog sync (skip if offline mode — data already in catalog)
+        if not used_offline:
+            any_new = any(apis.values())
+            if any_new:
+                sync_ok = trigger_catalog_sync(client)
+                if sync_ok:
+                    wait_for_sync(client)
+        else:
+            print("\n=== Phase 2: Catalog sync SKIPPED (offline mode — data is in catalog) ===")
 
         # Verify portal visibility
         portal_count = verify_portal_apis(client)

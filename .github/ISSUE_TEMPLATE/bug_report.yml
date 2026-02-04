@@ -1,0 +1,122 @@
+# Copyright 2026 STOA Platform Authors
+# SPDX-License-Identifier: Apache-2.0
+
+name: "\U0001F41B Bug Report"
+description: Report a bug to help us improve STOA
+title: "[Bug] "
+labels: ["type:bug", "status:triage"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the form below.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which STOA component is affected?
+      options:
+        - control-plane-api (FastAPI backend)
+        - portal (Developer Portal)
+        - control-plane-ui (Console UI)
+        - mcp-gateway (MCP Gateway)
+        - helm (Charts / Kubernetes)
+        - e2e (End-to-End tests)
+        - docs (Documentation)
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what the bug is.
+      placeholder: When I do X, I expect Y but Z happens instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to reproduce the behavior.
+      value: |
+        1. Configure '...'
+        2. Send request to '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is this bug?
+      options:
+        - "Critical: service down / data loss"
+        - "High: feature broken, no workaround"
+        - "Medium: feature broken, workaround exists"
+        - "Low: cosmetic / minor inconvenience"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: STOA Version
+      description: Which version of STOA are you using?
+      placeholder: "e.g. 0.1.0 or commit SHA"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      description: How is STOA deployed?
+      options:
+        - Docker Compose (local)
+        - Kubernetes (Helm)
+        - EKS
+        - Other
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Paste any relevant log output (secrets will NOT be sanitized automatically - please remove them).
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Relevant configuration (remove secrets!).
+      render: yaml
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues to ensure this bug hasn't been reported
+          required: true
+        - label: I have removed any sensitive information from logs and configs
+          required: true

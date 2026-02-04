@@ -19,6 +19,13 @@ from ..config import get_settings
 logger = structlog.get_logger(__name__)
 
 
+class VaultSealedException(VaultError):
+    """Raised when Vault is sealed and cannot serve requests."""
+
+    def __init__(self) -> None:
+        super().__init__("Vault is sealed — credentials unavailable. Check auto-unseal or unseal manually.")
+
+
 class VaultClient:
     """HashiCorp Vault client for API key storage.
 
@@ -79,6 +86,19 @@ class VaultClient:
 
         raise VaultError("Failed to authenticate with Vault")
 
+    def _ensure_unsealed(self) -> None:
+        """Check Vault seal status before operations. Raises VaultSealedException if sealed."""
+        try:
+            client = self._get_client()
+            status = client.sys.read_health_status(method="GET")
+            if status.get("sealed", True):
+                logger.error("Vault is sealed — credential operations will fail")
+                raise VaultSealedException()
+        except VaultSealedException:
+            raise
+        except Exception as e:
+            logger.warning("Could not verify Vault seal status", error=str(e))
+
     async def store_api_key(
         self,
         subscription_id: str,
@@ -94,7 +114,11 @@ class VaultClient:
 
         Returns:
             The Vault path where the key is stored
+
+        Raises:
+            VaultSealedException: If Vault is sealed
         """
+        self._ensure_unsealed()
         client = self._get_client()
         path = f"subscriptions/{subscription_id}"
 
@@ -134,7 +158,11 @@ class VaultClient:
 
         Returns:
             The API key if found, None otherwise
+
+        Raises:
+            VaultSealedException: If Vault is sealed
         """
+        self._ensure_unsealed()
         client = self._get_client()
         path = f"subscriptions/{subscription_id}"
 
@@ -177,7 +205,11 @@ class VaultClient:
 
         Returns:
             True if deleted, False if not found
+
+        Raises:
+            VaultSealedException: If Vault is sealed
         """
+        self._ensure_unsealed()
         client = self._get_client()
         path = f"subscriptions/{subscription_id}"
 

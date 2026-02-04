@@ -148,6 +148,27 @@ Then('I am redirected to the Portal dashboard', async ({ page }) => {
   expect(url).not.toContain('/auth/');
 });
 
+When('I search for an available API', async ({ page }) => {
+  // Extract just the API title from the first card (not the full card text)
+  const firstApi = page.locator('a[href^="/apis/"]').first();
+  const titleEl = firstApi.locator('h3, [class*="font-semibold"]').first();
+  let searchTerm = 'api';
+  if (await titleEl.isVisible({ timeout: 3000 }).catch(() => false)) {
+    const titleText = await titleEl.textContent();
+    // Use first 2 words of the title as search term
+    searchTerm = titleText?.trim().split(/\s+/).slice(0, 2).join(' ') || 'api';
+  }
+
+  const searchInput = page.locator(
+    'input[placeholder*="Search"], input[placeholder*="Rechercher"], input[type="search"]',
+  );
+  if (await searchInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await searchInput.fill(searchTerm);
+    await page.waitForTimeout(500);
+    await page.waitForLoadState('networkidle');
+  }
+});
+
 When('I click on the first API in results', async ({ page }) => {
   const apiLink = page.locator('a[href^="/apis/"]').first();
   await apiLink.click();

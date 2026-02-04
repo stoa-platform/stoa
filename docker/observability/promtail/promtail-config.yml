@@ -43,9 +43,15 @@ scrape_configs:
       # Extract service name from compose
       - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
         target_label: service
+      # Set app label from service name (for dashboard compatibility)
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: app
       # Extract compose project
       - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
         target_label: project
+      # Set namespace from project (for dashboard compatibility with K8s queries)
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: namespace
       # Extract container ID
       - source_labels: ['__meta_docker_container_id']
         target_label: container_id

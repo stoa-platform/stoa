@@ -196,6 +196,45 @@ services:
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
+      - loki
+    networks:
+      - stoa-network
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Loki (Log Aggregation)
+  # ==========================================================================
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: stoa-loki
+    ports:
+      - "${PORT_LOKI:-3100}:3100"
+    volumes:
+      - ./config/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Promtail (Log Shipping)
+  # ==========================================================================
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: stoa-promtail
+    volumes:
+      - ./config/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
     networks:
       - stoa-network
     restart: unless-stopped
@@ -215,3 +254,4 @@ volumes:
   keycloak-data:
   prometheus-data:
   grafana-data:
+  loki-data:

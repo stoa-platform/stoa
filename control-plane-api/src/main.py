@@ -156,7 +156,7 @@ async def lifespan(app: FastAPI):
 API_DESCRIPTION = """
 ## STOA Platform API
 
-**The Cilium of API Management** — AI-Native API Gateway for modern enterprises.
+**The European Agent Gateway** — AI-Native API Gateway for modern enterprises.
 
 ### Key Features
 

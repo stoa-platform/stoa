@@ -1,0 +1,11 @@
+# Trivy ignore list for upstream base image CVEs
+# These are Alpine/OpenSSL vulnerabilities in base images that we cannot fix
+# until the upstream base image is updated. Reviewed and accepted.
+#
+# Review this file monthly and remove entries once base images are patched.
+# Last reviewed: 2026-02-02
+
+# OpenSSL vulnerabilities in Alpine 3.22.2 base image (libcrypto3, libssl3)
+# Fixed in Alpine 3.22.3+ (openssl 3.5.5-r0) — waiting for upstream image update
+CVE-2025-15467
+CVE-2025-69419

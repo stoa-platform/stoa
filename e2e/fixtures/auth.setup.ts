@@ -1,12 +1,16 @@
 /**
  * Authentication Setup for STOA E2E Tests
- * Authenticates all personas via Keycloak and saves storage states
+ * Authenticates all personas via Keycloak and saves storage states.
+ *
+ * Note: react-oidc-context stores OIDC tokens in sessionStorage (not localStorage).
+ * Playwright's storageState() only captures cookies + localStorage, so we explicitly
+ * capture sessionStorage and merge it into the state file for test restoration.
  */
 
 import { test as setup, expect } from '@playwright/test';
 import { PERSONAS, PersonaKey, getAuthStatePath } from './personas';
+import * as fs from 'fs';
 
-const KEYCLOAK_URL = process.env.KEYCLOAK_URL || 'https://auth.gostoa.dev';
 const PORTAL_URL = process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev';
 const CONSOLE_URL = process.env.STOA_CONSOLE_URL || 'https://console.gostoa.dev';
 
@@ -55,23 +59,51 @@ for (const [personaKey, persona] of Object.entries(PERSONAS) as [PersonaKey, typ
       { timeout: 30000 }
     );
 
+    // Wait for OIDC callback to complete — tokens stored in sessionStorage
+    await page.waitForFunction(
+      () => {
+        const keys = Object.keys(sessionStorage);
+        return keys.some(k => k.startsWith('oidc.'));
+      },
+      { timeout: 15000 },
+    ).catch(() => {
+      console.warn(`${personaKey}: OIDC session keys not found in sessionStorage`);
+    });
+
     // Wait for app to fully load (no loading spinner)
     await expect(page.locator('text=Loading..., .animate-spin').first()).not.toBeVisible({ timeout: 15000 }).catch(() => {
       // Loading indicator might not exist, that's ok
     });
 
-    // Verify we're authenticated by checking for user-specific elements
-    // or by ensuring we're not on a login page
+    // Verify we're authenticated
     const currentUrl = page.url();
     expect(currentUrl).not.toContain('/login');
     expect(currentUrl).not.toContain('/auth/');
 
     console.log(`${persona.name} authenticated successfully`);
 
-    // Save storage state for this persona
+    // Save Playwright storage state (cookies + localStorage)
     const authStatePath = getAuthStatePath(personaKey);
     await page.context().storageState({ path: authStatePath });
 
-    console.log(`Storage state saved to ${authStatePath}`);
+    // Capture sessionStorage (contains OIDC tokens from react-oidc-context)
+    const sessionStorageData: Record<string, string> = await page.evaluate(() => {
+      const data: Record<string, string> = {};
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key) {
+          data[key] = sessionStorage.getItem(key) || '';
+        }
+      }
+      return data;
+    });
+
+    // Merge sessionStorage into the state file
+    const stateFile = JSON.parse(fs.readFileSync(authStatePath, 'utf-8'));
+    stateFile.sessionStorage = sessionStorageData;
+    fs.writeFileSync(authStatePath, JSON.stringify(stateFile, null, 2));
+
+    const oidcKeys = Object.keys(sessionStorageData).filter(k => k.startsWith('oidc.'));
+    console.log(`Storage state saved to ${authStatePath} (${oidcKeys.length} OIDC keys captured)`);
   });
 }

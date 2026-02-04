@@ -391,16 +391,16 @@ async def seed_catalog_directly(
             ).on_conflict_do_update(
                 index_elements=["tenant_id", "api_id"],
                 set_={
-                    APICatalog.api_name: api_entry.display_name,
-                    APICatalog.version: api_entry.version,
-                    APICatalog.status: "active",
-                    APICatalog.category: api_entry.category,
-                    APICatalog.tags: tags,
-                    APICatalog.portal_published: portal_published,
-                    APICatalog.api_metadata: api_metadata,
-                    APICatalog.openapi_spec: openapi_spec,
-                    APICatalog.synced_at: datetime.now(timezone.utc),
-                    APICatalog.deleted_at: None,
+                    "api_name": api_entry.display_name,
+                    "version": api_entry.version,
+                    "status": "active",
+                    "category": api_entry.category,
+                    "tags": tags,
+                    "portal_published": portal_published,
+                    "metadata": api_metadata,  # DB column is "metadata" not "api_metadata"
+                    "openapi_spec": openapi_spec,
+                    "synced_at": datetime.now(timezone.utc),
+                    "deleted_at": None,
                 },
             )
             await db.execute(stmt)

@@ -1,0 +1,178 @@
+{
+  "name": "STOA AI Phase Runner",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stoa-phase-trigger",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Linear Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "stoa-phase-trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-status",
+              "leftValue": "={{ $json.data.status.name }}",
+              "rightValue": "In Progress",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-status",
+      "name": "Check Status = In Progress",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🚀 *{{ $json.data.identifier }}* — Phase starting\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"🚀 Phase Starting\",\n        \"emoji\": true\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\"type\": \"mrkdwn\", \"text\": \"*Ticket*\\n{{ $json.data.identifier }}\"},\n        {\"type\": \"mrkdwn\", \"text\": \"*Title*\\n{{ $json.data.title }}\"}\n      ]\n    },\n    {\n      \"type\": \"actions\",\n      \"elements\": [\n        {\n          \"type\": \"button\",\n          \"text\": {\"type\": \"plain_text\", \"text\": \"View in Linear\"},\n          \"url\": \"{{ $json.data.url }}\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "slack-notify-start",
+      "name": "Slack: Phase Starting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [690, 200]
+    },
+    {
+      "parameters": {
+        "command": "=cd /path/to/stoa && git fetch && git checkout {{ $json.data.branchName }} && git pull"
+      },
+      "id": "git-checkout",
+      "name": "Git Checkout Branch",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [910, 200]
+    },
+    {
+      "parameters": {
+        "command": "=cd /path/to/stoa && ./.stoa-ai/scripts/run-phase.sh {{ $json.data.identifier }}"
+      },
+      "id": "run-claude-code",
+      "name": "Run Claude Code",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1130, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ $json.stdout.includes('Phase complete') ? '🟢' : '🔴' }} *{{ $node['Linear Webhook'].json.data.identifier }}* — Phase {{ $json.stdout.includes('Phase complete') ? 'Complete' : 'Stopped' }}\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"{{ $json.stdout.includes('Phase complete') ? '🟢 Phase Complete' : '🔴 Phase Stopped' }}\",\n        \"emoji\": true\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*{{ $node['Linear Webhook'].json.data.identifier }}*: {{ $node['Linear Webhook'].json.data.title }}\"\n      }\n    },\n    {\n      \"type\": \"actions\",\n      \"elements\": [\n        {\n          \"type\": \"button\",\n          \"text\": {\"type\": \"plain_text\", \"text\": \"Review\"},\n          \"url\": \"{{ $node['Linear Webhook'].json.data.url }}\",\n          \"style\": \"primary\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "slack-notify-end",
+      "name": "Slack: Phase Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1350, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"acknowledged\", \"ticket\": \"{{ $json.data.identifier }}\"}"
+      },
+      "id": "respond-webhook",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [690, 400]
+    }
+  ],
+  "connections": {
+    "Linear Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Status = In Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Status = In Progress": {
+      "main": [
+        [
+          {
+            "node": "Slack: Phase Starting",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Phase Starting": {
+      "main": [
+        [
+          {
+            "node": "Git Checkout Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Git Checkout Branch": {
+      "main": [
+        [
+          {
+            "node": "Run Claude Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Claude Code": {
+      "main": [
+        [
+          {
+            "node": "Slack: Phase Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["stoa", "ai-factory", "automation"]
+}

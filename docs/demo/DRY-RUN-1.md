@@ -138,13 +138,59 @@ Phase 5 — Metrics:    OK (33 calls, 0 errors)
 
 ---
 
+## Dry-Run #2 Results (Post-Fix)
+
+> **Date**: 2026-02-04
+> **Verdict**: **PASS** — 18/18 checks green
+
+### Fixes Applied
+
+| Blocker | Fix | File |
+|---------|-----|------|
+| BLOCKER-1 | Added `POST /v1/admin/catalog/seed` endpoint (offline mode) | `catalog_admin.py` |
+| BLOCKER-1 | Updated `seed-demo-data.py` with GitOps-first + offline fallback | `seed-demo-data.py` |
+| BLOCKER-2 | Replaced `user.sub` with `user.id` (6 occurrences) | `portal_applications.py` |
+| BLOCKER-3 | Changed backend_url from swagger.io to httpbin.org | `seed-demo-data.py` |
+| ISSUE-1 | Added auth token to DEMO-CHECKLIST curl examples | `DEMO-CHECKLIST.md` |
+| ISSUE-2 | Correct path is `/v1/monitoring/transactions/stats` | (documented) |
+
+### Dry-Run #2 Timing
+
+| Segment | Time | Checks |
+|---------|------|--------|
+| Pre-Auth | 0.9s | 3/3 OK |
+| Services UP | 1.4s | 4/4 OK |
+| Seed Data | 3.5s | 3/3 OK (petstore, account, payment found) |
+| Portal Flow | 2.8s | 5/5 OK |
+| Console Flow | 2.6s | 3/3 OK |
+| **TOTAL** | **11.4s** | **18/18 PASS** |
+
+### Seed Script Results (Post-Fix)
+
+```
+Phase 1 — APIs:       OK (3/3 via offline seed — GitOps failed, catalog/seed worked)
+Phase 2 — Sync:       SKIPPED (offline mode — data already in catalog)
+Phase 3 — Apps:       OK (2/2 created — oasis-mobile + gunter-dashboard)
+Phase 4 — Subs:       FAILED (pre-existing subscription endpoint issue — not blocking for demo)
+Phase 5 — Metrics:    OK (33 calls, 0 errors)
+```
+
+### Remaining Items (Non-Blocking)
+
+- **Subscription API**: Returns 500 for programmatic subscription creation. Not a demo blocker because the presenter subscribes live in the browser (DEMO-SCRIPT Step 3).
+- **Applications in-memory**: Apps are stored in-memory (`_applications` dict), so they reset on pod restart. Run seed shortly before demo.
+- **Hot-patched pods**: Fixes deployed via `kubectl cp`, not baked into image. Build and push a proper image before demo day.
+
+---
+
 ## Next Steps
 
-1. Fix the 3 blockers
-2. Re-run seed-demo-data.py
-3. Schedule Dry-Run #2
-4. Browser-based walkthrough (not just API calls) to validate UI rendering
-5. Record video backup once dry-run passes
+1. ~~Fix the 3 blockers~~ **DONE**
+2. ~~Re-run seed-demo-data.py~~ **DONE (3/3 APIs + 2/2 apps)**
+3. ~~Dry-Run #2~~ **PASS**
+4. Build proper Docker image with fixes and push to ECR
+5. Browser-based walkthrough to validate UI rendering
+6. Record video backup
 
 ---
 

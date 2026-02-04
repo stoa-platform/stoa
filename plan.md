@@ -12,8 +12,8 @@
 ## Semaine 1 (4-7 fév) — STABILISATION
 - [x] CAB-1044: Fix API Search HTTP 500
 - [x] CAB-1040: Fix Gateway Routes HTTP 404
-- [ ] CAB-1042: Vault sealed — credentials fail
-- [ ] CAB-1041: E2E BDD auth — tests fail
+- [x] CAB-1042: Vault sealed — credentials fail
+- [x] CAB-1041: E2E BDD auth — tests fail
 - [ ] CLI stoa complète (login, get apis, apply)
 - [ ] E2E tests 100% pass
 - [ ] Loki: 0 errors sur 5 min

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-04 (Session 3 — E2E Validation)
+> Dernière MAJ: 2026-02-04 (Session 5 — Documentation)
 
 ## DONE
 - CAB-1044: API Search HTTP 500 — Fixed (escape LIKE wildcards in portal search) — commit 2c5672d8
@@ -9,13 +9,13 @@
 - CAB-1041: E2E BDD auth — Fixed (capture/restore sessionStorage for OIDC tokens) — commit 248f9d29
 - CLI stoa complète — Python/Typer/Rich, 5 commands, 55 tests, 84% coverage
 - E2E tests 100% pass — 24/24 green against live gostoa.dev (Session 3)
+- CAB-1061: Demo data seed script — 3 APIs, 2 apps, metrics (Session 4)
+- CAB-1060: Docs 20 pages — Docusaurus site in stoa-docs/, build green (Session 5)
 
 ## IN PROGRESS
 (rien)
 
 ## NEXT
-- CAB-1060: Docs 20 pages (docs.gostoa.dev)
-- CAB-1061: Demo script 5 min
 - CAB-1062: Final polish + dry-runs
 - CAB-1066: Landing gostoa.dev + Stripe
 
@@ -81,3 +81,11 @@ Grafana healthy at v12.3.1, database OK.
 - Portal OIDC client: stoa-portal; Console OIDC client: control-plane-ui
 - TTFTC Alex Freelance: 12.7s from landing to API detail (5 steps)
 - Portal has 2 APIs in catalog; Console has 0 APIs per tenant (data seeding needed for richer tests)
+- Demo seed script: `make seed-demo` or `ANORAK_PASSWORD=xxx python3 scripts/seed-demo-data.py`
+- Demo seed creates: petstore, account-management, payments APIs + 2 apps (oasis-mobile active, gunter-dashboard pending) + Grafana metrics
+- Demo E2E: `npm run test:demo` in e2e/ (uses @demo tag, tests demo-portal.feature + demo-console.feature)
+- Auth for seed: anorak@gostoa.dev (cpi-admin) via control-plane-ui OIDC client, password grant
+- Docs site: stoa-docs/ (Docusaurus 3.9), 20 pages, 4 sections (Getting Started, Core Concepts, Guides, Reference)
+- Docs build: `cd stoa-docs && npm run build` — static output in stoa-docs/build/
+- Docs dev: `cd stoa-docs && npm start` — localhost:3000
+- Docs deploy target: docs.gostoa.dev

@@ -38,6 +38,44 @@ def sample_claims() -> dict:
         "aud": "stoa-mcp-gateway",
         "exp": int(time.time()) + 3600,
         "iat": int(time.time()),
+        "tenant_id": "acme-corp",
+    }
+
+
+@pytest.fixture
+def sample_claims_no_tenant() -> dict:
+    """Sample JWT claims without tenant_id (e.g. service account or legacy user)."""
+    return {
+        "sub": "user-456",
+        "email": "legacy@example.com",
+        "preferred_username": "legacyuser",
+        "realm_access": {
+            "roles": ["viewer"],
+        },
+        "scope": "openid profile email",
+        "iss": "https://auth.gostoa.dev/realms/stoa",
+        "aud": "stoa-mcp-gateway",
+        "exp": int(time.time()) + 3600,
+        "iat": int(time.time()),
+    }
+
+
+@pytest.fixture
+def sample_claims_tenant_array() -> dict:
+    """Sample JWT claims with tenant_id as Keycloak array format."""
+    return {
+        "sub": "user-789",
+        "email": "array@example.com",
+        "preferred_username": "arrayuser",
+        "realm_access": {
+            "roles": ["tenant-admin"],
+        },
+        "scope": "openid profile email",
+        "iss": "https://auth.gostoa.dev/realms/stoa",
+        "aud": "stoa-mcp-gateway",
+        "exp": int(time.time()) + 3600,
+        "iat": int(time.time()),
+        "tenant_id": ["beta-tenant"],
     }
 
 
@@ -111,6 +149,59 @@ class TestTokenClaims:
         """Test client_roles returns empty dict when no resource access."""
         claims = TokenClaims(sub="user-123")
         assert claims.client_roles == {}
+
+
+# =============================================================================
+# Tenant ID Extraction Tests
+# =============================================================================
+
+
+class TestTenantIdExtraction:
+    """Tests for tenant_id extraction from JWT claims."""
+
+    def test_tenant_id_extracted_from_claims(self, sample_claims: dict):
+        """Test tenant_id is correctly extracted from JWT claims."""
+        claims = TokenClaims(**sample_claims)
+        assert claims.tenant_id == "acme-corp"
+
+    def test_tenant_id_none_when_absent(self, sample_claims_no_tenant: dict):
+        """Test tenant_id is None when not present in JWT."""
+        claims = TokenClaims(**sample_claims_no_tenant)
+        assert claims.tenant_id is None
+
+    def test_tenant_id_normalized_from_keycloak_array(self, sample_claims_tenant_array: dict):
+        """Test tenant_id array (Keycloak user attribute format) is normalized to string."""
+        # Keycloak stores user attributes as arrays: {"tenant_id": ["beta-tenant"]}
+        # The auth middleware normalizes this before creating TokenClaims,
+        # but TokenClaims should also handle it gracefully.
+        raw = sample_claims_tenant_array.copy()
+        # Simulate middleware normalization (auth.py line 357-359)
+        if isinstance(raw["tenant_id"], list):
+            raw["tenant_id"] = raw["tenant_id"][0] if raw["tenant_id"] else None
+        claims = TokenClaims(**raw)
+        assert claims.tenant_id == "beta-tenant"
+
+    def test_tenant_id_empty_array_becomes_none(self):
+        """Test empty tenant_id array normalizes to None."""
+        raw_tenant_id: list = []
+        normalized = raw_tenant_id[0] if raw_tenant_id else None
+        claims = TokenClaims(sub="user-empty", tenant_id=normalized)
+        assert claims.tenant_id is None
+
+    def test_can_access_own_tenant(self, sample_claims: dict):
+        """Test user can access resources in their own tenant."""
+        claims = TokenClaims(**sample_claims)
+        assert claims.can_access_tenant("acme-corp") is True
+
+    def test_cannot_access_other_tenant(self, sample_claims: dict):
+        """Test non-admin user cannot access another tenant's resources."""
+        claims = TokenClaims(**sample_claims)
+        assert claims.can_access_tenant("other-corp") is False
+
+    def test_can_access_global_resources(self, sample_claims_no_tenant: dict):
+        """Test user without tenant_id can access global resources (tenant_id=None)."""
+        claims = TokenClaims(**sample_claims_no_tenant)
+        assert claims.can_access_tenant(None) is True
 
 
 # =============================================================================

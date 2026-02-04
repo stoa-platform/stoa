@@ -316,7 +316,7 @@ async def subscribe_to_server(
         id=subscription_id,
         server_id=server.id,
         server=server,
-        tenant_id="default",  # TODO: Extract tenant_id from token claims
+        tenant_id=user.tenant_id or "default",
         user_id=user.subject,
         status=ServerSubscriptionStatus.ACTIVE,
         plan=request.plan,
@@ -337,7 +337,7 @@ async def subscribe_to_server(
             metadata={
                 "user_id": user.subject,
                 "server_id": server.id,
-                "tenant_id": "default",
+                "tenant_id": user.tenant_id or "default",
                 "created_at": now.isoformat(),
             },
         )

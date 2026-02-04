@@ -342,7 +342,7 @@ async def create_subscription(
     subscription_id = str(uuid.uuid4())
     api_key = _generate_api_key()
     api_key_hash = _hash_api_key(api_key)
-    tenant_id = data.tenant_id or "default"
+    tenant_id = user.tenant_id or data.tenant_id or "default"
 
     # Try database first
     session = await _get_db_session()

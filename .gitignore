@@ -22,6 +22,11 @@ env/
 *.egg-info/
 dist/
 build/
+.coverage
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
 
 # IDEs
 .vscode/
@@ -29,6 +34,9 @@ build/
 *.swp
 *.swo
 *~
+
+# Claude Code
+.claude/
 
 # OS
 .DS_Store

@@ -44,7 +44,7 @@ from ..schemas.external_mcp_server import (
     ExternalMCPServerForGateway,
     ExternalMCPServersForGatewayResponse,
 )
-from ..services.vault_client import get_vault_client
+from ..services.vault_client import get_vault_client, VaultSealedException
 from ..services.mcp_client import get_mcp_client_service
 
 logger = logging.getLogger(__name__)

@@ -1,27 +1,38 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-CAB-279: Seed demo data for STOA MVP presentation.
+CAB-1061: Seed demo data for STOA Platform presentation.
 
-This script creates demo tenants and subscriptions via the Control-Plane API.
-It uses the E2E test users from CAB-238.
+Creates:
+  1. 3 APIs: petstore, account-management, payments (portal-published)
+  2. 2 Applications: 1 active, 1 pending approval
+  3. Sample API calls to generate Grafana metrics
+
+Idempotent: Safe to re-run. 409 = already exists = OK.
 
 Usage:
-    # With default settings (localhost)
+    # Default: targets production (gostoa.dev)
     python scripts/seed-demo-data.py
 
-    # With custom API URL
-    CONTROL_PLANE_URL=https://api.gostoa.dev python scripts/seed-demo-data.py
-
-    # With authentication
-    KEYCLOAK_URL=https://auth.gostoa.dev \
-    ADMIN_USERNAME=e2e-admin \
-    ADMIN_PASSWORD=Admin123! \
+    # Custom environment
+    CONTROL_PLANE_URL=http://localhost:8000 \
+    KEYCLOAK_URL=http://localhost:8180 \
+    ANORAK_PASSWORD=Anorak2045! \
     python scripts/seed-demo-data.py
+
+Environment Variables:
+    CONTROL_PLANE_URL   API base URL          (default: https://api.gostoa.dev)
+    KEYCLOAK_URL        Keycloak base URL     (default: https://auth.gostoa.dev)
+    KEYCLOAK_REALM      Keycloak realm        (default: stoa)
+    ANORAK_USER         Admin username         (default: anorak@gostoa.dev)
+    ANORAK_PASSWORD     Admin password         (required)
+    SEED_TENANT         Target tenant          (default: high-five)
 """
 
+import json
 import os
 import sys
-import json
+import time
 from datetime import datetime, timezone
 
 try:
@@ -30,82 +41,533 @@ except ImportError:
     print("Error: httpx not installed. Run: pip install httpx")
     sys.exit(1)
 
+
+# =============================================================================
 # Configuration
-API_URL = os.getenv("CONTROL_PLANE_URL", "http://localhost:8000")
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://localhost:8180")
+# =============================================================================
+
+API_URL = os.getenv("CONTROL_PLANE_URL", "https://api.gostoa.dev")
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.gostoa.dev")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "stoa")
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "e2e-admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Admin123!")
+SEED_USER = os.getenv("ANORAK_USER", "anorak@gostoa.dev")
+SEED_PASSWORD = os.getenv("ANORAK_PASSWORD", "")
+DEMO_TENANT = os.getenv("SEED_TENANT", "high-five")
 
-# Demo Tenants
-TENANTS = [
-    {
-        "id": "team-alpha",
-        "name": "Team Alpha - Sales & Finance",
-        "description": "Demo tenant for CRM and Billing tools",
-        "contact_email": "alice@demo.stoa.io",
-        "quota": {
-            "max_subscriptions": 10,
-            "max_requests_per_day": 10000,
+
+# =============================================================================
+# OpenAPI Specifications (embedded, minimal but renderable)
+# =============================================================================
+
+PETSTORE_SPEC = json.dumps({
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Petstore API",
+        "version": "1.0.0",
+        "description": "Classic pet management API — browse, add, and manage pets in the store.",
+    },
+    "servers": [{"url": "https://petstore3.swagger.io/api/v3"}],
+    "paths": {
+        "/pets": {
+            "get": {
+                "summary": "List all pets",
+                "operationId": "listPets",
+                "tags": ["pets"],
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "integer", "maximum": 100},
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": False,
+                        "schema": {
+                            "type": "string",
+                            "enum": ["available", "pending", "sold"],
+                        },
+                    },
+                ],
+                "responses": {
+                    "200": {
+                        "description": "A list of pets",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {"$ref": "#/components/schemas/Pet"},
+                                }
+                            }
+                        },
+                    }
+                },
+            },
+            "post": {
+                "summary": "Create a pet",
+                "operationId": "createPet",
+                "tags": ["pets"],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/Pet"}
+                        }
+                    },
+                },
+                "responses": {"201": {"description": "Pet created"}},
+            },
+        },
+        "/pets/{petId}": {
+            "get": {
+                "summary": "Get pet by ID",
+                "operationId": "getPetById",
+                "tags": ["pets"],
+                "parameters": [
+                    {
+                        "name": "petId",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string"},
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "A pet",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/Pet"}
+                            }
+                        },
+                    },
+                    "404": {"description": "Pet not found"},
+                },
+            }
         },
     },
-    {
-        "id": "team-beta",
-        "name": "Team Beta - Operations",
-        "description": "Demo tenant for Inventory and Notifications tools",
-        "contact_email": "bob@demo.stoa.io",
-        "quota": {
-            "max_subscriptions": 10,
-            "max_requests_per_day": 10000,
+    "components": {
+        "schemas": {
+            "Pet": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "id": {"type": "integer", "format": "int64"},
+                    "name": {"type": "string", "example": "Buddy"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["available", "pending", "sold"],
+                    },
+                    "category": {"type": "string", "example": "dog"},
+                },
+            }
+        }
+    },
+})
+
+ACCOUNTS_SPEC = json.dumps({
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Account Management API",
+        "version": "2.1.0",
+        "description": (
+            "Manage user accounts, profiles, and preferences. "
+            "Supports CRUD operations with full audit trail."
+        ),
+    },
+    "servers": [{"url": "https://api.gostoa.dev/mock/accounts"}],
+    "paths": {
+        "/accounts": {
+            "get": {
+                "summary": "List accounts",
+                "operationId": "listAccounts",
+                "tags": ["accounts"],
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {"type": "integer", "default": 1},
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["active", "suspended", "closed"],
+                        },
+                    },
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of accounts",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "items": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Account"
+                                            },
+                                        },
+                                        "total": {"type": "integer"},
+                                    },
+                                }
+                            }
+                        },
+                    }
+                },
+            },
+            "post": {
+                "summary": "Create account",
+                "operationId": "createAccount",
+                "tags": ["accounts"],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/AccountCreate"}
+                        }
+                    },
+                },
+                "responses": {"201": {"description": "Account created"}},
+            },
+        },
+        "/accounts/{accountId}": {
+            "get": {
+                "summary": "Get account details",
+                "operationId": "getAccount",
+                "tags": ["accounts"],
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string", "format": "uuid"},
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "Account details"},
+                    "404": {"description": "Account not found"},
+                },
+            },
+            "put": {
+                "summary": "Update account",
+                "operationId": "updateAccount",
+                "tags": ["accounts"],
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string", "format": "uuid"},
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/AccountUpdate"}
+                        }
+                    }
+                },
+                "responses": {"200": {"description": "Account updated"}},
+            },
+            "delete": {
+                "summary": "Close account",
+                "operationId": "deleteAccount",
+                "tags": ["accounts"],
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string", "format": "uuid"},
+                    }
+                ],
+                "responses": {"204": {"description": "Account closed"}},
+            },
         },
     },
+    "components": {
+        "schemas": {
+            "Account": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "format": "uuid"},
+                    "email": {"type": "string", "format": "email"},
+                    "display_name": {"type": "string"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["active", "suspended", "closed"],
+                    },
+                    "created_at": {"type": "string", "format": "date-time"},
+                },
+            },
+            "AccountCreate": {
+                "type": "object",
+                "required": ["email", "display_name"],
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "user@example.com",
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "example": "Jane Doe",
+                    },
+                },
+            },
+            "AccountUpdate": {
+                "type": "object",
+                "properties": {
+                    "display_name": {"type": "string"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["active", "suspended"],
+                    },
+                },
+            },
+        }
+    },
+})
+
+PAYMENTS_SPEC = json.dumps({
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Payments API",
+        "version": "3.0.0",
+        "description": (
+            "Process payments, refunds, and manage payment methods. "
+            "PCI-DSS Level 1 compliant."
+        ),
+    },
+    "servers": [{"url": "https://api.gostoa.dev/mock/payments"}],
+    "paths": {
+        "/payments": {
+            "post": {
+                "summary": "Create a payment",
+                "operationId": "createPayment",
+                "tags": ["payments"],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/PaymentCreate"}
+                        }
+                    },
+                },
+                "responses": {
+                    "201": {
+                        "description": "Payment initiated",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/Payment"}
+                            }
+                        },
+                    },
+                    "422": {"description": "Invalid payment data"},
+                },
+            },
+            "get": {
+                "summary": "List payments",
+                "operationId": "listPayments",
+                "tags": ["payments"],
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["pending", "completed", "failed", "refunded"],
+                        },
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "schema": {"type": "string", "format": "date"},
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "schema": {"type": "string", "format": "date"},
+                    },
+                ],
+                "responses": {"200": {"description": "List of payments"}},
+            },
+        },
+        "/payments/{paymentId}": {
+            "get": {
+                "summary": "Get payment details",
+                "operationId": "getPayment",
+                "tags": ["payments"],
+                "parameters": [
+                    {
+                        "name": "paymentId",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string", "format": "uuid"},
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "Payment details"},
+                    "404": {"description": "Payment not found"},
+                },
+            }
+        },
+        "/payments/{paymentId}/refund": {
+            "post": {
+                "summary": "Refund a payment",
+                "operationId": "refundPayment",
+                "tags": ["refunds"],
+                "parameters": [
+                    {
+                        "name": "paymentId",
+                        "in": "path",
+                        "required": True,
+                        "schema": {"type": "string", "format": "uuid"},
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "amount": {
+                                        "type": "number",
+                                        "format": "double",
+                                        "description": "Partial refund amount (omit for full)",
+                                    },
+                                    "reason": {"type": "string"},
+                                },
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {"description": "Refund processed"},
+                    "409": {"description": "Payment already refunded"},
+                },
+            },
+        },
+    },
+    "components": {
+        "schemas": {
+            "Payment": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "format": "uuid"},
+                    "amount": {"type": "number", "format": "double"},
+                    "currency": {"type": "string", "example": "EUR"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "completed", "failed", "refunded"],
+                    },
+                    "created_at": {"type": "string", "format": "date-time"},
+                },
+            },
+            "PaymentCreate": {
+                "type": "object",
+                "required": ["amount", "currency"],
+                "properties": {
+                    "amount": {
+                        "type": "number",
+                        "format": "double",
+                        "minimum": 0.01,
+                        "example": 49.99,
+                    },
+                    "currency": {
+                        "type": "string",
+                        "enum": ["EUR", "USD", "GBP"],
+                        "example": "EUR",
+                    },
+                    "description": {
+                        "type": "string",
+                        "example": "Monthly subscription",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "additionalProperties": {"type": "string"},
+                    },
+                },
+            },
+        }
+    },
+})
+
+
+# =============================================================================
+# Demo Data Definitions
+# =============================================================================
+
+DEMO_APIS = [
+    {
+        "name": "petstore",
+        "display_name": "Petstore API",
+        "version": "1.0.0",
+        "description": (
+            "Classic pet management API \u2014 browse, add, and manage pets in the store. "
+            "Ideal starter API for testing subscriptions and playground."
+        ),
+        "backend_url": "https://petstore3.swagger.io/api/v3",
+        "tags": ["portal:published", "rest", "demo", "public"],
+        "openapi_spec": PETSTORE_SPEC,
+    },
+    {
+        "name": "account-management",
+        "display_name": "Account Management API",
+        "version": "2.1.0",
+        "description": (
+            "Manage user accounts, profiles, and preferences. "
+            "Full CRUD with audit trail and role-based access."
+        ),
+        "backend_url": "https://api.gostoa.dev/mock/accounts",
+        "tags": ["portal:published", "rest", "demo", "enterprise"],
+        "openapi_spec": ACCOUNTS_SPEC,
+    },
+    {
+        "name": "payments",
+        "display_name": "Payments API",
+        "version": "3.0.0",
+        "description": (
+            "Process payments, refunds, and manage payment methods. "
+            "PCI-DSS Level 1 compliant. Supports EUR, USD, GBP."
+        ),
+        "backend_url": "https://api.gostoa.dev/mock/payments",
+        "tags": ["portal:published", "rest", "demo", "enterprise", "pci"],
+        "openapi_spec": PAYMENTS_SPEC,
+    },
 ]
 
-# Demo Subscriptions
-SUBSCRIPTIONS = [
-    # Team Alpha subscriptions
+DEMO_APPS = [
     {
-        "tenant_id": "team-alpha",
-        "api_id": "crm-search",
-        "subscriber_id": "e2e-tenant-admin",
-        "application_id": "demo-app-alpha",
-        "plan_id": "standard",
+        "name": "oasis-mobile",
+        "display_name": "OASIS Mobile App",
+        "description": "Mobile application for OASIS API consumption",
+        "tenant_id": None,  # set dynamically
+        "_status": "active",  # will have approved subscription
     },
     {
-        "tenant_id": "team-alpha",
-        "api_id": "billing-invoice",
-        "subscriber_id": "e2e-tenant-admin",
-        "application_id": "demo-app-alpha",
-        "plan_id": "standard",
-    },
-    # Team Beta subscriptions
-    {
-        "tenant_id": "team-beta",
-        "api_id": "inventory-lookup",
-        "subscriber_id": "e2e-devops",
-        "application_id": "demo-app-beta",
-        "plan_id": "standard",
-    },
-    {
-        "tenant_id": "team-beta",
-        "api_id": "notifications-send",
-        "subscriber_id": "e2e-devops",
-        "application_id": "demo-app-beta",
-        "plan_id": "standard",
+        "name": "gunter-dashboard",
+        "display_name": "Gunter Analytics Dashboard",
+        "description": "Analytics dashboard \u2014 pending approval for Payments API access",
+        "tenant_id": None,  # set dynamically
+        "_status": "pending",  # subscription left pending
     },
 ]
 
-# User-Tenant assignments
-USER_ASSIGNMENTS = [
-    {"tenant_id": "team-alpha", "user_id": "e2e-tenant-admin", "role": "admin"},
-    {"tenant_id": "team-alpha", "user_id": "e2e-viewer", "role": "viewer"},
-    {"tenant_id": "team-beta", "user_id": "e2e-devops", "role": "admin"},
-    {"tenant_id": "team-beta", "user_id": "e2e-viewer", "role": "viewer"},
-]
 
+# =============================================================================
+# Auth
+# =============================================================================
 
 def get_access_token() -> str | None:
-    """Get admin access token from Keycloak."""
+    """Get access token from Keycloak via password grant."""
+    if not SEED_PASSWORD:
+        print("  [!] ANORAK_PASSWORD not set")
+        return None
+
     token_url = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
 
     try:
@@ -113,218 +575,429 @@ def get_access_token() -> str | None:
             token_url,
             data={
                 "grant_type": "password",
-                "client_id": "stoa-admin",
-                "username": ADMIN_USERNAME,
-                "password": ADMIN_PASSWORD,
+                "client_id": "control-plane-ui",
+                "username": SEED_USER,
+                "password": SEED_PASSWORD,
             },
-            timeout=10.0,
+            timeout=15.0,
         )
         if resp.status_code == 200:
             return resp.json().get("access_token")
-        else:
-            print(f"Warning: Failed to get token: {resp.status_code}")
-            return None
+        print(f"  [-] Auth failed: {resp.status_code} \u2014 {resp.text[:120]}")
+        return None
     except Exception as e:
-        print(f"Warning: Could not connect to Keycloak: {e}")
+        print(f"  [-] Auth error: {e}")
         return None
 
 
 def create_client(token: str | None) -> httpx.Client:
-    """Create HTTP client with optional auth."""
+    """Create HTTP client with auth header."""
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return httpx.Client(base_url=API_URL, headers=headers, timeout=30.0)
 
 
-def seed_tenants(client: httpx.Client) -> dict[str, bool]:
-    """Create demo tenants."""
+# =============================================================================
+# Phase 1: Seed APIs (via GitOps endpoint + catalog sync)
+# =============================================================================
+
+def seed_apis(client: httpx.Client) -> dict[str, bool]:
+    """Create 3 demo APIs in the target tenant."""
     results = {}
 
-    print("\n=== Creating Tenants ===")
-    for tenant in TENANTS:
+    print(f"\n=== Phase 1: Creating APIs in tenant '{DEMO_TENANT}' ===")
+    for api in DEMO_APIS:
+        name = api["name"]
+        payload = {
+            "name": api["name"],
+            "display_name": api["display_name"],
+            "version": api["version"],
+            "description": api["description"],
+            "backend_url": api["backend_url"],
+            "tags": api["tags"],
+            "openapi_spec": api["openapi_spec"],
+        }
         try:
-            resp = client.post("/v1/tenants", json=tenant)
+            resp = client.post(f"/v1/tenants/{DEMO_TENANT}/apis", json=payload)
             if resp.status_code in (200, 201):
-                print(f"  [+] Tenant '{tenant['id']}' created")
-                results[tenant["id"]] = True
+                print(f"  [+] API '{name}' created")
+                results[name] = True
             elif resp.status_code == 409:
-                print(f"  [=] Tenant '{tenant['id']}' already exists")
-                results[tenant["id"]] = True
+                print(f"  [=] API '{name}' already exists (idempotent)")
+                results[name] = True
             else:
-                print(f"  [-] Tenant '{tenant['id']}' failed: {resp.status_code} - {resp.text}")
-                results[tenant["id"]] = False
+                print(f"  [-] API '{name}' failed: {resp.status_code} \u2014 {resp.text[:120]}")
+                results[name] = False
         except Exception as e:
-            print(f"  [-] Tenant '{tenant['id']}' error: {e}")
-            results[tenant["id"]] = False
+            print(f"  [-] API '{name}' error: {e}")
+            results[name] = False
 
     return results
 
 
-def seed_user_assignments(client: httpx.Client) -> dict[str, bool]:
-    """Assign users to tenants."""
+def trigger_catalog_sync(client: httpx.Client) -> bool:
+    """Trigger catalog sync so APIs appear in the portal."""
+    print("\n=== Phase 2: Triggering catalog sync ===")
+    try:
+        resp = client.post(f"/v1/admin/catalog/sync/tenant/{DEMO_TENANT}")
+        if resp.status_code in (200, 201):
+            data = resp.json()
+            print(f"  [+] Sync triggered: {data.get('message', 'OK')}")
+            return True
+        print(f"  [-] Sync trigger failed: {resp.status_code} \u2014 {resp.text[:120]}")
+        return False
+    except Exception as e:
+        print(f"  [-] Sync trigger error: {e}")
+        return False
+
+
+def wait_for_sync(client: httpx.Client, timeout: int = 30) -> bool:
+    """Poll sync status until complete or timeout."""
+    print("  [~] Waiting for sync to complete...", end="", flush=True)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            resp = client.get("/v1/admin/catalog/sync/status")
+            if resp.status_code == 200:
+                data = resp.json()
+                status = data.get("status", "")
+                if status in ("success", "completed"):
+                    items = data.get("items_synced", "?")
+                    print(f" done ({items} items)")
+                    return True
+                if status == "failed":
+                    print(f" FAILED: {data.get('errors', [])}")
+                    return False
+            elif resp.status_code == 404:
+                print(" (no sync history yet)")
+                return True
+        except Exception:
+            pass
+        print(".", end="", flush=True)
+        time.sleep(2)
+    print(" timeout")
+    return False
+
+
+def verify_portal_apis(client: httpx.Client) -> int:
+    """Check how many APIs are visible in the portal catalog."""
+    try:
+        resp = client.get("/v1/portal/apis", params={"page_size": 100})
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("total", 0)
+    except Exception:
+        pass
+    return -1
+
+
+# =============================================================================
+# Phase 3: Seed Applications
+# =============================================================================
+
+def seed_applications(client: httpx.Client) -> dict[str, str | None]:
+    """Create 2 demo applications. Returns {name: app_id}."""
     results = {}
 
-    print("\n=== Assigning Users to Tenants ===")
-    for assignment in USER_ASSIGNMENTS:
-        key = f"{assignment['user_id']}@{assignment['tenant_id']}"
+    print(f"\n=== Phase 3: Creating Applications ===")
+    for app_def in DEMO_APPS:
+        name = app_def["name"]
+        payload = {
+            "name": app_def["name"],
+            "display_name": app_def["display_name"],
+            "description": app_def["description"],
+            "tenant_id": DEMO_TENANT,
+        }
         try:
-            resp = client.post(
-                f"/v1/tenants/{assignment['tenant_id']}/users",
-                json={
-                    "user_id": assignment["user_id"],
-                    "role": assignment["role"],
-                },
-            )
-            if resp.status_code in (200, 201):
-                print(f"  [+] User '{assignment['user_id']}' -> '{assignment['tenant_id']}' ({assignment['role']})")
-                results[key] = True
-            elif resp.status_code == 409:
-                print(f"  [=] User '{assignment['user_id']}' already in '{assignment['tenant_id']}'")
-                results[key] = True
-            else:
-                print(f"  [-] Assignment failed: {resp.status_code}")
-                results[key] = False
-        except Exception as e:
-            print(f"  [-] Assignment error: {e}")
-            results[key] = False
-
-    return results
-
-
-def seed_subscriptions(client: httpx.Client) -> dict[str, str | None]:
-    """Create tool subscriptions and return API keys."""
-    results = {}
-
-    print("\n=== Creating Subscriptions ===")
-    for sub in SUBSCRIPTIONS:
-        key = f"{sub['api_id']}@{sub['tenant_id']}"
-        try:
-            resp = client.post("/v1/subscriptions", json=sub)
+            resp = client.post("/v1/applications", json=payload)
             if resp.status_code in (200, 201):
                 data = resp.json()
-                api_key = data.get("api_key")
-                print(f"  [+] Subscription '{sub['api_id']}' for '{sub['tenant_id']}'")
-                if api_key:
-                    print(f"      API Key: {api_key[:20]}...")
-                results[key] = api_key
+                app_id = data.get("id")
+                client_id = data.get("client_id", "?")
+                print(f"  [+] App '{name}' created (client_id: {client_id})")
+                results[name] = app_id
             elif resp.status_code == 409:
-                print(f"  [=] Subscription '{sub['api_id']}' already exists for '{sub['tenant_id']}'")
-                results[key] = None
+                print(f"  [=] App '{name}' already exists")
+                results[name] = None
             else:
-                print(f"  [-] Subscription failed: {resp.status_code} - {resp.text}")
-                results[key] = None
+                print(f"  [-] App '{name}' failed: {resp.status_code} \u2014 {resp.text[:120]}")
+                results[name] = None
         except Exception as e:
-            print(f"  [-] Subscription error: {e}")
-            results[key] = None
+            print(f"  [-] App '{name}' error: {e}")
+            results[name] = None
 
     return results
 
 
-def approve_subscriptions(client: httpx.Client) -> None:
-    """Auto-approve all pending subscriptions."""
-    print("\n=== Approving Pending Subscriptions ===")
+# =============================================================================
+# Phase 4: Seed Subscriptions (1 active, 1 pending)
+# =============================================================================
 
-    for tenant in TENANTS:
+def seed_subscriptions(
+    client: httpx.Client,
+    app_ids: dict[str, str | None],
+) -> dict[str, str]:
+    """Create subscriptions: oasis-mobile=active, gunter-dashboard=pending."""
+    results = {}
+
+    print("\n=== Phase 4: Creating Subscriptions ===")
+
+    # Active subscription: oasis-mobile -> petstore (approved)
+    active_app_id = app_ids.get("oasis-mobile")
+    if active_app_id:
+        sub_payload = {
+            "application_id": active_app_id,
+            "application_name": "OASIS Mobile App",
+            "api_id": "petstore",
+            "api_name": "Petstore API",
+            "api_version": "1.0.0",
+            "tenant_id": DEMO_TENANT,
+            "plan_id": "standard",
+            "plan_name": "Standard Plan",
+        }
         try:
-            resp = client.get(f"/v1/subscriptions/tenant/{tenant['id']}/pending")
-            if resp.status_code == 200:
-                pending = resp.json().get("subscriptions", [])
-                for sub in pending:
-                    sub_id = sub.get("id")
+            resp = client.post("/v1/subscriptions", json=sub_payload)
+            if resp.status_code in (200, 201):
+                data = resp.json()
+                sub_id = data.get("subscription_id") or data.get("id")
+                api_key = data.get("api_key", "")
+                print(f"  [+] Subscription oasis-mobile -> petstore (sub: {sub_id})")
+                if api_key:
+                    print(f"      API Key: {api_key[:20]}...")
+                results["oasis-mobile:petstore"] = "created"
+
+                # Auto-approve
+                if sub_id:
                     approve_resp = client.post(f"/v1/subscriptions/{sub_id}/approve")
                     if approve_resp.status_code == 200:
-                        print(f"  [+] Approved subscription {sub_id}")
+                        print("      [+] Subscription APPROVED (active)")
+                        results["oasis-mobile:petstore"] = "active"
                     else:
-                        print(f"  [-] Failed to approve {sub_id}")
+                        print(f"      [~] Auto-approve: {approve_resp.status_code}")
+            elif resp.status_code == 409:
+                print("  [=] Subscription oasis-mobile -> petstore already exists")
+                results["oasis-mobile:petstore"] = "exists"
+            else:
+                print(f"  [-] Subscription failed: {resp.status_code}")
+                results["oasis-mobile:petstore"] = "failed"
         except Exception as e:
-            print(f"  [-] Error checking pending: {e}")
+            print(f"  [-] Subscription error: {e}")
+            results["oasis-mobile:petstore"] = "error"
 
+    # Pending subscription: gunter-dashboard -> payments (left pending)
+    pending_app_id = app_ids.get("gunter-dashboard")
+    if pending_app_id:
+        sub_payload = {
+            "application_id": pending_app_id,
+            "application_name": "Gunter Analytics Dashboard",
+            "api_id": "payments",
+            "api_name": "Payments API",
+            "api_version": "3.0.0",
+            "tenant_id": DEMO_TENANT,
+            "plan_id": "premium",
+            "plan_name": "Premium Plan",
+        }
+        try:
+            resp = client.post("/v1/subscriptions", json=sub_payload)
+            if resp.status_code in (200, 201):
+                data = resp.json()
+                sub_id = data.get("subscription_id") or data.get("id")
+                print(f"  [+] Subscription gunter-dashboard -> payments (sub: {sub_id})")
+                print("      [~] Left PENDING (for demo approval flow)")
+                results["gunter-dashboard:payments"] = "pending"
+            elif resp.status_code == 409:
+                print("  [=] Subscription gunter-dashboard -> payments already exists")
+                results["gunter-dashboard:payments"] = "exists"
+            else:
+                print(f"  [-] Subscription failed: {resp.status_code}")
+                results["gunter-dashboard:payments"] = "failed"
+        except Exception as e:
+            print(f"  [-] Subscription error: {e}")
+            results["gunter-dashboard:payments"] = "error"
+
+    return results
+
+
+# =============================================================================
+# Phase 5: Generate Metrics (sample API traffic for Grafana)
+# =============================================================================
+
+def generate_metrics(client: httpx.Client) -> dict[str, int]:
+    """Make sample API calls to generate traffic metrics for Grafana dashboards."""
+    results: dict[str, int] = {}
+
+    print("\n=== Phase 5: Generating Metrics (sample API traffic) ===")
+
+    calls = [
+        ("GET", "/health/ready", None),
+        ("GET", "/health/live", None),
+        ("GET", "/health/startup", None),
+        ("GET", "/v1/portal/apis", {"page_size": 10}),
+        ("GET", "/v1/portal/apis", {"search": "petstore"}),
+        ("GET", "/v1/portal/apis", {"search": "payment"}),
+        ("GET", "/v1/portal/apis", {"category": "demo"}),
+        ("GET", "/v1/portal/mcp-servers", None),
+        ("GET", "/v1/portal/api-categories", None),
+        ("GET", "/v1/portal/api-tags", None),
+        ("GET", "/v1/portal/api-universes", None),
+    ]
+
+    # Multiple rounds to build up visible metrics
+    rounds = 3
+    total_ok = 0
+    total_err = 0
+
+    for r in range(rounds):
+        for method, path, params in calls:
+            try:
+                if method == "GET":
+                    resp = client.get(path, params=params)
+                else:
+                    resp = client.post(path)
+
+                if resp.status_code < 400:
+                    total_ok += 1
+                else:
+                    total_err += 1
+            except Exception:
+                total_err += 1
+
+    print(f"  [+] {total_ok} successful calls, {total_err} errors ({rounds} rounds)")
+    results["ok"] = total_ok
+    results["errors"] = total_err
+    return results
+
+
+# =============================================================================
+# Summary
+# =============================================================================
 
 def print_summary(
-    tenants: dict[str, bool],
-    assignments: dict[str, bool],
-    subscriptions: dict[str, str | None],
+    apis: dict[str, bool],
+    portal_count: int,
+    apps: dict[str, str | None],
+    subs: dict[str, str],
+    metrics: dict[str, int],
 ) -> None:
-    """Print summary of seeded data."""
-    print("\n" + "=" * 60)
+    """Print a summary of all seeded data."""
+    print("\n" + "=" * 70)
     print("DEMO DATA SUMMARY")
-    print("=" * 60)
+    print("=" * 70)
 
-    print("\nTenants:")
-    for tenant_id, success in tenants.items():
-        status = "[OK]" if success else "[FAIL]"
-        print(f"  {status} {tenant_id}")
+    print("\nAPIs (portal-published):")
+    for name, ok in apis.items():
+        status = "[OK]" if ok else "[FAIL]"
+        api_def = next((a for a in DEMO_APIS if a["name"] == name), {})
+        version = api_def.get("version", "?")
+        print(f"  {status} {name} v{version}")
 
-    print("\nUser Assignments:")
-    for key, success in assignments.items():
-        user, tenant = key.split("@")
-        status = "[OK]" if success else "[FAIL]"
-        print(f"  {status} {user} -> {tenant}")
+    print(f"\nPortal catalog: {portal_count} APIs visible")
+
+    print("\nApplications:")
+    for name, app_id in apps.items():
+        app_def = next((a for a in DEMO_APPS if a["name"] == name), {})
+        expected = app_def.get("_status", "?")
+        if app_id:
+            print(f"  [OK] {name} (id: {app_id[:8]}...) \u2014 {expected}")
+        else:
+            print(f"  [--] {name} \u2014 skipped or already exists")
 
     print("\nSubscriptions:")
-    for key, api_key in subscriptions.items():
-        tool, tenant = key.split("@")
-        if api_key:
-            print(f"  [OK] {tool} ({tenant}) - Key: {api_key[:15]}...")
-        else:
-            print(f"  [--] {tool} ({tenant}) - No key (already existed)")
+    for key, status in subs.items():
+        print(f"  [{status.upper():^8s}] {key}")
 
-    print("\n" + "=" * 60)
-    print("ACCESS MATRIX")
-    print("=" * 60)
-    print("""
-| User             | Tenant     | Tools                              |
-|------------------|------------|-------------------------------------|
-| e2e-tenant-admin | team-alpha | crm-search, billing-invoice        |
-| e2e-devops       | team-beta  | inventory-lookup, notifications-send|
-| e2e-viewer       | both       | Read-only access                    |
-| e2e-admin        | all        | Full admin access (Grafana)         |
+    print("\nMetrics:")
+    print(f"  {metrics.get('ok', 0)} API calls generated for Grafana")
+
+    print("\n" + "=" * 70)
+    print("DEMO ACCESS MATRIX")
+    print("=" * 70)
+    print(f"""
+| Persona  | Tenant       | Role          | Demo Path                          |
+|----------|-------------|---------------|------------------------------------|
+| art3mis  | {DEMO_TENANT:<12s}| devops        | Portal: discover, search, test API |
+| parzival | {DEMO_TENANT:<12s}| tenant-admin  | Console: approve subs, monitoring  |
+| anorak   | * (all)      | cpi-admin     | Console: platform-wide admin       |
+
+Portal APIs: petstore, account-management, payments
+Active App:  oasis-mobile (subscribed to petstore)
+Pending App: gunter-dashboard (awaiting approval for payments)
 """)
 
 
+# =============================================================================
+# Main
+# =============================================================================
+
 def main() -> int:
     """Main entry point."""
-    print("=" * 60)
-    print("STOA Demo Data Seeder (CAB-279)")
-    print("=" * 60)
-    print(f"\nAPI URL: {API_URL}")
-    print(f"Keycloak: {KEYCLOAK_URL}")
+    print("=" * 70)
+    print("STOA Platform \u2014 Demo Data Seeder (CAB-1061)")
+    print("=" * 70)
+    print(f"\nAPI URL:   {API_URL}")
+    print(f"Keycloak:  {KEYCLOAK_URL}")
+    print(f"Tenant:    {DEMO_TENANT}")
+    print(f"User:      {SEED_USER}")
 
-    # Get auth token
-    print("\nAuthenticating...")
+    if not SEED_PASSWORD:
+        print("\n[ERROR] ANORAK_PASSWORD environment variable is required.")
+        print("Usage: ANORAK_PASSWORD=<password> python scripts/seed-demo-data.py")
+        return 1
+
+    # Authenticate
+    print("\n[Auth] Authenticating...")
     token = get_access_token()
-    if token:
-        print("  [+] Authenticated as admin")
-    else:
-        print("  [!] Running without authentication (may fail)")
+    if not token:
+        print("[ERROR] Authentication failed. Check credentials.")
+        return 1
+    print("  [+] Authenticated as cpi-admin")
 
-    # Create client
     client = create_client(token)
 
     try:
-        # Seed data
-        tenants = seed_tenants(client)
-        assignments = seed_user_assignments(client)
-        subscriptions = seed_subscriptions(client)
+        # Phase 1: APIs
+        apis = seed_apis(client)
 
-        # Auto-approve subscriptions
-        approve_subscriptions(client)
+        # Phase 2: Catalog sync
+        any_new = any(apis.values())
+        if any_new:
+            sync_ok = trigger_catalog_sync(client)
+            if sync_ok:
+                wait_for_sync(client)
 
-        # Print summary
-        print_summary(tenants, assignments, subscriptions)
+        # Verify portal visibility
+        portal_count = verify_portal_apis(client)
+        if portal_count >= 0:
+            print(f"\n  [i] Portal catalog: {portal_count} APIs visible")
+        else:
+            print("\n  [!] Could not verify portal catalog")
 
-        # Check for failures
-        all_ok = (
-            all(tenants.values())
-            and all(assignments.values())
-        )
+        # Phase 3: Applications
+        apps = seed_applications(client)
 
-        if all_ok:
-            print("\n[SUCCESS] Demo data seeded successfully!")
+        # Phase 4: Subscriptions
+        subs = seed_subscriptions(client, apps)
+
+        # Phase 5: Metrics
+        metrics = generate_metrics(client)
+
+        # Summary
+        print_summary(apis, portal_count, apps, subs, metrics)
+
+        # Exit code
+        all_apis_ok = all(apis.values())
+        has_portal_apis = portal_count > 0
+
+        if all_apis_ok and has_portal_apis:
+            print("[SUCCESS] Demo data seeded. Ready for presentation.")
+            return 0
+        elif all_apis_ok:
+            print("[WARNING] APIs created but portal visibility not confirmed.")
+            print("  Try: POST /v1/admin/catalog/sync to refresh portal cache.")
             return 0
         else:
-            print("\n[WARNING] Some operations failed. Check logs above.")
+            print("[WARNING] Some operations failed. Check logs above.")
             return 1
 
     except httpx.ConnectError:

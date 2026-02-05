@@ -14,14 +14,17 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 mod auth;
 mod config;
 mod control_plane;
+mod governance;
 mod handlers;
 mod mcp;
 mod metrics;
+mod mode;
 mod oauth;
 mod policy;
 mod proxy;
 mod rate_limit;
 mod routes;
+mod shadow;
 mod state;
 mod uac;
 
@@ -44,10 +47,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing (with optional OTel export if configured)
     init_tracing(&config);
 
-    info!(version = env!("CARGO_PKG_VERSION"), "Starting STOA Gateway");
+    info!(
+        version = env!("CARGO_PKG_VERSION"),
+        mode = ?config.gateway_mode,
+        "Starting STOA Gateway"
+    );
 
     // Initialize application state
     let state = AppState::new(config.clone());
+
+    // Initialize mode-specific components
+    init_mode_components(&config).await;
 
     // Start background tasks
     state.start_background_tasks();
@@ -229,5 +239,42 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => info!("Received Ctrl+C, initiating shutdown..."),
         _ = terminate => info!("Received SIGTERM, initiating shutdown..."),
+    }
+}
+
+// === Mode-Specific Initialization ===
+
+/// Initialize components specific to the gateway mode
+async fn init_mode_components(config: &Config) {
+    use mode::GatewayMode;
+
+    match config.gateway_mode {
+        GatewayMode::EdgeMcp => {
+            info!("Mode: EdgeMcp - MCP protocol with SSE transport");
+            // EdgeMcp is the default mode, core router handles it
+        }
+        GatewayMode::Sidecar => {
+            info!("Mode: Sidecar - Policy enforcement behind existing gateway");
+            // TODO: Start ext_authz gRPC server for Envoy integration
+        }
+        GatewayMode::Proxy => {
+            info!("Mode: Proxy - Inline request/response transformation");
+            // TODO: Initialize route registry from config
+        }
+        GatewayMode::Shadow => {
+            info!("Mode: Shadow - Passive traffic capture and analysis");
+            // TODO: Start traffic capture based on shadow_capture_source
+            // TODO: Initialize pattern analyzer
+            // TODO: Start UAC generator
+        }
+    }
+
+    // Initialize governance (anti-zombie detection) if enabled
+    if config.zombie_detection_enabled {
+        info!(
+            ttl_secs = config.agent_session_ttl_secs,
+            attestation_interval = config.attestation_interval,
+            "Agent governance enabled (ADR-012)"
+        );
     }
 }

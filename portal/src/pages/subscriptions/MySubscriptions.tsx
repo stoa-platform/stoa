@@ -26,6 +26,8 @@ import {
   Wrench,
   ExternalLink,
 } from 'lucide-react';
+import { ConfirmDialog } from '@stoa/shared/components/ConfirmDialog';
+import { useToastActions } from '@stoa/shared/components/Toast';
 import { useSubscriptions, useRevokeSubscription, useRotateApiKey } from '../../hooks/useSubscriptions';
 import { RevealKeyModal } from '../../components/subscriptions/RevealKeyModal';
 import { RotateKeyModal } from '../../components/subscriptions/RotateKeyModal';
@@ -53,10 +55,12 @@ const statusConfig: Record<string, {
 
 export function MySubscriptions() {
   const { isAuthenticated, accessToken } = useAuth();
+  const toast = useToastActions();
   const [activeTab, setActiveTab] = useState<TabType>('servers');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
   const [revealModalSubscription, setRevealModalSubscription] = useState<MCPSubscription | null>(null);
   const [rotateModalSubscription, setRotateModalSubscription] = useState<MCPSubscription | null>(null);
   const [exportModalSubscription, setExportModalSubscription] = useState<MCPSubscription | null>(null);
@@ -99,14 +103,21 @@ export function MySubscriptions() {
     loadServerSubscriptions();
   }, [isAuthenticated, accessToken]);
 
-  const handleRevokeSubscription = async (subscriptionId: string) => {
-    if (confirm('Are you sure you want to revoke this subscription? Your API key will be invalidated immediately.')) {
-      setRevokingId(subscriptionId);
-      try {
-        await revokeMutation.mutateAsync(subscriptionId);
-      } finally {
-        setRevokingId(null);
-      }
+  const handleRevokeSubscription = (subscriptionId: string) => {
+    setConfirmRevokeId(subscriptionId);
+  };
+
+  const confirmRevoke = async () => {
+    if (!confirmRevokeId) return;
+    setRevokingId(confirmRevokeId);
+    try {
+      await revokeMutation.mutateAsync(confirmRevokeId);
+      toast.success('Subscription revoked', 'Your API key has been invalidated.');
+    } catch (error) {
+      toast.error('Failed to revoke subscription', error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      setRevokingId(null);
+      setConfirmRevokeId(null);
     }
   };
 
@@ -565,6 +576,18 @@ export function MySubscriptions() {
           onClose={() => setExportModalSubscription(null)}
         />
       )}
+
+      {/* Revoke Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!confirmRevokeId}
+        title="Revoke Subscription"
+        message="Are you sure you want to revoke this subscription? Your API key will be invalidated immediately."
+        confirmLabel="Revoke"
+        variant="danger"
+        onConfirm={confirmRevoke}
+        onCancel={() => setConfirmRevokeId(null)}
+        loading={revokingId === confirmRevokeId}
+      />
     </div>
   );
 }

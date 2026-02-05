@@ -32,7 +32,7 @@ function PageLoader() {
         <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center mx-auto mb-3 animate-pulse">
           <span className="text-white font-bold text-sm">SP</span>
         </div>
-        <p className="text-gray-500 text-sm">Loading...</p>
+        <p className="text-gray-500 dark:text-neutral-400 text-sm">Loading...</p>
       </div>
     </div>
   );
@@ -41,12 +41,12 @@ function PageLoader() {
 // Loading screen
 function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 flex items-center justify-center transition-colors">
       <div className="text-center">
         <div className="w-16 h-16 bg-primary-600 rounded-xl flex items-center justify-center mx-auto mb-4 animate-pulse">
           <span className="text-white font-bold text-xl">SP</span>
         </div>
-        <p className="text-gray-500">Loading...</p>
+        <p className="text-gray-500 dark:text-neutral-400">Loading...</p>
       </div>
     </div>
   );
@@ -57,14 +57,14 @@ function LoginScreen() {
   const { login } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-600 to-accent-600 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full">
+    <div className="min-h-screen bg-gradient-to-br from-primary-600 to-accent-600 dark:from-primary-900 dark:to-accent-900 flex items-center justify-center p-4 transition-colors">
+      <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-2xl p-8 max-w-md w-full">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-primary-600 rounded-xl flex items-center justify-center mx-auto mb-4">
             <span className="text-white font-bold text-xl">SP</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">STOA Developer Portal</h1>
-          <p className="text-gray-500 mt-2">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">STOA Developer Portal</h1>
+          <p className="text-gray-500 dark:text-neutral-400 mt-2">
             Sign in to access tools and APIs
           </p>
         </div>
@@ -76,9 +76,9 @@ function LoginScreen() {
           Sign in with SSO
         </button>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
+        <p className="text-center text-sm text-gray-500 dark:text-neutral-400 mt-6">
           Don't have an account?{' '}
-          <a href={`${config.services.console.url}/register`} className="text-primary-600 hover:underline">
+          <a href={`${config.services.console.url}/register`} className="text-primary-600 dark:text-primary-400 hover:underline">
             Contact your administrator
           </a>
         </p>

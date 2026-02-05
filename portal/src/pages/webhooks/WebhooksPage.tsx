@@ -21,6 +21,8 @@ import {
   ToggleRight,
   ExternalLink,
 } from 'lucide-react';
+import { ConfirmDialog } from '@stoa/shared/components/ConfirmDialog';
+import { useToastActions } from '@stoa/shared/components/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   useWebhooks,
@@ -52,6 +54,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: typeof 
 
 export function WebhooksPage() {
   const { user } = useAuth();
+  const toast = useToastActions();
   const [selectedTenantId, setSelectedTenantId] = useState<string>('');
 
   // Use user's tenant_id if available, otherwise allow admin to select
@@ -63,6 +66,7 @@ export function WebhooksPage() {
   const [viewingDeliveries, setViewingDeliveries] = useState<string | null>(null);
   const [testingWebhook, setTestingWebhook] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deleteWebhookId, setDeleteWebhookId] = useState<string | null>(null);
 
   const { data: webhooksData, isLoading, isError, refetch } = useWebhooks(tenantId);
   const createMutation = useCreateWebhook();
@@ -73,29 +77,36 @@ export function WebhooksPage() {
   const handleCreate = async (data: WebhookCreate) => {
     try {
       await createMutation.mutateAsync({ tenantId, data });
+      toast.success('Webhook created', 'Your webhook has been created successfully.');
       setShowCreateModal(false);
     } catch (error) {
-      console.error('Failed to create webhook:', error);
+      toast.error('Failed to create webhook', error instanceof Error ? error.message : 'An error occurred');
     }
   };
 
   const handleUpdate = async (webhookId: string, data: Partial<WebhookCreate>) => {
     try {
       await updateMutation.mutateAsync({ tenantId, webhookId, data });
+      toast.success('Webhook updated', 'Your changes have been saved.');
       setEditingWebhook(null);
     } catch (error) {
-      console.error('Failed to update webhook:', error);
+      toast.error('Failed to update webhook', error instanceof Error ? error.message : 'An error occurred');
     }
   };
 
-  const handleDelete = async (webhookId: string) => {
-    if (!confirm('Are you sure you want to delete this webhook? This action cannot be undone.')) {
-      return;
-    }
+  const handleDelete = (webhookId: string) => {
+    setDeleteWebhookId(webhookId);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteWebhookId) return;
     try {
-      await deleteMutation.mutateAsync({ tenantId, webhookId });
+      await deleteMutation.mutateAsync({ tenantId, webhookId: deleteWebhookId });
+      toast.success('Webhook deleted', 'The webhook has been removed.');
     } catch (error) {
-      console.error('Failed to delete webhook:', error);
+      toast.error('Failed to delete webhook', error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      setDeleteWebhookId(null);
     }
   };
 
@@ -106,8 +117,12 @@ export function WebhooksPage() {
         webhookId: webhook.id,
         data: { enabled: !webhook.enabled },
       });
+      toast.success(
+        webhook.enabled ? 'Webhook disabled' : 'Webhook enabled',
+        `The webhook is now ${webhook.enabled ? 'disabled' : 'active'}.`
+      );
     } catch (error) {
-      console.error('Failed to toggle webhook:', error);
+      toast.error('Failed to toggle webhook', error instanceof Error ? error.message : 'An error occurred');
     }
   };
 
@@ -308,6 +323,18 @@ export function WebhooksPage() {
           onClose={() => setViewingDeliveries(null)}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!deleteWebhookId}
+        title="Delete Webhook"
+        message="Are you sure you want to delete this webhook? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteWebhookId(null)}
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

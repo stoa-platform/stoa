@@ -163,6 +163,7 @@ impl UacEnforcer {
     }
 
     /// Check if a tool invocation is allowed (legacy signature for compatibility)
+    #[allow(dead_code)]
     pub async fn check(&self, tenant_id: &str, action: Action) -> Result<(), String> {
         // Legacy check with empty context — allows all by default for backwards compat
         // New code should use check_with_context() for proper policy evaluation
@@ -181,6 +182,7 @@ impl UacEnforcer {
     ///
     /// This is the primary method for policy evaluation. It builds a PolicyInput
     /// from the provided context and evaluates it against the OPA policy.
+    #[allow(clippy::too_many_arguments)]
     pub fn check_with_context(
         &self,
         user_id: Option<String>,

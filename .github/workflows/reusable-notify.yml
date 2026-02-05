@@ -1,0 +1,78 @@
+name: Reusable Slack Notification
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: 'Component name for notification title'
+        required: true
+        type: string
+      environment:
+        description: 'Deployment environment'
+        required: false
+        type: string
+        default: 'dev'
+      ci-result:
+        description: 'CI job result (success/failure/skipped)'
+        required: true
+        type: string
+      deploy-result:
+        description: 'Deploy job result'
+        required: false
+        type: string
+        default: 'skipped'
+      smoke-result:
+        description: 'Smoke test result'
+        required: false
+        type: string
+        default: 'skipped'
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: false
+
+jobs:
+  notify:
+    name: Notify (${{ inputs.component }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.24.0
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "${{ inputs.deploy-result == 'success' && 'good' || inputs.ci-result == 'success' && 'warning' || 'danger' }}",
+                  "title": "${{ inputs.component }} Deployment",
+                  "fields": [
+                    {
+                      "title": "Status",
+                      "value": "${{ inputs.deploy-result == 'success' && 'Deployed' || inputs.ci-result == 'success' && 'Built (not deployed)' || 'Failed' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Environment",
+                      "value": "${{ inputs.environment }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ github.sha }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    }
+                  ],
+                  "footer": "${{ inputs.component }} CI/CD"
+                }
+              ]
+            }

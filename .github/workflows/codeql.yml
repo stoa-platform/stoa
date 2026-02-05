@@ -1,0 +1,62 @@
+# =============================================================================
+# GitHub Actions: CodeQL Analysis
+# =============================================================================
+# Deep SAST analysis for Python and JavaScript/TypeScript.
+# Complements bandit (Python) and ESLint security plugin (JS).
+# Rust is not supported by CodeQL — covered by cargo clippy.
+# =============================================================================
+
+name: CodeQL Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 4 * * 1'  # Weekly Monday 4 AM UTC
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+          config: |
+            paths:
+              - control-plane-api/src
+              - mcp-gateway/src
+              - control-plane-ui/src
+              - portal/src
+            paths-ignore:
+              - '**/node_modules'
+              - '**/test*'
+              - '**/dist'
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'

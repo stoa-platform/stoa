@@ -1,0 +1,124 @@
+name: Reusable Python CI
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: 'Component directory name'
+        required: true
+        type: string
+      python-version:
+        description: 'Python version'
+        required: false
+        type: string
+        default: '3.11'
+      install-command:
+        description: 'Custom pip install command'
+        required: false
+        type: string
+        default: ''
+      coverage-threshold:
+        description: 'Minimum coverage percentage'
+        required: false
+        type: number
+        default: 70
+      mypy-enforce:
+        description: 'Fail on mypy errors'
+        required: false
+        type: boolean
+        default: false
+      test-markers:
+        description: 'pytest marker expression (e.g., "not integration")'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      test-result:
+        description: 'Test job result'
+        value: ${{ jobs.test.result }}
+
+jobs:
+  test:
+    name: Lint and Test (${{ inputs.component }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: ${{ inputs.python-version }}
+          working-directory: ${{ inputs.component }}
+          install-command: ${{ inputs.install-command }}
+
+      - name: Run linter (ruff)
+        working-directory: ${{ inputs.component }}
+        run: |
+          pip install ruff
+          ruff check src/
+
+      - name: Run type checker (mypy)
+        working-directory: ${{ inputs.component }}
+        continue-on-error: ${{ !inputs.mypy-enforce }}
+        run: |
+          pip install mypy
+          mypy src/ --ignore-missing-imports
+
+      - name: Run tests
+        working-directory: ${{ inputs.component }}
+        run: |
+          pip install pytest pytest-asyncio pytest-cov
+          pytest tests/ -v --tb=short \
+            ${{ inputs.test-markers != '' && format('-m "{0}"', inputs.test-markers) || '' }} \
+            --cov=src \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=${{ inputs.coverage-threshold }} \
+            --junitxml=test-results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ inputs.component }}
+          path: |
+            ${{ inputs.component }}/test-results.xml
+            ${{ inputs.component }}/coverage.xml
+          retention-days: 30
+
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: '${{ inputs.component }} Tests'
+          path: '${{ inputs.component }}/test-results.xml'
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## ${{ inputs.component }} CI Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f "${{ inputs.component }}/test-results.xml" ]; then
+            python3 -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('${{ inputs.component }}/test-results.xml')
+          root = tree.getroot()
+          tests = int(root.get('tests', 0))
+          failures = int(root.get('failures', 0))
+          errors = int(root.get('errors', 0))
+          skipped = int(root.get('skipped', 0))
+          passed = tests - failures - errors - skipped
+          print(f'| Metric | Count |')
+          print(f'|--------|-------|')
+          print(f'| Total | {tests} |')
+          print(f'| Passed | {passed} |')
+          print(f'| Failed | {failures + errors} |')
+          print(f'| Skipped | {skipped} |')
+          " >> $GITHUB_STEP_SUMMARY
+          fi

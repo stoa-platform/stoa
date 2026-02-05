@@ -17,6 +17,8 @@ import {
 import { externalMcpServersService } from '../../services/externalMcpServersApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { ExternalMCPServerModal } from './ExternalMCPServerModal';
+import { useToastActions } from '@stoa/shared/components/Toast';
+import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import type {
   ExternalMCPServerDetail as ServerDetail,
   ExternalMCPServerUpdate,
@@ -34,6 +36,8 @@ export function ExternalMCPServerDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isReady } = useAuth();
+  const toast = useToastActions();
+  const [confirm, ConfirmDialog] = useConfirm();
 
   const [server, setServer] = useState<ServerDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,16 +90,19 @@ export function ExternalMCPServerDetail() {
       await loadServer();
 
       if (result.success) {
-        alert(`Connection successful! ${result.tools_discovered !== undefined ? `Found ${result.tools_discovered} tools.` : ''} Latency: ${result.latency_ms}ms`);
+        toast.success(
+          'Connection successful',
+          `${result.tools_discovered !== undefined ? `Found ${result.tools_discovered} tools. ` : ''}Latency: ${result.latency_ms}ms`
+        );
       } else {
-        alert(`Connection failed: ${result.error}`);
+        toast.error('Connection failed', result.error);
       }
     } catch (err: any) {
-      alert(`Test failed: ${err.message}`);
+      toast.error('Test failed', err.message);
     } finally {
       setTesting(false);
     }
-  }, [id]);
+  }, [id, toast]);
 
   const handleSyncTools = useCallback(async () => {
     if (!id) return;
@@ -104,13 +111,16 @@ export function ExternalMCPServerDetail() {
       setSyncing(true);
       const result = await externalMcpServersService.syncTools(id);
       await loadServer();
-      alert(`Synced ${result.synced_count} tools. ${result.removed_count > 0 ? `Removed ${result.removed_count} obsolete tools.` : ''}`);
+      toast.success(
+        'Tools synchronized',
+        `Synced ${result.synced_count} tools${result.removed_count > 0 ? `. Removed ${result.removed_count} obsolete.` : ''}`
+      );
     } catch (err: any) {
-      alert(`Sync failed: ${err.message}`);
+      toast.error('Sync failed', err.message);
     } finally {
       setSyncing(false);
     }
-  }, [id]);
+  }, [id, toast]);
 
   const handleToggleTool = useCallback(async (toolId: string, enabled: boolean) => {
     if (!id) return;
@@ -119,27 +129,33 @@ export function ExternalMCPServerDetail() {
       setTogglingTool(toolId);
       await externalMcpServersService.updateTool(id, toolId, { enabled });
       await loadServer();
+      toast.success(enabled ? 'Tool enabled' : 'Tool disabled');
     } catch (err: any) {
-      alert(`Failed to update tool: ${err.message}`);
+      toast.error('Failed to update tool', err.message);
     } finally {
       setTogglingTool(null);
     }
-  }, [id]);
+  }, [id, toast]);
 
   const handleDelete = useCallback(async () => {
     if (!id || !server) return;
 
-    if (!confirm(`Are you sure you want to delete "${server.display_name}"? This will also delete all synced tools and cannot be undone.`)) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: 'Delete MCP Server',
+      message: `Are you sure you want to delete "${server.display_name}"? This will also delete all synced tools and cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       await externalMcpServersService.deleteServer(id);
+      toast.success('Server deleted', `${server.display_name} has been removed`);
       navigate('/external-mcp-servers');
     } catch (err: any) {
-      alert(`Delete failed: ${err.message}`);
+      toast.error('Delete failed', err.message);
     }
-  }, [id, server, navigate]);
+  }, [id, server, navigate, toast, confirm]);
 
   if (loading) {
     return (
@@ -348,10 +364,13 @@ export function ExternalMCPServerDetail() {
                   {/* Input Schema Preview */}
                   {tool.input_schema && (
                     <button
-                      onClick={() => alert(JSON.stringify(tool.input_schema, null, 2))}
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(tool.input_schema, null, 2));
+                        toast.info('Schema copied', 'Input schema copied to clipboard');
+                      }}
                       className="text-xs text-gray-500 hover:text-gray-700"
                     >
-                      View Schema
+                      Copy Schema
                     </button>
                   )}
 
@@ -401,6 +420,8 @@ export function ExternalMCPServerDetail() {
           onSubmit={handleUpdate}
         />
       )}
+
+      {ConfirmDialog}
     </div>
   );
 }

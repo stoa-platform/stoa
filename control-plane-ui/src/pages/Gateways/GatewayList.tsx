@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { GatewayRegistrationForm } from './GatewayRegistrationForm';
+import { useToastActions } from '@stoa/shared/components/Toast';
+import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import type {
   GatewayInstance,
   GatewayType,
@@ -25,6 +27,8 @@ const typeLabels: Record<GatewayType, string> = {
 
 export function GatewayList() {
   const { isReady } = useAuth();
+  const toast = useToastActions();
+  const [confirm, ConfirmDialog] = useConfirm();
   const [gateways, setGateways] = useState<GatewayInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,15 +66,23 @@ export function GatewayList() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete gateway "${name}"? This cannot be undone.`)) return;
+  const handleDelete = useCallback(async (id: string, name: string) => {
+    const confirmed = await confirm({
+      title: 'Delete Gateway',
+      message: `Are you sure you want to delete "${name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
     try {
       await apiService.deleteGatewayInstance(id);
+      toast.success(`Gateway "${name}" deleted successfully`);
       await loadGateways();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to delete gateway');
+      toast.error(err.response?.data?.detail || 'Failed to delete gateway');
     }
-  };
+  }, [confirm, toast, loadGateways]);
 
   const handleCreated = () => {
     setShowForm(false);
@@ -213,6 +225,8 @@ export function GatewayList() {
           ))}
         </div>
       )}
+
+      {ConfirmDialog}
     </div>
   );
 }

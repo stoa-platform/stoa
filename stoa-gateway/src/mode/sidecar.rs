@@ -40,13 +40,13 @@ use super::{DecisionFormat, SidecarSettings};
 use axum::{
     body::Body,
     extract::State,
-    http::{HeaderMap, Request, StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Response},
     Json,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 /// Sidecar authorization request (from upstream gateway)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -212,7 +212,10 @@ impl AuthzResponse {
             status_code: Some(429),
             headers_to_add: [
                 ("X-RateLimit-Limit".to_string(), state.limit.to_string()),
-                ("X-RateLimit-Remaining".to_string(), state.remaining.to_string()),
+                (
+                    "X-RateLimit-Remaining".to_string(),
+                    state.remaining.to_string(),
+                ),
                 ("X-RateLimit-Reset".to_string(), state.reset_at.to_string()),
             ]
             .into_iter()
@@ -491,8 +494,14 @@ mod tests {
             .with_header("X-Another", "test");
 
         assert!(response.allowed);
-        assert_eq!(response.headers_to_add.get("X-Custom"), Some(&"value".to_string()));
-        assert_eq!(response.headers_to_add.get("X-Another"), Some(&"test".to_string()));
+        assert_eq!(
+            response.headers_to_add.get("X-Custom"),
+            Some(&"value".to_string())
+        );
+        assert_eq!(
+            response.headers_to_add.get("X-Another"),
+            Some(&"test".to_string())
+        );
     }
 
     #[test]

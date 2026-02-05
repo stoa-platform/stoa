@@ -55,7 +55,10 @@ pub struct TrafficCapture {
 
 impl TrafficCapture {
     /// Create a new traffic capture service
-    pub fn new(source: CaptureSource, buffer_size: usize) -> (Self, mpsc::Receiver<CapturedTransaction>) {
+    pub fn new(
+        source: CaptureSource,
+        buffer_size: usize,
+    ) -> (Self, mpsc::Receiver<CapturedTransaction>) {
         let (tx, rx) = mpsc::channel(buffer_size);
         let capture = Self {
             source,
@@ -67,7 +70,8 @@ impl TrafficCapture {
 
     /// Start capturing traffic
     pub async fn start(&self) {
-        self.running.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.running
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         info!(source = ?self.source, "Starting traffic capture");
 
         match &self.source {
@@ -81,7 +85,11 @@ impl TrafficCapture {
                 // Inline capture is handled by the proxy middleware
                 info!("Inline capture mode - traffic captured via proxy");
             }
-            CaptureSource::KafkaReplay { brokers, topic, group_id } => {
+            CaptureSource::KafkaReplay {
+                brokers,
+                topic,
+                group_id,
+            } => {
                 self.capture_kafka_replay(brokers, topic, group_id).await;
             }
         }
@@ -89,7 +97,8 @@ impl TrafficCapture {
 
     /// Stop capturing
     pub fn stop(&self) {
-        self.running.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.running
+            .store(false, std::sync::atomic::Ordering::SeqCst);
         info!("Stopping traffic capture");
     }
 
@@ -169,7 +178,9 @@ impl TrafficCapture {
 
         for line in lines {
             if line.is_empty() {
-                body_start = text.find("\r\n\r\n").map(|i| i + 4)
+                body_start = text
+                    .find("\r\n\r\n")
+                    .map(|i| i + 4)
                     .or_else(|| text.find("\n\n").map(|i| i + 2))
                     .unwrap_or(raw.len());
                 break;
@@ -191,7 +202,8 @@ impl TrafficCapture {
         }
 
         // Parse body if JSON
-        let body = if body_start < raw.len() && content_type.as_deref() == Some("application/json") {
+        let body = if body_start < raw.len() && content_type.as_deref() == Some("application/json")
+        {
             serde_json::from_slice(&raw[body_start..]).ok()
         } else {
             None
@@ -229,7 +241,9 @@ impl TrafficCapture {
 
         for line in lines {
             if line.is_empty() {
-                body_start = text.find("\r\n\r\n").map(|i| i + 4)
+                body_start = text
+                    .find("\r\n\r\n")
+                    .map(|i| i + 4)
                     .or_else(|| text.find("\n\n").map(|i| i + 2))
                     .unwrap_or(raw.len());
                 break;
@@ -248,7 +262,12 @@ impl TrafficCapture {
         }
 
         // Parse body if JSON
-        let body = if body_start < raw.len() && content_type.as_deref().map(|ct| ct.contains("json")).unwrap_or(false) {
+        let body = if body_start < raw.len()
+            && content_type
+                .as_deref()
+                .map(|ct| ct.contains("json"))
+                .unwrap_or(false)
+        {
             serde_json::from_slice(&raw[body_start..]).ok()
         } else {
             None

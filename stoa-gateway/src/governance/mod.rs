@@ -22,6 +22,3 @@
 #![allow(dead_code)]
 
 pub mod zombie;
-
-// Re-exports
-pub use zombie::{ZombieDetector, ZombieConfig, ZombieAlert, SessionHealth};

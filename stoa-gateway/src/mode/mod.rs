@@ -370,7 +370,8 @@ impl EdgeMcpSettings {
 impl SidecarSettings {
     fn from_env() -> Self {
         Self {
-            upstream_type: std::env::var("STOA_UPSTREAM_TYPE").unwrap_or_else(|_| "generic".to_string()),
+            upstream_type: std::env::var("STOA_UPSTREAM_TYPE")
+                .unwrap_or_else(|_| "generic".to_string()),
             user_info_header: std::env::var("STOA_USER_INFO_HEADER")
                 .unwrap_or_else(|_| "X-User-Info".to_string()),
             tenant_id_header: std::env::var("STOA_TENANT_ID_HEADER")
@@ -431,11 +432,20 @@ mod tests {
 
     #[test]
     fn test_gateway_mode_parse() {
-        assert_eq!("edge-mcp".parse::<GatewayMode>().unwrap(), GatewayMode::EdgeMcp);
+        assert_eq!(
+            "edge-mcp".parse::<GatewayMode>().unwrap(),
+            GatewayMode::EdgeMcp
+        );
         assert_eq!("mcp".parse::<GatewayMode>().unwrap(), GatewayMode::EdgeMcp);
-        assert_eq!("sidecar".parse::<GatewayMode>().unwrap(), GatewayMode::Sidecar);
+        assert_eq!(
+            "sidecar".parse::<GatewayMode>().unwrap(),
+            GatewayMode::Sidecar
+        );
         assert_eq!("proxy".parse::<GatewayMode>().unwrap(), GatewayMode::Proxy);
-        assert_eq!("shadow".parse::<GatewayMode>().unwrap(), GatewayMode::Shadow);
+        assert_eq!(
+            "shadow".parse::<GatewayMode>().unwrap(),
+            GatewayMode::Shadow
+        );
         assert!("invalid".parse::<GatewayMode>().is_err());
     }
 

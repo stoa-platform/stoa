@@ -1,0 +1,32 @@
+# ============================================
+# CARGO.TOML ADDITIONS
+# Add these dependencies to stoa-gateway/Cargo.toml
+# ============================================
+
+# [dependencies] section - ADD:
+
+# Quality fixes (Phase 1)
+parking_lot = "0.12"
+
+# MCP SSE Transport (Phase 2)
+tokio-stream = "0.1"
+futures = "0.3"
+uuid = { version = "1.0", features = ["v4"] }
+
+# API Key Auth (Phase 3)
+moka = { version = "0.12", features = ["sync"] }
+
+# Config upgrade (Phase 4)
+figment = { version = "0.10", features = ["yaml", "env"] }
+
+# ============================================
+# FULL PATCH (copy-paste ready)
+# ============================================
+
+# Add after existing [dependencies]:
+# parking_lot = "0.12"
+# tokio-stream = "0.1"
+# futures = "0.3"
+# uuid = { version = "1.0", features = ["v4"] }
+# moka = { version = "0.12", features = ["sync"] }
+# figment = { version = "0.10", features = ["yaml", "env"] }

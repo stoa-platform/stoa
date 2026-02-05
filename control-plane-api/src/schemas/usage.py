@@ -3,12 +3,12 @@ Pydantic schemas for Usage API endpoints - CAB-280
 Dashboard Usage Consumer pour DevOps/CPI
 """
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class CallStatus(str, Enum):
+class CallStatus(StrEnum):
     """Status of an MCP tool call"""
     SUCCESS = "success"
     ERROR = "error"
@@ -195,7 +195,7 @@ class ActiveSubscription(BaseModel):
 
 # ============ Dashboard Types (CAB-299) ============
 
-class ActivityType(str, Enum):
+class ActivityType(StrEnum):
     """Type of activity for the dashboard"""
     SUBSCRIPTION_CREATED = "subscription.created"
     SUBSCRIPTION_APPROVED = "subscription.approved"

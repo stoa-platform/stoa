@@ -13,7 +13,7 @@ from sqlalchemy.sql import func
 from src.database import Base
 
 
-class GatewayType(str, enum.Enum):
+class GatewayType(enum.StrEnum):
     """Supported gateway types — each has a corresponding adapter."""
     WEBMETHODS = "webmethods"
     KONG = "kong"
@@ -22,7 +22,7 @@ class GatewayType(str, enum.Enum):
     STOA = "stoa"
 
 
-class GatewayInstanceStatus(str, enum.Enum):
+class GatewayInstanceStatus(enum.StrEnum):
     """Health status of a gateway instance."""
     ONLINE = "online"
     OFFLINE = "offline"

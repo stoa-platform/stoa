@@ -5,14 +5,14 @@ for usage tracking, billing, and analytics.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class MeteringStatus(str, Enum):
+class MeteringStatus(StrEnum):
     """Status of a metered operation."""
 
     SUCCESS = "success"

@@ -2,11 +2,11 @@
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from re import Pattern
 
 
-class PIIType(str, Enum):
+class PIIType(StrEnum):
     EMAIL = "email"
     PHONE = "phone"
     PHONE_FR = "phone_fr"

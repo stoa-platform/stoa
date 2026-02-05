@@ -27,14 +27,14 @@ from sqlalchemy.orm import relationship
 from src.database import Base
 
 
-class MCPServerCategory(str, enum.Enum):
+class MCPServerCategory(enum.StrEnum):
     """Category of MCP Server."""
     PLATFORM = "platform"   # STOA platform tools (admin-only)
     TENANT = "tenant"       # Tenant-specific APIs
     PUBLIC = "public"       # Publicly available APIs
 
 
-class MCPServerSyncStatus(str, enum.Enum):
+class MCPServerSyncStatus(enum.StrEnum):
     """GitOps sync status of an MCP Server."""
     SYNCED = "synced"       # Successfully synced from GitLab
     PENDING = "pending"     # Sync pending
@@ -42,14 +42,14 @@ class MCPServerSyncStatus(str, enum.Enum):
     ORPHAN = "orphan"       # Exists in DB but not in GitLab
 
 
-class MCPServerStatus(str, enum.Enum):
+class MCPServerStatus(enum.StrEnum):
     """Status of an MCP Server."""
     ACTIVE = "active"
     MAINTENANCE = "maintenance"
     DEPRECATED = "deprecated"
 
 
-class MCPSubscriptionStatus(str, enum.Enum):
+class MCPSubscriptionStatus(enum.StrEnum):
     """MCP Subscription status enum."""
     PENDING = "pending"       # Awaiting approval (if required)
     ACTIVE = "active"         # Active subscription
@@ -58,7 +58,7 @@ class MCPSubscriptionStatus(str, enum.Enum):
     EXPIRED = "expired"       # Auto-expired
 
 
-class MCPToolAccessStatus(str, enum.Enum):
+class MCPToolAccessStatus(enum.StrEnum):
     """Status of tool access within a subscription."""
     ENABLED = "enabled"
     DISABLED = "disabled"

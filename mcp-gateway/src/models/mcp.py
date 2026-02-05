@@ -5,7 +5,7 @@ https://modelcontextprotocol.io/specification
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -15,13 +15,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # =============================================================================
 
 
-class MCPVersion(str, Enum):
+class MCPVersion(StrEnum):
     """Supported MCP protocol versions."""
 
     V1 = "1.0"
 
 
-class ContentType(str, Enum):
+class ContentType(StrEnum):
     """Content types for MCP responses."""
 
     TEXT = "text"
@@ -34,7 +34,7 @@ class ContentType(str, Enum):
 # =============================================================================
 
 
-class ToolType(str, Enum):
+class ToolType(StrEnum):
     """Tool types for STOA platform."""
 
     CORE = "core"  # Static platform tools (stoa_*)
@@ -42,7 +42,7 @@ class ToolType(str, Enum):
     LEGACY = "legacy"  # Backward-compatible tool (existing Tool model)
 
 
-class ToolDomain(str, Enum):
+class ToolDomain(StrEnum):
     """Core tool domains for STOA platform."""
 
     PLATFORM = "platform"  # Platform & Discovery

@@ -17,7 +17,6 @@ from .config import settings
 from .features.error_snapshots import add_error_snapshot_middleware, connect_error_snapshots
 from .logging_config import configure_logging, get_logger
 from .middleware.http_logging import HTTPLoggingMiddleware
-from .tracing_config import configure_tracing, shutdown_tracing
 
 # Note: These are now imported as instances, not modules
 from .middleware.metrics import MetricsMiddleware, get_metrics
@@ -71,6 +70,7 @@ from .routers.mcp_admin import (
 )
 from .services import argocd_service, awx_service, git_service, kafka_service, keycloak_service, metrics_service
 from .services.gateway_service import gateway_service
+from .tracing_config import configure_tracing, shutdown_tracing
 from .workers.deployment_worker import deployment_worker
 from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .workers.sync_engine import sync_engine

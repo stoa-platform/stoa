@@ -3,28 +3,28 @@
 Reference: PLAN-MCP-SUBSCRIPTIONS.md
 """
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 # ============== Enums ==============
 
-class MCPServerCategoryEnum(str, Enum):
+class MCPServerCategoryEnum(StrEnum):
     """MCP Server category for API responses."""
     PLATFORM = "platform"
     TENANT = "tenant"
     PUBLIC = "public"
 
 
-class MCPServerStatusEnum(str, Enum):
+class MCPServerStatusEnum(StrEnum):
     """MCP Server status for API responses."""
     ACTIVE = "active"
     MAINTENANCE = "maintenance"
     DEPRECATED = "deprecated"
 
 
-class MCPSubscriptionStatusEnum(str, Enum):
+class MCPSubscriptionStatusEnum(StrEnum):
     """MCP Subscription status for API responses."""
     PENDING = "pending"
     ACTIVE = "active"
@@ -33,7 +33,7 @@ class MCPSubscriptionStatusEnum(str, Enum):
     EXPIRED = "expired"
 
 
-class MCPToolAccessStatusEnum(str, Enum):
+class MCPToolAccessStatusEnum(StrEnum):
     """Tool access status for API responses."""
     ENABLED = "enabled"
     DISABLED = "disabled"

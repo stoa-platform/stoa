@@ -2,13 +2,13 @@
 Pydantic schemas for Contracts and Protocol Bindings API.
 """
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class ProtocolType(str, Enum):
+class ProtocolType(StrEnum):
     """Supported protocol types for UAC bindings."""
     REST = "rest"
     GRAPHQL = "graphql"
@@ -17,7 +17,7 @@ class ProtocolType(str, Enum):
     KAFKA = "kafka"
 
 
-class ContractStatus(str, Enum):
+class ContractStatus(StrEnum):
     """Contract lifecycle status."""
     DRAFT = "draft"
     PUBLISHED = "published"

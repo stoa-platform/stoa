@@ -272,7 +272,7 @@ impl ToolProxyClient {
             self.get_token().await?
         };
 
-        let payload = serde_json::json!({ "arguments": args });
+        let payload = serde_json::json!({ "name": tool, "arguments": args });
 
         let mut req = self
             .client
@@ -312,7 +312,7 @@ impl ToolProxyClient {
         let url = format!("{}/v1/mcp/tools/{}/invoke", self.base_url, tool);
         debug!(tool, url = %url, "Proxying tool call (unauthenticated)");
 
-        let payload = serde_json::json!({ "arguments": args });
+        let payload = serde_json::json!({ "name": tool, "arguments": args });
 
         let resp = self
             .client

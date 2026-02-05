@@ -1,6 +1,10 @@
-import { ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { ReactNode, useState, useEffect, useMemo } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useBreadcrumbs } from '../hooks/useBreadcrumbs';
+import { Breadcrumb } from '@stoa/shared/components/Breadcrumb';
+import { useCommandPalette, type CommandItem } from '@stoa/shared/components/CommandPalette';
+import { useSequenceShortcuts } from '@stoa/shared/hooks';
 import {
   LayoutDashboard,
   Building2,
@@ -17,6 +21,10 @@ import {
   Network,
   ArrowUpDown,
   BarChart3,
+  Menu,
+  X,
+  Search,
+  Plus,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -25,10 +33,10 @@ interface LayoutProps {
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Tenants', href: '/tenants', icon: Building2, permission: 'tenants:read' },
-  { name: 'APIs', href: '/apis', icon: Layers, permission: 'apis:read' },
-  { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read' },
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard, shortcut: ['g', 'd'] },
+  { name: 'Tenants', href: '/tenants', icon: Building2, permission: 'tenants:read', shortcut: ['g', 't'] },
+  { name: 'APIs', href: '/apis', icon: Layers, permission: 'apis:read', shortcut: ['g', 'a'] },
+  { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read', shortcut: ['g', 'w'] },
   { name: 'External MCP Servers', href: '/external-mcp-servers', icon: Server, permission: 'admin:servers' },
   { name: 'Gateway', href: '/gateway', icon: Server, permission: 'apis:read' },
   { name: 'Gateway Registry', href: '/gateways', icon: Network, permission: 'tenants:read' },
@@ -43,20 +51,117 @@ const navigation = [
 export function Layout({ children }: LayoutProps) {
   const { user, logout, hasPermission } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const breadcrumbItems = useBreadcrumbs();
+  const { setOpen: setCommandPaletteOpen, setItems: setCommandItems } = useCommandPalette();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const filteredNavigation = navigation.filter(
     item => !item.permission || hasPermission(item.permission)
   );
 
+  // Close sidebar when route changes (mobile)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
+  // Register sequence shortcuts for navigation (g+key)
+  const sequenceShortcuts = useMemo(() =>
+    filteredNavigation
+      .filter(item => item.shortcut)
+      .map(item => ({
+        keys: item.shortcut!,
+        handler: () => navigate(item.href),
+        description: `Go to ${item.name}`,
+      })),
+    [filteredNavigation, navigate]
+  );
+
+  useSequenceShortcuts(sequenceShortcuts);
+
+  // Register command palette items
+  useEffect(() => {
+    const commands: CommandItem[] = [
+      // Navigation commands
+      ...filteredNavigation.map(item => ({
+        id: `nav-${item.href}`,
+        label: item.name,
+        description: `Navigate to ${item.name}`,
+        icon: <item.icon className="h-4 w-4" />,
+        section: 'Navigation',
+        shortcut: item.shortcut ? ['G', item.shortcut[1].toUpperCase()] : undefined,
+        keywords: [item.name.toLowerCase(), 'go', 'navigate'],
+        onSelect: () => navigate(item.href),
+      })),
+      // Quick actions
+      {
+        id: 'action-new-api',
+        label: 'Create New API',
+        description: 'Add a new API definition',
+        icon: <Plus className="h-4 w-4" />,
+        section: 'Actions',
+        shortcut: ['N'],
+        keywords: ['new', 'create', 'add', 'api'],
+        onSelect: () => {
+          navigate('/apis');
+          // The page will need to handle opening the create modal
+        },
+      },
+      {
+        id: 'action-new-tenant',
+        label: 'Create New Tenant',
+        description: 'Add a new tenant',
+        icon: <Plus className="h-4 w-4" />,
+        section: 'Actions',
+        keywords: ['new', 'create', 'add', 'tenant'],
+        onSelect: () => {
+          navigate('/tenants');
+        },
+      },
+      // User actions
+      {
+        id: 'user-logout',
+        label: 'Logout',
+        description: 'Sign out of your account',
+        icon: <LogOut className="h-4 w-4" />,
+        section: 'Account',
+        keywords: ['logout', 'sign out', 'exit'],
+        onSelect: logout,
+      },
+    ];
+
+    setCommandItems(commands);
+  }, [filteredNavigation, navigate, logout, setCommandItems]);
+
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden animate-fade-in"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <div className="fixed inset-y-0 left-0 z-50 w-64 bg-gray-900">
-        <div className="flex h-16 items-center justify-center border-b border-gray-800">
-          <h1 className="text-xl font-bold text-white">STOA Control Plane</h1>
+      <div
+        className={clsx(
+          'fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 transition-transform duration-300 ease-in-out lg:translate-x-0',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
+        {/* Sidebar header */}
+        <div className="flex h-16 items-center justify-between border-b border-gray-800 px-4">
+          <h1 className="text-lg font-bold text-white">STOA Control Plane</h1>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-800 hover:text-white lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        <nav className="mt-6 px-3">
+        <nav className="mt-6 px-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
           <ul className="space-y-1">
             {filteredNavigation.map((item) => {
               const isActive = location.pathname === item.href ||
@@ -73,8 +178,13 @@ export function Layout({ children }: LayoutProps) {
                         : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                     )}
                   >
-                    <item.icon className="h-5 w-5" />
-                    {item.name}
+                    <item.icon className="h-5 w-5 flex-shrink-0" />
+                    <span className="truncate">{item.name}</span>
+                    {item.shortcut && (
+                      <span className="ml-auto text-xs text-gray-500 hidden xl:block">
+                        g{item.shortcut[1]}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
@@ -85,7 +195,7 @@ export function Layout({ children }: LayoutProps) {
         {/* User section */}
         <div className="absolute bottom-0 left-0 right-0 border-t border-gray-800 p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600 flex-shrink-0">
               <User className="h-5 w-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
@@ -94,7 +204,7 @@ export function Layout({ children }: LayoutProps) {
             </div>
             <button
               onClick={logout}
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white"
+              className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white flex-shrink-0"
               title="Logout"
             >
               <LogOut className="h-5 w-5" />
@@ -104,22 +214,62 @@ export function Layout({ children }: LayoutProps) {
       </div>
 
       {/* Main content */}
-      <div className="pl-64">
+      <div className="lg:pl-64">
         {/* Header */}
-        <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-white px-6 shadow-sm">
-          <div className="flex flex-1 items-center gap-4">
-            {user?.tenant_id && (
-              <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5">
-                <Building2 className="h-4 w-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">{user.tenant_id}</span>
-                <ChevronDown className="h-4 w-4 text-gray-400" />
-              </div>
-            )}
-          </div>
+        <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-white px-4 sm:px-6 shadow-sm">
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+
+          {/* Breadcrumbs */}
+          <Breadcrumb
+            items={breadcrumbItems}
+            showHome={false}
+            onNavigate={navigate}
+            className="flex-1 hidden sm:flex"
+          />
+
+          {/* Mobile: Just show current page name */}
+          <span className="flex-1 font-medium text-gray-900 truncate sm:hidden">
+            {breadcrumbItems[breadcrumbItems.length - 1]?.label || 'Dashboard'}
+          </span>
+
+          {/* Command Palette trigger */}
+          <button
+            onClick={() => setCommandPaletteOpen(true)}
+            className="hidden sm:flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:border-gray-300 transition-colors"
+          >
+            <Search className="h-4 w-4" />
+            <span className="hidden md:inline">Search...</span>
+            <kbd className="hidden md:flex items-center gap-0.5 rounded bg-white px-1.5 py-0.5 text-xs font-medium border border-gray-200">
+              <span className="text-xs">⌘</span>K
+            </kbd>
+          </button>
+
+          {/* Mobile search button */}
+          <button
+            onClick={() => setCommandPaletteOpen(true)}
+            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 sm:hidden"
+          >
+            <Search className="h-5 w-5" />
+          </button>
+
+          {/* Tenant selector */}
+          {user?.tenant_id && (
+            <div className="hidden sm:flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-1.5">
+              <Building2 className="h-4 w-4 text-neutral-500" />
+              <span className="text-sm font-medium text-neutral-700 max-w-[120px] truncate">{user.tenant_id}</span>
+              <ChevronDown className="h-4 w-4 text-neutral-400" />
+            </div>
+          )}
         </header>
 
         {/* Page content */}
-        <main className="p-6">
+        <main className="p-4 sm:p-6">
           {children}
         </main>
       </div>

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { config } from '../config';
+import { useToastActions } from '@stoa/shared/components/Toast';
+import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import type { Deployment, Tenant, API, TraceSummary, PipelineTrace, TraceStats, TraceStep, TraceStatus } from '../types';
 import {
   Activity,
@@ -402,6 +404,8 @@ function PipelineTracesTab() {
 
 function DeploymentHistoryTab() {
   const { isReady } = useAuth();
+  const toast = useToastActions();
+  const [confirm, ConfirmDialog] = useConfirm();
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [apis, setApis] = useState<API[]>([]);
@@ -462,15 +466,23 @@ function DeploymentHistoryTab() {
     }
   }
 
-  async function handleRollback(deploymentId: string) {
-    if (!confirm('Are you sure you want to rollback this deployment?')) return;
+  const handleRollback = useCallback(async (deploymentId: string, apiName: string) => {
+    const confirmed = await confirm({
+      title: 'Rollback Deployment',
+      message: `Are you sure you want to rollback the deployment for "${apiName}"? This will restore the previous version.`,
+      confirmLabel: 'Rollback',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
+
     try {
       await apiService.rollbackDeployment(selectedTenant, deploymentId);
+      toast.success(`Deployment for ${apiName} rolled back successfully`);
       loadDeployments(selectedTenant, selectedApi || undefined);
     } catch (err: any) {
-      setError(err.message || 'Failed to rollback deployment');
+      toast.error(err.message || 'Failed to rollback deployment');
     }
-  }
+  }, [selectedTenant, selectedApi, confirm, toast]);
 
   const statusColors: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-800',
@@ -607,7 +619,7 @@ function DeploymentHistoryTab() {
                       )}
                       {deployment.status === 'success' && (
                         <button
-                          onClick={() => handleRollback(deployment.id)}
+                          onClick={() => handleRollback(deployment.id, deployment.api_name)}
                           className="text-orange-600 hover:text-orange-800"
                         >
                           Rollback
@@ -621,6 +633,8 @@ function DeploymentHistoryTab() {
           </table>
         )}
       </div>
+
+      {ConfirmDialog}
     </div>
   );
 }

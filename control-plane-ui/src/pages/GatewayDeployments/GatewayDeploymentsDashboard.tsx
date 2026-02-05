@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { SyncStatusBadge } from '../../components/SyncStatusBadge';
 import { DeployAPIDialog } from './DeployAPIDialog';
+import { useToastActions } from '@stoa/shared/components/Toast';
+import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import type { GatewayDeployment, DeploymentStatusSummary } from '../../types';
 
 const PAGE_SIZE = 20;
@@ -38,6 +40,8 @@ function StatCard({
 
 export function GatewayDeploymentsDashboard() {
   const { isReady } = useAuth();
+  const toast = useToastActions();
+  const [confirm, ConfirmDialog] = useConfirm();
   const [deployments, setDeployments] = useState<GatewayDeployment[]>([]);
   const [summary, setSummary] = useState<DeploymentStatusSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,18 +101,26 @@ export function GatewayDeploymentsDashboard() {
     }
   };
 
-  const handleUndeploy = async (id: string) => {
-    if (!confirm('Are you sure you want to undeploy this API?')) return;
+  const handleUndeploy = useCallback(async (id: string, apiName?: string) => {
+    const confirmed = await confirm({
+      title: 'Undeploy API',
+      message: `Are you sure you want to undeploy "${apiName || 'this API'}"? This will remove it from the gateway.`,
+      confirmLabel: 'Undeploy',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
     setActionLoading(id);
     try {
       await apiService.undeployFromGateway(id);
+      toast.success(`${apiName || 'API'} undeployed successfully`);
       await loadData();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Undeploy failed');
+      toast.error(err.response?.data?.detail || 'Undeploy failed');
     } finally {
       setActionLoading(null);
     }
-  };
+  }, [confirm, toast, loadData]);
 
   const handleDeployed = () => {
     setShowDeployDialog(false);
@@ -278,7 +290,7 @@ export function GatewayDeploymentsDashboard() {
                         Sync
                       </button>
                       <button
-                        onClick={() => handleUndeploy(dep.id)}
+                        onClick={() => handleUndeploy(dep.id, (dep.desired_state as any)?.api_name)}
                         disabled={actionLoading === dep.id}
                         className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
                         title="Undeploy"
@@ -326,6 +338,8 @@ export function GatewayDeploymentsDashboard() {
           onDeployed={handleDeployed}
         />
       )}
+
+      {ConfirmDialog}
     </div>
   );
 }

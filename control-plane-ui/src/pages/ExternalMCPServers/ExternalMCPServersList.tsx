@@ -4,6 +4,8 @@ import { Plus, RefreshCw, Server, CheckCircle, XCircle, AlertCircle, Clock } fro
 import { externalMcpServersService } from '../../services/externalMcpServersApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { ExternalMCPServerModal } from './ExternalMCPServerModal';
+import { useToastActions } from '@stoa/shared/components/Toast';
+import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import type { ExternalMCPServer, ExternalMCPServerCreate, ExternalMCPServerUpdate, ExternalMCPHealthStatus } from '../../types';
 
 const healthStatusConfig: Record<ExternalMCPHealthStatus, { color: string; icon: typeof CheckCircle; label: string }> = {
@@ -22,6 +24,8 @@ const transportLabels: Record<string, string> = {
 export function ExternalMCPServersList() {
   const navigate = useNavigate();
   const { isReady } = useAuth();
+  const toast = useToastActions();
+  const [confirm, ConfirmDialog] = useConfirm();
   const [servers, setServers] = useState<ExternalMCPServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,42 +70,53 @@ export function ExternalMCPServersList() {
       await loadServers(); // Refresh to get updated health status
 
       if (result.success) {
-        alert(`Connection successful! ${result.tools_discovered !== undefined ? `Found ${result.tools_discovered} tools.` : ''} Latency: ${result.latency_ms}ms`);
+        toast.success(
+          'Connection successful',
+          `${result.tools_discovered !== undefined ? `Found ${result.tools_discovered} tools. ` : ''}Latency: ${result.latency_ms}ms`
+        );
       } else {
-        alert(`Connection failed: ${result.error}`);
+        toast.error('Connection failed', result.error);
       }
     } catch (err: any) {
-      alert(`Test failed: ${err.message}`);
+      toast.error('Test failed', err.message);
     } finally {
       setTestingServerId(null);
     }
-  }, []);
+  }, [toast]);
 
   const handleSyncTools = useCallback(async (serverId: string) => {
     try {
       setSyncingServerId(serverId);
       const result = await externalMcpServersService.syncTools(serverId);
       await loadServers(); // Refresh to get updated tool count
-      alert(`Synced ${result.synced_count} tools. ${result.removed_count > 0 ? `Removed ${result.removed_count} obsolete tools.` : ''}`);
+      toast.success(
+        'Tools synchronized',
+        `Synced ${result.synced_count} tools${result.removed_count > 0 ? `. Removed ${result.removed_count} obsolete.` : ''}`
+      );
     } catch (err: any) {
-      alert(`Sync failed: ${err.message}`);
+      toast.error('Sync failed', err.message);
     } finally {
       setSyncingServerId(null);
     }
-  }, []);
+  }, [toast]);
 
   const handleDelete = useCallback(async (server: ExternalMCPServer) => {
-    if (!confirm(`Are you sure you want to delete "${server.display_name}"? This will also delete all synced tools.`)) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: 'Delete MCP Server',
+      message: `Are you sure you want to delete "${server.display_name}"? This will also delete all synced tools.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
 
     try {
       await externalMcpServersService.deleteServer(server.id);
+      toast.success('Server deleted', `${server.display_name} has been removed`);
       await loadServers();
     } catch (err: any) {
-      alert(`Delete failed: ${err.message}`);
+      toast.error('Delete failed', err.message);
     }
-  }, []);
+  }, [toast, confirm]);
 
   if (loading) {
     return (
@@ -267,6 +282,8 @@ export function ExternalMCPServersList() {
           onSubmit={handleCreate}
         />
       )}
+
+      {ConfirmDialog}
     </div>
   );
 }

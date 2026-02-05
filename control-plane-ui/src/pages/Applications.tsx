@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useToastActions } from '@stoa/shared/components/Toast';
+import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import type { Application, ApplicationCreate, Tenant, API } from '../types';
 
 // Debounce hook for search optimization
@@ -24,6 +26,8 @@ const PAGE_SIZE = 12;
 
 export function Applications() {
   const { isReady } = useAuth();
+  const toast = useToastActions();
+  const [confirm, ConfirmDialog] = useConfirm();
   const [applications, setApplications] = useState<Application[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [apis, setApis] = useState<API[]>([]);
@@ -153,13 +157,21 @@ export function Applications() {
     }
   }
 
-  async function handleDelete(appId: string) {
-    if (!confirm('Are you sure you want to delete this application?')) return;
+  async function handleDelete(appId: string, appName: string) {
+    const confirmed = await confirm({
+      title: 'Delete Application',
+      message: `Are you sure you want to delete "${appName}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
     try {
       await apiService.deleteApplication(selectedTenant, appId);
+      toast.success('Application deleted', `${appName} has been removed`);
       loadTenantData(selectedTenant);
     } catch (err: any) {
-      setError(err.message || 'Failed to delete application');
+      toast.error('Delete failed', err.message || 'Failed to delete application');
     }
   }
 
@@ -356,7 +368,7 @@ export function Applications() {
                   Edit
                 </button>
                 <button
-                  onClick={() => handleDelete(app.id)}
+                  onClick={() => handleDelete(app.id, app.display_name || app.name)}
                   className="flex-1 px-3 py-2 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
                 >
                   Delete
@@ -415,6 +427,9 @@ export function Applications() {
           title="Edit Application"
         />
       )}
+
+      {/* Confirm Dialog */}
+      {ConfirmDialog}
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { PlatformStatus } from './components/PlatformStatus';
 import { quickLinks } from './config';
+import { ToastProvider } from '@stoa/shared/components/Toast';
+import { CommandPaletteProvider } from '@stoa/shared/components/CommandPalette';
 
 // Lazy load pages for code splitting
 const Tenants = lazy(() => import('./pages/Tenants').then(m => ({ default: m.Tenants })));
@@ -203,30 +205,32 @@ function ProtectedRoutes() {
   }
 
   return (
-    <Layout>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/tenants" element={<Tenants />} />
-          <Route path="/apis" element={<APIs />} />
-          <Route path="/ai-tools" element={<ToolCatalog />} />
-          <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
-          <Route path="/ai-tools/usage" element={<UsageDashboard />} />
-          <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
-          <Route path="/applications" element={<Applications />} />
-          <Route path="/deployments" element={<Deployments />} />
-          <Route path="/monitoring" element={<APIMonitoring />} />
-          <Route path="/mcp/errors" element={<ErrorSnapshots />} />
-          <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
-          <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
-          <Route path="/gateway" element={<GatewayStatus />} />
-          <Route path="/gateways" element={<GatewayRegistry />} />
-          <Route path="/gateway-deployments" element={<GatewayDeployments />} />
-          <Route path="/gateway-observability" element={<GatewayObservability />} />
-          <Route path="/admin/prospects" element={<AdminProspects />} />
-        </Routes>
-      </Suspense>
-    </Layout>
+    <CommandPaletteProvider>
+      <Layout>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/tenants" element={<Tenants />} />
+            <Route path="/apis" element={<APIs />} />
+            <Route path="/ai-tools" element={<ToolCatalog />} />
+            <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
+            <Route path="/ai-tools/usage" element={<UsageDashboard />} />
+            <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
+            <Route path="/applications" element={<Applications />} />
+            <Route path="/deployments" element={<Deployments />} />
+            <Route path="/monitoring" element={<APIMonitoring />} />
+            <Route path="/mcp/errors" element={<ErrorSnapshots />} />
+            <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
+            <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
+            <Route path="/gateway" element={<GatewayStatus />} />
+            <Route path="/gateways" element={<GatewayRegistry />} />
+            <Route path="/gateway-deployments" element={<GatewayDeployments />} />
+            <Route path="/gateway-observability" element={<GatewayObservability />} />
+            <Route path="/admin/prospects" element={<AdminProspects />} />
+          </Routes>
+        </Suspense>
+      </Layout>
+    </CommandPaletteProvider>
   );
 }
 
@@ -271,12 +275,14 @@ function Login() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/*" element={<ProtectedRoutes />} />
-      </Routes>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/*" element={<ProtectedRoutes />} />
+        </Routes>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 

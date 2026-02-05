@@ -35,10 +35,10 @@ jobs:
         language: [python, javascript-typescript]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@2d3fe93d4896727350828f23e48f5391e6d3f022 # v3
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
@@ -54,9 +54,9 @@ jobs:
               - '**/dist'
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@2d3fe93d4896727350828f23e48f5391e6d3f022 # v3
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@2d3fe93d4896727350828f23e48f5391e6d3f022 # v3
         with:
           category: '/language:${{ matrix.language }}'

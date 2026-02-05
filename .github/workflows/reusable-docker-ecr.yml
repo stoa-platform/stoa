@@ -45,13 +45,14 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      attestations: write
     outputs:
       image_tag: ${{ env.ECR_REGISTRY }}/${{ inputs.ecr-repository }}:${{ inputs.environment }}-${{ github.sha }}
       image_digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Docker metadata
         uses: ./.github/actions/docker-metadata
@@ -65,7 +66,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: ${{ inputs.component }}
           platforms: ${{ inputs.platforms }}
@@ -78,10 +79,21 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ inputs.component }}
           build-args: ${{ inputs.build-args }}
 
+      - name: Generate SLSA provenance (attestation)
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-name: ${{ env.ECR_REGISTRY }}/${{ inputs.ecr-repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
       - name: Job Summary
         run: |
           echo "### ${{ inputs.component }} Docker Image" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Image:** \`${{ env.ECR_REGISTRY }}/${{ inputs.ecr-repository }}:${{ inputs.environment }}-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Platforms:** ${{ inputs.platforms }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**SLSA Provenance:** :white_check_mark: Attested" >> $GITHUB_STEP_SUMMARY

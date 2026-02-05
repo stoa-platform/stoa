@@ -1,0 +1,47 @@
+# ArgoCD Application: STOA Grafana Dashboards
+# Phase 7: GitOps for Grafana dashboard ConfigMaps
+#
+# Syncs deploy/grafana/dashboards/ directory
+# Grafana sidecar auto-loads dashboards from ConfigMaps with label:
+#   grafana_dashboard: "1"
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stoa-dashboards
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: stoa-dashboards
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: dashboards
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: stoa-alerts
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: stoa-alerts
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: stoa-platform
+
+  source:
+    repoURL: https://gitlab.com/cab6961310/stoa-gitops.git
+    targetRevision: main
+    path: deploy/grafana/dashboards
+    directory:
+      recurse: false
+      include: '*.yaml'
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stoa-monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

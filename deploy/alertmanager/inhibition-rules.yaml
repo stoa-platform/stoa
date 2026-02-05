@@ -1,0 +1,113 @@
+# CAB-1089 Phase 4: Inhibition Rules
+#
+# Prevents alert storms by suppressing lower-severity alerts when
+# higher-severity alerts are already firing for the same target.
+#
+# Applied as part of the global Alertmanager configuration
+# (merge into kube-prometheus-stack values or global config).
+#
+# Rules:
+# 1. Critical suppresses Warning for same component
+# 2. Critical suppresses Info for same component
+# 3. Fast burn suppresses Medium/Slow burn for same tier
+# 4. Component-down suppresses all other alerts for same component
+# 5. ErrorBudgetExhausted suppresses ErrorBudgetLow for same tier
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: stoa-inhibition-rules
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    alertmanagerconfig: stoa
+  annotations:
+    gostoa.dev/created-by: cab-1089
+spec:
+  # Inhibition rules are defined at the global Alertmanager level.
+  # This file documents the rules to merge into the global config
+  # via kube-prometheus-stack values (alertmanager.config.inhibit_rules).
+  #
+  # The AlertmanagerConfig CRD v1alpha1 does not support inhibit_rules
+  # natively, so these must be applied via Helm values.
+  #
+  # Apply with:
+  #   helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  #     -n stoa-monitoring -f deploy/alertmanager/inhibition-rules-values.yaml
+  route:
+    receiver: 'null'
+    routes: []
+  receivers:
+    - name: 'null'
+
+---
+# Inhibition rules for kube-prometheus-stack Helm values
+# Merge these into alertmanager.config.inhibit_rules in your values file.
+#
+# Usage:
+#   helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     -n stoa-monitoring \
+#     -f deploy/observability/values-alertmanager.yaml \
+#     --set-json 'alertmanager.config.inhibit_rules=[...]'
+#
+# Or reference this file directly in your values override.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-inhibition-rules-reference
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+  annotations:
+    gostoa.dev/created-by: cab-1089
+    gostoa.dev/purpose: "Reference document — merge into Alertmanager global config"
+data:
+  inhibit_rules.yaml: |
+    # Rule 1: Critical suppresses Warning for same component
+    - source_matchers:
+        - severity = critical
+      target_matchers:
+        - severity = warning
+      equal: ['component', 'tier']
+
+    # Rule 2: Critical suppresses Info for same component
+    - source_matchers:
+        - severity = critical
+      target_matchers:
+        - severity = info
+      equal: ['component', 'tier']
+
+    # Rule 3: Fast burn suppresses Medium burn for same tier
+    - source_matchers:
+        - burn_window = fast
+      target_matchers:
+        - burn_window = medium
+      equal: ['tier']
+
+    # Rule 4: Fast burn suppresses Slow burn for same tier
+    - source_matchers:
+        - burn_window = fast
+      target_matchers:
+        - burn_window = slow
+      equal: ['tier']
+
+    # Rule 5: Medium burn suppresses Slow burn for same tier
+    - source_matchers:
+        - burn_window = medium
+      target_matchers:
+        - burn_window = slow
+      equal: ['tier']
+
+    # Rule 6: Component down suppresses all other alerts for that component
+    # (e.g., MCPGatewayDown inhibits MCPGatewayHighErrorRate)
+    - source_matchers:
+        - alertname =~ ".*Down$"
+      target_matchers:
+        - severity =~ "warning|info"
+      equal: ['component']
+
+    # Rule 7: ErrorBudgetExhausted suppresses ErrorBudgetLow for same tier
+    - source_matchers:
+        - alertname = ErrorBudgetExhausted
+      target_matchers:
+        - alertname = ErrorBudgetLow
+      equal: ['tier']

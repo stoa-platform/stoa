@@ -1,0 +1,243 @@
+# CAB-1089 Phase 4: AlertmanagerConfig CRD
+#
+# Per-tier alert routing following Google SRE escalation model:
+#   enterprise → PagerDuty (page immediate) + Slack #stoa-incidents
+#   business   → Slack #stoa-alerts (business hours)
+#   demo/platform → Email digest (daily)
+#
+# This CRD is merged with the global Alertmanager config by
+# prometheus-operator. It replaces the legacy values-alertmanager.yaml
+# severity-only routing with tier-aware routing.
+#
+# Prerequisites:
+#   - Secret stoa-alertmanager-secrets in stoa-monitoring namespace
+#     (see secrets-template.yaml)
+#   - Prometheus-operator v0.65+ (AlertmanagerConfig v1alpha1)
+#
+# Routing tree:
+#   root (group_by: alertname, component, tier)
+#   ├── severity=critical + tier=enterprise → pagerduty-enterprise + slack-incidents
+#   ├── severity=critical + tier=business   → slack-incidents
+#   ├── severity=critical (other)           → slack-critical
+#   ├── component=slo + tier=enterprise     → slack-slo + pagerduty-enterprise
+#   ├── component=slo                       → slack-slo
+#   ├── severity=warning + tier=enterprise  → slack-alerts
+#   ├── severity=warning + tier=business    → slack-alerts
+#   ├── severity=warning (other)            → slack-alerts
+#   ├── severity=info                       → email-digest
+#   └── default                             → slack-alerts
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: stoa-tier-routing
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    alertmanagerconfig: stoa
+  annotations:
+    gostoa.dev/created-by: cab-1089
+spec:
+  route:
+    receiver: slack-alerts
+    groupBy: ['alertname', 'component', 'tier']
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    routes:
+      # ── Enterprise Critical: PagerDuty + Slack #incidents ──
+      - receiver: pagerduty-enterprise
+        matchers:
+          - name: severity
+            value: critical
+          - name: tier
+            value: enterprise
+        groupWait: 10s
+        repeatInterval: 30m
+        continue: true  # Also send to slack-incidents
+
+      - receiver: slack-incidents
+        matchers:
+          - name: severity
+            value: critical
+          - name: tier
+            value: enterprise
+        groupWait: 10s
+        repeatInterval: 1h
+
+      # ── Business Critical: Slack #incidents only ──
+      - receiver: slack-incidents
+        matchers:
+          - name: severity
+            value: critical
+          - name: tier
+            value: business
+        groupWait: 10s
+        repeatInterval: 1h
+
+      # ── Other Critical: Slack #critical ──
+      - receiver: slack-critical
+        matchers:
+          - name: severity
+            value: critical
+        groupWait: 10s
+        repeatInterval: 1h
+
+      # ── SLO burn-rate alerts: Enterprise → PagerDuty + Slack #slo ──
+      - receiver: pagerduty-enterprise
+        matchers:
+          - name: component
+            value: slo
+          - name: tier
+            value: enterprise
+          - name: severity
+            value: critical
+        repeatInterval: 30m
+        continue: true
+
+      - receiver: slack-slo
+        matchers:
+          - name: component
+            value: slo
+        repeatInterval: 2h
+
+      # ── Warnings: Slack #alerts (all tiers) ──
+      - receiver: slack-alerts
+        matchers:
+          - name: severity
+            value: warning
+        repeatInterval: 4h
+
+      # ── Info: Email digest ──
+      - receiver: email-digest
+        matchers:
+          - name: severity
+            value: info
+        groupWait: 10m
+        groupInterval: 1h
+        repeatInterval: 24h
+
+  receivers:
+    # ── PagerDuty: Enterprise critical + SLO fast-burn ──
+    - name: pagerduty-enterprise
+      pagerdutyConfigs:
+        - routingKey:
+            name: stoa-alertmanager-secrets
+            key: pagerduty-routing-key
+          severity: '{{ if eq .CommonLabels.severity "critical" }}critical{{ else }}warning{{ end }}'
+          description: '{{ .CommonLabels.alertname }} ({{ .CommonLabels.tier }})'
+          details:
+            - key: component
+              value: '{{ .CommonLabels.component }}'
+            - key: tier
+              value: '{{ .CommonLabels.tier }}'
+            - key: description
+              value: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+            - key: runbook
+              value: '{{ range .Alerts }}{{ .Annotations.runbook_url }}{{ end }}'
+          sendResolved: true
+
+    # ── Slack #stoa-incidents: Critical alerts (enterprise + business) ──
+    - name: slack-incidents
+      slackConfigs:
+        - apiURL:
+            name: stoa-alertmanager-secrets
+            key: slack-webhook-incidents
+          channel: '#stoa-incidents'
+          sendResolved: true
+          title: ':rotating_light: [{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+          text: |-
+            *Tier:* {{ .CommonLabels.tier | toUpper }}
+            *Component:* {{ .CommonLabels.component }}
+            *Severity:* {{ .CommonLabels.severity }}
+            {{ range .Alerts }}
+            *Description:* {{ .Annotations.description }}
+            *Runbook:* {{ .Annotations.runbook_url }}
+            {{ end }}
+          color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+
+    # ── Slack #stoa-alerts-critical: Critical for demo/platform ──
+    - name: slack-critical
+      slackConfigs:
+        - apiURL:
+            name: stoa-alertmanager-secrets
+            key: slack-webhook-critical
+          channel: '#stoa-alerts-critical'
+          sendResolved: true
+          title: '[CRITICAL] {{ .CommonLabels.alertname }}'
+          text: |-
+            *Component:* {{ .CommonLabels.component }}
+            *Tier:* {{ .CommonLabels.tier }}
+            {{ range .Alerts }}
+            *Description:* {{ .Annotations.description }}
+            *Runbook:* {{ .Annotations.runbook_url }}
+            {{ end }}
+          color: 'danger'
+
+    # ── Slack #stoa-slo: SLO burn-rate + error budget alerts ──
+    - name: slack-slo
+      slackConfigs:
+        - apiURL:
+            name: stoa-alertmanager-secrets
+            key: slack-webhook-slo
+          channel: '#stoa-slo'
+          sendResolved: true
+          title: ':chart_with_downwards_trend: SLO {{ .CommonLabels.burn_window | toUpper }} burn — {{ .CommonLabels.tier }}'
+          text: |-
+            *Alert:* {{ .CommonLabels.alertname }}
+            *Tier:* {{ .CommonLabels.tier }} (SLO target: {{ .CommonLabels.slo_target }}%)
+            *Burn window:* {{ .CommonLabels.burn_window }}
+            {{ range .Alerts }}
+            *Description:* {{ .Annotations.description }}
+            {{ end }}
+            :grafana: <https://grafana.gostoa.dev/d/stoa-slo-per-tier?var-tier={{ .CommonLabels.tier }}|View SLO Dashboard>
+          color: '{{ if eq .CommonLabels.severity "critical" }}danger{{ else if eq .CommonLabels.severity "warning" }}warning{{ else }}#439FE0{{ end }}'
+
+    # ── Slack #stoa-alerts: Warning-level alerts (all tiers) ──
+    - name: slack-alerts
+      slackConfigs:
+        - apiURL:
+            name: stoa-alertmanager-secrets
+            key: slack-webhook-alerts
+          channel: '#stoa-alerts'
+          sendResolved: true
+          title: '{{ if eq .Status "firing" }}:warning:{{ else }}:white_check_mark:{{ end }} [{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+          text: |-
+            *Component:* {{ .CommonLabels.component }}
+            *Tier:* {{ .CommonLabels.tier }}
+            *Severity:* {{ .CommonLabels.severity }}
+            {{ range .Alerts }}
+            *Description:* {{ .Annotations.description }}
+            {{ end }}
+          color: '{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "critical" }}danger{{ else }}warning{{ end }}{{ else }}good{{ end }}'
+
+    # ── Email: Daily digest for info-level (demo/platform slow burns) ──
+    - name: email-digest
+      emailConfigs:
+        - to: 'stoa-ops@gostoa.dev'
+          from: 'alertmanager@gostoa.dev'
+          smarthost: 'smtp.gostoa.dev:587'
+          authUsername:
+            name: stoa-alertmanager-secrets
+            key: smtp-username
+          authPassword:
+            name: stoa-alertmanager-secrets
+            key: smtp-password
+          requireTLS: true
+          sendResolved: false
+          headers:
+            - key: Subject
+              value: '[STOA] Daily Alert Digest — {{ .CommonLabels.tier }} tier'
+          html: |-
+            <h2>STOA Platform Alert Digest</h2>
+            <p><strong>Tier:</strong> {{ .CommonLabels.tier }}</p>
+            <table border="1" cellpadding="4">
+              <tr><th>Alert</th><th>Component</th><th>Description</th></tr>
+              {{ range .Alerts }}
+              <tr>
+                <td>{{ .Labels.alertname }}</td>
+                <td>{{ .Labels.component }}</td>
+                <td>{{ .Annotations.description }}</td>
+              </tr>
+              {{ end }}
+            </table>
+            <p><a href="https://grafana.gostoa.dev/d/stoa-slo-per-tier?var-tier={{ .CommonLabels.tier }}">View SLO Dashboard</a></p>

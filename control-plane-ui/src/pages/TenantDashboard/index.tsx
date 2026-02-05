@@ -1,0 +1,1 @@
+export { TenantDashboard } from './TenantDashboard';

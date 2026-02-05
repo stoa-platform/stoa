@@ -247,4 +247,43 @@ data:
         }
       }
     }
+
+    // =========================================================================
+    // 4. FARO RUM PIPELINE (Phase 6)
+    // =========================================================================
+    // Receives frontend telemetry from Grafana Faro SDK
+    // Console UI (stoa-console) and Developer Portal (stoa-portal)
+    //
+    // Data flow:
+    //   Faro SDK -> HTTP POST :12347/collect -> logs (Loki) + traces (Tempo)
+
+    faro.receiver "default" {
+      server {
+        listen_address = "0.0.0.0"
+        listen_port    = 12347
+
+        cors_allowed_origins = [
+          "https://console.*",
+          "https://portal.*",
+          "http://localhost:*",
+        ]
+      }
+
+      // Route Faro logs to Loki (via the existing log pipeline)
+      output {
+        logs   = [loki.process.faro_logs.receiver]
+        traces = [otelcol.processor.attributes.add_platform.input]
+      }
+    }
+
+    // Process Faro logs: add source label + forward to Loki
+    loki.process "faro_logs" {
+      forward_to = [loki.process.add_platform_labels.receiver]
+
+      stage.static_labels {
+        values = {
+          source = "faro",
+        }
+      }
+    }
 {{- end }}

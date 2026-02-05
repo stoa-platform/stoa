@@ -1,0 +1,356 @@
+{{- if .Values.blackboxExporter.enabled }}
+# =============================================================================
+# Blackbox Exporter - Synthetic HTTP Probes
+# =============================================================================
+# Phase 6: Uptime monitoring for all public STOA endpoints
+# Uses prometheus-operator Probe CRD for automatic scrape target generation
+#
+# Probed endpoints:
+#   - Control Plane API   (api.gostoa.dev)
+#   - MCP Gateway         (mcp.gostoa.dev)
+#   - Developer Portal    (portal.gostoa.dev)
+#   - Console UI          (console.gostoa.dev)
+#   - Keycloak SSO        (auth.gostoa.dev)
+#   - ArgoCD              (argocd.gostoa.dev)
+# =============================================================================
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-blackbox-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+data:
+  config.yml: |
+    modules:
+      http_2xx:
+        prober: http
+        timeout: 10s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: [200, 301, 302]
+          method: GET
+          follow_redirects: true
+          preferred_ip_protocol: ip4
+          tls_config:
+            insecure_skip_verify: false
+
+      http_api_health:
+        prober: http
+        timeout: 10s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: [200]
+          method: GET
+          follow_redirects: false
+          preferred_ip_protocol: ip4
+          fail_if_body_not_matches_regexp:
+            - '"status"\s*:\s*"(ok|healthy)"'
+
+      http_auth_health:
+        prober: http
+        timeout: 15s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: [200]
+          method: GET
+          follow_redirects: true
+          preferred_ip_protocol: ip4
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stoa-blackbox-exporter
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: blackbox-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stoa-blackbox-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: stoa-blackbox-exporter
+        app.kubernetes.io/component: blackbox-exporter
+      annotations:
+        checksum/config: {{ toYaml .Values.blackboxExporter | sha256sum }}
+    spec:
+      containers:
+        - name: blackbox-exporter
+          image: prom/blackbox-exporter:v0.25.0
+          args:
+            - --config.file=/etc/blackbox/config.yml
+            - --log.level=info
+          ports:
+            - name: http
+              containerPort: 9115
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/blackbox
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: stoa-blackbox-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stoa-blackbox-exporter
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: blackbox-exporter
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9115
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: stoa-blackbox-exporter
+
+---
+# ServiceMonitor for blackbox exporter internal metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: stoa-blackbox-exporter
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stoa-blackbox-exporter
+  endpoints:
+    - port: http
+      interval: 30s
+
+---
+# Probe CRD: Control Plane API health
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: stoa-probe-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    stoa.dev/probe-group: public-endpoints
+spec:
+  interval: 60s
+  scrapeTimeout: 15s
+  module: http_api_health
+  prober:
+    url: stoa-blackbox-exporter.{{ .Release.Namespace }}:9115
+  targets:
+    staticConfig:
+      static:
+        - https://api.{{ .Values.global.baseDomain | default "gostoa.dev" }}/health
+      labels:
+        component: control-plane-api
+        probe_type: health
+
+---
+# Probe CRD: MCP Gateway health
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: stoa-probe-mcp
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    stoa.dev/probe-group: public-endpoints
+spec:
+  interval: 60s
+  scrapeTimeout: 15s
+  module: http_api_health
+  prober:
+    url: stoa-blackbox-exporter.{{ .Release.Namespace }}:9115
+  targets:
+    staticConfig:
+      static:
+        - https://mcp.{{ .Values.global.baseDomain | default "gostoa.dev" }}/health
+      labels:
+        component: mcp-gateway
+        probe_type: health
+
+---
+# Probe CRD: Developer Portal availability
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: stoa-probe-portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    stoa.dev/probe-group: public-endpoints
+spec:
+  interval: 60s
+  scrapeTimeout: 15s
+  module: http_2xx
+  prober:
+    url: stoa-blackbox-exporter.{{ .Release.Namespace }}:9115
+  targets:
+    staticConfig:
+      static:
+        - https://portal.{{ .Values.global.baseDomain | default "gostoa.dev" }}
+      labels:
+        component: portal
+        probe_type: availability
+
+---
+# Probe CRD: Console UI availability
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: stoa-probe-console
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    stoa.dev/probe-group: public-endpoints
+spec:
+  interval: 60s
+  scrapeTimeout: 15s
+  module: http_2xx
+  prober:
+    url: stoa-blackbox-exporter.{{ .Release.Namespace }}:9115
+  targets:
+    staticConfig:
+      static:
+        - https://console.{{ .Values.global.baseDomain | default "gostoa.dev" }}
+      labels:
+        component: console
+        probe_type: availability
+
+---
+# Probe CRD: Keycloak SSO availability
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: stoa-probe-auth
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    stoa.dev/probe-group: public-endpoints
+spec:
+  interval: 60s
+  scrapeTimeout: 15s
+  module: http_auth_health
+  prober:
+    url: stoa-blackbox-exporter.{{ .Release.Namespace }}:9115
+  targets:
+    staticConfig:
+      static:
+        - https://auth.{{ .Values.global.baseDomain | default "gostoa.dev" }}/realms/stoa/.well-known/openid-configuration
+      labels:
+        component: keycloak
+        probe_type: health
+
+---
+# Probe CRD: ArgoCD availability
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: stoa-probe-argocd
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    stoa.dev/probe-group: internal-endpoints
+spec:
+  interval: 120s
+  scrapeTimeout: 15s
+  module: http_2xx
+  prober:
+    url: stoa-blackbox-exporter.{{ .Release.Namespace }}:9115
+  targets:
+    staticConfig:
+      static:
+        - https://argocd.{{ .Values.global.baseDomain | default "gostoa.dev" }}
+      labels:
+        component: argocd
+        probe_type: availability
+
+---
+# PrometheusRule: Alerts based on blackbox probe results
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-blackbox-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    prometheus: kube-prometheus-stack
+spec:
+  groups:
+    - name: stoa.blackbox.uptime
+      rules:
+        - alert: EndpointDown
+          expr: probe_success{job=~"probe/.*stoa-probe.*"} == 0
+          for: 3m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Endpoint {{ "{{" }} $labels.instance {{ "}}" }} is down"
+            description: "Blackbox probe failed for {{ "{{" }} $labels.component {{ "}}" }} ({{ "{{" }} $labels.instance {{ "}}" }}) for more than 3 minutes."
+            runbook_url: "https://docs.gostoa.dev/runbooks/endpoint-down"
+
+        - alert: EndpointSlowResponse
+          expr: probe_duration_seconds{job=~"probe/.*stoa-probe.*"} > 5
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Endpoint {{ "{{" }} $labels.instance {{ "}}" }} responding slowly"
+            description: "Probe to {{ "{{" }} $labels.component {{ "}}" }} took {{ "{{" }} $value {{ "}}" }}s (threshold: 5s)."
+
+        - alert: SSLCertExpiringSoon
+          expr: probe_ssl_earliest_cert_expiry{job=~"probe/.*stoa-probe.*"} - time() < 30 * 24 * 3600
+          for: 1h
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "SSL certificate for {{ "{{" }} $labels.instance {{ "}}" }} expires in < 30 days"
+            description: "Certificate expires at {{ "{{" }} $value | humanizeTimestamp {{ "}}" }}."
+
+        - alert: SSLCertExpiryCritical
+          expr: probe_ssl_earliest_cert_expiry{job=~"probe/.*stoa-probe.*"} - time() < 7 * 24 * 3600
+          for: 1h
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "SSL certificate for {{ "{{" }} $labels.instance {{ "}}" }} expires in < 7 days"
+            description: "Certificate expires at {{ "{{" }} $value | humanizeTimestamp {{ "}}" }}. Renew immediately."
+{{- end }}

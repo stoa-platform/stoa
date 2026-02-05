@@ -1,0 +1,295 @@
+---
+# Cost Attribution Dashboard - Phase 8
+# Per-tenant usage volume, top 10 tenants, quota utilization, MoM growth
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-cost-attribution-dashboard
+  namespace: stoa-monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: dashboards
+data:
+  cost-attribution.json: |
+    {
+      "annotations": { "list": [] },
+      "description": "Cost attribution — per-tenant volume, quota utilization, estimated cost, MoM growth",
+      "editable": false,
+      "graphTooltip": 2,
+      "id": null,
+      "links": [],
+      "templating": {
+        "list": [
+          {
+            "name": "tier",
+            "type": "query",
+            "query": "label_values(stoa_control_plane_http_requests_total, tier)",
+            "datasource": { "type": "prometheus", "uid": "prometheus" },
+            "refresh": 2,
+            "includeAll": true,
+            "allValue": ".*",
+            "current": { "text": "All", "value": "$__all" }
+          }
+        ]
+      },
+      "panels": [
+        {
+          "title": "Overview",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false
+        },
+        {
+          "title": "Total API Calls (30d)",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+          "targets": [
+            {
+              "expr": "sum(increase(stoa_control_plane_http_requests_total{tier=~\"$tier\"}[30d]))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short", "decimals": 0 }
+          }
+        },
+        {
+          "title": "Total Tool Calls (30d)",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+          "targets": [
+            {
+              "expr": "sum(increase(stoa_mcp_tool_invocations_total{tier=~\"$tier\"}[30d]))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short", "decimals": 0 }
+          }
+        },
+        {
+          "title": "Active Tenants",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+          "targets": [
+            {
+              "expr": "count(count by (tenant_id) (stoa_control_plane_http_requests_total{tier=~\"$tier\"}))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short", "decimals": 0 }
+          }
+        },
+        {
+          "title": "Tenants by Tier",
+          "type": "piechart",
+          "gridPos": { "h": 8, "w": 6, "x": 12, "y": 1 },
+          "targets": [
+            {
+              "expr": "count by (tier) (count by (tenant_id, tier) (stoa_control_plane_http_requests_total))",
+              "legendFormat": "{{ tier }}",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "pieType": "donut",
+            "legend": { "displayMode": "table", "placement": "right" }
+          }
+        },
+        {
+          "title": "MoM API Call Growth",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+          "targets": [
+            {
+              "expr": "(sum(increase(stoa_control_plane_http_requests_total{tier=~\"$tier\"}[30d])) - sum(increase(stoa_control_plane_http_requests_total{tier=~\"$tier\"}[30d] offset 30d))) / sum(increase(stoa_control_plane_http_requests_total{tier=~\"$tier\"}[30d] offset 30d)) * 100",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent", "decimals": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": -10 },
+                  { "color": "green", "value": 0 },
+                  { "color": "blue", "value": 50 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Per-Tenant Volume",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+          "collapsed": false
+        },
+        {
+          "title": "Top 10 Tenants by API Calls (30d)",
+          "type": "bargauge",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+          "targets": [
+            {
+              "expr": "topk(10, sum by (tenant_id) (increase(stoa_control_plane_http_requests_total{tier=~\"$tier\"}[30d])))",
+              "legendFormat": "{{ tenant_id }}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short" }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient"
+          }
+        },
+        {
+          "title": "Top 10 Tenants by Tool Calls (30d)",
+          "type": "bargauge",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+          "targets": [
+            {
+              "expr": "topk(10, sum by (tenant_id) (increase(stoa_mcp_tool_invocations_total{tier=~\"$tier\"}[30d])))",
+              "legendFormat": "{{ tenant_id }}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short" }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient"
+          }
+        },
+        {
+          "title": "Quota Utilization",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+          "collapsed": false
+        },
+        {
+          "title": "API Call Volume by Tenant (daily)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+          "targets": [
+            {
+              "expr": "sum by (tenant_id) (increase(stoa_control_plane_http_requests_total{tier=~\"$tier\"}[1d]))",
+              "legendFormat": "{{ tenant_id }}",
+              "refId": "A",
+              "interval": "1d"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } } }
+          }
+        },
+        {
+          "title": "Tool Call Volume by Tenant (daily)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+          "targets": [
+            {
+              "expr": "sum by (tenant_id) (increase(stoa_mcp_tool_invocations_total{tier=~\"$tier\"}[1d]))",
+              "legendFormat": "{{ tenant_id }}",
+              "refId": "A",
+              "interval": "1d"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } } }
+          }
+        },
+        {
+          "title": "Cost & Trends",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+          "collapsed": false
+        },
+        {
+          "title": "Tenant Usage Table (30d)",
+          "type": "table",
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 28 },
+          "targets": [
+            {
+              "expr": "sum by (tenant_id, tier) (increase(stoa_control_plane_http_requests_total{tier=~\"$tier\"}[30d]))",
+              "legendFormat": "{{ tenant_id }}",
+              "refId": "api_calls",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "sum by (tenant_id, tier) (increase(stoa_mcp_tool_invocations_total{tier=~\"$tier\"}[30d]))",
+              "legendFormat": "{{ tenant_id }}",
+              "refId": "tool_calls",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "expr": "sum by (tenant_id, tier) (rate(stoa_control_plane_http_requests_total{tier=~\"$tier\",status_code=~\"5..\"}[30d])) / sum by (tenant_id, tier) (rate(stoa_control_plane_http_requests_total{tier=~\"$tier\"}[30d])) * 100",
+              "legendFormat": "{{ tenant_id }}",
+              "refId": "error_rate",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "Value #api_calls": "API Calls",
+                  "Value #tool_calls": "Tool Calls",
+                  "Value #error_rate": "Error %"
+                }
+              }
+            }
+          ],
+          "options": {
+            "sortBy": [{ "displayName": "API Calls", "desc": true }],
+            "showHeader": true
+          },
+          "fieldConfig": {
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Error %" },
+                "properties": [
+                  { "id": "unit", "value": "percent" },
+                  { "id": "decimals", "value": 2 },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        { "color": "green", "value": null },
+                        { "color": "yellow", "value": 1 },
+                        { "color": "red", "value": 5 }
+                      ]
+                    }
+                  },
+                  { "id": "custom.displayMode", "value": "color-background" }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "refresh": "5m",
+      "schemaVersion": 39,
+      "tags": ["stoa", "cost", "attribution", "admin"],
+      "time": { "from": "now-30d", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "Cost Attribution",
+      "uid": "stoa-cost-attribution",
+      "version": 1
+    }

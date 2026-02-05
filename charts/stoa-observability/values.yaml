@@ -187,3 +187,35 @@ tenantTiers:
     traceSamplingRate: 0.1    # 10%
     logRetention: 72h         # 3 days
     traceRetention: 24h       # 1 day
+
+# -----------------------------------------------------------------------------
+# Loki per-tenant retention overrides (Phase 8: Cost attribution)
+# -----------------------------------------------------------------------------
+# Applied via Loki runtime overrides (limits_config.per_tenant_override_config)
+# Tenants are identified by the `tenant_id` label on log streams
+lokiRetentionOverrides:
+  enabled: false  # Enable in prod values overlay
+  # Default retention for unlabeled streams
+  defaultRetention: 168h  # 7 days
+  # Per-tier retention policies
+  tiers:
+    enterprise:
+      retention_period: 2160h  # 90 days
+      max_streams_per_user: 10000
+      ingestion_rate_mb: 10
+      ingestion_burst_size_mb: 20
+    business:
+      retention_period: 336h   # 14 days
+      max_streams_per_user: 5000
+      ingestion_rate_mb: 5
+      ingestion_burst_size_mb: 10
+    platform:
+      retention_period: 168h   # 7 days
+      max_streams_per_user: 2000
+      ingestion_rate_mb: 2
+      ingestion_burst_size_mb: 5
+    demo:
+      retention_period: 72h    # 3 days
+      max_streams_per_user: 500
+      ingestion_rate_mb: 1
+      ingestion_burst_size_mb: 2

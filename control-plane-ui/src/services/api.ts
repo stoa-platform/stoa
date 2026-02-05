@@ -98,6 +98,12 @@ class ApiService {
     await this.client.delete(`/v1/tenants/${tenantId}`);
   }
 
+  // Tenant Observability Dashboard (CAB-1089)
+  async getTenantDashboardUrl(tenantId: string): Promise<{ url: string; tier: string; tenant_id: string }> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/dashboard-url`);
+    return data;
+  }
+
   // APIs
   async getApis(tenantId: string): Promise<API[]> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/apis`);

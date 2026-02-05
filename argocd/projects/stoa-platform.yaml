@@ -32,6 +32,9 @@ spec:
       server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
     - namespace: '${K8S_NAMESPACE_PREFIX:stoa}-*'
       server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
+    # Phase 7: Observability stack namespace
+    - namespace: stoa-monitoring
+      server: ${K8S_CLUSTER_URL:https://kubernetes.default.svc}
 
   # Allowed cluster-scoped resources
   clusterResourceWhitelist:
@@ -58,6 +61,20 @@ spec:
       kind: Job
     - group: batch
       kind: CronJob
+    # Phase 7: Monitoring CRD resources for observability GitOps
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
+    - group: monitoring.coreos.com
+      kind: AlertmanagerConfig
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+    - group: monitoring.coreos.com
+      kind: PodMonitor
+    - group: monitoring.coreos.com
+      kind: Probe
+    # Phase 6: k6 synthetic test CRDs
+    - group: k6.io
+      kind: TestRun
 
   # Role definitions
   roles:

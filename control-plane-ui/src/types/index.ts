@@ -16,11 +16,14 @@ export interface Permission {
 }
 
 // Tenant types
+export type TenantTier = 'demo' | 'platform' | 'business' | 'enterprise';
+
 export interface Tenant {
   id: string;
   name: string;
   display_name: string;
   status: 'active' | 'suspended' | 'pending';
+  tier?: TenantTier;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +31,7 @@ export interface Tenant {
 export interface TenantCreate {
   name: string;
   display_name: string;
+  tier?: TenantTier;
 }
 
 // API types

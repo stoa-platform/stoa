@@ -4,6 +4,10 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { PlatformStatus } from './components/PlatformStatus';
 import { quickLinks } from './config';
+import { initFaro } from './observability/faro';
+
+// Initialize Faro RUM before React renders (Phase 6)
+initFaro();
 
 // Lazy load pages for code splitting
 const Tenants = lazy(() => import('./pages/Tenants').then(m => ({ default: m.Tenants })));
@@ -23,6 +27,7 @@ const GatewayStatus = lazy(() => import('./pages/GatewayStatus'));
 const GatewayRegistry = lazy(() => import('./pages/Gateways').then(m => ({ default: m.GatewayList })));
 const GatewayDeployments = lazy(() => import('./pages/GatewayDeployments').then(m => ({ default: m.GatewayDeploymentsDashboard })));
 const GatewayObservability = lazy(() => import('./pages/GatewayObservability').then(m => ({ default: m.GatewayObservabilityDashboard })));
+const TenantDashboard = lazy(() => import('./pages/TenantDashboard').then(m => ({ default: m.TenantDashboard })));
 
 // Loading spinner for lazy-loaded pages
 function PageLoader() {
@@ -223,6 +228,7 @@ function ProtectedRoutes() {
           <Route path="/gateways" element={<GatewayRegistry />} />
           <Route path="/gateway-deployments" element={<GatewayDeployments />} />
           <Route path="/gateway-observability" element={<GatewayObservability />} />
+          <Route path="/tenant-dashboard" element={<TenantDashboard />} />
           <Route path="/admin/prospects" element={<AdminProspects />} />
         </Routes>
       </Suspense>

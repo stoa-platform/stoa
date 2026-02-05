@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Permission, Role, User, get_current_user, require_permission
 from ..database import get_db
-from ..models.tenant import Tenant, TenantStatus
+from ..models.tenant import Tenant, TenantStatus, TenantTier
 from ..repositories.tenant import TenantRepository
+from ..services.grafana_provisioning_service import grafana_provisioning_service
 from ..services.kafka_service import Topics, kafka_service
 from ..services.keycloak_service import keycloak_service
 
@@ -22,6 +23,7 @@ class TenantCreate(BaseModel):
     display_name: str
     description: str = ""
     owner_email: str
+    tier: str = TenantTier.PLATFORM.value
 
 
 class TenantUpdate(BaseModel):
@@ -37,6 +39,7 @@ class TenantResponse(BaseModel):
     description: str = ""
     owner_email: str = ""
     status: str = "active"
+    tier: str = "platform"
     api_count: int = 0
     application_count: int = 0
     created_at: str | None = None
@@ -53,6 +56,7 @@ def _tenant_to_response(tenant: Tenant, api_count: int = 0, app_count: int = 0) 
         description=tenant.description or "",
         owner_email=settings.get("owner_email", ""),
         status=tenant.status,
+        tier=tenant.tier or TenantTier.PLATFORM.value,
         api_count=api_count,
         application_count=app_count,
         created_at=tenant.created_at.isoformat() if tenant.created_at else None,
@@ -145,6 +149,7 @@ async def create_tenant(
             name=tenant_data.display_name,
             description=tenant_data.description,
             status=TenantStatus.ACTIVE.value,
+            tier=tenant_data.tier,
             settings={"owner_email": tenant_data.owner_email},
         )
 
@@ -155,6 +160,16 @@ async def create_tenant(
             await keycloak_service.setup_tenant_group(tenant_id, tenant_data.display_name)
         except Exception as e:
             logger.warning(f"Failed to create Keycloak group for {tenant_id}: {e}")
+
+        # Provision Grafana resources (folder, team, dashboard) — CAB-1089
+        try:
+            await grafana_provisioning_service.provision_tenant(
+                tenant_id=tenant_id,
+                tenant_name=tenant_data.display_name,
+                tier=tenant_data.tier,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to provision Grafana for {tenant_id}: {e}")
 
         # Emit Kafka event
         await kafka_service.publish(
@@ -189,6 +204,39 @@ async def create_tenant(
     except Exception as e:
         logger.error(f"Failed to create tenant {tenant_data.name}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create tenant: {e!s}")
+
+
+@router.get("/{tenant_id}/dashboard-url")
+async def get_tenant_dashboard_url(
+    tenant_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get Grafana dashboard URL for tenant (CAB-1089 Phase 5)."""
+    # Check access
+    if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    try:
+        repo = TenantRepository(db)
+        tenant = await repo.get_by_id(tenant_id)
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+
+        url = await grafana_provisioning_service.get_tenant_dashboard_url(
+            tenant_id=tenant_id,
+            tier=tenant.tier or "platform",
+        )
+        return {
+            "url": url,
+            "tier": tenant.tier or "platform",
+            "tenant_id": tenant_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get dashboard URL for {tenant_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get dashboard URL")
 
 
 @router.put("/{tenant_id}", response_model=TenantResponse)

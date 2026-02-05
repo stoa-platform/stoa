@@ -1,0 +1,189 @@
+# =============================================================================
+# k6 Operator - Synthetic Monitoring
+# =============================================================================
+# Phase 6: Automated synthetic tests running on schedule in Kubernetes
+#
+# Deployment: k6-operator watches TestRun CRDs and executes k6 scripts
+# Results: Prometheus remote write (stoa_synthetic_* metrics)
+#
+# Schedule:
+#   - uptime-check: every 5 minutes (all tiers)
+#   - api-canary:   every 15 minutes (enterprise tier only)
+# =============================================================================
+
+# k6-operator Helm chart values
+# Chart: grafana/k6-operator
+operator:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# Prometheus remote write for k6 metrics
+# k6 outputs metrics with "k6_" prefix -> relabeled to "stoa_synthetic_"
+prometheusRemoteWrite:
+  url: "http://kube-prometheus-stack-prometheus.stoa-monitoring:9090/api/v1/write"
+
+---
+# TestRun CRD: Uptime Check (every 5 minutes)
+apiVersion: k6.io/v1alpha1
+kind: TestRun
+metadata:
+  name: stoa-uptime-check
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: synthetic-monitoring
+    stoa.dev/synthetic-type: uptime
+spec:
+  parallelism: 1
+  script:
+    configMap:
+      name: stoa-synthetic-scripts
+      file: uptime-check.js
+  arguments: --out experimental-prometheus-rw
+  runner:
+    env:
+      - name: K6_PROMETHEUS_RW_SERVER_URL
+        value: "http://kube-prometheus-stack-prometheus.stoa-monitoring:9090/api/v1/write"
+      - name: K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM
+        value: "true"
+      - name: BASE_DOMAIN
+        value: "gostoa.dev"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+  schedule: "*/5 * * * *"
+
+---
+# TestRun CRD: API Canary (every 15 minutes, enterprise tier)
+apiVersion: k6.io/v1alpha1
+kind: TestRun
+metadata:
+  name: stoa-api-canary
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: synthetic-monitoring
+    stoa.dev/synthetic-type: canary
+spec:
+  parallelism: 1
+  script:
+    configMap:
+      name: stoa-synthetic-scripts
+      file: api-canary.js
+  arguments: --out experimental-prometheus-rw
+  runner:
+    env:
+      - name: K6_PROMETHEUS_RW_SERVER_URL
+        value: "http://kube-prometheus-stack-prometheus.stoa-monitoring:9090/api/v1/write"
+      - name: K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM
+        value: "true"
+      - name: BASE_DOMAIN
+        value: "gostoa.dev"
+      - name: CANARY_CLIENT_ID
+        valueFrom:
+          secretKeyRef:
+            name: stoa-synthetic-secrets
+            key: canary-client-id
+      - name: CANARY_CLIENT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: stoa-synthetic-secrets
+            key: canary-client-secret
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 300m
+        memory: 256Mi
+  schedule: "*/15 * * * *"
+
+---
+# ConfigMap containing the k6 test scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-synthetic-scripts
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: synthetic-monitoring
+data:
+  uptime-check.js: |
+    // Mounted from deploy/synthetic/scripts/uptime-check.js
+    // See the file for the full script
+  api-canary.js: |
+    // Mounted from deploy/synthetic/scripts/api-canary.js
+    // See the file for the full script
+
+---
+# Secret template for canary test credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stoa-synthetic-secrets
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: synthetic-monitoring
+type: Opaque
+stringData:
+  # Keycloak service account for canary tests
+  # Replace with actual values or use ExternalSecret
+  canary-client-id: "stoa-canary-monitor"
+  canary-client-secret: "REPLACE_ME"
+
+---
+# PrometheusRule: Alerts for synthetic test failures
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-synthetic-alerts
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    prometheus: kube-prometheus-stack
+spec:
+  groups:
+    - name: stoa.synthetic
+      rules:
+        - alert: SyntheticUptimeCheckFailed
+          expr: k6_checks{scenario="uptime",check="status_ok"} == 0
+          for: 10m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Synthetic uptime check failing for {{ \"{{\" }} $labels.endpoint {{ \"}}\" }}"
+            description: "k6 uptime check has been failing for 10 minutes."
+
+        - alert: SyntheticCanaryFailed
+          expr: k6_checks{scenario="api_canary",check="auth_success"} == 0
+          for: 15m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "API canary flow failing"
+            description: "Full API canary test (auth -> list -> invoke) has been failing for 15 minutes."
+
+        - alert: SyntheticHighLatency
+          expr: k6_http_req_duration{quantile="0.95"} > 3000
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Synthetic test p95 latency > 3s"
+            description: "p95 latency for synthetic checks is {{ \"{{\" }} $value | humanize {{ \"}}\" }}ms."

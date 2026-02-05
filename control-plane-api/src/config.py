@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     PROMETHEUS_URL: str = f"https://prometheus.{_BASE_DOMAIN}"
     LOGS_URL: str = f"https://grafana.{_BASE_DOMAIN}/explore"
 
+    # Grafana Provisioning API (CAB-1089 Phase 5)
+    # Service account token with folder/team/dashboard admin permissions
+    GRAFANA_API_URL: str = f"https://grafana.{_BASE_DOMAIN}"
+    GRAFANA_SERVICE_ACCOUNT_TOKEN: str = ""
+
     # Prometheus Internal API (CAB-840) - for direct PromQL queries
     PROMETHEUS_INTERNAL_URL: str = "http://prometheus:9090"
     PROMETHEUS_TIMEOUT_SECONDS: int = 30

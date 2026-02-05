@@ -1,0 +1,276 @@
+# CAB-1089: SLO Burn-Rate Alerts — Google SRE Multi-Window Multi-Burn-Rate
+#
+# Three alert windows per tier:
+#   Fast burn:   14.4x error rate over 5m + 1h   → Critical (page)
+#   Medium burn: 6x error rate over 30m + 6h     → Warning (Slack)
+#   Slow burn:   1x error rate over 6h + 3d      → Info (ticket)
+#
+# References:
+#   - Google SRE Workbook Chapter 5
+#   - https://sre.google/workbook/alerting-on-slos/
+#
+# Depends on: slo-recording-rules.yaml (SLI recording rules)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-slo-burn-rate-alerts
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+  annotations:
+    gostoa.dev/created-by: cab-1089
+spec:
+  groups:
+    # =================================================================
+    # Enterprise tier — SLO 99.9% (error budget: 0.1%)
+    # =================================================================
+    - name: slo.burn_rate.enterprise
+      rules:
+        # Fast burn: 14.4x burn rate detected over short window
+        # Exhausts 2% of 30-day budget in 1 hour
+        - alert: SLOFastBurn_Enterprise
+          expr: |
+            (
+              1 - slo:api_availability:ratio5m{tier="enterprise"} > 14.4 * 0.001
+              and
+              1 - slo:api_availability:ratio1h{tier="enterprise"} > 14.4 * 0.001
+            )
+            or
+            (
+              1 - slo:gateway_tool_success:ratio5m{tier="enterprise"} > 14.4 * 0.001
+              and
+              1 - slo:gateway_tool_success:ratio1h{tier="enterprise"} > 14.4 * 0.001
+            )
+          for: 2m
+          labels:
+            severity: critical
+            tier: enterprise
+            component: slo
+            slo_target: "99.9"
+            burn_window: fast
+          annotations:
+            summary: "SLO fast burn — Enterprise tier (99.9%)"
+            description: |
+              Enterprise error rate is burning budget at >14.4x.
+              At this rate, 30-day error budget exhausts in ~1 hour.
+              Availability (5m): {{ with printf `slo:api_availability:ratio5m{tier="enterprise"}` | query }}{{ . | first | value | humanizePercentage }}{{ end }}
+            runbook_url: "https://docs.gostoa.dev/runbooks/slo-fast-burn"
+
+        # Medium burn: 6x burn rate over medium window
+        # Exhausts 5% of 30-day budget in 6 hours
+        - alert: SLOMediumBurn_Enterprise
+          expr: |
+            (
+              1 - slo:api_availability:ratio30m{tier="enterprise"} > 6 * 0.001
+              and
+              1 - slo:api_availability:ratio6h{tier="enterprise"} > 6 * 0.001
+            )
+            or
+            (
+              1 - slo:gateway_tool_success:ratio1h{tier="enterprise"} > 6 * 0.001
+              and
+              1 - slo:gateway_tool_success:ratio6h{tier="enterprise"} > 6 * 0.001
+            )
+          for: 5m
+          labels:
+            severity: warning
+            tier: enterprise
+            component: slo
+            slo_target: "99.9"
+            burn_window: medium
+          annotations:
+            summary: "SLO medium burn — Enterprise tier (99.9%)"
+            description: |
+              Enterprise error rate is burning budget at >6x.
+              At this rate, 30-day error budget exhausts in ~6 hours.
+            runbook_url: "https://docs.gostoa.dev/runbooks/slo-medium-burn"
+
+        # Slow burn: 1x burn rate over long window
+        # On track to exhaust full budget within 30 days
+        - alert: SLOSlowBurn_Enterprise
+          expr: |
+            (
+              1 - slo:api_availability:ratio6h{tier="enterprise"} > 1 * 0.001
+              and
+              1 - slo:api_availability:ratio3d{tier="enterprise"} > 1 * 0.001
+            )
+          for: 30m
+          labels:
+            severity: info
+            tier: enterprise
+            component: slo
+            slo_target: "99.9"
+            burn_window: slow
+          annotations:
+            summary: "SLO slow burn — Enterprise tier (99.9%)"
+            description: |
+              Enterprise error rate is on track to exhaust budget within 30 days.
+              Error budget remaining: {{ with printf `slo:error_budget:remaining_ratio{tier="enterprise"}` | query }}{{ . | first | value | humanizePercentage }}{{ end }}
+            runbook_url: "https://docs.gostoa.dev/runbooks/slo-slow-burn"
+
+    # =================================================================
+    # Business tier — SLO 99.5% (error budget: 0.5%)
+    # =================================================================
+    - name: slo.burn_rate.business
+      rules:
+        - alert: SLOFastBurn_Business
+          expr: |
+            (
+              1 - slo:api_availability:ratio5m{tier="business"} > 14.4 * 0.005
+              and
+              1 - slo:api_availability:ratio1h{tier="business"} > 14.4 * 0.005
+            )
+            or
+            (
+              1 - slo:gateway_tool_success:ratio5m{tier="business"} > 14.4 * 0.005
+              and
+              1 - slo:gateway_tool_success:ratio1h{tier="business"} > 14.4 * 0.005
+            )
+          for: 2m
+          labels:
+            severity: critical
+            tier: business
+            component: slo
+            slo_target: "99.5"
+            burn_window: fast
+          annotations:
+            summary: "SLO fast burn — Business tier (99.5%)"
+            description: |
+              Business error rate is burning budget at >14.4x.
+              At this rate, 30-day error budget exhausts in ~1 hour.
+            runbook_url: "https://docs.gostoa.dev/runbooks/slo-fast-burn"
+
+        - alert: SLOMediumBurn_Business
+          expr: |
+            (
+              1 - slo:api_availability:ratio30m{tier="business"} > 6 * 0.005
+              and
+              1 - slo:api_availability:ratio6h{tier="business"} > 6 * 0.005
+            )
+            or
+            (
+              1 - slo:gateway_tool_success:ratio1h{tier="business"} > 6 * 0.005
+              and
+              1 - slo:gateway_tool_success:ratio6h{tier="business"} > 6 * 0.005
+            )
+          for: 5m
+          labels:
+            severity: warning
+            tier: business
+            component: slo
+            slo_target: "99.5"
+            burn_window: medium
+          annotations:
+            summary: "SLO medium burn — Business tier (99.5%)"
+            description: |
+              Business error rate is burning budget at >6x.
+              At this rate, 30-day error budget exhausts in ~6 hours.
+            runbook_url: "https://docs.gostoa.dev/runbooks/slo-medium-burn"
+
+        - alert: SLOSlowBurn_Business
+          expr: |
+            (
+              1 - slo:api_availability:ratio6h{tier="business"} > 1 * 0.005
+              and
+              1 - slo:api_availability:ratio3d{tier="business"} > 1 * 0.005
+            )
+          for: 30m
+          labels:
+            severity: info
+            tier: business
+            component: slo
+            slo_target: "99.5"
+            burn_window: slow
+          annotations:
+            summary: "SLO slow burn — Business tier (99.5%)"
+            description: |
+              Business error rate is on track to exhaust budget within 30 days.
+            runbook_url: "https://docs.gostoa.dev/runbooks/slo-slow-burn"
+
+    # =================================================================
+    # Demo/Platform tier — SLO 99.0% (error budget: 1.0%)
+    # =================================================================
+    - name: slo.burn_rate.platform
+      rules:
+        - alert: SLOFastBurn_Platform
+          expr: |
+            (
+              1 - slo:api_availability:ratio5m{tier=~"demo|platform"} > 14.4 * 0.01
+              and
+              1 - slo:api_availability:ratio1h{tier=~"demo|platform"} > 14.4 * 0.01
+            )
+            or
+            (
+              1 - slo:gateway_tool_success:ratio5m{tier=~"demo|platform"} > 14.4 * 0.01
+              and
+              1 - slo:gateway_tool_success:ratio1h{tier=~"demo|platform"} > 14.4 * 0.01
+            )
+          for: 2m
+          labels:
+            severity: warning
+            tier: platform
+            component: slo
+            slo_target: "99.0"
+            burn_window: fast
+          annotations:
+            summary: "SLO fast burn — Platform/Demo tier (99.0%)"
+            description: |
+              Platform/Demo error rate is burning budget at >14.4x.
+            runbook_url: "https://docs.gostoa.dev/runbooks/slo-fast-burn"
+
+        - alert: SLOMediumBurn_Platform
+          expr: |
+            (
+              1 - slo:api_availability:ratio30m{tier=~"demo|platform"} > 6 * 0.01
+              and
+              1 - slo:api_availability:ratio6h{tier=~"demo|platform"} > 6 * 0.01
+            )
+          for: 10m
+          labels:
+            severity: info
+            tier: platform
+            component: slo
+            slo_target: "99.0"
+            burn_window: medium
+          annotations:
+            summary: "SLO medium burn — Platform/Demo tier (99.0%)"
+            description: |
+              Platform/Demo error rate is burning budget at >6x.
+            runbook_url: "https://docs.gostoa.dev/runbooks/slo-medium-burn"
+
+    # =================================================================
+    # Cross-tier: Error Budget Exhaustion
+    # =================================================================
+    - name: slo.error_budget
+      rules:
+        - alert: ErrorBudgetLow
+          expr: |
+            slo:error_budget:remaining_ratio < 0.25
+          for: 5m
+          labels:
+            severity: warning
+            component: slo
+          annotations:
+            summary: "Error budget < 25% for {{ $labels.tier }} tier"
+            description: |
+              Error budget remaining: {{ $value | humanizePercentage }}.
+              SLO target: {{ $labels.slo_target }}%.
+              Consider freezing risky deployments.
+            runbook_url: "https://docs.gostoa.dev/runbooks/error-budget-low"
+
+        - alert: ErrorBudgetExhausted
+          expr: |
+            slo:error_budget:remaining_ratio < 0.05
+          for: 5m
+          labels:
+            severity: critical
+            component: slo
+          annotations:
+            summary: "Error budget < 5% for {{ $labels.tier }} tier — FREEZE deployments"
+            description: |
+              Error budget remaining: {{ $value | humanizePercentage }}.
+              SLO target: {{ $labels.slo_target }}%.
+              FREEZE all non-critical deployments until budget recovers.
+            runbook_url: "https://docs.gostoa.dev/runbooks/error-budget-exhausted"

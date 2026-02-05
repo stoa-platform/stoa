@@ -1,20 +1,33 @@
-# AlertManager Configuration for kube-prometheus-stack
-# Apply with: helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-#   -n stoa-monitoring -f values-alertmanager.yaml
+# AlertManager Configuration for kube-prometheus-stack (CAB-1089)
 #
-# Routes alerts from deploy/prometheus/alerting-rules.yaml to Slack channels.
+# Apply with:
+#   helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     -n stoa-monitoring -f values-alertmanager.yaml
+#
+# NOTE: Per-tier routing is handled by the AlertmanagerConfig CRD in
+# deploy/alertmanager/alertmanager-config.yaml (merged automatically by
+# prometheus-operator). This file provides the global config baseline.
+#
 # Prerequisites:
-# 1. Create Slack incoming webhooks for #stoa-alerts and #stoa-alerts-critical
-# 2. Store webhook URLs as K8s secrets or replace placeholders below
+# 1. Create secret stoa-alertmanager-secrets (see deploy/alertmanager/secrets-template.yaml)
+# 2. Apply AlertmanagerConfig CRD: kubectl apply -f deploy/alertmanager/
 
 alertmanager:
+  # Allow AlertmanagerConfig CRDs from stoa-monitoring namespace
+  alertmanagerConfigSelector:
+    matchLabels:
+      alertmanagerconfig: stoa
+  alertmanagerConfigNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: stoa-monitoring
+
   config:
     global:
       resolve_timeout: 5m
 
     route:
       receiver: slack-default
-      group_by: ['alertname', 'component']
+      group_by: ['alertname', 'component', 'tier']
       group_wait: 30s
       group_interval: 5m
       repeat_interval: 4h
@@ -41,6 +54,7 @@ alertmanager:
             title: '{{ if eq .Status "firing" }}[FIRING] {{ else }}[RESOLVED] {{ end }}{{ .CommonLabels.alertname }}'
             text: >-
               *Component:* {{ .CommonLabels.component }}
+              *Tier:* {{ .CommonLabels.tier }}
               *Severity:* {{ .CommonLabels.severity }}
               *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
             color: '{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "critical" }}danger{{ else }}warning{{ end }}{{ else }}good{{ end }}'
@@ -53,14 +67,57 @@ alertmanager:
             title: '[CRITICAL] {{ .CommonLabels.alertname }}'
             text: >-
               *Component:* {{ .CommonLabels.component }}
+              *Tier:* {{ .CommonLabels.tier }}
               *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
               *Runbook:* {{ range .Alerts }}{{ .Annotations.runbook_url }}{{ end }}
             color: 'danger'
 
     inhibit_rules:
-      # Don't send warning if critical is already firing for the same component
-      - source_match:
-          severity: critical
-        target_match:
-          severity: warning
+      # Rule 1: Critical suppresses Warning for same component+tier
+      - source_matchers:
+          - severity = critical
+        target_matchers:
+          - severity = warning
+        equal: ['component', 'tier']
+
+      # Rule 2: Critical suppresses Info for same component+tier
+      - source_matchers:
+          - severity = critical
+        target_matchers:
+          - severity = info
+        equal: ['component', 'tier']
+
+      # Rule 3: Fast burn suppresses Medium burn for same tier
+      - source_matchers:
+          - burn_window = fast
+        target_matchers:
+          - burn_window = medium
+        equal: ['tier']
+
+      # Rule 4: Fast burn suppresses Slow burn for same tier
+      - source_matchers:
+          - burn_window = fast
+        target_matchers:
+          - burn_window = slow
+        equal: ['tier']
+
+      # Rule 5: Medium burn suppresses Slow burn for same tier
+      - source_matchers:
+          - burn_window = medium
+        target_matchers:
+          - burn_window = slow
+        equal: ['tier']
+
+      # Rule 6: *Down alerts suppress warnings for same component
+      - source_matchers:
+          - alertname =~ ".*Down$"
+        target_matchers:
+          - severity =~ "warning|info"
         equal: ['component']
+
+      # Rule 7: ErrorBudgetExhausted suppresses ErrorBudgetLow
+      - source_matchers:
+          - alertname = ErrorBudgetExhausted
+        target_matchers:
+          - alertname = ErrorBudgetLow
+        equal: ['tier']

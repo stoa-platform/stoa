@@ -1,0 +1,60 @@
+# ArgoCD Application: STOA Observability Stack
+# Phase 7: GitOps for Alloy + Tempo + Blackbox Exporter
+#
+# Deploys charts/stoa-observability Helm chart to stoa-monitoring namespace
+# Includes: Grafana Alloy, Tempo, Blackbox Exporter, datasource configs
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stoa-observability
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: stoa-observability
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: observability
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: stoa-alerts
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: stoa-alerts
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: stoa-platform
+
+  source:
+    repoURL: https://gitlab.com/cab6961310/stoa-gitops.git
+    targetRevision: main
+    path: charts/stoa-observability
+    helm:
+      # Use production values overlay
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stoa-monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+
+  # Ignore differences in auto-generated fields
+  ignoreDifferences:
+    - group: apps
+      kind: DaemonSet
+      jsonPointers:
+        - /spec/template/metadata/annotations
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/template/metadata/annotations

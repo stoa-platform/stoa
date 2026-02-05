@@ -1,0 +1,259 @@
+# CAB-1089: SLO Recording Rules — per-tier SLI computation
+#
+# Computes Service Level Indicators (SLIs) that feed into:
+# - Burn-rate alerting (slo-burn-rate-alerts.yaml)
+# - SLO dashboard (slo-per-tier Grafana dashboard)
+# - Error budget tracking
+#
+# Tier targets (from plan):
+#   demo/platform: 99.0%   | p95 < 2s
+#   business:      99.5%   | p95 < 1s
+#   enterprise:    99.9%   | p95 < 500ms
+#
+# Required labels on source metrics:
+#   - tenant_id: tenant slug
+#   - tier: demo | platform | business | enterprise
+#     (enriched via Alloy relabeling from CP-API tenant metadata)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-slo-recording-rules
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+  annotations:
+    gostoa.dev/created-by: cab-1089
+spec:
+  groups:
+    # =================================================================
+    # SLI: API Availability (success ratio over sliding windows)
+    # =================================================================
+    - name: slo:availability
+      interval: 30s
+      rules:
+        # --- Control-Plane API availability (5m window) ---
+        - record: slo:api_availability:ratio5m
+          expr: |
+            sum by (tier) (
+              rate(stoa_control_plane_http_requests_total{status_code!~"5.."}[5m])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_control_plane_http_requests_total[5m])
+            )
+
+        # --- Control-Plane API availability (30m window) ---
+        - record: slo:api_availability:ratio30m
+          expr: |
+            sum by (tier) (
+              rate(stoa_control_plane_http_requests_total{status_code!~"5.."}[30m])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_control_plane_http_requests_total[30m])
+            )
+
+        # --- Control-Plane API availability (1h window) ---
+        - record: slo:api_availability:ratio1h
+          expr: |
+            sum by (tier) (
+              rate(stoa_control_plane_http_requests_total{status_code!~"5.."}[1h])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_control_plane_http_requests_total[1h])
+            )
+
+        # --- Control-Plane API availability (6h window — medium burn) ---
+        - record: slo:api_availability:ratio6h
+          expr: |
+            sum by (tier) (
+              rate(stoa_control_plane_http_requests_total{status_code!~"5.."}[6h])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_control_plane_http_requests_total[6h])
+            )
+
+        # --- Control-Plane API availability (3d window — slow burn) ---
+        - record: slo:api_availability:ratio3d
+          expr: |
+            sum by (tier) (
+              rate(stoa_control_plane_http_requests_total{status_code!~"5.."}[3d])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_control_plane_http_requests_total[3d])
+            )
+
+    # =================================================================
+    # SLI: Gateway Tool Call Success Ratio
+    # =================================================================
+    - name: slo:gateway_tool_success
+      interval: 30s
+      rules:
+        # --- MCP Gateway (Python) tool success (5m) ---
+        - record: slo:gateway_tool_success:ratio5m
+          expr: |
+            sum by (tier) (
+              rate(stoa_mcp_tool_invocations_total{status="success"}[5m])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_mcp_tool_invocations_total[5m])
+            )
+
+        # --- MCP Gateway tool success (1h) ---
+        - record: slo:gateway_tool_success:ratio1h
+          expr: |
+            sum by (tier) (
+              rate(stoa_mcp_tool_invocations_total{status="success"}[1h])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_mcp_tool_invocations_total[1h])
+            )
+
+        # --- MCP Gateway tool success (6h) ---
+        - record: slo:gateway_tool_success:ratio6h
+          expr: |
+            sum by (tier) (
+              rate(stoa_mcp_tool_invocations_total{status="success"}[6h])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_mcp_tool_invocations_total[6h])
+            )
+
+        # --- STOA Gateway (Rust) tool success (5m) ---
+        - record: slo:stoa_gateway_tool_success:ratio5m
+          expr: |
+            sum by (tier) (
+              rate(stoa_mcp_tools_calls_total{status="success"}[5m])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_mcp_tools_calls_total[5m])
+            )
+
+        # --- STOA Gateway (Rust) tool success (1h) ---
+        - record: slo:stoa_gateway_tool_success:ratio1h
+          expr: |
+            sum by (tier) (
+              rate(stoa_mcp_tools_calls_total{status="success"}[1h])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_mcp_tools_calls_total[1h])
+            )
+
+    # =================================================================
+    # SLI: Latency — ratio of requests meeting tier SLO target
+    # =================================================================
+    - name: slo:latency
+      interval: 30s
+      rules:
+        # --- CP-API: requests under 2s (demo/platform target) ---
+        - record: slo:api_latency_good:ratio5m
+          expr: |
+            sum by (tier) (
+              rate(stoa_control_plane_http_request_duration_seconds_bucket{le="2.0"}[5m])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_control_plane_http_request_duration_seconds_count[5m])
+            )
+          labels:
+            latency_target: "2s"
+
+        # --- CP-API: requests under 1s (business target) ---
+        - record: slo:api_latency_good_business:ratio5m
+          expr: |
+            sum by (tier) (
+              rate(stoa_control_plane_http_request_duration_seconds_bucket{le="1.0"}[5m])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_control_plane_http_request_duration_seconds_count[5m])
+            )
+          labels:
+            latency_target: "1s"
+
+        # --- CP-API: requests under 500ms (enterprise target) ---
+        - record: slo:api_latency_good_enterprise:ratio5m
+          expr: |
+            sum by (tier) (
+              rate(stoa_control_plane_http_request_duration_seconds_bucket{le="0.5"}[5m])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_control_plane_http_request_duration_seconds_count[5m])
+            )
+          labels:
+            latency_target: "500ms"
+
+        # --- Gateway tool latency under 2s (5m) ---
+        - record: slo:gateway_latency_good:ratio5m
+          expr: |
+            sum by (tier) (
+              rate(stoa_mcp_tool_invocations_duration_seconds_bucket{le="2.0"}[5m])
+            )
+            /
+            sum by (tier) (
+              rate(stoa_mcp_tool_invocations_duration_seconds_count[5m])
+            )
+          labels:
+            latency_target: "2s"
+
+    # =================================================================
+    # Error Budget: remaining ratio over 30-day rolling window
+    # =================================================================
+    - name: slo:error_budget
+      interval: 1m
+      rules:
+        # --- Composite availability (CP-API + Gateway) 30d ---
+        - record: slo:composite_availability:ratio30d
+          expr: |
+            (
+              sum by (tier) (increase(stoa_control_plane_http_requests_total{status_code!~"5.."}[30d]))
+              +
+              sum by (tier) (increase(stoa_mcp_tool_invocations_total{status="success"}[30d]))
+            )
+            /
+            (
+              sum by (tier) (increase(stoa_control_plane_http_requests_total[30d]))
+              +
+              sum by (tier) (increase(stoa_mcp_tool_invocations_total[30d]))
+            )
+
+        # --- Error budget remaining for demo/platform (target 99.0%) ---
+        - record: slo:error_budget:remaining_ratio
+          expr: |
+            1 - (
+              (1 - slo:composite_availability:ratio30d{tier=~"demo|platform"})
+              / (1 - 0.99)
+            )
+          labels:
+            slo_target: "99.0"
+
+        # --- Error budget remaining for business (target 99.5%) ---
+        - record: slo:error_budget:remaining_ratio
+          expr: |
+            1 - (
+              (1 - slo:composite_availability:ratio30d{tier="business"})
+              / (1 - 0.995)
+            )
+          labels:
+            slo_target: "99.5"
+
+        # --- Error budget remaining for enterprise (target 99.9%) ---
+        - record: slo:error_budget:remaining_ratio
+          expr: |
+            1 - (
+              (1 - slo:composite_availability:ratio30d{tier="enterprise"})
+              / (1 - 0.999)
+            )
+          labels:
+            slo_target: "99.9"

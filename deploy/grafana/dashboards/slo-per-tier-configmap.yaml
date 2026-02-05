@@ -1,0 +1,489 @@
+# CAB-1089: SLO per-tier Dashboard ConfigMap
+# Deployed to stoa-monitoring namespace for Grafana sidecar auto-discovery.
+#
+# Features:
+#   - Template variable $tier (demo, platform, business, enterprise)
+#   - Error budget gauge (remaining %)
+#   - Availability SLI vs SLO target
+#   - Burn rate trend
+#   - Latency SLI (p50/p95/p99) vs target
+#   - Tool call success rate
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-slo-per-tier
+  namespace: stoa-monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: stoa-platform
+  annotations:
+    gostoa.dev/created-by: cab-1089
+data:
+  slo-per-tier.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "SLO tracking per commercial tier — Google SRE multi-window burn-rate model",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 2,
+      "id": null,
+      "links": [],
+      "templating": {
+        "list": [
+          {
+            "current": { "text": "enterprise", "value": "enterprise" },
+            "definition": "label_values(slo:error_budget:remaining_ratio, tier)",
+            "hide": 0,
+            "includeAll": false,
+            "multi": false,
+            "name": "tier",
+            "options": [],
+            "query": { "query": "label_values(slo:error_budget:remaining_ratio, tier)", "refId": "tier" },
+            "refresh": 2,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 1,
+            "type": "query"
+          },
+          {
+            "current": { "text": "99.9", "value": "99.9" },
+            "hide": 2,
+            "name": "slo_target",
+            "options": [],
+            "query": "label_values(slo:error_budget:remaining_ratio{tier=\"$tier\"}, slo_target)",
+            "refresh": 2,
+            "type": "query"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "title": "Tier: $tier — SLO Target: $slo_target%",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false
+        },
+        {
+          "title": "Error Budget Remaining",
+          "description": "Percentage of 30-day error budget remaining. Below 25% = warning, below 5% = freeze deployments.",
+          "type": "gauge",
+          "gridPos": { "h": 8, "w": 6, "x": 0, "y": 1 },
+          "targets": [
+            {
+              "expr": "slo:error_budget:remaining_ratio{tier=\"$tier\"}",
+              "legendFormat": "Budget Remaining",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "orange", "value": 0.05 },
+                  { "color": "yellow", "value": 0.25 },
+                  { "color": "green", "value": 0.5 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Availability SLI (30d rolling)",
+          "description": "Composite availability: CP-API + Gateway success ratio over 30 days vs SLO target.",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+          "targets": [
+            {
+              "expr": "slo:composite_availability:ratio30d{tier=\"$tier\"}",
+              "legendFormat": "Availability",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 3,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "orange", "value": 0.99 },
+                  { "color": "yellow", "value": 0.995 },
+                  { "color": "green", "value": 0.999 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Error Budget Consumed (30d)",
+          "description": "Fraction of error budget already consumed.",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 5 },
+          "targets": [
+            {
+              "expr": "1 - slo:error_budget:remaining_ratio{tier=\"$tier\"}",
+              "legendFormat": "Consumed",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.5 },
+                  { "color": "orange", "value": 0.75 },
+                  { "color": "red", "value": 0.95 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "SLO Target",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 3, "x": 12, "y": 1 },
+          "targets": [
+            {
+              "expr": "$slo_target / 100",
+              "legendFormat": "Target",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 1,
+              "color": { "mode": "fixed", "fixedColor": "blue" }
+            }
+          }
+        },
+        {
+          "title": "Budget (minutes remaining in 30d)",
+          "description": "Error budget translated to downtime minutes remaining this period.",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 3, "x": 12, "y": 5 },
+          "targets": [
+            {
+              "expr": "slo:error_budget:remaining_ratio{tier=\"$tier\"} * (1 - $slo_target / 100) * 30 * 24 * 60",
+              "legendFormat": "Minutes left",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "m",
+              "decimals": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "orange", "value": 5 },
+                  { "color": "yellow", "value": 30 },
+                  { "color": "green", "value": 60 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Active Burn-Rate Alerts",
+          "description": "Current burn-rate alert status for this tier. No data = all clear.",
+          "type": "state-timeline",
+          "gridPos": { "h": 8, "w": 9, "x": 15, "y": 1 },
+          "targets": [
+            {
+              "expr": "ALERTS{tier=\"$tier\", alertname=~\"SLO.*Burn.*\", alertstate=\"firing\"}",
+              "legendFormat": "{{ alertname }}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Availability Trend",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+          "collapsed": false
+        },
+        {
+          "title": "API Availability (5m / 1h / 6h windows)",
+          "description": "Control-Plane API success ratio across burn-rate windows.",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+          "targets": [
+            {
+              "expr": "slo:api_availability:ratio5m{tier=\"$tier\"}",
+              "legendFormat": "5m window",
+              "refId": "A"
+            },
+            {
+              "expr": "slo:api_availability:ratio1h{tier=\"$tier\"}",
+              "legendFormat": "1h window",
+              "refId": "B"
+            },
+            {
+              "expr": "slo:api_availability:ratio6h{tier=\"$tier\"}",
+              "legendFormat": "6h window",
+              "refId": "C"
+            },
+            {
+              "expr": "$slo_target / 100",
+              "legendFormat": "SLO Target",
+              "refId": "D"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0.95,
+              "max": 1.001,
+              "decimals": 3,
+              "custom": { "lineWidth": 2, "fillOpacity": 5 }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "SLO Target" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
+                  { "id": "custom.fillOpacity", "value": 0 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "title": "Gateway Tool Success Rate (5m / 1h / 6h)",
+          "description": "MCP Gateway tool call success ratio across burn-rate windows.",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+          "targets": [
+            {
+              "expr": "slo:gateway_tool_success:ratio5m{tier=\"$tier\"}",
+              "legendFormat": "5m window",
+              "refId": "A"
+            },
+            {
+              "expr": "slo:gateway_tool_success:ratio1h{tier=\"$tier\"}",
+              "legendFormat": "1h window",
+              "refId": "B"
+            },
+            {
+              "expr": "slo:gateway_tool_success:ratio6h{tier=\"$tier\"}",
+              "legendFormat": "6h window",
+              "refId": "C"
+            },
+            {
+              "expr": "$slo_target / 100",
+              "legendFormat": "SLO Target",
+              "refId": "D"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0.95,
+              "max": 1.001,
+              "decimals": 3,
+              "custom": { "lineWidth": 2, "fillOpacity": 5 }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "SLO Target" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
+                  { "id": "custom.fillOpacity", "value": 0 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "title": "Latency SLI",
+          "type": "row",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+          "collapsed": false
+        },
+        {
+          "title": "CP-API Latency (p50 / p95 / p99)",
+          "description": "Control-Plane API response time percentiles.",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(stoa_control_plane_http_request_duration_seconds_bucket{tier=\"$tier\"}[5m])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(stoa_control_plane_http_request_duration_seconds_bucket{tier=\"$tier\"}[5m])))",
+              "legendFormat": "p95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(stoa_control_plane_http_request_duration_seconds_bucket{tier=\"$tier\"}[5m])))",
+              "legendFormat": "p99",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Gateway Tool Latency (p50 / p95 / p99)",
+          "description": "MCP Gateway tool invocation latency percentiles.",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(stoa_mcp_tool_invocations_duration_seconds_bucket{tier=\"$tier\"}[5m])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(stoa_mcp_tool_invocations_duration_seconds_bucket{tier=\"$tier\"}[5m])))",
+              "legendFormat": "p95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(stoa_mcp_tool_invocations_duration_seconds_bucket{tier=\"$tier\"}[5m])))",
+              "legendFormat": "p99",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Latency SLI: % Requests Under Target",
+          "description": "Fraction of requests meeting the tier latency SLO (2s for demo/platform, 1s for business, 500ms for enterprise).",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
+          "targets": [
+            {
+              "expr": "slo:api_latency_good:ratio5m{tier=\"$tier\"}",
+              "legendFormat": "< 2s",
+              "refId": "A"
+            },
+            {
+              "expr": "slo:api_latency_good_business:ratio5m{tier=\"$tier\"}",
+              "legendFormat": "< 1s",
+              "refId": "B"
+            },
+            {
+              "expr": "slo:api_latency_good_enterprise:ratio5m{tier=\"$tier\"}",
+              "legendFormat": "< 500ms",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0.8,
+              "max": 1.001,
+              "custom": { "lineWidth": 2, "fillOpacity": 10 }
+            }
+          }
+        },
+        {
+          "title": "Error Budget Burn-Down (30d)",
+          "description": "Error budget remaining over time. Ideally stays above the warning threshold (25%).",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
+          "targets": [
+            {
+              "expr": "slo:error_budget:remaining_ratio{tier=\"$tier\"}",
+              "legendFormat": "Budget Remaining",
+              "refId": "A"
+            },
+            {
+              "expr": "0.25",
+              "legendFormat": "Warning (25%)",
+              "refId": "B"
+            },
+            {
+              "expr": "0.05",
+              "legendFormat": "Critical (5%)",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
+              "custom": { "lineWidth": 2, "fillOpacity": 5 }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Warning (25%)" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } },
+                  { "id": "custom.fillOpacity", "value": 0 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Critical (5%)" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
+                  { "id": "custom.fillOpacity", "value": 0 }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "refresh": "1m",
+      "schemaVersion": 39,
+      "tags": ["stoa", "slo", "error-budget", "tier", "google-sre"],
+      "time": { "from": "now-24h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "SLO per Tier — Error Budget & Burn Rate",
+      "uid": "stoa-slo-per-tier",
+      "version": 1
+    }

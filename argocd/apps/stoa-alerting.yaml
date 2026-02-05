@@ -1,0 +1,57 @@
+# ArgoCD Application: STOA Alerting Rules
+# Phase 7: GitOps for PrometheusRule + AlertmanagerConfig resources
+#
+# Syncs deploy/prometheus/ and deploy/alertmanager/ directories
+# Includes: recording rules, alerting rules, SLO burn-rate alerts,
+#           AlertmanagerConfig CRD, inhibition rules
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stoa-alerting
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: stoa-alerting
+    app.kubernetes.io/part-of: stoa-platform
+    app.kubernetes.io/component: alerting
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: stoa-alerts
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: stoa-alerts
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: stoa-platform
+
+  # Multi-source: alerting rules + alertmanager config
+  sources:
+    - repoURL: https://gitlab.com/cab6961310/stoa-gitops.git
+      targetRevision: main
+      path: deploy/prometheus
+      directory:
+        recurse: false
+        include: '*.yaml'
+
+    - repoURL: https://gitlab.com/cab6961310/stoa-gitops.git
+      targetRevision: main
+      path: deploy/alertmanager
+      directory:
+        recurse: false
+        include: '*.yaml'
+        exclude: 'secrets-template.yaml'
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stoa-monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

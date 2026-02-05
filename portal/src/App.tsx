@@ -4,6 +4,10 @@ import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ErrorBoundary, SkipLink } from './components/common';
 import { config } from './config';
+import { initFaro } from './observability/faro';
+
+// Initialize Faro RUM before React renders (Phase 6)
+initFaro();
 
 // Lazy load pages for code splitting - reduces initial bundle by ~60%
 const HomePage = lazy(() => import('./pages/Home').then(m => ({ default: m.HomePage })));

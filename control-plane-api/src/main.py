@@ -29,6 +29,7 @@ from .routers import (
     catalog_admin,
     certificates,
     contracts,
+    cost_attribution,
     deployments,
     events,
     gateway,
@@ -306,6 +307,7 @@ app = FastAPI(
         {"name": "Gateway Deployments", "description": "API deployment to gateways (sync engine)"},
         {"name": "Gateway Policies", "description": "Gateway-agnostic policy management"},
         {"name": "Gateway Observability", "description": "Multi-gateway health and sync metrics"},
+        {"name": "Cost Attribution", "description": "Per-tenant usage accounting and cost reporting (Phase 8)"},
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -422,6 +424,9 @@ app.include_router(gateway_observability.router)
 app.include_router(gateway_instances.router)
 app.include_router(gateway_deployments.router)
 app.include_router(gateway_policies.router)
+
+# Cost Attribution (Phase 8 - Per-tenant usage accounting)
+app.include_router(cost_attribution.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

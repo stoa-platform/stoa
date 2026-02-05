@@ -44,7 +44,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # Build the actual application (only this layer rebuilds on src changes)
 COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
-RUN cargo build --release
+RUN cargo build --release && strip target/release/stoa-gateway
 
 # --- Stage 3: Runtime (minimal) -----------------------------------------------
 FROM debian:bookworm-slim AS runtime

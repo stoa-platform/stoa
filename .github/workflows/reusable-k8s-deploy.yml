@@ -1,0 +1,141 @@
+name: Reusable Kubernetes Deploy
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: 'Component/deployment name in k8s'
+        required: true
+        type: string
+      image-tag:
+        description: 'Full Docker image tag to deploy'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment'
+        required: false
+        type: string
+        default: 'dev'
+      namespace:
+        description: 'Kubernetes namespace'
+        required: false
+        type: string
+        default: 'stoa-system'
+      cluster-name:
+        description: 'EKS cluster name'
+        required: false
+        type: string
+        default: 'apim-dev-cluster'
+      environment-url:
+        description: 'Environment URL (for GitHub environment)'
+        required: false
+        type: string
+        default: ''
+      verify-endpoint:
+        description: 'URL for post-deploy verification'
+        required: false
+        type: string
+        default: ''
+      expected-status:
+        description: 'Expected HTTP status from verify-endpoint'
+        required: false
+        type: string
+        default: '200'
+    outputs:
+      previous-image:
+        description: 'Previous deployment image (for rollback)'
+        value: ${{ jobs.deploy.outputs.previous_image }}
+
+env:
+  AWS_REGION: eu-west-1
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.component }} to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.environment-url }}
+    outputs:
+      previous_image: ${{ steps.save-state.outputs.previous_image }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check if EKS cluster exists
+        id: cluster-check
+        run: |
+          if aws eks describe-cluster --name ${{ inputs.cluster-name }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "CLUSTER_EXISTS=true" >> $GITHUB_OUTPUT
+          else
+            echo "CLUSTER_EXISTS=false" >> $GITHUB_OUTPUT
+            echo "::warning::EKS cluster '${{ inputs.cluster-name }}' not found. Skipping deployment."
+          fi
+
+      - name: Update kubeconfig
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: aws eks update-kubeconfig --name ${{ inputs.cluster-name }} --region ${{ env.AWS_REGION }}
+
+      - name: Save current deployment state for rollback
+        id: save-state
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: |
+          PREV_IMAGE=$(kubectl get deployment/${{ inputs.component }} -n ${{ inputs.namespace }} \
+            -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
+          echo "previous_image=$PREV_IMAGE" >> $GITHUB_OUTPUT
+          echo "Previous image: $PREV_IMAGE"
+
+      - name: Deploy
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: |
+          echo "Deploying ${{ inputs.component }} with image: ${{ inputs.image-tag }}"
+          kubectl set image deployment/${{ inputs.component }} \
+            ${{ inputs.component }}=${{ inputs.image-tag }} \
+            -n ${{ inputs.namespace }}
+          kubectl rollout restart deployment/${{ inputs.component }} -n ${{ inputs.namespace }}
+          if ! kubectl rollout status deployment/${{ inputs.component }} \
+            -n ${{ inputs.namespace }} --timeout=300s; then
+            echo "::error::Rollout failed, triggering rollback"
+            kubectl rollout undo deployment/${{ inputs.component }} -n ${{ inputs.namespace }}
+            exit 1
+          fi
+
+      - name: Verify deployment
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployment ${{ inputs.component }} -n ${{ inputs.namespace }}
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n ${{ inputs.namespace }} -l app.kubernetes.io/name=${{ inputs.component }}
+
+      - name: Post-deploy endpoint check
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true' && inputs.verify-endpoint != ''
+        run: |
+          sleep 10
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ inputs.verify-endpoint }}" || echo "000")
+          echo "Endpoint check: HTTP $HTTP_CODE (expected ${{ inputs.expected-status }})"
+          if [ "$HTTP_CODE" = "${{ inputs.expected-status }}" ]; then
+            echo "Endpoint verification PASSED"
+          else
+            echo "::warning::Endpoint returned $HTTP_CODE (expected ${{ inputs.expected-status }})"
+          fi
+
+      - name: Deploy Summary
+        if: always()
+        run: |
+          echo "### ${{ inputs.component }} Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ inputs.image-tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Previous | \`${{ steps.save-state.outputs.previous_image }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cluster | ${{ inputs.cluster-name }} |" >> $GITHUB_STEP_SUMMARY

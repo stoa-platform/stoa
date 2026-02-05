@@ -34,6 +34,13 @@ on:
           - staging
           - prod
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: '3.11'
   AWS_REGION: eu-west-1
@@ -83,7 +90,17 @@ jobs:
         working-directory: mcp-gateway
         run: |
           pip install pytest pytest-asyncio pytest-cov
-          pytest tests/ -v --tb=short --cov=src --cov-fail-under=50 || echo "Tests have pre-existing failures — tracked for remediation"
+          pytest tests/ -v --tb=short --cov=src --cov-report=xml:coverage.xml --cov-fail-under=40 --junitxml=test-results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-mcp-gateway
+          path: |
+            mcp-gateway/test-results.xml
+            mcp-gateway/coverage.xml
+          retention-days: 30
 
   # ==========================================================================
   # Build Docker Image and Push to ECR

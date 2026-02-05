@@ -34,6 +34,13 @@ on:
           - staging
           - prod
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: '3.11'
   AWS_REGION: eu-west-1
@@ -85,7 +92,17 @@ jobs:
         working-directory: control-plane-api
         run: |
           pip install pytest pytest-asyncio pytest-cov
-          pytest tests/ -v --tb=short -m "not integration" --cov=src --cov-fail-under=45
+          pytest tests/ -v --tb=short -m "not integration" --cov=src --cov-report=xml:coverage.xml --cov-fail-under=45 --junitxml=test-results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-control-plane-api
+          path: |
+            control-plane-api/test-results.xml
+            control-plane-api/coverage.xml
+          retention-days: 30
 
   # ==========================================================================
   # Build Docker Image and Push to ECR

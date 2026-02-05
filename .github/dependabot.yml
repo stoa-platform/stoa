@@ -39,6 +39,46 @@ updates:
     commit-message:
       prefix: "chore(ci)"
 
+  # NPM - Control Plane UI
+  - package-ecosystem: "npm"
+    directory: "/control-plane-ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  # NPM - E2E Tests
+  - package-ecosystem: "npm"
+    directory: "/e2e"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Cargo - STOA Gateway
+  - package-ecosystem: "cargo"
+    directory: "/stoa-gateway"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Python - CLI
+  - package-ecosystem: "pip"
+    directory: "/cli"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+
   # Docker
   - package-ecosystem: "docker"
     directory: "/"

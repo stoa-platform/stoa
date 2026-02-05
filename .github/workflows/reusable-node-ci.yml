@@ -1,0 +1,94 @@
+name: Reusable Node CI
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: 'Component directory name'
+        required: true
+        type: string
+      node-version:
+        description: 'Node.js version'
+        required: false
+        type: string
+        default: '20'
+      run-build:
+        description: 'Run npm run build'
+        required: false
+        type: boolean
+        default: true
+      upload-artifact:
+        description: 'Upload dist as artifact'
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      test-result:
+        description: 'Build job result'
+        value: ${{ jobs.build.result }}
+
+jobs:
+  build:
+    name: Build and Test (${{ inputs.component }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js environment
+        uses: ./.github/actions/setup-node-env
+        with:
+          node-version: ${{ inputs.node-version }}
+          working-directory: ${{ inputs.component }}
+
+      - name: Run linter
+        working-directory: ${{ inputs.component }}
+        run: npm run lint
+
+      - name: Check formatting
+        working-directory: ${{ inputs.component }}
+        continue-on-error: true
+        run: npm run format:check
+
+      - name: Run tests
+        working-directory: ${{ inputs.component }}
+        run: npm run test
+
+      - name: Build
+        if: inputs.run-build
+        working-directory: ${{ inputs.component }}
+        run: npm run build
+
+      - name: Upload build artifact
+        if: inputs.upload-artifact && inputs.run-build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.component }}-dist
+          path: ${{ inputs.component }}/dist
+          retention-days: 7
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ inputs.component }}
+          path: ${{ inputs.component }}/junit.xml
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## ${{ inputs.component }} CI Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.run-build }}" = "true" ]; then
+            echo "| Build | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
+          fi

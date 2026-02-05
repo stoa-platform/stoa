@@ -1,0 +1,99 @@
+name: Reusable Smoke Test
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: 'Component name (for artifact naming)'
+        required: true
+        type: string
+      test-grep:
+        description: 'Playwright grep pattern'
+        required: false
+        type: string
+        default: '@smoke'
+    secrets:
+      E2E_PORTAL_URL:
+        required: false
+      E2E_CONSOLE_URL:
+        required: false
+      E2E_GATEWAY_URL:
+        required: false
+      E2E_KEYCLOAK_URL:
+        required: false
+      PARZIVAL_USER:
+        required: false
+      PARZIVAL_PASSWORD:
+        required: false
+      ART3MIS_USER:
+        required: false
+      ART3MIS_PASSWORD:
+        required: false
+      AECH_USER:
+        required: false
+      AECH_PASSWORD:
+        required: false
+      SORRENTO_USER:
+        required: false
+      SORRENTO_PASSWORD:
+        required: false
+      ANORAK_USER:
+        required: false
+      ANORAK_PASSWORD:
+        required: false
+      ALEX_USER:
+        required: false
+      ALEX_PASSWORD:
+        required: false
+      TEST_API_KEY:
+        required: false
+
+jobs:
+  smoke-test:
+    name: Smoke Test (${{ inputs.component }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup E2E environment
+        uses: ./.github/actions/e2e-setup
+
+      - name: Run smoke tests
+        working-directory: e2e
+        env:
+          STOA_PORTAL_URL: ${{ secrets.E2E_PORTAL_URL || 'https://portal.gostoa.dev' }}
+          STOA_CONSOLE_URL: ${{ secrets.E2E_CONSOLE_URL || 'https://console.gostoa.dev' }}
+          STOA_GATEWAY_URL: ${{ secrets.E2E_GATEWAY_URL || 'https://api.gostoa.dev' }}
+          KEYCLOAK_URL: ${{ secrets.E2E_KEYCLOAK_URL || 'https://auth.gostoa.dev' }}
+          KEYCLOAK_REALM: stoa
+          PARZIVAL_USER: ${{ secrets.PARZIVAL_USER }}
+          PARZIVAL_PASSWORD: ${{ secrets.PARZIVAL_PASSWORD }}
+          ART3MIS_USER: ${{ secrets.ART3MIS_USER }}
+          ART3MIS_PASSWORD: ${{ secrets.ART3MIS_PASSWORD }}
+          AECH_USER: ${{ secrets.AECH_USER }}
+          AECH_PASSWORD: ${{ secrets.AECH_PASSWORD }}
+          SORRENTO_USER: ${{ secrets.SORRENTO_USER }}
+          SORRENTO_PASSWORD: ${{ secrets.SORRENTO_PASSWORD }}
+          ANORAK_USER: ${{ secrets.ANORAK_USER }}
+          ANORAK_PASSWORD: ${{ secrets.ANORAK_PASSWORD }}
+          ALEX_USER: ${{ secrets.ALEX_USER }}
+          ALEX_PASSWORD: ${{ secrets.ALEX_PASSWORD }}
+          TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
+        run: |
+          npx playwright test --project=auth-setup || exit 1
+          npx playwright test --grep ${{ inputs.test-grep }}
+
+      - name: Upload smoke test results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: smoke-test-${{ inputs.component }}-${{ github.run_id }}
+          path: |
+            e2e/reports/
+            e2e/test-results/
+          retention-days: 7

@@ -169,6 +169,13 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} 2>/dev/null || \
+          aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} \
+            --image-scanning-configuration scanOnPush=true \
+            --image-tag-mutability MUTABLE
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

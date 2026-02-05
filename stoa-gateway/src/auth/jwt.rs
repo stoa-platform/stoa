@@ -156,6 +156,8 @@ impl JwtValidator {
         // Set audience validation
         if self.config.validate_audience {
             validation.set_audience(&[self.oidc_provider.audience()]);
+        } else {
+            validation.validate_aud = false;
         }
 
         // Decode and validate

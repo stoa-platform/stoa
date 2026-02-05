@@ -1,10 +1,9 @@
 //! Control Plane Module
 //!
-//! CAB-912: HTTP client for the FastAPI control plane.
+//! CAB-912: HTTP clients for the FastAPI control plane.
 
-pub mod client;
+// TODO: Re-enable when mcp::protocol::ApiState and uac::Classification are wired
+// pub mod client;
+pub mod tool_proxy;
 
-pub use client::{
-    ApiRecord, ControlPlaneClient, ControlPlaneConfig, ControlPlaneError, CreateApiRequest,
-    CreateApiResponse, UpdateStateRequest,
-};
+pub use tool_proxy::{OidcConfig, RemoteToolDef, RemoteToolSchema, ToolProxyClient};

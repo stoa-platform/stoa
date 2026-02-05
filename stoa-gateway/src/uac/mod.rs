@@ -1,19 +1,98 @@
-//! UAC (Unified Access Control) Module
+//! UAC (Universal API Contract) module
 //!
-//! CAB-912: Policy enforcement with versioned caching and safe mode.
-//!
-//! This module provides:
-//! - Classification definitions (H/VH/VVH)
-//! - Versioned policy cache with Git validation
-//! - Policy enforcement with audit trail
-//! - Safe mode fallback for high availability
+//! Defines actions and permissions for API access control.
 
-pub mod cache;
-pub mod classifications;
-pub mod enforcer;
-pub mod safe_mode;
+use serde::{Deserialize, Serialize};
 
-pub use cache::{CacheStats, PolicyDefinition, VersionedPolicyCache};
-pub use classifications::{Classification, ClassificationConfig};
-pub use enforcer::{EnforcementContext, EnforcementDecision, UacEnforcer};
-pub use safe_mode::{SafeMode, SafeModeConfig, SafeModeTrigger};
+/// UAC Actions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Action {
+    // Read operations
+    Read,
+    List,
+    Search,
+    
+    // Write operations
+    Create,
+    Update,
+    Delete,
+    
+    // API-specific
+    CreateApi,
+    UpdateApi,
+    DeleteApi,
+    PublishApi,
+    DeprecateApi,
+    
+    // Subscription
+    Subscribe,
+    Unsubscribe,
+    ManageSubscription,
+    
+    // Admin
+    ManageUsers,
+    ManageTenants,
+    ManageContracts,
+    ViewMetrics,
+    ViewLogs,
+    ViewAudit,
+}
+
+impl Action {
+    /// Check if this action requires write permission
+    pub fn is_write(&self) -> bool {
+        matches!(
+            self,
+            Action::Create
+                | Action::Update
+                | Action::Delete
+                | Action::CreateApi
+                | Action::UpdateApi
+                | Action::DeleteApi
+                | Action::PublishApi
+                | Action::DeprecateApi
+                | Action::Subscribe
+                | Action::Unsubscribe
+                | Action::ManageSubscription
+                | Action::ManageUsers
+                | Action::ManageTenants
+                | Action::ManageContracts
+        )
+    }
+
+    /// Check if this action requires admin permission
+    pub fn is_admin(&self) -> bool {
+        matches!(
+            self,
+            Action::ManageUsers
+                | Action::ManageTenants
+                | Action::ManageContracts
+                | Action::ViewAudit
+        )
+    }
+}
+
+impl std::fmt::Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_action_write_check() {
+        assert!(!Action::Read.is_write());
+        assert!(Action::Create.is_write());
+        assert!(Action::CreateApi.is_write());
+    }
+
+    #[test]
+    fn test_action_admin_check() {
+        assert!(!Action::Read.is_admin());
+        assert!(!Action::CreateApi.is_admin());
+        assert!(Action::ManageUsers.is_admin());
+    }
+}

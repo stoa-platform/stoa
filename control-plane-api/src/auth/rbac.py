@@ -1,7 +1,8 @@
 """RBAC permissions and middleware"""
 from functools import wraps
-from fastapi import HTTPException, Depends
-from typing import List
+
+from fastapi import Depends, HTTPException
+
 from .dependencies import get_current_user
 
 
@@ -66,7 +67,7 @@ ROLE_PERMISSIONS = {
     ],
 }
 
-def get_user_permissions(roles: List[str]) -> List[str]:
+def get_user_permissions(roles: list[str]) -> list[str]:
     permissions = set()
     for role in roles:
         if role in ROLE_PERMISSIONS:
@@ -101,7 +102,7 @@ def require_tenant_access(func):
     return wrapper
 
 
-def require_role(allowed_roles: List[str]):
+def require_role(allowed_roles: list[str]):
     """
     Dependency factory that checks if the user has one of the allowed roles.
 
@@ -110,7 +111,7 @@ def require_role(allowed_roles: List[str]):
         async def trigger_sync(user: User = Depends(require_role(["cpi-admin", "devops"]))):
             ...
     """
-    from .dependencies import get_current_user, User
+    from .dependencies import User, get_current_user
 
     async def role_checker(user: User = Depends(get_current_user)) -> User:
         if not any(role in user.roles for role in allowed_roles):

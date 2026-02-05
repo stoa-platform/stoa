@@ -6,12 +6,9 @@ Resolves ${VARIABLE} placeholders in API configurations using:
 3. Default values (${VAR:default_value})
 4. Vault references (vault:secret/path#key)
 """
-import re
 import logging
-from typing import Optional, Any
-from pathlib import Path
-
-import yaml
+import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +126,7 @@ class VariableResolver:
                 result[key] = value
         return result
 
-    async def resolve_vault_reference(self, reference: str) -> Optional[str]:
+    async def resolve_vault_reference(self, reference: str) -> str | None:
         """
         Resolve a vault:path#key reference.
 
@@ -160,8 +157,8 @@ class VariableResolver:
         self,
         api_template: dict,
         environment: str,
-        global_config: Optional[dict] = None,
-        api_env_config: Optional[dict] = None,
+        global_config: dict | None = None,
+        api_env_config: dict | None = None,
     ) -> dict:
         """
         Fully resolve an API configuration for a specific environment.
@@ -285,9 +282,9 @@ class VariableResolver:
                 pattern = re.compile(rf'\$\{{{var}:([^}}]*)\}}')
                 has_default = False
 
-                def check_defaults(data):
+                def check_defaults(data, _pattern=pattern):
                     nonlocal has_default
-                    if isinstance(data, str) and pattern.search(data):
+                    if isinstance(data, str) and _pattern.search(data):
                         has_default = True
                     elif isinstance(data, dict):
                         for v in data.values():

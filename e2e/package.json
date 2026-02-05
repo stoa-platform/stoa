@@ -17,6 +17,7 @@
     "test:rpo": "bddgen && playwright test --grep @rpo",
     "test:demo": "bddgen && playwright test --grep @demo",
     "report": "playwright show-report reports/html",
+    "test:audit": "bddgen && playwright test --reporter=json,html && node scripts/generate-audit.js",
     "bddgen": "bddgen"
   },
   "devDependencies": {

@@ -8,26 +8,23 @@ import time
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
 from ..config import get_settings
 from ..metering import MeteringEvent, MeteringStatus, get_metering_producer
 from ..middleware.auth import TokenClaims, get_current_user
 from ..models import (
+    ErrorResponse,
+    InvokeToolResponse,
+    ListCategoriesResponse,
+    ListPromptsResponse,
+    ListResourcesResponse,
+    ListTagsResponse,
+    ListToolsResponse,
     Tool,
     ToolInvocation,
-    ToolResult,
-    ListToolsResponse,
-    ListResourcesResponse,
-    ListPromptsResponse,
-    ListCategoriesResponse,
-    ListTagsResponse,
-    InvokeToolResponse,
-    ErrorResponse,
-    Resource,
-    Prompt,
 )
-from ..policy import get_opa_client, get_argument_engine
+from ..policy import get_argument_engine, get_opa_client
 from ..services import get_tool_registry
 
 logger = structlog.get_logger(__name__)

@@ -1,0 +1,189 @@
+# STOA Observability Stack - Default Values
+# ============================================
+# LGTM Stack: Loki + Grafana + Tempo + Mimir (via Alloy collector)
+#
+# Architecture:
+#   Components -> Alloy (OTel Collector) -> Loki (logs) + Tempo (traces) + Prometheus (metrics)
+#   Grafana correlates all three via trace_id (exemplars, derived fields)
+
+# -----------------------------------------------------------------------------
+# Global settings
+# -----------------------------------------------------------------------------
+global:
+  # Platform identifier for multi-cluster setups
+  platform: stoa
+  # Default environment label injected into all telemetry
+  environment: production
+
+# -----------------------------------------------------------------------------
+# Grafana Alloy - Unified telemetry collector
+# -----------------------------------------------------------------------------
+# Replaces: Promtail (logs) + standalone Prometheus scrape
+# Adds: OTLP receiver for traces, Faro receiver for RUM
+alloy:
+  enabled: true
+
+  alloy:
+    # Use our custom ConfigMap instead of the sub-chart's default
+    # See templates/alloy-config.yaml for the full River pipeline config
+    configMap:
+      create: false
+      name: stoa-alloy-config
+      key: config.alloy
+    clustering:
+      enabled: false
+    # Extra ports for OTLP and Faro receivers
+    extraPorts:
+      - name: otlp-grpc
+        port: 4317
+        targetPort: 4317
+        protocol: TCP
+      - name: otlp-http
+        port: 4318
+        targetPort: 4318
+        protocol: TCP
+      - name: faro
+        port: 12347
+        targetPort: 12347
+        protocol: TCP
+
+  controller:
+    # DaemonSet ensures log collection from every node
+    type: daemonset
+
+  serviceMonitor:
+    enabled: true
+
+# -----------------------------------------------------------------------------
+# Alloy pipeline configuration (consumed by templates/alloy-config.yaml)
+# -----------------------------------------------------------------------------
+alloyConfig:
+  # Prometheus remote-write target
+  # Phase 1: write to existing kube-prometheus-stack Prometheus
+  # Phase 8: switch to Mimir for long-term storage
+  prometheusRemoteWriteUrl: "http://kube-prometheus-stack-prometheus.stoa-monitoring:9090/api/v1/write"
+
+  # Loki push target
+  lokiUrl: "http://loki.stoa-monitoring:3100/loki/api/v1/push"
+
+  # Tempo OTLP target
+  tempoEndpoint: "tempo.stoa-monitoring:4317"
+
+  # Kubernetes namespaces to collect logs from
+  logNamespaces:
+    - stoa-system
+    - stoa-monitoring
+
+  # Labels to extract from JSON logs (structlog format)
+  logLabels:
+    - level
+    - component
+    - tenant_id
+
+  # Metrics scrape interval
+  scrapeInterval: 15s
+
+# -----------------------------------------------------------------------------
+# Grafana Tempo - Distributed tracing backend
+# -----------------------------------------------------------------------------
+tempo:
+  enabled: true
+
+  tempo:
+    # Retention period for traces
+    retention: 7d
+
+    # Storage backend
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/traces
+        wal:
+          path: /var/tempo/wal
+
+    # Receiver configuration - Alloy sends OTLP to Tempo
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4317"
+          http:
+            endpoint: "0.0.0.0:4318"
+
+    # Metrics generator - generates service graph metrics for Grafana service map
+    metricsGenerator:
+      enabled: true
+      remoteWriteUrl: "http://kube-prometheus-stack-prometheus.stoa-monitoring:9090/api/v1/write"
+      processor:
+        serviceGraphs:
+          enabled: true
+          dimensions:
+            - tenant
+            - http.method
+            - http.status_code
+        spanMetrics:
+          enabled: true
+          dimensions:
+            - tenant
+            - http.method
+            - http.route
+
+    # Global overrides
+    overrides:
+      defaults:
+        metrics_generator:
+          processors:
+            - service-graphs
+            - span-metrics
+
+  # Persistence for WAL and traces
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  serviceMonitor:
+    enabled: true
+
+# -----------------------------------------------------------------------------
+# Prometheus Blackbox Exporter - Synthetic uptime probes
+# -----------------------------------------------------------------------------
+blackboxExporter:
+  enabled: false  # Enabled in Phase 6
+
+# -----------------------------------------------------------------------------
+# Grafana datasource configuration
+# -----------------------------------------------------------------------------
+grafana:
+  # Tempo datasource with full correlation config
+  tempoDataSource:
+    enabled: true
+    name: Tempo
+    # UID of the existing Loki datasource in Grafana
+    lokiDatasourceUid: loki
+    # UID of the existing Prometheus datasource in Grafana
+    prometheusDatasourceUid: prometheus
+
+  # Additional datasources to configure
+  additionalDatasources: []
+
+# -----------------------------------------------------------------------------
+# Tenant tier configuration (for sampling and retention)
+# -----------------------------------------------------------------------------
+tenantTiers:
+  enterprise:
+    traceSamplingRate: 1.0    # 100% - capture everything
+    logRetention: 2160h       # 90 days
+    traceRetention: 720h      # 30 days
+  business:
+    traceSamplingRate: 0.5    # 50%
+    logRetention: 336h        # 14 days
+    traceRetention: 168h      # 7 days
+  platform:
+    traceSamplingRate: 0.2    # 20%
+    logRetention: 168h        # 7 days
+    traceRetention: 24h       # 1 day
+  demo:
+    traceSamplingRate: 0.1    # 10%
+    logRetention: 72h         # 3 days
+    traceRetention: 24h       # 1 day

@@ -14,12 +14,12 @@ import asyncio
 import structlog
 
 from .token_counter import (
+    TOKENS_BY_TENANT,
+    TOKENS_TOTAL,
     TokenPayload,
+    _hash_for_log,
     count_tokens,
     get_token_queue,
-    TOKENS_TOTAL,
-    TOKENS_BY_TENANT,
-    _hash_for_log,
 )
 
 logger = structlog.get_logger(__name__)
@@ -64,7 +64,7 @@ class TokenCounterWorker:
                 payload: TokenPayload = await asyncio.wait_for(
                     queue.get(), timeout=1.0
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break

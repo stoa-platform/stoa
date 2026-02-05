@@ -7,13 +7,14 @@
 //! - Tenant isolation enforcement
 //! - Scope-based authorization
 //! - Action-based permissions
+#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use thiserror::Error;
 use tracing::{debug, warn};
 
-use super::claims::{Claims, StoaRole};
+use super::claims::StoaRole;
 use super::middleware::AuthenticatedUser;
 
 // =============================================================================
@@ -377,7 +378,7 @@ impl AuthzContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::claims::{Audience, RealmAccess};
+    use crate::auth::claims::{Audience, Claims, RealmAccess};
     use crate::auth::jwt::ValidatedToken;
 
     fn make_user(role: &str, tenant: Option<&str>, scopes: &str) -> AuthenticatedUser {

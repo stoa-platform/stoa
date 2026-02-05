@@ -1,12 +1,12 @@
 """API Monitoring endpoints for transaction tracking and analytics."""
-import random
 import logging
-from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import Optional, List
+import random
 from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from ..auth import get_current_user, User
+from ..auth import User, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +48,14 @@ class APITransaction(BaseModel):
     path: str
     status_code: int
     status: str
-    client_ip: Optional[str] = None
-    user_id: Optional[str] = None
+    client_ip: str | None = None
+    user_id: str | None = None
     started_at: str
     total_duration_ms: int
-    spans: List[TransactionSpan]
-    request_headers: Optional[dict] = None
-    response_headers: Optional[dict] = None
-    error_message: Optional[str] = None
+    spans: list[TransactionSpan]
+    request_headers: dict | None = None
+    response_headers: dict | None = None
+    error_message: str | None = None
 
 
 class APITransactionStats(BaseModel):
@@ -75,7 +75,7 @@ class APITransactionStats(BaseModel):
 # DEMO DATA GENERATOR
 # =============================================================================
 
-def generate_demo_transactions(count: int = 50, tenant_id: Optional[str] = None) -> List[APITransactionSummary]:
+def generate_demo_transactions(count: int = 50, tenant_id: str | None = None) -> list[APITransactionSummary]:
     """Generate realistic demo transaction data."""
     apis = [
         {"name": "customer-api", "paths": ["/customers", "/customers/{id}", "/customers/{id}/orders"]},
@@ -258,9 +258,9 @@ def generate_stats() -> APITransactionStats:
 @router.get("/transactions")
 async def list_transactions(
     limit: int = Query(50, ge=1, le=200),
-    tenant_id: Optional[str] = None,
-    api_name: Optional[str] = None,
-    status: Optional[str] = None,
+    tenant_id: str | None = None,
+    api_name: str | None = None,
+    status: str | None = None,
     user: User = Depends(get_current_user),
 ):
     """

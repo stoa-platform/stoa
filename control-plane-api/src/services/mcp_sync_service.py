@@ -7,20 +7,20 @@ PostgreSQL stores runtime state for subscriptions.
 This service implements one-way sync: GitLab -> Database.
 """
 import logging
-from datetime import datetime
-from typing import Optional, List
-from dataclasses import dataclass, field
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ..models.mcp_subscription import (
     MCPServer,
-    MCPServerTool,
     MCPServerCategory,
     MCPServerStatus,
     MCPServerSyncStatus,
+    MCPServerTool,
 )
 from .git_service import GitLabService
 
@@ -36,7 +36,7 @@ class SyncResult:
     servers_updated: int = 0
     servers_orphaned: int = 0
     tools_synced: int = 0
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
     def add_error(self, error: str):
         self.errors.append(error)
@@ -58,8 +58,8 @@ class MCPSyncService:
         self,
         tenant_id: str,
         server_name: str,
-        commit_sha: Optional[str] = None
-    ) -> Optional[MCPServer]:
+        commit_sha: str | None = None
+    ) -> MCPServer | None:
         """
         Sync a single MCP server from GitLab to database.
 
@@ -191,7 +191,7 @@ class MCPSyncService:
 
             return None
 
-    async def _sync_tools(self, server: MCPServer, tools_data: List[dict]) -> int:
+    async def _sync_tools(self, server: MCPServer, tools_data: list[dict]) -> int:
         """
         Sync tools for a server.
 
@@ -387,9 +387,8 @@ class MCPSyncService:
             # Find last sync time
             last_synced = None
             for s in servers:
-                if s.last_synced_at:
-                    if last_synced is None or s.last_synced_at > last_synced:
-                        last_synced = s.last_synced_at
+                if s.last_synced_at and (last_synced is None or s.last_synced_at > last_synced):
+                    last_synced = s.last_synced_at
 
             return {
                 "total_servers": len(servers),

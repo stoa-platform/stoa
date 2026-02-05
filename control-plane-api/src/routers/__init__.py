@@ -1,1 +1,1 @@
-from . import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, usage
+from . import apis, applications, deployments, events, gateway, git, subscriptions, tenants, traces, usage, webhooks

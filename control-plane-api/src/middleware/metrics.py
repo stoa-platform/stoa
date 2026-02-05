@@ -8,7 +8,6 @@ to avoid response buffering and reduce latency.
 
 import re
 import time
-from typing import Callable
 
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -17,11 +16,13 @@ from prometheus_client import (
     Histogram,
     Info,
     generate_latest,
+    openmetrics,
 )
 from starlette.responses import Response as StarletteResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from ..config import settings
+from ..tracing_config import get_current_trace_id
 
 # Metrics prefix
 METRICS_PREFIX = "stoa_control_plane"
@@ -122,10 +123,18 @@ class MetricsMiddleware:
             # Record metrics
             duration = time.perf_counter() - start_time
 
-            HTTP_REQUEST_DURATION_SECONDS.labels(
-                method=method,
-                endpoint=endpoint,
-            ).observe(duration)
+            # Attach trace_id exemplar for metrics→traces navigation in Grafana (CAB-1088)
+            trace_id = get_current_trace_id()
+            if trace_id:
+                HTTP_REQUEST_DURATION_SECONDS.labels(
+                    method=method,
+                    endpoint=endpoint,
+                ).observe(duration, exemplar={"trace_id": trace_id})
+            else:
+                HTTP_REQUEST_DURATION_SECONDS.labels(
+                    method=method,
+                    endpoint=endpoint,
+                ).observe(duration)
 
             HTTP_REQUESTS_TOTAL.labels(
                 method=method,
@@ -154,8 +163,12 @@ class MetricsMiddleware:
 
 
 def get_metrics() -> StarletteResponse:
-    """Generate Prometheus metrics response."""
+    """Generate Prometheus metrics response.
+
+    Serves OpenMetrics format (includes exemplars with trace_id)
+    when the client accepts it, otherwise falls back to standard Prometheus format.
+    """
     return StarletteResponse(
-        content=generate_latest(),
-        media_type=CONTENT_TYPE_LATEST,
+        content=openmetrics.exposition.generate_latest(),
+        media_type=openmetrics.exposition.CONTENT_TYPE_LATEST,
     )

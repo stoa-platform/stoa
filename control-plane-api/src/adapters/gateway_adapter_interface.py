@@ -13,7 +13,6 @@ See ADR-027 for the architectural decision and CIR research context.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -21,9 +20,9 @@ class AdapterResult:
     """Standardized result from any adapter operation."""
 
     success: bool
-    resource_id: Optional[str] = None
-    data: Optional[dict] = field(default_factory=dict)
-    error: Optional[str] = None
+    resource_id: str | None = None
+    data: dict | None = field(default_factory=dict)
+    error: str | None = None
 
 
 class GatewayAdapterInterface(ABC):
@@ -34,6 +33,17 @@ class GatewayAdapterInterface(ABC):
     MUST be idempotent: calling the same operation twice with the
     same input must produce the same result without side effects.
     """
+
+    def __init__(self, config: dict | None = None):
+        """Initialize the adapter with optional connection configuration.
+
+        Args:
+            config: Gateway-specific configuration dict. Typically contains:
+                - base_url: Admin API URL
+                - auth_config: Authentication details (type, vault_path, etc.)
+                When None, the adapter falls back to global settings.
+        """
+        self._config = config or {}
 
     # --- Lifecycle ---
 
@@ -56,21 +66,21 @@ class GatewayAdapterInterface(ABC):
 
     @abstractmethod
     async def sync_api(
-        self, api_spec: dict, tenant_id: str, auth_token: Optional[str] = None
+        self, api_spec: dict, tenant_id: str, auth_token: str | None = None
     ) -> AdapterResult:
         """Create or update an API from its specification."""
         ...
 
     @abstractmethod
     async def delete_api(
-        self, api_id: str, auth_token: Optional[str] = None
+        self, api_id: str, auth_token: str | None = None
     ) -> AdapterResult:
         """Delete an API by its gateway-side ID."""
         ...
 
     @abstractmethod
     async def list_apis(
-        self, auth_token: Optional[str] = None
+        self, auth_token: str | None = None
     ) -> list[dict]:
         """List all APIs currently registered in the gateway."""
         ...
@@ -79,21 +89,21 @@ class GatewayAdapterInterface(ABC):
 
     @abstractmethod
     async def upsert_policy(
-        self, policy_spec: dict, auth_token: Optional[str] = None
+        self, policy_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         """Create or update a policy (CORS, rate-limit, logging, JWT, etc.)."""
         ...
 
     @abstractmethod
     async def delete_policy(
-        self, policy_id: str, auth_token: Optional[str] = None
+        self, policy_id: str, auth_token: str | None = None
     ) -> AdapterResult:
         """Delete a policy by its gateway-side ID."""
         ...
 
     @abstractmethod
     async def list_policies(
-        self, auth_token: Optional[str] = None
+        self, auth_token: str | None = None
     ) -> list[dict]:
         """List all policies in the gateway."""
         ...
@@ -102,21 +112,21 @@ class GatewayAdapterInterface(ABC):
 
     @abstractmethod
     async def provision_application(
-        self, app_spec: dict, auth_token: Optional[str] = None
+        self, app_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         """Create an application and associate it with APIs."""
         ...
 
     @abstractmethod
     async def deprovision_application(
-        self, app_id: str, auth_token: Optional[str] = None
+        self, app_id: str, auth_token: str | None = None
     ) -> AdapterResult:
         """Remove an application from the gateway."""
         ...
 
     @abstractmethod
     async def list_applications(
-        self, auth_token: Optional[str] = None
+        self, auth_token: str | None = None
     ) -> list[dict]:
         """List all applications in the gateway."""
         ...
@@ -125,21 +135,21 @@ class GatewayAdapterInterface(ABC):
 
     @abstractmethod
     async def upsert_auth_server(
-        self, auth_spec: dict, auth_token: Optional[str] = None
+        self, auth_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         """Create or update an authentication server alias (e.g. Keycloak OIDC)."""
         ...
 
     @abstractmethod
     async def upsert_strategy(
-        self, strategy_spec: dict, auth_token: Optional[str] = None
+        self, strategy_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         """Create or update an authentication strategy."""
         ...
 
     @abstractmethod
     async def upsert_scope(
-        self, scope_spec: dict, auth_token: Optional[str] = None
+        self, scope_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         """Create or update an OAuth scope mapping."""
         ...
@@ -148,7 +158,7 @@ class GatewayAdapterInterface(ABC):
 
     @abstractmethod
     async def upsert_alias(
-        self, alias_spec: dict, auth_token: Optional[str] = None
+        self, alias_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         """Create or update a backend endpoint alias."""
         ...
@@ -157,7 +167,7 @@ class GatewayAdapterInterface(ABC):
 
     @abstractmethod
     async def apply_config(
-        self, config_spec: dict, auth_token: Optional[str] = None
+        self, config_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         """Apply global gateway configuration (error templates, JWT issuer, etc.)."""
         ...
@@ -166,7 +176,7 @@ class GatewayAdapterInterface(ABC):
 
     @abstractmethod
     async def export_archive(
-        self, auth_token: Optional[str] = None
+        self, auth_token: str | None = None
     ) -> bytes:
         """Export full gateway state as a portable archive (ZIP)."""
         ...

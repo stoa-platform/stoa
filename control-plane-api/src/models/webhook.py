@@ -1,9 +1,10 @@
 """Webhook SQLAlchemy models for subscription event notifications (CAB-315)"""
-from sqlalchemy import Column, String, DateTime, Boolean, Text, Index, Integer, JSON
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
-from datetime import datetime
-import uuid
 import enum
+import uuid
+from datetime import datetime
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 
 from src.database import Base
 

@@ -7,17 +7,17 @@ Uses OIDC authentication - forwards user's Keycloak token to ArgoCD.
 """
 import asyncio
 import logging
-from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from ..auth.dependencies import get_current_user, User
+from ..auth.dependencies import User, get_current_user
 from ..auth.rbac import require_role
+from ..config import settings
 from ..services.argocd_service import argocd_service
 from ..services.cache_service import TTLCache
-from ..config import settings
 
 # CAB-687: In-memory cache for platform status (Council obligation #3 - 30s TTL)
 _platform_status_cache = TTLCache(default_ttl_seconds=30, max_size=10)
@@ -39,27 +39,27 @@ class ComponentStatus(BaseModel):
     sync_status: str  # Synced, OutOfSync, Unknown
     health_status: str  # Healthy, Progressing, Degraded, Suspended, Missing, Unknown
     revision: str  # Short git commit hash
-    last_sync: Optional[str] = None
-    message: Optional[str] = None
+    last_sync: str | None = None
+    message: str | None = None
 
 
 class GitOpsStatus(BaseModel):
     """Overall GitOps sync status."""
     status: str  # healthy, degraded, syncing
-    components: List[ComponentStatus]
+    components: list[ComponentStatus]
     checked_at: str
 
 
 class PlatformEvent(BaseModel):
     """Platform deployment event."""
-    id: Optional[int] = None
+    id: int | None = None
     component: str
     event_type: str  # sync, deploy, rollback
     status: str  # success, failed, in_progress
     revision: str
-    message: Optional[str] = None
+    message: str | None = None
     timestamp: str
-    actor: Optional[str] = None
+    actor: str | None = None
 
 
 class ExternalLinks(BaseModel):
@@ -73,12 +73,12 @@ class ExternalLinks(BaseModel):
 class DiffResource(BaseModel):
     """Resource diff for OutOfSync applications."""
     name: str
-    namespace: Optional[str] = None
+    namespace: str | None = None
     kind: str
-    group: Optional[str] = None
+    group: str | None = None
     status: str
-    health: Optional[str] = None
-    diff: Optional[str] = None
+    health: str | None = None
+    diff: str | None = None
 
 
 class ApplicationDiffResponse(BaseModel):
@@ -86,13 +86,13 @@ class ApplicationDiffResponse(BaseModel):
     application: str
     total_resources: int
     diff_count: int
-    resources: List[DiffResource]
+    resources: list[DiffResource]
 
 
 class PlatformStatusResponse(BaseModel):
     """Complete platform status response."""
     gitops: GitOpsStatus
-    events: List[PlatformEvent]
+    events: list[PlatformEvent]
     external_links: ExternalLinks
     timestamp: str
 
@@ -195,7 +195,7 @@ async def get_platform_status(
         return _get_mock_status(error=str(e))
 
 
-@router.get("/components", response_model=List[ComponentStatus])
+@router.get("/components", response_model=list[ComponentStatus])
 async def list_platform_components(
     user: User = Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -213,7 +213,7 @@ async def list_platform_components(
 
     except Exception as e:
         logger.error(f"Failed to list components: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list components: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list components: {e!s}")
 
 
 @router.get("/components/{name}", response_model=ComponentStatus)
@@ -274,14 +274,14 @@ async def sync_component(
 
     except Exception as e:
         logger.error(f"Failed to sync component {name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to sync: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to sync: {e!s}")
 
 
-@router.get("/events", response_model=List[PlatformEvent])
+@router.get("/events", response_model=list[PlatformEvent])
 async def list_platform_events(
     user: User = Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    component: Optional[str] = Query(None, description="Filter by component name"),
+    component: str | None = Query(None, description="Filter by component name"),
     limit: int = Query(20, ge=1, le=100, description="Maximum events to return"),
 ):
     """
@@ -303,7 +303,7 @@ async def list_platform_events(
         )
 
         events = []
-        for app_name, result in zip(app_names, results):
+        for app_name, result in zip(app_names, results, strict=False):
             if isinstance(result, Exception):
                 logger.debug(f"Could not get events for {app_name}: {result}")
                 continue
@@ -325,7 +325,7 @@ async def list_platform_events(
 
     except Exception as e:
         logger.error(f"Failed to list events: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list events: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list events: {e!s}")
 
 
 @router.get("/components/{name}/diff", response_model=ApplicationDiffResponse)
@@ -369,14 +369,14 @@ async def get_component_diff(
 
     except Exception as e:
         logger.error(f"Failed to get diff for {name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get diff: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get diff: {e!s}")
 
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
 
-def _get_mock_status(error: Optional[str] = None) -> PlatformStatusResponse:
+def _get_mock_status(error: str | None = None) -> PlatformStatusResponse:
     """
     Return mock status when ArgoCD is not available.
 

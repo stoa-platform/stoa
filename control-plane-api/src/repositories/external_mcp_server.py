@@ -2,17 +2,17 @@
 
 Reference: External MCP Server Registration Plan
 """
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, delete
-from sqlalchemy.orm import selectinload
-from typing import Optional, List, Tuple
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from src.models.external_mcp_server import (
+    ExternalMCPHealthStatus,
     ExternalMCPServer,
     ExternalMCPServerTool,
-    ExternalMCPHealthStatus,
 )
 
 
@@ -29,7 +29,7 @@ class ExternalMCPServerRepository:
         await self.session.refresh(server)
         return server
 
-    async def get_by_id(self, server_id: UUID) -> Optional[ExternalMCPServer]:
+    async def get_by_id(self, server_id: UUID) -> ExternalMCPServer | None:
         """Get server by ID with tools."""
         result = await self.session.execute(
             select(ExternalMCPServer)
@@ -38,7 +38,7 @@ class ExternalMCPServerRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_name(self, name: str) -> Optional[ExternalMCPServer]:
+    async def get_by_name(self, name: str) -> ExternalMCPServer | None:
         """Get server by name."""
         result = await self.session.execute(
             select(ExternalMCPServer)
@@ -49,11 +49,11 @@ class ExternalMCPServerRepository:
 
     async def list_all(
         self,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
         enabled_only: bool = False,
         page: int = 1,
         page_size: int = 20,
-    ) -> Tuple[List[ExternalMCPServer], int]:
+    ) -> tuple[list[ExternalMCPServer], int]:
         """List all external MCP servers (admin)."""
         query = select(ExternalMCPServer).options(selectinload(ExternalMCPServer.tools))
 
@@ -83,7 +83,7 @@ class ExternalMCPServerRepository:
 
         return list(servers), total
 
-    async def list_enabled_with_tools(self) -> List[ExternalMCPServer]:
+    async def list_enabled_with_tools(self) -> list[ExternalMCPServer]:
         """List all enabled servers with their tools (for MCP Gateway)."""
         result = await self.session.execute(
             select(ExternalMCPServer)
@@ -109,8 +109,8 @@ class ExternalMCPServerRepository:
         self,
         server_id: UUID,
         status: ExternalMCPHealthStatus,
-        error: Optional[str] = None,
-    ) -> Optional[ExternalMCPServer]:
+        error: str | None = None,
+    ) -> ExternalMCPServer | None:
         """Update server health status after test-connection."""
         server = await self.get_by_id(server_id)
         if not server:
@@ -131,8 +131,8 @@ class ExternalMCPServerRepository:
     async def sync_tools(
         self,
         server_id: UUID,
-        tools: List[ExternalMCPServerTool],
-    ) -> Tuple[int, int]:
+        tools: list[ExternalMCPServerTool],
+    ) -> tuple[int, int]:
         """
         Sync tools from external server.
 
@@ -182,7 +182,7 @@ class ExternalMCPServerRepository:
         self,
         server_id: UUID,
         error: str,
-    ) -> Optional[ExternalMCPServer]:
+    ) -> ExternalMCPServer | None:
         """Set sync error message on server."""
         server = await self.get_by_id(server_id)
         if not server:
@@ -201,7 +201,7 @@ class ExternalMCPServerToolRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_by_id(self, tool_id: UUID) -> Optional[ExternalMCPServerTool]:
+    async def get_by_id(self, tool_id: UUID) -> ExternalMCPServerTool | None:
         """Get tool by ID."""
         result = await self.session.execute(
             select(ExternalMCPServerTool).where(ExternalMCPServerTool.id == tool_id)
@@ -212,7 +212,7 @@ class ExternalMCPServerToolRepository:
         self,
         server_id: UUID,
         tool_name: str,
-    ) -> Optional[ExternalMCPServerTool]:
+    ) -> ExternalMCPServerTool | None:
         """Get tool by server ID and name."""
         result = await self.session.execute(
             select(ExternalMCPServerTool).where(
@@ -228,7 +228,7 @@ class ExternalMCPServerToolRepository:
         self,
         server_id: UUID,
         enabled_only: bool = False,
-    ) -> List[ExternalMCPServerTool]:
+    ) -> list[ExternalMCPServerTool]:
         """List tools for a server."""
         query = select(ExternalMCPServerTool).where(
             ExternalMCPServerTool.server_id == server_id
@@ -246,7 +246,7 @@ class ExternalMCPServerToolRepository:
         self,
         tool_id: UUID,
         enabled: bool,
-    ) -> Optional[ExternalMCPServerTool]:
+    ) -> ExternalMCPServerTool | None:
         """Enable or disable a tool."""
         tool = await self.get_by_id(tool_id)
         if not tool:

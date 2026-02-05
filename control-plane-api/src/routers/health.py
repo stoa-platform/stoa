@@ -6,14 +6,13 @@ K8s-standard health endpoints for pod monitoring:
 - /health/startup - Startup probe (boot complete)
 """
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ..config import settings
-from ..services import kafka_service, git_service, awx_service, keycloak_service
+from ..services import awx_service, git_service, kafka_service, keycloak_service
 from ..services.gateway_service import gateway_service
 
 router = APIRouter(prefix="/health", tags=["Health"])
@@ -54,14 +53,14 @@ class HealthCheck(BaseModel):
     status: str
     version: str
     timestamp: str
-    checks: Optional[dict] = None
+    checks: dict | None = None
 
 
 class DependencyStatus(BaseModel):
     """Status of a dependency."""
     status: str
-    latency_ms: Optional[float] = None
-    error: Optional[str] = None
+    latency_ms: float | None = None
+    error: str | None = None
 
 
 @router.get("/live", response_model=HealthCheck)
@@ -74,7 +73,7 @@ async def liveness():
     return HealthCheck(
         status="healthy",
         version=settings.VERSION,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
 
@@ -96,7 +95,7 @@ async def readiness():
         if not kafka_healthy:
             all_healthy = False
     except Exception as e:
-        checks["kafka"] = f"error: {str(e)}"
+        checks["kafka"] = f"error: {e!s}"
         all_healthy = False
 
     # Check Keycloak connection (critical)
@@ -106,7 +105,7 @@ async def readiness():
         if not keycloak_healthy:
             all_healthy = False
     except Exception as e:
-        checks["keycloak"] = f"error: {str(e)}"
+        checks["keycloak"] = f"error: {e!s}"
         all_healthy = False
 
     # Check GitLab connection (non-critical)
@@ -114,28 +113,28 @@ async def readiness():
         gitlab_healthy = _check_gitlab_connected()
         checks["gitlab"] = "ok" if gitlab_healthy else "disconnected"
     except Exception as e:
-        checks["gitlab"] = f"error: {str(e)}"
+        checks["gitlab"] = f"error: {e!s}"
 
     # Check Gateway connection (non-critical)
     try:
         gateway_healthy = _check_gateway_connected()
         checks["gateway"] = "ok" if gateway_healthy else "disconnected"
     except Exception as e:
-        checks["gateway"] = f"error: {str(e)}"
+        checks["gateway"] = f"error: {e!s}"
 
     # Check AWX connection (non-critical)
     try:
         awx_healthy = _check_awx_connected()
         checks["awx"] = "ok" if awx_healthy else "disconnected"
     except Exception as e:
-        checks["awx"] = f"error: {str(e)}"
+        checks["awx"] = f"error: {e!s}"
 
     status = "healthy" if all_healthy else "degraded"
 
     response = HealthCheck(
         status=status,
         version=settings.VERSION,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         checks=checks,
     )
 
@@ -156,5 +155,5 @@ async def startup():
     return HealthCheck(
         status="healthy",
         version=settings.VERSION,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )

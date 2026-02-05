@@ -1,15 +1,13 @@
 """Pipeline traces API endpoints for end-to-end monitoring (PostgreSQL)"""
-import random
 import logging
-from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import Optional
-from datetime import datetime
+import random
 
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..services.trace_service import TraceService
 from ..models.traces_db import TraceStatusDB
+from ..services.trace_service import TraceService
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +22,8 @@ async def get_service(db: AsyncSession = Depends(get_db)) -> TraceService:
 @router.get("")
 async def list_traces(
     limit: int = Query(50, ge=1, le=200),
-    tenant_id: Optional[str] = None,
-    status: Optional[str] = None,
+    tenant_id: str | None = None,
+    status: str | None = None,
     service: TraceService = Depends(get_service),
 ):
     """

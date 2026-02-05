@@ -10,19 +10,19 @@ import structlog
 
 from ...config import get_settings
 from ...models import (
-    Tool,
-    CoreTool,
-    ProxiedTool,
-    ExternalTool,
     AnyTool,
-    ListToolsResponse,
+    CoreTool,
+    ExternalTool,
     ListCategoriesResponse,
     ListTagsResponse,
+    ListToolsResponse,
+    ProxiedTool,
+    Tool,
     ToolCategory,
 )
 
 if TYPE_CHECKING:
-    from . import ToolRegistry
+    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -68,7 +68,7 @@ class LookupMixin:
                 return self._proxied_tools[internal_key]
 
             # Also search by display name match
-            for key, tool in self._proxied_tools.items():
+            for _key, tool in self._proxied_tools.items():
                 if tool.tenant_id == tenant_id and tool.namespaced_name == name:
                     return tool
 
@@ -87,7 +87,7 @@ class LookupMixin:
             return tool
 
         # Search by namespaced_name in all tools
-        for key, tool in self._proxied_tools.items():
+        for _key, tool in self._proxied_tools.items():
             if tool.namespaced_name == name:
                 # Apply tenant filter if provided
                 if tenant_id and tool.tenant_id != tenant_id:
@@ -102,7 +102,7 @@ class LookupMixin:
 
         # Search by operation name within tenant context
         if tenant_id:
-            for key, tool in self._proxied_tools.items():
+            for _key, tool in self._proxied_tools.items():
                 if tool.tenant_id == tenant_id and tool.operation == name:
                     return tool
 

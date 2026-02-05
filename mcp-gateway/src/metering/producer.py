@@ -6,7 +6,6 @@ sending metering events to the STOA event streaming platform.
 
 import asyncio
 import json
-from typing import Any
 
 import structlog
 from aiokafka import AIOKafkaProducer

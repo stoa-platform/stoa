@@ -12,9 +12,7 @@ to avoid response buffering and reduce latency.
 import random
 import time
 import uuid
-from typing import Callable
 
-from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from ..config import settings

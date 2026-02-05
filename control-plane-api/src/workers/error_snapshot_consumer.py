@@ -66,7 +66,7 @@ class ErrorSnapshotConsumer:
                 try:
                     # Poll with timeout to check _running flag periodically
                     messages = self._consumer.poll(timeout_ms=1000)
-                    for topic_partition, records in messages.items():
+                    for _topic_partition, records in messages.items():
                         for message in records:
                             if not self._running:
                                 break

@@ -9,21 +9,14 @@ ADR-001 Compliance (CAB-672):
 CAB-659: Uses standardized error codes from src/errors.py
 """
 
-import json
 from typing import Any
 
 import structlog
 
-from ..clients import get_core_api_client, CoreAPIClient
+from ..clients import get_core_api_client
 from ..errors import (
     STOAErrorCode,
     error_result,
-    AuthRequiredError,
-    InvalidActionError,
-    InvalidParamsError,
-    APINotFoundError,
-    SubscriptionNotFoundError,
-    BackendError,
 )
 from ..middleware.auth import TokenClaims
 
@@ -662,7 +655,7 @@ class STOAToolHandlers:
 
                 # Check if user can access the API
                 try:
-                    api = await client.get_api(api_id, token)
+                    await client.get_api(api_id, token)
                     allowed = True
                     reason = "Access granted"
                 except Exception:

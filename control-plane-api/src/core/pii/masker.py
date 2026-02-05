@@ -1,12 +1,12 @@
 """PIIMasker — Service principal. Target: < 5ms pour 10KB."""
-import logging
 import hashlib
+import logging
 from dataclasses import dataclass, field
-from typing import Any
 from functools import lru_cache
+from typing import Any
 
+from .config import FieldMaskingMode, MaskingLevel, PIIMaskingConfig
 from .patterns import PIIPatterns, PIIType
-from .config import PIIMaskingConfig, MaskingLevel, FieldMaskingMode
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,8 @@ class PIIMasker:
             matches = list(pattern.pattern.finditer(text))
             if matches:
                 pii_found[pattern.pii_type] = len(matches)
-                mask_func = self._get_mask_func(pattern)
-                text = pattern.pattern.sub(lambda m: mask_func(m.group(0)), text)
+                _mask_func = self._get_mask_func(pattern)
+                text = pattern.pattern.sub(lambda m, mf=_mask_func: mf(m.group(0)), text)
 
         if self.config.audit_enabled and pii_found:
             logger.info("PII masked", extra={

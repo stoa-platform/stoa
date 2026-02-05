@@ -1,6 +1,8 @@
 """Configuration PII Masking par tenant."""
 from enum import Enum
+
 from pydantic import BaseModel, Field
+
 from .patterns import PIIType
 
 

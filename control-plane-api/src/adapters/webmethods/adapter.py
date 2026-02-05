@@ -6,9 +6,8 @@ webMethods-specific REST API at /rest/apigateway/*.
 """
 
 import logging
-from typing import Optional
 
-from ..gateway_adapter_interface import GatewayAdapterInterface, AdapterResult
+from ..gateway_adapter_interface import AdapterResult, GatewayAdapterInterface
 from . import mappers
 
 logger = logging.getLogger(__name__)
@@ -21,10 +20,19 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
     on top. All methods are idempotent where the underlying API allows it.
     """
 
-    def __init__(self):
+    def __init__(self, config: dict | None = None):
+        super().__init__(config=config)
         # Lazy import to avoid circular dependency during module load
         from ...services.gateway_service import GatewayAdminService
-        self._svc = GatewayAdminService()
+
+        if config and config.get("base_url"):
+            self._svc = GatewayAdminService(
+                base_url=config["base_url"],
+                auth_config=config.get("auth_config"),
+            )
+        else:
+            # Backward compatible: use global settings
+            self._svc = GatewayAdminService()
 
     # --- Lifecycle ---
 
@@ -44,7 +52,7 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
     # --- APIs ---
 
     async def sync_api(
-        self, api_spec: dict, tenant_id: str, auth_token: Optional[str] = None
+        self, api_spec: dict, tenant_id: str, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             result = await self._svc.import_api(
@@ -63,7 +71,7 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             return AdapterResult(success=False, error=str(e))
 
     async def delete_api(
-        self, api_id: str, auth_token: Optional[str] = None
+        self, api_id: str, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             await self._svc.delete_api(api_id, auth_token=auth_token)
@@ -71,13 +79,13 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
         except Exception as e:
             return AdapterResult(success=False, error=str(e))
 
-    async def list_apis(self, auth_token: Optional[str] = None) -> list[dict]:
+    async def list_apis(self, auth_token: str | None = None) -> list[dict]:
         return await self._svc.list_apis(auth_token=auth_token)
 
     # --- Policies ---
 
     async def upsert_policy(
-        self, policy_spec: dict, auth_token: Optional[str] = None
+        self, policy_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             payload = mappers.map_policy_to_webmethods(policy_spec)
@@ -110,7 +118,7 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             return AdapterResult(success=False, error=str(e))
 
     async def delete_policy(
-        self, policy_id: str, auth_token: Optional[str] = None
+        self, policy_id: str, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             await self._svc._request(
@@ -120,14 +128,14 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
         except Exception as e:
             return AdapterResult(success=False, error=str(e))
 
-    async def list_policies(self, auth_token: Optional[str] = None) -> list[dict]:
+    async def list_policies(self, auth_token: str | None = None) -> list[dict]:
         result = await self._svc._request("GET", "/policies", auth_token=auth_token)
         return result.get("policies", [])
 
     # --- Applications ---
 
     async def provision_application(
-        self, app_spec: dict, auth_token: Optional[str] = None
+        self, app_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             result = await self._svc.provision_application(
@@ -148,7 +156,7 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             return AdapterResult(success=False, error=str(e))
 
     async def deprovision_application(
-        self, app_id: str, auth_token: Optional[str] = None
+        self, app_id: str, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             await self._svc.deprovision_application(
@@ -160,13 +168,13 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
         except Exception as e:
             return AdapterResult(success=False, error=str(e))
 
-    async def list_applications(self, auth_token: Optional[str] = None) -> list[dict]:
+    async def list_applications(self, auth_token: str | None = None) -> list[dict]:
         return await self._svc.list_applications(auth_token=auth_token)
 
     # --- Auth / OIDC ---
 
     async def upsert_auth_server(
-        self, auth_spec: dict, auth_token: Optional[str] = None
+        self, auth_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             payload = mappers.map_auth_server_to_webmethods(auth_spec)
@@ -194,7 +202,7 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             return AdapterResult(success=False, error=str(e))
 
     async def upsert_strategy(
-        self, strategy_spec: dict, auth_token: Optional[str] = None
+        self, strategy_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             existing = await self._svc.list_strategies(auth_token=auth_token)
@@ -228,7 +236,7 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
             return AdapterResult(success=False, error=str(e))
 
     async def upsert_scope(
-        self, scope_spec: dict, auth_token: Optional[str] = None
+        self, scope_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             result = await self._svc.create_scope_mapping(
@@ -247,7 +255,7 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
     # --- Aliases ---
 
     async def upsert_alias(
-        self, alias_spec: dict, auth_token: Optional[str] = None
+        self, alias_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             payload = mappers.map_alias_to_webmethods(alias_spec)
@@ -276,7 +284,7 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
     # --- Configuration ---
 
     async def apply_config(
-        self, config_spec: dict, auth_token: Optional[str] = None
+        self, config_spec: dict, auth_token: str | None = None
     ) -> AdapterResult:
         try:
             payloads = mappers.map_config_to_webmethods(config_spec)
@@ -295,7 +303,7 @@ class WebMethodsGatewayAdapter(GatewayAdapterInterface):
 
     # --- Backup ---
 
-    async def export_archive(self, auth_token: Optional[str] = None) -> bytes:
+    async def export_archive(self, auth_token: str | None = None) -> bytes:
         async with self._svc._get_client(auth_token) as client:
             response = await client.request(
                 "GET", "/archive",

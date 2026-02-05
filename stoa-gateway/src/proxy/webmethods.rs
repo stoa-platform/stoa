@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use axum::{
     body::Body,
     extract::Request,
@@ -63,7 +65,10 @@ impl WebMethodsProxy {
             Method::DELETE => self.client.delete(&target_url),
             Method::PATCH => self.client.patch(&target_url),
             Method::HEAD => self.client.head(&target_url),
-            Method::OPTIONS => self.client.request(Method::OPTIONS, &target_url),
+            Method::OPTIONS => {
+                let m = reqwest::Method::from_bytes(b"OPTIONS").unwrap();
+                self.client.request(m, &target_url)
+            }
             _ => {
                 tracing::warn!(method = %method, "unsupported HTTP method");
                 return (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed").into_response();

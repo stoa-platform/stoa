@@ -4,7 +4,7 @@ This model maps to the existing stoa.invites table created by landing-api.
 It's read-only from control-plane-api's perspective - used for admin dashboard queries.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from uuid import UUID
 
@@ -53,9 +53,8 @@ class Invite(Base):
     @property
     def is_expired(self) -> bool:
         """Check if invite has expired based on expires_at."""
-        from datetime import timezone as tz
 
-        return datetime.now(tz.utc) > self.expires_at
+        return datetime.now(UTC) > self.expires_at
 
     @property
     def status_enum(self) -> InviteStatus:

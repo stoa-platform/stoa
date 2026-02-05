@@ -1,0 +1,26 @@
+{{- if and .Values.stoaGateway.enabled (default false .Values.stoaGateway.serviceMonitor.enabled) }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: stoa-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-gateway
+    app.kubernetes.io/component: gateway
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stoa-gateway
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.stoaGateway.serviceMonitor.interval | default "15s" }}
+      scrapeTimeout: {{ .Values.stoaGateway.serviceMonitor.scrapeTimeout | default "10s" }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+{{- end }}

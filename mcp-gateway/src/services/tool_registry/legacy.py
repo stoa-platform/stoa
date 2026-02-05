@@ -12,14 +12,14 @@ import structlog
 
 from ...config import get_settings
 from ...models import (
+    TextContent,
     Tool,
     ToolResult,
-    TextContent,
 )
 from ..health import HealthChecker
 
 if TYPE_CHECKING:
-    from . import ToolRegistry
+    pass
 
 logger = structlog.get_logger(__name__)
 

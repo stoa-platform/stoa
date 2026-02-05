@@ -6,11 +6,10 @@ Database operations for error snapshots.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional, List, Tuple
+from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import select, func, desc, and_, or_
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models.error_snapshot import ErrorSnapshotModel, ResolutionStatus
@@ -37,7 +36,7 @@ class ErrorSnapshotRepository:
         )
         return model
 
-    async def get_by_id(self, snapshot_id: str) -> Optional[ErrorSnapshotModel]:
+    async def get_by_id(self, snapshot_id: str) -> ErrorSnapshotModel | None:
         """Get a snapshot by ID."""
         result = await self.session.execute(
             select(ErrorSnapshotModel).where(ErrorSnapshotModel.id == snapshot_id)
@@ -48,17 +47,17 @@ class ErrorSnapshotRepository:
         self,
         page: int = 1,
         page_size: int = 20,
-        error_types: Optional[list[str]] = None,
-        status_codes: Optional[list[int]] = None,
-        server_names: Optional[list[str]] = None,
-        tool_names: Optional[list[str]] = None,
-        resolution_statuses: Optional[list[str]] = None,
-        tenant_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        min_cost_usd: Optional[float] = None,
-        search: Optional[str] = None,
+        error_types: list[str] | None = None,
+        status_codes: list[int] | None = None,
+        server_names: list[str] | None = None,
+        tool_names: list[str] | None = None,
+        resolution_statuses: list[str] | None = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        min_cost_usd: float | None = None,
+        search: str | None = None,
     ) -> tuple[list[ErrorSnapshotModel], int]:
         """List snapshots with filters and pagination.
 
@@ -135,9 +134,9 @@ class ErrorSnapshotRepository:
 
     async def get_stats(
         self,
-        tenant_id: Optional[str] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        tenant_id: str | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> dict:
         """Get aggregated statistics for snapshots."""
         # Build base filters
@@ -239,9 +238,9 @@ class ErrorSnapshotRepository:
         self,
         snapshot_id: str,
         status: ResolutionStatus,
-        notes: Optional[str] = None,
-        resolved_by: Optional[str] = None,
-    ) -> Optional[ErrorSnapshotModel]:
+        notes: str | None = None,
+        resolved_by: str | None = None,
+    ) -> ErrorSnapshotModel | None:
         """Update resolution status of a snapshot."""
         snapshot = await self.get_by_id(snapshot_id)
         if not snapshot:
@@ -254,7 +253,7 @@ class ErrorSnapshotRepository:
             snapshot.resolved_by = resolved_by
 
         if status == ResolutionStatus.RESOLVED:
-            snapshot.resolved_at = datetime.now(timezone.utc)
+            snapshot.resolved_at = datetime.now(UTC)
 
         await self.session.flush()
 

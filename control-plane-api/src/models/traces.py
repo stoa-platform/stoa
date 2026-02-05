@@ -1,9 +1,9 @@
 """Pipeline trace models for end-to-end monitoring"""
-from pydantic import BaseModel, Field
-from typing import Optional, List
+import uuid
 from datetime import datetime
 from enum import Enum
-import uuid
+
+from pydantic import BaseModel, Field
 
 
 class TraceStatus(str, Enum):
@@ -18,17 +18,17 @@ class TraceStep(BaseModel):
     """Individual step in a pipeline trace"""
     name: str
     status: TraceStatus = TraceStatus.PENDING
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    duration_ms: Optional[int] = None
-    details: Optional[dict] = None
-    error: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_ms: int | None = None
+    details: dict | None = None
+    error: str | None = None
 
     def start(self):
         self.status = TraceStatus.IN_PROGRESS
         self.started_at = datetime.utcnow()
 
-    def complete(self, details: Optional[dict] = None):
+    def complete(self, details: dict | None = None):
         self.status = TraceStatus.SUCCESS
         self.completed_at = datetime.utcnow()
         if self.started_at:
@@ -36,7 +36,7 @@ class TraceStep(BaseModel):
         if details:
             self.details = details
 
-    def fail(self, error: str, details: Optional[dict] = None):
+    def fail(self, error: str, details: dict | None = None):
         self.status = TraceStatus.FAILED
         self.completed_at = datetime.utcnow()
         self.error = error
@@ -55,33 +55,33 @@ class PipelineTrace(BaseModel):
     trigger_source: str  # gitlab, ui, api
 
     # Git info (for GitLab triggers)
-    git_commit_sha: Optional[str] = None
-    git_commit_message: Optional[str] = None
-    git_branch: Optional[str] = None
-    git_author: Optional[str] = None
-    git_author_email: Optional[str] = None
-    git_project: Optional[str] = None
-    git_files_changed: Optional[List[str]] = None
+    git_commit_sha: str | None = None
+    git_commit_message: str | None = None
+    git_branch: str | None = None
+    git_author: str | None = None
+    git_author_email: str | None = None
+    git_project: str | None = None
+    git_files_changed: list[str] | None = None
 
     # Target info
-    tenant_id: Optional[str] = None
-    api_id: Optional[str] = None
-    api_name: Optional[str] = None
-    environment: Optional[str] = None
+    tenant_id: str | None = None
+    api_id: str | None = None
+    api_name: str | None = None
+    environment: str | None = None
 
     # Timing
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = None
-    total_duration_ms: Optional[int] = None
+    completed_at: datetime | None = None
+    total_duration_ms: int | None = None
 
     # Overall status
     status: TraceStatus = TraceStatus.PENDING
 
     # Pipeline steps
-    steps: List[TraceStep] = Field(default_factory=list)
+    steps: list[TraceStep] = Field(default_factory=list)
 
     # Error summary
-    error_summary: Optional[str] = None
+    error_summary: str | None = None
 
     def add_step(self, name: str) -> TraceStep:
         """Add a new step to the trace"""
@@ -89,7 +89,7 @@ class PipelineTrace(BaseModel):
         self.steps.append(step)
         return step
 
-    def get_step(self, name: str) -> Optional[TraceStep]:
+    def get_step(self, name: str) -> TraceStep | None:
         """Get a step by name"""
         for step in self.steps:
             if step.name == name:
@@ -152,11 +152,11 @@ class TraceStore:
                 del self._traces[oldest_id]
         self._traces[trace.id] = trace
 
-    def get(self, trace_id: str) -> Optional[PipelineTrace]:
+    def get(self, trace_id: str) -> PipelineTrace | None:
         """Get a trace by ID"""
         return self._traces.get(trace_id)
 
-    def list_recent(self, limit: int = 50, tenant_id: Optional[str] = None) -> List[PipelineTrace]:
+    def list_recent(self, limit: int = 50, tenant_id: str | None = None) -> list[PipelineTrace]:
         """List recent traces, optionally filtered by tenant"""
         traces = list(self._traces.values())
         if tenant_id:
@@ -165,7 +165,7 @@ class TraceStore:
         traces.sort(key=lambda t: t.created_at, reverse=True)
         return traces[:limit]
 
-    def list_by_status(self, status: TraceStatus, limit: int = 50) -> List[PipelineTrace]:
+    def list_by_status(self, status: TraceStatus, limit: int = 50) -> list[PipelineTrace]:
         """List traces by status"""
         traces = [t for t in self._traces.values() if t.status == status]
         traces.sort(key=lambda t: t.created_at, reverse=True)

@@ -7,7 +7,6 @@ Reference: CAB-397 - Error Snapshot / Flight Recorder (Time-Travel Debugging)
 """
 
 from datetime import datetime
-from typing import Optional
 from urllib.parse import urlencode
 
 import structlog
@@ -15,10 +14,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...services.database import get_session
 from ...models.error_snapshot import ResolutionStatus
-from .repository import ErrorSnapshotRepository
+from ...services.database import get_session
 from .models import MCPErrorType
+from .repository import ErrorSnapshotRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -33,8 +32,8 @@ class SnapshotSummary(BaseModel):
     error_type: str
     error_message: str
     response_status: int
-    mcp_server_name: Optional[str] = None
-    tool_name: Optional[str] = None
+    mcp_server_name: str | None = None
+    tool_name: str | None = None
     total_cost_usd: float
     tokens_wasted: int
     resolution_status: str
@@ -64,13 +63,13 @@ class SnapshotStats(BaseModel):
 class ResolutionUpdate(BaseModel):
     """Request model for updating resolution status."""
     resolution_status: str = Field(..., description="New resolution status")
-    resolution_notes: Optional[str] = Field(None, description="Notes about the resolution")
+    resolution_notes: str | None = Field(None, description="Notes about the resolution")
 
 
 class ReplayResponse(BaseModel):
     """Response for replay command generation."""
     curl_command: str
-    warning: Optional[str] = None
+    warning: str | None = None
 
 
 class FiltersResponse(BaseModel):
@@ -90,10 +89,10 @@ async def list_snapshots(
     server_name: list[str] = Query(default=[], description="Filter by MCP server names"),
     tool_name: list[str] = Query(default=[], description="Filter by tool names"),
     resolution_status: list[str] = Query(default=[], description="Filter by resolution status"),
-    start_date: Optional[datetime] = Query(None, description="Filter from date"),
-    end_date: Optional[datetime] = Query(None, description="Filter to date"),
-    min_cost_usd: Optional[float] = Query(None, ge=0, description="Minimum cost filter"),
-    search: Optional[str] = Query(None, description="Search in error message, tool, server"),
+    start_date: datetime | None = Query(None, description="Filter from date"),
+    end_date: datetime | None = Query(None, description="Filter to date"),
+    min_cost_usd: float | None = Query(None, ge=0, description="Minimum cost filter"),
+    search: str | None = Query(None, description="Search in error message, tool, server"),
     session: AsyncSession = Depends(get_session),
 ):
     """List error snapshots with filters and pagination."""
@@ -124,8 +123,8 @@ async def list_snapshots(
 
 @router.get("/stats", response_model=SnapshotStats)
 async def get_stats(
-    start_date: Optional[datetime] = Query(None, description="Filter from date"),
-    end_date: Optional[datetime] = Query(None, description="Filter to date"),
+    start_date: datetime | None = Query(None, description="Filter from date"),
+    end_date: datetime | None = Query(None, description="Filter to date"),
     session: AsyncSession = Depends(get_session),
 ):
     """Get aggregated error statistics."""

@@ -7,6 +7,7 @@
 //! - Validate token and extract claims
 //! - Inject authenticated user into request extensions
 //! - Optional authentication (for public endpoints)
+#![allow(dead_code)]
 
 use axum::{
     body::Body,
@@ -18,7 +19,7 @@ use axum::{
 };
 use serde::Serialize;
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, warn};
 
 use super::claims::Claims;
 use super::jwt::{JwtError, JwtValidator, ValidatedToken};
@@ -312,7 +313,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::claims::{Audience, RealmAccess, StoaRole};
+    use crate::auth::claims::{Audience, RealmAccess};
 
     fn sample_claims() -> Claims {
         Claims {

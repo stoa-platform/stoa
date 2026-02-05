@@ -6,10 +6,10 @@ and role-based visibility.
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List
 
 from pydantic import BaseModel, Field
-from sqlalchemy import Column, String, Boolean, DateTime, JSON, Enum as SQLEnum, ForeignKey, Table
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 
 from .subscription import Base
@@ -138,8 +138,8 @@ class ToolAccessModel(Base):
 
 class MCPServerVisibility(BaseModel):
     """Visibility configuration for MCP Servers."""
-    roles: Optional[List[str]] = Field(None, description="Required roles to see this server")
-    exclude_roles: Optional[List[str]] = Field(None, description="Roles that cannot see this server")
+    roles: list[str] | None = Field(None, description="Required roles to see this server")
+    exclude_roles: list[str] | None = Field(None, description="Roles that cannot see this server")
     public: bool = Field(False, description="If true, visible to all authenticated users")
 
 
@@ -149,7 +149,7 @@ class MCPServerTool(BaseModel):
     name: str
     display_name: str = Field(..., alias="displayName")
     description: str
-    input_schema: Optional[dict] = Field(None, alias="inputSchema")
+    input_schema: dict | None = Field(None, alias="inputSchema")
     enabled: bool = True
     requires_approval: bool = False
 
@@ -163,14 +163,14 @@ class MCPServer(BaseModel):
     name: str
     display_name: str = Field(..., alias="displayName")
     description: str
-    icon: Optional[str] = None
+    icon: str | None = None
     category: ServerCategory
-    tenant_id: Optional[str] = None
+    tenant_id: str | None = None
     visibility: MCPServerVisibility
-    tools: List[MCPServerTool] = []
+    tools: list[MCPServerTool] = []
     status: ServerStatus = ServerStatus.ACTIVE
-    version: Optional[str] = None
-    documentation_url: Optional[str] = None
+    version: str | None = None
+    documentation_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -184,26 +184,26 @@ class ToolAccess(BaseModel):
     tool_id: str
     tool_name: str
     status: ToolAccessStatus
-    granted_at: Optional[datetime] = None
-    granted_by: Optional[str] = None
+    granted_at: datetime | None = None
+    granted_by: str | None = None
 
 
 class ServerSubscription(BaseModel):
     """Server subscription with per-tool access control."""
     id: str
     server_id: str
-    server: Optional[MCPServer] = None
+    server: MCPServer | None = None
     tenant_id: str
     user_id: str
     status: ServerSubscriptionStatus
     plan: str = "free"
-    tool_access: List[ToolAccess] = []
-    api_key_prefix: Optional[str] = None
-    last_rotated_at: Optional[datetime] = None
+    tool_access: list[ToolAccess] = []
+    api_key_prefix: str | None = None
+    last_rotated_at: datetime | None = None
     has_active_grace_period: bool = False
     created_at: datetime
-    expires_at: Optional[datetime] = None
-    last_used_at: Optional[datetime] = None
+    expires_at: datetime | None = None
+    last_used_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -218,12 +218,12 @@ class ServerSubscriptionCreate(BaseModel):
     """Request to create a server subscription."""
     server_id: str
     plan: str = "free"
-    requested_tools: List[str] = Field(..., description="Tool IDs to request access to")
+    requested_tools: list[str] = Field(..., description="Tool IDs to request access to")
 
 
 class ToolAccessUpdate(BaseModel):
     """Request to update tool access within a subscription."""
-    tool_ids: List[str]
+    tool_ids: list[str]
     action: str = Field(..., description="Action: enable, disable, or request")
 
 
@@ -231,11 +231,11 @@ class ToolAccessUpdate(BaseModel):
 
 class ListServersResponse(BaseModel):
     """Response for listing MCP servers."""
-    servers: List[MCPServer]
+    servers: list[MCPServer]
     total_count: int
 
 
 class ListServerSubscriptionsResponse(BaseModel):
     """Response for listing server subscriptions."""
-    subscriptions: List[ServerSubscription]
+    subscriptions: list[ServerSubscription]
     total_count: int

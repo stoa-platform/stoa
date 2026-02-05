@@ -19,7 +19,6 @@ Config is inline in UAC per-tenant configuration:
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
 
 from pydantic import BaseModel, field_validator, model_validator
 
@@ -100,7 +99,7 @@ class TransformConfig(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_truncate_fields(self) -> "TransformConfig":
+    def validate_truncate_fields(self) -> TransformConfig:
         """Warn if truncate references fields not in the whitelist."""
         if self.fields and self.truncate:
             for field_name in self.truncate:

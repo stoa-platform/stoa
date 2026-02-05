@@ -1,0 +1,44 @@
+{{- if and .Values.tempo.enabled .Values.grafana.tempoDataSource.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-loki-derived
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    # Grafana sidecar auto-discovery label
+    grafana_datasource: "1"
+data:
+  loki-derived-fields.yaml: |
+    apiVersion: 1
+    datasources:
+      # Override existing Loki datasource to add derived fields
+      # This enables clicking a trace_id in logs to jump to the Tempo trace
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.{{ .Release.Namespace }}:3100
+        isDefault: false
+        jsonData:
+          maxLines: 1000
+          timeout: 60
+          # ---------------------------------------------------------------
+          # Derived Fields - Logs-to-Traces correlation
+          # Automatically detects trace_id in log lines and creates
+          # clickable links to Tempo (Datadog-style unified navigation)
+          # ---------------------------------------------------------------
+          derivedFields:
+            # Match trace_id in JSON structured logs
+            - name: TraceID
+              matcherRegex: '"trace_id":\s*"([a-f0-9]+)"'
+              url: "$${__value.raw}"
+              datasourceUid: tempo
+              urlDisplayLabel: "View Trace"
+
+            # Match trace_id as structured metadata (Loki 3.x)
+            - name: TraceID-Metadata
+              matcherRegex: 'trace_id=([a-f0-9]+)'
+              url: "$${__value.raw}"
+              datasourceUid: tempo
+              urlDisplayLabel: "View Trace"
+{{- end }}

@@ -13,7 +13,7 @@ Runs AFTER TransformEngine (field selection, truncation, pagination).
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from ..middleware.token_counter import count_tokens

@@ -19,7 +19,6 @@ from ..base import TransformerAdapter
 from ..config import TransformConfig, TruncateConfig, TruncateStrategy
 from ..engine import TransformEngine
 
-
 # Default config matching the ADR-015 spec
 NOTION_LITE_CONFIG = TransformConfig(
     fields=[

@@ -11,22 +11,21 @@ Now with:
 Reference: Linear CAB-247, CAB-292, CAB-XXX (Secure API Key Management)
 """
 
-import secrets
 import hashlib
+import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, select
 
 from ..middleware.auth import TokenClaims, get_current_user
 from ..models.subscription import SubscriptionModel, SubscriptionStatus
-from ..services.database import get_session, get_session_factory
-from ..services.vault_client import get_vault_client, VaultClient, VaultSealedException
+from ..services.database import get_session_factory
+from ..services.vault_client import VaultSealedException, get_vault_client
 
 logger = structlog.get_logger(__name__)
 
@@ -336,7 +335,7 @@ async def create_subscription(
 ) -> SubscriptionWithKey:
     """Create a new subscription and return the API key."""
     user_id = user.subject
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Generate subscription ID and API key
     subscription_id = str(uuid.uuid4())
@@ -480,7 +479,7 @@ async def revoke_subscription(
 ) -> None:
     """Revoke a subscription and invalidate its API key."""
     user_id = user.subject
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Try database first
     session = await _get_db_session()
@@ -690,7 +689,7 @@ async def reveal_api_key(
     - Returns key with 30-second visibility window hint
     """
     user_id = user.subject
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Try database first
     session = await _get_db_session()
@@ -948,7 +947,7 @@ async def validate_api_key(api_key: str) -> Subscription | None:
     This is called by the auth middleware when X-API-Key is provided.
     """
     api_key_hash = _hash_api_key(api_key)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Try database first
     session = await _get_db_session()

@@ -14,7 +14,8 @@ Audit: SHA-256 hash of original payload logged for traceability.
 
 import hashlib
 import json
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import structlog
 from fastapi import Request, Response
@@ -25,7 +26,7 @@ from ..config import get_settings
 from ..transformer.capper import CapEngine, CapResult
 from ..transformer.config import TransformConfig
 from ..transformer.engine import TransformEngine
-from ..transformer.registry import get_adapter, get_config_for_tool
+from ..transformer.registry import get_config_for_tool
 
 logger = structlog.get_logger(__name__)
 

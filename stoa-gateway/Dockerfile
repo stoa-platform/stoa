@@ -6,7 +6,7 @@
 # ==============================================================================
 # Stage 1: Build stage
 # ==============================================================================
-FROM rust:1.82-bookworm AS builder
+FROM rust:1.88-bookworm AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -66,15 +66,13 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health/live || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Set default environment variables
-ENV HOST=0.0.0.0 \
-    PORT=8080 \
-    LOG_LEVEL=info \
-    LOG_FORMAT=json \
-    WEBMETHODS_HEALTH_CHECK_INTERVAL_SECS=5 \
-    WEBMETHODS_HEALTH_CHECK_TIMEOUT_SECS=2
+ENV STOA_HOST=0.0.0.0 \
+    STOA_PORT=8080 \
+    STOA_LOG_LEVEL=info \
+    STOA_LOG_FORMAT=json
 
 # Run the gateway
 ENTRYPOINT ["/app/stoa-gateway"]

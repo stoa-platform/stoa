@@ -110,7 +110,6 @@ class GrafanaProvisioningService:
 
     async def get_tenant_dashboard_url(self, tenant_id: str, tier: str) -> str:
         """Return the Grafana kiosk-mode URL for a tenant's dashboard."""
-        folder_uid = f"tenant-{tenant_id}"
         dashboard_uid = f"tenant-{tenant_id}-overview"
         return (
             f"{settings.GRAFANA_URL}/d/{dashboard_uid}"

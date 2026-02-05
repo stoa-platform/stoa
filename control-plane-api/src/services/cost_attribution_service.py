@@ -11,7 +11,7 @@ Queries Prometheus for per-tenant usage metrics:
 Computes estimated costs and quota utilization per tier.
 """
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from ..schemas.cost_attribution import (
     AdminUsageReport,
@@ -88,7 +88,7 @@ class CostAttributionService:
     ) -> TenantUsageReport:
         """Full usage report for a single tenant."""
         tier_enum = TenantTier(tier)
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         period_start = now - timedelta(days=days)
         time_range = f"{days}d"
 
@@ -158,7 +158,7 @@ class CostAttributionService:
             tenants: List of dicts with keys: id, name, tier
             days: Report period in days
         """
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         period_start = now - timedelta(days=days)
 
         summaries = []

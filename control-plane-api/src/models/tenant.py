@@ -10,7 +10,7 @@ from sqlalchemy.sql import func
 from src.database import Base
 
 
-class TenantStatus(str, enum.Enum):
+class TenantStatus(enum.StrEnum):
     """Tenant status enum."""
     ACTIVE = "active"
     SUSPENDED = "suspended"

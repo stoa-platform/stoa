@@ -19,7 +19,7 @@ Endpoints:
 """
 
 import logging
-from enum import Enum
+from enum import StrEnum
 
 from fastapi import APIRouter, Depends, Query
 from opensearchpy import AsyncOpenSearch
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/search", tags=["search"])
 # Models
 # =============================================================================
 
-class SortOrder(str, Enum):
+class SortOrder(StrEnum):
     """Sort order options."""
     RELEVANCE = "relevance"
     NAME_ASC = "name_asc"

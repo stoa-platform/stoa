@@ -5,7 +5,7 @@ and role-based visibility.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String
@@ -15,28 +15,28 @@ from sqlalchemy.orm import relationship
 from .subscription import Base
 
 
-class ServerCategory(str, Enum):
+class ServerCategory(StrEnum):
     """Category of MCP Server."""
     PLATFORM = "platform"   # STOA platform tools (admin-only)
     TENANT = "tenant"       # Tenant-specific APIs
     PUBLIC = "public"       # Publicly available APIs
 
 
-class ServerStatus(str, Enum):
+class ServerStatus(StrEnum):
     """Status of an MCP Server."""
     ACTIVE = "active"
     MAINTENANCE = "maintenance"
     DEPRECATED = "deprecated"
 
 
-class ToolAccessStatus(str, Enum):
+class ToolAccessStatus(StrEnum):
     """Status of tool access within a subscription."""
     ENABLED = "enabled"
     DISABLED = "disabled"
     PENDING_APPROVAL = "pending_approval"
 
 
-class ServerSubscriptionStatus(str, Enum):
+class ServerSubscriptionStatus(StrEnum):
     """Status of a server subscription."""
     PENDING = "pending"
     ACTIVE = "active"

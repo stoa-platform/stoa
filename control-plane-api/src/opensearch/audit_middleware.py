@@ -26,7 +26,7 @@ import time
 import uuid
 from contextvars import ContextVar
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from fastapi import Request, Response
 from opensearchpy import AsyncOpenSearch
@@ -39,7 +39,7 @@ logger = logging.getLogger("stoa.audit")
 correlation_id_ctx: ContextVar[str] = ContextVar("correlation_id", default="")
 
 
-class EventCategory(str, Enum):
+class EventCategory(StrEnum):
     """Audit event categories."""
     AUTHENTICATION = "authentication"
     AUTHORIZATION = "authorization"
@@ -50,7 +50,7 @@ class EventCategory(str, Enum):
     SECURITY = "security"
 
 
-class EventSeverity(str, Enum):
+class EventSeverity(StrEnum):
     """Audit event severity levels."""
     INFO = "info"
     WARNING = "warning"

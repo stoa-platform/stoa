@@ -1,6 +1,6 @@
 """Pydantic schemas for catalog cache endpoints (CAB-682)"""
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -8,14 +8,14 @@ from pydantic import BaseModel, ConfigDict
 
 # ============== Enums ==============
 
-class SyncTypeEnum(str, Enum):
+class SyncTypeEnum(StrEnum):
     """Sync operation type."""
     FULL = "full"
     TENANT = "tenant"
     API = "api"
 
 
-class SyncStatusEnum(str, Enum):
+class SyncStatusEnum(StrEnum):
     """Sync operation status."""
     RUNNING = "running"
     SUCCESS = "success"

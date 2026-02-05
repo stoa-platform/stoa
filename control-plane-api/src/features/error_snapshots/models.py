@@ -5,14 +5,14 @@ Captures complete request/response context when errors occur.
 """
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class SnapshotTrigger(str, Enum):
+class SnapshotTrigger(StrEnum):
     """What triggered the snapshot capture."""
 
     ERROR_4XX = "4xx"

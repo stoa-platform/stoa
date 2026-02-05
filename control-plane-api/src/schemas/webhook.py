@@ -1,12 +1,12 @@
 """Pydantic schemas for webhook endpoints (CAB-315)"""
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class WebhookEventTypeEnum(str, Enum):
+class WebhookEventTypeEnum(StrEnum):
     """Supported webhook event types"""
     SUBSCRIPTION_CREATED = "subscription.created"
     SUBSCRIPTION_APPROVED = "subscription.approved"
@@ -16,7 +16,7 @@ class WebhookEventTypeEnum(str, Enum):
     ALL = "*"
 
 
-class WebhookDeliveryStatusEnum(str, Enum):
+class WebhookDeliveryStatusEnum(StrEnum):
     """Webhook delivery status"""
     PENDING = "pending"
     SUCCESS = "success"

@@ -1,7 +1,7 @@
 """Deployments router - API deployment management"""
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -12,11 +12,11 @@ from ..services.kafka_service import Topics, kafka_service
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/deployments", tags=["Deployments"])
 
-class Environment(str, Enum):
+class Environment(StrEnum):
     DEV = "dev"
     STAGING = "staging"
 
-class DeploymentStatus(str, Enum):
+class DeploymentStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     SUCCESS = "success"

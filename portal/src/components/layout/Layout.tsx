@@ -13,7 +13,7 @@ export function Layout({ children }: LayoutProps) {
   const { showSpotlight, dismissSpotlight } = useUACSpotlight();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 flex flex-col transition-colors">
       <Header onMenuClick={() => setSidebarOpen(true)} />
 
       <div className="flex flex-1">

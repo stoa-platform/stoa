@@ -13,8 +13,9 @@ The OIDC proxy mode is preferred for production as it:
 - Supports role-based access control via Keycloak
 """
 import logging
-from typing import Optional, List, Dict, Any
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from typing import Any
+
 import httpx
 
 from ..config import settings
@@ -28,16 +29,27 @@ class GatewayAdminService:
     Supports both OIDC proxy mode (token forwarding) and Basic Auth mode.
     """
 
-    def __init__(self):
-        self._client: Optional[httpx.AsyncClient] = None
-        self._use_proxy = settings.GATEWAY_USE_OIDC_PROXY
+    def __init__(
+        self,
+        base_url: str | None = None,
+        auth_config: dict | None = None,
+    ):
+        self._client: httpx.AsyncClient | None = None
+        self._base_url = base_url
+        self._auth_config = auth_config or {}
+        # Determine proxy mode: explicit config takes precedence over global settings
+        if auth_config and "type" in auth_config:
+            self._use_proxy = auth_config["type"] == "oidc_proxy"
+        else:
+            self._use_proxy = settings.GATEWAY_USE_OIDC_PROXY
 
     async def connect(self):
         """Initialize Gateway connection (for Basic Auth mode only)."""
         if not self._use_proxy:
             # Basic Auth mode - create persistent client
+            gw_url = self._base_url or settings.GATEWAY_URL
             self._client = httpx.AsyncClient(
-                base_url=f"{settings.GATEWAY_URL}/rest/apigateway",
+                base_url=f"{gw_url}/rest/apigateway",
                 auth=(settings.GATEWAY_ADMIN_USER, settings.GATEWAY_ADMIN_PASSWORD),
                 headers={
                     "Content-Type": "application/json",
@@ -46,9 +58,10 @@ class GatewayAdminService:
                 timeout=30.0,
                 verify=True,
             )
-            logger.info(f"Connected to Gateway (Basic Auth) at {settings.GATEWAY_URL}")
+            logger.info(f"Connected to Gateway (Basic Auth) at {gw_url}")
         else:
-            logger.info(f"Gateway service configured for OIDC proxy at {settings.GATEWAY_ADMIN_PROXY_URL}")
+            proxy_url = self._auth_config.get("proxy_url", settings.GATEWAY_ADMIN_PROXY_URL)
+            logger.info(f"Gateway service configured for OIDC proxy at {proxy_url}")
 
     async def disconnect(self):
         """Close Gateway connection."""
@@ -57,7 +70,7 @@ class GatewayAdminService:
             self._client = None
 
     @asynccontextmanager
-    async def _get_client(self, auth_token: Optional[str] = None):
+    async def _get_client(self, auth_token: str | None = None):
         """Get HTTP client based on authentication mode.
 
         Args:
@@ -70,9 +83,10 @@ class GatewayAdminService:
             if not auth_token:
                 raise ValueError("JWT token required for OIDC proxy mode")
 
+            proxy_url = self._auth_config.get("proxy_url", settings.GATEWAY_ADMIN_PROXY_URL)
             # Create per-request client with Bearer token
             async with httpx.AsyncClient(
-                base_url=settings.GATEWAY_ADMIN_PROXY_URL,
+                base_url=proxy_url,
                 headers={
                     "Authorization": f"Bearer {auth_token}",
                     "Content-Type": "application/json",
@@ -92,7 +106,7 @@ class GatewayAdminService:
         self,
         method: str,
         path: str,
-        auth_token: Optional[str] = None,
+        auth_token: str | None = None,
         **kwargs
     ) -> dict:
         """Make request to Gateway Admin API.
@@ -120,7 +134,7 @@ class GatewayAdminService:
     # API Operations
     # =========================================================================
 
-    async def list_apis(self, auth_token: Optional[str] = None) -> List[dict]:
+    async def list_apis(self, auth_token: str | None = None) -> list[dict]:
         """List all APIs in the Gateway.
 
         Args:
@@ -132,7 +146,7 @@ class GatewayAdminService:
         result = await self._request("GET", "/apis", auth_token=auth_token)
         return result.get("apiResponse", [])
 
-    async def get_api(self, api_id: str, auth_token: Optional[str] = None) -> dict:
+    async def get_api(self, api_id: str, auth_token: str | None = None) -> dict:
         """Get API by ID.
 
         Args:
@@ -145,7 +159,7 @@ class GatewayAdminService:
         result = await self._request("GET", f"/apis/{api_id}", auth_token=auth_token)
         return result.get("apiResponse", {}).get("api", {})
 
-    async def activate_api(self, api_id: str, auth_token: Optional[str] = None) -> dict:
+    async def activate_api(self, api_id: str, auth_token: str | None = None) -> dict:
         """Activate an API.
 
         Args:
@@ -159,7 +173,7 @@ class GatewayAdminService:
         logger.info(f"Activated API {api_id}")
         return result
 
-    async def deactivate_api(self, api_id: str, auth_token: Optional[str] = None) -> dict:
+    async def deactivate_api(self, api_id: str, auth_token: str | None = None) -> dict:
         """Deactivate an API.
 
         Args:
@@ -173,7 +187,7 @@ class GatewayAdminService:
         logger.info(f"Deactivated API {api_id}")
         return result
 
-    async def delete_api(self, api_id: str, auth_token: Optional[str] = None) -> bool:
+    async def delete_api(self, api_id: str, auth_token: str | None = None) -> bool:
         """Delete an API.
 
         Args:
@@ -191,10 +205,10 @@ class GatewayAdminService:
         self,
         api_name: str,
         api_version: str,
-        openapi_url: Optional[str] = None,
-        openapi_spec: Optional[Dict[str, Any]] = None,
+        openapi_url: str | None = None,
+        openapi_spec: dict[str, Any] | None = None,
         api_type: str = "openapi",
-        auth_token: Optional[str] = None
+        auth_token: str | None = None
     ) -> dict:
         """Import an API from OpenAPI specification.
 
@@ -233,7 +247,7 @@ class GatewayAdminService:
     # Application Operations
     # =========================================================================
 
-    async def list_applications(self, auth_token: Optional[str] = None) -> List[dict]:
+    async def list_applications(self, auth_token: str | None = None) -> list[dict]:
         """List all applications in the Gateway.
 
         Args:
@@ -245,7 +259,7 @@ class GatewayAdminService:
         result = await self._request("GET", "/applications", auth_token=auth_token)
         return result.get("applications", [])
 
-    async def get_application(self, app_id: str, auth_token: Optional[str] = None) -> dict:
+    async def get_application(self, app_id: str, auth_token: str | None = None) -> dict:
         """Get application by ID.
 
         Args:
@@ -261,8 +275,8 @@ class GatewayAdminService:
         self,
         name: str,
         description: str = "",
-        contact_emails: List[str] = None,
-        auth_token: Optional[str] = None
+        contact_emails: list[str] | None = None,
+        auth_token: str | None = None
     ) -> dict:
         """Create a new application.
 
@@ -292,7 +306,7 @@ class GatewayAdminService:
         tenant_id: str,
         subscriber_email: str,
         correlation_id: str,
-        auth_token: Optional[str] = None,
+        auth_token: str | None = None,
     ) -> dict:
         """Provision a gateway application for a subscription (CAB-800).
 
@@ -337,10 +351,8 @@ class GatewayAdminService:
             )
         except Exception:
             # Cleanup: delete the application if association fails
-            try:
+            with suppress(Exception):
                 await self._request("DELETE", f"/applications/{app_id}", auth_token=auth_token)
-            except Exception:
-                pass
             raise
 
         logger.info(
@@ -353,7 +365,7 @@ class GatewayAdminService:
         self,
         app_id: str,
         correlation_id: str,
-        auth_token: Optional[str] = None,
+        auth_token: str | None = None,
     ) -> bool:
         """Remove a provisioned application from the gateway (CAB-800).
 
@@ -376,7 +388,7 @@ class GatewayAdminService:
     # Alias Operations
     # =========================================================================
 
-    async def list_aliases(self, auth_token: Optional[str] = None) -> List[dict]:
+    async def list_aliases(self, auth_token: str | None = None) -> list[dict]:
         """List all aliases in the Gateway.
 
         Args:
@@ -393,7 +405,7 @@ class GatewayAdminService:
         name: str,
         endpoint_uri: str,
         description: str = "",
-        auth_token: Optional[str] = None
+        auth_token: str | None = None
     ) -> dict:
         """Create an endpoint alias.
 
@@ -424,7 +436,7 @@ class GatewayAdminService:
     # Scope Operations
     # =========================================================================
 
-    async def list_scopes(self, auth_token: Optional[str] = None) -> List[dict]:
+    async def list_scopes(self, auth_token: str | None = None) -> list[dict]:
         """List all OAuth scopes in the Gateway.
 
         Args:
@@ -441,10 +453,10 @@ class GatewayAdminService:
         scope_name: str,
         description: str,
         audience: str,
-        api_ids: List[str],
+        api_ids: list[str],
         auth_server_alias: str = "KeycloakOIDC",
         keycloak_scope: str = "openid",
-        auth_token: Optional[str] = None
+        auth_token: str | None = None
     ) -> dict:
         """Create an OAuth scope mapping.
 
@@ -480,7 +492,7 @@ class GatewayAdminService:
     # Strategy Operations
     # =========================================================================
 
-    async def list_strategies(self, auth_token: Optional[str] = None) -> List[dict]:
+    async def list_strategies(self, auth_token: str | None = None) -> list[dict]:
         """List all authentication strategies in the Gateway.
 
         Args:
@@ -499,7 +511,7 @@ class GatewayAdminService:
         client_id: str,
         audience: str,
         description: str = "",
-        auth_token: Optional[str] = None
+        auth_token: str | None = None
     ) -> dict:
         """Create an OAuth2 authentication strategy.
 
@@ -530,7 +542,7 @@ class GatewayAdminService:
     # Health Check
     # =========================================================================
 
-    async def health_check(self, auth_token: Optional[str] = None) -> dict:
+    async def health_check(self, auth_token: str | None = None) -> dict:
         """Check Gateway health status.
 
         Args:
@@ -554,8 +566,8 @@ class GatewayAdminService:
         client_id: str,
         audience: str = "control-plane-api",
         auth_server_alias: str = "KeycloakOIDC",
-        auth_token: Optional[str] = None
-    ) -> Dict[str, Any]:
+        auth_token: str | None = None
+    ) -> dict[str, Any]:
         """Configure OIDC authentication for an API.
 
         Creates strategy, application, associates them, and creates scope mappings.

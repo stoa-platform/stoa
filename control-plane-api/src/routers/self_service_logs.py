@@ -7,19 +7,19 @@ without opening support tickets.
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
-from ..auth import get_current_user, User
+from ..auth import User, get_current_user
 from ..core.pii import PIIMasker
-from ..services.loki_client import loki_client
-from ..services.consumer_logs_service import ConsumerLogsService
 from ..schemas.logs import (
+    LogLevel,
     LogQueryParams,
     LogQueryResponse,
     LogStatus,
-    LogLevel,
 )
+from ..services.consumer_logs_service import ConsumerLogsService
+from ..services.loki_client import loki_client
 
 router = APIRouter(
     prefix="/v1/logs",

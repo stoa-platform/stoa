@@ -201,3 +201,130 @@ Then('the API is created in namespace {string}', async ({ page }, _namespace: st
 Then('the API does not appear for {string}', async ({ page }, _otherPersona: string) => {
   await expect(page.locator('h1, h2').first()).toBeVisible();
 });
+
+// ============================================================================
+// API CRUD STEPS (6C.1)
+// ============================================================================
+
+Then('the API {string} appears in the list', async ({ page }, apiName: string) => {
+  await page.goto(`${URLS.console}/apis`);
+  await page.waitForLoadState('networkidle');
+  const apiEntry = page.locator(`text=${apiName}`).first();
+  await expect(apiEntry).toBeVisible({ timeout: 10000 });
+});
+
+When('I select the API {string}', async ({ page }, apiName: string) => {
+  const apiLink = page.locator(`a:has-text("${apiName}"), tr:has-text("${apiName}")`).first();
+  await expect(apiLink).toBeVisible({ timeout: 10000 });
+  await apiLink.click();
+  await page.waitForLoadState('networkidle');
+});
+
+When('I edit the API display name to {string}', async ({ page }, newName: string) => {
+  const editButton = page.locator(
+    'button:has-text("Edit"), button:has-text("Modifier"), a:has-text("Edit")',
+  );
+  if (await editButton.isVisible()) {
+    await editButton.click();
+    await page.waitForLoadState('networkidle');
+  }
+
+  const nameInput = page.locator(
+    'input[name="display_name"], input[name="name"], input[placeholder*="name"]',
+  ).first();
+  await nameInput.clear();
+  await nameInput.fill(newName);
+
+  await page.click(
+    'button[type="submit"]:has-text("Save"), button[type="submit"]:has-text("Update"), button:has-text("Enregistrer")',
+  );
+  await page.waitForLoadState('networkidle');
+});
+
+Then('I see the updated API name {string}', async ({ page }, name: string) => {
+  await expect(page.locator(`text=${name}`).first()).toBeVisible({ timeout: 10000 });
+});
+
+When('I delete the current API', async ({ page }) => {
+  const deleteButton = page.locator(
+    'button:has-text("Delete"), button:has-text("Supprimer"), button[aria-label*="delete" i]',
+  );
+  await expect(deleteButton).toBeVisible({ timeout: 10000 });
+  await deleteButton.click();
+});
+
+When('I confirm the deletion', async ({ page }) => {
+  // Wait for confirmation dialog
+  const confirmButton = page.locator(
+    'button:has-text("Confirm"), button:has-text("Yes"), button:has-text("OK"), button:has-text("Confirmer")',
+  );
+  await expect(confirmButton).toBeVisible({ timeout: 5000 });
+  await confirmButton.click();
+  await page.waitForLoadState('networkidle');
+});
+
+Then('the API {string} is no longer in the list', async ({ page }, apiName: string) => {
+  await page.goto(`${URLS.console}/apis`);
+  await page.waitForLoadState('networkidle');
+  const apiEntry = page.locator(`text=${apiName}`);
+  await expect(apiEntry).not.toBeVisible({ timeout: 10000 });
+});
+
+Then('the Create API button is not visible or disabled', async ({ page }) => {
+  const createButton = page.locator(
+    'button:has-text("Create API"), button:has-text("New API"), button:has-text("Nouvelle API")',
+  );
+  const isVisible = await createButton.isVisible().catch(() => false);
+  if (isVisible) {
+    // If visible, it should be disabled
+    await expect(createButton).toBeDisabled();
+  }
+  // If not visible, the test passes (RBAC hides the button)
+});
+
+// ============================================================================
+// RBAC STEPS (6C.4)
+// ============================================================================
+
+When('I navigate directly to {string}', async ({ page }, path: string) => {
+  await page.goto(`${URLS.console}${path}`);
+  await page.waitForLoadState('networkidle');
+});
+
+Then('I receive an access denied error or redirect', async ({ page }) => {
+  // Check for: 403 message, redirect to home/login, or "not authorized" text
+  const url = page.url();
+  const hasAccessDenied = await page.locator(
+    'text=/access denied|unauthorized|forbidden|not authorized|403|interdit/i',
+  ).isVisible().catch(() => false);
+
+  const redirectedAway = !url.includes('/tenants') && !url.includes('/admin');
+
+  expect(hasAccessDenied || redirectedAway).toBe(true);
+});
+
+Then('write actions are hidden or disabled', async ({ page }) => {
+  const writeButtons = page.locator(
+    'button:has-text("Create"), button:has-text("New"), button:has-text("Delete"), button:has-text("Edit")',
+  );
+  const count = await writeButtons.count();
+  for (let i = 0; i < count; i++) {
+    const btn = writeButtons.nth(i);
+    const isDisabled = await btn.isDisabled().catch(() => true);
+    const isHidden = !(await btn.isVisible().catch(() => false));
+    expect(isDisabled || isHidden).toBe(true);
+  }
+});
+
+Then('I see an access denied or not found message', async ({ page }) => {
+  const errorIndicator = page.locator(
+    'text=/not found|access denied|unauthorized|forbidden|404|403|introuvable|interdit/i',
+  );
+  const isError = await errorIndicator.isVisible({ timeout: 5000 }).catch(() => false);
+
+  // Also check if redirected to API list (no cross-tenant data shown)
+  const url = page.url();
+  const safeRedirect = url.includes('/apis') && !url.includes('some-api');
+
+  expect(isError || safeRedirect).toBe(true);
+});

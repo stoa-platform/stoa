@@ -13,14 +13,14 @@ Endpoints:
 - POST /v1/mcp/tools/{name}/invoke - Invoke a tool
 """
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from ..auth import get_current_user, User
+from ..auth import User, get_current_user
 from ..config import settings
 
 # Security scheme for extracting Bearer token
@@ -165,12 +165,12 @@ class ToolInvokeResponse(BaseModel):
 @router.get("", response_model=ListToolsResponse)
 async def list_tools(
     request: Request,
-    tag: Optional[str] = Query(None, description="Filter by tag"),
-    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
-    category: Optional[str] = Query(None, description="Filter by category"),
-    search: Optional[str] = Query(None, description="Search in name and description"),
-    tenant_id: Optional[str] = Query(None, description="Filter by tenant"),
-    cursor: Optional[str] = Query(None, description="Pagination cursor"),
+    tag: str | None = Query(None, description="Filter by tag"),
+    tags: str | None = Query(None, description="Filter by tags (comma-separated)"),
+    category: str | None = Query(None, description="Filter by category"),
+    search: str | None = Query(None, description="Search in name and description"),
+    tenant_id: str | None = Query(None, description="Filter by tenant"),
+    cursor: str | None = Query(None, description="Pagination cursor"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     user: User = Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),

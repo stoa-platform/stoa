@@ -11,12 +11,12 @@ Rate limit tiers:
 - Tool invocations: 60 req/min (more restrictive)
 """
 
+import structlog
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-from fastapi import Request
-from fastapi.responses import JSONResponse
-import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -161,13 +161,13 @@ def limit_anonymous(limit: str = DEFAULT_LIMITS["anonymous"]):
 # =============================================================================
 
 __all__ = [
-    "limiter",
+    "DEFAULT_LIMITS",
     "get_rate_limit_key",
     "get_strict_rate_limit_key",
-    "rate_limit_exceeded_handler",
-    "limit_authenticated",
-    "limit_tool_invoke",
-    "limit_subscription",
     "limit_anonymous",
-    "DEFAULT_LIMITS",
+    "limit_authenticated",
+    "limit_subscription",
+    "limit_tool_invoke",
+    "limiter",
+    "rate_limit_exceeded_handler",
 ]

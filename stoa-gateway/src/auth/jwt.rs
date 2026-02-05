@@ -8,11 +8,12 @@
 //! - Issuer validation
 //! - Audience validation
 //! - Claims extraction
+#![allow(dead_code)]
 
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{decode, decode_header, Algorithm, Validation};
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, warn};
 
 use super::claims::Claims;
 use super::oidc::{OidcError, OidcProvider};
@@ -156,6 +157,8 @@ impl JwtValidator {
         // Set audience validation
         if self.config.validate_audience {
             validation.set_audience(&[self.oidc_provider.audience()]);
+        } else {
+            validation.validate_aud = false;
         }
 
         // Decode and validate

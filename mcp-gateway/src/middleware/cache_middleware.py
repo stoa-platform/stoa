@@ -22,8 +22,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
-from ..cache.semantic_cache import SemanticCache
 from ..cache.embedder import Embedder
+from ..cache.semantic_cache import SemanticCache
 from ..services.database import get_db_session
 
 logger = structlog.get_logger(__name__)

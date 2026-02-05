@@ -1,10 +1,9 @@
 """Repository for subscription CRUD operations"""
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.exc import IntegrityError
-from typing import Optional, List, Tuple
 from datetime import datetime, timedelta
 from uuid import UUID
+
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.subscription import Subscription, SubscriptionStatus
 
@@ -22,14 +21,14 @@ class SubscriptionRepository:
         await self.session.refresh(subscription)
         return subscription
 
-    async def get_by_id(self, subscription_id: UUID) -> Optional[Subscription]:
+    async def get_by_id(self, subscription_id: UUID) -> Subscription | None:
         """Get subscription by ID"""
         result = await self.session.execute(
             select(Subscription).where(Subscription.id == subscription_id)
         )
         return result.scalar_one_or_none()
 
-    async def get_by_api_key_hash(self, api_key_hash: str) -> Optional[Subscription]:
+    async def get_by_api_key_hash(self, api_key_hash: str) -> Subscription | None:
         """Get subscription by API key hash (for validation)"""
         result = await self.session.execute(
             select(Subscription).where(Subscription.api_key_hash == api_key_hash)
@@ -40,7 +39,7 @@ class SubscriptionRepository:
         self,
         application_id: str,
         api_id: str
-    ) -> Optional[Subscription]:
+    ) -> Subscription | None:
         """Check if subscription already exists for app+api combo"""
         result = await self.session.execute(
             select(Subscription).where(
@@ -59,10 +58,10 @@ class SubscriptionRepository:
     async def list_by_subscriber(
         self,
         subscriber_id: str,
-        status: Optional[SubscriptionStatus] = None,
+        status: SubscriptionStatus | None = None,
         page: int = 1,
         page_size: int = 20
-    ) -> Tuple[List[Subscription], int]:
+    ) -> tuple[list[Subscription], int]:
         """List subscriptions for a subscriber with pagination"""
         query = select(Subscription).where(
             Subscription.subscriber_id == subscriber_id
@@ -88,10 +87,10 @@ class SubscriptionRepository:
     async def list_by_tenant(
         self,
         tenant_id: str,
-        status: Optional[SubscriptionStatus] = None,
+        status: SubscriptionStatus | None = None,
         page: int = 1,
         page_size: int = 20
-    ) -> Tuple[List[Subscription], int]:
+    ) -> tuple[list[Subscription], int]:
         """List subscriptions for a tenant with pagination"""
         query = select(Subscription).where(
             Subscription.tenant_id == tenant_id
@@ -118,10 +117,10 @@ class SubscriptionRepository:
         self,
         api_id: str,
         tenant_id: str,
-        status: Optional[SubscriptionStatus] = None,
+        status: SubscriptionStatus | None = None,
         page: int = 1,
         page_size: int = 20
-    ) -> Tuple[List[Subscription], int]:
+    ) -> tuple[list[Subscription], int]:
         """List subscriptions for an API with pagination"""
         query = select(Subscription).where(
             and_(
@@ -149,10 +148,10 @@ class SubscriptionRepository:
 
     async def list_pending(
         self,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
         page: int = 1,
         page_size: int = 20
-    ) -> Tuple[List[Subscription], int]:
+    ) -> tuple[list[Subscription], int]:
         """List pending subscriptions for approval"""
         query = select(Subscription).where(
             Subscription.status == SubscriptionStatus.PENDING
@@ -179,8 +178,8 @@ class SubscriptionRepository:
         self,
         subscription: Subscription,
         new_status: SubscriptionStatus,
-        reason: Optional[str] = None,
-        actor_id: Optional[str] = None
+        reason: str | None = None,
+        actor_id: str | None = None
     ) -> Subscription:
         """Update subscription status"""
         subscription.status = new_status
@@ -203,7 +202,7 @@ class SubscriptionRepository:
     async def set_expiration(
         self,
         subscription: Subscription,
-        expires_at: Optional[datetime]
+        expires_at: datetime | None
     ) -> Subscription:
         """Set subscription expiration date"""
         subscription.expires_at = expires_at
@@ -212,7 +211,7 @@ class SubscriptionRepository:
         await self.session.refresh(subscription)
         return subscription
 
-    async def get_stats(self, tenant_id: Optional[str] = None) -> dict:
+    async def get_stats(self, tenant_id: str | None = None) -> dict:
         """Get subscription statistics"""
         base_query = select(Subscription)
         if tenant_id:
@@ -291,7 +290,7 @@ class SubscriptionRepository:
     async def get_by_previous_key_hash(
         self,
         api_key_hash: str
-    ) -> Optional[Subscription]:
+    ) -> Subscription | None:
         """
         Get subscription by previous API key hash (for grace period validation).
 

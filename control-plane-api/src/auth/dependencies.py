@@ -2,15 +2,15 @@
 
 CAB-330: Enhanced debug logging for authentication troubleshooting.
 """
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
-from pydantic import BaseModel
-from typing import List, Optional
+
 import httpx
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from pydantic import BaseModel
 
 from ..config import settings
-from ..logging_config import get_logger, bind_request_context
+from ..logging_config import bind_request_context, get_logger
 
 logger = get_logger(__name__)
 security = HTTPBearer(auto_error=True)
@@ -19,8 +19,8 @@ class User(BaseModel):
     id: str
     email: str
     username: str
-    roles: List[str]
-    tenant_id: Optional[str] = None
+    roles: list[str]
+    tenant_id: str | None = None
 
 async def get_keycloak_public_key():
     """Fetch Keycloak realm public key"""
@@ -107,10 +107,7 @@ async def get_current_user(
         roles = payload.get("realm_access", {}).get("roles", [])
         # Handle tenant_id as either string or list (from group membership mapper)
         raw_tenant_id = payload.get("tenant_id")
-        if isinstance(raw_tenant_id, list):
-            tenant_id = raw_tenant_id[0] if raw_tenant_id else None
-        else:
-            tenant_id = raw_tenant_id
+        tenant_id = (raw_tenant_id[0] if raw_tenant_id else None) if isinstance(raw_tenant_id, list) else raw_tenant_id
 
         # Get user ID from 'sub' claim, with fallback to email or username
         # Some Keycloak configurations may not include 'sub' in certain token types
@@ -168,7 +165,7 @@ async def get_current_user(
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {str(e)}"
+            detail=f"Invalid token: {e!s}"
         )
     except httpx.HTTPError as e:
         logger.error(

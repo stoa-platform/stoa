@@ -6,17 +6,17 @@ Reference: CAB-397 - Error Snapshot / Flight Recorder (Time-Travel Debugging)
 """
 
 import enum
-from datetime import datetime, timezone
-from typing import Optional, Any
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
     DateTime,
     Enum,
-    Integer,
     Float,
+    Index,
+    Integer,
     String,
     Text,
-    Index,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -50,33 +50,33 @@ class ErrorSnapshotModel(Base):
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 
     # Error classification
     error_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     error_message: Mapped[str] = mapped_column(Text, nullable=False)
-    error_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     response_status: Mapped[int] = mapped_column(Integer, nullable=False, default=500, index=True)
 
     # Request context (extracted for filtering)
-    request_method: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    request_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    request_method: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    request_path: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # User context (extracted for filtering)
-    user_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    tenant_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
     # MCP context (extracted for filtering)
-    mcp_server_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
-    tool_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    mcp_server_name: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    tool_name: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
     # LLM context (extracted for analytics)
-    llm_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    llm_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    llm_tokens_input: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    llm_tokens_output: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    llm_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    llm_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    llm_tokens_input: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    llm_tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Cost tracking
     total_cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
@@ -87,8 +87,8 @@ class ErrorSnapshotModel(Base):
     retry_max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
 
     # Tracing
-    trace_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
-    conversation_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    conversation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # Resolution workflow
     resolution_status: Mapped[ResolutionStatus] = mapped_column(
@@ -97,9 +97,9 @@ class ErrorSnapshotModel(Base):
         default=ResolutionStatus.UNRESOLVED,
         index=True,
     )
-    resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    resolved_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Full snapshot data as JSONB for complete context
     snapshot_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

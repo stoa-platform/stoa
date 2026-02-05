@@ -1,407 +1,258 @@
-//! Rate Limiting
+//! Rate Limiter with parking_lot RwLock and automatic cleanup
 //!
-//! CAB-912: Per-tenant and per-classification rate limiting.
-//!
-//! Rate limits:
-//! - Per tenant: 10 requests/minute (global)
-//! - H classification: 50 requests/hour
-//! - VH classification: 10 requests/hour
-//! - VVH classification: 2 requests/hour
+//! Replaces std::sync::RwLock to avoid poisoning panics.
+//! Adds periodic cleanup of stale tenant buckets.
 
 use chrono::{DateTime, Duration, Utc};
-use serde::{Deserialize, Serialize};
+use parking_lot::RwLock;
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::Arc;
+use tokio::time::{interval, Duration as TokioDuration};
+use tracing::{debug, info};
 
-use crate::uac::Classification;
+use crate::config::Config;
+use crate::metrics;
 
-// =============================================================================
-// Rate Limit Result
-// =============================================================================
-
-/// Result of a rate limit check.
-#[derive(Debug, Clone, Serialize)]
-pub struct RateLimitResult {
-    /// Whether the request is allowed
-    pub allowed: bool,
-
-    /// Current count in the window
-    pub current: u32,
-
-    /// Maximum allowed in the window
-    pub limit: u32,
-
-    /// When the window resets
-    pub reset_at: DateTime<Utc>,
-
-    /// Time until reset in seconds
-    pub retry_after_seconds: i64,
-}
-
-impl RateLimitResult {
-    fn allowed(current: u32, limit: u32, reset_at: DateTime<Utc>) -> Self {
-        Self {
-            allowed: true,
-            current,
-            limit,
-            reset_at,
-            retry_after_seconds: 0,
-        }
-    }
-
-    fn denied(current: u32, limit: u32, reset_at: DateTime<Utc>) -> Self {
-        let retry_after = (reset_at - Utc::now()).num_seconds().max(0);
-        Self {
-            allowed: false,
-            current,
-            limit,
-            reset_at,
-            retry_after_seconds: retry_after,
-        }
-    }
-}
-
-// =============================================================================
-// Rate Limit Bucket
-// =============================================================================
-
-/// A sliding window rate limit bucket.
+/// Sliding window rate limit bucket for a tenant
 #[derive(Debug, Clone)]
-struct RateBucket {
-    /// Request timestamps in the current window
+struct TenantBucket {
+    /// Timestamps of requests within the window
     timestamps: Vec<DateTime<Utc>>,
-
-    /// Window duration
-    window: Duration,
-
-    /// Maximum requests in window
-    limit: u32,
+    /// Last activity time for cleanup
+    last_activity: DateTime<Utc>,
 }
 
-impl RateBucket {
-    fn new(limit: u32, window: Duration) -> Self {
+impl TenantBucket {
+    fn new() -> Self {
         Self {
-            timestamps: Vec::new(),
-            window,
-            limit,
+            timestamps: Vec::with_capacity(100),
+            last_activity: Utc::now(),
         }
     }
 
-    /// Check if a request is allowed and record it if so.
-    fn check_and_record(&mut self) -> RateLimitResult {
-        let now = Utc::now();
-        let window_start = now - self.window;
-
-        // Remove expired entries
-        self.timestamps.retain(|t| *t > window_start);
-
-        let current = self.timestamps.len() as u32;
-        let reset_at = self
-            .timestamps
-            .first()
-            .map(|t| *t + self.window)
-            .unwrap_or(now + self.window);
-
-        if current >= self.limit {
-            return RateLimitResult::denied(current, self.limit, reset_at);
-        }
-
-        // Record this request
-        self.timestamps.push(now);
-
-        RateLimitResult::allowed(current + 1, self.limit, reset_at)
+    /// Clean old timestamps outside the window
+    fn cleanup_window(&mut self, window: Duration) {
+        let cutoff = Utc::now() - window;
+        self.timestamps.retain(|ts| *ts > cutoff);
     }
 
-    /// Check without recording (peek).
-    fn check(&self) -> RateLimitResult {
-        let now = Utc::now();
-        let window_start = now - self.window;
+    /// Check if request is allowed and record it
+    fn check_and_record(&mut self, limit: usize, window: Duration) -> bool {
+        self.cleanup_window(window);
+        self.last_activity = Utc::now();
 
-        let current = self
-            .timestamps
-            .iter()
-            .filter(|t| **t > window_start)
-            .count() as u32;
-        let reset_at = self
-            .timestamps
-            .iter()
-            .find(|t| **t > window_start)
-            .map(|t| *t + self.window)
-            .unwrap_or(now + self.window);
-
-        if current >= self.limit {
-            RateLimitResult::denied(current, self.limit, reset_at)
+        if self.timestamps.len() < limit {
+            self.timestamps.push(Utc::now());
+            true
         } else {
-            RateLimitResult::allowed(current, self.limit, reset_at)
+            false
         }
+    }
+
+    /// Get remaining requests in current window
+    fn remaining(&self, limit: usize) -> usize {
+        limit.saturating_sub(self.timestamps.len())
+    }
+
+    /// Get reset time (oldest timestamp + window)
+    fn reset_at(&self, window: Duration) -> Option<DateTime<Utc>> {
+        self.timestamps.first().map(|ts| *ts + window)
     }
 }
 
-// =============================================================================
-// Rate Limiter
-// =============================================================================
-
-/// Rate limiter with per-tenant and per-classification limits.
+/// Rate limiter with per-tenant sliding window
 pub struct RateLimiter {
-    /// Per-tenant buckets (tenant_id -> bucket)
-    tenant_buckets: RwLock<HashMap<String, RateBucket>>,
-
-    /// Per-tenant-classification buckets (tenant_id:classification -> bucket)
-    classification_buckets: RwLock<HashMap<String, RateBucket>>,
-
-    /// Configuration
-    config: RateLimitConfig,
-}
-
-/// Rate limiter configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RateLimitConfig {
-    /// Per-tenant limit per minute
-    pub tenant_limit_per_minute: u32,
-
-    /// H classification limit per hour
-    pub h_limit_per_hour: u32,
-
-    /// VH classification limit per hour
-    pub vh_limit_per_hour: u32,
-
-    /// VVH classification limit per hour
-    pub vvh_limit_per_hour: u32,
-}
-
-impl Default for RateLimitConfig {
-    fn default() -> Self {
-        Self {
-            tenant_limit_per_minute: 10,
-            h_limit_per_hour: 50,
-            vh_limit_per_hour: 10,
-            vvh_limit_per_hour: 2,
-        }
-    }
-}
-
-impl RateLimitConfig {
-    /// Get the per-hour limit for a classification.
-    pub fn limit_for(&self, classification: Classification) -> u32 {
-        match classification {
-            Classification::H => self.h_limit_per_hour,
-            Classification::VH => self.vh_limit_per_hour,
-            Classification::VVH => self.vvh_limit_per_hour,
-        }
-    }
+    buckets: Arc<RwLock<HashMap<String, TenantBucket>>>,
+    default_limit: usize,
+    window: Duration,
+    /// How long before a bucket is considered stale
+    stale_threshold: Duration,
 }
 
 impl RateLimiter {
-    /// Create a new rate limiter with default config.
-    pub fn new() -> Self {
-        Self::with_config(RateLimitConfig::default())
-    }
-
-    /// Create a rate limiter with custom config.
-    pub fn with_config(config: RateLimitConfig) -> Self {
+    pub fn new(config: &Config) -> Self {
         Self {
-            tenant_buckets: RwLock::new(HashMap::new()),
-            classification_buckets: RwLock::new(HashMap::new()),
-            config,
+            buckets: Arc::new(RwLock::new(HashMap::new())),
+            default_limit: config.rate_limit_default.unwrap_or(1000),
+            window: Duration::seconds(config.rate_limit_window_seconds.unwrap_or(60) as i64),
+            stale_threshold: Duration::hours(1),
         }
     }
 
-    /// Check tenant-level rate limit.
-    pub fn check_tenant(&self, tenant_id: &str) -> RateLimitResult {
-        let mut buckets = self.tenant_buckets.write().unwrap();
-        let bucket = buckets.entry(tenant_id.to_string()).or_insert_with(|| {
-            RateBucket::new(self.config.tenant_limit_per_minute, Duration::minutes(1))
-        });
-        bucket.check_and_record()
-    }
+    /// Check if request is allowed for tenant
+    pub fn check(&self, tenant_id: &str) -> RateLimitResult {
+        let mut buckets = self.buckets.write();
 
-    /// Check classification-level rate limit.
-    pub fn check_classification(
-        &self,
-        tenant_id: &str,
-        classification: Classification,
-    ) -> RateLimitResult {
-        let key = format!("{}:{}", tenant_id, classification);
-        let limit = self.config.limit_for(classification);
-
-        let mut buckets = self.classification_buckets.write().unwrap();
         let bucket = buckets
-            .entry(key)
-            .or_insert_with(|| RateBucket::new(limit, Duration::hours(1)));
-        bucket.check_and_record()
+            .entry(tenant_id.to_string())
+            .or_insert_with(TenantBucket::new);
+
+        let allowed = bucket.check_and_record(self.default_limit, self.window);
+        let remaining = bucket.remaining(self.default_limit);
+        let reset_at = bucket.reset_at(self.window);
+
+        RateLimitResult {
+            allowed,
+            limit: self.default_limit,
+            remaining,
+            reset_at,
+        }
     }
 
-    /// Check both tenant and classification limits.
-    ///
-    /// Returns the most restrictive result.
-    pub fn check(&self, tenant_id: &str, classification: Classification) -> RateLimitResult {
-        // Check tenant limit first
-        let tenant_result = self.check_tenant(tenant_id);
-        if !tenant_result.allowed {
-            return tenant_result;
+    /// Cleanup stale buckets (call periodically)
+    pub fn cleanup_stale_buckets(&self) {
+        let cutoff = Utc::now() - self.stale_threshold;
+        let mut buckets = self.buckets.write();
+
+        let before_count = buckets.len();
+        buckets.retain(|tenant_id, bucket| {
+            let keep = bucket.last_activity > cutoff;
+            if !keep {
+                debug!(tenant_id = %tenant_id, "Removing stale rate limit bucket");
+            }
+            keep
+        });
+
+        let removed = before_count - buckets.len();
+        if removed > 0 {
+            info!(
+                removed = removed,
+                remaining = buckets.len(),
+                "Cleaned up stale rate limit buckets"
+            );
+        }
+        metrics::update_rate_limit_buckets(buckets.len());
+    }
+
+    /// Start background cleanup task
+    pub fn start_cleanup_task(self: Arc<Self>) {
+        let limiter = self.clone();
+        tokio::spawn(async move {
+            let mut cleanup_interval = interval(TokioDuration::from_secs(60));
+            loop {
+                cleanup_interval.tick().await;
+                limiter.cleanup_stale_buckets();
+            }
+        });
+        info!("Rate limiter cleanup task started (60s interval)");
+    }
+
+    /// Get current bucket count (for metrics)
+    #[allow(dead_code)]
+    pub fn bucket_count(&self) -> usize {
+        self.buckets.read().len()
+    }
+}
+
+/// Result of a rate limit check
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct RateLimitResult {
+    pub allowed: bool,
+    pub limit: usize,
+    pub remaining: usize,
+    pub reset_at: Option<DateTime<Utc>>,
+}
+
+impl RateLimitResult {
+    /// Generate X-RateLimit-* headers
+    #[allow(dead_code)]
+    pub fn headers(&self) -> Vec<(&'static str, String)> {
+        let mut headers = vec![
+            ("X-RateLimit-Limit", self.limit.to_string()),
+            ("X-RateLimit-Remaining", self.remaining.to_string()),
+        ];
+
+        if let Some(reset) = self.reset_at {
+            headers.push(("X-RateLimit-Reset", reset.timestamp().to_string()));
         }
 
-        // Check classification limit
-        self.check_classification(tenant_id, classification)
-    }
-
-    /// Peek at current limits without recording.
-    pub fn peek(
-        &self,
-        tenant_id: &str,
-        classification: Classification,
-    ) -> (RateLimitResult, RateLimitResult) {
-        let tenant_result = {
-            let buckets = self.tenant_buckets.read().unwrap();
-            buckets
-                .get(tenant_id)
-                .map(|b| b.check())
-                .unwrap_or_else(|| {
-                    RateLimitResult::allowed(
-                        0,
-                        self.config.tenant_limit_per_minute,
-                        Utc::now() + Duration::minutes(1),
-                    )
-                })
-        };
-
-        let class_result = {
-            let key = format!("{}:{}", tenant_id, classification);
-            let limit = self.config.limit_for(classification);
-            let buckets = self.classification_buckets.read().unwrap();
-            buckets.get(&key).map(|b| b.check()).unwrap_or_else(|| {
-                RateLimitResult::allowed(0, limit, Utc::now() + Duration::hours(1))
-            })
-        };
-
-        (tenant_result, class_result)
-    }
-
-    /// Get the current configuration.
-    pub fn config(&self) -> &RateLimitConfig {
-        &self.config
-    }
-
-    /// Clear all rate limit buckets (for testing).
-    #[cfg(test)]
-    pub fn clear(&self) {
-        self.tenant_buckets.write().unwrap().clear();
-        self.classification_buckets.write().unwrap().clear();
+        headers
     }
 }
-
-impl Default for RateLimiter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// =============================================================================
-// Tests
-// =============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_tenant_rate_limit() {
-        let limiter = RateLimiter::new();
-
-        // First 10 requests should succeed
-        for i in 0..10 {
-            let result = limiter.check_tenant("tenant-1");
-            assert!(result.allowed, "Request {} should be allowed", i + 1);
-        }
-
-        // 11th request should be denied
-        let result = limiter.check_tenant("tenant-1");
-        assert!(!result.allowed);
-        assert_eq!(result.current, 10);
-        assert!(result.retry_after_seconds > 0);
-    }
-
-    #[test]
-    fn test_classification_rate_limit_vvh() {
-        let limiter = RateLimiter::new();
-
-        // VVH allows only 2 per hour
-        let result1 = limiter.check_classification("tenant-1", Classification::VVH);
-        assert!(result1.allowed);
-
-        let result2 = limiter.check_classification("tenant-1", Classification::VVH);
-        assert!(result2.allowed);
-
-        let result3 = limiter.check_classification("tenant-1", Classification::VVH);
-        assert!(!result3.allowed);
-        assert_eq!(result3.current, 2);
-    }
-
-    #[test]
-    fn test_different_tenants_separate_limits() {
-        let limiter = RateLimiter::new();
-
-        // Exhaust tenant-1's VVH limit
-        limiter.check_classification("tenant-1", Classification::VVH);
-        limiter.check_classification("tenant-1", Classification::VVH);
-        let result = limiter.check_classification("tenant-1", Classification::VVH);
-        assert!(!result.allowed);
-
-        // tenant-2 should still have quota
-        let result = limiter.check_classification("tenant-2", Classification::VVH);
-        assert!(result.allowed);
-    }
-
-    #[test]
-    fn test_combined_check() {
-        let limiter = RateLimiter::new();
-
-        // VVH should hit classification limit before tenant limit
-        let result1 = limiter.check("tenant-1", Classification::VVH);
-        assert!(result1.allowed);
-
-        let result2 = limiter.check("tenant-1", Classification::VVH);
-        assert!(result2.allowed);
-
-        let result3 = limiter.check("tenant-1", Classification::VVH);
-        assert!(!result3.allowed);
-    }
-
-    #[test]
-    fn test_h_classification_limit() {
-        let config = RateLimitConfig {
-            h_limit_per_hour: 3, // Low limit for testing
+    fn test_config() -> Config {
+        Config {
+            rate_limit_default: Some(5),
+            rate_limit_window_seconds: Some(60),
             ..Default::default()
-        };
-        let limiter = RateLimiter::with_config(config);
-
-        for _ in 0..3 {
-            let result = limiter.check_classification("tenant-1", Classification::H);
-            assert!(result.allowed);
         }
-
-        let result = limiter.check_classification("tenant-1", Classification::H);
-        assert!(!result.allowed);
     }
 
     #[test]
-    fn test_peek_does_not_consume() {
-        let limiter = RateLimiter::new();
+    fn test_rate_limit_allows_within_limit() {
+        let limiter = RateLimiter::new(&test_config());
 
-        // Peek should not affect counts
-        let (tenant, class) = limiter.peek("tenant-1", Classification::H);
-        assert!(tenant.allowed);
-        assert!(class.allowed);
-        assert_eq!(tenant.current, 0);
-        assert_eq!(class.current, 0);
+        for i in 0..5 {
+            let result = limiter.check("tenant-1");
+            assert!(result.allowed, "Request {} should be allowed", i + 1);
+            assert_eq!(result.remaining, 4 - i);
+        }
+    }
 
-        // Actual check should show 1
-        let result = limiter.check("tenant-1", Classification::H);
+    #[test]
+    fn test_rate_limit_blocks_over_limit() {
+        let limiter = RateLimiter::new(&test_config());
+
+        // Exhaust limit
+        for _ in 0..5 {
+            limiter.check("tenant-1");
+        }
+
+        // Should be blocked
+        let result = limiter.check("tenant-1");
+        assert!(!result.allowed);
+        assert_eq!(result.remaining, 0);
+    }
+
+    #[test]
+    fn test_separate_tenant_buckets() {
+        let limiter = RateLimiter::new(&test_config());
+
+        // Exhaust tenant-1
+        for _ in 0..5 {
+            limiter.check("tenant-1");
+        }
+
+        // tenant-2 should still be allowed
+        let result = limiter.check("tenant-2");
         assert!(result.allowed);
+        assert_eq!(result.remaining, 4);
+    }
 
-        // Peek again should show 1 (not 2)
-        let (tenant, class) = limiter.peek("tenant-1", Classification::H);
-        assert_eq!(tenant.current, 1);
-        assert_eq!(class.current, 1);
+    #[test]
+    fn test_cleanup_stale_buckets() {
+        let config = test_config();
+        let limiter = RateLimiter::new(&config);
+
+        // Add some buckets
+        limiter.check("tenant-1");
+        limiter.check("tenant-2");
+
+        assert_eq!(limiter.bucket_count(), 2);
+
+        // Cleanup (none should be removed - not stale yet)
+        limiter.cleanup_stale_buckets();
+        assert_eq!(limiter.bucket_count(), 2);
+    }
+
+    #[test]
+    fn test_headers_generation() {
+        let result = RateLimitResult {
+            allowed: true,
+            limit: 1000,
+            remaining: 500,
+            reset_at: Some(Utc::now()),
+        };
+
+        let headers = result.headers();
+        assert_eq!(headers.len(), 3);
+        assert_eq!(headers[0].0, "X-RateLimit-Limit");
+        assert_eq!(headers[1].0, "X-RateLimit-Remaining");
+        assert_eq!(headers[2].0, "X-RateLimit-Reset");
     }
 }

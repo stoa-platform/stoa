@@ -5,16 +5,16 @@ FastAPI middleware for automatic error capture on MCP Gateway.
 """
 
 import time
-from typing import Callable
+from collections.abc import Callable
 
 import structlog
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from .config import get_mcp_snapshot_settings
-from .models import MCPErrorType, MCPServerContext
 from .capture import capture_mcp_error
+from .config import get_mcp_snapshot_settings
+from .models import MCPErrorType
 
 logger = structlog.get_logger(__name__)
 
@@ -51,7 +51,7 @@ class MCPErrorSnapshotMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            int((time.perf_counter() - start_time) * 1000)
 
             # Capture on error status codes
             if response.status_code >= 400:

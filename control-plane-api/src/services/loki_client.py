@@ -5,8 +5,9 @@ Uses httpx.AsyncClient with context managers following existing patterns.
 """
 import json
 import logging
-from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
+from typing import Any
+
 import httpx
 
 from ..config import settings
@@ -53,7 +54,7 @@ class LokiClient:
         end: datetime,
         limit: int = 100,
         direction: str = "backward"
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> list[dict[str, Any]] | None:
         """Execute LogQL range query.
 
         Args:
@@ -101,13 +102,13 @@ class LokiClient:
         user_id: str,
         tenant_id: str,
         limit: int = 20,
-        tool_id: Optional[str] = None,
-        status: Optional[str] = None,
-        from_date: Optional[datetime] = None,
-        to_date: Optional[datetime] = None,
-        search: Optional[str] = None,
-        level: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        tool_id: str | None = None,
+        status: str | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+        search: str | None = None,
+        level: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Get recent API calls from logs.
 
         Args:
@@ -151,7 +152,7 @@ class LokiClient:
         user_id: str,
         tenant_id: str,
         limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get recent activity for dashboard.
 
         Args:
@@ -177,7 +178,7 @@ class LokiClient:
 
     # ===== Helper Methods =====
 
-    def _extract_log_entries(self, data: Dict) -> List[Dict[str, Any]]:
+    def _extract_log_entries(self, data: dict) -> list[dict[str, Any]]:
         """Extract log entries from Loki response."""
         entries = []
         try:
@@ -194,7 +195,7 @@ class LokiClient:
             logger.warning(f"Error extracting log entries: {e}")
         return entries
 
-    def _format_call_entries(self, entries: List[Dict]) -> List[Dict[str, Any]]:
+    def _format_call_entries(self, entries: list[dict]) -> list[dict[str, Any]]:
         """Format log entries as UsageCall-compatible objects."""
         calls = []
         for i, entry in enumerate(entries):
@@ -217,7 +218,7 @@ class LokiClient:
                 continue
         return calls
 
-    def _format_activity_entries(self, entries: List[Dict]) -> List[Dict[str, Any]]:
+    def _format_activity_entries(self, entries: list[dict]) -> list[dict[str, Any]]:
         """Format log entries as RecentActivityItem-compatible objects."""
         activities = []
         for i, entry in enumerate(entries):
@@ -241,14 +242,14 @@ class LokiClient:
                 continue
         return activities
 
-    def _parse_log_line(self, log_line: str) -> Optional[Dict[str, Any]]:
+    def _parse_log_line(self, log_line: str) -> dict[str, Any] | None:
         """Parse a log line as JSON."""
         try:
             return json.loads(log_line)
         except json.JSONDecodeError:
             return None
 
-    def _get_activity_title(self, event_type: str, data: Dict) -> str:
+    def _get_activity_title(self, event_type: str, data: dict) -> str:
         """Generate human-readable activity title."""
         tool_name = data.get("tool_name", "tool")
         titles = {

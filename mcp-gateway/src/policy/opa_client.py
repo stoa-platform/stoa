@@ -9,24 +9,21 @@ CAB-604: Updated with 12 granular OAuth2 scopes and 6 personas.
 
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import httpx
 import structlog
 
 from ..config import get_settings
-from ..models import ToolType, ToolDomain
 from .scopes import (
-    Scope,
-    LegacyScope,
-    PERSONAS,
     LEGACY_ROLE_TO_PERSONA,
-    expand_legacy_scopes,
-    get_scopes_for_roles,
-    get_required_scopes_for_tool,
-    TOOL_SCOPE_REQUIREMENTS,
+    PERSONAS,
     PROXIED_TOOL_REQUIRED_SCOPES,
+    LegacyScope,
+    Scope,
+    expand_legacy_scopes,
+    get_required_scopes_for_tool,
+    get_scopes_for_roles,
 )
 
 logger = structlog.get_logger(__name__)

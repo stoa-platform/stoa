@@ -9,7 +9,6 @@ Runs locally — zero external API calls.
 import hashlib
 from typing import Any
 
-import numpy as np
 import structlog
 
 logger = structlog.get_logger(__name__)

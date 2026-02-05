@@ -9,12 +9,11 @@ Importing this module auto-registers all built-in adapters
 (Linear Lite, Notion Lite).
 """
 
-from .config import TransformConfig, TruncateConfig, TransformFieldConfig
-from .engine import TransformEngine
-from .base import TransformerAdapter
-
 # Auto-register built-in adapters on import
 from . import adapters as _adapters  # noqa: F401
+from .base import TransformerAdapter
+from .config import TransformConfig, TransformFieldConfig, TruncateConfig
+from .engine import TransformEngine
 
 __all__ = [
     "TransformConfig",

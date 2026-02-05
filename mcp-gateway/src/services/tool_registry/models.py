@@ -5,7 +5,7 @@ CAB-605 Phase 3: Deprecation layer models.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
@@ -27,16 +27,16 @@ class DeprecatedToolAlias:
     old_name: str
     new_name: str
     new_args: dict[str, Any] = field(default_factory=dict)
-    deprecated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    deprecated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     remove_after: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=60)
+        default_factory=lambda: datetime.now(UTC) + timedelta(days=60)
     )
 
     def is_expired(self) -> bool:
         """Check if the deprecation period has ended."""
-        return datetime.now(timezone.utc) > self.remove_after
+        return datetime.now(UTC) > self.remove_after
 
     def days_until_removal(self) -> int:
         """Get days remaining until removal."""
-        remaining = self.remove_after - datetime.now(timezone.utc)
+        remaining = self.remove_after - datetime.now(UTC)
         return max(0, remaining.days)

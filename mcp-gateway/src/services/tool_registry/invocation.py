@@ -11,20 +11,19 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from ...models import (
-    Tool,
     CoreTool,
-    ProxiedTool,
     ExternalTool,
-    ToolType,
+    ProxiedTool,
+    TextContent,
     ToolInvocation,
     ToolResult,
-    TextContent,
+    ToolType,
 )
 from .exceptions import ToolNotFoundError
 from .models import DeprecatedToolAlias
 
 if TYPE_CHECKING:
-    from . import ToolRegistry
+    pass
 
 logger = structlog.get_logger(__name__)
 

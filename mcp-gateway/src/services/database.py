@@ -7,20 +7,19 @@ Reference: CAB-XXX - Secure API Key Management with Vault & 2FA
 """
 
 import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import structlog
 from sqlalchemy.ext.asyncio import (
-    AsyncSession,
     AsyncEngine,
-    create_async_engine,
+    AsyncSession,
     async_sessionmaker,
+    create_async_engine,
 )
 from sqlalchemy.pool import NullPool
 
 from ..config import get_settings
-from ..models.subscription import Base
 
 logger = structlog.get_logger(__name__)
 
@@ -43,9 +42,9 @@ def get_database_url() -> str:
         return database_url
 
     # Build from individual components
-    settings = get_settings()
+    get_settings()
 
-    db_host = os.environ.get("DB_HOST", f"control-plane-db.stoa-system.svc.cluster.local")
+    db_host = os.environ.get("DB_HOST", "control-plane-db.stoa-system.svc.cluster.local")
     db_port = os.environ.get("DB_PORT", "5432")
     db_name = os.environ.get("DB_NAME", "stoa")
     db_user = os.environ.get("DB_USER", "stoa")

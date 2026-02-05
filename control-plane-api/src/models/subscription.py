@@ -1,9 +1,10 @@
 """Subscription SQLAlchemy model for API subscriptions"""
-from sqlalchemy import Column, String, DateTime, Enum as SQLEnum, Text, Index, Integer
-from sqlalchemy.dialects.postgresql import UUID
-from datetime import datetime
-import uuid
 import enum
+import uuid
+from datetime import datetime
+
+from sqlalchemy import Column, DateTime, Enum as SQLEnum, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 
 from src.database import Base
 

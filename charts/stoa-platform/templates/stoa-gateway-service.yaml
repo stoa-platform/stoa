@@ -1,0 +1,21 @@
+{{- if .Values.stoaGateway.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stoa-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-gateway
+    app.kubernetes.io/component: gateway
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: stoa-gateway
+{{- end }}

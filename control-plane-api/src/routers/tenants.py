@@ -1,16 +1,15 @@
 """Tenants router - Multi-tenant management using database"""
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
-from pydantic import BaseModel
-from datetime import datetime
 
-from ..auth import get_current_user, User, Permission, require_permission, Role
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..auth import Permission, Role, User, get_current_user, require_permission
 from ..database import get_db
 from ..models.tenant import Tenant, TenantStatus
 from ..repositories.tenant import TenantRepository
-from ..services.kafka_service import kafka_service, Topics
+from ..services.kafka_service import Topics, kafka_service
 from ..services.keycloak_service import keycloak_service
 
 logger = logging.getLogger(__name__)
@@ -26,9 +25,9 @@ class TenantCreate(BaseModel):
 
 
 class TenantUpdate(BaseModel):
-    display_name: Optional[str] = None
-    description: Optional[str] = None
-    owner_email: Optional[str] = None
+    display_name: str | None = None
+    description: str | None = None
+    owner_email: str | None = None
 
 
 class TenantResponse(BaseModel):
@@ -40,8 +39,8 @@ class TenantResponse(BaseModel):
     status: str = "active"
     api_count: int = 0
     application_count: int = 0
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 def _tenant_to_response(tenant: Tenant, api_count: int = 0, app_count: int = 0) -> TenantResponse:
@@ -61,7 +60,7 @@ def _tenant_to_response(tenant: Tenant, api_count: int = 0, app_count: int = 0) 
     )
 
 
-@router.get("", response_model=List[TenantResponse])
+@router.get("", response_model=list[TenantResponse])
 async def list_tenants(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -189,7 +188,7 @@ async def create_tenant(
         raise
     except Exception as e:
         logger.error(f"Failed to create tenant {tenant_data.name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create tenant: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create tenant: {e!s}")
 
 
 @router.put("/{tenant_id}", response_model=TenantResponse)
@@ -245,7 +244,7 @@ async def update_tenant(
         raise
     except Exception as e:
         logger.error(f"Failed to update tenant {tenant_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update tenant: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update tenant: {e!s}")
 
 
 @router.delete("/{tenant_id}")
@@ -299,4 +298,4 @@ async def delete_tenant(
         raise
     except Exception as e:
         logger.error(f"Failed to delete tenant {tenant_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete tenant: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete tenant: {e!s}")

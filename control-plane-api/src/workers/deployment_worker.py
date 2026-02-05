@@ -7,18 +7,18 @@ the appropriate AWX job template based on the event type.
 Pipeline: Control-Plane API → Kafka → DeploymentWorker → AWX → Gateway
 """
 import asyncio
-import logging
+import contextlib
 import json
-from typing import Optional
+import logging
 from datetime import datetime
 
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
 from ..config import settings
-from ..services.kafka_service import kafka_service, Topics
 from ..services.awx_service import awx_service
 from ..services.git_service import git_service
+from ..services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class DeploymentWorker:
     """
 
     def __init__(self):
-        self._consumer: Optional[KafkaConsumer] = None
+        self._consumer: KafkaConsumer | None = None
         self._running = False
         self._consumer_group = "deployment-worker"
 
@@ -346,10 +346,8 @@ class DeploymentWorker:
 
                     # Get job output for details
                     stdout = ""
-                    try:
+                    with contextlib.suppress(Exception):
                         stdout = await awx_service.get_job_stdout(job_id)
-                    except Exception:
-                        pass
 
                     await self._emit_result(
                         tenant_id=tenant_id,

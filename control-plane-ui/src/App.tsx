@@ -20,6 +20,9 @@ const ExternalMCPServersList = lazy(() => import('./pages/ExternalMCPServers').t
 const ExternalMCPServerDetail = lazy(() => import('./pages/ExternalMCPServers').then(m => ({ default: m.ExternalMCPServerDetail })));
 const AdminProspects = lazy(() => import('./pages/AdminProspects').then(m => ({ default: m.AdminProspects })));
 const GatewayStatus = lazy(() => import('./pages/GatewayStatus'));
+const GatewayRegistry = lazy(() => import('./pages/Gateways').then(m => ({ default: m.GatewayList })));
+const GatewayDeployments = lazy(() => import('./pages/GatewayDeployments').then(m => ({ default: m.GatewayDeploymentsDashboard })));
+const GatewayObservability = lazy(() => import('./pages/GatewayObservability').then(m => ({ default: m.GatewayObservabilityDashboard })));
 
 // Loading spinner for lazy-loaded pages
 function PageLoader() {
@@ -217,6 +220,9 @@ function ProtectedRoutes() {
           <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
           <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
           <Route path="/gateway" element={<GatewayStatus />} />
+          <Route path="/gateways" element={<GatewayRegistry />} />
+          <Route path="/gateway-deployments" element={<GatewayDeployments />} />
+          <Route path="/gateway-observability" element={<GatewayObservability />} />
           <Route path="/admin/prospects" element={<AdminProspects />} />
         </Routes>
       </Suspense>

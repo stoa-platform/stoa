@@ -14,21 +14,21 @@ Data Sources (CAB-840):
 """
 import logging
 from datetime import datetime
-from typing import Optional
-from fastapi import APIRouter, Depends, Query, HTTPException
 
-from ..auth import get_current_user, User
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from ..auth import User, get_current_user
 from ..database import get_db
-from ..services.metrics_service import metrics_service
-from ..services.cache_service import TTLCache
 from ..schemas.usage import (
-    UsageSummary,
-    UsageCallsResponse,
     ActiveSubscription,
     CallStatus,
-    DashboardStats,
     DashboardActivityResponse,
+    DashboardStats,
+    UsageCallsResponse,
+    UsageSummary,
 )
+from ..services.cache_service import TTLCache
+from ..services.metrics_service import metrics_service
 from ..services.prometheus_client import PrometheusClient
 
 logger = logging.getLogger(__name__)
@@ -85,10 +85,10 @@ async def get_my_usage_summary(
 async def get_my_calls(
     limit: int = Query(default=20, ge=1, le=100, description="Number of calls to return"),
     offset: int = Query(default=0, ge=0, description="Offset for pagination"),
-    status: Optional[CallStatus] = Query(default=None, description="Filter by call status"),
-    tool_id: Optional[str] = Query(default=None, description="Filter by tool ID"),
-    from_date: Optional[datetime] = Query(default=None, description="Start date filter"),
-    to_date: Optional[datetime] = Query(default=None, description="End date filter"),
+    status: CallStatus | None = Query(default=None, description="Filter by call status"),
+    tool_id: str | None = Query(default=None, description="Filter by tool ID"),
+    from_date: datetime | None = Query(default=None, description="Start date filter"),
+    to_date: datetime | None = Query(default=None, description="End date filter"),
     current_user: User = Depends(get_current_user)
 ) -> UsageCallsResponse:
     """

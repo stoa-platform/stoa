@@ -4,12 +4,12 @@ CAB-XXX: Single source of truth for user permissions.
 This endpoint allows frontends (Portal, Console) to fetch calculated
 permissions without duplicating the role-to-permission mapping logic.
 """
+
 from fastapi import APIRouter, Depends
-from typing import List, Optional
 from pydantic import BaseModel
 
-from ..auth.dependencies import get_current_user, User
-from ..auth.rbac import ROLE_PERMISSIONS, get_user_permissions
+from ..auth.dependencies import User, get_current_user
+from ..auth.rbac import get_user_permissions
 
 router = APIRouter(prefix="/v1", tags=["Users"])
 
@@ -22,10 +22,10 @@ class UserPermissionsResponse(BaseModel):
     user_id: str
     email: str
     username: str
-    tenant_id: Optional[str]
-    roles: List[str]
-    permissions: List[str]
-    effective_scopes: List[str]
+    tenant_id: str | None
+    roles: list[str]
+    permissions: list[str]
+    effective_scopes: list[str]
 
     class Config:
         json_schema_extra = {
@@ -126,7 +126,7 @@ ROLE_TO_SCOPES = {
 }
 
 
-def get_effective_scopes(roles: List[str]) -> List[str]:
+def get_effective_scopes(roles: list[str]) -> list[str]:
     """Calculate effective OAuth2 scopes from user roles.
 
     This aligns with mcp-gateway's get_scopes_for_roles() to ensure
@@ -136,10 +136,10 @@ def get_effective_scopes(roles: List[str]) -> List[str]:
     for role in roles:
         if role in ROLE_TO_SCOPES:
             scopes.update(ROLE_TO_SCOPES[role])
-    return sorted(list(scopes))
+    return sorted(scopes)
 
 
-def filter_system_roles(roles: List[str]) -> List[str]:
+def filter_system_roles(roles: list[str]) -> list[str]:
     """Filter out Keycloak system roles."""
     system_prefixes = (
         "default-roles-",

@@ -1,0 +1,53 @@
+# =============================================================================
+# GitHub Actions: Helm Lint
+# =============================================================================
+# STOA Platform - CAB-1074
+# Validate Helm charts on changes
+# =============================================================================
+
+name: Helm Lint
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+      - '.github/workflows/helm-lint.yml'
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+      - '.github/workflows/helm-lint.yml'
+
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint Helm Charts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.14.0
+
+      - name: Lint stoa-platform chart
+        run: helm lint charts/stoa-platform
+
+      - name: Template stoa-platform chart (dry-run)
+        run: helm template stoa-platform charts/stoa-platform > /dev/null
+
+      - name: Lint stoa-observability chart
+        run: helm lint charts/stoa-observability
+
+      - name: Template stoa-observability chart (dry-run)
+        run: helm template stoa-observability charts/stoa-observability > /dev/null

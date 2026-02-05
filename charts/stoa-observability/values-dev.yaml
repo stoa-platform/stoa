@@ -1,0 +1,54 @@
+# STOA Observability - Dev Environment Overrides
+# ================================================
+# Lightweight config: filesystem storage, short retention, single replicas
+
+global:
+  environment: development
+
+alloyConfig:
+  # Local Prometheus (docker-compose or minikube)
+  prometheusRemoteWriteUrl: "http://prometheus:9090/api/v1/write"
+  lokiUrl: "http://loki:3100/loki/api/v1/push"
+  tempoEndpoint: "tempo:4317"
+  scrapeInterval: 30s
+
+tempo:
+  tempo:
+    retention: 1d
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/traces
+  persistence:
+    enabled: true
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+blackboxExporter:
+  enabled: false
+
+# Dev: relaxed sampling - capture everything for debugging
+tenantTiers:
+  enterprise:
+    traceSamplingRate: 1.0
+    logRetention: 24h
+    traceRetention: 24h
+  business:
+    traceSamplingRate: 1.0
+    logRetention: 24h
+    traceRetention: 24h
+  platform:
+    traceSamplingRate: 1.0
+    logRetention: 24h
+    traceRetention: 24h
+  demo:
+    traceSamplingRate: 1.0
+    logRetention: 24h
+    traceRetention: 24h

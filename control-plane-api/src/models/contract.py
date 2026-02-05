@@ -4,10 +4,11 @@ Contract and Protocol Binding models for UAC Protocol Switcher
 Contracts represent Universal API Contracts that can be exposed via multiple protocols.
 ProtocolBindings track which protocols are enabled for each contract.
 """
-import uuid
 import enum
+import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, ForeignKey, Enum as SQLEnum, Index, Text
+
+from sqlalchemy import Boolean, Column, DateTime, Enum as SQLEnum, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 

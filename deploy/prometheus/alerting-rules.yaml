@@ -73,6 +73,66 @@ spec:
             description: "Tool {{ $labels.tool }} in tenant {{ $labels.tenant_id }} has error rate {{ $value | humanize }}/s"
 
     # ============================================
+    # STOA Gateway (Rust) Alerts
+    # ============================================
+    - name: stoa.stoa-gateway.rules
+      rules:
+        - alert: StoaGatewayHighErrorRate
+          expr: |
+            (
+              sum(rate(stoa_mcp_tools_calls_total{status="error"}[5m]))
+              / sum(rate(stoa_mcp_tools_calls_total[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            component: stoa-gateway
+          annotations:
+            summary: "STOA Gateway high error rate"
+            description: "STOA Gateway tool error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/stoa-gateway-errors.md"
+
+        - alert: StoaGatewayHighLatency
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(stoa_mcp_tool_duration_seconds_bucket[5m])) by (le)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+            component: stoa-gateway
+          annotations:
+            summary: "STOA Gateway high latency"
+            description: "STOA Gateway P99 latency is {{ $value | humanizeDuration }} (threshold: 2s)"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/stoa-gateway-latency.md"
+
+        - alert: StoaGatewayDown
+          expr: |
+            up{job="stoa-gateway"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            component: stoa-gateway
+          annotations:
+            summary: "STOA Gateway is down"
+            description: "STOA Gateway has been down for more than 1 minute"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/stoa-gateway-down.md"
+
+        - alert: StoaGatewayOidcFailure
+          expr: |
+            sum(rate(stoa_mcp_tools_calls_total{status="error"}[5m])) > 0
+            and
+            sum(rate(stoa_mcp_tools_calls_total{status="success"}[5m])) == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: stoa-gateway
+          annotations:
+            summary: "STOA Gateway OIDC authentication may be failing"
+            description: "STOA Gateway has errors but no successful tool calls — possible OIDC token failure"
+            runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/stoa-gateway-oidc.md"
+
+    # ============================================
     # Control-Plane API Alerts
     # ============================================
     - name: stoa.control-plane-api.rules

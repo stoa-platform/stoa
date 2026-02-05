@@ -4,8 +4,9 @@ Provides access to Prometheus metrics for usage statistics.
 Uses httpx.AsyncClient with context managers following existing patterns.
 """
 import logging
-from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
+from typing import Any
+
 import httpx
 
 from ..config import settings
@@ -45,7 +46,7 @@ class PrometheusClient:
         """Cleanup (no-op for stateless client)."""
         pass
 
-    async def query(self, promql: str) -> Optional[Dict[str, Any]]:
+    async def query(self, promql: str) -> dict[str, Any] | None:
         """Execute instant PromQL query.
 
         Args:
@@ -83,7 +84,7 @@ class PrometheusClient:
         start: datetime,
         end: datetime,
         step: str = "1h"
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Execute range PromQL query.
 
         Args:
@@ -123,9 +124,9 @@ class PrometheusClient:
 
     async def get_request_count(
         self,
-        subscription_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        subscription_id: str | None = None,
+        user_id: str | None = None,
+        tenant_id: str | None = None,
         time_range: str = "24h"
     ) -> int:
         """Get total request count for given filters."""
@@ -136,9 +137,9 @@ class PrometheusClient:
 
     async def get_success_count(
         self,
-        subscription_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        subscription_id: str | None = None,
+        user_id: str | None = None,
+        tenant_id: str | None = None,
         time_range: str = "24h"
     ) -> int:
         """Get successful request count."""
@@ -151,9 +152,9 @@ class PrometheusClient:
 
     async def get_error_count(
         self,
-        subscription_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        subscription_id: str | None = None,
+        user_id: str | None = None,
+        tenant_id: str | None = None,
         time_range: str = "24h"
     ) -> int:
         """Get error request count."""
@@ -166,9 +167,9 @@ class PrometheusClient:
 
     async def get_avg_latency_ms(
         self,
-        subscription_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
+        subscription_id: str | None = None,
+        user_id: str | None = None,
+        tenant_id: str | None = None,
         time_range: str = "24h"
     ) -> int:
         """Get average latency in milliseconds."""
@@ -194,7 +195,7 @@ class PrometheusClient:
         tenant_id: str,
         limit: int = 5,
         time_range: str = "30d"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get top tools by usage count."""
         query = f'''
             topk({limit},
@@ -211,7 +212,7 @@ class PrometheusClient:
         user_id: str,
         tenant_id: str,
         days: int = 7
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get daily call counts for the last N days."""
         end = datetime.utcnow()
         start = end - timedelta(days=days)
@@ -269,9 +270,9 @@ class PrometheusClient:
 
     def _build_labels(
         self,
-        subscription_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        tenant_id: Optional[str] = None
+        subscription_id: str | None = None,
+        user_id: str | None = None,
+        tenant_id: str | None = None
     ) -> str:
         """Build PromQL label selector."""
         labels = []
@@ -283,7 +284,7 @@ class PrometheusClient:
             labels.append(f'tenant_id="{tenant_id}"')
         return ",".join(labels)
 
-    def _extract_scalar(self, result: Optional[Dict], default: int = 0) -> int:
+    def _extract_scalar(self, result: dict | None, default: int = 0) -> int:
         """Extract scalar value from Prometheus result."""
         if not result:
             return default
@@ -300,7 +301,7 @@ class PrometheusClient:
         except (IndexError, ValueError, TypeError):
             return default
 
-    def _extract_scalar_float(self, result: Optional[Dict], default: float = 0.0) -> float:
+    def _extract_scalar_float(self, result: dict | None, default: float = 0.0) -> float:
         """Extract scalar float value from Prometheus result."""
         if not result:
             return default
@@ -316,7 +317,7 @@ class PrometheusClient:
         except (IndexError, ValueError, TypeError):
             return default
 
-    def _extract_tool_stats(self, result: Optional[Dict]) -> List[Dict[str, Any]]:
+    def _extract_tool_stats(self, result: dict | None) -> list[dict[str, Any]]:
         """Extract tool statistics from Prometheus result."""
         if not result:
             return []
@@ -336,7 +337,7 @@ class PrometheusClient:
             logger.warning(f"Error extracting tool stats: {e}")
         return tools
 
-    def _extract_daily_stats(self, result: Optional[Dict]) -> List[Dict[str, Any]]:
+    def _extract_daily_stats(self, result: dict | None) -> list[dict[str, Any]]:
         """Extract daily statistics from Prometheus range result."""
         if not result:
             return []

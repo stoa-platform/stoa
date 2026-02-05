@@ -103,8 +103,8 @@ def add_app_context(
 
 
 def configure_logging(
-    log_level: str = None,
-    log_format: Literal["json", "text"] = None,
+    log_level: str | None = None,
+    log_format: Literal["json", "text"] | None = None,
 ) -> None:
     """Configure structured logging for the application.
 
@@ -172,14 +172,10 @@ def configure_logging(
 
     if fmt == "json":
         # JSON format for production/Loki ingestion
-        processors = shared_processors + [
-            structlog.processors.JSONRenderer(),
-        ]
+        processors = [*shared_processors, structlog.processors.JSONRenderer()]
     else:
         # Human-readable format for development
-        processors = shared_processors + [
-            structlog.dev.ConsoleRenderer(colors=True),
-        ]
+        processors = [*shared_processors, structlog.dev.ConsoleRenderer(colors=True)]
 
     structlog.configure(
         processors=processors,
@@ -190,7 +186,7 @@ def configure_logging(
     )
 
 
-def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:
+def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     """Get a structured logger instance.
 
     Args:
@@ -239,11 +235,11 @@ def generate_request_id() -> str:
 
 
 def bind_request_context(
-    request_id: str = None,
-    tenant_id: str = None,
-    user_id: str = None,
-    trace_id: str = None,
-    span_id: str = None,
+    request_id: str | None = None,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+    trace_id: str | None = None,
+    span_id: str | None = None,
 ) -> str:
     """Bind request-specific context to all logs in the current request.
 

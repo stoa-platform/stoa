@@ -6,16 +6,15 @@ monitoring sync status.
 These endpoints are admin-only.
 """
 import logging
-from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from datetime import datetime
-
-from ..auth.dependencies import get_current_user, User
-from ..services.git_service import git_service
-from ..services.mcp_sync_service import MCPSyncService, SyncResult
-from ..database import get_db as get_async_db
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..auth.dependencies import User, get_current_user
+from ..database import get_db as get_async_db
+from ..services.git_service import git_service
+from ..services.mcp_sync_service import MCPSyncService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/mcp/gitops", tags=["MCP GitOps"])
@@ -44,7 +43,7 @@ class SyncStatusResponse(BaseModel):
     error: int
     orphan: int
     untracked: int
-    last_sync_at: Optional[str] = None
+    last_sync_at: str | None = None
     errors: list = []
 
 
@@ -105,7 +104,7 @@ async def trigger_full_sync(
 
     except Exception as e:
         logger.error(f"Full sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {e!s}")
 
 
 @router.post("/sync/tenant/{tenant_id}", response_model=SyncResponse)
@@ -142,7 +141,7 @@ async def trigger_tenant_sync(
 
     except Exception as e:
         logger.error(f"Tenant sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {e!s}")
 
 
 @router.post("/sync/server/{tenant_id}/{server_name}", response_model=SyncResponse)
@@ -182,7 +181,7 @@ async def trigger_server_sync(
 
     except Exception as e:
         logger.error(f"Server sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {e!s}")
 
 
 @router.get("/status", response_model=SyncStatusResponse)
@@ -218,7 +217,7 @@ async def get_sync_status(
 
     except Exception as e:
         logger.error(f"Failed to get sync status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get status: {e!s}")
 
 
 # ============================================================================
@@ -239,7 +238,7 @@ async def get_gitlab_health(
             await git_service.connect()
 
         # Try to list root directory
-        tree = git_service._project.repository_tree(ref="main", per_page=1)
+        git_service._project.repository_tree(ref="main", per_page=1)
 
         return {
             "status": "healthy",
@@ -290,4 +289,4 @@ async def list_gitlab_servers(
 
     except Exception as e:
         logger.error(f"Failed to list GitLab servers: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list servers: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list servers: {e!s}")

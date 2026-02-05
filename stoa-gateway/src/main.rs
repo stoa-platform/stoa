@@ -1,238 +1,223 @@
-use anyhow::Result;
+//! STOA Gateway - Main Entry Point
+//!
+//! MCP-native API Gateway bridging legacy systems to AI agents.
+
 use axum::{
-    routing::{any, get},
+    routing::{delete, get, post},
     Router,
 };
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::net::TcpListener;
-use tokio::signal;
-use tokio::sync::broadcast;
-use tower_http::trace::TraceLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing::{info, warn};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod auth;
 mod config;
 mod control_plane;
-mod git;
 mod handlers;
-mod health;
 mod mcp;
 mod metrics;
+mod oauth;
 mod proxy;
 mod rate_limit;
-mod router;
+mod routes;
+mod state;
 mod uac;
 
-use auth::{AuthBuilder, AuthComponents, RbacPolicy};
 use config::Config;
-use handlers::{health_live, health_ready, health_startup, metrics_handler, AppState};
-use health::HealthChecker;
-use mcp::handlers::{mcp_router, mcp_router_with_auth, McpState};
-use mcp::tools::ToolRegistry;
-use metrics::Metrics;
-use router::{shadow_route_request, ShadowRouter};
+use handlers::admin;
+use mcp::{
+    discovery::{mcp_capabilities, mcp_discovery, mcp_health},
+    handlers::{mcp_tools_call, mcp_tools_list},
+    sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
+};
+use proxy::dynamic_proxy;
+use state::AppState;
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    // Load configuration
-    let config = Config::from_env()?;
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load configuration first (needed for OTel endpoint)
+    let config = Config::load()?;
+    config.validate()?;
 
-    // Initialize tracing
+    // Initialize tracing (with optional OTel export if configured)
     init_tracing(&config);
 
-    tracing::info!(
-        host = %config.host,
-        port = config.port,
-        webmethods_url = %config.webmethods_url,
-        shadow_mode = config.shadow_mode_enabled,
-        "starting stoa-gateway"
+    info!(version = env!("CARGO_PKG_VERSION"), "Starting STOA Gateway");
+
+    // Initialize application state
+    let state = AppState::new(config.clone());
+
+    // Start background tasks
+    state.start_background_tasks();
+
+    // Register tools: try CP discovery, fallback to static
+    register_tools(&state).await;
+
+    info!(
+        tools = state.tool_registry.count(),
+        "Tool registry initialized"
     );
 
-    // Create shutdown broadcast channel
-    let (shutdown_tx, _) = broadcast::channel::<()>(1);
-    let shutting_down = Arc::new(AtomicBool::new(false));
+    // Build router
+    let app = build_router(state);
 
-    // Create metrics registry
-    let metrics = Metrics::new();
+    // Start server
+    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+    info!(addr = %addr, "STOA Gateway listening");
 
-    // Create health checker
-    let health_checker = Arc::new(HealthChecker::new(
-        config.webmethods_url.clone(),
-        Duration::from_secs(config.webmethods_health_check_interval_secs),
-        Duration::from_secs(config.webmethods_health_check_timeout_secs),
-    ));
-
-    // Get shared health state
-    let health_state = health_checker.state();
-
-    // Spawn health checker task
-    let health_shutdown_rx = shutdown_tx.subscribe();
-    let health_checker_clone = Arc::clone(&health_checker);
-    tokio::spawn(async move {
-        health_checker_clone.run(health_shutdown_rx).await;
-    });
-
-    // Spawn metrics sync task (tracks health changes for prometheus)
-    let metrics_shutdown_rx = shutdown_tx.subscribe();
-    let health_metrics = metrics.clone();
-    let health_state_for_metrics = Arc::clone(&health_state);
-    tokio::spawn(async move {
-        let mut was_healthy = true;
-        let mut interval = tokio::time::interval(Duration::from_secs(1));
-        let mut shutdown_rx = metrics_shutdown_rx;
-
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    let is_healthy = health_state_for_metrics.load(Ordering::SeqCst);
-                    health_metrics.set_health("webmethods", is_healthy);
-
-                    if was_healthy && !is_healthy {
-                        health_metrics.record_failover("webmethods", "rust");
-                    }
-                    was_healthy = is_healthy;
-                }
-                _ = shutdown_rx.recv() => {
-                    tracing::debug!("metrics sync task shutting down");
-                    break;
-                }
-            }
-        }
-    });
-
-    // Create app state for health endpoints
-    let app_state = AppState {
-        webmethods_healthy: Arc::clone(&health_state),
-        shutting_down: Arc::clone(&shutting_down),
-    };
-
-    // Create shadow router (uses shadow mode when enabled)
-    let shadow_router = ShadowRouter::new(
-        health_state,
-        config.webmethods_url.clone(),
-        metrics.clone(),
-        Duration::from_secs(config.shadow_timeout_secs),
-        config.shadow_mode_enabled,
-    );
-
-    // CAB-912: Create MCP tool registry
-    let tool_registry = ToolRegistry::new();
-    // Tools will be registered here when services are configured
-    // registry.register(StoaCreateApiTool::new(...));
-
-    // CAB-912 P2: Initialize auth if OIDC is configured
-    let oidc_enabled = std::env::var("OIDC_ISSUER_URL").is_ok();
-    let mcp_routes = if oidc_enabled {
-        let auth_components = AuthBuilder::from_env()
-            .with_rbac_policy(RbacPolicy::default())
-            .build();
-
-        tracing::info!(
-            issuer = %auth_components.config.issuer_url,
-            audience = %auth_components.config.audience,
-            "OIDC authentication enabled"
-        );
-
-        let mcp_state = McpState::with_rbac(
-            tool_registry,
-            auth_components.auth_state.clone(),
-            auth_components.rbac_enforcer,
-        );
-
-        mcp_router_with_auth(mcp_state)
-    } else {
-        tracing::warn!("OIDC not configured - MCP endpoints will be unauthenticated");
-        let mcp_state = McpState::new(tool_registry);
-        mcp_router(mcp_state)
-    };
-
-    tracing::info!("MCP gateway initialized");
-
-    // Build application router
-    let app = Router::new()
-        // Health endpoints (no state needed for live/startup)
-        .route("/health/live", get(health_live))
-        .route("/health/startup", get(health_startup))
-        .route(
-            "/health/ready",
-            get(health_ready).with_state(app_state.clone()),
-        )
-        // Metrics endpoint
-        .route("/metrics", get(metrics_handler).with_state(metrics.clone()))
-        // CAB-912: MCP endpoints (with or without auth)
-        .merge(mcp_routes)
-        // Catch-all route for API proxying with shadow mode
-        .fallback(any(shadow_route_request).with_state(shadow_router))
-        // Add tracing layer
-        .layer(TraceLayer::new_for_http());
-
-    // Create TCP listener
-    let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
     let listener = TcpListener::bind(addr).await?;
-    tracing::info!(address = %addr, "listening for connections");
-
-    // Spawn graceful shutdown handler
-    let shutdown_tx_clone = shutdown_tx.clone();
-    let shutting_down_clone = Arc::clone(&shutting_down);
-    tokio::spawn(async move {
-        shutdown_signal().await;
-        tracing::info!("shutdown signal received, initiating graceful shutdown");
-
-        // Mark as shutting down (health check will return not ready)
-        shutting_down_clone.store(true, Ordering::SeqCst);
-
-        // Signal all tasks to stop
-        let _ = shutdown_tx_clone.send(());
-
-        // Give some time for in-flight requests to complete
-        tokio::time::sleep(Duration::from_secs(5)).await;
-    });
-
-    // Run server with graceful shutdown
     axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            let mut rx = shutdown_tx.subscribe();
-            let _ = rx.recv().await;
-        })
+        .with_graceful_shutdown(shutdown_signal())
         .await?;
 
-    tracing::info!("stoa-gateway stopped");
+    // TODO: Flush OTel spans once OpenTelemetry API is stabilized
+    // opentelemetry::global::shutdown_tracer_provider();
+
+    info!("STOA Gateway shutdown complete");
     Ok(())
 }
 
-/// Initialize tracing based on configuration.
+/// Initialize tracing subscriber with optional OpenTelemetry export.
+///
+/// When `config.otel_endpoint` is set, spans are exported via OTLP gRPC
+/// to Grafana Alloy, enabling distributed tracing with Tempo and
+/// automatic Service Map generation in Grafana.
 fn init_tracing(config: &Config) {
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info,stoa_gateway=debug"));
 
-    if config.log_format == "json" {
-        tracing_subscriber::registry()
-            .with(filter)
-            .with(tracing_subscriber::fmt::layer().json())
-            .init();
-    } else {
-        tracing_subscriber::registry()
-            .with(filter)
-            .with(tracing_subscriber::fmt::layer().pretty())
-            .init();
+    let fmt_layer = fmt::layer().json();
+
+    if config.otel_endpoint.is_some() {
+        // TODO: Re-enable OTel tracing once opentelemetry 0.27 API is stabilized.
+        // The current opentelemetry_sdk 0.27 changed SdkTracerProvider/Resource APIs.
+        // For now, use plain tracing subscriber and log a warning.
+        warn!(
+            "STOA_OTEL_ENDPOINT set but OTel export not yet available — using local tracing only"
+        );
     }
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt_layer)
+        .init();
 }
 
-/// Wait for shutdown signal (SIGTERM or SIGINT).
+/// Build the Axum router with all routes
+fn build_router(state: AppState) -> Router {
+    // Admin API (protected by bearer token)
+    let admin_router = Router::new()
+        .route("/health", get(admin::admin_health))
+        .route("/apis", get(admin::list_apis).post(admin::upsert_api))
+        .route("/apis/:id", get(admin::get_api).delete(admin::delete_api))
+        .route(
+            "/policies",
+            get(admin::list_policies).post(admin::upsert_policy),
+        )
+        .route("/policies/:id", delete(admin::delete_policy))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            admin::admin_auth,
+        ));
+
+    Router::new()
+        // Health & Metrics
+        .route("/health", get(health))
+        .route("/ready", get(ready))
+        .route("/metrics", get(prometheus_metrics))
+        // OAuth Discovery + Proxy (RFC 9728, RFC 8414, OIDC, DCR)
+        .route(
+            "/.well-known/oauth-protected-resource",
+            get(oauth::discovery::protected_resource_metadata),
+        )
+        .route(
+            "/.well-known/oauth-authorization-server",
+            get(oauth::discovery::authorization_server_metadata),
+        )
+        .route(
+            "/.well-known/openid-configuration",
+            get(oauth::discovery::openid_configuration),
+        )
+        .route("/oauth/token", post(oauth::proxy::token_proxy))
+        .route("/oauth/register", post(oauth::proxy::register_proxy))
+        // MCP Discovery
+        .route("/mcp", get(mcp_discovery))
+        .route("/mcp/capabilities", get(mcp_capabilities))
+        .route("/mcp/health", get(mcp_health))
+        // MCP Tools (REST-style for backward compat)
+        .route("/mcp/tools/list", post(mcp_tools_list))
+        .route("/mcp/tools/call", post(mcp_tools_call))
+        // MCP SSE Transport (Streamable HTTP)
+        .route(
+            "/mcp/sse",
+            get(handle_sse_get)
+                .post(handle_sse_post)
+                .delete(handle_sse_delete),
+        )
+        // Admin API (Control Plane → Gateway)
+        .nest("/admin", admin_router)
+        // Dynamic proxy fallback — must be LAST
+        .fallback(dynamic_proxy)
+        // Add state
+        .with_state(state)
+}
+
+/// Register MCP tools.
+///
+/// 1. Try dynamic discovery from Control Plane (no rebuild needed)
+/// 2. Fallback to static definitions if CP is unreachable
+/// 3. Start background refresh task to pick up CP changes
+async fn register_tools(state: &AppState) {
+    use mcp::tools::stoa_tools;
+
+    match stoa_tools::discover_and_register(&state.tool_registry, &state.control_plane).await {
+        Ok(count) => {
+            info!(count, "Tools discovered from Control Plane");
+        }
+        Err(e) => {
+            info!(error = %e, "CP unreachable — using static tool definitions");
+            stoa_tools::register_static_tools(&state.tool_registry, state.control_plane.clone());
+        }
+    }
+
+    // Background refresh: sync tools from CP every 60s
+    stoa_tools::start_tool_refresh_task(state.tool_registry.clone(), state.control_plane.clone());
+}
+
+// === Health Endpoints ===
+
+async fn health() -> &'static str {
+    "OK"
+}
+
+async fn ready() -> &'static str {
+    // TODO: Check dependencies (DB, Control Plane, etc.)
+    "READY"
+}
+
+async fn prometheus_metrics() -> String {
+    use prometheus::Encoder;
+    let encoder = prometheus::TextEncoder::new();
+    let metric_families = prometheus::gather();
+    let mut buffer = Vec::new();
+    encoder.encode(&metric_families, &mut buffer).unwrap();
+    String::from_utf8(buffer).unwrap()
+}
+
+// === Graceful Shutdown ===
+
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
+        tokio::signal::ctrl_c()
             .await
-            .expect("failed to install Ctrl+C handler");
+            .expect("Failed to install Ctrl+C handler");
     };
 
     #[cfg(unix)]
     let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install SIGTERM handler")
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Failed to install SIGTERM handler")
             .recv()
             .await;
     };
@@ -241,7 +226,7 @@ async fn shutdown_signal() {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
+        _ = ctrl_c => info!("Received Ctrl+C, initiating shutdown..."),
+        _ = terminate => info!("Received SIGTERM, initiating shutdown..."),
     }
 }

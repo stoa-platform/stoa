@@ -9,22 +9,18 @@ Reference: PLAN-MCP-SUBSCRIPTIONS.md
 import logging
 import math
 import uuid
-from datetime import datetime
-from typing import Optional, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import get_current_user, User, require_permission, Permission
+from ..auth import User, get_current_user
 from ..database import get_db
 from ..models.mcp_subscription import (
     MCPServer,
-    MCPServerTool,
-    MCPServerSubscription,
-    MCPToolAccess,
     MCPServerCategory,
     MCPServerStatus,
+    MCPServerTool,
     MCPSubscriptionStatus,
     MCPToolAccessStatus,
 )
@@ -34,24 +30,22 @@ from ..repositories.mcp_subscription import (
     MCPToolAccessRepository,
 )
 from ..schemas.mcp_subscription import (
-    MCPServerCreate,
-    MCPServerResponse,
-    MCPServerListResponse,
+    MCPPendingApprovalResponse,
+    MCPPendingApprovalsListResponse,
     MCPServerCategoryEnum,
+    MCPServerCreate,
+    MCPServerListResponse,
+    MCPServerResponse,
     MCPServerStatusEnum,
-    MCPServerVisibility,
     MCPServerToolCreate,
     MCPServerToolResponse,
     MCPSubscriptionApprove,
-    MCPSubscriptionRevoke,
-    MCPSubscriptionResponse,
     MCPSubscriptionListResponse,
-    MCPSubscriptionWithKeyResponse,
-    MCPSubscriptionStatusEnum,
-    MCPPendingApprovalsListResponse,
-    MCPPendingApprovalResponse,
+    MCPSubscriptionResponse,
+    MCPSubscriptionRevoke,
     MCPSubscriptionStatsResponse,
-    MCPToolAccessResponse,
+    MCPSubscriptionStatusEnum,
+    MCPSubscriptionWithKeyResponse,
 )
 from ..services.api_key import APIKeyService
 from .mcp import _convert_server_to_response, _convert_subscription_to_response
@@ -69,9 +63,7 @@ def _has_tenant_access(user: User, tenant_id: str) -> bool:
     """Check if user has access to a tenant."""
     if "cpi-admin" in user.roles:
         return True
-    if user.tenant_id == tenant_id:
-        return True
-    return False
+    return user.tenant_id == tenant_id
 
 
 # ============ Admin Subscriptions Router ============
@@ -84,7 +76,7 @@ admin_subscriptions_router = APIRouter(
 
 @admin_subscriptions_router.get("/pending", response_model=MCPPendingApprovalsListResponse)
 async def list_pending_approvals(
-    tenant_id: Optional[str] = None,
+    tenant_id: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     user: User = Depends(get_current_user),
@@ -129,7 +121,7 @@ async def list_pending_approvals(
 @admin_subscriptions_router.get("/tenant/{tenant_id}", response_model=MCPSubscriptionListResponse)
 async def list_tenant_subscriptions(
     tenant_id: str,
-    status: Optional[MCPSubscriptionStatusEnum] = None,
+    status: MCPSubscriptionStatusEnum | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     user: User = Depends(get_current_user),
@@ -367,7 +359,7 @@ async def reactivate_subscription(
 
 @admin_subscriptions_router.get("/stats", response_model=MCPSubscriptionStatsResponse)
 async def get_subscription_stats(
-    tenant_id: Optional[str] = None,
+    tenant_id: str | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -387,7 +379,7 @@ async def get_subscription_stats(
     stats = await sub_repo.get_stats(tenant_id=effective_tenant_id)
 
     # Get server count
-    servers, total_servers = await server_repo.list_all(page=1, page_size=1)
+    _servers, total_servers = await server_repo.list_all(page=1, page_size=1)
 
     return MCPSubscriptionStatsResponse(
         total_servers=total_servers,
@@ -408,8 +400,8 @@ admin_servers_router = APIRouter(
 
 @admin_servers_router.get("", response_model=MCPServerListResponse)
 async def list_all_servers(
-    category: Optional[MCPServerCategoryEnum] = None,
-    status: Optional[MCPServerStatusEnum] = None,
+    category: MCPServerCategoryEnum | None = None,
+    status: MCPServerStatusEnum | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     user: User = Depends(get_current_user),

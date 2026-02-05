@@ -1,0 +1,88 @@
+# STOA Observability - Production Environment Overrides
+# =====================================================
+# HA config: S3 storage, long retention, resource limits, clustering
+
+global:
+  environment: production
+
+alloy:
+  alloy:
+    clustering:
+      enabled: true
+  controller:
+    type: daemonset
+    tolerations:
+      - operator: Exists
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+alloyConfig:
+  prometheusRemoteWriteUrl: "http://kube-prometheus-stack-prometheus.stoa-monitoring:9090/api/v1/write"
+  lokiUrl: "http://loki-write.stoa-monitoring:3100/loki/api/v1/push"
+  tempoEndpoint: "tempo.stoa-monitoring:4317"
+  scrapeInterval: 15s
+
+tempo:
+  tempo:
+    retention: 30d
+    storage:
+      trace:
+        backend: s3
+        s3:
+          bucket: stoa-tempo-traces
+          endpoint: s3.eu-west-1.amazonaws.com
+          region: eu-west-1
+          # Credentials via IRSA (IAM Roles for Service Accounts)
+        wal:
+          path: /var/tempo/wal
+    metricsGenerator:
+      enabled: true
+      remoteWriteUrl: "http://kube-prometheus-stack-prometheus.stoa-monitoring:9090/api/v1/write"
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClassName: gp3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  # Production: enable anti-affinity to spread across nodes
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: tempo
+            topologyKey: kubernetes.io/hostname
+
+blackboxExporter:
+  enabled: true
+
+# Production: differentiated per-tier (matches commercial SLA)
+tenantTiers:
+  enterprise:
+    traceSamplingRate: 1.0
+    logRetention: 2160h    # 90 days
+    traceRetention: 720h   # 30 days
+  business:
+    traceSamplingRate: 0.5
+    logRetention: 336h     # 14 days
+    traceRetention: 168h   # 7 days
+  platform:
+    traceSamplingRate: 0.2
+    logRetention: 168h     # 7 days
+    traceRetention: 24h    # 1 day
+  demo:
+    traceSamplingRate: 0.1
+    logRetention: 72h      # 3 days
+    traceRetention: 24h    # 1 day

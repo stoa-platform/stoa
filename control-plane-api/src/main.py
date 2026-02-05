@@ -4,32 +4,76 @@ FastAPI backend with RBAC, GitOps, and Kafka integration
 """
 import asyncio
 import os
+from contextlib import asynccontextmanager, suppress
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
-from starlette.responses import Response
-from contextlib import asynccontextmanager
-
 from slowapi.errors import RateLimitExceeded
+from starlette.responses import Response
 
 from .config import settings
+from .features.error_snapshots import add_error_snapshot_middleware, connect_error_snapshots
 from .logging_config import configure_logging, get_logger
-from .routers import tenants, apis, applications, deployments, git, events, webhooks, traces, gateway, subscriptions, tenant_webhooks, certificates, usage, service_accounts, health, contracts, monitoring, users
-from .routers.mcp import servers_router as mcp_servers_router, subscriptions_router as mcp_subscriptions_router, validation_router as mcp_validation_router
-from .routers.mcp_admin import admin_subscriptions_router as mcp_admin_subscriptions_router, admin_servers_router as mcp_admin_servers_router
-from .routers.external_mcp_servers import admin_router as external_mcp_servers_admin_router, internal_router as external_mcp_servers_internal_router
-from .routers import portal, mcp_gitops, mcp_proxy, mcp_policy_proxy, platform, portal_applications, catalog_admin, admin_prospects, self_service_logs
-from .opensearch import search_router, AuditMiddleware, setup_opensearch
-from .services import kafka_service, git_service, awx_service, keycloak_service, argocd_service, metrics_service
+from .middleware.http_logging import HTTPLoggingMiddleware
+from .tracing_config import configure_tracing, shutdown_tracing
+
 # Note: These are now imported as instances, not modules
 from .middleware.metrics import MetricsMiddleware, get_metrics
 from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
-from .middleware.http_logging import HTTPLoggingMiddleware
+from .opensearch import search_router, setup_opensearch
+from .routers import (
+    admin_prospects,
+    apis,
+    applications,
+    catalog_admin,
+    certificates,
+    contracts,
+    deployments,
+    events,
+    gateway,
+    gateway_deployments,
+    gateway_instances,
+    gateway_observability,
+    gateway_policies,
+    git,
+    health,
+    mcp_gitops,
+    mcp_policy_proxy,
+    mcp_proxy,
+    monitoring,
+    platform,
+    portal,
+    portal_applications,
+    self_service_logs,
+    service_accounts,
+    subscriptions,
+    tenant_webhooks,
+    tenants,
+    traces,
+    usage,
+    users,
+    webhooks,
+)
+from .routers.external_mcp_servers import (
+    admin_router as external_mcp_servers_admin_router,
+    internal_router as external_mcp_servers_internal_router,
+)
+from .routers.mcp import (
+    servers_router as mcp_servers_router,
+    subscriptions_router as mcp_subscriptions_router,
+    validation_router as mcp_validation_router,
+)
+from .routers.mcp_admin import (
+    admin_servers_router as mcp_admin_servers_router,
+    admin_subscriptions_router as mcp_admin_subscriptions_router,
+)
+from .services import argocd_service, awx_service, git_service, kafka_service, keycloak_service, metrics_service
 from .services.gateway_service import gateway_service
 from .workers.deployment_worker import deployment_worker
 from .workers.error_snapshot_consumer import error_snapshot_consumer
-from .features.error_snapshots import add_error_snapshot_middleware, connect_error_snapshots
+from .workers.sync_engine import sync_engine
 
 # Configure structured logging (CAB-281)
 configure_logging()
@@ -38,6 +82,7 @@ logger = get_logger(__name__)
 # Flag to control worker startup (can be disabled for dev/testing)
 ENABLE_WORKER = os.getenv("ENABLE_DEPLOYMENT_WORKER", "true").lower() == "true"
 ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
+ENABLE_SYNC_ENGINE = os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -122,6 +167,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start error snapshot consumer", error=str(e))
 
+    # Start gateway sync engine (Control Plane Agnostique)
+    sync_engine_task = None
+    if ENABLE_SYNC_ENGINE and settings.SYNC_ENGINE_ENABLED:
+        try:
+            sync_engine_task = asyncio.create_task(sync_engine.start())
+            logger.info("Gateway sync engine started")
+        except Exception as e:
+            logger.warning("Failed to start sync engine", error=str(e))
+
     yield
 
     # Shutdown
@@ -131,19 +185,22 @@ async def lifespan(app: FastAPI):
     if ENABLE_WORKER and worker_task:
         await deployment_worker.stop()
         worker_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await worker_task
-        except asyncio.CancelledError:
-            pass
 
     # Stop error snapshot consumer
     if ENABLE_SNAPSHOT_CONSUMER and snapshot_consumer_task:
         await error_snapshot_consumer.stop()
         snapshot_consumer_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await snapshot_consumer_task
-        except asyncio.CancelledError:
-            pass
+
+    # Stop gateway sync engine
+    if ENABLE_SYNC_ENGINE and sync_engine_task:
+        await sync_engine.stop()
+        sync_engine_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await sync_engine_task
 
     await kafka_service.disconnect()
     await git_service.disconnect()
@@ -152,6 +209,9 @@ async def lifespan(app: FastAPI):
     await gateway_service.disconnect()
     await argocd_service.disconnect()
     await metrics_service.disconnect()
+
+    # Flush remaining OTel spans before exit (CAB-1088)
+    shutdown_tracing()
 
 API_DESCRIPTION = """
 ## STOA Platform API
@@ -242,6 +302,10 @@ app = FastAPI(
         {"name": "MCP GitOps", "description": "GitOps synchronization for MCP servers"},
         {"name": "MCP Tools", "description": "MCP tools discovery and invocation (proxy to MCP Gateway)"},
         {"name": "Platform", "description": "Platform status and GitOps observability (CAB-654)"},
+        {"name": "Gateways", "description": "Gateway instance management (multi-gateway orchestration)"},
+        {"name": "Gateway Deployments", "description": "API deployment to gateways (sync engine)"},
+        {"name": "Gateway Policies", "description": "Gateway-agnostic policy management"},
+        {"name": "Gateway Observability", "description": "Multi-gateway health and sync metrics"},
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -255,6 +319,10 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# OpenTelemetry distributed tracing (CAB-1088)
+# Must be configured before middleware so FastAPI auto-instrumentation works
+configure_tracing(app, settings)
 
 # Rate limiting (CAB-298)
 app.state.limiter = limiter
@@ -347,6 +415,13 @@ app.include_router(users.router)
 
 # Self-Service Logs (CAB-793 - Consumer log access with PII masking)
 app.include_router(self_service_logs.router)
+
+# Gateway Orchestration (Control Plane Agnostique)
+# IMPORTANT: observability router BEFORE gateway_instances (path ordering for /metrics vs /{gateway_id})
+app.include_router(gateway_observability.router)
+app.include_router(gateway_instances.router)
+app.include_router(gateway_deployments.router)
+app.include_router(gateway_policies.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

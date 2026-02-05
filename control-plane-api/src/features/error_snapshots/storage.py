@@ -5,9 +5,8 @@ Stores snapshots as gzipped JSON with date-based partitioning.
 """
 
 import gzip
-import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import aioboto3
@@ -230,7 +229,7 @@ class SnapshotStorage:
                         meta["year"],
                         meta["month"],
                         meta["day"],
-                        tzinfo=timezone.utc,
+                        tzinfo=UTC,
                     )
 
                     if start_date and obj_date.date() < start_date.date():
@@ -318,7 +317,7 @@ class SnapshotStorage:
         Returns:
             Number of snapshots deleted
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(
+        cutoff_date = datetime.now(UTC) - timedelta(
             days=self.settings.retention_days
         )
 
@@ -333,7 +332,7 @@ class SnapshotStorage:
                 objects_to_delete = []
 
                 for obj in page.get("Contents", []):
-                    if obj["LastModified"].replace(tzinfo=timezone.utc) < cutoff_date:
+                    if obj["LastModified"].replace(tzinfo=UTC) < cutoff_date:
                         objects_to_delete.append({"Key": obj["Key"]})
 
                 if objects_to_delete:

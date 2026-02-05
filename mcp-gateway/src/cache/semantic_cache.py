@@ -11,7 +11,7 @@ TTL: 5 minutes (configurable).
 """
 
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import text
@@ -56,7 +56,7 @@ class SemanticCache:
         """
         cache_key = self._embedder.build_cache_key(tool_name, arguments)
         key_hash = self._embedder.hash_key(cache_key)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # --- Fast path: exact hash match ---
         result = await session.execute(
@@ -130,7 +130,7 @@ class SemanticCache:
         key_hash = self._embedder.hash_key(cache_key)
         embedding = self._embedder.embed(cache_key)
         embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=self._ttl_seconds)
         payload = json.dumps(response, separators=(",", ":"))
 
@@ -206,7 +206,7 @@ class SemanticCache:
 
     async def cleanup_expired(self, session: AsyncSession) -> int:
         """Delete expired entries (TTL enforcement)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = await session.execute(
             text("DELETE FROM semantic_cache WHERE expires_at <= :now"),
             {"now": now},
@@ -216,7 +216,7 @@ class SemanticCache:
 
     async def cleanup_gdpr(self, session: AsyncSession, max_age_hours: int = 24) -> int:
         """Hard-delete entries older than max_age_hours (GDPR compliance)."""
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
         result = await session.execute(
             text("DELETE FROM semantic_cache WHERE created_at < :cutoff"),
             {"cutoff": cutoff},

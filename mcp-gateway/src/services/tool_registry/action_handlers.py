@@ -9,15 +9,13 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from ...models import (
-    ToolResult,
     TextContent,
-    ListToolsResponse,
-    ListCategoriesResponse,
+    ToolResult,
 )
 from ..tool_handlers import STOAToolHandlers
 
 if TYPE_CHECKING:
-    from . import ToolRegistry
+    pass
 
 logger = structlog.get_logger(__name__)
 

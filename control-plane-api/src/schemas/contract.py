@@ -1,11 +1,11 @@
 """
 Pydantic schemas for Contracts and Protocol Bindings API.
 """
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
 from datetime import datetime
-from uuid import UUID
 from enum import Enum
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProtocolType(str, Enum):
@@ -30,15 +30,15 @@ class ProtocolBindingResponse(BaseModel):
     """Protocol binding information for a contract."""
     protocol: ProtocolType
     enabled: bool
-    endpoint: Optional[str] = None
-    playground_url: Optional[str] = None
-    tool_name: Optional[str] = None  # For MCP
-    operations: Optional[List[str]] = None  # For GraphQL
-    proto_file_url: Optional[str] = None  # For gRPC
-    topic_name: Optional[str] = None  # For Kafka
-    traffic_24h: Optional[int] = None  # Request count in last 24 hours
-    generated_at: Optional[datetime] = None
-    generation_error: Optional[str] = None
+    endpoint: str | None = None
+    playground_url: str | None = None
+    tool_name: str | None = None  # For MCP
+    operations: list[str] | None = None  # For GraphQL
+    proto_file_url: str | None = None  # For gRPC
+    topic_name: str | None = None  # For Kafka
+    traffic_24h: int | None = None  # Request count in last 24 hours
+    generated_at: datetime | None = None
+    generation_error: str | None = None
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -59,7 +59,7 @@ class BindingsListResponse(BaseModel):
     """List of protocol bindings for a contract."""
     contract_id: UUID
     contract_name: str
-    bindings: List[ProtocolBindingResponse]
+    bindings: list[ProtocolBindingResponse]
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -95,8 +95,8 @@ class EnableBindingResponse(BaseModel):
     """Response after enabling a protocol binding."""
     protocol: ProtocolType
     endpoint: str
-    playground_url: Optional[str] = None
-    tool_name: Optional[str] = None
+    playground_url: str | None = None
+    tool_name: str | None = None
     status: str = "active"
     generated_at: datetime
 
@@ -125,10 +125,10 @@ class DisableBindingResponse(BaseModel):
 class ContractCreate(BaseModel):
     """Request to create a new contract."""
     name: str = Field(..., min_length=1, max_length=255, description="Unique contract name")
-    display_name: Optional[str] = Field(None, max_length=255, description="Human-friendly name")
-    description: Optional[str] = Field(None, description="Contract description")
+    display_name: str | None = Field(None, max_length=255, description="Human-friendly name")
+    description: str | None = Field(None, description="Contract description")
     version: str = Field(default="1.0.0", max_length=50, description="Contract version")
-    openapi_spec_url: Optional[str] = Field(None, max_length=512, description="URL to OpenAPI spec")
+    openapi_spec_url: str | None = Field(None, max_length=512, description="URL to OpenAPI spec")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -145,11 +145,11 @@ class ContractCreate(BaseModel):
 
 class ContractUpdate(BaseModel):
     """Request to update a contract."""
-    display_name: Optional[str] = Field(None, max_length=255)
-    description: Optional[str] = None
-    version: Optional[str] = Field(None, max_length=50)
-    status: Optional[ContractStatus] = None
-    openapi_spec_url: Optional[str] = Field(None, max_length=512)
+    display_name: str | None = Field(None, max_length=255)
+    description: str | None = None
+    version: str | None = Field(None, max_length=50)
+    status: ContractStatus | None = None
+    openapi_spec_url: str | None = Field(None, max_length=512)
 
 
 class ContractResponse(BaseModel):
@@ -157,15 +157,15 @@ class ContractResponse(BaseModel):
     id: UUID
     tenant_id: str
     name: str
-    display_name: Optional[str] = None
-    description: Optional[str] = None
+    display_name: str | None = None
+    description: str | None = None
     version: str
     status: str
-    openapi_spec_url: Optional[str] = None
+    openapi_spec_url: str | None = None
     created_at: datetime
     updated_at: datetime
-    created_by: Optional[str] = None
-    bindings: List[ProtocolBindingResponse] = []
+    created_by: str | None = None
+    bindings: list[ProtocolBindingResponse] = []
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -188,7 +188,7 @@ class ContractResponse(BaseModel):
 
 class ContractListResponse(BaseModel):
     """Paginated list of contracts."""
-    items: List[ContractResponse]
+    items: list[ContractResponse]
     total: int
     page: int
     page_size: int

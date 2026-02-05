@@ -7,14 +7,13 @@ Designed to be non-blocking and failure-tolerant.
 import asyncio
 import logging
 import time
-from typing import Any, Callable
+from collections.abc import Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .config import SnapshotSettings
 from .models import SnapshotTrigger
 from .service import SnapshotService
 
@@ -58,10 +57,8 @@ class ErrorSnapshotMiddleware:
 
             if message["type"] == "http.request":
                 body = message.get("body", b"")
-                if body:
-                    # Limit captured body size
-                    if sum(len(c) for c in request_body_chunks) < self.settings.max_body_size:
-                        request_body_chunks.append(body)
+                if body and sum(len(c) for c in request_body_chunks) < self.settings.max_body_size:
+                    request_body_chunks.append(body)
 
                 if not message.get("more_body", False):
                     request_complete = True
@@ -89,10 +86,8 @@ class ErrorSnapshotMiddleware:
 
             elif message["type"] == "http.response.body":
                 body = message.get("body", b"")
-                if body:
-                    # Limit captured body size
-                    if sum(len(c) for c in response_body_chunks) < self.settings.max_body_size:
-                        response_body_chunks.append(body)
+                if body and sum(len(c) for c in response_body_chunks) < self.settings.max_body_size:
+                    response_body_chunks.append(body)
 
             await send(message)
 
@@ -139,10 +134,7 @@ class ErrorSnapshotMiddleware:
 
     def _should_skip_path(self, path: str) -> bool:
         """Check if path should be excluded from capture."""
-        for excluded in self.settings.exclude_paths_list:
-            if path.startswith(excluded):
-                return True
-        return False
+        return any(path.startswith(excluded) for excluded in self.settings.exclude_paths_list)
 
     def _should_capture(self, status: int, duration_ms: int) -> bool:
         """Determine if snapshot should be captured based on config."""

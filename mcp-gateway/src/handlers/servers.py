@@ -7,32 +7,31 @@ Provides endpoints for:
 - Vault integration for secure API key storage
 """
 
-import uuid
-import secrets
 import hashlib
-from datetime import datetime, timezone
-from typing import Optional
+import secrets
+import uuid
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ..middleware.auth import TokenClaims, get_current_user
 from ..models.server import (
+    ListServersResponse,
+    ListServerSubscriptionsResponse,
     MCPServer,
-    MCPServerVisibility,
     MCPServerTool,
+    MCPServerVisibility,
     ServerCategory,
     ServerStatus,
     ServerSubscription,
-    ServerSubscriptionWithKey,
     ServerSubscriptionCreate,
+    ServerSubscriptionStatus,
+    ServerSubscriptionWithKey,
     ToolAccess,
     ToolAccessStatus,
     ToolAccessUpdate,
-    ServerSubscriptionStatus,
-    ListServersResponse,
-    ListServerSubscriptionsResponse,
 )
-from ..middleware.auth import get_current_user, TokenClaims
 from ..services.vault_client import get_vault_client
 
 # Alias for clarity
@@ -86,8 +85,8 @@ MOCK_SERVERS: list[MCPServer] = [
         status=ServerStatus.ACTIVE,
         version="1.0.0",
         documentation_url="https://docs.gostoa.dev/platform-tools",
-        created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 1, 10, tzinfo=timezone.utc),
+        created_at=datetime(2024, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 10, tzinfo=UTC),
     ),
     MCPServer(
         id="crm-apis",
@@ -118,8 +117,8 @@ MOCK_SERVERS: list[MCPServer] = [
         ],
         status=ServerStatus.ACTIVE,
         version="2.1.0",
-        created_at=datetime(2024, 6, 1, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 1, 8, tzinfo=timezone.utc),
+        created_at=datetime(2024, 6, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 8, tzinfo=UTC),
     ),
     MCPServer(
         id="billing-services",
@@ -150,8 +149,8 @@ MOCK_SERVERS: list[MCPServer] = [
         ],
         status=ServerStatus.ACTIVE,
         version="1.5.0",
-        created_at=datetime(2024, 3, 15, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 1, 5, tzinfo=timezone.utc),
+        created_at=datetime(2024, 3, 15, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 5, tzinfo=UTC),
     ),
 ]
 
@@ -195,7 +194,7 @@ def generate_api_key() -> tuple[str, str, str]:
         Tuple of (full_key, key_prefix, key_hash)
     """
     # Generate 32 random bytes = 256 bits of entropy
-    random_bytes = secrets.token_bytes(32)
+    secrets.token_bytes(32)
     key_suffix = secrets.token_hex(20)  # 40 hex chars
 
     full_key = f"stoa_sk_{key_suffix}"
@@ -209,7 +208,7 @@ def generate_api_key() -> tuple[str, str, str]:
 
 @router.get("", response_model=ListServersResponse)
 async def list_servers(
-    category: Optional[ServerCategory] = Query(None, description="Filter by category"),
+    category: ServerCategory | None = Query(None, description="Filter by category"),
     user: User = Depends(get_current_user),
 ) -> ListServersResponse:
     """List all MCP servers the user can see.
@@ -305,12 +304,12 @@ async def subscribe_to_server(
                 tool_id=tool.id,
                 tool_name=tool.display_name,
                 status=status,
-                granted_at=datetime.now(timezone.utc) if status == ToolAccessStatus.ENABLED else None,
+                granted_at=datetime.now(UTC) if status == ToolAccessStatus.ENABLED else None,
             ))
 
     # Create subscription
     subscription_id = f"sub-{uuid.uuid4().hex[:12]}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     subscription = ServerSubscription(
         id=subscription_id,
@@ -431,7 +430,7 @@ async def update_tool_access(
         if request.action == "enable":
             if tool_id in tool_access_map:
                 tool_access_map[tool_id].status = ToolAccessStatus.ENABLED
-                tool_access_map[tool_id].granted_at = datetime.now(timezone.utc)
+                tool_access_map[tool_id].granted_at = datetime.now(UTC)
         elif request.action == "disable":
             if tool_id in tool_access_map:
                 tool_access_map[tool_id].status = ToolAccessStatus.DISABLED
@@ -446,7 +445,7 @@ async def update_tool_access(
                     tool_id=tool_id,
                     tool_name=tool.display_name,
                     status=status,
-                    granted_at=datetime.now(timezone.utc) if status == ToolAccessStatus.ENABLED else None,
+                    granted_at=datetime.now(UTC) if status == ToolAccessStatus.ENABLED else None,
                 )
 
     subscription.tool_access = list(tool_access_map.values())
@@ -604,11 +603,11 @@ async def rotate_server_key(
 
     # Calculate grace period expiry
     from datetime import timedelta
-    old_key_expires = datetime.now(timezone.utc) + timedelta(hours=grace_period_hours)
+    old_key_expires = datetime.now(UTC) + timedelta(hours=grace_period_hours)
 
     # Update subscription
     subscription.api_key_prefix = key_prefix
-    subscription.last_rotated_at = datetime.now(timezone.utc)
+    subscription.last_rotated_at = datetime.now(UTC)
     subscription.has_active_grace_period = True
 
     # Store new key in Vault

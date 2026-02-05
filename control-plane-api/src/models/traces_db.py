@@ -1,10 +1,9 @@
 """SQLAlchemy models for pipeline traces (PostgreSQL persistence)"""
 import enum
 import uuid
-from datetime import datetime, timezone
-from typing import Optional, List
+from datetime import UTC, datetime
 
-from sqlalchemy import String, Text, Integer, DateTime, Enum, Index
+from sqlalchemy import DateTime, Enum, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,28 +30,28 @@ class PipelineTraceDB(Base):
     trigger_source: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Git info
-    git_commit_sha: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
-    git_commit_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    git_branch: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    git_author: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    git_author_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    git_project: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    git_files_changed: Mapped[Optional[List[str]]] = mapped_column(JSONB, nullable=True)
+    git_commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    git_commit_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    git_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    git_author: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    git_author_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    git_project: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    git_files_changed: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
     # Target info
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
-    api_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    api_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    environment: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tenant_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    api_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    api_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    environment: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Timing
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(UTC)
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    total_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    total_duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Status
     status: Mapped[TraceStatusDB] = mapped_column(
@@ -61,10 +60,10 @@ class PipelineTraceDB(Base):
         default=TraceStatusDB.PENDING,
         index=True
     )
-    error_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Steps as JSONB
-    steps: Mapped[List[dict]] = mapped_column(JSONB, nullable=False, default=list)
+    steps: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, default=list)
 
     # Additional indexes
     __table_args__ = (

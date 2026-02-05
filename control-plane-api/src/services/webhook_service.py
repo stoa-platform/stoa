@@ -6,26 +6,25 @@ This service handles:
 3. Retry logic with exponential backoff
 4. HMAC signature generation for payload verification
 """
-import json
-import hmac
-import hashlib
-import logging
 import asyncio
-from typing import Optional, List
+import hashlib
+import hmac
+import json
+import logging
 from datetime import datetime, timedelta
 from uuid import UUID
-import httpx
 
-from sqlalchemy import select, and_
+import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.subscription import Subscription
 from src.models.webhook import (
     TenantWebhook,
     WebhookDelivery,
-    WebhookEventType,
     WebhookDeliveryStatus,
+    WebhookEventType,
 )
-from src.models.subscription import Subscription
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +46,10 @@ class WebhookService:
         tenant_id: str,
         name: str,
         url: str,
-        events: List[str],
-        secret: Optional[str] = None,
-        headers: Optional[dict] = None,
-        created_by: Optional[str] = None,
+        events: list[str],
+        secret: str | None = None,
+        headers: dict | None = None,
+        created_by: str | None = None,
     ) -> TenantWebhook:
         """Create a new webhook configuration for a tenant"""
         # Validate events
@@ -73,7 +72,7 @@ class WebhookService:
         logger.info(f"Created webhook {webhook.id} for tenant {tenant_id}: {name}")
         return webhook
 
-    async def get_webhook(self, webhook_id: UUID) -> Optional[TenantWebhook]:
+    async def get_webhook(self, webhook_id: UUID) -> TenantWebhook | None:
         """Get a webhook by ID"""
         result = await self.db.execute(
             select(TenantWebhook).where(TenantWebhook.id == webhook_id)
@@ -84,24 +83,24 @@ class WebhookService:
         self,
         tenant_id: str,
         enabled_only: bool = False,
-    ) -> List[TenantWebhook]:
+    ) -> list[TenantWebhook]:
         """List all webhooks for a tenant"""
         query = select(TenantWebhook).where(TenantWebhook.tenant_id == tenant_id)
         if enabled_only:
-            query = query.where(TenantWebhook.enabled == True)
+            query = query.where(TenantWebhook.enabled)
         result = await self.db.execute(query.order_by(TenantWebhook.created_at.desc()))
         return list(result.scalars().all())
 
     async def update_webhook(
         self,
         webhook_id: UUID,
-        name: Optional[str] = None,
-        url: Optional[str] = None,
-        events: Optional[List[str]] = None,
-        secret: Optional[str] = None,
-        headers: Optional[dict] = None,
-        enabled: Optional[bool] = None,
-    ) -> Optional[TenantWebhook]:
+        name: str | None = None,
+        url: str | None = None,
+        events: list[str] | None = None,
+        secret: str | None = None,
+        headers: dict | None = None,
+        enabled: bool | None = None,
+    ) -> TenantWebhook | None:
         """Update a webhook configuration"""
         webhook = await self.get_webhook(webhook_id)
         if not webhook:
@@ -146,8 +145,8 @@ class WebhookService:
         self,
         event_type: str,
         subscription: Subscription,
-        additional_data: Optional[dict] = None,
-    ) -> List[WebhookDelivery]:
+        additional_data: dict | None = None,
+    ) -> list[WebhookDelivery]:
         """
         Dispatch an event to all matching webhooks for the subscription's tenant.
 
@@ -194,7 +193,7 @@ class WebhookService:
         self,
         event_type: str,
         subscription: Subscription,
-        additional_data: Optional[dict] = None,
+        additional_data: dict | None = None,
     ) -> dict:
         """Build the webhook payload"""
         payload = {
@@ -301,15 +300,15 @@ class WebhookService:
                         logger.warning(f"Webhook {webhook.id} returned {response.status_code}, attempt {delivery.attempt_count}/{delivery.max_attempts}")
 
                 except httpx.TimeoutException as e:
-                    delivery.error_message = f"Timeout: {str(e)}"
+                    delivery.error_message = f"Timeout: {e!s}"
                     logger.warning(f"Webhook {webhook.id} timed out, attempt {delivery.attempt_count}/{delivery.max_attempts}")
 
                 except httpx.RequestError as e:
-                    delivery.error_message = f"Request error: {str(e)}"
+                    delivery.error_message = f"Request error: {e!s}"
                     logger.warning(f"Webhook {webhook.id} request failed: {e}, attempt {delivery.attempt_count}/{delivery.max_attempts}")
 
                 except Exception as e:
-                    delivery.error_message = f"Unexpected error: {str(e)}"
+                    delivery.error_message = f"Unexpected error: {e!s}"
                     logger.error(f"Webhook {webhook.id} unexpected error: {e}", exc_info=True)
 
                 # Schedule retry if attempts remaining
@@ -334,7 +333,7 @@ class WebhookService:
         self,
         webhook_id: UUID,
         limit: int = 50,
-    ) -> List[WebhookDelivery]:
+    ) -> list[WebhookDelivery]:
         """Get recent delivery history for a webhook"""
         result = await self.db.execute(
             select(WebhookDelivery)
@@ -344,7 +343,7 @@ class WebhookService:
         )
         return list(result.scalars().all())
 
-    async def retry_delivery(self, delivery_id: UUID) -> Optional[WebhookDelivery]:
+    async def retry_delivery(self, delivery_id: UUID) -> WebhookDelivery | None:
         """Manually retry a failed delivery"""
         result = await self.db.execute(
             select(WebhookDelivery).where(WebhookDelivery.id == delivery_id)

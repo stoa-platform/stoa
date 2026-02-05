@@ -5,7 +5,7 @@ Keys are stored as SHA-256 hashes in the subscription store.
 """
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 
@@ -41,7 +41,7 @@ async def validate_api_key(api_key: str) -> TokenClaims | None:
         return None
 
     # Hash the provided key
-    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    hashlib.sha256(api_key.encode()).hexdigest()
     key_prefix = api_key[:16]
 
     # Get subscriptions store
@@ -70,7 +70,7 @@ async def validate_api_key(api_key: str) -> TokenClaims | None:
                 return None
 
             # Update last used timestamp
-            subscription.last_used_at = datetime.now(timezone.utc)
+            subscription.last_used_at = datetime.now(UTC)
 
             logger.info(
                 "API key validated successfully",

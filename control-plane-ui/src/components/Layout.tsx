@@ -14,6 +14,9 @@ import {
   AlertTriangle,
   Activity,
   Server,
+  Network,
+  ArrowUpDown,
+  BarChart3,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -28,6 +31,9 @@ const navigation = [
   { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read' },
   { name: 'External MCP Servers', href: '/external-mcp-servers', icon: Server, permission: 'admin:servers' },
   { name: 'Gateway', href: '/gateway', icon: Server, permission: 'apis:read' },
+  { name: 'Gateway Registry', href: '/gateways', icon: Network, permission: 'tenants:read' },
+  { name: 'Gateway Deployments', href: '/gateway-deployments', icon: ArrowUpDown, permission: 'tenants:read' },
+  { name: 'Observability', href: '/gateway-observability', icon: BarChart3, permission: 'tenants:read' },
   { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
   { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
   { name: 'API Monitoring', href: '/monitoring', icon: Activity, permission: 'apis:read' },

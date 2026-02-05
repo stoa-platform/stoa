@@ -8,7 +8,7 @@ Tools are registered as ExternalTool instances that proxy to the external server
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -159,7 +159,7 @@ class ExternalServerLoader:
                 if server_id not in seen_server_ids:
                     del self._servers[server_id]
 
-            self._last_sync = datetime.now(timezone.utc)
+            self._last_sync = datetime.now(UTC)
             logger.info(
                 "External servers synced",
                 server_count=len(servers),

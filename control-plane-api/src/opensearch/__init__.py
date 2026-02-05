@@ -36,15 +36,15 @@ __all__ = [
     "AuditMiddleware",
     "EventCategory",
     "EventSeverity",
-    "log_audit_event",
     # Integration
     "OpenSearchService",
     "OpenSearchSettings",
     "get_audit_logger",
     "get_opensearch_client",
     "get_settings",
+    "log_audit_event",
     "opensearch_lifespan",
-    "setup_opensearch",
     # Search
     "search_router",
+    "setup_opensearch",
 ]

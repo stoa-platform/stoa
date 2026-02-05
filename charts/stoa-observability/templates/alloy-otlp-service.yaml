@@ -1,0 +1,34 @@
+{{- if .Values.alloy.enabled }}
+# Dedicated ClusterIP Service for OTLP ingestion
+# This gives a stable DNS name for all components to send traces to:
+#   grpc: stoa-alloy-otlp.stoa-monitoring:4317
+#   http: stoa-alloy-otlp.stoa-monitoring:4318
+# The Alloy sub-chart creates its own service, but we add this dedicated one
+# for clarity and to decouple from chart naming conventions.
+apiVersion: v1
+kind: Service
+metadata:
+  name: stoa-alloy-otlp
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: otlp-receiver
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+    - name: faro
+      port: 12347
+      targetPort: 12347
+      protocol: TCP
+{{- end }}

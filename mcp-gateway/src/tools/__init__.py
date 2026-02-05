@@ -14,29 +14,36 @@ Legacy tools (35 total) are available via LEGACY_CORE_TOOLS for deprecation peri
 Core tools follow the naming convention: stoa_{domain}_{action}
 """
 
+from .consolidated_tools import (
+    CONSOLIDATED_CATALOG_TOOLS,
+    # CAB-605: Consolidated action-based tools
+    CONSOLIDATED_CORE_TOOLS,
+    CONSOLIDATED_OBSERVABILITY_TOOLS,
+    # Domain-specific exports
+    CONSOLIDATED_PLATFORM_TOOLS,
+    CONSOLIDATED_SECURITY_TOOLS,
+    CONSOLIDATED_SUBSCRIPTION_TOOLS,
+    CONSOLIDATED_TOOLS_BY_NAME,
+    CONSOLIDATED_UAC_TOOLS,
+    DEPRECATION_MAPPINGS,
+)
 from .core_tools import (
     # Legacy exports (for deprecation period)
     CORE_TOOLS as LEGACY_CORE_TOOLS,
+)
+from .core_tools import (
     CORE_TOOLS_BY_DOMAIN,  # Keep original name for backward compatibility
-    CORE_TOOLS_BY_DOMAIN as LEGACY_CORE_TOOLS_BY_DOMAIN,
-    CORE_TOOLS_BY_NAME as LEGACY_CORE_TOOLS_BY_NAME,
-    get_core_tool as get_legacy_core_tool,
     get_core_tools_by_domain,
     list_all_core_tools,
 )
-
-from .consolidated_tools import (
-    # CAB-605: Consolidated action-based tools
-    CONSOLIDATED_CORE_TOOLS,
-    CONSOLIDATED_TOOLS_BY_NAME,
-    DEPRECATION_MAPPINGS,
-    # Domain-specific exports
-    CONSOLIDATED_PLATFORM_TOOLS,
-    CONSOLIDATED_CATALOG_TOOLS,
-    CONSOLIDATED_SUBSCRIPTION_TOOLS,
-    CONSOLIDATED_OBSERVABILITY_TOOLS,
-    CONSOLIDATED_UAC_TOOLS,
-    CONSOLIDATED_SECURITY_TOOLS,
+from .core_tools import (
+    CORE_TOOLS_BY_DOMAIN as LEGACY_CORE_TOOLS_BY_DOMAIN,
+)
+from .core_tools import (
+    CORE_TOOLS_BY_NAME as LEGACY_CORE_TOOLS_BY_NAME,
+)
+from .core_tools import (
+    get_core_tool as get_legacy_core_tool,
 )
 
 # CAB-605: Default to consolidated tools

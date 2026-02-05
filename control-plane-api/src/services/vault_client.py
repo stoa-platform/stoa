@@ -5,13 +5,12 @@ Uses Kubernetes authentication in cluster, token auth for development.
 
 Reference: External MCP Server Registration Plan
 """
-import os
 import logging
-from functools import lru_cache
-from typing import Any, Optional
+import os
+from typing import Any
 
 import hvac
-from hvac.exceptions import VaultError, InvalidPath
+from hvac.exceptions import InvalidPath, VaultError
 
 from src.config import settings
 
@@ -34,8 +33,8 @@ class VaultClient:
     def __init__(
         self,
         vault_addr: str,
-        vault_token: Optional[str] = None,
-        kubernetes_role: Optional[str] = None,
+        vault_token: str | None = None,
+        kubernetes_role: str | None = None,
         mount_point: str = "secret",
     ):
         """Initialize Vault client.
@@ -48,7 +47,7 @@ class VaultClient:
         """
         self.vault_addr = vault_addr
         self.mount_point = mount_point
-        self._client: Optional[hvac.Client] = None
+        self._client: hvac.Client | None = None
         self._vault_token = vault_token
         self._kubernetes_role = kubernetes_role
 
@@ -128,19 +127,19 @@ class VaultClient:
 
             full_path = f"{self.mount_point}/data/{path}"
             logger.info(
-                f"Stored credentials for external MCP server in Vault",
+                "Stored credentials for external MCP server in Vault",
                 extra={"server_id": server_id, "path": full_path},
             )
             return full_path
 
         except VaultError as e:
             logger.error(
-                f"Failed to store credentials in Vault",
+                "Failed to store credentials in Vault",
                 extra={"server_id": server_id, "error": str(e)},
             )
             raise
 
-    async def retrieve_credential(self, server_id: str) -> Optional[dict[str, Any]]:
+    async def retrieve_credential(self, server_id: str) -> dict[str, Any] | None:
         """Retrieve credentials for an external MCP server.
 
         Args:
@@ -164,7 +163,7 @@ class VaultClient:
 
             if response and "data" in response and "data" in response["data"]:
                 logger.info(
-                    f"Retrieved credentials from Vault",
+                    "Retrieved credentials from Vault",
                     extra={"server_id": server_id},
                 )
                 return response["data"]["data"]
@@ -173,14 +172,14 @@ class VaultClient:
 
         except InvalidPath:
             logger.warning(
-                f"Credentials not found in Vault",
+                "Credentials not found in Vault",
                 extra={"server_id": server_id},
             )
             return None
 
         except VaultError as e:
             logger.error(
-                f"Failed to retrieve credentials from Vault",
+                "Failed to retrieve credentials from Vault",
                 extra={"server_id": server_id, "error": str(e)},
             )
             raise
@@ -209,21 +208,21 @@ class VaultClient:
             )
 
             logger.info(
-                f"Deleted credentials from Vault",
+                "Deleted credentials from Vault",
                 extra={"server_id": server_id},
             )
             return True
 
         except InvalidPath:
             logger.warning(
-                f"Credentials not found for deletion",
+                "Credentials not found for deletion",
                 extra={"server_id": server_id},
             )
             return False
 
         except VaultError as e:
             logger.error(
-                f"Failed to delete credentials from Vault",
+                "Failed to delete credentials from Vault",
                 extra={"server_id": server_id, "error": str(e)},
             )
             raise
@@ -243,7 +242,7 @@ class VaultClient:
 
 
 # Global client instance
-_vault_client: Optional[VaultClient] = None
+_vault_client: VaultClient | None = None
 
 
 def get_vault_client() -> VaultClient:

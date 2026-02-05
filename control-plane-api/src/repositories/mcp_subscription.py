@@ -2,21 +2,20 @@
 
 Reference: PLAN-MCP-SUBSCRIPTIONS.md
 """
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import selectinload
-from typing import Optional, List, Tuple
 from datetime import datetime, timedelta
 from uuid import UUID
 
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from src.models.mcp_subscription import (
     MCPServer,
-    MCPServerTool,
-    MCPServerSubscription,
-    MCPToolAccess,
     MCPServerCategory,
     MCPServerStatus,
+    MCPServerSubscription,
     MCPSubscriptionStatus,
+    MCPToolAccess,
     MCPToolAccessStatus,
 )
 
@@ -34,7 +33,7 @@ class MCPServerRepository:
         await self.session.refresh(server)
         return server
 
-    async def get_by_id(self, server_id: UUID) -> Optional[MCPServer]:
+    async def get_by_id(self, server_id: UUID) -> MCPServer | None:
         """Get server by ID with tools."""
         result = await self.session.execute(
             select(MCPServer)
@@ -43,7 +42,7 @@ class MCPServerRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_name(self, name: str) -> Optional[MCPServer]:
+    async def get_by_name(self, name: str) -> MCPServer | None:
         """Get server by name."""
         result = await self.session.execute(
             select(MCPServer)
@@ -54,12 +53,12 @@ class MCPServerRepository:
 
     async def list_visible_for_user(
         self,
-        user_roles: List[str],
-        tenant_id: Optional[str] = None,
-        category: Optional[MCPServerCategory] = None,
+        user_roles: list[str],
+        tenant_id: str | None = None,
+        category: MCPServerCategory | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> Tuple[List[MCPServer], int]:
+    ) -> tuple[list[MCPServer], int]:
         """List servers visible to a user based on roles and visibility config."""
         query = select(MCPServer).options(selectinload(MCPServer.tools))
 
@@ -98,11 +97,11 @@ class MCPServerRepository:
 
     async def list_all(
         self,
-        category: Optional[MCPServerCategory] = None,
-        status: Optional[MCPServerStatus] = None,
+        category: MCPServerCategory | None = None,
+        status: MCPServerStatus | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> Tuple[List[MCPServer], int]:
+    ) -> tuple[list[MCPServer], int]:
         """List all servers (admin only)."""
         query = select(MCPServer).options(selectinload(MCPServer.tools))
 
@@ -151,7 +150,7 @@ class MCPSubscriptionRepository:
         await self.session.refresh(subscription)
         return subscription
 
-    async def get_by_id(self, subscription_id: UUID) -> Optional[MCPServerSubscription]:
+    async def get_by_id(self, subscription_id: UUID) -> MCPServerSubscription | None:
         """Get subscription by ID with server and tool access."""
         result = await self.session.execute(
             select(MCPServerSubscription)
@@ -163,7 +162,7 @@ class MCPSubscriptionRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_api_key_hash(self, api_key_hash: str) -> Optional[MCPServerSubscription]:
+    async def get_by_api_key_hash(self, api_key_hash: str) -> MCPServerSubscription | None:
         """Get subscription by API key hash (for validation)."""
         result = await self.session.execute(
             select(MCPServerSubscription)
@@ -175,7 +174,7 @@ class MCPSubscriptionRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_previous_key_hash(self, api_key_hash: str) -> Optional[MCPServerSubscription]:
+    async def get_by_previous_key_hash(self, api_key_hash: str) -> MCPServerSubscription | None:
         """Get subscription by previous API key hash (grace period validation)."""
         now = datetime.utcnow()
         result = await self.session.execute(
@@ -197,7 +196,7 @@ class MCPSubscriptionRepository:
         self,
         subscriber_id: str,
         server_id: UUID,
-    ) -> Optional[MCPServerSubscription]:
+    ) -> MCPServerSubscription | None:
         """Check if subscription already exists for subscriber+server combo."""
         result = await self.session.execute(
             select(MCPServerSubscription)
@@ -218,10 +217,10 @@ class MCPSubscriptionRepository:
     async def list_by_subscriber(
         self,
         subscriber_id: str,
-        status: Optional[MCPSubscriptionStatus] = None,
+        status: MCPSubscriptionStatus | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> Tuple[List[MCPServerSubscription], int]:
+    ) -> tuple[list[MCPServerSubscription], int]:
         """List subscriptions for a subscriber."""
         query = select(MCPServerSubscription).options(
             selectinload(MCPServerSubscription.server).selectinload(MCPServer.tools),
@@ -248,10 +247,10 @@ class MCPSubscriptionRepository:
     async def list_by_tenant(
         self,
         tenant_id: str,
-        status: Optional[MCPSubscriptionStatus] = None,
+        status: MCPSubscriptionStatus | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> Tuple[List[MCPServerSubscription], int]:
+    ) -> tuple[list[MCPServerSubscription], int]:
         """List subscriptions for a tenant."""
         query = select(MCPServerSubscription).options(
             selectinload(MCPServerSubscription.server),
@@ -277,10 +276,10 @@ class MCPSubscriptionRepository:
 
     async def list_pending(
         self,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> Tuple[List[MCPServerSubscription], int]:
+    ) -> tuple[list[MCPServerSubscription], int]:
         """List pending subscriptions for approval."""
         query = select(MCPServerSubscription).options(
             selectinload(MCPServerSubscription.server),
@@ -308,8 +307,8 @@ class MCPSubscriptionRepository:
         self,
         subscription: MCPServerSubscription,
         new_status: MCPSubscriptionStatus,
-        reason: Optional[str] = None,
-        actor_id: Optional[str] = None,
+        reason: str | None = None,
+        actor_id: str | None = None,
     ) -> MCPServerSubscription:
         """Update subscription status."""
         subscription.status = new_status
@@ -334,7 +333,7 @@ class MCPSubscriptionRepository:
         subscription: MCPServerSubscription,
         api_key_hash: str,
         api_key_prefix: str,
-        vault_path: Optional[str] = None,
+        vault_path: str | None = None,
     ) -> MCPServerSubscription:
         """Set API key for subscription (after approval)."""
         subscription.api_key_hash = api_key_hash
@@ -383,7 +382,7 @@ class MCPSubscriptionRepository:
     async def set_expiration(
         self,
         subscription: MCPServerSubscription,
-        expires_at: Optional[datetime],
+        expires_at: datetime | None,
     ) -> MCPServerSubscription:
         """Set subscription expiration date."""
         subscription.expires_at = expires_at
@@ -392,7 +391,7 @@ class MCPSubscriptionRepository:
         await self.session.refresh(subscription)
         return subscription
 
-    async def get_stats(self, tenant_id: Optional[str] = None) -> dict:
+    async def get_stats(self, tenant_id: str | None = None) -> dict:
         """Get subscription statistics.
 
         Optimized to use GROUP BY instead of N+1 queries for status counts.
@@ -466,7 +465,7 @@ class MCPToolAccessRepository:
         await self.session.refresh(tool_access)
         return tool_access
 
-    async def create_many(self, tool_accesses: List[MCPToolAccess]) -> List[MCPToolAccess]:
+    async def create_many(self, tool_accesses: list[MCPToolAccess]) -> list[MCPToolAccess]:
         """Create multiple tool access records."""
         self.session.add_all(tool_accesses)
         await self.session.flush()
@@ -476,7 +475,7 @@ class MCPToolAccessRepository:
         self,
         subscription_id: UUID,
         tool_id: UUID,
-    ) -> Optional[MCPToolAccess]:
+    ) -> MCPToolAccess | None:
         """Get tool access by subscription and tool."""
         result = await self.session.execute(
             select(MCPToolAccess).where(
@@ -491,7 +490,7 @@ class MCPToolAccessRepository:
     async def list_by_subscription(
         self,
         subscription_id: UUID,
-    ) -> List[MCPToolAccess]:
+    ) -> list[MCPToolAccess]:
         """List all tool access records for a subscription."""
         result = await self.session.execute(
             select(MCPToolAccess).where(
@@ -504,7 +503,7 @@ class MCPToolAccessRepository:
         self,
         tool_access: MCPToolAccess,
         status: MCPToolAccessStatus,
-        actor_id: Optional[str] = None,
+        actor_id: str | None = None,
     ) -> MCPToolAccess:
         """Update tool access status."""
         tool_access.status = status

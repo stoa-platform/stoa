@@ -1,25 +1,25 @@
 """Middleware components."""
 
 from .auth import (
-    TokenClaims,
     OIDCAuthenticator,
+    TokenClaims,
     get_current_user,
     get_optional_user,
     require_role,
     require_scope,
 )
+from .cache_middleware import SemanticCacheMiddleware
 from .metrics import (
     MetricsMiddleware,
-    record_tool_invocation,
     record_auth_attempt,
     record_backend_request,
+    record_tool_invocation,
     update_tools_registered,
 )
+from .response_transformer import ResponseTransformerMiddleware
 from .shadow import ShadowMiddleware
 from .token_counter import TokenCounterMiddleware
 from .token_counter_worker import token_counter_worker
-from .response_transformer import ResponseTransformerMiddleware
-from .cache_middleware import SemanticCacheMiddleware
 
 __all__ = [
     # Auth

@@ -9,7 +9,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ...auth.dependencies import User, get_current_user
-from .config import SnapshotSettings, get_snapshot_settings
 from .models import (
     ErrorSnapshot,
     ReplayResponse,
@@ -18,7 +17,6 @@ from .models import (
     SnapshotTrigger,
 )
 from .service import SnapshotService
-from .storage import SnapshotStorage
 
 router = APIRouter(prefix="/v1/snapshots", tags=["Error Snapshots"])
 

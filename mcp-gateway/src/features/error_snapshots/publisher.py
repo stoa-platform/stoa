@@ -9,8 +9,6 @@ Phase 4: Database persistence
 
 import asyncio
 import json
-from datetime import datetime
-from functools import lru_cache
 from typing import Optional
 
 import structlog
@@ -37,7 +35,7 @@ class MCPSnapshotPublisher:
         self._started = False
         self._buffer: list[MCPErrorSnapshot] = []
         self._buffer_lock = asyncio.Lock()
-        self._flush_task: Optional[asyncio.Task] = None
+        self._flush_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         """Initialize Kafka producer"""

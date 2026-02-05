@@ -19,24 +19,21 @@ import logging
 import math
 import uuid
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import get_current_user, User
-from ..middleware.rate_limit import limiter
+from ..auth import User, get_current_user
 from ..database import get_db
-from ..services.cache_service import api_key_cache
+from ..middleware.rate_limit import limiter
 from ..models.mcp_subscription import (
     MCPServer,
-    MCPServerTool,
-    MCPServerSubscription,
-    MCPToolAccess,
     MCPServerCategory,
     MCPServerStatus,
+    MCPServerSubscription,
     MCPSubscriptionStatus,
+    MCPToolAccess,
     MCPToolAccessStatus,
 )
 from ..repositories.mcp_subscription import (
@@ -45,22 +42,23 @@ from ..repositories.mcp_subscription import (
     MCPToolAccessRepository,
 )
 from ..schemas.mcp_subscription import (
-    MCPServerResponse,
-    MCPServerListResponse,
-    MCPServerCategoryEnum,
-    MCPServerVisibility,
-    MCPServerToolResponse,
-    MCPSubscriptionCreate,
-    MCPSubscriptionResponse,
-    MCPSubscriptionWithKeyResponse,
-    MCPSubscriptionListResponse,
-    MCPSubscriptionStatusEnum,
-    MCPToolAccessStatusEnum,
-    MCPToolAccessResponse,
     MCPKeyRotationRequest,
     MCPKeyRotationResponse,
+    MCPServerCategoryEnum,
+    MCPServerListResponse,
+    MCPServerResponse,
+    MCPServerToolResponse,
+    MCPServerVisibility,
+    MCPSubscriptionCreate,
+    MCPSubscriptionListResponse,
+    MCPSubscriptionResponse,
+    MCPSubscriptionStatusEnum,
+    MCPSubscriptionWithKeyResponse,
+    MCPToolAccessResponse,
+    MCPToolAccessStatusEnum,
 )
 from ..services.api_key import APIKeyService
+from ..services.cache_service import api_key_cache
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +122,7 @@ def _convert_server_to_response(server: MCPServer) -> MCPServerResponse:
 @limiter.limit("100/minute")
 async def list_servers(
     request: Request,
-    category: Optional[MCPServerCategoryEnum] = Query(None, description="Filter by server category"),
+    category: MCPServerCategoryEnum | None = Query(None, description="Filter by server category"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     user: User = Depends(get_current_user),
@@ -341,9 +339,7 @@ async def create_subscription(
 
             # Determine tool access status
             tool_status = MCPToolAccessStatus.ENABLED
-            if tool.requires_approval and initial_status == MCPSubscriptionStatus.PENDING:
-                tool_status = MCPToolAccessStatus.PENDING_APPROVAL
-            elif initial_status == MCPSubscriptionStatus.PENDING:
+            if (tool.requires_approval and initial_status == MCPSubscriptionStatus.PENDING) or initial_status == MCPSubscriptionStatus.PENDING:
                 tool_status = MCPToolAccessStatus.PENDING_APPROVAL
 
             tool_access = MCPToolAccess(
@@ -402,7 +398,7 @@ async def create_subscription(
 @limiter.limit("100/minute")
 async def list_my_subscriptions(
     request: Request,
-    status: Optional[MCPSubscriptionStatusEnum] = Query(None, description="Filter by subscription status"),
+    status: MCPSubscriptionStatusEnum | None = Query(None, description="Filter by subscription status"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     user: User = Depends(get_current_user),
@@ -641,11 +637,9 @@ async def validate_api_key(
 
     # Check cache first (10s TTL reduces DB hits by ~90% for active keys)
     cached_response = await api_key_cache.get(cache_key)
-    if cached_response is not None:
-        # Return cached response for valid keys
-        if cached_response.get("valid"):
-            return cached_response
-        # For invalid keys, re-validate (they might have been activated)
+    if cached_response is not None and cached_response.get("valid"):
+        return cached_response
+    # For invalid/missing keys, re-validate (they might have been activated)
 
     repo = MCPSubscriptionRepository(db)
 

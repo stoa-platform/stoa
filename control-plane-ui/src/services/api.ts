@@ -289,6 +289,138 @@ class ApiService {
     });
     return data;
   }
+
+  // Gateway Instances (Control Plane Agnostique)
+  async getGatewayInstances(params?: {
+    gateway_type?: string;
+    environment?: string;
+    tenant_id?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
+    const { data } = await this.client.get('/v1/admin/gateways', { params });
+    return data;
+  }
+
+  async getGatewayInstance(id: string): Promise<any> {
+    const { data } = await this.client.get(`/v1/admin/gateways/${id}`);
+    return data;
+  }
+
+  async createGatewayInstance(payload: any): Promise<any> {
+    const { data } = await this.client.post('/v1/admin/gateways', payload);
+    return data;
+  }
+
+  async updateGatewayInstance(id: string, payload: any): Promise<any> {
+    const { data } = await this.client.put(`/v1/admin/gateways/${id}`, payload);
+    return data;
+  }
+
+  async deleteGatewayInstance(id: string): Promise<void> {
+    await this.client.delete(`/v1/admin/gateways/${id}`);
+  }
+
+  async checkGatewayHealth(id: string): Promise<any> {
+    const { data } = await this.client.post(`/v1/admin/gateways/${id}/health`);
+    return data;
+  }
+
+  // Gateway Deployments
+  async getDeploymentStatusSummary(): Promise<any> {
+    const { data } = await this.client.get('/v1/admin/deployments/status');
+    return data;
+  }
+
+  async getGatewayDeployments(params?: {
+    sync_status?: string;
+    gateway_instance_id?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<{ items: any[]; total: number; page: number; page_size: number }> {
+    const { data } = await this.client.get('/v1/admin/deployments', { params });
+    return data;
+  }
+
+  async getGatewayDeployment(id: string): Promise<any> {
+    const { data } = await this.client.get(`/v1/admin/deployments/${id}`);
+    return data;
+  }
+
+  async deployApiToGateways(payload: {
+    api_catalog_id: string;
+    gateway_instance_ids: string[];
+  }): Promise<any[]> {
+    const { data } = await this.client.post('/v1/admin/deployments', payload);
+    return data;
+  }
+
+  async undeployFromGateway(id: string): Promise<void> {
+    await this.client.delete(`/v1/admin/deployments/${id}`);
+  }
+
+  async forceSyncDeployment(id: string): Promise<any> {
+    const { data } = await this.client.post(`/v1/admin/deployments/${id}/sync`);
+    return data;
+  }
+
+  async getCatalogEntries(): Promise<
+    { id: string; api_name: string; tenant_id: string; version: string }[]
+  > {
+    const { data } = await this.client.get('/v1/admin/deployments/catalog-entries');
+    return data;
+  }
+
+  // =========================================================================
+  // Gateway Observability
+  // =========================================================================
+
+  async getGatewayAggregatedMetrics(): Promise<any> {
+    const { data } = await this.client.get('/v1/admin/gateways/metrics');
+    return data;
+  }
+
+  async getGatewayHealthSummary(): Promise<any> {
+    const { data } = await this.client.get('/v1/admin/gateways/health-summary');
+    return data;
+  }
+
+  async getGatewayInstanceMetrics(id: string): Promise<any> {
+    const { data } = await this.client.get(`/v1/admin/gateways/${id}/metrics`);
+    return data;
+  }
+
+  // =========================================================================
+  // Gateway Policies
+  // =========================================================================
+
+  async getGatewayPolicies(params?: { tenant_id?: string }): Promise<any[]> {
+    const { data } = await this.client.get('/v1/admin/policies', { params });
+    return data;
+  }
+
+  async createGatewayPolicy(payload: any): Promise<any> {
+    const { data } = await this.client.post('/v1/admin/policies', payload);
+    return data;
+  }
+
+  async updateGatewayPolicy(id: string, payload: any): Promise<any> {
+    const { data } = await this.client.put(`/v1/admin/policies/${id}`, payload);
+    return data;
+  }
+
+  async deleteGatewayPolicy(id: string): Promise<void> {
+    await this.client.delete(`/v1/admin/policies/${id}`);
+  }
+
+  async createPolicyBinding(payload: any): Promise<any> {
+    const { data } = await this.client.post('/v1/admin/policies/bindings', payload);
+    return data;
+  }
+
+  async deletePolicyBinding(id: string): Promise<void> {
+    await this.client.delete(`/v1/admin/policies/bindings/${id}`);
+  }
 }
 
 // Platform Status types (CAB-654)

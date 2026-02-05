@@ -1,0 +1,284 @@
+# =============================================================================
+# GitHub Actions: STOA Gateway (Rust) CI/CD
+# =============================================================================
+# STOA Platform - CAB-1075
+# Build, test, and deploy the Rust STOA Gateway
+# =============================================================================
+
+name: STOA Gateway CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'stoa-gateway/**'
+      - '.github/workflows/stoa-gateway-ci.yml'
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'stoa-gateway/**'
+      - '.github/workflows/stoa-gateway-ci.yml'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+  AWS_REGION: eu-west-1
+  ECR_REGISTRY: 848853684735.dkr.ecr.eu-west-1.amazonaws.com
+  ECR_REPOSITORY: apim/stoa-gateway
+
+jobs:
+  # ==========================================================================
+  # Check, Lint, and Test
+  # ==========================================================================
+  check:
+    name: Check & Lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: stoa-gateway
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: stoa-gateway -> target
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --all-features
+
+      - name: Security audit
+        run: |
+          cargo install cargo-audit --locked || true
+          cargo audit
+
+  # ==========================================================================
+  # Build Docker Image and Push to ECR
+  # ==========================================================================
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: check
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      id-token: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        id: env
+        run: |
+          ENV="${{ github.event.inputs.environment || 'dev' }}"
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=raw,value=${{ steps.env.outputs.ENVIRONMENT }}-${{ github.sha }}
+            type=raw,value=${{ steps.env.outputs.ENVIRONMENT }}-latest
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: stoa-gateway
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image info
+        run: |
+          echo "### STOA Gateway Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # Deploy to Kubernetes
+  # ==========================================================================
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'dev' }}
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+      url: https://mcp.gostoa.dev
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        id: env
+        run: |
+          ENV="${{ github.event.inputs.environment || 'dev' }}"
+          echo "ENVIRONMENT=$ENV" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check if EKS cluster exists
+        id: cluster-check
+        run: |
+          if aws eks describe-cluster --name apim-dev-cluster --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "CLUSTER_EXISTS=true" >> $GITHUB_OUTPUT
+          else
+            echo "CLUSTER_EXISTS=false" >> $GITHUB_OUTPUT
+            echo "⚠️ EKS cluster 'apim-dev-cluster' not found. Skipping deployment."
+          fi
+
+      - name: Update kubeconfig
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: |
+          aws eks update-kubeconfig --name apim-dev-cluster --region ${{ env.AWS_REGION }}
+
+      - name: Update deployment image
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: |
+          ENV="${{ steps.env.outputs.ENVIRONMENT }}"
+          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${ENV}-${{ github.sha }}"
+
+          echo "Updating stoa-gateway to image: $IMAGE"
+
+          kubectl set image deployment/stoa-gateway \
+            stoa-gateway=$IMAGE \
+            -n stoa-system
+
+          kubectl rollout restart deployment/stoa-gateway -n stoa-system
+          kubectl rollout status deployment/stoa-gateway -n stoa-system --timeout=300s
+
+      - name: Verify deployment
+        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployment stoa-gateway -n stoa-system
+
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n stoa-system -l app.kubernetes.io/name=stoa-gateway
+
+          echo ""
+          echo "=== Health Check ==="
+          sleep 10
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://mcp.gostoa.dev/health || echo "000")
+          echo "HTTP Status Code: $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "Health check PASSED"
+          else
+            echo "WARNING: Health check returned $HTTP_CODE"
+          fi
+
+  # ==========================================================================
+  # Notify
+  # ==========================================================================
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [check, docker, deploy]
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.24.0
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "${{ needs.deploy.result == 'success' && 'good' || needs.check.result == 'success' && 'warning' || 'danger' }}",
+                  "title": "STOA Gateway (Rust) Deployment",
+                  "fields": [
+                    {
+                      "title": "Status",
+                      "value": "${{ needs.deploy.result == 'success' && 'Deployed' || needs.check.result == 'success' && 'Built (not deployed)' || 'Failed' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Environment",
+                      "value": "${{ github.event.inputs.environment || 'dev' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ github.sha }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    }
+                  ],
+                  "footer": "STOA Gateway CI/CD (Rust)"
+                }
+              ]
+            }

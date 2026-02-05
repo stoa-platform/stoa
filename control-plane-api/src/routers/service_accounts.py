@@ -4,11 +4,11 @@ Allows users to create OAuth2 Service Accounts for MCP tool access.
 Each service account inherits the user's RBAC roles and tenant isolation.
 """
 
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from typing import Optional
 
-from ..auth.dependencies import get_current_user, User
+from ..auth.dependencies import User, get_current_user
 from ..services.keycloak_service import keycloak_service
 
 router = APIRouter(prefix="/v1/service-accounts", tags=["Service Accounts"])
@@ -23,7 +23,7 @@ class ServiceAccountCreate(BaseModel):
         max_length=50,
         description="Name for the service account (e.g., 'claude-desktop', 'cursor-ide')"
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         None,
         max_length=200,
         description="Optional description"
@@ -44,7 +44,7 @@ class ServiceAccountResponse(BaseModel):
     id: str
     client_id: str
     name: str
-    description: Optional[str]
+    description: str | None
     enabled: bool
 
 
@@ -100,7 +100,7 @@ async def list_service_accounts(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list service accounts: {str(e)}"
+            detail=f"Failed to list service accounts: {e!s}"
         )
 
 
@@ -142,7 +142,7 @@ async def create_service_account(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create service account: {str(e)}"
+            detail=f"Failed to create service account: {e!s}"
         )
 
 
@@ -172,7 +172,7 @@ async def delete_service_account(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete service account: {str(e)}"
+            detail=f"Failed to delete service account: {e!s}"
         )
 
 
@@ -215,5 +215,5 @@ async def regenerate_secret(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to regenerate secret: {str(e)}"
+            detail=f"Failed to regenerate secret: {e!s}"
         )

@@ -6,9 +6,9 @@ Embedding-based deduplication for MCP tool responses.
 Uses pgvector for cosine similarity search with strict tenant isolation.
 """
 
+from .cleanup import CacheCleanupWorker
 from .embedder import Embedder
 from .semantic_cache import SemanticCache
-from .cleanup import CacheCleanupWorker
 
 __all__ = [
     "Embedder",

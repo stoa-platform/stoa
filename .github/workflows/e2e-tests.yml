@@ -112,6 +112,10 @@ jobs:
           ANORAK_USER: ${{ secrets.ANORAK_USER }}
           ANORAK_PASSWORD: ${{ secrets.ANORAK_PASSWORD }}
 
+          # Personas - Freelance
+          ALEX_USER: ${{ secrets.ALEX_USER }}
+          ALEX_PASSWORD: ${{ secrets.ALEX_PASSWORD }}
+
           # Test API Key
           TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
 

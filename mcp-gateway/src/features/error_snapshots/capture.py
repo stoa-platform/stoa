@@ -7,24 +7,23 @@ Core capture logic for MCP Gateway errors.
 import asyncio
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 from fastapi import Request
 
 from .config import get_mcp_snapshot_settings
+from .masking import mask_error_message, mask_headers, mask_tool_params
 from .models import (
+    LLMContext,
     MCPErrorSnapshot,
     MCPErrorType,
     MCPServerContext,
-    ToolInvocation,
-    LLMContext,
-    RetryContext,
     RequestContext,
+    RetryContext,
+    ToolInvocation,
     UserContext,
-    estimate_llm_cost,
 )
-from .masking import mask_tool_params, mask_headers, mask_url, mask_error_message
 from .publisher import get_snapshot_publisher
 
 logger = structlog.get_logger(__name__)
@@ -36,14 +35,14 @@ async def capture_mcp_error(
     error_type: MCPErrorType,
     error_message: str,
     *,
-    mcp_server: Optional[MCPServerContext] = None,
-    tool_invocation: Optional[ToolInvocation] = None,
-    llm_context: Optional[LLMContext] = None,
-    retry_context: Optional[RetryContext] = None,
-    conversation_id: Optional[str] = None,
-    message_index: Optional[int] = None,
-    exception: Optional[Exception] = None,
-) -> Optional[MCPErrorSnapshot]:
+    mcp_server: MCPServerContext | None = None,
+    tool_invocation: ToolInvocation | None = None,
+    llm_context: LLMContext | None = None,
+    retry_context: RetryContext | None = None,
+    conversation_id: str | None = None,
+    message_index: int | None = None,
+    exception: Exception | None = None,
+) -> MCPErrorSnapshot | None:
     """
     Capture an MCP error snapshot.
 
@@ -149,12 +148,12 @@ async def capture_tool_error(
     error: Exception,
     *,
     duration_ms: int = 0,
-    backend_status: Optional[int] = None,
-    backend_response: Optional[str] = None,
-    request: Optional[Request] = None,
-    mcp_server: Optional[MCPServerContext] = None,
-    retry_context: Optional[RetryContext] = None,
-) -> Optional[MCPErrorSnapshot]:
+    backend_status: int | None = None,
+    backend_response: str | None = None,
+    request: Request | None = None,
+    mcp_server: MCPServerContext | None = None,
+    retry_context: RetryContext | None = None,
+) -> MCPErrorSnapshot | None:
     """
     Capture an error from tool execution.
 
@@ -253,7 +252,7 @@ async def _build_request_context(request: Request) -> RequestContext:
     )
 
 
-def _build_user_context(request: Request) -> Optional[UserContext]:
+def _build_user_context(request: Request) -> UserContext | None:
     """Extract user context from request state"""
     # Check if we have token claims in request state (set by auth middleware)
     if not hasattr(request.state, "user") or request.state.user is None:
@@ -270,7 +269,7 @@ def _build_user_context(request: Request) -> Optional[UserContext]:
     )
 
 
-def _classify_tool_error(error: Exception, status_code: Optional[int]) -> MCPErrorType:
+def _classify_tool_error(error: Exception, status_code: int | None) -> MCPErrorType:
     """Classify error into MCPErrorType"""
     error_name = type(error).__name__.lower()
 
@@ -295,7 +294,7 @@ def _classify_tool_error(error: Exception, status_code: Optional[int]) -> MCPErr
     return MCPErrorType.TOOL_EXECUTION_ERROR
 
 
-def _is_retryable_error(error: Exception, status_code: Optional[int]) -> bool:
+def _is_retryable_error(error: Exception, status_code: int | None) -> bool:
     """Determine if an error is retryable"""
     # Rate limits are retryable
     if status_code == 429:

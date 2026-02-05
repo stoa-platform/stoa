@@ -7,45 +7,43 @@ Provides endpoints for:
 Reference: External MCP Server Registration Plan
 """
 import logging
-from datetime import datetime
-from typing import Optional, List
-from uuid import UUID
 import uuid
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import get_current_user, User
+from ..auth import User, get_current_user
 from ..database import get_db
 from ..models.external_mcp_server import (
+    ExternalMCPAuthType,
+    ExternalMCPHealthStatus,
     ExternalMCPServer,
     ExternalMCPServerTool,
     ExternalMCPTransport,
-    ExternalMCPAuthType,
-    ExternalMCPHealthStatus,
 )
 from ..repositories.external_mcp_server import (
     ExternalMCPServerRepository,
     ExternalMCPServerToolRepository,
 )
 from ..schemas.external_mcp_server import (
+    AuthTypeEnum,
     ExternalMCPServerCreate,
-    ExternalMCPServerUpdate,
-    ExternalMCPServerResponse,
     ExternalMCPServerDetailResponse,
+    ExternalMCPServerForGateway,
     ExternalMCPServerListResponse,
+    ExternalMCPServerResponse,
+    ExternalMCPServersForGatewayResponse,
     ExternalMCPServerToolResponse,
     ExternalMCPServerToolUpdate,
-    TestConnectionResponse,
-    SyncToolsResponse,
-    TransportTypeEnum,
-    AuthTypeEnum,
+    ExternalMCPServerUpdate,
     HealthStatusEnum,
-    ExternalMCPServerForGateway,
-    ExternalMCPServersForGatewayResponse,
+    SyncToolsResponse,
+    TestConnectionResponse,
+    TransportTypeEnum,
 )
-from ..services.vault_client import get_vault_client, VaultSealedException
 from ..services.mcp_client import get_mcp_client_service
+from ..services.vault_client import get_vault_client
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +54,7 @@ def _require_admin(user: User) -> None:
         raise HTTPException(status_code=403, detail="Admin access required")
 
 
-def _has_tenant_access(user: User, tenant_id: Optional[str]) -> bool:
+def _has_tenant_access(user: User, tenant_id: str | None) -> bool:
     """Check if user has access to manage a server with given tenant_id."""
     if "cpi-admin" in user.roles:
         return True

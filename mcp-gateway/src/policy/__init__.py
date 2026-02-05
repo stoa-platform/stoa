@@ -5,25 +5,25 @@ Contains two policy engines:
 2. Argument Engine - Business rules (what argument values are allowed)
 """
 
-from .opa_client import (
-    OPAClient,
-    PolicyDecision,
-    get_opa_client,
-    shutdown_opa_client,
-)
 from .argument_engine import (
     ArgumentPolicyEngine,
     get_argument_engine,
     shutdown_argument_engine,
 )
 from .argument_models import (
+    ConditionGroup,
+    ConditionLeaf,
+    Operator,
     Policy,
     PolicyFile,
     PolicyResult,
     Rule,
-    ConditionLeaf,
-    ConditionGroup,
-    Operator,
+)
+from .opa_client import (
+    OPAClient,
+    PolicyDecision,
+    get_opa_client,
+    shutdown_opa_client,
 )
 
 __all__ = [

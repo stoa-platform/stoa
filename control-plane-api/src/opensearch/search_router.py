@@ -19,11 +19,9 @@ Endpoints:
 """
 
 import logging
-from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from opensearchpy import AsyncOpenSearch
 from pydantic import BaseModel, Field
 
@@ -49,8 +47,8 @@ class ToolSearchResult(BaseModel):
     """Single tool search result."""
     id: str
     name: str
-    description: Optional[str] = None
-    category: Optional[str] = None
+    description: str | None = None
+    category: str | None = None
     tags: list[str] = Field(default_factory=list)
     version: str = "1.0.0"
     visibility: str = "private"
@@ -107,29 +105,29 @@ async def get_current_tenant(
 
 class SearchService:
     """OpenSearch search service."""
-    
+
     def __init__(self, client: AsyncOpenSearch):
         self.client = client
         self.index = "tools"
-    
+
     async def search_tools(
         self,
         query: str,
         tenant_id: str,
-        category: Optional[str] = None,
-        tags: Optional[list[str]] = None,
-        visibility: Optional[str] = None,
+        category: str | None = None,
+        tags: list[str] | None = None,
+        visibility: str | None = None,
         sort: SortOrder = SortOrder.RELEVANCE,
         page: int = 1,
         page_size: int = 20,
         include_facets: bool = True,
     ) -> SearchResponse:
         """Search tools catalog with full-text search."""
-        
+
         # Build query
         must_clauses = []
         filter_clauses = []
-        
+
         # Full-text search
         if query and query.strip():
             must_clauses.append({
@@ -149,7 +147,7 @@ class SearchService:
             })
         else:
             must_clauses.append({"match_all": {}})
-        
+
         # Tenant filter (mandatory)
         filter_clauses.append({
             "bool": {
@@ -160,23 +158,23 @@ class SearchService:
                 "minimum_should_match": 1,
             }
         })
-        
+
         # Category filter
         if category:
             filter_clauses.append({"term": {"category": category}})
-        
+
         # Tags filter
         if tags:
             for tag in tags:
                 filter_clauses.append({"term": {"tags": tag}})
-        
+
         # Visibility filter
         if visibility:
             filter_clauses.append({"term": {"visibility": visibility}})
-        
+
         # Build sort
         sort_config = self._build_sort(sort)
-        
+
         # Build aggregations for facets
         aggs = {}
         if include_facets:
@@ -191,7 +189,7 @@ class SearchService:
                     "terms": {"field": "visibility", "size": 5}
                 },
             }
-        
+
         # Execute search
         body = {
             "query": {
@@ -212,12 +210,12 @@ class SearchService:
             },
             "aggs": aggs,
         }
-        
+
         response = await self.client.search(
             index=self.index,
             body=body,
         )
-        
+
         # Parse results
         results = []
         for hit in response["hits"]["hits"]:
@@ -235,7 +233,7 @@ class SearchService:
                 highlights=hit.get("highlight", {}),
             )
             results.append(result)
-        
+
         # Parse facets
         facets = {}
         if include_facets and "aggregations" in response:
@@ -244,7 +242,7 @@ class SearchService:
                     {"key": bucket["key"], "count": bucket["doc_count"]}
                     for bucket in agg_data.get("buckets", [])
                 ]
-        
+
         return SearchResponse(
             query=query,
             total=response["hits"]["total"]["value"],
@@ -254,7 +252,7 @@ class SearchService:
             facets=facets,
             took_ms=response["took"],
         )
-    
+
     async def suggest(
         self,
         query: str,
@@ -262,7 +260,7 @@ class SearchService:
         limit: int = 10,
     ) -> SuggestResponse:
         """Get auto-complete suggestions."""
-        
+
         body = {
             "suggest": {
                 "tool-suggest": {
@@ -281,12 +279,12 @@ class SearchService:
                 }
             }
         }
-        
+
         response = await self.client.search(
             index=self.index,
             body=body,
         )
-        
+
         suggestions = []
         for option in response["suggest"]["tool-suggest"][0]["options"]:
             suggestions.append({
@@ -294,19 +292,19 @@ class SearchService:
                 "name": option["text"],
                 "score": option["_score"],
             })
-        
+
         return SuggestResponse(
             query=query,
             suggestions=suggestions,
             took_ms=response["took"],
         )
-    
+
     async def get_facets(
         self,
         tenant_id: str,
     ) -> FacetsResponse:
         """Get all available facets for filtering."""
-        
+
         body = {
             "size": 0,
             "query": {
@@ -330,12 +328,12 @@ class SearchService:
                 },
             },
         }
-        
+
         response = await self.client.search(
             index=self.index,
             body=body,
         )
-        
+
         return FacetsResponse(
             categories=[
                 {"key": b["key"], "count": b["doc_count"]}
@@ -350,7 +348,7 @@ class SearchService:
                 for b in response["aggregations"]["visibility"]["buckets"]
             ],
         )
-    
+
     def _build_sort(self, sort: SortOrder) -> list:
         """Build sort configuration."""
         if sort == SortOrder.RELEVANCE:
@@ -373,9 +371,9 @@ class SearchService:
 @router.get("/tools", response_model=SearchResponse)
 async def search_tools(
     q: str = Query("", description="Search query"),
-    category: Optional[str] = Query(None, description="Filter by category"),
-    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
-    visibility: Optional[str] = Query(None, description="Filter by visibility"),
+    category: str | None = Query(None, description="Filter by category"),
+    tags: str | None = Query(None, description="Filter by tags (comma-separated)"),
+    visibility: str | None = Query(None, description="Filter by visibility"),
     sort: SortOrder = Query(SortOrder.RELEVANCE, description="Sort order"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Results per page"),
@@ -385,7 +383,7 @@ async def search_tools(
 ):
     """
     Search tools catalog with full-text search.
-    
+
     Supports:
     - Full-text search across name, description, and tags
     - Fuzzy matching for typo tolerance
@@ -394,12 +392,12 @@ async def search_tools(
     - Pagination and sorting
     """
     service = SearchService(client)
-    
+
     # Parse tags
     tag_list = None
     if tags:
         tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-    
+
     return await service.search_tools(
         query=q,
         tenant_id=tenant_id,
@@ -422,7 +420,7 @@ async def suggest_tools(
 ):
     """
     Get auto-complete suggestions for tool names.
-    
+
     Returns matching tool names as the user types,
     with fuzzy matching for typo tolerance.
     """
@@ -441,7 +439,7 @@ async def get_tool_facets(
 ):
     """
     Get all available facets for filtering tools.
-    
+
     Returns counts for each category, tag, and visibility level.
     """
     service = SearchService(client)
@@ -456,7 +454,7 @@ async def get_search_analytics(
 ):
     """
     Get search analytics (admin only).
-    
+
     Returns:
     - Top search queries
     - Popular tools
@@ -465,7 +463,7 @@ async def get_search_analytics(
     # Parse period
     period_map = {"1d": 1, "7d": 7, "30d": 30}
     days = period_map.get(period, 7)
-    
+
     body = {
         "size": 0,
         "query": {
@@ -491,12 +489,12 @@ async def get_search_analytics(
             },
         },
     }
-    
+
     response = await client.search(
         index="analytics-*",
         body=body,
     )
-    
+
     return {
         "period": period,
         "top_tools": response["aggregations"]["top_tools"]["buckets"],

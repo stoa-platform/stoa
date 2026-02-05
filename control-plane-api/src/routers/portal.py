@@ -9,18 +9,18 @@ PERFORMANCE OPTIMIZATION (CAB-682):
 - Cache is synced from GitLab via the catalog sync service
 """
 import logging
-from typing import List, Optional
 from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from ..auth.dependencies import get_current_user, User
+from ..auth.dependencies import User, get_current_user
 from ..database import get_db as get_async_db
 from ..models.mcp_subscription import MCPServer, MCPServerStatus
 from ..repositories.catalog import CatalogRepository
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/portal", tags=["Portal"])
@@ -52,15 +52,15 @@ class PortalAPIResponse(BaseModel):
     version: str
     description: str
     tenant_id: str
-    tenant_name: Optional[str] = None
+    tenant_name: str | None = None
     status: str
-    backend_url: Optional[str] = None
-    category: Optional[str] = None
-    tags: List[str] = []
+    backend_url: str | None = None
+    category: str | None = None
+    tags: list[str] = []
     deployments: dict = {}
     is_promoted: bool = True  # Whether API is promoted to Portal (portal_published=True)
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
     class Config:
         from_attributes = True
@@ -68,7 +68,7 @@ class PortalAPIResponse(BaseModel):
 
 class PortalAPIsResponse(BaseModel):
     """Paginated API list response."""
-    apis: List[PortalAPIResponse]
+    apis: list[PortalAPIResponse]
     total: int
     page: int
     page_size: int
@@ -80,15 +80,15 @@ class PortalMCPServerResponse(BaseModel):
     name: str
     display_name: str
     description: str
-    icon: Optional[str] = None
+    icon: str | None = None
     category: str
-    tenant_id: Optional[str] = None
+    tenant_id: str | None = None
     status: str
-    version: Optional[str] = None
-    documentation_url: Optional[str] = None
+    version: str | None = None
+    documentation_url: str | None = None
     requires_approval: bool = False
     tools_count: int = 0
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -96,11 +96,11 @@ class PortalMCPServerResponse(BaseModel):
 
 class PortalMCPServersResponse(BaseModel):
     """Paginated MCP servers list response."""
-    servers: List[PortalMCPServerResponse]
+    servers: list[PortalMCPServerResponse]
     total: int
     page: int
     page_size: int
-    synced_at: Optional[datetime] = None  # CAB-689: Obligation #4
+    synced_at: datetime | None = None  # CAB-689: Obligation #4
 
 
 # ============================================================================
@@ -113,11 +113,11 @@ async def list_portal_apis(
     db: AsyncSession = Depends(get_async_db),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    search: Optional[str] = Query(None),
-    category: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
+    search: str | None = Query(None),
+    category: str | None = Query(None),
+    status: str | None = Query(None),
     include_unpromoted: bool = Query(False, description="Include APIs not promoted to Portal"),
-    universe: Optional[str] = Query(None, description="Filter by universe: oasis, enterprise"),
+    universe: str | None = Query(None, description="Filter by universe: oasis, enterprise"),
 ):
     """
     List all promoted APIs available in the Portal catalog.
@@ -170,7 +170,7 @@ async def list_portal_apis(
 
     except Exception as e:
         logger.error(f"Failed to list Portal APIs: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list APIs: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list APIs: {e!s}")
 
 
 @router.get("/apis/{api_id}", response_model=PortalAPIResponse)
@@ -221,7 +221,7 @@ async def get_portal_api(
         raise
     except Exception as e:
         logger.error(f"Failed to get API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get API: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get API: {e!s}")
 
 
 @router.get("/apis/{api_id}/openapi")
@@ -267,7 +267,7 @@ async def get_portal_api_openapi(
         raise
     except Exception as e:
         logger.error(f"Failed to get OpenAPI spec for {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get OpenAPI spec: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get OpenAPI spec: {e!s}")
 
 
 # ============================================================================
@@ -280,8 +280,8 @@ async def list_portal_mcp_servers(
     db: AsyncSession = Depends(get_async_db),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    search: Optional[str] = Query(None),
-    category: Optional[str] = Query(None),
+    search: str | None = Query(None),
+    category: str | None = Query(None),
 ):
     """
     List all MCP servers available in the Portal catalog.
@@ -408,14 +408,14 @@ async def list_portal_mcp_servers(
 
     except Exception as e:
         logger.error(f"Failed to list Portal MCP servers: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list MCP servers: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list MCP servers: {e!s}")
 
 
 # ============================================================================
 # Categories and Tags (CAB-682: Now from database)
 # ============================================================================
 
-@router.get("/api-categories", response_model=List[str])
+@router.get("/api-categories", response_model=list[str])
 async def get_api_categories(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
@@ -439,7 +439,7 @@ class UniverseResponse(BaseModel):
     label: str
 
 
-@router.get("/api-universes", response_model=List[UniverseResponse])
+@router.get("/api-universes", response_model=list[UniverseResponse])
 async def get_api_universes(
     user: User = Depends(get_current_user),
 ):
@@ -450,7 +450,7 @@ async def get_api_universes(
     ]
 
 
-@router.get("/api-tags", response_model=List[str])
+@router.get("/api-tags", response_model=list[str])
 async def get_api_tags(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
@@ -467,7 +467,7 @@ async def get_api_tags(
         return ["rest", "graphql", "grpc", "websocket", "internal", "external", "beta"]
 
 
-@router.get("/mcp-categories", response_model=List[str])
+@router.get("/mcp-categories", response_model=list[str])
 async def get_mcp_categories(
     user: User = Depends(get_current_user),
 ):

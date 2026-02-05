@@ -12,17 +12,18 @@ import asyncio
 import json
 import time
 import uuid
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
-from ..middleware.auth import TokenClaims, get_optional_user
-from ..middleware.sse_limiter import sse_limiter, get_client_ip
-from ..services import get_tool_registry
 from ..config import get_settings
+from ..middleware.auth import TokenClaims, get_optional_user
+from ..middleware.sse_limiter import get_client_ip, sse_limiter
 from ..models.mcp import ToolInvocation
+from ..services import get_tool_registry
 
 logger = structlog.get_logger(__name__)
 

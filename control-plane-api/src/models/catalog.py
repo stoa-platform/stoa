@@ -1,10 +1,10 @@
 """Catalog SQLAlchemy models for API and MCP tools caching (CAB-682)"""
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, Text, Index
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.sql import func
-from datetime import datetime
-import uuid
 import enum
+import uuid
+
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.sql import func
 
 from src.database import Base
 
@@ -51,6 +51,11 @@ class APICatalog(Base):
     # Git tracking
     git_path = Column(String(500), nullable=True)
     git_commit_sha = Column(String(40), nullable=True)
+
+    # Gateway targeting (which gateways this API should be deployed to)
+    target_gateways = Column(JSONB, default=list, nullable=False, server_default="[]")
+    # List of gateway instance names: ["webmethods-prod", "kong-staging"]
+    # Empty list = catalog-only (not deployed to any gateway)
 
     # Sync tracking
     synced_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

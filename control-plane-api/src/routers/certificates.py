@@ -8,8 +8,7 @@ Provides endpoints for validating client certificates for mTLS subscriptions.
 - Return certificate metadata
 """
 
-from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
@@ -17,9 +16,9 @@ from pydantic import BaseModel, Field
 # Import cryptography for certificate parsing
 try:
     from cryptography import x509
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.serialization import Encoding
-    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.serialization import Encoding  # noqa: F401
+    from cryptography.x509.oid import NameOID  # noqa: F401
 
     CRYPTOGRAPHY_AVAILABLE = True
 except ImportError:

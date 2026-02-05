@@ -4,37 +4,56 @@ Model Context Protocol Gateway for AI-Native API Management.
 Exposes APIs as MCP Tools for LLM consumption.
 """
 
-import asyncio
 import ipaddress
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 import structlog
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException, Form
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import FileResponse, JSONResponse
+from prometheus_client import openmetrics
 from starlette.responses import Response
 
-from .config import get_settings
-from .handlers import mcp_router, subscriptions_router, mcp_sse_router, sse_alias_router, servers_router, policy_router
-from .middleware import MetricsMiddleware, ShadowMiddleware, TokenCounterMiddleware, token_counter_worker, ResponseTransformerMiddleware, SemanticCacheMiddleware
 from .cache.cleanup import cache_cleanup_worker
-from .services import get_tool_registry, shutdown_tool_registry, init_database, shutdown_database
-from .services.tool_handlers import init_tool_handlers, shutdown_tool_handlers
-from .services.external_server_loader import get_external_server_loader, shutdown_external_server_loader
-from .k8s import get_tool_watcher, shutdown_tool_watcher
 from .clients import init_core_api_client, shutdown_core_api_client
+from .config import get_settings
 from .features.error_snapshots import (
     MCPErrorSnapshotMiddleware,
     get_mcp_snapshot_settings,
     snapshots_router,
 )
-from .features.error_snapshots.publisher import setup_snapshot_publisher, shutdown_snapshot_publisher
+from .features.error_snapshots.publisher import (
+    setup_snapshot_publisher,
+    shutdown_snapshot_publisher,
+)
+from .handlers import (
+    mcp_router,
+    mcp_sse_router,
+    policy_router,
+    servers_router,
+    sse_alias_router,
+    subscriptions_router,
+)
+from .k8s import get_tool_watcher, shutdown_tool_watcher
+from .middleware import (
+    MetricsMiddleware,
+    ResponseTransformerMiddleware,
+    SemanticCacheMiddleware,
+    ShadowMiddleware,
+    TokenCounterMiddleware,
+    token_counter_worker,
+)
+from .services import get_tool_registry, init_database, shutdown_database, shutdown_tool_registry
+from .services.external_server_loader import (
+    get_external_server_loader,
+    shutdown_external_server_loader,
+)
+from .services.tool_handlers import init_tool_handlers, shutdown_tool_handlers
+from .tracing_config import configure_tracing, shutdown_tracing
 
 # Configure structured logging
 structlog.configure(
@@ -72,7 +91,7 @@ async def lifespan(app: FastAPI):
     )
 
     # Startup
-    app_state["started_at"] = datetime.now(timezone.utc)
+    app_state["started_at"] = datetime.now(UTC)
 
     # Initialize Core API client (ADR-001 compliance)
     init_core_api_client(
@@ -232,6 +251,9 @@ async def lifespan(app: FastAPI):
     # Cleanup Core API client
     shutdown_core_api_client()
 
+    # Flush remaining OTel spans before exit (CAB-1088)
+    shutdown_tracing()
+
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
@@ -247,6 +269,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         redirect_slashes=False,  # CAB-1040: Prevent 307 redirects that break MCP clients
     )
+
+    # OpenTelemetry distributed tracing (CAB-1088)
+    # Must be configured before middleware so FastAPI auto-instrumentation works
+    configure_tracing(app, settings)
 
     # Shadow mode middleware for Python → Rust migration
     if settings.shadow_mode_enabled:
@@ -405,7 +431,7 @@ def register_routes(app: FastAPI) -> None:
         return {
             "status": "healthy",
             "version": settings.app_version,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     @app.get("/health/ready", tags=["Health"])
@@ -429,7 +455,7 @@ def register_routes(app: FastAPI) -> None:
         response = {
             "status": "healthy" if is_ready else "unhealthy",
             "version": settings.app_version,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "checks": checks,
         }
 
@@ -452,7 +478,7 @@ def register_routes(app: FastAPI) -> None:
         return {
             "status": "healthy",
             "version": settings.app_version,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     # Legacy endpoints (backward compatibility)
@@ -469,7 +495,7 @@ def register_routes(app: FastAPI) -> None:
             "status": "healthy",
             "service": "stoa-mcp-gateway",
             "version": settings.app_version,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     @app.get("/ready", tags=["Health"], include_in_schema=False)
@@ -483,7 +509,7 @@ def register_routes(app: FastAPI) -> None:
         checks: dict[str, Any] = {
             "service": "stoa-mcp-gateway",
             "version": settings.app_version,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "checks": {
                 "app_ready": app_state["ready"],
             },
@@ -515,8 +541,8 @@ def register_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=403, detail="Forbidden - internal only")
 
         return Response(
-            content=generate_latest(),
-            media_type=CONTENT_TYPE_LATEST,
+            content=openmetrics.exposition.generate_latest(),
+            media_type=openmetrics.exposition.CONTENT_TYPE_LATEST,
         )
 
     @app.get("/", tags=["Info"])
@@ -733,9 +759,8 @@ def register_routes(app: FastAPI) -> None:
     @app.post("/tools/{tool_name}", tags=["MCP REST"])
     async def call_tool_rest(tool_name: str, request: Request) -> dict[str, Any]:
         """Call an MCP tool (REST endpoint for Claude.ai hybrid mode)."""
-        import json
-        from .services import get_tool_registry
         from .models.mcp import ToolInvocation
+        from .services import get_tool_registry
 
         body = await request.json()
         arguments = body.get("arguments", {})
@@ -876,7 +901,7 @@ def register_routes(app: FastAPI) -> None:
 
         # Get the form data from the request
         form_data = await request.form()
-        form_dict = {key: value for key, value in form_data.items()}
+        form_dict = dict(form_data.items())
 
         print(f"[OAUTH-TOKEN] Received token request: grant_type={form_dict.get('grant_type')} client_id={form_dict.get('client_id')} redirect_uri={form_dict.get('redirect_uri')}", flush=True)
         print(f"[OAUTH-TOKEN] Form keys: {list(form_dict.keys())}", flush=True)

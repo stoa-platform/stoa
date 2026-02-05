@@ -4,12 +4,12 @@ CAB-397: Time-travel debugging via error snapshots.
 Captures complete request/response context when errors occur.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SnapshotTrigger(str, Enum):
@@ -90,7 +90,7 @@ class EnvironmentInfo(BaseModel):
 
 def _generate_snapshot_id() -> str:
     """Generate a unique snapshot ID with timestamp prefix."""
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     suffix = uuid4().hex[:8]
     return f"SNP-{ts}-{suffix}"
 
@@ -131,7 +131,7 @@ class ErrorSnapshot(BaseModel):
 
     # Identifiers
     id: str = Field(default_factory=_generate_snapshot_id)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tenant_id: str
 
     # Trigger info

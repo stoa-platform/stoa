@@ -1,0 +1,250 @@
+{{- if .Values.alloy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-alloy-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+data:
+  config.alloy: |
+    // =========================================================================
+    // STOA Platform - Grafana Alloy Pipeline Configuration
+    // =========================================================================
+    // Unified telemetry collector: metrics + logs + traces + RUM
+    // Inspired by Datadog unified tagging and Grafana Cloud LGTM stack
+    //
+    // Data flow:
+    //   Metrics: ServiceMonitors -> scrape -> remote_write -> Prometheus/Mimir
+    //   Logs:    K8s pods stdout -> discovery -> process -> push -> Loki
+    //   Traces:  OTel SDK (OTLP) -> receive -> batch -> export -> Tempo
+    //   RUM:     Faro SDK -> receive -> logs + traces (Phase 6)
+    // =========================================================================
+
+    // --- Logging configuration for Alloy itself ---
+    logging {
+      level  = "info"
+      format = "json"
+    }
+
+    // =========================================================================
+    // 1. METRICS PIPELINE
+    // =========================================================================
+
+    // Discover and scrape all ServiceMonitors (kube-prometheus-stack pattern)
+    // This replaces standalone Prometheus scraping
+    prometheus.operator.servicemonitors "stoa" {
+      forward_to = [prometheus.relabel.add_platform_labels.receiver]
+      namespaces = {{ .Values.alloyConfig.logNamespaces | toJson }}
+      scrape {
+        default_scrape_interval = {{ .Values.alloyConfig.scrapeInterval | quote }}
+      }
+    }
+
+    // Also scrape PodMonitors if any exist
+    prometheus.operator.podmonitors "stoa" {
+      forward_to = [prometheus.relabel.add_platform_labels.receiver]
+      namespaces = {{ .Values.alloyConfig.logNamespaces | toJson }}
+    }
+
+    // Add platform-level labels to all metrics
+    prometheus.relabel "add_platform_labels" {
+      forward_to = [prometheus.remote_write.default.receiver]
+      rule {
+        target_label = "platform"
+        replacement  = {{ .Values.global.platform | quote }}
+      }
+      rule {
+        target_label = "environment"
+        replacement  = {{ .Values.global.environment | quote }}
+      }
+    }
+
+    // Remote write to Prometheus (Phase 1) or Mimir (Phase 8)
+    prometheus.remote_write "default" {
+      endpoint {
+        url = {{ .Values.alloyConfig.prometheusRemoteWriteUrl | quote }}
+      }
+    }
+
+    // =========================================================================
+    // 2. LOGS PIPELINE
+    // =========================================================================
+
+    // Kubernetes pod discovery
+    discovery.kubernetes "pods" {
+      role = "pod"
+      namespaces {
+        names = {{ .Values.alloyConfig.logNamespaces | toJson }}
+      }
+    }
+
+    // Relabel discovered pods to extract useful metadata
+    discovery.relabel "pods" {
+      targets = discovery.kubernetes.pods.targets
+
+      // Keep only running pods
+      rule {
+        source_labels = ["__meta_kubernetes_pod_phase"]
+        regex         = "Pending|Succeeded|Failed|Unknown"
+        action        = "drop"
+      }
+
+      // Extract namespace as label
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+
+      // Extract pod name
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+
+      // Extract container name
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+
+      // Extract app label (standard Kubernetes)
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        target_label  = "app"
+      }
+
+      // Extract component label
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_component"]
+        target_label  = "component"
+      }
+    }
+
+    // Collect logs from discovered pods
+    loki.source.kubernetes "pods" {
+      targets    = discovery.relabel.pods.output
+      forward_to = [loki.process.stoa_json.receiver]
+    }
+
+    // Process STOA structured logs (JSON format from structlog / tracing-subscriber)
+    // Extracts: level, component, tenant_id, trace_id, span_id, request_id
+    loki.process "stoa_json" {
+      forward_to = [loki.process.add_platform_labels.receiver]
+
+      // Parse JSON logs (structlog Python, tracing-subscriber Rust)
+      stage.json {
+        expressions = {
+          level      = "level",
+          component  = "component",
+          tenant_id  = "tenant_id",
+          trace_id   = "trace_id",
+          span_id    = "span_id",
+          request_id = "request_id",
+          user_id    = "user_id",
+          message    = "message",
+        }
+      }
+
+      // Promote extracted fields to labels (indexed in Loki)
+      stage.labels {
+        values = {
+          level      = "",
+          component  = "",
+          tenant_id  = "",
+        }
+      }
+
+      // Set trace_id as structured metadata (for Grafana trace-log correlation)
+      stage.structured_metadata {
+        values = {
+          trace_id   = "",
+          span_id    = "",
+          request_id = "",
+          user_id    = "",
+        }
+      }
+
+      // Drop debug logs in production to save storage
+      stage.match {
+        selector = "{level=\"debug\"}"
+        stage.drop {
+          expression  = ".*"
+          drop_counter_reason = "debug_logs_filtered"
+        }
+      }
+    }
+
+    // Add platform labels to all log streams
+    loki.process "add_platform_labels" {
+      forward_to = [loki.write.default.receiver]
+
+      stage.static_labels {
+        values = {
+          platform    = {{ .Values.global.platform | quote }},
+          environment = {{ .Values.global.environment | quote }},
+        }
+      }
+    }
+
+    // Push logs to Loki
+    loki.write "default" {
+      endpoint {
+        url = {{ .Values.alloyConfig.lokiUrl | quote }}
+      }
+    }
+
+    // =========================================================================
+    // 3. TRACES PIPELINE
+    // =========================================================================
+
+    // OTLP receiver - accepts traces from OTel SDKs in all components
+    // gRPC on :4317, HTTP on :4318
+    otelcol.receiver.otlp "default" {
+      grpc {
+        endpoint = "0.0.0.0:4317"
+      }
+      http {
+        endpoint = "0.0.0.0:4318"
+      }
+      output {
+        traces = [otelcol.processor.attributes.add_platform.input]
+      }
+    }
+
+    // Add platform-level attributes to all spans
+    otelcol.processor.attributes "add_platform" {
+      action {
+        key    = "platform"
+        value  = {{ .Values.global.platform | quote }}
+        action = "upsert"
+      }
+      action {
+        key    = "environment"
+        value  = {{ .Values.global.environment | quote }}
+        action = "upsert"
+      }
+      output {
+        traces = [otelcol.processor.batch.default.input]
+      }
+    }
+
+    // Batch spans for efficient export (reduce network overhead)
+    otelcol.processor.batch "default" {
+      timeout          = "5s"
+      send_batch_size  = 1024
+      output {
+        traces = [otelcol.exporter.otlp.tempo.input]
+      }
+    }
+
+    // Export traces to Tempo via OTLP gRPC
+    otelcol.exporter.otlp "tempo" {
+      client {
+        endpoint = {{ .Values.alloyConfig.tempoEndpoint | quote }}
+        tls {
+          insecure = true
+        }
+      }
+    }
+{{- end }}

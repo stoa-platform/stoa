@@ -1,10 +1,9 @@
 """Service for managing pipeline traces in PostgreSQL."""
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import Optional, List
+from datetime import UTC, datetime
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.traces_db import PipelineTraceDB, TraceStatusDB
@@ -39,7 +38,7 @@ class TraceService:
         logger.info(f"Created trace {trace.id}")
         return trace
 
-    async def get(self, trace_id: str) -> Optional[PipelineTraceDB]:
+    async def get(self, trace_id: str) -> PipelineTraceDB | None:
         """Get a trace by ID."""
         result = await self.session.execute(
             select(PipelineTraceDB).where(PipelineTraceDB.id == trace_id)
@@ -57,15 +56,15 @@ class TraceService:
         trace: PipelineTraceDB,
         name: str,
         status: str = "pending",
-        details: Optional[dict] = None,
-        error: Optional[str] = None,
-        duration_ms: Optional[int] = None
+        details: dict | None = None,
+        error: str | None = None,
+        duration_ms: int | None = None
     ) -> PipelineTraceDB:
         """Add a step to the trace."""
         step = {
             "name": name,
             "status": status,
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
             "completed_at": None,
             "duration_ms": duration_ms,
             "details": details,
@@ -83,16 +82,16 @@ class TraceService:
         trace: PipelineTraceDB,
         step_name: str,
         status: str,
-        details: Optional[dict] = None,
-        error: Optional[str] = None,
-        duration_ms: Optional[int] = None
+        details: dict | None = None,
+        error: str | None = None,
+        duration_ms: int | None = None
     ) -> PipelineTraceDB:
         """Update a step in the trace."""
         steps = list(trace.steps)
         for step in steps:
             if step["name"] == step_name:
                 step["status"] = status
-                step["completed_at"] = datetime.now(timezone.utc).isoformat()
+                step["completed_at"] = datetime.now(UTC).isoformat()
                 if duration_ms:
                     step["duration_ms"] = duration_ms
                 if details:
@@ -108,11 +107,11 @@ class TraceService:
         self,
         trace: PipelineTraceDB,
         status: TraceStatusDB = TraceStatusDB.SUCCESS,
-        error_summary: Optional[str] = None
+        error_summary: str | None = None
     ) -> PipelineTraceDB:
         """Mark trace as completed."""
         trace.status = status
-        trace.completed_at = datetime.now(timezone.utc)
+        trace.completed_at = datetime.now(UTC)
         if trace.created_at:
             trace.total_duration_ms = int(
                 (trace.completed_at - trace.created_at).total_seconds() * 1000
@@ -127,9 +126,9 @@ class TraceService:
     async def list_recent(
         self,
         limit: int = 50,
-        tenant_id: Optional[str] = None,
-        status: Optional[TraceStatusDB] = None
-    ) -> List[PipelineTraceDB]:
+        tenant_id: str | None = None,
+        status: TraceStatusDB | None = None
+    ) -> list[PipelineTraceDB]:
         """List recent traces with optional filtering."""
         query = select(PipelineTraceDB)
 

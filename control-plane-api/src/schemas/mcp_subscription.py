@@ -2,12 +2,11 @@
 
 Reference: PLAN-MCP-SUBSCRIPTIONS.md
 """
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
 from datetime import datetime
-from uuid import UUID
 from enum import Enum
+from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============== Enums ==============
 
@@ -45,8 +44,8 @@ class MCPToolAccessStatusEnum(str, Enum):
 
 class MCPServerVisibility(BaseModel):
     """Visibility configuration for MCP Servers."""
-    roles: Optional[List[str]] = Field(None, description="Required roles to see this server")
-    exclude_roles: Optional[List[str]] = Field(None, description="Roles that cannot see this server")
+    roles: list[str] | None = Field(None, description="Required roles to see this server")
+    exclude_roles: list[str] | None = Field(None, description="Roles that cannot see this server")
     public: bool = Field(True, description="If true, visible to all authenticated users")
 
 
@@ -56,7 +55,7 @@ class MCPServerToolResponse(BaseModel):
     name: str
     display_name: str
     description: str
-    input_schema: Optional[dict] = None
+    input_schema: dict | None = None
     enabled: bool = True
     requires_approval: bool = False
 
@@ -69,15 +68,15 @@ class MCPServerResponse(BaseModel):
     name: str
     display_name: str
     description: str
-    icon: Optional[str] = None
+    icon: str | None = None
     category: MCPServerCategoryEnum
-    tenant_id: Optional[str] = None
+    tenant_id: str | None = None
     visibility: MCPServerVisibility
     requires_approval: bool = False
     status: MCPServerStatusEnum
-    version: Optional[str] = None
-    documentation_url: Optional[str] = None
-    tools: List[MCPServerToolResponse] = []
+    version: str | None = None
+    documentation_url: str | None = None
+    tools: list[MCPServerToolResponse] = []
     created_at: datetime
     updated_at: datetime
 
@@ -86,7 +85,7 @@ class MCPServerResponse(BaseModel):
 
 class MCPServerListResponse(BaseModel):
     """Response for listing MCP servers."""
-    servers: List[MCPServerResponse]
+    servers: list[MCPServerResponse]
     total_count: int
 
 
@@ -95,14 +94,14 @@ class MCPServerCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     display_name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(..., min_length=1)
-    icon: Optional[str] = Field(None, max_length=500)
+    icon: str | None = Field(None, max_length=500)
     category: MCPServerCategoryEnum = MCPServerCategoryEnum.PUBLIC
-    tenant_id: Optional[str] = Field(None, max_length=255)
+    tenant_id: str | None = Field(None, max_length=255)
     visibility: MCPServerVisibility = MCPServerVisibility()
     requires_approval: bool = False
-    auto_approve_roles: Optional[List[str]] = None
-    version: Optional[str] = Field(None, max_length=50)
-    documentation_url: Optional[str] = Field(None, max_length=500)
+    auto_approve_roles: list[str] | None = None
+    version: str | None = Field(None, max_length=50)
+    documentation_url: str | None = Field(None, max_length=500)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -123,7 +122,7 @@ class MCPServerToolCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     display_name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(..., min_length=1)
-    input_schema: Optional[dict] = None
+    input_schema: dict | None = None
     enabled: bool = True
     requires_approval: bool = False
 
@@ -135,10 +134,10 @@ class MCPToolAccessResponse(BaseModel):
     tool_id: UUID
     tool_name: str
     status: MCPToolAccessStatusEnum
-    granted_at: Optional[datetime] = None
-    granted_by: Optional[str] = None
+    granted_at: datetime | None = None
+    granted_by: str | None = None
     usage_count: int = 0
-    last_used_at: Optional[datetime] = None
+    last_used_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -147,23 +146,23 @@ class MCPSubscriptionResponse(BaseModel):
     """MCP Server subscription response."""
     id: UUID
     server_id: UUID
-    server: Optional[MCPServerResponse] = None
+    server: MCPServerResponse | None = None
     subscriber_id: str
     subscriber_email: str
     tenant_id: str
     plan: str
-    api_key_prefix: Optional[str] = None
+    api_key_prefix: str | None = None
     status: MCPSubscriptionStatusEnum
-    status_reason: Optional[str] = None
-    tool_access: List[MCPToolAccessResponse] = []
-    last_rotated_at: Optional[datetime] = None
+    status_reason: str | None = None
+    tool_access: list[MCPToolAccessResponse] = []
+    last_rotated_at: datetime | None = None
     rotation_count: int = 0
     has_active_grace_period: bool = False
     created_at: datetime
     updated_at: datetime
-    approved_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
-    last_used_at: Optional[datetime] = None
+    approved_at: datetime | None = None
+    expires_at: datetime | None = None
+    last_used_at: datetime | None = None
     usage_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
@@ -176,7 +175,7 @@ class MCPSubscriptionWithKeyResponse(MCPSubscriptionResponse):
 
 class MCPSubscriptionListResponse(BaseModel):
     """Response for listing subscriptions."""
-    items: List[MCPSubscriptionResponse]
+    items: list[MCPSubscriptionResponse]
     total: int
     page: int
     page_size: int
@@ -187,7 +186,7 @@ class MCPSubscriptionCreate(BaseModel):
     """Schema for creating a new MCP subscription."""
     server_id: UUID
     plan: str = Field("free", max_length=100)
-    requested_tools: List[UUID] = Field(
+    requested_tools: list[UUID] = Field(
         default_factory=list,
         description="Tool IDs to request access to (empty = all enabled tools)"
     )
@@ -205,11 +204,11 @@ class MCPSubscriptionCreate(BaseModel):
 
 class MCPSubscriptionApprove(BaseModel):
     """Schema for approving a subscription."""
-    expires_at: Optional[datetime] = Field(
+    expires_at: datetime | None = Field(
         None,
         description="Optional expiration date for the subscription"
     )
-    approved_tools: Optional[List[UUID]] = Field(
+    approved_tools: list[UUID] | None = Field(
         None,
         description="Tool IDs to approve (None = approve all requested)"
     )
@@ -238,7 +237,7 @@ class MCPSubscriptionRevoke(BaseModel):
 
 class MCPToolAccessUpdate(BaseModel):
     """Schema for updating tool access within a subscription."""
-    tool_ids: List[UUID]
+    tool_ids: list[UUID]
     action: str = Field(..., description="Action: enable, disable, or request")
 
 
@@ -277,7 +276,7 @@ class MCPPendingApprovalResponse(BaseModel):
 
 class MCPPendingApprovalsListResponse(BaseModel):
     """Response for listing pending approvals."""
-    items: List[MCPPendingApprovalResponse]
+    items: list[MCPPendingApprovalResponse]
     total: int
 
 
@@ -300,12 +299,12 @@ class MCPAPIKeyValidateRequest(BaseModel):
 class MCPAPIKeyValidateResponse(BaseModel):
     """Response for API key validation (used by MCP Gateway)."""
     valid: bool
-    subscription_id: Optional[str] = None
-    server_id: Optional[str] = None
-    subscriber_id: Optional[str] = None
-    tenant_id: Optional[str] = None
-    plan: Optional[str] = None
-    enabled_tools: Optional[List[str]] = None
-    warning: Optional[str] = None  # For grace period warnings
+    subscription_id: str | None = None
+    server_id: str | None = None
+    subscriber_id: str | None = None
+    tenant_id: str | None = None
+    plan: str | None = None
+    enabled_tools: list[str] | None = None
+    warning: str | None = None  # For grace period warnings
     using_previous_key: bool = False
-    key_expires_at: Optional[datetime] = None
+    key_expires_at: datetime | None = None

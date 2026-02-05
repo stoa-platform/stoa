@@ -19,6 +19,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from opensearchpy import AsyncOpenSearch
 
+# Mark entire module as integration tests (requires OpenSearch, index template files)
+pytestmark = pytest.mark.integration
+
 
 # =============================================================================
 # Fixtures

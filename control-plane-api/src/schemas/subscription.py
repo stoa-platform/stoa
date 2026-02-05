@@ -1,9 +1,9 @@
 """Pydantic schemas for subscription endpoints"""
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
-from typing import Optional, List
 from datetime import datetime
-from uuid import UUID
 from enum import Enum
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SubscriptionStatusEnum(str, Enum):
@@ -34,8 +34,8 @@ class SubscriptionCreate(BaseModel):
     api_name: str = Field(..., min_length=1, max_length=255)
     api_version: str = Field(..., min_length=1, max_length=50)
     tenant_id: str = Field(..., min_length=1, max_length=255)
-    plan_id: Optional[str] = Field(None, max_length=255)
-    plan_name: Optional[str] = Field("default", max_length=255)
+    plan_id: str | None = Field(None, max_length=255)
+    plan_name: str | None = Field("default", max_length=255)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -64,31 +64,31 @@ class SubscriptionResponse(BaseModel):
     api_name: str
     api_version: str
     tenant_id: str
-    plan_id: Optional[str]
-    plan_name: Optional[str]
+    plan_id: str | None
+    plan_name: str | None
     api_key_prefix: str
     status: SubscriptionStatusEnum
-    status_reason: Optional[str]
+    status_reason: str | None
     created_at: datetime
     updated_at: datetime
-    approved_at: Optional[datetime]
-    expires_at: Optional[datetime]
-    revoked_at: Optional[datetime]
-    approved_by: Optional[str]
-    revoked_by: Optional[str]
+    approved_at: datetime | None
+    expires_at: datetime | None
+    revoked_at: datetime | None
+    approved_by: str | None
+    revoked_by: str | None
 
     # Gateway provisioning (CAB-800)
-    provisioning_status: Optional[ProvisioningStatusEnum] = None
-    gateway_app_id: Optional[str] = None
-    provisioning_error: Optional[str] = None
-    provisioned_at: Optional[datetime] = None
+    provisioning_status: ProvisioningStatusEnum | None = None
+    gateway_app_id: str | None = None
+    provisioning_error: str | None = None
+    provisioned_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class SubscriptionListResponse(BaseModel):
     """Schema for paginated subscription list"""
-    items: List[SubscriptionResponse]
+    items: list[SubscriptionResponse]
     total: int
     page: int
     page_size: int
@@ -97,7 +97,7 @@ class SubscriptionListResponse(BaseModel):
 
 class SubscriptionApprove(BaseModel):
     """Schema for approving a subscription"""
-    expires_at: Optional[datetime] = Field(
+    expires_at: datetime | None = Field(
         None,
         description="Optional expiration date for the subscription"
     )
@@ -129,7 +129,7 @@ class APIKeyResponse(BaseModel):
     subscription_id: UUID
     api_key: str = Field(..., description="Full API key - shown only once!")
     api_key_prefix: str = Field(..., description="Key prefix for reference")
-    expires_at: Optional[datetime]
+    expires_at: datetime | None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -196,11 +196,11 @@ class KeyRotationResponse(BaseModel):
 
 class SubscriptionWithRotationInfo(SubscriptionResponse):
     """Extended subscription response with rotation info"""
-    previous_key_expires_at: Optional[datetime] = Field(
+    previous_key_expires_at: datetime | None = Field(
         None,
         description="If set, old key is still valid until this time"
     )
-    last_rotated_at: Optional[datetime] = Field(
+    last_rotated_at: datetime | None = Field(
         None,
         description="When the key was last rotated"
     )

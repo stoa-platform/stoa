@@ -1,14 +1,15 @@
 """Events router - SSE endpoint for real-time Kafka events"""
-from fastapi import APIRouter, Depends, Request
-from sse_starlette.sse import EventSourceResponse
-from typing import AsyncGenerator, Optional
-from pydantic import BaseModel
 import asyncio
 import json
 import logging
+from collections.abc import AsyncGenerator
 
-from ..auth import get_current_user, User, require_tenant_access
-from ..services.kafka_service import kafka_service, Topics
+from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel
+from sse_starlette.sse import EventSourceResponse
+
+from ..auth import User, get_current_user, require_tenant_access
+from ..services.kafka_service import Topics, kafka_service
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +19,13 @@ router = APIRouter(prefix="/v1/events", tags=["Events"])
 class DeploymentResult(BaseModel):
     """Deployment result from AWX playbook"""
     api_name: str
-    api_version: Optional[str] = "1.0"
-    api_id: Optional[str] = None
+    api_version: str | None = "1.0"
+    api_id: str | None = None
     tenant_id: str
     status: str  # success, failed, rollback
-    action: Optional[str] = None
-    message: Optional[str] = None
-    error: Optional[str] = None
+    action: str | None = None
+    message: str | None = None
+    error: str | None = None
 
 # Event types that can be streamed
 EVENT_TYPES = [

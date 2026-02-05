@@ -1,15 +1,14 @@
 """Deployments router - API deployment management"""
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional
-from pydantic import BaseModel
-from enum import Enum
-from datetime import datetime
 import uuid
+from datetime import datetime
+from enum import Enum
 
-from ..auth import get_current_user, User, Permission, require_permission, require_tenant_access
-from ..services.kafka_service import kafka_service, Topics
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
 from ..services.git_service import git_service
-from ..services.awx_service import awx_service
+from ..services.kafka_service import Topics, kafka_service
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/deployments", tags=["Deployments"])
 
@@ -27,7 +26,7 @@ class DeploymentStatus(str, Enum):
 class DeploymentRequest(BaseModel):
     api_id: str
     environment: Environment
-    version: Optional[str] = None  # If None, deploy latest
+    version: str | None = None  # If None, deploy latest
 
 class DeploymentResponse(BaseModel):
     id: str
@@ -38,20 +37,20 @@ class DeploymentResponse(BaseModel):
     version: str
     status: DeploymentStatus
     started_at: str
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
     deployed_by: str
-    awx_job_id: Optional[str] = None
-    error_message: Optional[str] = None
+    awx_job_id: str | None = None
+    error_message: str | None = None
 
 class RollbackRequest(BaseModel):
-    target_version: Optional[str] = None  # If None, rollback to previous
+    target_version: str | None = None  # If None, rollback to previous
 
-@router.get("", response_model=List[DeploymentResponse])
+@router.get("", response_model=list[DeploymentResponse])
 @require_tenant_access
 async def list_deployments(
     tenant_id: str,
-    api_id: Optional[str] = None,
-    environment: Optional[Environment] = None,
+    api_id: str | None = None,
+    environment: Environment | None = None,
     limit: int = 50,
     user: User = Depends(get_current_user)
 ):
@@ -106,7 +105,7 @@ async def create_deployment(
         openapi_spec = await git_service.get_file(
             f"tenants/{tenant_id}/apis/{request.api_id}/openapi.yaml"
         )
-    except Exception as e:
+    except Exception:
         # GitLab might not be configured yet, continue without it
         pass
 

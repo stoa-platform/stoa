@@ -8,13 +8,14 @@ CAB-603: Updated to create ProxiedTool instances with
 """
 
 import asyncio
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import structlog
 
 from ..config import get_settings
-from ..models import Tool, ProxiedTool, AnyTool, ToolInputSchema
-from .models import ToolCR, ToolCRSpec, ToolSetCR
+from ..models import AnyTool, ProxiedTool, Tool, ToolInputSchema
+from .models import ToolCR, ToolSetCR
 
 logger = structlog.get_logger(__name__)
 
@@ -110,7 +111,7 @@ class ToolWatcher:
 
         try:
             # Try to import kubernetes-asyncio
-            from kubernetes_asyncio import client, config, watch
+            from kubernetes_asyncio import client, config, watch  # noqa: F401
 
             # Load configuration
             if self.kubeconfig:

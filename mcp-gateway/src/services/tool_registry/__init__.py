@@ -26,27 +26,27 @@ import structlog
 
 from ...config import get_settings
 from ...models import (
-    Tool,
     CoreTool,
-    ProxiedTool,
     ExternalTool,
+    ProxiedTool,
+    Tool,
 )
-
-# Public API exports
-from .exceptions import ToolNotFoundError
-from .models import DeprecatedToolAlias
-from .singleton import get_tool_registry, shutdown_tool_registry
+from .action_handlers import ActionHandlersMixin
+from .core_routing import CoreRoutingMixin
 
 # Mixins
 from .deprecation import DeprecationMixin
-from .registration import RegistrationMixin
-from .lookup import LookupMixin
-from .invocation import InvocationMixin
-from .core_routing import CoreRoutingMixin
-from .action_handlers import ActionHandlersMixin
-from .proxied import ProxiedMixin
+
+# Public API exports
+from .exceptions import ToolNotFoundError
 from .external import ExternalMixin
+from .invocation import InvocationMixin
 from .legacy import LegacyMixin
+from .lookup import LookupMixin
+from .models import DeprecatedToolAlias
+from .proxied import ProxiedMixin
+from .registration import RegistrationMixin
+from .singleton import get_tool_registry, shutdown_tool_registry
 
 logger = structlog.get_logger(__name__)
 

@@ -7,6 +7,7 @@
 //! - JWKS fetching and caching (moka cache)
 //! - Key rotation support
 //! - TTL-based cache invalidation (5 minutes)
+#![allow(dead_code)]
 
 use moka::future::Cache;
 use reqwest::Client;

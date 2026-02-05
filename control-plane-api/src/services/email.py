@@ -1,11 +1,10 @@
 """Email notification service for STOA Platform"""
 import logging
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from typing import Optional
-from datetime import datetime
 import os
+import smtplib
+from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class EmailService:
         to_email: str,
         subject: str,
         html_body: str,
-        text_body: Optional[str] = None
+        text_body: str | None = None
     ) -> bool:
         """
         Send an email notification.

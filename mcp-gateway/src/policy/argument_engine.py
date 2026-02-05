@@ -17,12 +17,12 @@ import yaml
 
 from ..config import get_settings
 from .argument_models import (
+    ConditionGroup,
+    ConditionLeaf,
+    Operator,
     Policy,
     PolicyFile,
     PolicyResult,
-    ConditionLeaf,
-    ConditionGroup,
-    Operator,
 )
 
 logger = structlog.get_logger(__name__)
@@ -115,7 +115,7 @@ class ArgumentPolicyEngine:
 
     async def _load_file(self, path: Path) -> None:
         """Load policies from a single YAML file."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if data is None:

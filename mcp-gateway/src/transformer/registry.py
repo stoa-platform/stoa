@@ -12,7 +12,7 @@ Resolution priority for configs:
 from __future__ import annotations
 
 from .base import TransformerAdapter
-from .config import TransformConfig, DEFAULT_CONFIGS
+from .config import DEFAULT_CONFIGS, TransformConfig
 
 
 class _DefaultAdapter(TransformerAdapter):

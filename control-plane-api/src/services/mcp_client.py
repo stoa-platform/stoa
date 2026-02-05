@@ -5,11 +5,9 @@ Supports SSE and HTTP transports with various authentication methods.
 
 Reference: External MCP Server Registration Plan
 """
-import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Optional, List
 from uuid import uuid4
 
 import httpx
@@ -21,18 +19,18 @@ logger = logging.getLogger(__name__)
 class MCPTool:
     """Discovered MCP tool from external server."""
     name: str
-    description: Optional[str] = None
-    input_schema: Optional[dict] = None
+    description: str | None = None
+    input_schema: dict | None = None
 
 
 @dataclass
 class TestConnectionResult:
     """Result of test-connection operation."""
     success: bool
-    latency_ms: Optional[int] = None
-    error: Optional[str] = None
-    server_info: Optional[dict] = None
-    tools_discovered: Optional[int] = None
+    latency_ms: int | None = None
+    error: str | None = None
+    server_info: dict | None = None
+    tools_discovered: int | None = None
 
 
 class MCPClientService:
@@ -50,7 +48,7 @@ class MCPClientService:
     def _build_auth_headers(
         self,
         auth_type: str,
-        credentials: Optional[dict],
+        credentials: dict | None,
     ) -> dict[str, str]:
         """Build authentication headers from credentials."""
         headers = {}
@@ -83,7 +81,7 @@ class MCPClientService:
         base_url: str,
         transport: str,
         auth_type: str,
-        credentials: Optional[dict] = None,
+        credentials: dict | None = None,
     ) -> TestConnectionResult:
         """Test connection to an external MCP server.
 
@@ -115,7 +113,7 @@ class MCPClientService:
             result.latency_ms = latency_ms
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return TestConnectionResult(
                 success=False,
                 latency_ms=self.timeout * 1000,
@@ -134,7 +132,7 @@ class MCPClientService:
         self,
         base_url: str,
         auth_type: str,
-        credentials: Optional[dict],
+        credentials: dict | None,
     ) -> TestConnectionResult:
         """Test SSE transport connection."""
         headers = self._build_auth_headers(auth_type, credentials)
@@ -175,7 +173,7 @@ class MCPClientService:
         self,
         base_url: str,
         auth_type: str,
-        credentials: Optional[dict],
+        credentials: dict | None,
     ) -> TestConnectionResult:
         """Test HTTP JSON-RPC transport connection."""
         headers = self._build_auth_headers(auth_type, credentials)
@@ -238,7 +236,7 @@ class MCPClientService:
         self,
         base_url: str,
         auth_type: str,
-        credentials: Optional[dict],
+        credentials: dict | None,
     ) -> TestConnectionResult:
         """Test WebSocket transport connection."""
         # WebSocket support would require additional library (websockets)
@@ -253,7 +251,7 @@ class MCPClientService:
         base_url: str,
         headers: dict,
         client: httpx.AsyncClient,
-    ) -> Optional[int]:
+    ) -> int | None:
         """Try to discover tools count for SSE transport."""
         # SSE servers typically require bidirectional communication
         # For now, return None (unknown) - full discovery in list_tools
@@ -264,7 +262,7 @@ class MCPClientService:
         base_url: str,
         headers: dict,
         client: httpx.AsyncClient,
-    ) -> Optional[int]:
+    ) -> int | None:
         """Try to discover tools count for HTTP transport."""
         try:
             tools_request = {
@@ -295,8 +293,8 @@ class MCPClientService:
         base_url: str,
         transport: str,
         auth_type: str,
-        credentials: Optional[dict] = None,
-    ) -> List[MCPTool]:
+        credentials: dict | None = None,
+    ) -> list[MCPTool]:
         """Discover tools from an external MCP server.
 
         Args:
@@ -325,8 +323,8 @@ class MCPClientService:
         self,
         base_url: str,
         auth_type: str,
-        credentials: Optional[dict],
-    ) -> List[MCPTool]:
+        credentials: dict | None,
+    ) -> list[MCPTool]:
         """List tools via HTTP JSON-RPC transport."""
         headers = self._build_auth_headers(auth_type, credentials)
         headers["Content-Type"] = "application/json"
@@ -391,8 +389,8 @@ class MCPClientService:
         self,
         base_url: str,
         auth_type: str,
-        credentials: Optional[dict],
-    ) -> List[MCPTool]:
+        credentials: dict | None,
+    ) -> list[MCPTool]:
         """List tools via SSE transport.
 
         Note: Full SSE implementation requires the mcp SDK for proper
@@ -405,13 +403,13 @@ class MCPClientService:
         except Exception:
             # SSE servers typically require proper SSE client
             logger.warning(
-                f"SSE tool discovery requires mcp SDK - returning empty list"
+                "SSE tool discovery requires mcp SDK - returning empty list"
             )
             return []
 
 
 # Global service instance
-_mcp_client_service: Optional[MCPClientService] = None
+_mcp_client_service: MCPClientService | None = None
 
 
 def get_mcp_client_service() -> MCPClientService:

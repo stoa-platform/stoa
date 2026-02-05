@@ -8,7 +8,7 @@ Python response is authoritative, Rust response is logged for comparison.
 import asyncio
 import json
 import time
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 import structlog
@@ -59,7 +59,7 @@ class ShadowMiddleware(BaseHTTPMiddleware):
         self.rust_gateway_url = rust_gateway_url.rstrip("/")
         self.enabled = enabled
         self.timeout = timeout
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client."""
@@ -121,10 +121,10 @@ class ShadowMiddleware(BaseHTTPMiddleware):
     ) -> None:
         """Send shadow request to Rust gateway and compare responses."""
         start_time = time.perf_counter()
-        rust_response_status: Optional[int] = None
-        rust_response_body: Optional[bytes] = None
-        rust_latency: Optional[float] = None
-        error: Optional[str] = None
+        rust_response_status: int | None = None
+        rust_response_body: bytes | None = None
+        rust_latency: float | None = None
+        error: str | None = None
 
         try:
             # Build shadow URL
@@ -186,10 +186,10 @@ class ShadowMiddleware(BaseHTTPMiddleware):
         python_status: int,
         python_body: bytes,
         python_latency: float,
-        rust_status: Optional[int],
-        rust_body: Optional[bytes],
-        rust_latency: Optional[float],
-        error: Optional[str],
+        rust_status: int | None,
+        rust_body: bytes | None,
+        rust_latency: float | None,
+        error: str | None,
     ) -> None:
         """Compare Python and Rust responses, log differences."""
         if error:
@@ -237,7 +237,7 @@ class ShadowMiddleware(BaseHTTPMiddleware):
             )
 
     def _compare_bodies(
-        self, python_body: bytes, rust_body: Optional[bytes]
+        self, python_body: bytes, rust_body: bytes | None
     ) -> bool:
         """Compare response bodies, normalizing JSON."""
         if rust_body is None:

@@ -1,10 +1,10 @@
 """Pydantic schemas for catalog cache endpoints (CAB-682)"""
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Any
 from datetime import datetime
-from uuid import UUID
 from enum import Enum
+from typing import Any
+from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict
 
 # ============== Enums ==============
 
@@ -29,22 +29,22 @@ class APICatalogResponse(BaseModel):
     id: UUID
     tenant_id: str
     api_id: str
-    api_name: Optional[str] = None
-    version: Optional[str] = None
+    api_name: str | None = None
+    version: str | None = None
     status: str = "active"
-    category: Optional[str] = None
-    tags: List[str] = []
+    category: str | None = None
+    tags: list[str] = []
     portal_published: bool = False
 
     # Extracted from metadata for convenience
-    display_name: Optional[str] = None
-    description: Optional[str] = None
-    backend_url: Optional[str] = None
-    deployments: Optional[dict] = None
+    display_name: str | None = None
+    description: str | None = None
+    backend_url: str | None = None
+    deployments: dict | None = None
 
     # Git tracking
-    git_path: Optional[str] = None
-    git_commit_sha: Optional[str] = None
+    git_path: str | None = None
+    git_commit_sha: str | None = None
 
     # Timing
     synced_at: datetime
@@ -77,7 +77,7 @@ class APICatalogResponse(BaseModel):
 
 class APICatalogListResponse(BaseModel):
     """Response for listing API catalog entries."""
-    apis: List[APICatalogResponse]
+    apis: list[APICatalogResponse]
     total: int
     page: int = 1
     page_size: int = 20
@@ -85,8 +85,8 @@ class APICatalogListResponse(BaseModel):
 
 class APICatalogDetailResponse(APICatalogResponse):
     """Detailed API catalog response including OpenAPI spec."""
-    openapi_spec: Optional[dict] = None
-    metadata: Optional[dict] = None
+    openapi_spec: dict | None = None
+    metadata: dict | None = None
 
     @classmethod
     def from_db_model(cls, api: Any) -> "APICatalogDetailResponse":
@@ -122,11 +122,11 @@ class SyncStatusResponse(BaseModel):
     sync_type: SyncTypeEnum
     status: SyncStatusEnum
     started_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
     items_synced: int = 0
-    errors: List[dict] = []
-    git_commit_sha: Optional[str] = None
-    duration_seconds: Optional[float] = None
+    errors: list[dict] = []
+    git_commit_sha: str | None = None
+    duration_seconds: float | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -150,12 +150,12 @@ class SyncTriggerResponse(BaseModel):
     """Response when triggering a sync operation."""
     status: str = "sync_started"
     message: str = "Catalog sync triggered"
-    sync_id: Optional[UUID] = None
+    sync_id: UUID | None = None
 
 
 class SyncHistoryResponse(BaseModel):
     """Response for sync history."""
-    syncs: List[SyncStatusResponse]
+    syncs: list[SyncStatusResponse]
     total: int
 
 
@@ -168,16 +168,16 @@ class CatalogStatsResponse(BaseModel):
     unpublished_apis: int
     by_tenant: dict[str, int] = {}
     by_category: dict[str, int] = {}
-    last_sync: Optional[SyncStatusResponse] = None
+    last_sync: SyncStatusResponse | None = None
 
 
 # ============== Categories/Tags Schemas ==============
 
 class CategoriesResponse(BaseModel):
     """Available categories response."""
-    categories: List[str]
+    categories: list[str]
 
 
 class TagsResponse(BaseModel):
     """Available tags response."""
-    tags: List[str]
+    tags: list[str]

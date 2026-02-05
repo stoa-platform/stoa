@@ -2,11 +2,10 @@
 
 Provides models for GitOps observability and platform health status.
 """
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict
 from datetime import datetime
 from enum import Enum
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============== Enums ==============
 
@@ -59,9 +58,9 @@ class ComponentStatus(BaseModel):
     """Health status for a platform component."""
     name: str = Field(..., description="Component name")
     status: ComponentHealthEnum = Field(..., description="Health status")
-    message: Optional[str] = Field(None, description="Status message or details")
+    message: str | None = Field(None, description="Status message or details")
     last_check: datetime = Field(..., description="Last health check timestamp")
-    external_url: Optional[str] = Field(None, description="Link to external dashboard/UI")
+    external_url: str | None = Field(None, description="Link to external dashboard/UI")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,14 +70,14 @@ class ComponentStatus(BaseModel):
 class GitOpsAppStatus(BaseModel):
     """Status of a single ArgoCD application."""
     name: str = Field(..., description="Application name")
-    display_name: Optional[str] = Field(None, description="Human-readable display name")
+    display_name: str | None = Field(None, description="Human-readable display name")
     sync_status: str = Field(..., description="Sync status (Synced, OutOfSync, Unknown)")
     health_status: str = Field(..., description="Health status (Healthy, Degraded, etc.)")
-    revision: Optional[str] = Field(None, description="Current Git revision (short)")
-    last_sync: Optional[datetime] = Field(None, description="Last sync timestamp")
-    message: Optional[str] = Field(None, description="Status message")
-    namespace: Optional[str] = Field(None, description="Target namespace")
-    project: Optional[str] = Field(None, description="ArgoCD project")
+    revision: str | None = Field(None, description="Current Git revision (short)")
+    last_sync: datetime | None = Field(None, description="Last sync timestamp")
+    message: str | None = Field(None, description="Status message")
+    namespace: str | None = Field(None, description="Target namespace")
+    project: str | None = Field(None, description="ArgoCD project")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -90,7 +89,7 @@ class GitOpsSummary(BaseModel):
     out_of_sync_count: int = Field(..., description="Number of out-of-sync applications")
     healthy_count: int = Field(..., description="Number of healthy applications")
     degraded_count: int = Field(..., description="Number of degraded applications")
-    apps: List[GitOpsAppStatus] = Field(default_factory=list, description="Application status list")
+    apps: list[GitOpsAppStatus] = Field(default_factory=list, description="Application status list")
     argocd_url: str = Field(..., description="ArgoCD URL for external links")
 
     model_config = ConfigDict(from_attributes=True)
@@ -105,7 +104,7 @@ class PlatformEvent(BaseModel):
     severity: str = Field(..., description="Event severity (info, warning, error)")
     application: str = Field(..., description="Related application name")
     message: str = Field(..., description="Event message")
-    details: Optional[Dict] = Field(None, description="Additional event details")
+    details: dict | None = Field(None, description="Additional event details")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -116,18 +115,18 @@ class ExternalLink(BaseModel):
     """External tool link."""
     name: str = Field(..., description="Link name")
     url: str = Field(..., description="Link URL")
-    icon: Optional[str] = Field(None, description="Icon name (lucide icon)")
-    description: Optional[str] = Field(None, description="Link description")
+    icon: str | None = Field(None, description="Icon name (lucide icon)")
+    description: str | None = Field(None, description="Link description")
 
 
 # ============== Main Response Models ==============
 
 class PlatformStatusResponse(BaseModel):
     """Complete platform status response."""
-    components: List[ComponentStatus] = Field(..., description="Component health status")
+    components: list[ComponentStatus] = Field(..., description="Component health status")
     gitops: GitOpsSummary = Field(..., description="GitOps sync summary")
-    recent_events: List[PlatformEvent] = Field(default_factory=list, description="Recent platform events")
-    external_links: Dict[str, str] = Field(..., description="External tool URLs")
+    recent_events: list[PlatformEvent] = Field(default_factory=list, description="Recent platform events")
+    external_links: dict[str, str] = Field(..., description="External tool URLs")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Response timestamp")
 
     model_config = ConfigDict(from_attributes=True)
@@ -136,26 +135,26 @@ class PlatformStatusResponse(BaseModel):
 class GitOpsSyncRequest(BaseModel):
     """Request to trigger GitOps sync."""
     prune: bool = Field(False, description="Prune resources no longer in Git")
-    revision: Optional[str] = Field(None, description="Specific revision to sync to")
+    revision: str | None = Field(None, description="Specific revision to sync to")
 
 
 class GitOpsSyncResponse(BaseModel):
     """Response from triggering GitOps sync."""
     status: str = Field(..., description="Sync status (triggered, failed)")
     application: str = Field(..., description="Application name")
-    message: Optional[str] = Field(None, description="Status message")
-    operation: Optional[Dict] = Field(None, description="Operation details")
+    message: str | None = Field(None, description="Status message")
+    operation: dict | None = Field(None, description="Operation details")
 
 
 class GitOpsDiffResource(BaseModel):
     """Resource diff for an OutOfSync application."""
     name: str = Field(..., description="Resource name")
-    namespace: Optional[str] = Field(None, description="Resource namespace")
+    namespace: str | None = Field(None, description="Resource namespace")
     kind: str = Field(..., description="Resource kind (Deployment, Service, etc.)")
-    group: Optional[str] = Field(None, description="API group")
+    group: str | None = Field(None, description="API group")
     status: str = Field(..., description="Resource status")
-    health: Optional[str] = Field(None, description="Resource health status")
-    diff: Optional[str] = Field(None, description="Diff content")
+    health: str | None = Field(None, description="Resource health status")
+    diff: str | None = Field(None, description="Diff content")
 
 
 class GitOpsDiffResponse(BaseModel):
@@ -163,4 +162,4 @@ class GitOpsDiffResponse(BaseModel):
     application: str = Field(..., description="Application name")
     total_resources: int = Field(..., description="Total managed resources")
     diff_count: int = Field(..., description="Number of resources with differences")
-    resources: List[GitOpsDiffResource] = Field(default_factory=list, description="Resources with diffs")
+    resources: list[GitOpsDiffResource] = Field(default_factory=list, description="Resources with diffs")

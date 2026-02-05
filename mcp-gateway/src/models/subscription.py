@@ -7,18 +7,16 @@ Reference: CAB-XXX - Secure API Key Management with Vault & 2FA
 """
 
 import enum
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import (
-    Column,
+    Boolean,
     DateTime,
     Enum,
+    Index,
     Integer,
     String,
     Text,
-    Boolean,
-    Index,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -69,7 +67,7 @@ class SubscriptionModel(Base):
     api_key_prefix: Mapped[str] = mapped_column(String(12), nullable=False)
 
     # Vault reference
-    vault_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    vault_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # 2FA status
     totp_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -78,13 +76,13 @@ class SubscriptionModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
     )
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+    last_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -93,12 +91,12 @@ class SubscriptionModel(Base):
     usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Audit fields
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+    revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    revoked_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    revoked_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    revoked_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    revoked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Indexes for common queries
     __table_args__ = (

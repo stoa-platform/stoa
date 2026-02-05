@@ -6,10 +6,10 @@ For multi-instance deployments, replace with Redis.
 Performance optimization: CAB-PERF
 """
 import asyncio
-from datetime import datetime, timedelta
-from typing import Any, Optional, Dict
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from functools import wraps
+from typing import Any
 
 
 @dataclass
@@ -27,13 +27,13 @@ class TTLCache:
     """
 
     def __init__(self, default_ttl_seconds: int = 10, max_size: int = 10000):
-        self._cache: Dict[str, CacheEntry] = {}
+        self._cache: dict[str, CacheEntry] = {}
         self._default_ttl = default_ttl_seconds
         self._max_size = max_size
         self._lock = asyncio.Lock()
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Get value from cache if exists and not expired."""
         async with self._lock:
             entry = self._cache.get(key)
@@ -46,7 +46,7 @@ class TTLCache:
 
             return entry.value
 
-    async def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> None:
+    async def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
         """Set value in cache with TTL."""
         ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl
         expires_at = datetime.utcnow() + timedelta(seconds=ttl)
@@ -90,7 +90,7 @@ class TTLCache:
         async with self._lock:
             self._cache.clear()
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Return cache statistics."""
         return {
             "size": len(self._cache),
@@ -103,7 +103,7 @@ class TTLCache:
 api_key_cache = TTLCache(default_ttl_seconds=10, max_size=10000)
 
 
-def cached(cache: TTLCache, key_prefix: str, ttl_seconds: Optional[int] = None):
+def cached(cache: TTLCache, key_prefix: str, ttl_seconds: int | None = None):
     """Decorator for caching async function results.
 
     Usage:

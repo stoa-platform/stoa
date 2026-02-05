@@ -25,26 +25,26 @@ from pydantic import BaseModel, Field
 
 class STOAErrorCode(str, Enum):
     """Standard STOA error codes.
-    
+
     Each code maps to a specific HTTP status and has a default message template.
     """
-    
+
     # 400 Bad Request
     INVALID_ACTION = "INVALID_ACTION"
     INVALID_PARAMS = "INVALID_PARAMS"
     VALIDATION_ERROR = "VALIDATION_ERROR"
-    
+
     # 401 Unauthorized
     AUTH_REQUIRED = "AUTH_REQUIRED"
     INVALID_TOKEN = "INVALID_TOKEN"
     TOKEN_EXPIRED = "TOKEN_EXPIRED"
-    
+
     # 403 Forbidden
     PERMISSION_DENIED = "PERMISSION_DENIED"
     TENANT_MISMATCH = "TENANT_MISMATCH"
     SCOPE_INSUFFICIENT = "SCOPE_INSUFFICIENT"
     POLICY_VIOLATION = "POLICY_VIOLATION"
-    
+
     # 404 Not Found
     TENANT_NOT_FOUND = "TENANT_NOT_FOUND"
     API_NOT_FOUND = "API_NOT_FOUND"
@@ -52,28 +52,28 @@ class STOAErrorCode(str, Enum):
     TOOL_NOT_FOUND = "TOOL_NOT_FOUND"
     RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
     CONTRACT_NOT_FOUND = "CONTRACT_NOT_FOUND"
-    
+
     # 409 Conflict
     ALREADY_EXISTS = "ALREADY_EXISTS"
     SUBSCRIPTION_CONFLICT = "SUBSCRIPTION_CONFLICT"
-    
+
     # 429 Too Many Requests
     RATE_LIMITED = "RATE_LIMITED"
     QUOTA_EXCEEDED = "QUOTA_EXCEEDED"
-    
+
     # 500 Internal Server Error
     INTERNAL_ERROR = "INTERNAL_ERROR"
-    
+
     # 502 Bad Gateway
     BACKEND_ERROR = "BACKEND_ERROR"
-    
+
     # 503 Service Unavailable
     API_UNAVAILABLE = "API_UNAVAILABLE"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
-    
+
     # 504 Gateway Timeout
     BACKEND_TIMEOUT = "BACKEND_TIMEOUT"
-    
+
     # Feature-specific
     NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
 
@@ -153,12 +153,12 @@ ERROR_CODE_SUGGESTIONS: dict[STOAErrorCode, str] = {
 
 class STOAErrorDetail(BaseModel):
     """Standard STOA error response body.
-    
+
     This schema is returned in tool results when errors occur,
     providing machine-readable error codes with human-friendly messages
     and LLM-optimized suggestions.
     """
-    
+
     code: str = Field(
         ...,
         description="Machine-readable error code (e.g., 'TENANT_NOT_FOUND')",
@@ -183,16 +183,16 @@ class STOAErrorDetail(BaseModel):
 
 class STOAErrorResponse(BaseModel):
     """Wrapper for error responses."""
-    
+
     error: STOAErrorDetail
 
 
 class STOAError(Exception):
     """Base exception for STOA errors.
-    
+
     All STOA errors inherit from this class, providing consistent
     error handling and response generation.
-    
+
     Usage:
         raise STOAError(
             code=STOAErrorCode.API_NOT_FOUND,
@@ -200,7 +200,7 @@ class STOAError(Exception):
             details={"api_id": api_id, "searched_tenant": tenant_id}
         )
     """
-    
+
     def __init__(
         self,
         code: STOAErrorCode | str,
@@ -209,7 +209,7 @@ class STOAError(Exception):
         suggestion: str | None = None,
     ):
         """Initialize STOA error.
-        
+
         Args:
             code: Error code (STOAErrorCode enum or string)
             message: Human-readable error message
@@ -221,15 +221,15 @@ class STOAError(Exception):
         self.details = details
         self.suggestion = suggestion or ERROR_CODE_SUGGESTIONS.get(self.code)
         super().__init__(message)
-    
+
     @property
     def http_status(self) -> int:
         """Get HTTP status code for this error."""
         return ERROR_CODE_TO_HTTP_STATUS.get(self.code, 500)
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization.
-        
+
         Returns the error in tool result format (flat dict with 'error' key).
         """
         return {
@@ -240,10 +240,10 @@ class STOAError(Exception):
                 "suggestion": self.suggestion,
             }
         }
-    
+
     def to_tool_result(self) -> dict[str, Any]:
         """Convert to tool result format for MCP responses.
-        
+
         This is the format returned by tool handlers when errors occur.
         """
         result = {
@@ -255,7 +255,7 @@ class STOAError(Exception):
         if self.suggestion:
             result["suggestion"] = self.suggestion
         return result
-    
+
     def to_response(self) -> STOAErrorResponse:
         """Convert to Pydantic response model."""
         return STOAErrorResponse(
@@ -275,7 +275,7 @@ class STOAError(Exception):
 
 class TenantNotFoundError(STOAError):
     """Raised when a tenant is not found."""
-    
+
     def __init__(
         self,
         tenant_id: str,
@@ -291,7 +291,7 @@ class TenantNotFoundError(STOAError):
 
 class APINotFoundError(STOAError):
     """Raised when an API is not found."""
-    
+
     def __init__(
         self,
         api_id: str,
@@ -307,7 +307,7 @@ class APINotFoundError(STOAError):
 
 class SubscriptionNotFoundError(STOAError):
     """Raised when a subscription is not found."""
-    
+
     def __init__(
         self,
         subscription_id: str,
@@ -364,7 +364,7 @@ class PolicyViolationError(STOAError):
 
 class RateLimitedError(STOAError):
     """Raised when rate limit is exceeded."""
-    
+
     def __init__(
         self,
         limit: int,
@@ -376,7 +376,7 @@ class RateLimitedError(STOAError):
         if resets_in_seconds:
             details["resets_in_seconds"] = resets_in_seconds
             details["resets_in_minutes"] = resets_in_seconds // 60
-        
+
         super().__init__(
             code=STOAErrorCode.RATE_LIMITED,
             message=message or f"Rate limit exceeded: {used}/{limit} requests",
@@ -386,7 +386,7 @@ class RateLimitedError(STOAError):
 
 class InvalidActionError(STOAError):
     """Raised when an invalid action is provided."""
-    
+
     def __init__(
         self,
         action: str,
@@ -396,7 +396,7 @@ class InvalidActionError(STOAError):
         details: dict[str, Any] = {"action": action}
         if valid_actions:
             details["valid_actions"] = valid_actions
-        
+
         super().__init__(
             code=STOAErrorCode.INVALID_ACTION,
             message=message or f"Unknown action: '{action}'",
@@ -407,7 +407,7 @@ class InvalidActionError(STOAError):
 
 class InvalidParamsError(STOAError):
     """Raised when required parameters are missing or invalid."""
-    
+
     def __init__(
         self,
         param: str,
@@ -424,7 +424,7 @@ class InvalidParamsError(STOAError):
 
 class AuthRequiredError(STOAError):
     """Raised when authentication is required but not provided."""
-    
+
     def __init__(
         self,
         message: str | None = None,
@@ -439,7 +439,7 @@ class AuthRequiredError(STOAError):
 
 class BackendError(STOAError):
     """Raised when a backend API call fails."""
-    
+
     def __init__(
         self,
         backend: str,
@@ -451,7 +451,7 @@ class BackendError(STOAError):
         error_details["backend"] = backend
         if status_code:
             error_details["status_code"] = status_code
-        
+
         super().__init__(
             code=STOAErrorCode.BACKEND_ERROR,
             message=message or f"Backend '{backend}' returned an error",
@@ -461,7 +461,7 @@ class BackendError(STOAError):
 
 class ServiceUnavailableError(STOAError):
     """Raised when a required service is unavailable."""
-    
+
     def __init__(
         self,
         service: str,
@@ -487,19 +487,19 @@ def error_result(
     suggestion: str | None = None,
 ) -> dict[str, Any]:
     """Create a standardized error result dict for tool handlers.
-    
+
     This is a convenience function for returning errors from handlers
     without raising exceptions.
-    
+
     Args:
         code: Error code
         message: Human-readable message
         details: Additional context
         suggestion: Override default suggestion
-        
+
     Returns:
         Dict suitable for tool handler return value
-        
+
     Example:
         return error_result(
             STOAErrorCode.API_NOT_FOUND,

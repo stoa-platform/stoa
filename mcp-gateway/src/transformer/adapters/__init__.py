@@ -6,9 +6,9 @@ Auto-registers all adapters on import.
 Import this module to populate the adapter registry.
 """
 
+from ..registry import register_adapter
 from .linear import LinearLiteAdapter
 from .notion import NotionLiteAdapter
-from ..registry import register_adapter
 
 # Auto-register adapters
 register_adapter(LinearLiteAdapter())

@@ -10,14 +10,15 @@ Benefits:
 - Centralized API management through Control-Plane
 """
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import List, Optional, Dict, Any
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from ..auth import get_current_user, User, Permission, require_permission
-from ..services.gateway_service import gateway_service
+from ..auth import Permission, User, get_current_user, require_permission
 from ..config import settings
+from ..services.gateway_service import gateway_service
 
 logger = logging.getLogger(__name__)
 
@@ -34,22 +35,22 @@ class GatewayAPIResponse(BaseModel):
     id: str
     apiName: str
     apiVersion: str
-    type: Optional[str] = None
+    type: str | None = None
     isActive: bool = False
-    systemVersion: Optional[int] = None
+    systemVersion: int | None = None
 
 
 class GatewayApplicationResponse(BaseModel):
     id: str
     name: str
-    description: Optional[str] = None
-    contactEmails: List[str] = []
+    description: str | None = None
+    contactEmails: list[str] = []
 
 
 class GatewayScopeResponse(BaseModel):
     scopeName: str
-    scopeDescription: Optional[str] = None
-    audience: Optional[str] = None
+    scopeDescription: str | None = None
+    audience: str | None = None
 
 
 class ImportAPIRequest(BaseModel):
@@ -59,15 +60,15 @@ class ImportAPIRequest(BaseModel):
     """
     apiName: str
     apiVersion: str
-    url: Optional[str] = None  # URL to fetch OpenAPI spec from
-    apiDefinition: Optional[Dict[str, Any]] = None  # Inline OpenAPI spec as JSON object
+    url: str | None = None  # URL to fetch OpenAPI spec from
+    apiDefinition: dict[str, Any] | None = None  # Inline OpenAPI spec as JSON object
     type: str = "openapi"  # API type: openapi, swagger, raml, wsdl
 
 
 class ImportAPIResponse(BaseModel):
     """Response model for imported API."""
     success: bool
-    api_id: Optional[str] = None
+    api_id: str | None = None
     api_name: str
     api_version: str
     message: str = ""
@@ -85,9 +86,9 @@ class OIDCConfigRequest(BaseModel):
 
 class OIDCConfigResponse(BaseModel):
     success: bool
-    strategy: Optional[dict] = None
-    application: Optional[dict] = None
-    scopes: List[dict] = []
+    strategy: dict | None = None
+    application: dict | None = None
+    scopes: list[dict] = []
     message: str = ""
 
 
@@ -106,7 +107,7 @@ async def get_auth_token(
 # API Operations
 # ============================================================================
 
-@router.get("/apis", response_model=List[GatewayAPIResponse])
+@router.get("/apis", response_model=list[GatewayAPIResponse])
 @require_permission(Permission.APIS_READ)
 async def list_gateway_apis(
     user: User = Depends(get_current_user),
@@ -183,7 +184,7 @@ async def import_gateway_api(
         raise
     except Exception as e:
         logger.error(f"Failed to import API {request.apiName}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
 
 
 @router.get("/apis/{api_id}")
@@ -206,7 +207,7 @@ async def get_gateway_api(
         raise
     except Exception as e:
         logger.error(f"Failed to get Gateway API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
 
 
 @router.put("/apis/{api_id}/activate")
@@ -226,7 +227,7 @@ async def activate_gateway_api(
         return {"success": True, "message": f"API {api_id} activated", "result": result}
     except Exception as e:
         logger.error(f"Failed to activate Gateway API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
 
 
 @router.put("/apis/{api_id}/deactivate")
@@ -246,7 +247,7 @@ async def deactivate_gateway_api(
         return {"success": True, "message": f"API {api_id} deactivated", "result": result}
     except Exception as e:
         logger.error(f"Failed to deactivate Gateway API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
 
 
 @router.delete("/apis/{api_id}")
@@ -266,14 +267,14 @@ async def delete_gateway_api(
         return {"success": True, "message": f"API {api_id} deleted"}
     except Exception as e:
         logger.error(f"Failed to delete Gateway API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
 
 
 # ============================================================================
 # Application Operations
 # ============================================================================
 
-@router.get("/applications", response_model=List[GatewayApplicationResponse])
+@router.get("/applications", response_model=list[GatewayApplicationResponse])
 @require_permission(Permission.APIS_READ)
 async def list_gateway_applications(
     user: User = Depends(get_current_user),
@@ -303,7 +304,7 @@ async def list_gateway_applications(
 # Scope Operations
 # ============================================================================
 
-@router.get("/scopes", response_model=List[GatewayScopeResponse])
+@router.get("/scopes", response_model=list[GatewayScopeResponse])
 @require_permission(Permission.APIS_READ)
 async def list_gateway_scopes(
     user: User = Depends(get_current_user),
@@ -325,7 +326,7 @@ async def list_gateway_scopes(
         ]
     except Exception as e:
         logger.error(f"Failed to list Gateway scopes: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
 
 
 # ============================================================================
@@ -377,7 +378,7 @@ async def configure_api_oidc(
 
     except Exception as e:
         logger.error(f"Failed to configure OIDC for API {config.api_name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gateway error: {e!s}")
 
 
 # ============================================================================

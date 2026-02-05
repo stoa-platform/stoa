@@ -5,22 +5,23 @@ Models for registering and managing external MCP servers
 
 Reference: External MCP Server Registration Plan
 """
+import enum
+import uuid
+from datetime import datetime
+
 from sqlalchemy import (
+    JSON,
+    Boolean,
     Column,
-    String,
     DateTime,
     Enum as SQLEnum,
-    Text,
-    Index,
-    Boolean,
     ForeignKey,
-    JSON,
+    Index,
+    String,
+    Text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime
-import uuid
-import enum
 
 from src.database import Base
 

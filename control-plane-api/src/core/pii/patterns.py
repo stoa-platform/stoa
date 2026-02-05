@@ -1,8 +1,9 @@
 """PII Detection Patterns — RGPD Art. 4"""
 import re
-from enum import Enum
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Pattern
+from enum import Enum
+from re import Pattern
 
 
 class PIIType(str, Enum):

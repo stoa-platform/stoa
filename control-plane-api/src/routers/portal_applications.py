@@ -8,16 +8,13 @@ The source of truth for applications is Keycloak (OAuth clients).
 """
 import logging
 import secrets
-from typing import List, Optional
 from datetime import datetime
 from uuid import uuid4
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
-from ..auth.dependencies import get_current_user, User
-from ..database import get_db as get_async_db
+from ..auth.dependencies import User, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/applications", tags=["Portal Applications"])
@@ -34,11 +31,11 @@ class ApplicationResponse(BaseModel):
     display_name: str
     description: str
     client_id: str
-    client_secret: Optional[str] = None  # Only returned on create
-    tenant_id: Optional[str] = None
+    client_secret: str | None = None  # Only returned on create
+    tenant_id: str | None = None
     status: str = "active"
-    redirect_uris: List[str] = []
-    api_subscriptions: List[str] = []
+    redirect_uris: list[str] = []
+    api_subscriptions: list[str] = []
     created_at: str
     updated_at: str
 
@@ -48,7 +45,7 @@ class ApplicationResponse(BaseModel):
 
 class ApplicationsListResponse(BaseModel):
     """Paginated applications list response."""
-    items: List[ApplicationResponse]
+    items: list[ApplicationResponse]
     total: int
     page: int
     pageSize: int
@@ -60,15 +57,15 @@ class ApplicationCreateRequest(BaseModel):
     name: str
     display_name: str
     description: str = ""
-    redirect_uris: List[str] = []
-    tenant_id: Optional[str] = None  # If not specified, uses user's default tenant
+    redirect_uris: list[str] = []
+    tenant_id: str | None = None  # If not specified, uses user's default tenant
 
 
 class ApplicationUpdateRequest(BaseModel):
     """Request to update an application."""
-    display_name: Optional[str] = None
-    description: Optional[str] = None
-    redirect_uris: Optional[List[str]] = None
+    display_name: str | None = None
+    description: str | None = None
+    redirect_uris: list[str] | None = None
 
 
 class RegenerateSecretResponse(BaseModel):
@@ -85,7 +82,7 @@ class RegenerateSecretResponse(BaseModel):
 _applications: dict[str, dict] = {}
 
 
-def _get_user_applications(user: User) -> List[dict]:
+def _get_user_applications(user: User) -> list[dict]:
     """Get all applications owned by the user."""
     return [
         app for app in _applications.values()
@@ -102,7 +99,7 @@ async def list_applications(
     user: User = Depends(get_current_user),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100, alias="page_size"),
-    status: Optional[str] = Query(None),
+    status: str | None = Query(None),
 ):
     """
     List user's applications.
@@ -152,7 +149,7 @@ async def list_applications(
 
     except Exception as e:
         logger.error(f"Failed to list applications: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list applications: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list applications: {e!s}")
 
 
 @router.get("/{app_id}", response_model=ApplicationResponse)
@@ -241,7 +238,7 @@ async def create_application(
 
     except Exception as e:
         logger.error(f"Failed to create application: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create application: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create application: {e!s}")
 
 
 @router.patch("/{app_id}", response_model=ApplicationResponse)

@@ -9,30 +9,37 @@ Supports multiple authentication schemes:
 CAB-604: Updated with 12 granular OAuth2 scopes and 6 personas.
 """
 
-import base64
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
-from functools import lru_cache
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
+
+if TYPE_CHECKING:
+    from ..config import Settings
 
 import httpx
 import structlog
 from fastapi import Depends, HTTPException, Request, Security
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, APIKeyHeader, HTTPBasic, HTTPBasicCredentials
+from fastapi.security import (
+    APIKeyHeader,
+    HTTPAuthorizationCredentials,
+    HTTPBasic,
+    HTTPBasicCredentials,
+    HTTPBearer,
+)
 from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError
 from pydantic import BaseModel
 
 from ..config import get_settings
 from ..policy.scopes import (
-    Scope,
     LegacyScope,
     Persona,
-    PERSONAS,
-    LEGACY_ROLE_TO_PERSONA,
+    Scope,
     expand_legacy_scopes,
-    get_scopes_for_roles,
     get_persona_for_roles,
+    get_scopes_for_roles,
 )
 
 logger = structlog.get_logger(__name__)
@@ -203,7 +210,7 @@ class OIDCAuthenticator:
     Handles JWT validation using Keycloak's public keys (JWKS).
     """
 
-    def __init__(self, keycloak_url: str, realm: str, settings: "Settings | None" = None):
+    def __init__(self, keycloak_url: str, realm: str, settings: Settings | None = None):
         self.keycloak_url = keycloak_url.rstrip("/")
         self.realm = realm
         self.issuer = f"{self.keycloak_url}/realms/{self.realm}"
@@ -469,7 +476,7 @@ CLIENT_TOKEN_CACHE_TTL = 300  # 5 minutes
 
 
 async def get_cached_client_token(
-    authenticator: "OIDCAuthenticator",
+    authenticator: OIDCAuthenticator,
     client_id: str,
     client_secret: str,
 ) -> TokenClaims:

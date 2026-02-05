@@ -6,27 +6,27 @@ The Protocol Switcher UI uses these endpoints to enable/disable bindings.
 """
 import uuid
 from datetime import datetime
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.auth.dependencies import User, get_current_user
+from src.config import settings
 from src.database import get_db
-from src.auth.dependencies import get_current_user, User
+from src.logging_config import get_logger
 from src.models.contract import Contract, ProtocolBinding, ProtocolType
 from src.schemas.contract import (
-    ContractCreate,
-    ContractUpdate,
-    ContractResponse,
-    ContractListResponse,
     BindingsListResponse,
+    ContractCreate,
+    ContractListResponse,
+    ContractResponse,
+    ContractUpdate,
+    DisableBindingResponse,
     EnableBindingRequest,
     EnableBindingResponse,
-    DisableBindingResponse,
     ProtocolBindingResponse,
 )
-from src.logging_config import get_logger
-from src.config import settings
 
 logger = get_logger(__name__)
 
@@ -72,7 +72,7 @@ async def _get_or_create_default_bindings(
     return bindings
 
 
-async def _get_traffic_24h(binding: ProtocolBinding) -> Optional[int]:
+async def _get_traffic_24h(binding: ProtocolBinding) -> int | None:
     """
     Get traffic count for the last 24 hours.
 
@@ -125,7 +125,7 @@ def _generate_endpoint_info(contract: Contract, protocol: ProtocolType) -> dict:
     return generators[protocol]()
 
 
-def _binding_to_response(binding: ProtocolBinding, traffic_24h: Optional[int] = None) -> ProtocolBindingResponse:
+def _binding_to_response(binding: ProtocolBinding, traffic_24h: int | None = None) -> ProtocolBindingResponse:
     """Convert ProtocolBinding model to response schema."""
     operations = None
     if binding.operations:
@@ -219,7 +219,7 @@ async def create_contract(
 async def list_contracts(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    status: Optional[str] = Query(default=None, description="Filter by status"),
+    status: str | None = Query(default=None, description="Filter by status"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

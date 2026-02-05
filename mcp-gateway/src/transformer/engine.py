@@ -7,7 +7,6 @@ Core transformation logic. Stateless, operates on dicts.
 
 from __future__ import annotations
 
-import copy
 from typing import Any
 
 from .config import TransformConfig, TruncateConfig, TruncateStrategy

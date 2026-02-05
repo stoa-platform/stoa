@@ -11,7 +11,6 @@ All endpoints require the `cpi-admin` role.
 
 import logging
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -48,19 +47,19 @@ def _require_admin(user: User) -> None:
 async def list_prospects(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    company: Optional[str] = Query(
+    company: str | None = Query(
         None,
         description="Filter by company name (partial match, case-insensitive)",
     ),
-    status: Optional[str] = Query(
+    status: str | None = Query(
         None,
         description="Filter by status (pending, opened, converted, expired)",
     ),
-    date_from: Optional[datetime] = Query(
+    date_from: datetime | None = Query(
         None,
         description="Filter invites created after this date (ISO8601)",
     ),
-    date_to: Optional[datetime] = Query(
+    date_to: datetime | None = Query(
         None,
         description="Filter invites created before this date (ISO8601)",
     ),
@@ -94,11 +93,11 @@ async def list_prospects(
 async def get_metrics(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    date_from: Optional[datetime] = Query(
+    date_from: datetime | None = Query(
         None,
         description="Filter invites created after this date",
     ),
-    date_to: Optional[datetime] = Query(
+    date_to: datetime | None = Query(
         None,
         description="Filter invites created before this date",
     ),
@@ -127,10 +126,10 @@ async def get_metrics(
 async def export_prospects(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    company: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    date_from: Optional[datetime] = Query(None),
-    date_to: Optional[datetime] = Query(None),
+    company: str | None = Query(None),
+    status: str | None = Query(None),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
 ):
     """Export prospects to CSV file.
 

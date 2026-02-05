@@ -1,11 +1,10 @@
 """Kafka service for event-driven architecture"""
 import json
 import logging
-from typing import Optional, Callable, Any
-from datetime import datetime
 import uuid
+from datetime import datetime
 
-from kafka import KafkaProducer, KafkaConsumer
+from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import KafkaError
 
 from ..config import settings
@@ -26,11 +25,16 @@ class Topics:
     MCP_SYNC_REQUESTS = "mcp-sync-requests"     # Manual sync trigger requests
     MCP_SYNC_RESULTS = "mcp-sync-results"       # Sync completion results
 
+    # Gateway orchestration events (Control Plane Agnostique)
+    GATEWAY_SYNC_REQUESTS = "gateway-sync-requests"   # Trigger sync for specific deployments
+    GATEWAY_SYNC_RESULTS = "gateway-sync-results"     # Results of sync operations
+    GATEWAY_EVENTS = "gateway-events"                 # Health changes, drift detected
+
 class KafkaService:
     """Service for Kafka/Redpanda message handling"""
 
     def __init__(self):
-        self._producer: Optional[KafkaProducer] = None
+        self._producer: KafkaProducer | None = None
         self._consumers: dict[str, KafkaConsumer] = {}
 
     async def connect(self):
@@ -77,7 +81,7 @@ class KafkaService:
         event_type: str,
         tenant_id: str,
         payload: dict,
-        user_id: Optional[str] = None
+        user_id: str | None = None
     ) -> dict:
         """Create a standardized event envelope"""
         return {
@@ -95,8 +99,8 @@ class KafkaService:
         event_type: str,
         tenant_id: str,
         payload: dict,
-        user_id: Optional[str] = None,
-        key: Optional[str] = None
+        user_id: str | None = None,
+        key: str | None = None
     ) -> str:
         """
         Publish an event to a Kafka topic.
@@ -187,7 +191,7 @@ class KafkaService:
         resource_type: str,
         resource_id: str,
         user_id: str,
-        details: Optional[dict] = None
+        details: dict | None = None
     ) -> str:
         """Emit audit log event"""
         return await self.publish(
@@ -207,7 +211,7 @@ class KafkaService:
         self,
         topics: list[str],
         group_id: str,
-        tenant_filter: Optional[str] = None
+        tenant_filter: str | None = None
     ) -> KafkaConsumer:
         """
         Create a Kafka consumer for the specified topics.

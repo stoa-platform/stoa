@@ -1,9 +1,9 @@
 """Git router - GitLab operations for GitOps"""
+
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional
 from pydantic import BaseModel
 
-from ..auth import get_current_user, User, Permission, require_permission, require_tenant_access
+from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/git", tags=["Git"])
 
@@ -36,11 +36,11 @@ class MergeRequestResponse(BaseModel):
     created_at: str
     author: str
 
-@router.get("/commits", response_model=List[CommitInfo])
+@router.get("/commits", response_model=list[CommitInfo])
 @require_tenant_access
 async def list_commits(
     tenant_id: str,
-    path: Optional[str] = None,
+    path: str | None = None,
     limit: int = 20,
     user: User = Depends(get_current_user)
 ):
@@ -77,7 +77,7 @@ async def create_or_update_file(
     file_path: str,
     content: FileContent,
     branch: str = "main",
-    commit_message: Optional[str] = None,
+    commit_message: str | None = None,
     user: User = Depends(get_current_user)
 ):
     """Create or update a file in GitLab"""
@@ -91,7 +91,7 @@ async def delete_file(
     tenant_id: str,
     file_path: str,
     branch: str = "main",
-    commit_message: Optional[str] = None,
+    commit_message: str | None = None,
     user: User = Depends(get_current_user)
 ):
     """Delete a file from GitLab"""
@@ -99,7 +99,7 @@ async def delete_file(
     return {"message": "File deleted"}
 
 # Merge Requests
-@router.get("/merge-requests", response_model=List[MergeRequestResponse])
+@router.get("/merge-requests", response_model=list[MergeRequestResponse])
 @require_tenant_access
 async def list_merge_requests(
     tenant_id: str,

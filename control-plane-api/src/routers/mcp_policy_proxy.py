@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from ..auth import get_current_user, User
+from ..auth import User, get_current_user
 from .mcp_proxy import proxy_to_mcp
 
 # Security scheme for extracting Bearer token

@@ -1,7 +1,6 @@
 """API Key generation and validation service"""
-import secrets
 import hashlib
-from typing import Tuple
+import secrets
 
 
 class APIKeyService:
@@ -12,7 +11,7 @@ class APIKeyService:
     KEY_LENGTH = 32  # 32 hex chars = 128 bits of entropy
 
     @classmethod
-    def generate_key(cls, prefix: str = None) -> Tuple[str, str, str]:
+    def generate_key(cls, prefix: str | None = None) -> tuple[str, str, str]:
         """
         Generate a new API key.
 

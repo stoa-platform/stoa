@@ -12,13 +12,14 @@ Provides health checking with:
 import asyncio
 import os
 import time
+from datetime import UTC
 from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, Field
-import httpx
+
 import asyncpg
+import httpx
 from aiokafka import AIOKafkaProducer
 from aiokafka.errors import KafkaConnectionError
+from pydantic import BaseModel, Field
 
 
 class HealthStatus(str, Enum):
@@ -33,11 +34,11 @@ class HealthStatus(str, Enum):
 class ComponentHealth(BaseModel):
     """Health status for a single component."""
     status: HealthStatus
-    latency_ms: Optional[float] = Field(None, description="Response time in milliseconds")
-    description: Optional[str] = Field(None, description="Component description")
-    message: Optional[str] = Field(None, description="Human-readable status message")
-    error: Optional[str] = Field(None, description="Error message if status is down")
-    details: Optional[dict] = Field(None, description="Additional component-specific details")
+    latency_ms: float | None = Field(None, description="Response time in milliseconds")
+    description: str | None = Field(None, description="Component description")
+    message: str | None = Field(None, description="Human-readable status message")
+    error: str | None = Field(None, description="Error message if status is down")
+    details: dict | None = Field(None, description="Additional component-specific details")
 
 
 class PlatformHealth(BaseModel):
@@ -168,7 +169,7 @@ class HealthChecker:
         kafka_bootstrap: str = "",
         opensearch_url: str = "",
         timeout_seconds: float = 5.0,
-        thresholds: Optional[dict[str, HealthThresholds]] = None,
+        thresholds: dict[str, HealthThresholds] | None = None,
     ):
         self.mcp_url = mcp_url
         self.webmethods_url = webmethods_url
@@ -188,7 +189,7 @@ class HealthChecker:
 
     async def check_components(self, components: list[str]) -> PlatformHealth:
         """Check specified components in parallel, including not_configured ones."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Get dynamic config to pick up env var changes at runtime
         component_config = get_component_config()
@@ -240,7 +241,7 @@ class HealthChecker:
         component_health: dict[str, ComponentHealth] = {}
 
         # Add enabled components with their check results
-        for comp, result in zip(enabled_components, results):
+        for comp, result in zip(enabled_components, results, strict=False):
             config = component_config.get(comp, {})
             if isinstance(result, Exception):
                 component_health[comp] = ComponentHealth(
@@ -268,7 +269,7 @@ class HealthChecker:
         return PlatformHealth(
             overall=overall,
             components=component_health,
-            checked_at=datetime.now(timezone.utc).isoformat()
+            checked_at=datetime.now(UTC).isoformat()
         )
 
     def _compute_overall(self, components: dict[str, ComponentHealth]) -> HealthStatus:
@@ -424,7 +425,7 @@ class HealthChecker:
                     )
             finally:
                 await conn.close()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ComponentHealth(
                 status=HealthStatus.DOWN,
                 error=f"Connection timeout ({self.timeout}s)"
@@ -459,7 +460,7 @@ class HealthChecker:
                 latency_ms=round(latency_ms, 2),
                 details={"broker_count": brokers}
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ComponentHealth(
                 status=HealthStatus.DOWN,
                 error=f"Connection timeout ({self.timeout}s)"
@@ -536,7 +537,7 @@ class HealthChecker:
 
 # Convenience function for simple usage
 async def check_platform_health(
-    components: Optional[list[str]] = None,
+    components: list[str] | None = None,
     **config
 ) -> PlatformHealth:
     """

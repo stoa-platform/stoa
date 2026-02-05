@@ -2,9 +2,11 @@
 import asyncio
 import logging
 import re
-from typing import Any, Callable, Optional
-import yaml
+from collections.abc import Callable
+from typing import Any
+
 import gitlab
+import yaml
 from gitlab.v4.objects import Project
 
 from ..config import settings
@@ -40,7 +42,7 @@ async def _fetch_with_protection(
             try:
                 async with asyncio.timeout(timeout):
                     return await coro_factory()
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(f"GitLab call '{name}' timed out (attempt {attempt + 1}/{max_retries})")
                 last_error = TimeoutError(f"{name} timed out")
             except Exception as e:
@@ -89,8 +91,8 @@ class GitLabService:
     """Service for GitLab operations - GitOps source of truth"""
 
     def __init__(self):
-        self._gl: Optional[gitlab.Gitlab] = None
-        self._project: Optional[Project] = None
+        self._gl: gitlab.Gitlab | None = None
+        self._project: Project | None = None
 
     async def connect(self):
         """Initialize GitLab connection"""
@@ -185,7 +187,7 @@ settings:
             logger.error(f"Failed to create tenant structure: {e}")
             raise
 
-    async def get_tenant(self, tenant_id: str) -> Optional[dict]:
+    async def get_tenant(self, tenant_id: str) -> dict | None:
         """Get tenant configuration from GitLab"""
         if not self._project:
             raise RuntimeError("GitLab not connected")
@@ -311,7 +313,7 @@ settings:
             logger.error(f"Failed to create API: {e}")
             raise
 
-    async def get_api(self, tenant_id: str, api_name: str) -> Optional[dict]:
+    async def get_api(self, tenant_id: str, api_name: str) -> dict | None:
         """Get API configuration from GitLab"""
         if not self._project:
             raise RuntimeError("GitLab not connected")
@@ -329,7 +331,7 @@ settings:
             logger.error(f"Failed to parse API YAML for {api_name}: {e}")
             return None
 
-    async def get_api_openapi_spec(self, tenant_id: str, api_name: str) -> Optional[dict]:
+    async def get_api_openapi_spec(self, tenant_id: str, api_name: str) -> dict | None:
         """Get OpenAPI specification for an API from GitLab"""
         if not self._project:
             raise RuntimeError("GitLab not connected")
@@ -398,7 +400,7 @@ settings:
 
         api_dirs = [item["name"] for item in tree if item["type"] == "tree" and item["name"] != ".gitkeep"]
 
-        async def fetch_api(api_id: str) -> Optional[dict]:
+        async def fetch_api(api_id: str) -> dict | None:
             try:
                 return await _fetch_with_protection(
                     lambda aid=api_id: self.get_api(tenant_id, aid),
@@ -415,9 +417,9 @@ settings:
         self,
         tenant_id: str,
         api_ids: list[str]
-    ) -> dict[str, Optional[dict]]:
+    ) -> dict[str, dict | None]:
         """Fetch OpenAPI specs for multiple APIs in parallel (CAB-688)."""
-        async def fetch_spec(api_id: str) -> tuple[str, Optional[dict]]:
+        async def fetch_spec(api_id: str) -> tuple[str, dict | None]:
             try:
                 spec = await _fetch_with_protection(
                     lambda aid=api_id: self.get_api_openapi_spec(tenant_id, aid),
@@ -504,7 +506,7 @@ settings:
             raise
 
     # Git operations
-    async def get_file(self, path: str, ref: str = "main") -> Optional[str]:
+    async def get_file(self, path: str, ref: str = "main") -> str | None:
         """Get file content from GitLab"""
         if not self._project:
             raise RuntimeError("GitLab not connected")
@@ -515,7 +517,7 @@ settings:
         except gitlab.exceptions.GitlabGetError:
             return None
 
-    async def list_commits(self, path: Optional[str] = None, limit: int = 20) -> list[dict]:
+    async def list_commits(self, path: str | None = None, limit: int = 20) -> list[dict]:
         """List commits for a path"""
         if not self._project:
             raise RuntimeError("GitLab not connected")
@@ -601,7 +603,7 @@ settings:
             "git_path": git_path,
         }
 
-    async def get_mcp_server(self, tenant_id: str, server_name: str) -> Optional[dict]:
+    async def get_mcp_server(self, tenant_id: str, server_name: str) -> dict | None:
         """Get MCP server configuration from GitLab."""
         if not self._project:
             raise RuntimeError("GitLab not connected")

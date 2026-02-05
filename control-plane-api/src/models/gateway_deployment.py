@@ -60,7 +60,11 @@ class GatewayDeployment(Base):
 
     # Sync tracking
     sync_status = Column(
-        SQLEnum(DeploymentSyncStatus, name="deployment_sync_status_enum"),
+        SQLEnum(
+            DeploymentSyncStatus,
+            name="deployment_sync_status_enum",
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=DeploymentSyncStatus.PENDING,
         server_default="pending",

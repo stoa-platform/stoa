@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tracing::info;
 
+use crate::mode::GatewayMode;
+
 /// Gateway configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -110,6 +112,44 @@ pub struct Config {
 
     #[serde(default)]
     pub otel_endpoint: Option<String>,
+
+    // === Gateway Mode (Phase 8) ===
+    /// Gateway deployment mode: edge-mcp, sidecar, proxy, shadow
+    /// Env: STOA_GATEWAY_MODE (default: edge-mcp)
+    #[serde(default)]
+    pub gateway_mode: GatewayMode,
+
+    // === Governance (ADR-012) ===
+    /// Enable anti-zombie agent detection
+    /// Env: STOA_ZOMBIE_DETECTION_ENABLED (default: true)
+    #[serde(default = "default_zombie_detection")]
+    pub zombie_detection_enabled: bool,
+
+    /// Session TTL for agent sessions in seconds (default: 600 = 10 min per ADR-012)
+    /// Env: STOA_AGENT_SESSION_TTL_SECS
+    #[serde(default = "default_agent_session_ttl")]
+    pub agent_session_ttl_secs: u64,
+
+    /// Attestation interval (requests between attestations)
+    /// Env: STOA_ATTESTATION_INTERVAL
+    #[serde(default = "default_attestation_interval")]
+    pub attestation_interval: u64,
+
+    // === Shadow Mode ===
+    /// Traffic capture source for shadow mode
+    /// Env: STOA_SHADOW_CAPTURE_SOURCE (inline, envoy-tap, port-mirror, kafka)
+    #[serde(default)]
+    pub shadow_capture_source: Option<String>,
+
+    /// Minimum samples before generating UAC
+    /// Env: STOA_SHADOW_MIN_SAMPLES
+    #[serde(default = "default_shadow_min_samples")]
+    pub shadow_min_samples: usize,
+
+    /// GitLab project for UAC MR submission
+    /// Env: STOA_SHADOW_GITLAB_PROJECT
+    #[serde(default)]
+    pub shadow_gitlab_project: Option<String>,
 }
 
 fn default_port() -> u16 {
@@ -130,6 +170,22 @@ fn default_gateway_external_url() -> Option<String> {
 
 fn default_policy_enabled() -> bool {
     true
+}
+
+fn default_zombie_detection() -> bool {
+    true
+}
+
+fn default_agent_session_ttl() -> u64 {
+    600 // 10 minutes per ADR-012
+}
+
+fn default_attestation_interval() -> u64 {
+    100 // Require attestation every 100 requests
+}
+
+fn default_shadow_min_samples() -> usize {
+    10 // Minimum samples before pattern is considered stable
 }
 
 impl Default for Config {
@@ -160,6 +216,13 @@ impl Default for Config {
             log_level: Some("info".to_string()),
             log_format: Some("json".to_string()),
             otel_endpoint: None,
+            gateway_mode: GatewayMode::default(),
+            zombie_detection_enabled: default_zombie_detection(),
+            agent_session_ttl_secs: default_agent_session_ttl(),
+            attestation_interval: default_attestation_interval(),
+            shadow_capture_source: None,
+            shadow_min_samples: default_shadow_min_samples(),
+            shadow_gitlab_project: None,
         }
     }
 }

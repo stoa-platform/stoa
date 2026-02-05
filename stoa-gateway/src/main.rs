@@ -18,6 +18,7 @@ mod handlers;
 mod mcp;
 mod metrics;
 mod oauth;
+mod policy;
 mod proxy;
 mod rate_limit;
 mod routes;

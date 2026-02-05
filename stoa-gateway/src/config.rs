@@ -90,6 +90,17 @@ pub struct Config {
     #[serde(default = "default_session_ttl")]
     pub mcp_session_ttl_minutes: i64,
 
+    // === Policy Engine (Phase 2 OPA) ===
+    /// Path to Rego policy file (e.g., /etc/stoa/policies/default.rego)
+    /// Env: STOA_POLICY_PATH
+    #[serde(default)]
+    pub policy_path: Option<String>,
+
+    /// Enable/disable policy enforcement (default: true)
+    /// Env: STOA_POLICY_ENABLED
+    #[serde(default = "default_policy_enabled")]
+    pub policy_enabled: bool,
+
     // === Observability ===
     #[serde(default)]
     pub log_level: Option<String>,
@@ -117,6 +128,10 @@ fn default_gateway_external_url() -> Option<String> {
     Some("http://localhost:8080".to_string())
 }
 
+fn default_policy_enabled() -> bool {
+    true
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -140,6 +155,8 @@ impl Default for Config {
             rate_limit_default: Some(1000),
             rate_limit_window_seconds: Some(60),
             mcp_session_ttl_minutes: default_session_ttl(),
+            policy_path: None,
+            policy_enabled: default_policy_enabled(),
             log_level: Some("info".to_string()),
             log_format: Some("json".to_string()),
             otel_endpoint: None,

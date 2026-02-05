@@ -81,6 +81,8 @@ pub struct ToolContext {
     #[allow(dead_code)]
     pub request_id: String,
     pub roles: Vec<String>,
+    /// OAuth scopes from JWT (ADR-012 12-Scope Model)
+    pub scopes: Vec<String>,
     /// Raw JWT token for forwarding to downstream services (Control Plane)
     pub raw_token: Option<String>,
 }

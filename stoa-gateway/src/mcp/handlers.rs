@@ -135,6 +135,7 @@ pub async fn mcp_tools_call(
         user_email: None,
         request_id,
         roles: vec![],
+        scopes: vec!["stoa:read".to_string()], // Default scope for REST endpoints
         raw_token: None,
     };
 

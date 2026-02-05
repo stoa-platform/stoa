@@ -50,39 +50,34 @@ on:
           - staging
           - production
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: '20'
 
 jobs:
   e2e-tests:
-    name: Playwright E2E Tests
+    name: E2E Tests (shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Scheduled runs are non-blocking — environment data may be incomplete
     continue-on-error: ${{ github.event_name == 'schedule' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: e2e/package-lock.json
-
-      - name: Install dependencies
-        working-directory: e2e
-        run: npm ci
-
-      - name: Install Playwright browsers
-        working-directory: e2e
-        run: npx playwright install --with-deps chromium
-
-      - name: Generate BDD tests
-        working-directory: e2e
-        run: npm run bddgen
+      - name: Setup E2E environment
+        uses: ./.github/actions/e2e-setup
 
       - name: Run E2E tests
         working-directory: e2e
@@ -130,30 +125,32 @@ jobs:
           }
 
           # Then run the filtered tests
+          SHARD="--shard=${{ matrix.shard }}/3"
+
           case "$TEST_SUITE" in
             "all")
-              npm run test:e2e
+              npx playwright test $SHARD
               ;;
             "smoke")
-              npx playwright test --grep @smoke
+              npx playwright test --grep @smoke $SHARD
               ;;
             "critical")
-              npx playwright test --grep @critical
+              npx playwright test --grep @critical $SHARD
               ;;
             "portal")
-              npx playwright test --grep @portal
+              npx playwright test --grep @portal $SHARD
               ;;
             "console")
-              npx playwright test --grep @console
+              npx playwright test --grep @console $SHARD
               ;;
             "gateway")
-              npx playwright test --grep @gateway
+              npx playwright test --grep @gateway $SHARD
               ;;
             "rpo")
-              npx playwright test --grep @rpo
+              npx playwright test --grep @rpo $SHARD
               ;;
             *)
-              npx playwright test --grep @smoke
+              npx playwright test --grep @smoke $SHARD
               ;;
           esac
 
@@ -161,7 +158,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report-${{ github.run_id }}
+          name: playwright-report-shard-${{ matrix.shard }}-${{ github.run_id }}
           path: e2e/reports/html/
           retention-days: 14
 
@@ -169,7 +166,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: test-results-${{ github.run_id }}
+          name: test-results-shard-${{ matrix.shard }}-${{ github.run_id }}
           path: |
             e2e/test-results/
             e2e/reports/results.json

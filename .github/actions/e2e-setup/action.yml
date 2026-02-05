@@ -1,0 +1,47 @@
+name: 'E2E Test Setup'
+description: 'Install Playwright, browsers, and generate BDD tests'
+
+inputs:
+  node-version:
+    description: 'Node.js version'
+    required: false
+    default: '20'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+        cache-dependency-path: e2e/package-lock.json
+
+    - name: Install E2E dependencies
+      shell: bash
+      working-directory: e2e
+      run: npm ci
+
+    - name: Cache Playwright browsers
+      uses: actions/cache@v4
+      id: playwright-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
+
+    - name: Install Playwright browsers
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: e2e
+      run: npx playwright install --with-deps chromium
+
+    - name: Install Playwright deps (cached)
+      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      shell: bash
+      working-directory: e2e
+      run: npx playwright install-deps chromium
+
+    - name: Generate BDD tests
+      shell: bash
+      working-directory: e2e
+      run: npm run bddgen

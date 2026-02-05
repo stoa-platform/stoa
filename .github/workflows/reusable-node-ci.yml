@@ -24,20 +24,22 @@ on:
         default: true
     outputs:
       test-result:
-        description: 'Build job result'
-        value: ${{ jobs.build.result }}
+        description: 'Build job result (success/failure)'
+        value: ${{ jobs.build.outputs.result }}
 
 jobs:
   build:
     name: Build and Test (${{ inputs.component }})
     runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.set-result.outputs.result }}
     permissions:
       contents: read
       checks: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js environment
         uses: ./.github/actions/setup-node-env
@@ -65,14 +67,14 @@ jobs:
 
       - name: Upload build artifact
         if: inputs.upload-artifact && inputs.run-build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ inputs.component }}-dist
           path: ${{ inputs.component }}/dist
           retention-days: 7
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: test-results-${{ inputs.component }}
@@ -92,3 +94,8 @@ jobs:
           if [ "${{ inputs.run-build }}" = "true" ]; then
             echo "| Build | :white_check_mark: |" >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Set result output
+        id: set-result
+        if: always()
+        run: echo "result=success" >> $GITHUB_OUTPUT

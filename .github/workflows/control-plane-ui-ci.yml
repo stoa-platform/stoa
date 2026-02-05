@@ -12,6 +12,7 @@ on:
       - main
     paths:
       - 'control-plane-ui/**'
+      - 'shared/**'
       - '.github/workflows/control-plane-ui-ci.yml'
       - '.github/workflows/reusable-node-ci.yml'
       - '.github/workflows/reusable-docker-ecr.yml'
@@ -23,6 +24,7 @@ on:
       - main
     paths:
       - 'control-plane-ui/**'
+      - 'shared/**'
       - '.github/workflows/control-plane-ui-ci.yml'
       - '.github/workflows/reusable-node-ci.yml'
       - '.github/actions/**'
@@ -72,6 +74,7 @@ jobs:
       ecr-repository: apim/control-plane-ui
       environment: ${{ github.event.inputs.environment || 'dev' }}
       platforms: linux/amd64,linux/arm64
+      use-monorepo-context: true
       build-args: |
         VITE_BASE_DOMAIN=${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
         VITE_ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}

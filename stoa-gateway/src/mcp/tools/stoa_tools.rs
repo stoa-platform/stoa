@@ -1,17 +1,17 @@
-//! STOA Tool Registration — Dynamic + Static Fallback
+//! STOA Tool Registration — Native + Dynamic Discovery
 //!
-//! Tools are discovered from the Control Plane at startup and periodically
-//! refreshed. No gateway rebuild needed when tools change on the CP side.
+//! Phase 1: Native tools call CP API directly (no Python mcp-gateway).
 //!
 //! Flow:
-//!   1. Try `POST /mcp/tools/list` on Control Plane → dynamic registration
-//!   2. If CP unreachable → use embedded static definitions (12 tools)
-//!   3. Background task refreshes every 60s from CP
+//!   1. Register native tools (12 STOA tools, direct CP API calls)
+//!   2. Try `GET /v1/mcp/tools` on Control Plane → dynamic registration for unknown tools
+//!   3. Background task refreshes every 60s from CP (only registers non-native tools)
 
-use serde_json::json;
+use reqwest::Client;
 use std::sync::Arc;
 use std::time::Duration;
 
+use super::native_tool::{create_http_client, has_native_implementation, register_native_tools};
 use super::proxy_tool::ProxyTool;
 use super::{ToolRegistry, ToolSchema};
 use crate::control_plane::{RemoteToolDef, ToolProxyClient};
@@ -20,17 +20,15 @@ use crate::uac::Action;
 /// Default refresh interval for tool discovery
 const TOOL_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 
-/// Helper to build a ToolSchema from JSON properties
-fn schema(props: serde_json::Value, required: Vec<&str>) -> ToolSchema {
-    ToolSchema {
-        schema_type: "object".into(),
-        properties: serde_json::from_value(props).unwrap_or_default(),
-        required: required.iter().map(|s| s.to_string()).collect(),
-    }
-}
-
 /// Convert a remote tool definition into a ProxyTool and register it.
+/// Only used for tools that don't have native implementations.
 fn register_remote_tool(registry: &ToolRegistry, def: &RemoteToolDef, cp: &Arc<ToolProxyClient>) {
+    // Skip if we have a native implementation
+    if has_native_implementation(&def.name) {
+        tracing::debug!(tool = %def.name, "Skipping remote registration — native implementation exists");
+        return;
+    }
+
     let tool_schema = ToolSchema {
         schema_type: def.input_schema.schema_type.clone(),
         properties: def.input_schema.properties.clone(),
@@ -47,6 +45,8 @@ fn register_remote_tool(registry: &ToolRegistry, def: &RemoteToolDef, cp: &Arc<T
         action,
         cp.clone(),
     )));
+
+    tracing::info!(tool = %def.name, "Registered remote tool (proxy fallback)");
 }
 
 /// Infer UAC action from tool name convention
@@ -68,26 +68,47 @@ fn infer_action(tool_name: &str) -> Action {
     }
 }
 
-// ─── Dynamic Discovery ───────────────────────────────────────────
+// ─── Native + Dynamic Discovery ───────────────────────────────────
 
-/// Try to discover and register tools from the Control Plane.
-/// Returns the number of tools registered, or an error.
+/// Register native tools and try to discover additional tools from CP.
+///
+/// Native tools (12 STOA tools) are always registered and call CP API directly.
+/// Additional tools discovered from CP are registered as ProxyTool (fallback).
 pub async fn discover_and_register(
     registry: &ToolRegistry,
     cp: &Arc<ToolProxyClient>,
 ) -> Result<usize, String> {
-    let defs = cp.discover_tools().await?;
-    let count = defs.len();
+    // First, register all native tools
+    let cp_url = cp.base_url();
+    let http_client = create_http_client();
+    register_native_tools(registry, http_client, cp_url, Arc::new(ToolRegistry::new()));
 
-    for def in &defs {
-        register_remote_tool(registry, def, cp);
+    tracing::info!("Native tools registered (12 STOA tools, direct CP API calls)");
+
+    // Then, try to discover additional tools from CP
+    match cp.discover_tools().await {
+        Ok(defs) => {
+            let mut proxy_count = 0;
+            for def in &defs {
+                if !has_native_implementation(&def.name) {
+                    register_remote_tool(registry, def, cp);
+                    proxy_count += 1;
+                }
+            }
+            if proxy_count > 0 {
+                tracing::info!(proxy_count, "Additional tools registered via CP proxy");
+            }
+            Ok(registry.count())
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "CP unreachable — using native tools only");
+            Ok(registry.count())
+        }
     }
-
-    tracing::info!(tool_count = count, "Registered tools from Control Plane");
-    Ok(count)
 }
 
 /// Start a background task that periodically refreshes tools from CP.
+/// Only registers tools that don't have native implementations.
 pub fn start_tool_refresh_task(registry: Arc<ToolRegistry>, cp: Arc<ToolProxyClient>) {
     tokio::spawn(async move {
         loop {
@@ -95,13 +116,18 @@ pub fn start_tool_refresh_task(registry: Arc<ToolRegistry>, cp: Arc<ToolProxyCli
 
             match cp.discover_tools().await {
                 Ok(defs) => {
+                    let mut new_count = 0;
                     for def in &defs {
-                        register_remote_tool(&registry, def, &cp);
+                        if !has_native_implementation(&def.name)
+                            && registry.get(&def.name).is_none()
+                        {
+                            register_remote_tool(&registry, def, &cp);
+                            new_count += 1;
+                        }
                     }
-                    tracing::debug!(
-                        tool_count = defs.len(),
-                        "Refreshed tools from Control Plane"
-                    );
+                    if new_count > 0 {
+                        tracing::info!(new_count, "New proxy tools discovered from CP");
+                    }
                 }
                 Err(e) => {
                     tracing::debug!(error = %e, "Tool refresh from CP failed (keeping existing tools)");
@@ -111,11 +137,41 @@ pub fn start_tool_refresh_task(registry: Arc<ToolRegistry>, cp: Arc<ToolProxyCli
     });
 }
 
-// ─── Static Fallback ─────────────────────────────────────────────
+/// Register native tools only (used as fallback when CP is unreachable at startup).
+///
+/// This is the new default behavior: native tools call CP API directly,
+/// bypassing the Python mcp-gateway entirely.
+#[allow(dead_code)]
+pub fn register_native_tools_only(
+    registry: &ToolRegistry,
+    http_client: Client,
+    cp_base_url: &str,
+    registry_ref: Arc<ToolRegistry>,
+) {
+    register_native_tools(registry, http_client, cp_base_url, registry_ref);
+    tracing::info!(
+        tool_count = registry.count(),
+        "Native STOA tools registered (Phase 1: no Python dependency)"
+    );
+}
 
-/// Register the 12 STOA tools with hardcoded schemas.
-/// Used as fallback when the Control Plane is unreachable at startup.
+// ─── Legacy Fallback (kept for compatibility) ─────────────────────
+
+/// Register the 12 STOA tools with ProxyTool (legacy behavior).
+/// DEPRECATED: Use register_native_tools_only() instead.
+#[allow(dead_code)]
 pub fn register_static_tools(registry: &ToolRegistry, cp: Arc<ToolProxyClient>) {
+    use serde_json::json;
+
+    /// Helper to build a ToolSchema from JSON properties
+    fn schema(props: serde_json::Value, required: Vec<&str>) -> ToolSchema {
+        ToolSchema {
+            schema_type: "object".into(),
+            properties: serde_json::from_value(props).unwrap_or_default(),
+            required: required.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
     // 1. stoa_platform_info
     registry.register(Arc::new(ProxyTool::new(
         "stoa_platform_info",
@@ -330,6 +386,6 @@ pub fn register_static_tools(registry: &ToolRegistry, cp: Arc<ToolProxyClient>) 
 
     tracing::info!(
         tool_count = registry.count(),
-        "Static STOA tools registered (fallback)"
+        "Static STOA tools registered (LEGACY: proxy mode)"
     );
 }

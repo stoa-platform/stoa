@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Bell,
   Wrench,
   ExternalLink,
   AlertCircle,
@@ -11,6 +10,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { mcpGatewayService } from '../../services/mcpGatewayApi';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { ToolSubscription, MCPTool } from '../../types';
 
 export function MySubscriptions() {
@@ -78,8 +79,16 @@ export function MySubscriptions() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-10 w-32 bg-gray-200 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -211,19 +220,13 @@ export function MySubscriptions() {
           </table>
         </div>
       ) : (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <Bell className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No subscriptions yet</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Subscribe to AI tools from the catalog to start using them
-          </p>
-          <Link
-            to="/ai-tools"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
-          >
-            <Wrench className="h-4 w-4" />
-            Browse Tool Catalog
-          </Link>
+        <div className="bg-white rounded-lg border border-gray-200">
+          <EmptyState
+            variant="subscriptions"
+            title="No subscriptions yet"
+            description="Subscribe to AI tools from the catalog to start using them."
+            action={{ label: 'Browse Tool Catalog', onClick: () => navigate('/ai-tools') }}
+          />
         </div>
       )}
 

@@ -98,8 +98,15 @@ export function DeployAPIDialog({ onClose, onDeployed }: DeployAPIDialogProps) {
           )}
 
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+                <div className="h-10 w-full bg-gray-200 rounded animate-pulse" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 w-28 bg-gray-200 rounded animate-pulse" />
+                <div className="h-32 w-full bg-gray-200 rounded animate-pulse" />
+              </div>
             </div>
           ) : (
             <>

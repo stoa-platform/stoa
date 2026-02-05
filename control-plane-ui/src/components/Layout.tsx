@@ -5,6 +5,8 @@ import { useBreadcrumbs } from '../hooks/useBreadcrumbs';
 import { Breadcrumb } from '@stoa/shared/components/Breadcrumb';
 import { useCommandPalette, type CommandItem } from '@stoa/shared/components/CommandPalette';
 import { useSequenceShortcuts } from '@stoa/shared/hooks';
+import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
+import { useTheme } from '@stoa/shared/contexts';
 import {
   LayoutDashboard,
   Building2,
@@ -25,6 +27,8 @@ import {
   X,
   Search,
   Plus,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -54,6 +58,7 @@ export function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const breadcrumbItems = useBreadcrumbs();
   const { setOpen: setCommandPaletteOpen, setItems: setCommandItems } = useCommandPalette();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const filteredNavigation = navigation.filter(
@@ -128,13 +133,23 @@ export function Layout({ children }: LayoutProps) {
         keywords: ['logout', 'sign out', 'exit'],
         onSelect: logout,
       },
+      // Theme toggle
+      {
+        id: 'toggle-theme',
+        label: resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+        description: `Currently in ${resolvedTheme} mode`,
+        icon: resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />,
+        section: 'Settings',
+        keywords: ['theme', 'dark', 'light', 'mode', 'toggle'],
+        onSelect: toggleTheme,
+      },
     ];
 
     setCommandItems(commands);
-  }, [filteredNavigation, navigate, logout, setCommandItems]);
+  }, [filteredNavigation, navigate, logout, setCommandItems, resolvedTheme, toggleTheme]);
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 dark:bg-neutral-900 transition-colors">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -146,16 +161,16 @@ export function Layout({ children }: LayoutProps) {
       {/* Sidebar */}
       <div
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 transition-transform duration-300 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 dark:bg-neutral-950 transition-transform duration-300 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         {/* Sidebar header */}
-        <div className="flex h-16 items-center justify-between border-b border-gray-800 px-4">
+        <div className="flex h-16 items-center justify-between border-b border-gray-800 dark:border-neutral-800 px-4">
           <h1 className="text-lg font-bold text-white">STOA Control Plane</h1>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-800 hover:text-white lg:hidden"
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-800 dark:hover:bg-neutral-800 hover:text-white lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
@@ -175,7 +190,7 @@ export function Layout({ children }: LayoutProps) {
                       'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                       isActive
                         ? 'bg-primary-600 text-white'
-                        : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                        : 'text-gray-300 hover:bg-gray-800 dark:hover:bg-neutral-800 hover:text-white'
                     )}
                   >
                     <item.icon className="h-5 w-5 flex-shrink-0" />
@@ -193,7 +208,7 @@ export function Layout({ children }: LayoutProps) {
         </nav>
 
         {/* User section */}
-        <div className="absolute bottom-0 left-0 right-0 border-t border-gray-800 p-4">
+        <div className="absolute bottom-0 left-0 right-0 border-t border-gray-800 dark:border-neutral-800 p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600 flex-shrink-0">
               <User className="h-5 w-5 text-white" />
@@ -204,7 +219,7 @@ export function Layout({ children }: LayoutProps) {
             </div>
             <button
               onClick={logout}
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white flex-shrink-0"
+              className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 dark:hover:bg-neutral-800 hover:text-white flex-shrink-0"
               title="Logout"
             >
               <LogOut className="h-5 w-5" />
@@ -216,11 +231,11 @@ export function Layout({ children }: LayoutProps) {
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Header */}
-        <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-white px-4 sm:px-6 shadow-sm">
+        <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-white dark:bg-neutral-900 dark:border-neutral-800 px-4 sm:px-6 shadow-sm dark:shadow-none">
           {/* Mobile menu button */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden"
+            className="rounded-lg p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -234,18 +249,18 @@ export function Layout({ children }: LayoutProps) {
           />
 
           {/* Mobile: Just show current page name */}
-          <span className="flex-1 font-medium text-gray-900 truncate sm:hidden">
+          <span className="flex-1 font-medium text-gray-900 dark:text-white truncate sm:hidden">
             {breadcrumbItems[breadcrumbItems.length - 1]?.label || 'Dashboard'}
           </span>
 
           {/* Command Palette trigger */}
           <button
             onClick={() => setCommandPaletteOpen(true)}
-            className="hidden sm:flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:border-gray-300 transition-colors"
+            className="hidden sm:flex items-center gap-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600 transition-colors"
           >
             <Search className="h-4 w-4" />
             <span className="hidden md:inline">Search...</span>
-            <kbd className="hidden md:flex items-center gap-0.5 rounded bg-white px-1.5 py-0.5 text-xs font-medium border border-gray-200">
+            <kbd className="hidden md:flex items-center gap-0.5 rounded bg-white dark:bg-neutral-700 px-1.5 py-0.5 text-xs font-medium border border-gray-200 dark:border-neutral-600">
               <span className="text-xs">⌘</span>K
             </kbd>
           </button>
@@ -253,16 +268,19 @@ export function Layout({ children }: LayoutProps) {
           {/* Mobile search button */}
           <button
             onClick={() => setCommandPaletteOpen(true)}
-            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 sm:hidden"
+            className="rounded-lg p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 sm:hidden"
           >
             <Search className="h-5 w-5" />
           </button>
 
+          {/* Theme toggle */}
+          <ThemeToggle size="md" />
+
           {/* Tenant selector */}
           {user?.tenant_id && (
-            <div className="hidden sm:flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-1.5">
-              <Building2 className="h-4 w-4 text-neutral-500" />
-              <span className="text-sm font-medium text-neutral-700 max-w-[120px] truncate">{user.tenant_id}</span>
+            <div className="hidden sm:flex items-center gap-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 px-3 py-1.5">
+              <Building2 className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 max-w-[120px] truncate">{user.tenant_id}</span>
               <ChevronDown className="h-4 w-4 text-neutral-400" />
             </div>
           )}

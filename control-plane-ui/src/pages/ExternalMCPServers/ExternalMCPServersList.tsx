@@ -6,6 +6,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ExternalMCPServerModal } from './ExternalMCPServerModal';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { ExternalMCPServer, ExternalMCPServerCreate, ExternalMCPServerUpdate, ExternalMCPHealthStatus } from '../../types';
 
 const healthStatusConfig: Record<ExternalMCPHealthStatus, { color: string; icon: typeof CheckCircle; label: string }> = {
@@ -120,8 +122,19 @@ export function ExternalMCPServersList() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="h-8 w-64 bg-gray-200 rounded animate-pulse" />
+          <div className="flex gap-3">
+            <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
+            <div className="h-10 w-28 bg-gray-200 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -165,12 +178,13 @@ export function ExternalMCPServersList() {
       {/* Servers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {servers.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg shadow">
-            <Server className="mx-auto h-12 w-12 text-gray-400" />
-            <p className="mt-2">No external MCP servers registered</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Click "Add Server" to register an external MCP server like Linear or GitHub
-            </p>
+          <div className="col-span-full bg-white rounded-lg shadow">
+            <EmptyState
+              variant="servers"
+              title="No external MCP servers registered"
+              description="Register external MCP servers like Linear or GitHub to proxy through STOA with governance."
+              action={{ label: 'Add Server', onClick: () => setShowCreateModal(true) }}
+            />
           </div>
         ) : (
           servers.map((server) => {

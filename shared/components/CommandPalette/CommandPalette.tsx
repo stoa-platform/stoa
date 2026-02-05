@@ -87,7 +87,7 @@ function ShortcutKey({ shortcut }: { shortcut: string[] }) {
       {shortcut.map((key, index) => (
         <kbd
           key={index}
-          className="px-1.5 py-0.5 text-xs font-medium text-neutral-500 bg-neutral-100 border border-neutral-200 rounded"
+          className="px-1.5 py-0.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded"
         >
           {key}
         </kbd>
@@ -192,11 +192,11 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
 
       {/* Dialog */}
       <div
-        className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden animate-scale-in"
+        className="relative bg-white dark:bg-neutral-900 rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden animate-scale-in"
         onKeyDown={handleKeyDown}
       >
         {/* Search Input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200 dark:border-neutral-700">
           <Search className="h-5 w-5 text-neutral-400 flex-shrink-0" />
           <input
             ref={inputRef}
@@ -204,9 +204,9 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={placeholder}
-            className="flex-1 text-base text-neutral-900 placeholder-neutral-400 outline-none bg-transparent"
+            className="flex-1 text-base text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 outline-none bg-transparent"
           />
-          <kbd className="hidden sm:flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-400 bg-neutral-100 border border-neutral-200 rounded">
+          <kbd className="hidden sm:flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-400 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded">
             esc
           </kbd>
         </div>
@@ -214,16 +214,16 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
         {/* Results */}
         <div ref={listRef} className="max-h-[60vh] overflow-y-auto">
           {flatItems.length === 0 ? (
-            <div className="px-4 py-12 text-center text-neutral-500">
-              <Command className="h-8 w-8 mx-auto mb-3 text-neutral-300" />
+            <div className="px-4 py-12 text-center text-neutral-500 dark:text-neutral-400">
+              <Command className="h-8 w-8 mx-auto mb-3 text-neutral-300 dark:text-neutral-600" />
               <p className="text-sm">No results found</p>
-              <p className="text-xs text-neutral-400 mt-1">Try a different search term</p>
+              <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">Try a different search term</p>
             </div>
           ) : (
             Object.entries(groupedItems).map(([section, sectionItems]) => (
               <div key={section}>
                 {/* Section Header */}
-                <div className="px-4 py-2 text-xs font-medium text-neutral-500 uppercase tracking-wider bg-neutral-50">
+                <div className="px-4 py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider bg-neutral-50 dark:bg-neutral-800">
                   {section}
                 </div>
 
@@ -242,23 +242,23 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
                       }}
                       onMouseEnter={() => setSelectedIndex(itemIndex)}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                        isSelected ? 'bg-primary-50' : 'hover:bg-neutral-50'
+                        isSelected ? 'bg-primary-50 dark:bg-primary-900/30' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800'
                       }`}
                     >
                       {/* Icon */}
                       {item.icon && (
-                        <div className={`flex-shrink-0 ${isSelected ? 'text-primary-600' : 'text-neutral-400'}`}>
+                        <div className={`flex-shrink-0 ${isSelected ? 'text-primary-600 dark:text-primary-400' : 'text-neutral-400'}`}>
                           {item.icon}
                         </div>
                       )}
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <div className={`text-sm font-medium ${isSelected ? 'text-primary-700' : 'text-neutral-900'}`}>
+                        <div className={`text-sm font-medium ${isSelected ? 'text-primary-700 dark:text-primary-300' : 'text-neutral-900 dark:text-neutral-100'}`}>
                           {item.label}
                         </div>
                         {item.description && (
-                          <div className="text-xs text-neutral-500 truncate">
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
                             {item.description}
                           </div>
                         )}
@@ -268,7 +268,7 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
                       {item.shortcut ? (
                         <ShortcutKey shortcut={item.shortcut} />
                       ) : isSelected ? (
-                        <ArrowRight className="h-4 w-4 text-primary-500" />
+                        <ArrowRight className="h-4 w-4 text-primary-500 dark:text-primary-400" />
                       ) : null}
                     </button>
                   );
@@ -279,20 +279,20 @@ export function CommandPalette({ items, placeholder = 'Search commands...', onCl
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-neutral-200 bg-neutral-50 text-xs text-neutral-500">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-xs text-neutral-500 dark:text-neutral-400">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 bg-white border border-neutral-200 rounded text-[10px]">↑</kbd>
-              <kbd className="px-1 py-0.5 bg-white border border-neutral-200 rounded text-[10px]">↓</kbd>
+              <kbd className="px-1 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">↑</kbd>
+              <kbd className="px-1 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">↓</kbd>
               <span className="ml-1">navigate</span>
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-white border border-neutral-200 rounded text-[10px]">↵</kbd>
+              <kbd className="px-1.5 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">↵</kbd>
               <span className="ml-1">select</span>
             </span>
           </div>
           <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-white border border-neutral-200 rounded text-[10px]">esc</kbd>
+            <kbd className="px-1.5 py-0.5 bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded text-[10px]">esc</kbd>
             <span className="ml-1">close</span>
           </span>
         </div>

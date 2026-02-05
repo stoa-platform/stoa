@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { mcpGatewayService } from '../../services/mcpGatewayApi';
 import { ToolSchemaViewer, SchemaJsonViewer, QuickStartGuide } from '../../components/tools';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { MCPTool, ToolUsageSummary } from '../../types';
 
 type TabType = 'overview' | 'schema' | 'quickstart' | 'usage';
@@ -72,8 +73,19 @@ export function ToolDetail() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="h-16 w-16 bg-gray-200 rounded-lg animate-pulse" />
+          <div className="space-y-2 flex-1">
+            <div className="h-8 w-64 bg-gray-200 rounded animate-pulse" />
+            <div className="h-4 w-96 bg-gray-200 rounded animate-pulse" />
+          </div>
+        </div>
+        <CardSkeleton className="h-64" />
       </div>
     );
   }

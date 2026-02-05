@@ -137,24 +137,24 @@ const ICONS: Record<ToastType, React.ComponentType<{ className?: string }>> = {
 
 const STYLES: Record<ToastType, { bg: string; icon: string; border: string }> = {
   success: {
-    bg: 'bg-white',
+    bg: 'bg-white dark:bg-neutral-800',
     icon: 'text-success-500',
-    border: 'border-success-200',
+    border: 'border-success-200 dark:border-success-700',
   },
   error: {
-    bg: 'bg-white',
+    bg: 'bg-white dark:bg-neutral-800',
     icon: 'text-error-500',
-    border: 'border-error-200',
+    border: 'border-error-200 dark:border-error-700',
   },
   warning: {
-    bg: 'bg-white',
+    bg: 'bg-white dark:bg-neutral-800',
     icon: 'text-warning-500',
-    border: 'border-warning-200',
+    border: 'border-warning-200 dark:border-warning-700',
   },
   info: {
-    bg: 'bg-white',
+    bg: 'bg-white dark:bg-neutral-800',
     icon: 'text-primary-500',
-    border: 'border-primary-200',
+    border: 'border-primary-200 dark:border-primary-700',
   },
 };
 
@@ -197,14 +197,14 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       <div className="flex gap-3">
         <Icon className={`h-5 w-5 flex-shrink-0 ${styles.icon}`} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-neutral-900">{toast.title}</p>
+          <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{toast.title}</p>
           {toast.description && (
-            <p className="mt-1 text-sm text-neutral-600">{toast.description}</p>
+            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{toast.description}</p>
           )}
           {toast.action && (
             <button
               onClick={toast.action.onClick}
-              className="mt-2 text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors"
+              className="mt-2 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
             >
               {toast.action.label}
             </button>
@@ -213,7 +213,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       </div>
       <button
         onClick={handleDismiss}
-        className="absolute top-3 right-3 p-1 rounded-full text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors"
+        className="absolute top-3 right-3 p-1 rounded-full text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
         aria-label="Dismiss notification"
       >
         <X className="h-4 w-4" />

@@ -12,13 +12,14 @@ import {
   Trash2,
   Play,
   ExternalLink,
-  Code,
 } from 'lucide-react';
 import { externalMcpServersService } from '../../services/externalMcpServersApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { ExternalMCPServerModal } from './ExternalMCPServerModal';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type {
   ExternalMCPServerDetail as ServerDetail,
   ExternalMCPServerUpdate,
@@ -159,8 +160,17 @@ export function ExternalMCPServerDetail() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <div className="h-6 w-6 bg-gray-200 rounded animate-pulse" />
+          <div className="h-12 w-12 bg-gray-200 rounded-lg animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
+            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+          </div>
+        </div>
+        <CardSkeleton className="h-48" />
+        <CardSkeleton className="h-64" />
       </div>
     );
   }
@@ -334,11 +344,12 @@ export function ExternalMCPServerDetail() {
         </div>
 
         {server.tools.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
-            <Code className="h-12 w-12 mx-auto text-gray-400" />
-            <p className="mt-2">No tools synced yet</p>
-            <p className="text-sm text-gray-400">Click "Sync Tools" to discover available tools</p>
-          </div>
+          <EmptyState
+            variant="tools"
+            title="No tools synced yet"
+            description="Click 'Sync Tools' to discover available tools from this server."
+            action={{ label: 'Sync Tools', onClick: handleSyncTools }}
+          />
         ) : (
           <div className="divide-y">
             {server.tools.map((tool) => (

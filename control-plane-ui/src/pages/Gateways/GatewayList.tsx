@@ -4,6 +4,8 @@ import { apiService } from '../../services/api';
 import { GatewayRegistrationForm } from './GatewayRegistrationForm';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type {
   GatewayInstance,
   GatewayType,
@@ -91,8 +93,16 @@ export function GatewayList() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-10 w-40 bg-gray-200 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -135,14 +145,13 @@ export function GatewayList() {
 
       {/* Gateway Cards */}
       {gateways.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No gateways registered</h3>
-          <p className="text-gray-500">
-            Register your first gateway instance to start multi-gateway orchestration.
-          </p>
+        <div className="bg-white rounded-lg shadow">
+          <EmptyState
+            variant="servers"
+            title="No gateways registered"
+            description="Register your first gateway instance to start multi-gateway orchestration."
+            action={{ label: 'Register Gateway', onClick: () => setShowForm(true) }}
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

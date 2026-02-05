@@ -5,6 +5,11 @@ import type { API, APICreate, Tenant } from '../types';
 import yaml from 'js-yaml';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { TableSkeleton } from '@stoa/shared/components/Skeleton';
+import { useCelebration } from '@stoa/shared/components/Celebration';
+import { Collapsible } from '@stoa/shared/components/Collapsible';
+import { FileText, Server, Code2, Settings } from 'lucide-react';
 
 // Debounce hook for search optimization
 function useDebounce<T>(value: T, delay: number): T {
@@ -36,6 +41,7 @@ export function APIs() {
   const { isReady } = useAuth();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
+  const { celebrate } = useCelebration();
   const [apis, setApis] = useState<API[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>('');
@@ -43,6 +49,7 @@ export function APIs() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingApi, setEditingApi] = useState<API | null>(null);
+  const [isFirstApi, setIsFirstApi] = useState(false);
 
   // Search and pagination state
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,6 +100,7 @@ export function APIs() {
       console.log('[APIs] Loading APIs for tenant:', tenantId);
       const data = await apiService.getApis(tenantId);
       console.log('[APIs] Loaded APIs:', data);
+      setIsFirstApi(data.length === 0);
       setApis(data);
       setError(null);
     } catch (err: any) {
@@ -138,6 +146,7 @@ export function APIs() {
   // Memoized handlers to prevent unnecessary re-renders
   const handleCreate = useCallback(async (api: APICreate, deployToDev: boolean) => {
     try {
+      const wasFirstApi = isFirstApi;
       const created = await apiService.createApi(selectedTenant, api);
 
       // Auto-deploy to DEV if requested
@@ -150,11 +159,19 @@ export function APIs() {
       }
 
       setShowCreateModal(false);
-      loadApis(selectedTenant);
+      await loadApis(selectedTenant);
+
+      // Celebrate first API creation
+      if (wasFirstApi) {
+        celebrate();
+        toast.success('Welcome!', 'You created your first API. Explore the Deploy options next.');
+      } else {
+        toast.success('API created', `${api.display_name || api.name} has been created`);
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to create API');
+      toast.error('Creation failed', err.message || 'Failed to create API');
     }
-  }, [selectedTenant]);
+  }, [selectedTenant, isFirstApi, celebrate, toast]);
 
   const handleUpdate = useCallback(async (apiId: string, api: Partial<APICreate>) => {
     try {
@@ -210,8 +227,12 @@ export function APIs() {
 
   if (loading && tenants.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <TableSkeleton
+          rows={5}
+          columns={6}
+          headers={['Name', 'Version', 'Status', 'Portal', 'Deployed', 'Actions']}
+        />
       </div>
     );
   }
@@ -313,35 +334,27 @@ export function APIs() {
       {/* APIs List */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-          </div>
+          <TableSkeleton
+            rows={5}
+            columns={6}
+            headers={['Name', 'Version', 'Status', 'Portal', 'Deployed', 'Actions']}
+          />
         ) : apis.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <p className="mt-2">No APIs found for this tenant</p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="mt-4 text-blue-600 hover:text-blue-700"
-            >
-              Create your first API
-            </button>
-          </div>
+          <EmptyState
+            variant="apis"
+            action={{
+              label: 'Create your first API',
+              onClick: () => setShowCreateModal(true),
+            }}
+          />
         ) : filteredApis.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <p className="mt-2">No APIs match your search criteria</p>
-            <button
-              onClick={clearFilters}
-              className="mt-4 text-blue-600 hover:text-blue-700"
-            >
-              Clear filters
-            </button>
-          </div>
+          <EmptyState
+            variant="search"
+            action={{
+              label: 'Clear filters',
+              onClick: clearFilters,
+            }}
+          />
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -709,121 +722,161 @@ paths:
             </div>
           )}
 
-          {/* Form Fields */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Basic Information Section */}
+          <Collapsible
+            title="Basic Information"
+            icon={<FileText className="h-4 w-4" />}
+            defaultExpanded={true}
+            variant="bordered"
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name (slug)</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="payment-api"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Version</label>
+                  <input
+                    type="text"
+                    value={formData.version}
+                    onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="1.0.0"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                <input
+                  type="text"
+                  value={formData.display_name}
+                  onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Payment API"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  rows={2}
+                  placeholder="API for handling payments..."
+                />
+              </div>
+            </div>
+          </Collapsible>
+
+          {/* Endpoint Configuration Section */}
+          <Collapsible
+            title="Endpoint Configuration"
+            icon={<Server className="h-4 w-4" />}
+            defaultExpanded={true}
+            variant="bordered"
+          >
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name (slug)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Backend URL</label>
               <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                type="url"
+                value={formData.backend_url}
+                onChange={(e) => setFormData({ ...formData, backend_url: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="payment-api"
+                placeholder="https://backend.internal/api/v1"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">The backend service URL that the Gateway will proxy requests to</p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Version</label>
-              <input
-                type="text"
-                value={formData.version}
-                onChange={(e) => setFormData({ ...formData, version: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="1.0.0"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
-            <input
-              type="text"
-              value={formData.display_name}
-              onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Payment API"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              rows={2}
-              placeholder="API for handling payments..."
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Backend URL</label>
-            <input
-              type="url"
-              value={formData.backend_url}
-              onChange={(e) => setFormData({ ...formData, backend_url: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="https://backend.internal/api/v1"
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">The backend service URL that the Gateway will proxy requests to</p>
-          </div>
+          </Collapsible>
 
           {/* OpenAPI Spec for manual mode */}
           {mode === 'manual' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">OpenAPI Spec (optional)</label>
-              <textarea
-                value={formData.openapi_spec}
-                onChange={(e) => setFormData({ ...formData, openapi_spec: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-                rows={4}
-                placeholder="Paste OpenAPI/Swagger spec here (YAML or JSON)..."
-              />
-            </div>
-          )}
-
-          {/* Portal Promotion Toggle */}
-          <div className="pt-4 border-t">
-            <div className="flex items-start gap-3">
-              <div className="flex items-center h-5">
-                <input
-                  type="checkbox"
-                  id="portalPromoted"
-                  checked={formData.portal_promoted}
-                  onChange={(e) => setFormData({ ...formData, portal_promoted: e.target.checked })}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            <Collapsible
+              title="OpenAPI Specification"
+              icon={<Code2 className="h-4 w-4" />}
+              badge="Optional"
+              defaultExpanded={false}
+              variant="bordered"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">OpenAPI Spec</label>
+                <textarea
+                  value={formData.openapi_spec}
+                  onChange={(e) => setFormData({ ...formData, openapi_spec: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                  rows={6}
+                  placeholder="Paste OpenAPI/Swagger spec here (YAML or JSON)..."
                 />
+                <p className="text-xs text-gray-500 mt-1">Adding an OpenAPI spec enables API documentation and validation</p>
               </div>
-              <div className="flex-1">
-                <label htmlFor="portalPromoted" className="text-sm font-medium text-gray-700">
-                  Promote to Developer Portal
-                </label>
-                <p className="text-xs text-gray-500 mt-1">
-                  When enabled, this API will be visible in the Developer Portal for consumers to discover and subscribe.
-                  This adds the <code className="bg-gray-100 px-1 rounded">portal:published</code> tag.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Deploy to DEV checkbox */}
-          {!isEdit && (
-            <div className="flex items-center gap-2 pt-2">
-              <input
-                type="checkbox"
-                id="deployToDev"
-                checked={deployToDev}
-                onChange={(e) => setDeployToDev(e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label htmlFor="deployToDev" className="text-sm text-gray-700">
-                Deploy to DEV environment after creation
-              </label>
-            </div>
+            </Collapsible>
           )}
+
+          {/* Portal & Deployment Settings */}
+          <Collapsible
+            title="Portal & Deployment"
+            icon={<Settings className="h-4 w-4" />}
+            defaultExpanded={!isEdit}
+            variant="bordered"
+          >
+            <div className="space-y-4">
+              {/* Portal Promotion Toggle */}
+              <div className="flex items-start gap-3">
+                <div className="flex items-center h-5">
+                  <input
+                    type="checkbox"
+                    id="portalPromoted"
+                    checked={formData.portal_promoted}
+                    onChange={(e) => setFormData({ ...formData, portal_promoted: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label htmlFor="portalPromoted" className="text-sm font-medium text-gray-700">
+                    Promote to Developer Portal
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1">
+                    When enabled, this API will be visible in the Developer Portal for consumers to discover and subscribe.
+                  </p>
+                </div>
+              </div>
+
+              {/* Deploy to DEV checkbox */}
+              {!isEdit && (
+                <div className="flex items-start gap-3 pt-3 border-t">
+                  <div className="flex items-center h-5">
+                    <input
+                      type="checkbox"
+                      id="deployToDev"
+                      checked={deployToDev}
+                      onChange={(e) => setDeployToDev(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label htmlFor="deployToDev" className="text-sm font-medium text-gray-700">
+                      Deploy to DEV environment
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Automatically deploy this API to the DEV environment after creation.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Collapsible>
 
           <div className="flex justify-end gap-3 pt-4 border-t mt-6">
             <button

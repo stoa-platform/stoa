@@ -42,21 +42,21 @@ const variantStyles: Record<ConfirmVariant, {
 }> = {
   default: {
     icon: <AlertTriangle className="h-6 w-6" />,
-    iconBg: 'bg-primary-100',
-    iconColor: 'text-primary-600',
-    confirmButton: 'bg-primary-600 hover:bg-primary-700 text-white',
+    iconBg: 'bg-primary-100 dark:bg-primary-900',
+    iconColor: 'text-primary-600 dark:text-primary-400',
+    confirmButton: 'bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 text-white',
   },
   danger: {
     icon: <Trash2 className="h-6 w-6" />,
-    iconBg: 'bg-error-100',
-    iconColor: 'text-error-600',
-    confirmButton: 'bg-error-600 hover:bg-error-700 text-white',
+    iconBg: 'bg-error-100 dark:bg-error-900',
+    iconColor: 'text-error-600 dark:text-error-400',
+    confirmButton: 'bg-error-600 hover:bg-error-700 dark:bg-error-500 dark:hover:bg-error-600 text-white',
   },
   warning: {
     icon: <AlertTriangle className="h-6 w-6" />,
-    iconBg: 'bg-warning-100',
-    iconColor: 'text-warning-600',
-    confirmButton: 'bg-warning-600 hover:bg-warning-700 text-white',
+    iconBg: 'bg-warning-100 dark:bg-warning-900',
+    iconColor: 'text-warning-600 dark:text-warning-400',
+    confirmButton: 'bg-warning-600 hover:bg-warning-700 dark:bg-warning-500 dark:hover:bg-warning-600 text-white',
   },
 };
 
@@ -135,13 +135,13 @@ export function ConfirmDialog({
       {/* Dialog */}
       <div
         ref={dialogRef}
-        className="relative bg-white rounded-modal shadow-modal w-full max-w-md animate-scale-in"
+        className="relative bg-white dark:bg-neutral-900 rounded-modal shadow-modal w-full max-w-md animate-scale-in"
       >
         {/* Close button */}
         <button
           onClick={onCancel}
           disabled={loading}
-          className="absolute top-4 right-4 p-1 rounded-full text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors disabled:opacity-50"
+          className="absolute top-4 right-4 p-1 rounded-full text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50"
           aria-label="Close dialog"
         >
           <X className="h-5 w-5" />
@@ -157,7 +157,7 @@ export function ConfirmDialog({
           {/* Title */}
           <h2
             id="confirm-dialog-title"
-            className="text-lg font-semibold text-neutral-900 text-center mb-2"
+            className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 text-center mb-2"
           >
             {title}
           </h2>
@@ -165,7 +165,7 @@ export function ConfirmDialog({
           {/* Message */}
           <p
             id="confirm-dialog-description"
-            className="text-sm text-neutral-600 text-center"
+            className="text-sm text-neutral-600 dark:text-neutral-400 text-center"
           >
             {message}
           </p>
@@ -176,7 +176,7 @@ export function ConfirmDialog({
           <button
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors disabled:opacity-50"
           >
             {cancelLabel}
           </button>

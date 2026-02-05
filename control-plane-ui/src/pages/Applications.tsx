@@ -3,6 +3,8 @@ import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { Application, ApplicationCreate, Tenant, API } from '../types';
 
 // Debounce hook for search optimization
@@ -183,8 +185,16 @@ export function Applications() {
 
   if (loading && tenants.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-10 w-40 bg-gray-200 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -286,34 +296,26 @@ export function Applications() {
       {/* Applications Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {loading ? (
-          <div className="col-span-full flex items-center justify-center h-32">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-          </div>
+          <>
+            {[1, 2, 3].map((i) => (
+              <CardSkeleton key={i} />
+            ))}
+          </>
         ) : applications.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg shadow">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-            </svg>
-            <p className="mt-2">No applications found for this tenant</p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="mt-4 text-blue-600 hover:text-blue-700"
-            >
-              Create your first application
-            </button>
+          <div className="col-span-full bg-white rounded-lg shadow">
+            <EmptyState
+              variant="default"
+              title="No applications found"
+              description="No applications found for this tenant. Create your first application to get started."
+              action={{ label: 'Create Application', onClick: () => setShowCreateModal(true) }}
+            />
           </div>
         ) : filteredApplications.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg shadow">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <p className="mt-2">No applications match your search criteria</p>
-            <button
-              onClick={() => { setSearchQuery(''); setStatusFilter(''); }}
-              className="mt-4 text-blue-600 hover:text-blue-700"
-            >
-              Clear filters
-            </button>
+          <div className="col-span-full bg-white rounded-lg shadow">
+            <EmptyState
+              variant="search"
+              action={{ label: 'Clear filters', onClick: () => { setSearchQuery(''); setStatusFilter(''); } }}
+            />
           </div>
         ) : (
           paginatedApplications.map((app) => (

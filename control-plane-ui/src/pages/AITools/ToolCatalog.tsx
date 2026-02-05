@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Filter, Tag, RefreshCw, Wrench, AlertCircle } from 'lucide-react';
+import { Search, Filter, Tag, RefreshCw, AlertCircle } from 'lucide-react';
 import { mcpGatewayService } from '../../services/mcpGatewayApi';
 import { ToolCard } from '../../components/tools';
 import type { MCPTool } from '../../types';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 
 export function ToolCatalog() {
   const navigate = useNavigate();
@@ -184,8 +186,10 @@ export function ToolCatalog() {
 
       {/* Loading */}
       {loading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
         </div>
       )}
 
@@ -211,22 +215,15 @@ export function ToolCatalog() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-              <Wrench className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No tools found</h3>
-              <p className="text-sm text-gray-500">
-                {hasActiveFilters
-                  ? 'Try adjusting your search or filter criteria'
-                  : 'No tools are available at the moment'}
-              </p>
-              {hasActiveFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
-                >
-                  Clear all filters
-                </button>
-              )}
+            <div className="col-span-full bg-white rounded-lg border border-gray-200">
+              <EmptyState
+                variant={hasActiveFilters ? 'search' : 'tools'}
+                action={
+                  hasActiveFilters
+                    ? { label: 'Clear all filters', onClick: clearFilters }
+                    : undefined
+                }
+              />
             </div>
           )}
         </>

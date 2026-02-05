@@ -41,6 +41,11 @@ WORKDIR /app
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
+# Cache-bust: ensures source changes always trigger recompilation
+# (GHA Docker layer cache can otherwise serve stale compiled artifacts)
+ARG CACHEBUST=unknown
+RUN echo "Build revision: ${CACHEBUST}"
+
 # Build the actual application (only this layer rebuilds on src changes)
 COPY Cargo.toml Cargo.lock* ./
 COPY src ./src

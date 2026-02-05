@@ -4,13 +4,14 @@ Collects and exposes metrics for the MCP Gateway.
 """
 
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
-from prometheus_client import Counter, Histogram, Gauge, Info
+from prometheus_client import Counter, Gauge, Histogram, Info
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from ..config import get_settings
+from ..tracing_config import get_current_trace_id
 
 settings = get_settings()
 prefix = settings.metrics_prefix
@@ -133,12 +134,19 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             status_code = 500
             raise
         finally:
-            # Record duration
+            # Record duration with trace_id exemplar for metrics→traces (CAB-1088)
             duration = time.time() - start_time
-            HTTP_REQUEST_DURATION_SECONDS.labels(
-                method=method,
-                endpoint=endpoint,
-            ).observe(duration)
+            trace_id = get_current_trace_id()
+            if trace_id:
+                HTTP_REQUEST_DURATION_SECONDS.labels(
+                    method=method,
+                    endpoint=endpoint,
+                ).observe(duration, exemplar={"trace_id": trace_id})
+            else:
+                HTTP_REQUEST_DURATION_SECONDS.labels(
+                    method=method,
+                    endpoint=endpoint,
+                ).observe(duration)
 
             # Record request count
             HTTP_REQUESTS_TOTAL.labels(
@@ -193,9 +201,16 @@ def record_tool_invocation(
         tool_name=tool_name,
         status=status,
     ).inc()
-    MCP_TOOL_INVOCATION_DURATION_SECONDS.labels(
-        tool_name=tool_name,
-    ).observe(duration_seconds)
+    # Attach trace_id exemplar for metrics→traces navigation (CAB-1088)
+    trace_id = get_current_trace_id()
+    if trace_id:
+        MCP_TOOL_INVOCATION_DURATION_SECONDS.labels(
+            tool_name=tool_name,
+        ).observe(duration_seconds, exemplar={"trace_id": trace_id})
+    else:
+        MCP_TOOL_INVOCATION_DURATION_SECONDS.labels(
+            tool_name=tool_name,
+        ).observe(duration_seconds)
 
 
 def record_auth_attempt(

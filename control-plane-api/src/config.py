@@ -3,11 +3,10 @@
 All settings can be overridden via environment variables.
 For Kubernetes deployments, set these in ConfigMaps/Secrets.
 """
-from pydantic_settings import BaseSettings
-from pydantic import field_validator
-from typing import List
 import json
 import os
+
+from pydantic_settings import BaseSettings
 
 # Base domain - used to construct default URLs
 _BASE_DOMAIN = os.getenv("BASE_DOMAIN", "gostoa.dev")
@@ -106,6 +105,12 @@ class Settings(BaseSettings):
     LOKI_TIMEOUT_SECONDS: int = 30
     LOKI_ENABLED: bool = True
 
+    # Gateway Sync Engine (Control Plane Agnostique)
+    SYNC_ENGINE_ENABLED: bool = True
+    SYNC_ENGINE_INTERVAL_SECONDS: int = 300  # 5 minutes
+    SYNC_ENGINE_MAX_CONCURRENT: int = 5
+    SYNC_ENGINE_RETRY_MAX: int = 3
+
     # CORS - comma-separated list of allowed origins
     CORS_ORIGINS: str = f"https://console.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
 
@@ -183,14 +188,14 @@ class Settings(BaseSettings):
         return self.DATABASE_URL.replace("+asyncpg", "")
 
     @property
-    def argocd_platform_apps_list(self) -> List[str]:
+    def argocd_platform_apps_list(self) -> list[str]:
         """Return ARGOCD_PLATFORM_APPS as a list"""
         if isinstance(self.ARGOCD_PLATFORM_APPS, list):
             return self.ARGOCD_PLATFORM_APPS
         return [app.strip() for app in self.ARGOCD_PLATFORM_APPS.split(",") if app.strip()]
 
     @property
-    def cors_origins_list(self) -> List[str]:
+    def cors_origins_list(self) -> list[str]:
         """Return CORS origins as a list"""
         if isinstance(self.CORS_ORIGINS, list):
             return self.CORS_ORIGINS
@@ -205,7 +210,7 @@ class Settings(BaseSettings):
             return {}
 
     @property
-    def log_exclude_paths_list(self) -> List[str]:
+    def log_exclude_paths_list(self) -> list[str]:
         """Return LOG_EXCLUDE_PATHS as a list"""
         try:
             return json.loads(self.LOG_EXCLUDE_PATHS)
@@ -213,7 +218,7 @@ class Settings(BaseSettings):
             return ["/health", "/healthz", "/ready", "/metrics"]
 
     @property
-    def log_masking_patterns_list(self) -> List[str]:
+    def log_masking_patterns_list(self) -> list[str]:
         """Return LOG_MASKING_PATTERNS as a list"""
         try:
             return json.loads(self.LOG_MASKING_PATTERNS)

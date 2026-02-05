@@ -7,12 +7,11 @@ Reference: CAB-XXX - Secure API Key Management with Vault & 2FA
 """
 
 import os
-from functools import lru_cache
 from typing import Any
 
-import structlog
 import hvac
-from hvac.exceptions import VaultError, InvalidPath
+import structlog
+from hvac.exceptions import InvalidPath, VaultError
 
 from ..config import get_settings
 

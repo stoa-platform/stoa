@@ -4,33 +4,32 @@ Combines data from Prometheus, Loki, and PostgreSQL for usage endpoints.
 Implements graceful degradation when external services are unavailable.
 """
 import logging
-from typing import Optional, List
 from datetime import datetime, timedelta
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
-from .prometheus_client import prometheus_client, PrometheusClient
-from .loki_client import loki_client, LokiClient
 from ..models.mcp_subscription import (
-    MCPServerSubscription,
     MCPServer,
-    MCPSubscriptionStatus,
     MCPServerStatus,
+    MCPServerSubscription,
+    MCPSubscriptionStatus,
 )
 from ..schemas.usage import (
-    UsageSummary,
-    UsagePeriodStats,
-    ToolUsageStat,
-    DailyCallStat,
-    UsageCall,
-    UsageCallsResponse,
     ActiveSubscription,
+    ActivityType,
+    CallStatus,
+    DailyCallStat,
     DashboardStats,
     RecentActivityItem,
-    CallStatus,
-    ActivityType,
+    ToolUsageStat,
+    UsageCall,
+    UsageCallsResponse,
+    UsagePeriodStats,
+    UsageSummary,
 )
+from .loki_client import LokiClient, loki_client
+from .prometheus_client import PrometheusClient, prometheus_client
 
 logger = logging.getLogger(__name__)
 
@@ -140,10 +139,10 @@ class MetricsService:
 
     async def _enrich_tool_stats(
         self,
-        tools: List[dict],
+        tools: list[dict],
         user_id: str,
         tenant_id: str,
-    ) -> List[ToolUsageStat]:
+    ) -> list[ToolUsageStat]:
         """Enrich tool stats with success rate and latency."""
         enriched = []
         for tool in tools:
@@ -176,10 +175,10 @@ class MetricsService:
         tenant_id: str,
         limit: int = 20,
         offset: int = 0,
-        status: Optional[CallStatus] = None,
-        tool_id: Optional[str] = None,
-        from_date: Optional[datetime] = None,
-        to_date: Optional[datetime] = None,
+        status: CallStatus | None = None,
+        tool_id: str | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
     ) -> UsageCallsResponse:
         """Get paginated call history from Loki.
 
@@ -252,7 +251,7 @@ class MetricsService:
         self,
         user_id: str,
         db: AsyncSession,
-    ) -> List[ActiveSubscription]:
+    ) -> list[ActiveSubscription]:
         """Get active subscriptions from PostgreSQL with usage data from Prometheus.
 
         Args:
@@ -363,7 +362,7 @@ class MetricsService:
         user_id: str,
         tenant_id: str,
         limit: int = 5,
-    ) -> List[RecentActivityItem]:
+    ) -> list[RecentActivityItem]:
         """Get recent activity for dashboard.
 
         Args:
@@ -407,7 +406,7 @@ class MetricsService:
 
     # ===== Helper Methods =====
 
-    def _generate_empty_daily_calls(self, days: int) -> List[DailyCallStat]:
+    def _generate_empty_daily_calls(self, days: int) -> list[DailyCallStat]:
         """Generate empty daily stats as fallback."""
         result = []
         for i in range(days - 1, -1, -1):

@@ -8,7 +8,6 @@ CAB-603: MCP RBAC Phase 1 - Tool Registry Restructure
 
 from src.models.mcp import CoreTool, ToolDomain, ToolInputSchema
 
-
 # =============================================================================
 # Category 1: Platform & Discovery (6 tools)
 # =============================================================================

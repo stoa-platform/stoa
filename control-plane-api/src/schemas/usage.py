@@ -2,10 +2,10 @@
 Pydantic schemas for Usage API endpoints - CAB-280
 Dashboard Usage Consumer pour DevOps/CPI
 """
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CallStatus(str, Enum):
@@ -72,11 +72,11 @@ class UsageSummary(BaseModel):
     today: UsagePeriodStats = Field(..., description="Today's statistics")
     this_week: UsagePeriodStats = Field(..., description="This week's statistics")
     this_month: UsagePeriodStats = Field(..., description="This month's statistics")
-    top_tools: List[ToolUsageStat] = Field(
+    top_tools: list[ToolUsageStat] = Field(
         default_factory=list,
         description="Top 5 most used tools"
     )
-    daily_calls: List[DailyCallStat] = Field(
+    daily_calls: list[DailyCallStat] = Field(
         default_factory=list,
         description="Call counts for the last 7 days"
     )
@@ -130,7 +130,7 @@ class UsageCall(BaseModel):
     tool_name: str = Field(..., description="Tool display name")
     status: CallStatus = Field(..., description="Call status")
     latency_ms: int = Field(..., ge=0, description="Call latency in milliseconds")
-    error_message: Optional[str] = Field(None, description="Error message if failed")
+    error_message: str | None = Field(None, description="Error message if failed")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -149,7 +149,7 @@ class UsageCall(BaseModel):
 
 class UsageCallsResponse(BaseModel):
     """Paginated response for calls list"""
-    calls: List[UsageCall] = Field(..., description="List of calls")
+    calls: list[UsageCall] = Field(..., description="List of calls")
     total: int = Field(..., ge=0, description="Total number of calls matching filters")
     limit: int = Field(..., ge=1, description="Page size")
     offset: int = Field(..., ge=0, description="Offset from start")
@@ -171,10 +171,10 @@ class ActiveSubscription(BaseModel):
     id: str = Field(..., description="Subscription identifier")
     tool_id: str = Field(..., description="Tool identifier")
     tool_name: str = Field(..., description="Tool display name")
-    tool_description: Optional[str] = Field(None, description="Tool description")
+    tool_description: str | None = Field(None, description="Tool description")
     status: str = Field(..., description="Subscription status (active, suspended, expired)")
     created_at: datetime = Field(..., description="When subscription was created")
-    last_used_at: Optional[datetime] = Field(None, description="When tool was last used")
+    last_used_at: datetime | None = Field(None, description="When tool was last used")
     call_count_total: int = Field(default=0, ge=0, description="Total calls made via this subscription")
 
     model_config = ConfigDict(
@@ -209,9 +209,9 @@ class DashboardStats(BaseModel):
     tools_available: int = Field(..., ge=0, description="Number of tools available")
     active_subscriptions: int = Field(..., ge=0, description="Number of active subscriptions")
     api_calls_this_week: int = Field(..., ge=0, description="API calls this week")
-    tools_trend: Optional[float] = Field(None, description="Tools trend percentage")
-    subscriptions_trend: Optional[float] = Field(None, description="Subscriptions trend percentage")
-    calls_trend: Optional[float] = Field(None, description="Calls trend percentage")
+    tools_trend: float | None = Field(None, description="Tools trend percentage")
+    subscriptions_trend: float | None = Field(None, description="Subscriptions trend percentage")
+    calls_trend: float | None = Field(None, description="Calls trend percentage")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -232,9 +232,9 @@ class RecentActivityItem(BaseModel):
     id: str = Field(..., description="Activity identifier")
     type: ActivityType = Field(..., description="Type of activity")
     title: str = Field(..., description="Activity title")
-    description: Optional[str] = Field(None, description="Activity description")
-    tool_id: Optional[str] = Field(None, description="Related tool ID")
-    tool_name: Optional[str] = Field(None, description="Related tool name")
+    description: str | None = Field(None, description="Activity description")
+    tool_id: str | None = Field(None, description="Related tool ID")
+    tool_name: str | None = Field(None, description="Related tool name")
     timestamp: datetime = Field(..., description="When the activity occurred")
 
     model_config = ConfigDict(
@@ -254,4 +254,4 @@ class RecentActivityItem(BaseModel):
 
 class DashboardActivityResponse(BaseModel):
     """Response for dashboard activity endpoint"""
-    activity: List[RecentActivityItem] = Field(..., description="List of recent activities")
+    activity: list[RecentActivityItem] = Field(..., description="List of recent activities")

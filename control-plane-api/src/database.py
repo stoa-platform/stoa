@@ -1,7 +1,8 @@
 """Database session management for Control-Plane API"""
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from collections.abc import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
-from typing import AsyncGenerator
 
 # Base class for models - defined first to avoid circular imports
 # This is used by all SQLAlchemy models and must be importable without side effects

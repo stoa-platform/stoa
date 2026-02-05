@@ -1,0 +1,71 @@
+{{- if and .Values.tempo.enabled .Values.grafana.tempoDataSource.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-tempo
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "stoa-observability.labels" . | nindent 4 }}
+    # Grafana sidecar auto-discovery label
+    grafana_datasource: "1"
+data:
+  tempo-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: {{ .Values.grafana.tempoDataSource.name }}
+        type: tempo
+        access: proxy
+        url: http://{{ .Release.Name }}-tempo.{{ .Release.Namespace }}:3100
+        isDefault: false
+        jsonData:
+          # ---------------------------------------------------------------
+          # Trace-to-Logs correlation (Datadog-style unified navigation)
+          # Clicking a trace span opens corresponding logs in Loki
+          # ---------------------------------------------------------------
+          tracesToLogsV2:
+            datasourceUid: {{ .Values.grafana.tempoDataSource.lokiDatasourceUid }}
+            spanStartTimeShift: "-1m"
+            spanEndTimeShift: "1m"
+            filterByTraceID: true
+            filterBySpanID: true
+            customQuery: false
+            tags:
+              - key: "component"
+                value: "component"
+              - key: "tenant_id"
+                value: "tenant_id"
+
+          # ---------------------------------------------------------------
+          # Trace-to-Metrics correlation
+          # Link from trace view to related Prometheus metrics
+          # ---------------------------------------------------------------
+          tracesToMetrics:
+            datasourceUid: {{ .Values.grafana.tempoDataSource.prometheusDatasourceUid }}
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            tags:
+              - key: "service.name"
+                value: "job"
+
+          # ---------------------------------------------------------------
+          # Service Map (Dynatrace-style auto-generated dependency graph)
+          # Emerges automatically from trace data
+          # ---------------------------------------------------------------
+          serviceMap:
+            datasourceUid: {{ .Values.grafana.tempoDataSource.prometheusDatasourceUid }}
+
+          # Node Graph visualization
+          nodeGraph:
+            enabled: true
+
+          # Search configuration
+          search:
+            hide: false
+
+          # Streaming for large traces
+          streamingEnabled: true
+
+          # Tempo internal search
+          lokiSearch:
+            datasourceUid: {{ .Values.grafana.tempoDataSource.lokiDatasourceUid }}
+{{- end }}

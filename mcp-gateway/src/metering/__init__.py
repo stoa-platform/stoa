@@ -8,8 +8,8 @@ This module provides usage metering for billing and analytics:
 
 from .models import (
     MeteringEvent,
-    MeteringStatus,
     MeteringEventBatch,
+    MeteringStatus,
 )
 from .producer import (
     MeteringProducer,

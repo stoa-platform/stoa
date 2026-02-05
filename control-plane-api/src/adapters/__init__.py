@@ -4,6 +4,7 @@ This package defines the abstract interface for gateway orchestration
 and provides concrete implementations for supported gateways.
 """
 
-from .gateway_adapter_interface import GatewayAdapterInterface, AdapterResult
+from .gateway_adapter_interface import AdapterResult, GatewayAdapterInterface
+from .registry import AdapterRegistry
 
-__all__ = ["GatewayAdapterInterface", "AdapterResult"]
+__all__ = ["AdapterRegistry", "AdapterResult", "GatewayAdapterInterface"]

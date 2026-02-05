@@ -1,14 +1,13 @@
 """APIs router - API lifecycle management via GitOps"""
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional
-from pydantic import BaseModel
 import uuid
 
-from ..auth import get_current_user, User, Permission, require_permission, require_tenant_access
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
 from ..services.git_service import git_service
 from ..services.kafka_service import kafka_service
-from ..services.variable_resolver import variable_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -21,17 +20,17 @@ class APICreate(BaseModel):
     version: str = "1.0.0"
     description: str = ""
     backend_url: str
-    openapi_spec: Optional[str] = None
-    tags: List[str] = []  # Tags for categorization and portal promotion
+    openapi_spec: str | None = None
+    tags: list[str] = []  # Tags for categorization and portal promotion
 
 
 class APIUpdate(BaseModel):
-    display_name: Optional[str] = None
-    version: Optional[str] = None
-    description: Optional[str] = None
-    backend_url: Optional[str] = None
-    openapi_spec: Optional[str] = None
-    tags: Optional[List[str]] = None  # Tags for categorization and portal promotion
+    display_name: str | None = None
+    version: str | None = None
+    description: str | None = None
+    backend_url: str | None = None
+    openapi_spec: str | None = None
+    tags: list[str] | None = None  # Tags for categorization and portal promotion
 
 
 class APIResponse(BaseModel):
@@ -45,7 +44,7 @@ class APIResponse(BaseModel):
     status: str = "draft"
     deployed_dev: bool = False
     deployed_staging: bool = False
-    tags: List[str] = []
+    tags: list[str] = []
     portal_promoted: bool = False  # True if API has portal:published tag
 
 
@@ -73,7 +72,7 @@ def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
     )
 
 
-@router.get("", response_model=List[APIResponse])
+@router.get("", response_model=list[APIResponse])
 @require_tenant_access
 async def list_apis(tenant_id: str, user: User = Depends(get_current_user)):
     """List all APIs for a tenant from GitLab"""
@@ -178,7 +177,7 @@ async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_cu
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to create API {api.name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create API: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create API: {e!s}")
 
 
 @router.put("/{api_id}", response_model=APIResponse)
@@ -230,7 +229,7 @@ async def update_api(
         raise
     except Exception as e:
         logger.error(f"Failed to update API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update API: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update API: {e!s}")
 
 
 @router.delete("/{api_id}")
@@ -272,4 +271,4 @@ async def delete_api(tenant_id: str, api_id: str, user: User = Depends(get_curre
         raise
     except Exception as e:
         logger.error(f"Failed to delete API {api_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete API: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete API: {e!s}")

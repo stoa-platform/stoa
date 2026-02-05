@@ -1,9 +1,9 @@
 """Applications router - Consumer applications management"""
+
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional
 from pydantic import BaseModel
 
-from ..auth import get_current_user, User, Permission, require_permission, require_tenant_access
+from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/applications", tags=["Applications"])
 
@@ -11,8 +11,8 @@ class ApplicationCreate(BaseModel):
     name: str
     display_name: str
     description: str = ""
-    redirect_uris: List[str] = []
-    api_subscriptions: List[str] = []  # List of API IDs
+    redirect_uris: list[str] = []
+    api_subscriptions: list[str] = []  # List of API IDs
 
 class ApplicationResponse(BaseModel):
     id: str
@@ -22,7 +22,7 @@ class ApplicationResponse(BaseModel):
     description: str
     client_id: str
     status: str = "pending"
-    api_subscriptions: List[str] = []
+    api_subscriptions: list[str] = []
     created_at: str
     updated_at: str
 
@@ -30,7 +30,7 @@ class ApplicationCredentials(BaseModel):
     client_id: str
     client_secret: str
 
-@router.get("", response_model=List[ApplicationResponse])
+@router.get("", response_model=list[ApplicationResponse])
 @require_tenant_access
 async def list_applications(tenant_id: str, user: User = Depends(get_current_user)):
     """List all applications for a tenant"""

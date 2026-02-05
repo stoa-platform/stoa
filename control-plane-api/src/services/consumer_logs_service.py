@@ -5,17 +5,16 @@ Orchestrates Loki queries + PII masking for self-service logs.
 import csv
 import io
 import time
-from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Any
+from datetime import UTC, datetime, timedelta
 
 from ..core.pii import PIIMasker
-from ..services.loki_client import loki_client as default_loki_client, LokiClient
 from ..schemas.logs import (
-    LogQueryParams,
     LogEntryResponse,
+    LogQueryParams,
     LogQueryResponse,
     LogStatus,
 )
+from ..services.loki_client import LokiClient, loki_client as default_loki_client
 
 MAX_TIME_RANGE_HOURS = 24
 DEFAULT_LOOKBACK_HOURS = 1
@@ -40,7 +39,7 @@ class ConsumerLogsService:
     ) -> LogQueryResponse:
         t0 = time.monotonic()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         end_time = params.end_time or now
         start_time = params.start_time or (now - timedelta(hours=DEFAULT_LOOKBACK_HOURS))
 
@@ -92,8 +91,8 @@ class ConsumerLogsService:
         tenant_id: str,
         start_time: datetime,
         end_time: datetime,
-        tool_id: Optional[str] = None,
-        status: Optional[str] = None,
+        tool_id: str | None = None,
+        status: str | None = None,
     ) -> str:
         if (end_time - start_time) > timedelta(hours=MAX_TIME_RANGE_HOURS):
             start_time = end_time - timedelta(hours=MAX_TIME_RANGE_HOURS)

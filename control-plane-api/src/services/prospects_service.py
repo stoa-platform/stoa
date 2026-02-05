@@ -8,7 +8,6 @@ import csv
 import io
 import logging
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import case, func, select
@@ -39,10 +38,10 @@ TIMELINE_LIMIT = 50
 
 async def list_prospects(
     db: AsyncSession,
-    company: Optional[str] = None,
-    status: Optional[str] = None,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
+    company: str | None = None,
+    status: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     page: int = 1,
     limit: int = 25,
 ) -> ProspectListResponse:
@@ -134,7 +133,7 @@ async def list_prospects(
     for row in rows:
         invite = row[0]
         nps_score = row[1]
-        nps_comment = row[2]
+        row[2]
         last_activity = row[3]
         first_tool_at = row[4]
         event_count = row[5] or 0
@@ -181,7 +180,7 @@ async def list_prospects(
 async def get_prospect_detail(
     db: AsyncSession,
     invite_id: UUID,
-) -> Optional[ProspectDetail]:
+) -> ProspectDetail | None:
     """Get detailed prospect info with timeline.
 
     Args:
@@ -325,8 +324,8 @@ async def _calculate_metrics(
 
 async def get_metrics(
     db: AsyncSession,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
 ) -> ProspectsMetricsResponse:
     """Calculate aggregated KPIs for the dashboard.
 
@@ -516,10 +515,10 @@ async def get_metrics(
 
 async def export_prospects_csv(
     db: AsyncSession,
-    company: Optional[str] = None,
-    status: Optional[str] = None,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
+    company: str | None = None,
+    status: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
 ) -> str:
     """Export prospects to CSV format.
 

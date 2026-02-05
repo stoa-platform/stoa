@@ -1,7 +1,7 @@
 """Repository for tenant CRUD operations"""
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from typing import Optional, List
 
 from src.models.tenant import Tenant, TenantStatus
 
@@ -19,7 +19,7 @@ class TenantRepository:
         await self.session.refresh(tenant)
         return tenant
 
-    async def get_by_id(self, tenant_id: str) -> Optional[Tenant]:
+    async def get_by_id(self, tenant_id: str) -> Tenant | None:
         """Get tenant by ID"""
         result = await self.session.execute(
             select(Tenant).where(Tenant.id == tenant_id)
@@ -29,7 +29,7 @@ class TenantRepository:
     async def list_all(
         self,
         include_archived: bool = False
-    ) -> List[Tenant]:
+    ) -> list[Tenant]:
         """List all tenants (optionally including archived)"""
         query = select(Tenant)
 
@@ -43,9 +43,9 @@ class TenantRepository:
 
     async def list_for_user(
         self,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
         is_admin: bool = False
-    ) -> List[Tenant]:
+    ) -> list[Tenant]:
         """
         List tenants based on user access.
 

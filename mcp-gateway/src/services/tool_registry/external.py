@@ -12,12 +12,12 @@ import structlog
 
 from ...models import (
     ExternalTool,
-    ToolResult,
     TextContent,
+    ToolResult,
 )
 
 if TYPE_CHECKING:
-    from . import ToolRegistry
+    pass
 
 logger = structlog.get_logger(__name__)
 

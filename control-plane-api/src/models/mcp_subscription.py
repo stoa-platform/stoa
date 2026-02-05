@@ -5,23 +5,24 @@ and admin approval workflow.
 
 Reference: PLAN-MCP-SUBSCRIPTIONS.md
 """
+import enum
+import uuid
+from datetime import datetime
+
 from sqlalchemy import (
+    JSON,
+    Boolean,
     Column,
-    String,
     DateTime,
     Enum as SQLEnum,
-    Text,
+    ForeignKey,
     Index,
     Integer,
-    Boolean,
-    ForeignKey,
-    JSON,
+    String,
+    Text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime
-import uuid
-import enum
 
 from src.database import Base
 

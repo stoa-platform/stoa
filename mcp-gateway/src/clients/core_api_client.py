@@ -4,9 +4,9 @@ HTTP Client for Core API calls - ADR-001 Compliance.
 Ce client remplace l'accès direct PostgreSQL dans le MCP Gateway.
 Toutes les données doivent transiter par Core API.
 """
-import httpx
-from typing import Optional, List
 import logging
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,8 @@ class CoreAPIClient:
         method: str,
         path: str,
         token: str,
-        json: Optional[dict] = None,
-        params: Optional[dict] = None
+        json: dict | None = None,
+        params: dict | None = None
     ) -> dict:
         """Make authenticated request to Core API."""
         url = f"{self.base_url}{path}"
@@ -68,12 +68,12 @@ class CoreAPIClient:
         """Get tenant by ID."""
         return await self._request("GET", f"/v1/tenants/{tenant_id}", token)
 
-    async def list_tenants(self, token: str) -> List[dict]:
+    async def list_tenants(self, token: str) -> list[dict]:
         """List all accessible tenants."""
         result = await self._request("GET", "/v1/tenants", token)
         return result.get("items", result) if isinstance(result, dict) else result
 
-    async def get_tenant_by_slug(self, slug: str, token: str) -> Optional[dict]:
+    async def get_tenant_by_slug(self, slug: str, token: str) -> dict | None:
         """Get tenant by slug."""
         tenants = await self.list_tenants(token)
         for tenant in tenants:
@@ -88,10 +88,10 @@ class CoreAPIClient:
     async def list_mcp_subscriptions(
         self,
         token: str,
-        user_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
-        status: Optional[str] = None
-    ) -> List[dict]:
+        user_id: str | None = None,
+        tenant_id: str | None = None,
+        status: str | None = None
+    ) -> list[dict]:
         """List MCP subscriptions with optional filters."""
         params = {}
         if user_id:
@@ -120,7 +120,7 @@ class CoreAPIClient:
         self,
         subscription_id: str,
         token: str,
-        totp_code: Optional[str] = None
+        totp_code: str | None = None
     ) -> dict:
         """Reveal API key (requires 2FA if configured)."""
         data = {"totp_code": totp_code} if totp_code else {}
@@ -152,9 +152,9 @@ class CoreAPIClient:
     async def list_mcp_servers(
         self,
         token: str,
-        tenant_id: Optional[str] = None,
-        category: Optional[str] = None
-    ) -> List[dict]:
+        tenant_id: str | None = None,
+        category: str | None = None
+    ) -> list[dict]:
         """List available MCP servers."""
         params = {}
         if tenant_id:
@@ -176,9 +176,9 @@ class CoreAPIClient:
     async def list_tools(
         self,
         token: str,
-        tenant_id: Optional[str] = None,
-        category: Optional[str] = None
-    ) -> List[dict]:
+        tenant_id: str | None = None,
+        category: str | None = None
+    ) -> list[dict]:
         """List available MCP tools."""
         params = {}
         if tenant_id:
@@ -200,10 +200,10 @@ class CoreAPIClient:
     async def list_apis(
         self,
         token: str,
-        tenant_id: Optional[str] = None,
-        status: Optional[str] = None,
-        category: Optional[str] = None
-    ) -> List[dict]:
+        tenant_id: str | None = None,
+        status: str | None = None,
+        category: str | None = None
+    ) -> list[dict]:
         """List APIs from portal catalog."""
         params = {}
         if tenant_id:
@@ -262,7 +262,7 @@ class CoreAPIClient:
 # SINGLETON
 # =============================================================================
 
-_client: Optional[CoreAPIClient] = None
+_client: CoreAPIClient | None = None
 
 
 def init_core_api_client(base_url: str, timeout: float = 30.0) -> CoreAPIClient:

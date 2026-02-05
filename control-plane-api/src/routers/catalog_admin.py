@@ -5,26 +5,25 @@ These endpoints require admin role (cpi-admin or tenant-admin).
 """
 import json
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth.dependencies import get_current_user, User
+from ..auth.dependencies import User, get_current_user
 from ..database import get_db as get_async_db
 from ..models.catalog import APICatalog
-from ..services.catalog_sync_service import CatalogSyncService
-from ..services.git_service import git_service
 from ..repositories.catalog import CatalogRepository
 from ..schemas.catalog import (
-    SyncTriggerResponse,
-    SyncStatusResponse,
-    SyncHistoryResponse,
     CatalogStatsResponse,
+    SyncHistoryResponse,
+    SyncStatusResponse,
+    SyncTriggerResponse,
 )
+from ..services.catalog_sync_service import CatalogSyncService
+from ..services.git_service import git_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/admin/catalog", tags=["Catalog Admin"])
@@ -84,7 +83,7 @@ async def trigger_catalog_sync(
 
     except Exception as e:
         logger.error(f"Failed to trigger catalog sync: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to trigger sync: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger sync: {e!s}")
 
 
 @router.post("/sync/mcp-servers", response_model=SyncTriggerResponse)
@@ -92,7 +91,7 @@ async def trigger_mcp_servers_sync(
     background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
-    tenant_id: Optional[str] = Query(None, description="Sync specific tenant only"),
+    tenant_id: str | None = Query(None, description="Sync specific tenant only"),
 ):
     """
     Trigger MCP servers synchronization from GitLab.
@@ -121,7 +120,7 @@ async def trigger_mcp_servers_sync(
 
     except Exception as e:
         logger.error(f"Failed to trigger MCP servers sync: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to trigger sync: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger sync: {e!s}")
 
 
 @router.post("/sync/tenant/{tenant_id}", response_model=SyncTriggerResponse)
@@ -158,7 +157,7 @@ async def trigger_tenant_sync(
 
     except Exception as e:
         logger.error(f"Failed to trigger tenant sync: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to trigger sync: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to trigger sync: {e!s}")
 
 
 @router.get("/sync/status", response_model=SyncStatusResponse)
@@ -193,7 +192,7 @@ async def get_sync_status(
         raise
     except Exception as e:
         logger.error(f"Failed to get sync status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get sync status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get sync status: {e!s}")
 
 
 @router.get("/sync/history", response_model=SyncHistoryResponse)
@@ -222,7 +221,7 @@ async def get_sync_history(
 
     except Exception as e:
         logger.error(f"Failed to get sync history: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get sync history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get sync history: {e!s}")
 
 
 # ============================================================================
@@ -267,7 +266,7 @@ async def get_catalog_stats(
 
     except Exception as e:
         logger.error(f"Failed to get catalog stats: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get catalog stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get catalog stats: {e!s}")
 
 
 # ============================================================================
@@ -307,15 +306,15 @@ class CatalogSeedAPIEntry(BaseModel):
     version: str = "1.0.0"
     description: str = ""
     backend_url: str = ""
-    tags: List[str] = []
-    category: Optional[str] = None
-    openapi_spec: Optional[str] = None  # JSON string
+    tags: list[str] = []
+    category: str | None = None
+    openapi_spec: str | None = None  # JSON string
 
 
 class CatalogSeedRequest(BaseModel):
     """Request to seed APIs directly into catalog (bypasses GitLab)."""
     tenant_id: str
-    apis: List[CatalogSeedAPIEntry]
+    apis: list[CatalogSeedAPIEntry]
 
 
 class CatalogSeedResponse(BaseModel):
@@ -386,7 +385,7 @@ async def seed_catalog_directly(
                 openapi_spec=openapi_spec,
                 git_path=None,
                 git_commit_sha=None,
-                synced_at=datetime.now(timezone.utc),
+                synced_at=datetime.now(UTC),
                 deleted_at=None,
             ).on_conflict_do_update(
                 index_elements=["tenant_id", "api_id"],
@@ -399,7 +398,7 @@ async def seed_catalog_directly(
                     "portal_published": portal_published,
                     "metadata": api_metadata,  # DB column is "metadata" not "api_metadata"
                     "openapi_spec": openapi_spec,
-                    "synced_at": datetime.now(timezone.utc),
+                    "synced_at": datetime.now(UTC),
                     "deleted_at": None,
                 },
             )

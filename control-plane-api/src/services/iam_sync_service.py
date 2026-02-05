@@ -6,14 +6,13 @@ This service ensures consistency between GitOps repository and Keycloak:
 - Application clients (OAuth2)
 """
 import logging
-from typing import Optional
 from datetime import datetime
 
 import yaml
 
 from .git_service import git_service
+from .kafka_service import Topics, kafka_service
 from .keycloak_service import keycloak_service
-from .kafka_service import kafka_service, Topics
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class IAMSyncService:
     """
 
     def __init__(self):
-        self._last_sync: Optional[datetime] = None
+        self._last_sync: datetime | None = None
 
     async def sync_tenant(self, tenant_id: str) -> dict:
         """
@@ -87,7 +86,7 @@ class IAMSyncService:
             result["errors"].append(str(e))
             return result
 
-    async def _get_tenant_users_config(self, tenant_id: str) -> Optional[dict]:
+    async def _get_tenant_users_config(self, tenant_id: str) -> dict | None:
         """Get users configuration from GitOps for a tenant."""
         try:
             content = await git_service.get_file(

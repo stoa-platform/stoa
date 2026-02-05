@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import shlex
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from starlette.requests import Request
@@ -237,7 +237,7 @@ class SnapshotService:
 
             snapshot.logs = [
                 LogEntry(
-                    timestamp=log.get("timestamp", datetime.now(timezone.utc)),
+                    timestamp=log.get("timestamp", datetime.now(UTC)),
                     level=log.get("level", "INFO"),
                     message=log.get("message", ""),
                     extra=log.get("extra", {}),
@@ -344,10 +344,7 @@ class SnapshotService:
 
         # Add body if present
         if req.body:
-            if isinstance(req.body, dict):
-                body_str = json.dumps(req.body)
-            else:
-                body_str = str(req.body)
+            body_str = json.dumps(req.body) if isinstance(req.body, dict) else str(req.body)
             parts.extend(["-d", body_str])
 
         # Build URL with query params

@@ -1,6 +1,6 @@
 """Keycloak service for authentication and client management"""
 import logging
-from typing import Optional
+
 from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
 
 from ..config import settings
@@ -11,7 +11,7 @@ class KeycloakService:
     """Service for Keycloak operations"""
 
     def __init__(self):
-        self._admin: Optional[KeycloakAdmin] = None
+        self._admin: KeycloakAdmin | None = None
 
     async def connect(self):
         """Initialize Keycloak admin connection"""
@@ -34,7 +34,7 @@ class KeycloakService:
         self._admin = None
 
     # User operations
-    async def get_users(self, tenant_id: Optional[str] = None) -> list[dict]:
+    async def get_users(self, tenant_id: str | None = None) -> list[dict]:
         """Get users, optionally filtered by tenant"""
         if not self._admin:
             raise RuntimeError("Keycloak not connected")
@@ -50,7 +50,7 @@ class KeycloakService:
 
         return users
 
-    async def get_user(self, user_id: str) -> Optional[dict]:
+    async def get_user(self, user_id: str) -> dict | None:
         """Get user by ID"""
         if not self._admin:
             raise RuntimeError("Keycloak not connected")
@@ -68,7 +68,7 @@ class KeycloakService:
         last_name: str,
         tenant_id: str,
         roles: list[str],
-        temporary_password: Optional[str] = None
+        temporary_password: str | None = None
     ) -> str:
         """Create a new user in Keycloak"""
         if not self._admin:
@@ -146,7 +146,7 @@ class KeycloakService:
         return True
 
     # Client (Application) operations
-    async def get_clients(self, tenant_id: Optional[str] = None) -> list[dict]:
+    async def get_clients(self, tenant_id: str | None = None) -> list[dict]:
         """Get all clients, optionally filtered by tenant"""
         if not self._admin:
             raise RuntimeError("Keycloak not connected")
@@ -163,7 +163,7 @@ class KeycloakService:
 
         return clients
 
-    async def get_client(self, client_id: str) -> Optional[dict]:
+    async def get_client(self, client_id: str) -> dict | None:
         """Get client by client_id"""
         if not self._admin:
             raise RuntimeError("Keycloak not connected")

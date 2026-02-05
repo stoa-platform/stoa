@@ -39,6 +39,61 @@ gateway:
     # piiMaskingEnabled: true
     # retentionDays: 30
 
+# STOA Gateway (Rust) Configuration
+# Emerging Rust implementation - will replace Python mcp-gateway Q4 2026
+stoaGateway:
+  enabled: false  # Enable when ready for production
+  image:
+    repository: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-gateway
+    tag: latest
+    pullPolicy: Always
+  replicas: 2
+  serviceAccount: default
+
+  # Control Plane (Python FastAPI backend)
+  controlPlaneUrl: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+
+  # Keycloak OIDC
+  keycloakUrl: ""
+  keycloakRealm: stoa
+  keycloakClientId: stoa-mcp-gateway
+
+  # Secret containing JWT_SECRET, KEYCLOAK_CLIENT_SECRET, ADMIN_API_TOKEN
+  secretName: stoa-gateway-secrets
+
+  # ExternalSecret (Vault-backed)
+  externalSecret:
+    enabled: false
+    refreshInterval: 1h
+    secretStoreRef: vault-backend
+    vaultPath: stoa/data/gateway
+
+  # ServiceMonitor for Prometheus autodiscovery
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    scrapeTimeout: 10s
+
+  # Observability
+  logLevel: info
+  logFormat: json
+  # OpenTelemetry Collector endpoint (Grafana Alloy in stoa-monitoring namespace)
+  # Set to enable distributed tracing export via OTLP gRPC
+  otelEndpoint: ""  # e.g. "http://stoa-alloy-otlp.stoa-monitoring:4317"
+
+  # Resources
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  nodeSelector: {}
+  tolerations: []
+  extraEnv: []
+
 # Gateway OpenAPI Sync Configuration
 # Automatically syncs OpenAPI spec from Control-Plane-API to webMethods Gateway
 gatewaySync:

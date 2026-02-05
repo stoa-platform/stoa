@@ -4,7 +4,7 @@ CAB-841: Extracted from tool_registry.py for modularity.
 CAB-605 Phase 3: Deprecation layer for backward compatibility.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -15,7 +15,7 @@ from .exceptions import ToolNotFoundError
 from .models import DeprecatedToolAlias
 
 if TYPE_CHECKING:
-    from . import ToolRegistry
+    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -65,7 +65,7 @@ class DeprecationMixin:
             new_args: Arguments to inject (e.g., {"action": "list"})
             deprecation_days: Days until the alias expires (default: 60)
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         alias = DeprecatedToolAlias(
             old_name=old_name,
             new_name=new_name,

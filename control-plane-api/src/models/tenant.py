@@ -2,9 +2,10 @@
 
 Model for multi-tenant management stored in the database.
 """
-from sqlalchemy import Column, String, Text, DateTime, JSON
-from sqlalchemy.sql import func
 import enum
+
+from sqlalchemy import JSON, Column, DateTime, String, Text
+from sqlalchemy.sql import func
 
 from src.database import Base
 

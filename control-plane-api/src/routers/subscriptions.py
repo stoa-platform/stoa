@@ -1,45 +1,45 @@
 """Subscriptions router - API subscription management"""
 import asyncio
 import logging
+import math
 import uuid as uuid_mod
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
-from uuid import UUID
-import math
 
-from ..auth import get_current_user, User, require_permission, Permission
+from ..auth import User, get_current_user
 from ..database import get_db
 from ..models.subscription import Subscription, SubscriptionStatus
 from ..repositories.subscription import SubscriptionRepository
-from ..services.api_key import APIKeyService
 from ..schemas.subscription import (
-    SubscriptionCreate,
-    SubscriptionResponse,
-    SubscriptionListResponse,
-    SubscriptionApprove,
-    SubscriptionRevoke,
-    SubscriptionStatusEnum,
     APIKeyResponse,
     KeyRotationRequest,
     KeyRotationResponse,
+    SubscriptionApprove,
+    SubscriptionCreate,
+    SubscriptionListResponse,
+    SubscriptionResponse,
+    SubscriptionRevoke,
+    SubscriptionStatusEnum,
     SubscriptionWithRotationInfo,
 )
+from ..services.api_key import APIKeyService
 from ..services.email import email_service
+from ..services.provisioning_service import deprovision_on_revocation, provision_on_approval
 from ..services.webhook_service import (
-    emit_subscription_created,
     emit_subscription_approved,
-    emit_subscription_revoked,
+    emit_subscription_created,
     emit_subscription_key_rotated,
+    emit_subscription_revoked,
 )
-from ..services.provisioning_service import provision_on_approval, deprovision_on_revocation
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/subscriptions", tags=["Subscriptions"])
 
 
-def _extract_auth_token(request: Request) -> Optional[str]:
+def _extract_auth_token(request: Request) -> str | None:
     """Extract Bearer token from Authorization header if present."""
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
@@ -51,9 +51,7 @@ def _has_tenant_access(user: User, tenant_id: str) -> bool:
     """Check if user has access to a tenant"""
     if "cpi-admin" in user.roles:
         return True
-    if user.tenant_id == tenant_id:
-        return True
-    return False
+    return user.tenant_id == tenant_id
 
 
 # ============== Subscriber Endpoints (Developer Portal) ==============
@@ -134,7 +132,7 @@ async def create_subscription(
 
 @router.get("/my", response_model=SubscriptionListResponse)
 async def list_my_subscriptions(
-    status: Optional[SubscriptionStatusEnum] = None,
+    status: SubscriptionStatusEnum | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     user: User = Depends(get_current_user),
@@ -356,7 +354,7 @@ async def get_subscription_rotation_info(
 @router.get("/tenant/{tenant_id}", response_model=SubscriptionListResponse)
 async def list_tenant_subscriptions(
     tenant_id: str,
-    status: Optional[SubscriptionStatusEnum] = None,
+    status: SubscriptionStatusEnum | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     user: User = Depends(get_current_user),

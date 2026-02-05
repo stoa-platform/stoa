@@ -5,21 +5,21 @@ CAB-603: Registration methods for core, proxied, and legacy tools.
 CAB-605: Tool consolidation and RPO Easter eggs.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import structlog
 
 from ...config import get_settings
 from ...models import (
-    Tool,
     CoreTool,
     ProxiedTool,
+    Tool,
     ToolInputSchema,
 )
 from ...tools import CORE_TOOLS
 
 if TYPE_CHECKING:
-    from . import ToolRegistry
+    pass
 
 logger = structlog.get_logger(__name__)
 

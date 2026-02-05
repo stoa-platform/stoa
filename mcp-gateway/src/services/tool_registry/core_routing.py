@@ -12,13 +12,13 @@ import structlog
 from ...config import get_settings
 from ...models import (
     CoreTool,
-    ToolResult,
     TextContent,
+    ToolResult,
 )
 from ..tool_handlers import get_tool_handlers
 
 if TYPE_CHECKING:
-    from . import ToolRegistry
+    pass
 
 logger = structlog.get_logger(__name__)
 

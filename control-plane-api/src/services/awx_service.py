@@ -1,6 +1,6 @@
 """AWX service for Ansible automation"""
 import logging
-from typing import Optional
+
 import httpx
 
 from ..config import settings
@@ -11,7 +11,7 @@ class AWXService:
     """Service for AWX/Ansible Tower operations"""
 
     def __init__(self):
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
         self._base_url: str = ""
 
     async def connect(self):
@@ -52,7 +52,7 @@ class AWXService:
         """Get job template by ID"""
         return await self._request("GET", f"/job_templates/{template_id}/")
 
-    async def get_job_template_by_name(self, name: str) -> Optional[dict]:
+    async def get_job_template_by_name(self, name: str) -> dict | None:
         """Get job template by name"""
         result = await self._request("GET", "/job_templates/", params={"name": name})
         templates = result.get("results", [])
@@ -62,8 +62,8 @@ class AWXService:
     async def launch_job(
         self,
         template_id: int,
-        extra_vars: Optional[dict] = None,
-        limit: Optional[str] = None
+        extra_vars: dict | None = None,
+        limit: str | None = None
     ) -> dict:
         """
         Launch a job from a template.
@@ -178,7 +178,7 @@ class AWXService:
         tenant_id: str,
         tenant_name: str,
         users: list[dict],
-        environments: list[str] = None
+        environments: list[str] | None = None
     ) -> dict:
         """
         Launch tenant provisioning job.

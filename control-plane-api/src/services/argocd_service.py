@@ -5,8 +5,8 @@ Uses OIDC authentication - forwards user's Keycloak token to ArgoCD.
 """
 import asyncio
 import logging
-from typing import Any, Optional, List
 from datetime import datetime
+
 import httpx
 
 from ..config import settings
@@ -75,7 +75,7 @@ class ArgoCDService:
             logger.warning(f"ArgoCD health check failed: {e}")
             return False
 
-    async def get_applications(self, auth_token: str, project: str = "") -> List[dict]:
+    async def get_applications(self, auth_token: str, project: str = "") -> list[dict]:
         """
         List all applications, optionally filtered by project.
 
@@ -129,7 +129,7 @@ class ArgoCDService:
             "conditions": status.get("conditions", []),
         }
 
-    async def get_platform_status(self, auth_token: str, app_names: Optional[List[str]] = None, include_events: bool = False) -> dict:
+    async def get_platform_status(self, auth_token: str, app_names: list[str] | None = None, include_events: bool = False) -> dict:
         """
         Get aggregated platform status for multiple applications.
 
@@ -156,7 +156,7 @@ class ArgoCDService:
         overall_healthy = True
         overall_synced = True
 
-        for app_name, result in zip(app_names, results):
+        for app_name, result in zip(app_names, results, strict=False):
             if isinstance(result, httpx.HTTPStatusError):
                 if result.response.status_code == 404:
                     components.append({
@@ -254,7 +254,7 @@ class ArgoCDService:
             result["events"] = app_events
         return result
 
-    async def get_application_events(self, auth_token: str, app_name: str, limit: int = 20) -> List[dict]:
+    async def get_application_events(self, auth_token: str, app_name: str, limit: int = 20) -> list[dict]:
         """
         Get recent events for an application.
 
@@ -269,7 +269,7 @@ class ArgoCDService:
         app = await self.get_application(auth_token, app_name)
         return self._extract_events(app, limit)
 
-    def _extract_events(self, app: dict, limit: int = 20) -> List[dict]:
+    def _extract_events(self, app: dict, limit: int = 20) -> list[dict]:
         """Extract events from an already-fetched application object."""
         history = app.get("status", {}).get("history", [])
 

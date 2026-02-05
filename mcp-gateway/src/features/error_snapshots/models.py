@@ -4,12 +4,13 @@ MCP Error Snapshot Models
 Pydantic schemas for capturing MCP Gateway errors with full context.
 """
 
-from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
-from pydantic import BaseModel, Field
 import hashlib
 import uuid
+from datetime import datetime
+from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class MCPErrorType(str, Enum):
@@ -45,12 +46,12 @@ class MCPErrorType(str, Enum):
 class MCPServerContext(BaseModel):
     """Context about the MCP server involved in the error"""
     name: str = Field(..., description="Server name/identifier")
-    url: Optional[str] = Field(None, description="Server URL (masked if contains secrets)")
-    version: Optional[str] = Field(None, description="Server version")
+    url: str | None = Field(None, description="Server URL (masked if contains secrets)")
+    version: str | None = Field(None, description="Server version")
     tools_available: list[str] = Field(default_factory=list, description="List of available tools")
-    health_at_error: Optional[str] = Field(None, description="Server health status at error time")
-    latency_p99_ms: Optional[int] = Field(None, description="P99 latency in ms")
-    error_rate_percent: Optional[float] = Field(None, description="Recent error rate")
+    health_at_error: str | None = Field(None, description="Server health status at error time")
+    latency_p99_ms: int | None = Field(None, description="P99 latency in ms")
+    error_rate_percent: float | None = Field(None, description="Recent error rate")
 
 
 class ToolInvocation(BaseModel):
@@ -60,11 +61,11 @@ class ToolInvocation(BaseModel):
     input_params_masked: list[str] = Field(default_factory=list, description="List of masked parameter keys")
     started_at: datetime = Field(default_factory=datetime.utcnow)
     duration_ms: int = Field(0, description="Execution duration in ms")
-    error_type: Optional[str] = Field(None, description="Error type/class name")
-    error_message: Optional[str] = Field(None, description="Error message")
+    error_type: str | None = Field(None, description="Error type/class name")
+    error_message: str | None = Field(None, description="Error message")
     error_retryable: bool = Field(False, description="Whether the error is retryable")
-    backend_status_code: Optional[int] = Field(None, description="Backend HTTP status code")
-    backend_response_preview: Optional[str] = Field(None, description="First 500 chars of backend response")
+    backend_status_code: int | None = Field(None, description="Backend HTTP status code")
+    backend_response_preview: str | None = Field(None, description="First 500 chars of backend response")
 
 
 class LLMContext(BaseModel):
@@ -75,9 +76,9 @@ class LLMContext(BaseModel):
     tokens_output: int = Field(0, description="Output tokens generated")
     estimated_cost_usd: float = Field(0.0, description="Estimated cost in USD")
     latency_ms: int = Field(0, description="LLM call latency")
-    error_code: Optional[str] = Field(None, description="LLM-specific error code")
-    prompt_length: Optional[int] = Field(None, description="Length of prompt (chars)")
-    prompt_hash: Optional[str] = Field(None, description="SHA256 hash of prompt for correlation")
+    error_code: str | None = Field(None, description="LLM-specific error code")
+    prompt_length: int | None = Field(None, description="Length of prompt (chars)")
+    prompt_hash: str | None = Field(None, description="SHA256 hash of prompt for correlation")
 
 
 class RetryContext(BaseModel):
@@ -87,8 +88,8 @@ class RetryContext(BaseModel):
     strategy: str = Field("exponential_backoff", description="Retry strategy used")
     delays_ms: list[int] = Field(default_factory=list, description="Delays between attempts")
     fallback_attempted: bool = Field(False, description="Whether fallback was attempted")
-    fallback_server: Optional[str] = Field(None, description="Fallback server name if used")
-    fallback_result: Optional[str] = Field(None, description="Result of fallback attempt")
+    fallback_server: str | None = Field(None, description="Fallback server name if used")
+    fallback_result: str | None = Field(None, description="Result of fallback attempt")
 
 
 class RequestContext(BaseModel):
@@ -97,15 +98,15 @@ class RequestContext(BaseModel):
     path: str
     query_params: dict[str, str] = Field(default_factory=dict)
     headers: dict[str, str] = Field(default_factory=dict, description="Masked headers")
-    client_ip: Optional[str] = None
-    user_agent: Optional[str] = None
+    client_ip: str | None = None
+    user_agent: str | None = None
 
 
 class UserContext(BaseModel):
     """User/authentication context"""
-    user_id: Optional[str] = None
-    tenant_id: Optional[str] = None
-    client_id: Optional[str] = None
+    user_id: str | None = None
+    tenant_id: str | None = None
+    client_id: str | None = None
     roles: list[str] = Field(default_factory=list)
     scopes: list[str] = Field(default_factory=list)
 
@@ -123,24 +124,24 @@ class MCPErrorSnapshot(BaseModel):
     # Error classification
     error_type: MCPErrorType = Field(..., description="Type of MCP error")
     error_message: str = Field(..., description="Human-readable error message")
-    error_code: Optional[str] = Field(None, description="Machine-readable error code")
+    error_code: str | None = Field(None, description="Machine-readable error code")
 
     # Request context
     request: RequestContext
     response_status: int = Field(500, description="HTTP response status code")
 
     # User context
-    user: Optional[UserContext] = None
+    user: UserContext | None = None
 
     # MCP specific context
-    mcp_server: Optional[MCPServerContext] = None
-    tool_invocation: Optional[ToolInvocation] = None
-    llm_context: Optional[LLMContext] = None
-    retry_context: Optional[RetryContext] = None
+    mcp_server: MCPServerContext | None = None
+    tool_invocation: ToolInvocation | None = None
+    llm_context: LLMContext | None = None
+    retry_context: RetryContext | None = None
 
     # Conversation tracking (for multi-turn debugging)
-    conversation_id: Optional[str] = Field(None, description="Conversation/session ID")
-    message_index: Optional[int] = Field(None, description="Message index in conversation")
+    conversation_id: str | None = Field(None, description="Conversation/session ID")
+    message_index: int | None = Field(None, description="Message index in conversation")
 
     # Cost tracking
     total_cost_usd: float = Field(0.0, description="Total cost incurred (including wasted)")
@@ -149,8 +150,8 @@ class MCPErrorSnapshot(BaseModel):
     # Metadata
     gateway_version: str = Field("1.0.0", description="MCP Gateway version")
     environment: str = Field("production", description="Environment (dev, staging, prod)")
-    trace_id: Optional[str] = Field(None, description="Distributed trace ID")
-    span_id: Optional[str] = Field(None, description="Span ID")
+    trace_id: str | None = Field(None, description="Distributed trace ID")
+    span_id: str | None = Field(None, description="Span ID")
 
     # PII tracking
     masked_fields: list[str] = Field(default_factory=list, description="List of fields that were masked")

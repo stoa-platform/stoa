@@ -11,10 +11,8 @@ Scope Naming Convention:
 Personas map to Keycloak realm roles with assigned scopes.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import FrozenSet
-
 
 # =============================================================================
 # CAB-604: OAuth2 Scopes (12 granular scopes)
@@ -68,7 +66,7 @@ class LegacyScope(str, Enum):
 # =============================================================================
 
 # Map legacy scopes to their equivalent granular scopes
-LEGACY_TO_GRANULAR: dict[str, FrozenSet[str]] = {
+LEGACY_TO_GRANULAR: dict[str, frozenset[str]] = {
     LegacyScope.READ.value: frozenset({
         Scope.CATALOG_READ.value,
         Scope.SUBSCRIPTION_READ.value,
@@ -139,7 +137,7 @@ class Persona:
     name: str
     description: str
     keycloak_role: str  # Realm role name in Keycloak
-    scopes: FrozenSet[str]
+    scopes: frozenset[str]
 
     # Constraints for tenant isolation
     own_tenant_only: bool = True  # Can only access own tenant resources

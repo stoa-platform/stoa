@@ -1,7 +1,7 @@
 """Pydantic schemas for admin prospects endpoints (CAB-911)."""
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -23,15 +23,15 @@ class ProspectSummary(BaseModel):
     email: str
     company: str
     status: ProspectStatus
-    source: Optional[str] = None
+    source: str | None = None
     created_at: datetime
-    opened_at: Optional[datetime] = None
-    last_activity_at: Optional[datetime] = None
-    time_to_first_tool_seconds: Optional[float] = Field(
+    opened_at: datetime | None = None
+    last_activity_at: datetime | None = None
+    time_to_first_tool_seconds: float | None = Field(
         None, description="Seconds from first visit to first tool call"
     )
-    nps_score: Optional[int] = Field(None, ge=1, le=10)
-    nps_category: Optional[NPSCategory] = None
+    nps_score: int | None = Field(None, ge=1, le=10)
+    nps_category: NPSCategory | None = None
     total_events: int = 0
 
     model_config = {"from_attributes": True}
@@ -74,16 +74,16 @@ class ProspectEventDetail(BaseModel):
 class ProspectMetrics(BaseModel):
     """Calculated metrics for a prospect."""
 
-    time_to_open_seconds: Optional[float] = Field(
+    time_to_open_seconds: float | None = Field(
         None, description="Seconds from invite creation to first visit"
     )
-    time_to_first_tool_seconds: Optional[float] = Field(
+    time_to_first_tool_seconds: float | None = Field(
         None, description="Seconds from first visit to first tool call"
     )
     tools_called_count: int = 0
     pages_viewed_count: int = 0
     errors_count: int = 0
-    session_duration_seconds: Optional[float] = None
+    session_duration_seconds: float | None = None
 
 
 class ProspectDetail(BaseModel):
@@ -93,13 +93,13 @@ class ProspectDetail(BaseModel):
     email: str
     company: str
     status: ProspectStatus
-    source: Optional[str] = None
+    source: str | None = None
     created_at: datetime
-    opened_at: Optional[datetime] = None
+    opened_at: datetime | None = None
     expires_at: datetime
-    nps_score: Optional[int] = Field(None, ge=1, le=10)
-    nps_category: Optional[NPSCategory] = None
-    nps_comment: Optional[str] = None
+    nps_score: int | None = Field(None, ge=1, le=10)
+    nps_category: NPSCategory | None = None
+    nps_comment: str | None = None
     metrics: ProspectMetrics
     timeline: list[ProspectEventDetail] = Field(
         default_factory=list,
@@ -138,7 +138,7 @@ class NPSDistribution(BaseModel):
     nps_score: float = Field(
         0, description="Calculated NPS (-100 to 100)"
     )
-    avg_score: Optional[float] = Field(
+    avg_score: float | None = Field(
         None, description="Average NPS score (1-10)"
     )
 
@@ -146,8 +146,8 @@ class NPSDistribution(BaseModel):
 class TimingMetrics(BaseModel):
     """Average timing metrics."""
 
-    avg_time_to_open_seconds: Optional[float] = None
-    avg_time_to_first_tool_seconds: Optional[float] = None
+    avg_time_to_open_seconds: float | None = None
+    avg_time_to_first_tool_seconds: float | None = None
 
 
 class CompanyStats(BaseModel):
@@ -165,10 +165,10 @@ class ProspectsMetricsResponse(BaseModel):
     total_active: int = Field(
         0, description="Opened + converted (active prospects)"
     )
-    avg_time_to_tool: Optional[float] = Field(
+    avg_time_to_tool: float | None = Field(
         None, description="Average seconds to first tool call"
     )
-    avg_nps: Optional[float] = Field(None, description="Average NPS score")
+    avg_nps: float | None = Field(None, description="Average NPS score")
     by_status: ConversionFunnel
     nps: NPSDistribution
     timing: TimingMetrics

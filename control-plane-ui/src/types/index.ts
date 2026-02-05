@@ -820,3 +820,141 @@ export interface ProspectsFilters {
   date_from?: string;
   date_to?: string;
 }
+
+// =============================================================================
+// Gateway Instance Types (Control Plane Agnostique)
+// =============================================================================
+
+export type GatewayType = 'webmethods' | 'kong' | 'apigee' | 'aws_apigateway' | 'stoa';
+export type GatewayInstanceStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
+export type DeploymentSyncStatus = 'pending' | 'syncing' | 'synced' | 'drifted' | 'error' | 'deleting';
+
+export interface GatewayInstance {
+  id: string;
+  name: string;
+  display_name: string;
+  gateway_type: GatewayType;
+  environment: string;
+  tenant_id?: string;
+  base_url: string;
+  auth_config: Record<string, unknown>;
+  status: GatewayInstanceStatus;
+  last_health_check?: string;
+  health_details?: Record<string, unknown>;
+  capabilities: string[];
+  version?: string;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GatewayInstanceCreate {
+  name: string;
+  display_name: string;
+  gateway_type: GatewayType;
+  environment: string;
+  tenant_id?: string;
+  base_url: string;
+  auth_config?: Record<string, unknown>;
+  capabilities?: string[];
+  tags?: string[];
+}
+
+export interface GatewayInstanceUpdate {
+  display_name?: string;
+  base_url?: string;
+  environment?: string;
+  auth_config?: Record<string, unknown>;
+  capabilities?: string[];
+  tags?: string[];
+}
+
+export interface GatewayHealthCheckResponse {
+  status: string;
+  details: Record<string, unknown>;
+  gateway_name: string;
+  gateway_type: string;
+}
+
+export interface PaginatedGatewayInstances {
+  items: GatewayInstance[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface GatewayDeployment {
+  id: string;
+  api_catalog_id: string;
+  gateway_instance_id: string;
+  desired_state: Record<string, unknown>;
+  desired_at: string;
+  actual_state?: Record<string, unknown>;
+  actual_at?: string;
+  sync_status: DeploymentSyncStatus;
+  last_sync_attempt?: string;
+  last_sync_success?: string;
+  sync_error?: string;
+  sync_attempts: number;
+  gateway_resource_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeploymentStatusSummary {
+  pending: number;
+  syncing: number;
+  synced: number;
+  drifted: number;
+  error: number;
+  deleting: number;
+  total: number;
+}
+
+// =============================================================================
+// Gateway Policy Types (Phase 3 — Policy Engine)
+// =============================================================================
+
+export type PolicyType = 'cors' | 'rate_limit' | 'jwt_validation' | 'ip_filter' | 'logging' | 'caching' | 'transform';
+export type PolicyScope = 'api' | 'gateway' | 'tenant';
+
+export interface GatewayPolicy {
+  id: string;
+  name: string;
+  description?: string;
+  policy_type: PolicyType;
+  tenant_id?: string;
+  scope: PolicyScope;
+  config: Record<string, unknown>;
+  priority: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at?: string;
+  binding_count: number;
+}
+
+// =============================================================================
+// Gateway Observability Types (Phase 3 — Metrics)
+// =============================================================================
+
+export interface AggregatedMetrics {
+  health: {
+    total_gateways: number;
+    online: number;
+    offline: number;
+    degraded: number;
+    maintenance: number;
+    health_percentage: number;
+  };
+  sync: {
+    total_deployments: number;
+    synced: number;
+    pending: number;
+    syncing: number;
+    drifted: number;
+    error: number;
+    deleting: number;
+    sync_percentage: number;
+  };
+  overall_status: string;
+}

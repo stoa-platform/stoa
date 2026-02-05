@@ -3,13 +3,11 @@
 Provides fast database-backed queries for the Portal API catalog
 instead of real-time GitLab API calls.
 """
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.dialects.postgresql import JSONB
-from typing import Optional, List, Tuple
-from datetime import datetime
 
-from src.models.catalog import APICatalog, MCPToolsCatalog, CatalogSyncStatus
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.models.catalog import APICatalog, MCPToolsCatalog
 
 
 def escape_like(value: str) -> str:
@@ -30,16 +28,16 @@ class CatalogRepository:
 
     async def get_portal_apis(
         self,
-        category: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
-        tenant_id: Optional[str] = None,
-        tenant_ids: Optional[List[str]] = None,
+        category: str | None = None,
+        tags: list[str] | None = None,
+        search: str | None = None,
+        status: str | None = None,
+        tenant_id: str | None = None,
+        tenant_ids: list[str] | None = None,
         include_unpublished: bool = False,
         page: int = 1,
         page_size: int = 20,
-    ) -> Tuple[List[APICatalog], int]:
+    ) -> tuple[list[APICatalog], int]:
         """
         Get APIs from the catalog cache.
 
@@ -54,7 +52,7 @@ class CatalogRepository:
 
         # Filter by portal_published unless including unpublished
         if not include_unpublished:
-            query = query.where(APICatalog.portal_published == True)
+            query = query.where(APICatalog.portal_published)
 
         # Filter by category
         if category:
@@ -111,7 +109,7 @@ class CatalogRepository:
         self,
         tenant_id: str,
         api_id: str,
-    ) -> Optional[APICatalog]:
+    ) -> APICatalog | None:
         """Get a single API by tenant_id and api_id."""
         result = await self.session.execute(
             select(APICatalog)
@@ -124,7 +122,7 @@ class CatalogRepository:
     async def find_api_by_name(
         self,
         api_name: str,
-    ) -> Optional[APICatalog]:
+    ) -> APICatalog | None:
         """
         Find an API by name across all tenants.
 
@@ -135,7 +133,7 @@ class CatalogRepository:
             select(APICatalog)
             .where(APICatalog.api_id == api_name)
             .where(APICatalog.deleted_at.is_(None))
-            .where(APICatalog.portal_published == True)
+            .where(APICatalog.portal_published)
             .limit(1)
         )
         return result.scalar_one_or_none()
@@ -144,7 +142,7 @@ class CatalogRepository:
         self,
         tenant_id: str,
         api_id: str,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Get the OpenAPI spec for an API."""
         api = await self.get_api_by_id(tenant_id, api_id)
         return api.openapi_spec if api else None
@@ -153,7 +151,7 @@ class CatalogRepository:
         self,
         tenant_id: str,
         include_unpublished: bool = False,
-    ) -> List[APICatalog]:
+    ) -> list[APICatalog]:
         """Get all APIs for a specific tenant."""
         query = (
             select(APICatalog)
@@ -162,18 +160,18 @@ class CatalogRepository:
         )
 
         if not include_unpublished:
-            query = query.where(APICatalog.portal_published == True)
+            query = query.where(APICatalog.portal_published)
 
         query = query.order_by(APICatalog.api_name)
 
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
-    async def get_categories(self) -> List[str]:
+    async def get_categories(self) -> list[str]:
         """Get distinct categories from published APIs."""
         result = await self.session.execute(
             select(APICatalog.category)
-            .where(APICatalog.portal_published == True)
+            .where(APICatalog.portal_published)
             .where(APICatalog.deleted_at.is_(None))
             .where(APICatalog.category.isnot(None))
             .distinct()
@@ -181,12 +179,12 @@ class CatalogRepository:
         )
         return [r[0] for r in result.fetchall() if r[0]]
 
-    async def get_tags(self) -> List[str]:
+    async def get_tags(self) -> list[str]:
         """Get distinct tags from published APIs."""
         # This query extracts unique tags from the JSONB array
         result = await self.session.execute(
             select(func.jsonb_array_elements_text(APICatalog.tags).label('tag'))
-            .where(APICatalog.portal_published == True)
+            .where(APICatalog.portal_published)
             .where(APICatalog.deleted_at.is_(None))
             .distinct()
         )
@@ -205,7 +203,7 @@ class CatalogRepository:
         published_result = await self.session.execute(
             select(func.count(APICatalog.id))
             .where(APICatalog.deleted_at.is_(None))
-            .where(APICatalog.portal_published == True)
+            .where(APICatalog.portal_published)
         )
         published = published_result.scalar_one()
 
@@ -243,12 +241,12 @@ class MCPToolsCatalogRepository:
 
     async def get_tools(
         self,
-        category: Optional[str] = None,
-        tenant_id: Optional[str] = None,
-        search: Optional[str] = None,
+        category: str | None = None,
+        tenant_id: str | None = None,
+        search: str | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> Tuple[List[MCPToolsCatalog], int]:
+    ) -> tuple[list[MCPToolsCatalog], int]:
         """Get MCP tools from the catalog cache."""
         query = select(MCPToolsCatalog).where(MCPToolsCatalog.deleted_at.is_(None))
 
@@ -288,7 +286,7 @@ class MCPToolsCatalogRepository:
         self,
         tenant_id: str,
         tool_name: str,
-    ) -> Optional[MCPToolsCatalog]:
+    ) -> MCPToolsCatalog | None:
         """Get a single tool by tenant_id and tool_name."""
         result = await self.session.execute(
             select(MCPToolsCatalog)
@@ -298,7 +296,7 @@ class MCPToolsCatalogRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_categories(self) -> List[str]:
+    async def get_categories(self) -> list[str]:
         """Get distinct tool categories."""
         result = await self.session.execute(
             select(MCPToolsCatalog.category)

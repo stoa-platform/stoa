@@ -4,28 +4,27 @@ This router provides CRUD operations for tenant webhook configurations
 and delivery history endpoints.
 """
 import logging
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database import get_db
 from src.auth import get_current_user
+from src.database import get_db
+from src.models.webhook import WebhookEventType
 from src.schemas.webhook import (
-    WebhookCreate,
-    WebhookUpdate,
-    WebhookResponse,
-    WebhookListResponse,
-    WebhookDeliveryResponse,
-    WebhookDeliveryListResponse,
-    WebhookTestRequest,
-    WebhookTestResponse,
     EventTypeInfo,
     EventTypesResponse,
+    WebhookCreate,
+    WebhookDeliveryListResponse,
+    WebhookDeliveryResponse,
+    WebhookListResponse,
+    WebhookResponse,
+    WebhookTestRequest,
+    WebhookTestResponse,
+    WebhookUpdate,
 )
 from src.services.webhook_service import WebhookService
-from src.models.webhook import WebhookEventType
 
 logger = logging.getLogger(__name__)
 
@@ -469,12 +468,13 @@ async def test_webhook(
     """
     Send a test event to a webhook to verify it's working.
     """
-    import httpx
-    import json
-    import hmac
     import hashlib
+    import hmac
+    import json
     from datetime import datetime
     from uuid import uuid4
+
+    import httpx
 
     service = WebhookService(db)
     webhook = await service.get_webhook(webhook_id)
@@ -570,6 +570,6 @@ async def test_webhook(
             success=False,
             status_code=None,
             response_body=None,
-            error=f"Request failed: {str(e)}",
+            error=f"Request failed: {e!s}",
             signature_header=signature_header,
         )

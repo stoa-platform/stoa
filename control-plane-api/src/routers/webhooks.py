@@ -1,16 +1,16 @@
 """Webhooks router - GitLab webhook handlers for GitOps with full tracing"""
 import hmac
 import logging
-from typing import Optional
-from fastapi import APIRouter, Request, HTTPException, Header, Depends
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..database import get_db
-from ..services.kafka_service import kafka_service, Topics
-from ..services.trace_service import TraceService
 from ..models.traces_db import TraceStatusDB
+from ..services.kafka_service import Topics, kafka_service
+from ..services.trace_service import TraceService
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +24,11 @@ class GitLabPushEvent(BaseModel):
     ref: str  # "refs/heads/main"
     before: str  # Previous commit SHA
     after: str  # New commit SHA
-    checkout_sha: Optional[str] = None
+    checkout_sha: str | None = None
     project_id: int
     user_name: str
     user_username: str
-    user_email: Optional[str] = None
+    user_email: str | None = None
     commits: list = []
     total_commits_count: int = 0
 
@@ -42,7 +42,7 @@ class GitLabMergeRequestEvent(BaseModel):
     object_attributes: dict
 
 
-def verify_gitlab_token(token: Optional[str], expected_token: str) -> bool:
+def verify_gitlab_token(token: str | None, expected_token: str) -> bool:
     """Verify GitLab webhook secret token"""
     if not expected_token:
         return True  # No token configured, allow all
@@ -52,8 +52,8 @@ def verify_gitlab_token(token: Optional[str], expected_token: str) -> bool:
 @router.post("/gitlab")
 async def gitlab_webhook(
     request: Request,
-    x_gitlab_token: Optional[str] = Header(None, alias="X-Gitlab-Token"),
-    x_gitlab_event: Optional[str] = Header(None, alias="X-Gitlab-Event"),
+    x_gitlab_token: str | None = Header(None, alias="X-Gitlab-Token"),
+    x_gitlab_event: str | None = Header(None, alias="X-Gitlab-Event"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -255,7 +255,7 @@ async def handle_push_event_traced_pg(
 
     # Update trace with first affected API
     if affected_apis:
-        first_api = list(affected_apis)[0]
+        first_api = next(iter(affected_apis))
         trace.tenant_id = first_api[0]
         trace.api_name = first_api[1]
         trace.environment = "dev"

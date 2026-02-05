@@ -21,14 +21,12 @@ Usage:
 """
 
 import hashlib
-import json
 import logging
 import time
 import uuid
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Optional
 
 from fastapi import Request, Response
 from opensearchpy import AsyncOpenSearch
@@ -62,31 +60,31 @@ class EventSeverity(str, Enum):
 
 class AuditEvent(BaseModel):
     """Audit event model for OpenSearch."""
-    
+
     timestamp: datetime = Field(alias="@timestamp")
     event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     event_type: str
     event_category: EventCategory
     severity: EventSeverity = EventSeverity.INFO
-    
+
     actor: dict = Field(default_factory=dict)
-    tenant_id: Optional[str] = None
+    tenant_id: str | None = None
     resource: dict = Field(default_factory=dict)
     action: str
     outcome: str = "success"
-    
+
     details: dict = Field(default_factory=dict)
     changes: dict = Field(default_factory=dict)
-    
+
     request: dict = Field(default_factory=dict)
     response: dict = Field(default_factory=dict)
-    
-    correlation_id: Optional[str] = None
-    session_id: Optional[str] = None
-    
+
+    correlation_id: str | None = None
+    session_id: str | None = None
+
     source: dict = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
-    
+
     class Config:
         populate_by_name = True
         use_enum_values = True
@@ -94,7 +92,7 @@ class AuditEvent(BaseModel):
 
 class AuditLogger:
     """Async audit logger to OpenSearch."""
-    
+
     def __init__(
         self,
         client: AsyncOpenSearch,
@@ -108,64 +106,64 @@ class AuditLogger:
         self.buffer_size = buffer_size
         self.flush_interval = flush_interval
         self._last_flush = time.time()
-    
+
     async def log(self, event: AuditEvent) -> None:
         """Log an audit event."""
         doc = event.model_dump(by_alias=True, exclude_none=True)
         doc["@timestamp"] = doc["@timestamp"].isoformat()
-        
+
         self.buffer.append({
             "_index": self.index_alias,
             "_source": doc,
         })
-        
+
         # Flush if buffer is full or interval exceeded
         if len(self.buffer) >= self.buffer_size or \
            (time.time() - self._last_flush) > self.flush_interval:
             await self.flush()
-    
+
     async def flush(self) -> None:
         """Flush buffered events to OpenSearch."""
         if not self.buffer:
             return
-        
+
         try:
             from opensearchpy.helpers import async_bulk
-            
+
             success, errors = await async_bulk(
                 self.client,
                 self.buffer,
                 raise_on_error=False,
             )
-            
+
             if errors:
                 logger.error(f"Failed to index {len(errors)} audit events")
-            
+
             logger.debug(f"Flushed {success} audit events to OpenSearch")
-            
+
         except Exception as e:
             logger.error(f"Error flushing audit events: {e}")
         finally:
             self.buffer.clear()
             self._last_flush = time.time()
-    
+
     async def log_event(
         self,
         event_type: str,
         category: EventCategory,
         action: str,
         actor: dict,
-        resource: Optional[dict] = None,
-        tenant_id: Optional[str] = None,
+        resource: dict | None = None,
+        tenant_id: str | None = None,
         outcome: str = "success",
         severity: EventSeverity = EventSeverity.INFO,
-        details: Optional[dict] = None,
-        changes: Optional[dict] = None,
-        tags: Optional[list[str]] = None,
+        details: dict | None = None,
+        changes: dict | None = None,
+        tags: list[str] | None = None,
     ) -> None:
         """Log a custom audit event."""
         event = AuditEvent(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             event_type=event_type,
             event_category=category,
             severity=severity,
@@ -189,7 +187,7 @@ class AuditLogger:
 
 class AuditMiddleware(BaseHTTPMiddleware):
     """FastAPI middleware for automatic audit logging."""
-    
+
     # Paths to skip auditing
     SKIP_PATHS = {
         "/health",
@@ -201,10 +199,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
         "/redoc",
         "/favicon.ico",
     }
-    
+
     # Methods that indicate data modification
     MODIFICATION_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-    
+
     # Path patterns that indicate sensitive operations
     SENSITIVE_PATTERNS = {
         "/api-keys": "api_key",
@@ -215,60 +213,60 @@ class AuditMiddleware(BaseHTTPMiddleware):
         "/webhooks": "webhook",
         "/secrets": "secret",
     }
-    
+
     def __init__(
         self,
         app,
         audit_logger: AuditLogger,
-        skip_paths: Optional[set[str]] = None,
+        skip_paths: set[str] | None = None,
     ):
         super().__init__(app)
         self.audit_logger = audit_logger
         self.skip_paths = skip_paths or self.SKIP_PATHS
-    
+
     async def dispatch(
         self,
         request: Request,
         call_next: RequestResponseEndpoint,
     ) -> Response:
         """Process request and log audit event."""
-        
+
         # Skip non-auditable paths
         if request.url.path in self.skip_paths:
             return await call_next(request)
-        
+
         # Generate/extract correlation ID
         correlation_id = request.headers.get(
             "X-Correlation-ID",
             str(uuid.uuid4())
         )
         correlation_id_ctx.set(correlation_id)
-        
+
         # Extract actor from JWT
         actor = await self._extract_actor(request)
-        
+
         # Start timing
         start_time = time.time()
-        
+
         # Process request
         try:
             response = await call_next(request)
             outcome = "success" if response.status_code < 400 else "failure"
             severity = self._get_severity(response.status_code)
-        except Exception as e:
+        except Exception:
             outcome = "error"
             severity = EventSeverity.ERROR
             raise
         finally:
             # Calculate latency
             latency_ms = (time.time() - start_time) * 1000
-            
+
             # Determine event type and category
             event_type, category = self._classify_request(request)
-            
+
             # Build audit event
             event = AuditEvent(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 event_type=event_type,
                 event_category=category,
                 severity=severity,
@@ -296,25 +294,25 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 },
                 tags=self._get_tags(request),
             )
-            
+
             # Log asynchronously (non-blocking)
             try:
                 await self.audit_logger.log(event)
             except Exception as e:
                 logger.error(f"Failed to log audit event: {e}")
-        
+
         # Add correlation ID to response
         response.headers["X-Correlation-ID"] = correlation_id
-        
+
         return response
-    
+
     async def _extract_actor(self, request: Request) -> dict:
         """Extract actor information from request."""
         actor = {
             "ip_address": request.client.host if request.client else None,
             "user_agent": request.headers.get("User-Agent"),
         }
-        
+
         # Extract from JWT if available
         if hasattr(request.state, "user"):
             user = request.state.user
@@ -335,19 +333,19 @@ class AuditMiddleware(BaseHTTPMiddleware):
             })
         else:
             actor["type"] = "anonymous"
-        
+
         return actor
-    
+
     def _extract_resource(self, request: Request) -> dict:
         """Extract resource information from request path."""
         path_parts = request.url.path.strip("/").split("/")
-        
+
         resource = {
             "type": "unknown",
             "id": None,
             "name": None,
         }
-        
+
         # Try to identify resource type and ID
         for pattern, resource_type in self.SENSITIVE_PATTERNS.items():
             if pattern.strip("/") in path_parts:
@@ -360,20 +358,20 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 except (ValueError, IndexError):
                     pass
                 break
-        
+
         return resource
-    
+
     def _classify_request(
         self, request: Request
     ) -> tuple[str, EventCategory]:
         """Classify request into event type and category."""
         method = request.method
         path = request.url.path
-        
+
         # Authentication endpoints
         if "/auth" in path or "/login" in path or "/token" in path:
             return "authentication", EventCategory.AUTHENTICATION
-        
+
         # Data modification
         if method in self.MODIFICATION_METHODS:
             for pattern in self.SENSITIVE_PATTERNS:
@@ -385,10 +383,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     else:
                         return f"{self.SENSITIVE_PATTERNS[pattern]}.updated", EventCategory.DATA_MODIFICATION
             return "data.modified", EventCategory.DATA_MODIFICATION
-        
+
         # Data access
         return "data.accessed", EventCategory.DATA_ACCESS
-    
+
     def _get_severity(self, status_code: int) -> EventSeverity:
         """Determine severity from status code."""
         if status_code >= 500:
@@ -396,29 +394,29 @@ class AuditMiddleware(BaseHTTPMiddleware):
         elif status_code >= 400:
             return EventSeverity.WARNING
         return EventSeverity.INFO
-    
+
     def _get_tags(self, request: Request) -> list[str]:
         """Generate tags for the request."""
         tags = []
-        
+
         # Add method tag
         tags.append(f"method:{request.method.lower()}")
-        
+
         # Add version tag if present
         if "/v1/" in request.url.path:
             tags.append("api:v1")
         elif "/v2/" in request.url.path:
             tags.append("api:v2")
-        
+
         # Add sensitive tag if applicable
         for pattern in self.SENSITIVE_PATTERNS:
             if pattern in request.url.path:
                 tags.append("sensitive")
                 break
-        
+
         return tags
-    
-    async def _hash_body(self, request: Request) -> Optional[str]:
+
+    async def _hash_body(self, request: Request) -> str | None:
         """Create a hash of the request body for audit (no sensitive data)."""
         try:
             body = await request.body()
@@ -435,13 +433,13 @@ async def log_audit_event(
     event_type: str,
     action: str,
     actor_id: str,
-    actor_email: Optional[str] = None,
-    tenant_id: Optional[str] = None,
-    resource_type: Optional[str] = None,
-    resource_id: Optional[str] = None,
+    actor_email: str | None = None,
+    tenant_id: str | None = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
     outcome: str = "success",
-    details: Optional[dict] = None,
-    changes: Optional[dict] = None,
+    details: dict | None = None,
+    changes: dict | None = None,
 ) -> None:
     """Log a manual audit event (for business logic events)."""
     await audit_logger.log_event(
@@ -477,7 +475,7 @@ async def create_subscription(
 ):
     # Create subscription...
     subscription = await subscription_service.create(data)
-    
+
     # Log audit event
     await log_audit_event(
         audit_logger=audit_logger,
@@ -490,6 +488,6 @@ async def create_subscription(
         resource_id=subscription.id,
         details={"plan": data.plan, "tool_id": data.tool_id},
     )
-    
+
     return subscription
 """

@@ -14,7 +14,6 @@ Consolidation Summary:
 
 from src.models.mcp import CoreTool, ToolDomain, ToolInputSchema
 
-
 # =============================================================================
 # Consolidated Catalog Tools (8 → 2)
 # =============================================================================

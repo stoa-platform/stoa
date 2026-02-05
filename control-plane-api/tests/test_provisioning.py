@@ -4,6 +4,7 @@ Tests for Gateway Provisioning Service - CAB-800
 Tests cover:
 - provision_on_approval: success, retry on failure, all retries exhausted
 - deprovision_on_revocation: success, failure, skip when no gateway_app_id
+- _resolve_adapter: default fallback, gateway deployment resolution
 - GatewayAdminService.provision_application: success, cleanup on association failure
 """
 
@@ -12,6 +13,8 @@ from datetime import datetime
 from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+from src.adapters.gateway_adapter_interface import AdapterResult
 
 
 class SubscriptionStatus(str, Enum):
@@ -67,6 +70,20 @@ def _make_subscription(**overrides):
     return mock
 
 
+def _mock_adapter(provision_result=None, deprovision_result=None):
+    """Create a mock adapter with default AdapterResult returns."""
+    adapter = AsyncMock()
+    adapter.provision_application = AsyncMock(
+        return_value=provision_result or AdapterResult(
+            success=True, resource_id="wm-app-001", data={"app_id": "wm-app-001"}
+        )
+    )
+    adapter.deprovision_application = AsyncMock(
+        return_value=deprovision_result or AdapterResult(success=True, resource_id="wm-app-001")
+    )
+    return adapter
+
+
 class TestProvisionOnApproval:
     """Tests for provisioning_service.provision_on_approval"""
 
@@ -76,13 +93,13 @@ class TestProvisionOnApproval:
         sub = _make_subscription()
         db = AsyncMock()
 
-        mock_result = {"app_id": "wm-app-001", "application": {"name": "test"}}
+        adapter = _mock_adapter()
 
         with patch(
-            "src.services.provisioning_service.gateway_service"
-        ) as mock_gw:
-            mock_gw.provision_application = AsyncMock(return_value=mock_result)
-
+            "src.services.provisioning_service._resolve_adapter",
+            new_callable=AsyncMock,
+            return_value=adapter,
+        ):
             from src.services.provisioning_service import provision_on_approval
 
             await provision_on_approval(db, sub, "jwt-token", "corr-123")
@@ -99,25 +116,30 @@ class TestProvisionOnApproval:
         sub = _make_subscription()
         db = AsyncMock()
 
-        mock_result = {"app_id": "wm-app-002", "application": {}}
+        success_result = AdapterResult(success=True, resource_id="wm-app-002", data={})
+        adapter = AsyncMock()
+        adapter.provision_application = AsyncMock(
+            side_effect=[
+                RuntimeError("timeout"),
+                success_result,
+            ]
+        )
 
         with patch(
-            "src.services.provisioning_service.gateway_service"
-        ) as mock_gw, patch(
+            "src.services.provisioning_service._resolve_adapter",
+            new_callable=AsyncMock,
+            return_value=adapter,
+        ), patch(
             "src.services.provisioning_service.asyncio.sleep",
             new_callable=AsyncMock,
         ):
-            mock_gw.provision_application = AsyncMock(
-                side_effect=[RuntimeError("timeout"), mock_result]
-            )
-
             from src.services.provisioning_service import provision_on_approval
 
             await provision_on_approval(db, sub, "jwt-token", "corr-456")
 
         assert sub.provisioning_status == ProvisioningStatus.READY
         assert sub.gateway_app_id == "wm-app-002"
-        assert mock_gw.provision_application.await_count == 2
+        assert adapter.provision_application.await_count == 2
 
     @pytest.mark.asyncio
     async def test_provision_all_retries_exhausted(self):
@@ -125,23 +147,56 @@ class TestProvisionOnApproval:
         sub = _make_subscription()
         db = AsyncMock()
 
+        adapter = AsyncMock()
+        adapter.provision_application = AsyncMock(
+            side_effect=RuntimeError("connection refused")
+        )
+
         with patch(
-            "src.services.provisioning_service.gateway_service"
-        ) as mock_gw, patch(
+            "src.services.provisioning_service._resolve_adapter",
+            new_callable=AsyncMock,
+            return_value=adapter,
+        ), patch(
             "src.services.provisioning_service.asyncio.sleep",
             new_callable=AsyncMock,
         ):
-            mock_gw.provision_application = AsyncMock(
-                side_effect=RuntimeError("connection refused")
-            )
-
             from src.services.provisioning_service import provision_on_approval
 
             await provision_on_approval(db, sub, "jwt-token", "corr-789")
 
         assert sub.provisioning_status == ProvisioningStatus.FAILED
         assert "connection refused" in sub.provisioning_error
-        assert mock_gw.provision_application.await_count == 3
+        assert adapter.provision_application.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_provision_adapter_returns_failure(self):
+        """AdapterResult with success=False triggers retry."""
+        sub = _make_subscription()
+        db = AsyncMock()
+
+        fail_result = AdapterResult(success=False, error="gateway 503")
+        success_result = AdapterResult(success=True, resource_id="wm-app-003", data={})
+        adapter = AsyncMock()
+        adapter.provision_application = AsyncMock(
+            side_effect=[fail_result, success_result]
+        )
+
+        with patch(
+            "src.services.provisioning_service._resolve_adapter",
+            new_callable=AsyncMock,
+            return_value=adapter,
+        ), patch(
+            "src.services.provisioning_service.asyncio.sleep",
+            new_callable=AsyncMock,
+        ):
+            from src.services.provisioning_service import provision_on_approval
+
+            await provision_on_approval(db, sub, "jwt-token", "corr-800")
+
+        # First call returns failure (AdapterResult.success=False) which raises RuntimeError
+        # Second call succeeds
+        assert sub.provisioning_status == ProvisioningStatus.READY
+        assert sub.gateway_app_id == "wm-app-003"
 
 
 class TestDeprovisionOnRevocation:
@@ -156,11 +211,13 @@ class TestDeprovisionOnRevocation:
         )
         db = AsyncMock()
 
-        with patch(
-            "src.services.provisioning_service.gateway_service"
-        ) as mock_gw:
-            mock_gw.deprovision_application = AsyncMock(return_value=True)
+        adapter = _mock_adapter()
 
+        with patch(
+            "src.services.provisioning_service._resolve_adapter",
+            new_callable=AsyncMock,
+            return_value=adapter,
+        ):
             from src.services.provisioning_service import deprovision_on_revocation
 
             await deprovision_on_revocation(db, sub, "jwt-token", "corr-100")
@@ -175,13 +232,14 @@ class TestDeprovisionOnRevocation:
         db = AsyncMock()
 
         with patch(
-            "src.services.provisioning_service.gateway_service"
-        ) as mock_gw:
+            "src.services.provisioning_service._resolve_adapter",
+            new_callable=AsyncMock,
+        ) as mock_resolve:
             from src.services.provisioning_service import deprovision_on_revocation
 
             await deprovision_on_revocation(db, sub, "jwt-token", "corr-200")
 
-        mock_gw.deprovision_application.assert_not_called()
+        mock_resolve.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_deprovision_failure(self):
@@ -192,19 +250,89 @@ class TestDeprovisionOnRevocation:
         )
         db = AsyncMock()
 
-        with patch(
-            "src.services.provisioning_service.gateway_service"
-        ) as mock_gw:
-            mock_gw.deprovision_application = AsyncMock(
-                side_effect=RuntimeError("not found")
-            )
+        adapter = AsyncMock()
+        adapter.deprovision_application = AsyncMock(
+            side_effect=RuntimeError("not found")
+        )
 
+        with patch(
+            "src.services.provisioning_service._resolve_adapter",
+            new_callable=AsyncMock,
+            return_value=adapter,
+        ):
             from src.services.provisioning_service import deprovision_on_revocation
 
             await deprovision_on_revocation(db, sub, "jwt-token", "corr-300")
 
         assert sub.provisioning_status == ProvisioningStatus.FAILED
         assert "not found" in sub.provisioning_error
+
+    @pytest.mark.asyncio
+    async def test_deprovision_adapter_failure_result(self):
+        """AdapterResult with success=False sets status FAILED."""
+        sub = _make_subscription(
+            gateway_app_id="wm-app-500",
+            provisioning_status=ProvisioningStatus.READY,
+        )
+        db = AsyncMock()
+
+        fail_result = AdapterResult(success=False, error="gateway rejected")
+        adapter = _mock_adapter(deprovision_result=fail_result)
+
+        with patch(
+            "src.services.provisioning_service._resolve_adapter",
+            new_callable=AsyncMock,
+            return_value=adapter,
+        ):
+            from src.services.provisioning_service import deprovision_on_revocation
+
+            await deprovision_on_revocation(db, sub, "jwt-token", "corr-400")
+
+        assert sub.provisioning_status == ProvisioningStatus.FAILED
+        assert "gateway rejected" in sub.provisioning_error
+
+
+class TestResolveAdapter:
+    """Tests for _resolve_adapter helper."""
+
+    @pytest.mark.asyncio
+    async def test_resolve_returns_default_when_no_deployment(self):
+        """Falls back to default adapter when no gateway deployment exists."""
+        db = AsyncMock()
+
+        with patch(
+            "src.services.provisioning_service.GatewayDeploymentRepository",
+            create=True,
+        ) as MockDeployRepo, patch(
+            "src.services.provisioning_service.GatewayInstanceRepository",
+            create=True,
+        ):
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_primary_for_api = AsyncMock(return_value=None)
+
+            from src.services.provisioning_service import _resolve_adapter, _default_adapter
+
+            adapter = await _resolve_adapter(db, "api-123", "acme")
+            assert adapter is _default_adapter
+
+    @pytest.mark.asyncio
+    async def test_resolve_returns_default_on_exception(self):
+        """Falls back to default adapter when resolution fails."""
+        db = AsyncMock()
+
+        with patch(
+            "src.services.provisioning_service.GatewayDeploymentRepository",
+            create=True,
+        ) as MockDeployRepo:
+            mock_deploy_repo = MockDeployRepo.return_value
+            mock_deploy_repo.get_primary_for_api = AsyncMock(
+                side_effect=Exception("DB error")
+            )
+
+            from src.services.provisioning_service import _resolve_adapter, _default_adapter
+
+            adapter = await _resolve_adapter(db, "api-123", "acme")
+            assert adapter is _default_adapter
 
 
 class TestGatewayAdminServiceProvisioning:

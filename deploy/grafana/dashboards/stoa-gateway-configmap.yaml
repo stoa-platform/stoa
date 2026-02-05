@@ -1,0 +1,197 @@
+# STOA Gateway (Rust) Dashboard ConfigMap
+# Deploy to monitoring namespace for Grafana sidecar to pick up
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-stoa-gateway
+  namespace: stoa-monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: stoa-platform
+data:
+  stoa-gateway.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "title": "Tool Call Rate",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum(rate(stoa_mcp_tools_calls_total[5m])) by (status)",
+              "legendFormat": "{{ status }}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "ops" }
+          }
+        },
+        {
+          "title": "Error Rate (%)",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 4, "x": 8, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum(rate(stoa_mcp_tools_calls_total{status=\"error\"}[5m])) / sum(rate(stoa_mcp_tools_calls_total[5m])) * 100",
+              "legendFormat": "Error %",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Latency (p50 / p95 / p99)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(stoa_mcp_tool_duration_seconds_bucket[5m])) by (le))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_tool_duration_seconds_bucket[5m])) by (le))",
+              "legendFormat": "p95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(stoa_mcp_tool_duration_seconds_bucket[5m])) by (le))",
+              "legendFormat": "p99",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s" }
+          }
+        },
+        {
+          "title": "Active SSE Connections",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "expr": "stoa_mcp_sse_connections_active",
+              "legendFormat": "Active",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "Active Sessions",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 4, "x": 8, "y": 8 },
+          "targets": [
+            {
+              "expr": "stoa_mcp_sessions_active",
+              "legendFormat": "Sessions",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "SSE Connection Duration",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(stoa_mcp_sse_connection_duration_seconds_bucket[5m])) by (le))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(stoa_mcp_sse_connection_duration_seconds_bucket[5m])) by (le))",
+              "legendFormat": "p95",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s" }
+          }
+        },
+        {
+          "title": "Rate Limit Hits",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "targets": [
+            {
+              "expr": "sum(rate(stoa_rate_limit_hits_total[5m])) by (tenant)",
+              "legendFormat": "{{ tenant }}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "ops" }
+          }
+        },
+        {
+          "title": "Rate Limit Buckets",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 4, "x": 12, "y": 16 },
+          "targets": [
+            {
+              "expr": "stoa_rate_limit_buckets",
+              "legendFormat": "Buckets",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "Top Tools by Call Rate",
+          "type": "bargauge",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+          "targets": [
+            {
+              "expr": "topk(10, sum(rate(stoa_mcp_tools_calls_total[5m])) by (tool))",
+              "legendFormat": "{{ tool }}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "ops" }
+          }
+        }
+      ],
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "tags": ["stoa", "gateway", "rust", "mcp"],
+      "templating": {
+        "list": []
+      },
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "STOA Gateway (Rust)",
+      "uid": "stoa-gateway-rust",
+      "version": 1
+    }

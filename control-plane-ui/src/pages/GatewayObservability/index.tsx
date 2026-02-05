@@ -1,0 +1,1 @@
+export { GatewayObservabilityDashboard } from './GatewayObservabilityDashboard';

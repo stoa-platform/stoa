@@ -253,7 +253,7 @@ class TestAdminProspectsRouter:
                 response = client.get(f"/v1/admin/prospects/{invite_id}")
                 assert response.status_code == 200
                 data = response.json()
-                assert data["email"] == "pierre@engie.fr"
+                assert data["email"] == "pierre@nexora-energy.com"
                 assert data["nps_score"] == 9
                 assert "metrics" in data
                 assert "timeline" in data

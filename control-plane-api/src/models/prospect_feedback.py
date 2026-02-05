@@ -3,17 +3,18 @@
 Stores NPS (Net Promoter Score) feedback from prospects.
 Each invite can have at most one feedback submission.
 """
+import uuid
+from datetime import datetime
+
 from sqlalchemy import (
-    Column,
-    String,
-    DateTime,
-    SmallInteger,
-    Index,
     CheckConstraint,
+    Column,
+    DateTime,
+    Index,
+    SmallInteger,
+    String,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from datetime import datetime
-import uuid
 
 from src.database import Base
 

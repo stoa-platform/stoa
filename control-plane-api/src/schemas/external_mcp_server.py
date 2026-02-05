@@ -3,21 +3,21 @@
 Reference: External MCP Server Registration Plan
 """
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 # ============== Enums ==============
 
-class TransportTypeEnum(str, Enum):
+class TransportTypeEnum(StrEnum):
     """Transport protocol for external MCP server."""
     SSE = "sse"
     HTTP = "http"
     WEBSOCKET = "websocket"
 
 
-class AuthTypeEnum(str, Enum):
+class AuthTypeEnum(StrEnum):
     """Authentication type for external MCP server."""
     NONE = "none"
     API_KEY = "api_key"
@@ -25,7 +25,7 @@ class AuthTypeEnum(str, Enum):
     OAUTH2 = "oauth2"
 
 
-class HealthStatusEnum(str, Enum):
+class HealthStatusEnum(StrEnum):
     """Health status of external MCP server."""
     UNKNOWN = "unknown"
     HEALTHY = "healthy"

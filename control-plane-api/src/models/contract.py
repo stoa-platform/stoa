@@ -15,7 +15,7 @@ from sqlalchemy.orm import relationship
 from src.database import Base
 
 
-class ProtocolType(str, enum.Enum):
+class ProtocolType(enum.StrEnum):
     """Supported protocol types for UAC bindings."""
     REST = "rest"
     GRAPHQL = "graphql"

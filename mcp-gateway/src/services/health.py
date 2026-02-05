@@ -13,7 +13,7 @@ import asyncio
 import os
 import time
 from datetime import UTC
-from enum import Enum
+from enum import StrEnum
 
 import asyncpg
 import httpx
@@ -22,7 +22,7 @@ from aiokafka.errors import KafkaConnectionError
 from pydantic import BaseModel, Field
 
 
-class HealthStatus(str, Enum):
+class HealthStatus(StrEnum):
     """Health status matching v2.0 system prompt spec."""
     HEALTHY = "healthy"
     DEGRADED = "degraded"

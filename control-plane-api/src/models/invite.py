@@ -5,7 +5,7 @@ It's read-only from control-plane-api's perspective - used for admin dashboard q
 """
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import DateTime, String
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ..database import Base
 
 
-class InviteStatus(str, Enum):
+class InviteStatus(StrEnum):
     """Status of an invite (matches landing-api InviteStatus)."""
 
     PENDING = "pending"  # Created, not yet clicked

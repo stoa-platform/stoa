@@ -18,12 +18,12 @@ Config is inline in UAC per-tenant configuration:
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, field_validator, model_validator
 
 
-class TruncateStrategy(str, Enum):
+class TruncateStrategy(StrEnum):
     """How to truncate long text fields."""
     END = "end"        # Keep first N chars
     MIDDLE = "middle"  # Keep first_n + last_n, cut middle

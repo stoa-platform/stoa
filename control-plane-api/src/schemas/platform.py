@@ -3,13 +3,13 @@
 Provides models for GitOps observability and platform health status.
 """
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 # ============== Enums ==============
 
-class ComponentHealthEnum(str, Enum):
+class ComponentHealthEnum(StrEnum):
     """Component health status."""
     HEALTHY = "healthy"
     DEGRADED = "degraded"
@@ -17,7 +17,7 @@ class ComponentHealthEnum(str, Enum):
     UNKNOWN = "unknown"
 
 
-class GitOpsSyncStatusEnum(str, Enum):
+class GitOpsSyncStatusEnum(StrEnum):
     """ArgoCD sync status."""
     SYNCED = "Synced"
     OUT_OF_SYNC = "OutOfSync"
@@ -26,7 +26,7 @@ class GitOpsSyncStatusEnum(str, Enum):
     ERROR = "Error"
 
 
-class GitOpsHealthStatusEnum(str, Enum):
+class GitOpsHealthStatusEnum(StrEnum):
     """ArgoCD health status."""
     HEALTHY = "Healthy"
     DEGRADED = "Degraded"
@@ -36,7 +36,7 @@ class GitOpsHealthStatusEnum(str, Enum):
     UNKNOWN = "Unknown"
 
 
-class PlatformEventTypeEnum(str, Enum):
+class PlatformEventTypeEnum(StrEnum):
     """Platform event types."""
     SYNC_STARTED = "sync_started"
     SYNC_COMPLETED = "sync_completed"
@@ -45,7 +45,7 @@ class PlatformEventTypeEnum(str, Enum):
     HEALTH_CHANGED = "health_changed"
 
 
-class PlatformEventSeverityEnum(str, Enum):
+class PlatformEventSeverityEnum(StrEnum):
     """Platform event severity."""
     INFO = "info"
     WARNING = "warning"

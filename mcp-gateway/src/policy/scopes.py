@@ -12,14 +12,14 @@ Personas map to Keycloak realm roles with assigned scopes.
 """
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 # =============================================================================
 # CAB-604: OAuth2 Scopes (12 granular scopes)
 # =============================================================================
 
 
-class Scope(str, Enum):
+class Scope(StrEnum):
     """OAuth2 scopes for MCP Gateway.
 
     12 granular scopes organized by domain and action.
@@ -51,7 +51,7 @@ class Scope(str, Enum):
 
 
 # Legacy scope names for backward compatibility
-class LegacyScope(str, Enum):
+class LegacyScope(StrEnum):
     """Legacy OAuth2 scopes for backward compatibility.
 
     These map to the new granular scopes.

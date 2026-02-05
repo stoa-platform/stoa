@@ -9,14 +9,14 @@ from sqlalchemy.sql import func
 from src.database import Base
 
 
-class SyncType(str, enum.Enum):
+class SyncType(enum.StrEnum):
     """Sync operation type"""
     FULL = "full"
     TENANT = "tenant"
     API = "api"
 
 
-class SyncStatus(str, enum.Enum):
+class SyncStatus(enum.StrEnum):
     """Sync operation status"""
     RUNNING = "running"
     SUCCESS = "success"

@@ -2,18 +2,18 @@
 Schemas for Self-Service Logs API (CAB-793)
 """
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class LogStatus(str, Enum):
+class LogStatus(StrEnum):
     SUCCESS = "success"
     ERROR = "error"
     ALL = "all"
 
 
-class LogLevel(str, Enum):
+class LogLevel(StrEnum):
     DEBUG = "debug"
     INFO = "info"
     WARNING = "warning"

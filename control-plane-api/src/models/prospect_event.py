@@ -5,7 +5,7 @@ It's read-only from control-plane-api's perspective - used for admin dashboard q
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import DateTime, String
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ..database import Base
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Types of events that can be tracked (matches landing-api EventType)."""
 
     INVITE_OPENED = "invite_opened"  # GET /welcome/{token}

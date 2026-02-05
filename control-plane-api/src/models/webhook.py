@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from src.database import Base
 
 
-class WebhookEventType(str, enum.Enum):
+class WebhookEventType(enum.StrEnum):
     """Supported webhook event types"""
     SUBSCRIPTION_CREATED = "subscription.created"
     SUBSCRIPTION_APPROVED = "subscription.approved"
@@ -18,7 +18,7 @@ class WebhookEventType(str, enum.Enum):
     SUBSCRIPTION_EXPIRED = "subscription.expired"
 
 
-class WebhookDeliveryStatus(str, enum.Enum):
+class WebhookDeliveryStatus(enum.StrEnum):
     """Webhook delivery status"""
     PENDING = "pending"
     SUCCESS = "success"

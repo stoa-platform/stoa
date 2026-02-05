@@ -26,14 +26,14 @@ from sqlalchemy.orm import relationship
 from src.database import Base
 
 
-class ExternalMCPTransport(str, enum.Enum):
+class ExternalMCPTransport(enum.StrEnum):
     """Transport protocol for external MCP server."""
     SSE = "sse"           # Server-Sent Events (Claude Desktop compatible)
     HTTP = "http"         # HTTP JSON-RPC
     WEBSOCKET = "websocket"  # WebSocket
 
 
-class ExternalMCPAuthType(str, enum.Enum):
+class ExternalMCPAuthType(enum.StrEnum):
     """Authentication type for external MCP server."""
     NONE = "none"              # No authentication
     API_KEY = "api_key"        # API key in header
@@ -41,7 +41,7 @@ class ExternalMCPAuthType(str, enum.Enum):
     OAUTH2 = "oauth2"          # OAuth2 flow
 
 
-class ExternalMCPHealthStatus(str, enum.Enum):
+class ExternalMCPHealthStatus(enum.StrEnum):
     """Health status of external MCP server."""
     UNKNOWN = "unknown"     # Not yet checked
     HEALTHY = "healthy"     # Connection successful

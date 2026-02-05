@@ -4,13 +4,13 @@ CAB-876: Models for validating tool call arguments against business rules.
 This is separate from OPA scope-based RBAC.
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
 
-class Operator(str, Enum):
+class Operator(StrEnum):
     """Supported condition operators for argument validation."""
 
     # Equality

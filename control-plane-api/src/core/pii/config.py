@@ -1,19 +1,19 @@
 """Configuration PII Masking par tenant."""
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 from .patterns import PIIType
 
 
-class MaskingLevel(str, Enum):
+class MaskingLevel(StrEnum):
     STRICT = "strict"
     MODERATE = "moderate"
     MINIMAL = "minimal"
     DISABLED = "disabled"
 
 
-class FieldMaskingMode(str, Enum):
+class FieldMaskingMode(StrEnum):
     FULL = "full"
     PARTIAL = "partial"
     HASH = "hash"

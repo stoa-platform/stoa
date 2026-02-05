@@ -17,13 +17,13 @@ Error Response Schema:
 ```
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class STOAErrorCode(str, Enum):
+class STOAErrorCode(StrEnum):
     """Standard STOA error codes.
 
     Each code maps to a specific HTTP status and has a default message template.

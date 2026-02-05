@@ -10,12 +10,10 @@ import re
 import time
 
 from prometheus_client import (
-    CONTENT_TYPE_LATEST,
     Counter,
     Gauge,
     Histogram,
     Info,
-    generate_latest,
     openmetrics,
 )
 from starlette.responses import Response as StarletteResponse

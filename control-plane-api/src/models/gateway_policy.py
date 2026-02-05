@@ -26,7 +26,7 @@ from sqlalchemy.sql import func
 from src.database import Base
 
 
-class PolicyType(str, enum.Enum):
+class PolicyType(enum.StrEnum):
     """Supported gateway policy types."""
     CORS = "cors"
     RATE_LIMIT = "rate_limit"
@@ -37,7 +37,7 @@ class PolicyType(str, enum.Enum):
     TRANSFORM = "transform"
 
 
-class PolicyScope(str, enum.Enum):
+class PolicyScope(enum.StrEnum):
     """Scope of policy application."""
     API = "api"           # Specific API + gateway combo
     GATEWAY = "gateway"   # All APIs on a gateway

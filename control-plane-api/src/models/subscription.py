@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from src.database import Base
 
 
-class SubscriptionStatus(str, enum.Enum):
+class SubscriptionStatus(enum.StrEnum):
     """Subscription status enum"""
     PENDING = "pending"
     ACTIVE = "active"
@@ -18,7 +18,7 @@ class SubscriptionStatus(str, enum.Enum):
     EXPIRED = "expired"
 
 
-class ProvisioningStatus(str, enum.Enum):
+class ProvisioningStatus(enum.StrEnum):
     """Gateway provisioning status for webMethods integration (CAB-800)"""
     NONE = "none"                        # No provisioning needed
     PENDING = "pending"                  # Awaiting provisioning

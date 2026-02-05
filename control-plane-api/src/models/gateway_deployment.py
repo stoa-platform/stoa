@@ -15,7 +15,7 @@ from sqlalchemy.sql import func
 from src.database import Base
 
 
-class DeploymentSyncStatus(str, enum.Enum):
+class DeploymentSyncStatus(enum.StrEnum):
     """Synchronization status of a gateway deployment."""
     PENDING = "pending"       # Desired state set, not yet synced
     SYNCING = "syncing"       # Sync in progress

@@ -24,7 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .subscription import Base
 
 
-class ResolutionStatus(str, enum.Enum):
+class ResolutionStatus(enum.StrEnum):
     """Resolution status values.
 
     Inherits from str to ensure PostgreSQL receives lowercase values.

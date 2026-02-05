@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ..database import Base
 
 
-class TraceStatusDB(str, enum.Enum):
+class TraceStatusDB(enum.StrEnum):
     """Trace status enum for database."""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"

@@ -1,12 +1,12 @@
 """Pydantic schemas for subscription endpoints"""
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class SubscriptionStatusEnum(str, Enum):
+class SubscriptionStatusEnum(StrEnum):
     """Subscription status enum for API responses"""
     PENDING = "pending"
     ACTIVE = "active"
@@ -15,7 +15,7 @@ class SubscriptionStatusEnum(str, Enum):
     EXPIRED = "expired"
 
 
-class ProvisioningStatusEnum(str, Enum):
+class ProvisioningStatusEnum(StrEnum):
     """Gateway provisioning status for API responses (CAB-800)"""
     NONE = "none"
     PENDING = "pending"

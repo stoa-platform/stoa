@@ -45,7 +45,11 @@ class GatewayInstance(Base):
     name = Column(String(255), unique=True, nullable=False)        # "webmethods-prod"
     display_name = Column(String(255), nullable=False)
     gateway_type = Column(
-        SQLEnum(GatewayType, name="gateway_type_enum"),
+        SQLEnum(
+            GatewayType,
+            name="gateway_type_enum",
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
     )
     environment = Column(String(50), nullable=False, index=True)   # dev / staging / prod
@@ -61,7 +65,11 @@ class GatewayInstance(Base):
 
     # Health
     status = Column(
-        SQLEnum(GatewayInstanceStatus, name="gateway_instance_status_enum"),
+        SQLEnum(
+            GatewayInstanceStatus,
+            name="gateway_instance_status_enum",
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=GatewayInstanceStatus.OFFLINE,
         server_default="offline",

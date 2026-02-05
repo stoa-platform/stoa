@@ -64,9 +64,9 @@ class Subscription(Base):
 
     # Status
     status = Column(
-        SQLEnum(SubscriptionStatus),
+        SQLEnum(SubscriptionStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        default=SubscriptionStatus.PENDING
+        default=SubscriptionStatus.PENDING,
     )
     status_reason = Column(Text, nullable=True)
 
@@ -83,7 +83,7 @@ class Subscription(Base):
 
     # Gateway provisioning (CAB-800)
     provisioning_status = Column(
-        SQLEnum(ProvisioningStatus),
+        SQLEnum(ProvisioningStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ProvisioningStatus.NONE,
         server_default="none",

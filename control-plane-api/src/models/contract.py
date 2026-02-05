@@ -75,7 +75,10 @@ class ProtocolBinding(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     contract_id = Column(UUID(as_uuid=True), ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False)
-    protocol = Column(SQLEnum(ProtocolType), nullable=False)
+    protocol = Column(
+        SQLEnum(ProtocolType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
     enabled = Column(Boolean, default=False, nullable=False)
 
     # Protocol-specific endpoint info

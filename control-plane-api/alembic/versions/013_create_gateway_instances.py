@@ -21,16 +21,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create enum types
+    # Create enum types (create_type=False prevents double-creation in create_table)
     gateway_type_enum = sa.Enum(
         'webmethods', 'kong', 'apigee', 'aws_apigateway', 'stoa',
         name='gateway_type_enum',
+        create_type=False,
     )
     gateway_type_enum.create(op.get_bind(), checkfirst=True)
 
     gateway_status_enum = sa.Enum(
         'online', 'offline', 'degraded', 'maintenance',
         name='gateway_instance_status_enum',
+        create_type=False,
     )
     gateway_status_enum.create(op.get_bind(), checkfirst=True)
 

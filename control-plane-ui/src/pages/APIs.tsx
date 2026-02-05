@@ -3,6 +3,8 @@ import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { API, APICreate, Tenant } from '../types';
 import yaml from 'js-yaml';
+import { useToastActions } from '@stoa/shared/components/Toast';
+import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 
 // Debounce hook for search optimization
 function useDebounce<T>(value: T, delay: number): T {
@@ -32,6 +34,8 @@ const statusColors: Record<string, string> = {
 
 export function APIs() {
   const { isReady } = useAuth();
+  const toast = useToastActions();
+  const [confirm, ConfirmDialog] = useConfirm();
   const [apis, setApis] = useState<API[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>('');
@@ -162,15 +166,24 @@ export function APIs() {
     }
   }, [selectedTenant]);
 
-  const handleDelete = useCallback(async (apiId: string) => {
-    if (!confirm('Are you sure you want to delete this API?')) return;
+  const handleDelete = useCallback(async (apiId: string, apiName: string) => {
+    const confirmed = await confirm({
+      title: 'Delete API',
+      message: `Are you sure you want to delete "${apiName}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
     try {
       await apiService.deleteApi(selectedTenant, apiId);
+      toast.success('API deleted', `${apiName} has been removed`);
       loadApis(selectedTenant);
     } catch (err: any) {
-      setError(err.message || 'Failed to delete API');
+      toast.error('Delete failed', err.message || 'Failed to delete API');
     }
-  }, [selectedTenant]);
+  }, [selectedTenant, confirm, toast]);
 
   const handleDeploy = useCallback(async (api: API, environment: 'dev' | 'staging') => {
     try {
@@ -179,12 +192,15 @@ export function APIs() {
         environment,
         version: api.version,
       });
-      alert(`Deployment to ${environment.toUpperCase()} started!`);
+      toast.success(
+        `Deployment started`,
+        `${api.name} is being deployed to ${environment.toUpperCase()}`
+      );
       loadApis(selectedTenant);
     } catch (err: any) {
-      setError(err.message || 'Failed to deploy API');
+      toast.error('Deployment failed', err.message || 'Failed to deploy API');
     }
-  }, [selectedTenant]);
+  }, [selectedTenant, toast]);
 
   // Memoized filter clear handler
   const clearFilters = useCallback(() => {
@@ -400,7 +416,7 @@ export function APIs() {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete(api.id)}
+                        onClick={() => handleDelete(api.id, api.display_name || api.name)}
                         className="text-red-600 hover:text-red-800"
                       >
                         Delete
@@ -461,6 +477,9 @@ export function APIs() {
           isEdit
         />
       )}
+
+      {/* Confirm Dialog */}
+      {ConfirmDialog}
     </div>
   );
 }

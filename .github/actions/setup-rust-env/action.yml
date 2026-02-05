@@ -14,11 +14,11 @@ runs:
   using: 'composite'
   steps:
     - name: Install Rust stable toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
       with:
         components: ${{ inputs.components }}
 
     - name: Cache Cargo
-      uses: Swatinem/rust-cache@v2
+      uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
       with:
         workspaces: ${{ inputs.working-directory }} -> target

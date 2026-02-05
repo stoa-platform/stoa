@@ -168,8 +168,8 @@ impl ToolProxyClient {
     /// Discover available tools from the Control Plane.
     ///
     /// Strategy:
-    /// 1. If OIDC configured → try GET /mcp/v1/tools (authenticated)
-    /// 2. Fallback → GET /tools (unauthenticated)
+    /// 1. If OIDC configured → try GET /v1/mcp/tools (authenticated)
+    /// 2. Fallback → GET /v1/mcp/tools (unauthenticated)
     pub async fn discover_tools(&self) -> Result<Vec<RemoteToolDef>, String> {
         if self.oidc.is_some() {
             match self.discover_authenticated().await {
@@ -183,7 +183,7 @@ impl ToolProxyClient {
     }
 
     async fn discover_authenticated(&self) -> Result<Vec<RemoteToolDef>, String> {
-        let url = format!("{}/mcp/v1/tools", self.base_url);
+        let url = format!("{}/v1/mcp/tools", self.base_url);
         debug!(url = %url, "Discovering tools (authenticated)");
 
         let token = self.get_token().await?;
@@ -207,7 +207,7 @@ impl ToolProxyClient {
     }
 
     async fn discover_unauthenticated(&self) -> Result<Vec<RemoteToolDef>, String> {
-        let url = format!("{}/tools", self.base_url);
+        let url = format!("{}/v1/mcp/tools", self.base_url);
         debug!(url = %url, "Discovering tools (unauthenticated)");
 
         let resp = self.client.get(&url).send().await.map_err(|e| {
@@ -261,7 +261,7 @@ impl ToolProxyClient {
         args: &Value,
         ctx: &ToolContext,
     ) -> Result<Value, String> {
-        let url = format!("{}/mcp/v1/tools/{}/invoke", self.base_url, tool);
+        let url = format!("{}/v1/mcp/tools/{}/invoke", self.base_url, tool);
 
         // Use user token if present, otherwise fall back to service account
         let token = if let Some(ref user_token) = ctx.raw_token {
@@ -309,7 +309,7 @@ impl ToolProxyClient {
         args: &Value,
         tenant_id: &str,
     ) -> Result<Value, String> {
-        let url = format!("{}/tools/{}", self.base_url, tool);
+        let url = format!("{}/v1/mcp/tools/{}/invoke", self.base_url, tool);
         debug!(tool, url = %url, "Proxying tool call (unauthenticated)");
 
         let payload = serde_json::json!({ "arguments": args });

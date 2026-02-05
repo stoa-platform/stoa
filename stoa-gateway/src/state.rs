@@ -11,8 +11,10 @@ use crate::config::Config;
 use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
+use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
 use crate::rate_limit::RateLimiter;
 use crate::routes::{PolicyRegistry, RouteRegistry};
+use crate::uac::Action;
 
 /// Application state shared across all handlers
 #[derive(Clone)]
@@ -37,7 +39,28 @@ impl AppState {
         let session_manager = Arc::new(SessionManager::new(config.mcp_session_ttl_minutes));
         let rate_limiter = Arc::new(RateLimiter::new(&config));
         let api_key_validator = Arc::new(ApiKeyValidator::new(&config));
-        let uac_enforcer = Arc::new(UacEnforcer);
+
+        // Initialize Policy Engine (OPA)
+        let policy_config = PolicyEngineConfig {
+            policy_path: config.policy_path.clone(),
+            enabled: config.policy_enabled,
+            ..PolicyEngineConfig::default()
+        };
+        let policy_engine = match PolicyEngine::new(policy_config) {
+            Ok(engine) => Arc::new(engine),
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to initialize policy engine — using permissive fallback");
+                // Create disabled engine as fallback
+                Arc::new(
+                    PolicyEngine::new(PolicyEngineConfig {
+                        enabled: false,
+                        ..PolicyEngineConfig::default()
+                    })
+                    .expect("Fallback policy engine"),
+                )
+            }
+        };
+        let uac_enforcer = Arc::new(UacEnforcer::new(policy_engine));
 
         let cp_url = config
             .control_plane_url
@@ -125,12 +148,62 @@ impl AppState {
     }
 }
 
-// Placeholder for UAC enforcer until full implementation
-pub struct UacEnforcer;
+/// UAC Enforcer using OPA Policy Engine
+///
+/// Evaluates scope-based access control policies for tool invocations.
+/// Implements ADR-012 12-Scope Model.
+pub struct UacEnforcer {
+    policy_engine: Arc<PolicyEngine>,
+}
 
 impl UacEnforcer {
-    pub async fn check(&self, _tenant_id: &str, _action: crate::uac::Action) -> Result<(), String> {
-        // TODO: Implement actual UAC check
-        Ok(())
+    /// Create a new UAC enforcer with the given policy engine
+    pub fn new(policy_engine: Arc<PolicyEngine>) -> Self {
+        Self { policy_engine }
+    }
+
+    /// Check if a tool invocation is allowed (legacy signature for compatibility)
+    pub async fn check(&self, tenant_id: &str, action: Action) -> Result<(), String> {
+        // Legacy check with empty context — allows all by default for backwards compat
+        // New code should use check_with_context() for proper policy evaluation
+        self.check_with_context(
+            None,
+            None,
+            tenant_id,
+            "unknown",
+            action,
+            vec!["stoa:read".to_string()], // Default read scope
+            vec![],
+        )
+    }
+
+    /// Check if a tool invocation is allowed with full context
+    ///
+    /// This is the primary method for policy evaluation. It builds a PolicyInput
+    /// from the provided context and evaluates it against the OPA policy.
+    pub fn check_with_context(
+        &self,
+        user_id: Option<String>,
+        user_email: Option<String>,
+        tenant_id: &str,
+        tool_name: &str,
+        action: Action,
+        scopes: Vec<String>,
+        roles: Vec<String>,
+    ) -> Result<(), String> {
+        let input = PolicyInput::new(
+            user_id,
+            user_email,
+            tenant_id.to_string(),
+            tool_name.to_string(),
+            action,
+            scopes,
+            roles,
+        );
+
+        match self.policy_engine.evaluate(&input) {
+            PolicyDecision::Allow => Ok(()),
+            PolicyDecision::Deny { reason } => Err(reason),
+        }
     }
 }

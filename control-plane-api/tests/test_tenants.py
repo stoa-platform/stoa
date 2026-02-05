@@ -19,6 +19,7 @@ def _make_tenant(
     description="Test tenant",
     status="active",
     owner_email="admin@acme.com",
+    tier="platform",
 ):
     """Create a mock Tenant ORM object."""
     tenant = MagicMock(spec=Tenant)
@@ -26,6 +27,7 @@ def _make_tenant(
     tenant.name = name
     tenant.description = description
     tenant.status = status
+    tenant.tier = tier
     tenant.settings = {"owner_email": owner_email}
     tenant.created_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
     tenant.updated_at = datetime(2025, 1, 1, tzinfo=timezone.utc)

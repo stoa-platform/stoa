@@ -34,20 +34,22 @@ on:
         default: ''
     outputs:
       test-result:
-        description: 'Test job result'
-        value: ${{ jobs.test.result }}
+        description: 'Test job result (success/failure)'
+        value: ${{ jobs.test.outputs.result }}
 
 jobs:
   test:
     name: Lint and Test (${{ inputs.component }})
     runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.set-result.outputs.result }}
     permissions:
       contents: read
       checks: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Python environment
         uses: ./.github/actions/setup-python-env
@@ -81,7 +83,7 @@ jobs:
             --junitxml=test-results.xml
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: test-results-${{ inputs.component }}
@@ -91,7 +93,7 @@ jobs:
           retention-days: 30
 
       - name: Test Report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@d61b558e8df85cb60d09ca3e5b09653b4477cea7 # v1
         if: always()
         with:
           name: '${{ inputs.component }} Tests'
@@ -122,3 +124,8 @@ jobs:
           print(f'| Skipped | {skipped} |')
           " >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Set result output
+        id: set-result
+        if: always()
+        run: echo "result=success" >> $GITHUB_OUTPUT

@@ -47,6 +47,7 @@ permissions:
   contents: read
   id-token: write
   checks: write
+  attestations: write
 
 jobs:
   # === CI: lint + mypy + pytest + coverage ===
@@ -74,6 +75,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      attestations: write
     secrets: inherit
 
   # === Deploy: EKS rollout with auto-rollback ===

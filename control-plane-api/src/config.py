@@ -111,6 +111,14 @@ class Settings(BaseSettings):
     SYNC_ENGINE_MAX_CONCURRENT: int = 5
     SYNC_ENGINE_RETRY_MAX: int = 3
 
+    # Gateway Auto-Registration (ADR-028)
+    # Comma-separated list of valid API keys for gateway self-registration
+    GATEWAY_API_KEYS: str = ""
+    # Heartbeat timeout in seconds (gateway marked OFFLINE after this)
+    GATEWAY_HEARTBEAT_TIMEOUT_SECONDS: int = 90
+    # Health check interval in seconds (how often to check for stale gateways)
+    GATEWAY_HEALTH_CHECK_INTERVAL_SECONDS: int = 30
+
     # CORS - comma-separated list of allowed origins
     CORS_ORIGINS: str = f"https://console.{_BASE_DOMAIN},http://localhost:3000,http://localhost:5173"
 
@@ -224,6 +232,13 @@ class Settings(BaseSettings):
             return json.loads(self.LOG_MASKING_PATTERNS)
         except (json.JSONDecodeError, TypeError):
             return ["password", "secret", "token", "api_key", "authorization"]
+
+    @property
+    def gateway_api_keys_list(self) -> list[str]:
+        """Return GATEWAY_API_KEYS as a list (ADR-028)"""
+        if not self.GATEWAY_API_KEYS:
+            return []
+        return [key.strip() for key in self.GATEWAY_API_KEYS.split(",") if key.strip()]
 
     class Config:
         env_file = ".env"

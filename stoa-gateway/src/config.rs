@@ -150,6 +150,22 @@ pub struct Config {
     /// Env: STOA_SHADOW_GITLAB_PROJECT
     #[serde(default)]
     pub shadow_gitlab_project: Option<String>,
+
+    // === Auto-Registration (ADR-028) ===
+    /// Environment identifier for registration (dev, staging, prod)
+    /// Env: STOA_ENVIRONMENT
+    #[serde(default = "default_environment")]
+    pub environment: String,
+
+    /// Enable auto-registration with Control Plane on startup
+    /// Env: STOA_AUTO_REGISTER
+    #[serde(default = "default_auto_register")]
+    pub auto_register: bool,
+
+    /// Heartbeat interval in seconds (default: 30)
+    /// Env: STOA_HEARTBEAT_INTERVAL_SECS
+    #[serde(default = "default_heartbeat_interval")]
+    pub heartbeat_interval_secs: u64,
 }
 
 fn default_port() -> u16 {
@@ -188,6 +204,18 @@ fn default_shadow_min_samples() -> usize {
     10 // Minimum samples before pattern is considered stable
 }
 
+fn default_environment() -> String {
+    "dev".to_string()
+}
+
+fn default_auto_register() -> bool {
+    true // Auto-register when control_plane_url is set
+}
+
+fn default_heartbeat_interval() -> u64 {
+    30 // 30 seconds per ADR-028
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -223,6 +251,9 @@ impl Default for Config {
             shadow_capture_source: None,
             shadow_min_samples: default_shadow_min_samples(),
             shadow_gitlab_project: None,
+            environment: default_environment(),
+            auto_register: default_auto_register(),
+            heartbeat_interval_secs: default_heartbeat_interval(),
         }
     }
 }

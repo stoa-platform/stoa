@@ -276,6 +276,6 @@ async def invoke_tool(
         f"/mcp/v1/tools/{tool_name}/invoke",
         user,
         credentials.credentials,
-        json_body={"arguments": body.arguments},
+        json_body={"name": tool_name, "arguments": body.arguments},
     )
     return result

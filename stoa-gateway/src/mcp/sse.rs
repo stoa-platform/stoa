@@ -169,8 +169,8 @@ pub async fn handle_sse_post(
             }
         });
 
-    // Validate JWT and extract user identity
-    let (tenant_id, user_id, user_email, roles, validated_token) = if let Some(ref token) =
+    // Validate JWT and extract user identity (including scopes for OPA policy evaluation)
+    let (tenant_id, user_id, user_email, roles, scopes, validated_token) = if let Some(ref token) =
         raw_token
     {
         if let Some(ref validator) = state.jwt_validator {
@@ -185,12 +185,15 @@ pub async fn handle_sse_post(
                     let email = claims.email.clone();
                     let r: Vec<String> =
                         claims.realm_roles().iter().map(|s| s.to_string()).collect();
+                    // Extract OAuth scopes from JWT (ADR-012 12-Scope Model)
+                    let s: Vec<String> = claims.scopes().iter().map(|s| s.to_string()).collect();
                     debug!(
                         user_id = ?uid,
                         tenant_id = %tenant,
+                        scopes = ?s,
                         "JWT validated — user authenticated"
                     );
-                    (tenant, uid, email, r, Some(token.clone()))
+                    (tenant, uid, email, r, s, Some(token.clone()))
                 }
                 Err(e) => {
                     warn!(error = %e, "JWT validation failed");
@@ -213,12 +216,12 @@ pub async fn handle_sse_post(
             // No JWT validator configured — accept token but don't validate
             debug!("JWT validator not configured — skipping token validation");
             let tenant = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
-            (tenant, None, None, vec![], Some(token.clone()))
+            (tenant, None, None, vec![], vec![], Some(token.clone()))
         }
     } else {
         // No token present (public methods only reach here)
         let tenant = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
-        (tenant, None, None, vec![], None)
+        (tenant, None, None, vec![], vec![], None)
     };
 
     // Resolve or create session
@@ -244,6 +247,7 @@ pub async fn handle_sse_post(
         user_email,
         request_id: request_id.clone(),
         roles,
+        scopes,
         raw_token: validated_token,
     };
 
@@ -460,18 +464,30 @@ async fn handle_tools_call(
         }
     };
 
-    // Check UAC permission using tool's required_action (FIX for hardcoded action)
+    // Check UAC permission using OPA policy engine (Phase 2: CAB-1094)
+    // Default to stoa:read scope for authenticated users without explicit scopes
     let required_action = tool.required_action();
-    if let Err(e) = state
-        .uac_enforcer
-        .check(&ctx.tenant_id, required_action)
-        .await
-    {
+    let effective_scopes = if ctx.scopes.is_empty() && ctx.user_id.is_some() {
+        vec!["stoa:read".to_string()]
+    } else {
+        ctx.scopes.clone()
+    };
+
+    if let Err(e) = state.uac_enforcer.check_with_context(
+        ctx.user_id.clone(),
+        ctx.user_email.clone(),
+        &ctx.tenant_id,
+        tool_name,
+        required_action,
+        effective_scopes.clone(),
+        ctx.roles.clone(),
+    ) {
         warn!(
             tool = %tool_name,
             action = ?required_action,
             tenant = %ctx.tenant_id,
-            "UAC check failed: {}",
+            scopes = ?effective_scopes,
+            "UAC policy denied: {}",
             e
         );
         return JsonRpcResponse::error(

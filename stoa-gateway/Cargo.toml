@@ -45,6 +45,12 @@ figment = { version = "0.10", features = ["yaml", "env"] }  # Layered config
 # === Phase 2 OPA: Embedded Policy Engine (CAB-1094) ===
 regorus = "0.2"                              # Pure Rust OPA evaluator (no sidecar)
 
+# === Phase 7: Kubernetes CRD + Federation (CAB-1095) ===
+kube = { version = "0.98", features = ["runtime", "derive", "client"] }
+kube-runtime = "0.98"
+k8s-openapi = { version = "0.24", features = ["latest"] }
+schemars = "0.8"                             # JSON Schema for CRD generation
+
 # === Phase 5: OpenTelemetry Distributed Tracing (CAB-1088) ===
 # TODO: Re-enable once opentelemetry 0.27 API stabilizes
 # opentelemetry = { version = "0.27", features = ["trace"] }

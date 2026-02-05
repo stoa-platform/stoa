@@ -6,6 +6,8 @@ import { SyncStatusBadge } from '../../components/SyncStatusBadge';
 import { DeployAPIDialog } from './DeployAPIDialog';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import type { GatewayDeployment, DeploymentStatusSummary } from '../../types';
 
 const PAGE_SIZE = 20;
@@ -213,19 +215,14 @@ export function GatewayDeploymentsDashboard() {
       {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          </div>
+          <TableSkeleton rows={5} columns={6} />
         ) : deployments.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No deployments found.</p>
-            <button
-              onClick={() => setShowDeployDialog(true)}
-              className="mt-3 text-sm text-blue-600 hover:text-blue-800"
-            >
-              Deploy your first API
-            </button>
-          </div>
+          <EmptyState
+            variant="deployments"
+            title="No deployments found"
+            description="Deploy an API to a gateway to get started."
+            action={{ label: 'Deploy API', onClick: () => setShowDeployDialog(true) }}
+          />
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

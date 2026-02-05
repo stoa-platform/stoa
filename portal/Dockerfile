@@ -1,16 +1,27 @@
 # Build stage
+# NOTE: Build context must be repo root (not portal/)
+# Use: docker build -f portal/Dockerfile .
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy shared package first (monorepo dependency)
+COPY shared/package*.json ./shared/
+RUN cd shared && npm ci --ignore-scripts
+
+# Copy main package files
+COPY portal/package*.json ./portal/
 
 # Install dependencies
+WORKDIR /app/portal
 RUN npm ci
 
-# Copy source
-COPY . .
+# Copy source files
+WORKDIR /app
+COPY shared/ ./shared/
+COPY portal/ ./portal/
+
+WORKDIR /app/portal
 
 # Build arguments - Override with --build-arg during docker build
 # Example: docker build --build-arg VITE_BASE_DOMAIN=staging.example.com .
@@ -75,10 +86,10 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:alpine
 
 # Copy custom nginx config (nginx-unprivileged uses 8080 by default)
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY portal/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built app
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/portal/dist /usr/share/nginx/html
 
 # nginx-unprivileged listens on 8080
 EXPOSE 8080

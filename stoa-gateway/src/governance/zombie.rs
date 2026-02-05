@@ -193,7 +193,12 @@ impl ZombieDetector {
     }
 
     /// Start a new session
-    pub async fn start_session(&self, session_id: &str, user_id: Option<String>, tenant_id: Option<String>) {
+    pub async fn start_session(
+        &self,
+        session_id: &str,
+        user_id: Option<String>,
+        tenant_id: Option<String>,
+    ) {
         let mut session = TrackedSession::new(session_id.to_string());
         session.user_id = user_id.clone();
         session.tenant_id = tenant_id.clone();
@@ -274,7 +279,10 @@ impl ZombieDetector {
             let idle_secs = session.idle_duration().num_seconds();
 
             // Check for zombie state
-            if idle_secs >= zombie_threshold && session.health != SessionHealth::Zombie && session.health != SessionHealth::Revoked {
+            if idle_secs >= zombie_threshold
+                && session.health != SessionHealth::Zombie
+                && session.health != SessionHealth::Revoked
+            {
                 session.health = SessionHealth::Zombie;
 
                 let alert = ZombieAlert {
@@ -387,7 +395,8 @@ impl ZombieDetector {
     /// Cleanup expired sessions
     pub async fn cleanup(&self) -> usize {
         let mut sessions = self.sessions.write().await;
-        let zombie_threshold = (self.config.session_ttl_secs as f64 * self.config.zombie_factor * 2.0) as i64;
+        let zombie_threshold =
+            (self.config.session_ttl_secs as f64 * self.config.zombie_factor * 2.0) as i64;
 
         let before = sessions.len();
         sessions.retain(|_, session| {
@@ -408,22 +417,31 @@ impl ZombieDetector {
     pub async fn stats(&self) -> ZombieStats {
         let sessions = self.sessions.read().await;
 
-        let mut stats = ZombieStats::default();
-        stats.total_sessions = sessions.len();
+        let mut healthy = 0;
+        let mut warning = 0;
+        let mut expired = 0;
+        let mut zombie = 0;
+        let mut revoked = 0;
 
         for session in sessions.values() {
             match session.health {
-                SessionHealth::Healthy => stats.healthy += 1,
-                SessionHealth::Warning => stats.warning += 1,
-                SessionHealth::Expired => stats.expired += 1,
-                SessionHealth::Zombie => stats.zombie += 1,
-                SessionHealth::Revoked => stats.revoked += 1,
+                SessionHealth::Healthy => healthy += 1,
+                SessionHealth::Warning => warning += 1,
+                SessionHealth::Expired => expired += 1,
+                SessionHealth::Zombie => zombie += 1,
+                SessionHealth::Revoked => revoked += 1,
             }
         }
 
-        stats.alerts_total = self.alerts.read().await.len();
-
-        stats
+        ZombieStats {
+            total_sessions: sessions.len(),
+            healthy,
+            warning,
+            expired,
+            zombie,
+            revoked,
+            alerts_total: self.alerts.read().await.len(),
+        }
     }
 
     /// Get recent alerts
@@ -435,7 +453,10 @@ impl ZombieDetector {
     /// Check if zombie threshold is exceeded
     pub async fn is_alert_threshold_exceeded(&self) -> bool {
         let sessions = self.sessions.read().await;
-        let zombie_count = sessions.values().filter(|s| s.health == SessionHealth::Zombie).count();
+        let zombie_count = sessions
+            .values()
+            .filter(|s| s.health == SessionHealth::Zombie)
+            .count();
         zombie_count >= self.config.alert_threshold
     }
 }
@@ -492,7 +513,9 @@ mod tests {
         let detector = ZombieDetector::new(ZombieConfig::default());
 
         // Start session
-        detector.start_session("test-session", Some("user-1".to_string()), None).await;
+        detector
+            .start_session("test-session", Some("user-1".to_string()), None)
+            .await;
 
         // Record activity
         let health = detector.record_activity("test-session").await.unwrap();
@@ -557,9 +580,9 @@ mod tests {
     #[tokio::test]
     async fn test_zombie_detection() {
         let detector = ZombieDetector::new(ZombieConfig {
-            session_ttl_secs: 1,  // 1 second TTL for testing
-            zombie_factor: 2.0,   // 2 seconds to zombie
-            auto_revoke: false,   // Don't auto-revoke for this test
+            session_ttl_secs: 1, // 1 second TTL for testing
+            zombie_factor: 2.0,  // 2 seconds to zombie
+            auto_revoke: false,  // Don't auto-revoke for this test
             ..Default::default()
         });
 

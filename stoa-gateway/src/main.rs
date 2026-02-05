@@ -29,6 +29,7 @@ mod state;
 mod uac;
 
 use config::Config;
+use control_plane::GatewayRegistrar;
 use handlers::admin;
 use mcp::{
     discovery::{mcp_capabilities, mcp_discovery, mcp_health},
@@ -58,6 +59,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize mode-specific components
     init_mode_components(&config).await;
+
+    // Auto-register with Control Plane (ADR-028)
+    if config.auto_register {
+        if let Some(cp_url) = &config.control_plane_url {
+            if let Some(api_key) = &config.control_plane_api_key {
+                info!("Auto-registering with Control Plane: {}", cp_url);
+                let registrar =
+                    std::sync::Arc::new(GatewayRegistrar::new(cp_url.clone(), api_key.clone()));
+
+                match registrar.register(&config).await {
+                    Ok(id) => {
+                        info!(gateway_id = %id, "Registered with Control Plane");
+                        // Start heartbeat background task
+                        registrar.start_heartbeat(
+                            std::sync::Arc::new(state.clone()),
+                            config.heartbeat_interval_secs,
+                        );
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "Failed to register with Control Plane — running in standalone mode");
+                    }
+                }
+            } else {
+                info!("Auto-registration skipped: STOA_CONTROL_PLANE_API_KEY not set");
+            }
+        } else {
+            info!("Auto-registration skipped: STOA_CONTROL_PLANE_URL not set");
+        }
+    }
 
     // Start background tasks
     state.start_background_tasks();

@@ -103,6 +103,11 @@ impl ToolProxyClient {
         }
     }
 
+    /// Get the base URL for native tools
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
     /// Get a valid access token, refreshing if expired.
     async fn get_token(&self) -> Result<String, String> {
         let oidc = match &self.oidc {

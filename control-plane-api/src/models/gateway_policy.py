@@ -56,12 +56,20 @@ class GatewayPolicy(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     policy_type = Column(
-        SQLEnum(PolicyType, name="policy_type_enum"),
+        SQLEnum(
+            PolicyType,
+            name="policy_type_enum",
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
     )
     tenant_id = Column(String(255), nullable=True, index=True)
     scope = Column(
-        SQLEnum(PolicyScope, name="policy_scope_enum"),
+        SQLEnum(
+            PolicyScope,
+            name="policy_scope_enum",
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=PolicyScope.API,
         server_default="api",

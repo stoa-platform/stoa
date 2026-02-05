@@ -2,12 +2,13 @@
 //!
 //! Pure-Rust OPA evaluator using `regorus` crate.
 //! Evaluates Rego policies for scope-based access control.
+#![allow(dead_code)]
 
+use parking_lot::RwLock;
 use regorus::{Engine, Value};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
-use parking_lot::RwLock;
 use tracing::{debug, error, info, warn};
 
 use crate::uac::Action;
@@ -222,10 +223,9 @@ impl PolicyEngine {
     /// Get denial reason from policy
     fn get_denial_reason(&self, engine: &mut Engine, input: &PolicyInput) -> String {
         // Try to evaluate a denial_reason rule if it exists
-        if let Ok(value) = engine.eval_rule("data.stoa.authz.denial_reason".to_string()) {
-            if let Value::String(s) = value {
-                return s.to_string();
-            }
+        if let Ok(Value::String(s)) = engine.eval_rule("data.stoa.authz.denial_reason".to_string())
+        {
+            return s.to_string();
         }
 
         // Default reason based on action and scopes

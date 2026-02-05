@@ -65,10 +65,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(cp_url) = &config.control_plane_url {
             if let Some(api_key) = &config.control_plane_api_key {
                 info!("Auto-registering with Control Plane: {}", cp_url);
-                let registrar = std::sync::Arc::new(GatewayRegistrar::new(
-                    cp_url.clone(),
-                    api_key.clone(),
-                ));
+                let registrar =
+                    std::sync::Arc::new(GatewayRegistrar::new(cp_url.clone(), api_key.clone()));
 
                 match registrar.register(&config).await {
                     Ok(id) => {

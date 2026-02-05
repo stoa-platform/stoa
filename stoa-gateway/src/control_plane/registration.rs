@@ -286,8 +286,8 @@ impl GatewayRegistrar {
     /// Detect capabilities based on configuration
     fn detect_capabilities(&self, config: &Config) -> Vec<String> {
         let mut caps = vec![
-            "rest".to_string(),    // Always support REST
-            "oidc".to_string(),    // OIDC enforcement
+            "rest".to_string(),     // Always support REST
+            "oidc".to_string(),     // OIDC enforcement
             "metering".to_string(), // Usage metering
         ];
 

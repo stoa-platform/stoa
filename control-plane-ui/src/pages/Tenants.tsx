@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { Tenant } from '../types';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { Users } from 'lucide-react';
 
 export function Tenants() {
   const { isReady } = useAuth();
@@ -41,8 +44,12 @@ export function Tenants() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -69,12 +76,17 @@ export function Tenants() {
       {/* Tenants Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {tenants.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg shadow">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-            <p className="mt-2">No tenants found</p>
-            <p className="text-sm text-gray-400 mt-1">Tenants are managed via GitOps configuration</p>
+          <div className="col-span-full bg-white rounded-lg shadow">
+            <EmptyState
+              variant="users"
+              title="No tenants found"
+              description="Tenants are managed via GitOps configuration in the iam/tenants.yaml file."
+              illustration={
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center">
+                  <Users className="w-10 h-10 text-purple-500" />
+                </div>
+              }
+            />
           </div>
         ) : (
           tenants.map((tenant) => (

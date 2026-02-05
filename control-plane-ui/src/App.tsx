@@ -6,6 +6,7 @@ import { PlatformStatus } from './components/PlatformStatus';
 import { quickLinks } from './config';
 import { ToastProvider } from '@stoa/shared/components/Toast';
 import { CommandPaletteProvider } from '@stoa/shared/components/CommandPalette';
+import { ThemeProvider } from '@stoa/shared/contexts';
 
 // Lazy load pages for code splitting
 const Tenants = lazy(() => import('./pages/Tenants').then(m => ({ default: m.Tenants })));
@@ -275,14 +276,16 @@ function Login() {
 
 function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/*" element={<ProtectedRoutes />} />
-        </Routes>
-      </AuthProvider>
-    </ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/*" element={<ProtectedRoutes />} />
+          </Routes>
+        </AuthProvider>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 

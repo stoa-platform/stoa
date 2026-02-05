@@ -7,7 +7,9 @@ export default {
     './src/**/*.{js,ts,jsx,tsx}',
     // Include shared components
     '../shared/components/**/*.{js,ts,jsx,tsx}',
+    '../shared/contexts/**/*.{js,ts,jsx,tsx}',
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: tokens.colors,

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
+import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { AggregatedMetrics } from '../../types';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
@@ -111,8 +112,24 @@ export function GatewayObservabilityDashboard() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="space-y-6">
+          <div className="h-8 w-32 bg-gray-200 rounded-full animate-pulse" />
+          <div>
+            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mb-3" />
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <CardSkeleton key={i} className="h-20" />
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-3" />
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {[1, 2, 3].map((i) => (
+                <CardSkeleton key={i} className="h-16" />
+              ))}
+            </div>
+          </div>
         </div>
       ) : metrics ? (
         <>

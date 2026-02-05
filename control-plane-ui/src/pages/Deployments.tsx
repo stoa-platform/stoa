@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { config } from '../config';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
+import { EmptyState } from '@stoa/shared/components/EmptyState';
+import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import type { Deployment, Tenant, API, TraceSummary, PipelineTrace, TraceStats, TraceStep, TraceStatus } from '../types';
 import {
   Activity,
@@ -494,8 +496,13 @@ function DeploymentHistoryTab() {
 
   if (loading && tenants.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+          <div className="h-10 w-48 bg-gray-200 rounded animate-pulse" />
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+          <TableSkeleton rows={5} columns={7} />
+        </div>
       </div>
     );
   }
@@ -550,15 +557,12 @@ function DeploymentHistoryTab() {
       {/* Deployments List */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-          </div>
+          <TableSkeleton rows={5} columns={7} />
         ) : deployments.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <Rocket className="mx-auto h-12 w-12 text-gray-400" />
-            <p className="mt-2">No deployments found</p>
-            <p className="text-sm text-gray-400">Deploy an API to see it here</p>
-          </div>
+          <EmptyState
+            variant="deployments"
+            description="Deploy an API to see it here."
+          />
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

@@ -50,7 +50,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 /// Captured HTTP transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -468,24 +468,22 @@ impl ShadowService {
         let error_rate = errors as f64 / transactions.len() as f64;
 
         // Detect auth type
-        let auth_type = transactions
-            .iter()
-            .find_map(|t| {
-                if t.request.headers.contains_key("authorization") {
-                    let auth = t.request.headers.get("authorization")?;
-                    if auth.to_lowercase().starts_with("bearer") {
-                        Some("bearer".to_string())
-                    } else if auth.to_lowercase().starts_with("basic") {
-                        Some("basic".to_string())
-                    } else {
-                        Some("unknown".to_string())
-                    }
-                } else if t.request.headers.contains_key("x-api-key") {
-                    Some("api_key".to_string())
+        let auth_type = transactions.iter().find_map(|t| {
+            if t.request.headers.contains_key("authorization") {
+                let auth = t.request.headers.get("authorization")?;
+                if auth.to_lowercase().starts_with("bearer") {
+                    Some("bearer".to_string())
+                } else if auth.to_lowercase().starts_with("basic") {
+                    Some("basic".to_string())
                 } else {
-                    None
+                    Some("unknown".to_string())
                 }
-            });
+            } else if t.request.headers.contains_key("x-api-key") {
+                Some("api_key".to_string())
+            } else {
+                None
+            }
+        });
 
         // Collect content types
         let content_types: Vec<String> = transactions
@@ -602,7 +600,8 @@ impl ShadowService {
             }],
             metadata: UacMetadata {
                 generated_at: now,
-                analysis_start: now - chrono::Duration::hours(self.settings.analysis_window_hours as i64),
+                analysis_start: now
+                    - chrono::Duration::hours(self.settings.analysis_window_hours as i64),
                 analysis_end: now,
                 transactions_analyzed: self.transactions.read().await.len() as u64,
                 endpoints_detected: endpoints.len() as u64,

@@ -49,7 +49,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument};
 
 /// Proxy errors
 #[derive(Error, Debug)]
@@ -303,7 +303,10 @@ impl ProxyService {
 
         // Apply request transformers
         for transformer in &self.transformers {
-            debug!(transformer = transformer.name(), "Applying request transformer");
+            debug!(
+                transformer = transformer.name(),
+                "Applying request transformer"
+            );
             transformer.transform(&mut proxy_request)?;
         }
 
@@ -312,7 +315,10 @@ impl ProxyService {
 
         // Apply response transformers
         for transformer in &self.response_transformers {
-            debug!(transformer = transformer.name(), "Applying response transformer");
+            debug!(
+                transformer = transformer.name(),
+                "Applying response transformer"
+            );
             transformer.transform(&mut proxy_response)?;
         }
 
@@ -417,16 +423,13 @@ impl ProxyService {
         req_builder = req_builder.timeout(Duration::from_secs(route.timeout_secs));
 
         // Send request
-        let response = req_builder
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    ProxyError::Timeout
-                } else {
-                    ProxyError::Connection(e.to_string())
-                }
-            })?;
+        let response = req_builder.send().await.map_err(|e| {
+            if e.is_timeout() {
+                ProxyError::Timeout
+            } else {
+                ProxyError::Connection(e.to_string())
+            }
+        })?;
 
         let upstream_time = start.elapsed().as_millis() as u64;
 
@@ -595,9 +598,15 @@ mod tests {
     #[test]
     fn test_hop_by_hop_headers() {
         assert!(is_hop_by_hop_header(&HeaderName::from_static("connection")));
-        assert!(is_hop_by_hop_header(&HeaderName::from_static("transfer-encoding")));
-        assert!(!is_hop_by_hop_header(&HeaderName::from_static("content-type")));
-        assert!(!is_hop_by_hop_header(&HeaderName::from_static("authorization")));
+        assert!(is_hop_by_hop_header(&HeaderName::from_static(
+            "transfer-encoding"
+        )));
+        assert!(!is_hop_by_hop_header(&HeaderName::from_static(
+            "content-type"
+        )));
+        assert!(!is_hop_by_hop_header(&HeaderName::from_static(
+            "authorization"
+        )));
     }
 
     #[test]

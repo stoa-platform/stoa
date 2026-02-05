@@ -19,17 +19,3 @@
 #![allow(dead_code)]
 
 pub mod capture;
-
-// Re-export capture utilities
-pub use capture::{CaptureSource, TrafficCapture};
-
-// Re-export types from mode::shadow for convenience
-pub use crate::mode::shadow::{
-    CapturedRequest,
-    CapturedResponse,
-    CapturedTransaction,
-    EndpointPattern,
-    GeneratedUac,
-    ShadowService,
-    ShadowStatus,
-};

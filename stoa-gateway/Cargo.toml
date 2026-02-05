@@ -34,6 +34,7 @@ parking_lot = "0.12"                    # Non-poisoning RwLock
 tokio-stream = "0.1"                    # SSE event streams
 futures = "0.3"                          # Stream combinators
 uuid = { version = "1", features = ["v4", "serde"] }  # Session IDs
+urlencoding = "2"                           # URL encoding for query params
 
 # === NEW - Phase 3: Auth ===
 moka = { version = "0.12", features = ["sync", "future"] }  # API key + JWKS cache

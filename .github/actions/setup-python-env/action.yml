@@ -31,10 +31,12 @@ runs:
     - name: Install dependencies
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        INSTALL_CMD: ${{ inputs.install-command }}
       run: |
         pip install --upgrade pip
-        if [ -n "${{ inputs.install-command }}" ]; then
-          ${{ inputs.install-command }}
+        if [ -n "$INSTALL_CMD" ]; then
+          eval "$INSTALL_CMD"
         elif [ -f "pyproject.toml" ]; then
           pip install -e ".[dev,k8s]" 2>/dev/null || pip install -e ".[dev]" 2>/dev/null || pip install -e "."
         elif [ -f "requirements.txt" ]; then

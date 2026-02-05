@@ -21,10 +21,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create enum type
+    # Create enum type (create_type=False prevents double-creation in create_table)
     sync_status_enum = sa.Enum(
         'pending', 'syncing', 'synced', 'drifted', 'error', 'deleting',
         name='deployment_sync_status_enum',
+        create_type=False,
     )
     sync_status_enum.create(op.get_bind(), checkfirst=True)
 

@@ -19,17 +19,17 @@ pub struct Config {
     // === Server ===
     #[serde(default = "default_port")]
     pub port: u16,
-    
+
     #[serde(default = "default_host")]
     pub host: String,
 
     // === Authentication ===
     #[serde(default)]
     pub jwt_secret: Option<String>,
-    
+
     #[serde(default)]
     pub jwt_issuer: Option<String>,
-    
+
     #[serde(default)]
     pub keycloak_url: Option<String>,
 
@@ -56,7 +56,7 @@ pub struct Config {
     // === Control Plane ===
     #[serde(default)]
     pub control_plane_url: Option<String>,
-    
+
     #[serde(default)]
     pub control_plane_api_key: Option<String>,
 
@@ -69,20 +69,20 @@ pub struct Config {
     // === GitLab (UAC Sync) ===
     #[serde(default)]
     pub gitlab_url: Option<String>,
-    
+
     #[serde(default)]
     pub gitlab_api_url: Option<String>,
-    
+
     #[serde(default)]
     pub gitlab_token: Option<String>,
-    
+
     #[serde(default)]
     pub gitlab_project_id: Option<String>,
 
     // === Rate Limiting ===
     #[serde(default)]
     pub rate_limit_default: Option<usize>,
-    
+
     #[serde(default)]
     pub rate_limit_window_seconds: Option<u64>,
 
@@ -93,10 +93,10 @@ pub struct Config {
     // === Observability ===
     #[serde(default)]
     pub log_level: Option<String>,
-    
+
     #[serde(default)]
     pub log_format: Option<String>,
-    
+
     #[serde(default)]
     pub otel_endpoint: Option<String>,
 }
@@ -149,6 +149,7 @@ impl Default for Config {
 
 impl Config {
     /// Load configuration from file and environment
+    #[allow(clippy::result_large_err)]
     pub fn load() -> Result<Self, figment::Error> {
         let mut figment = Figment::new()
             // Start with defaults
@@ -170,20 +171,19 @@ impl Config {
         figment = figment.merge(Env::prefixed("STOA_"));
 
         // Legacy env vars (backward compat with envy)
-        figment = figment
-            .merge(Env::raw().only(&[
-                "PORT",
-                "HOST",
-                "JWT_SECRET",
-                "KEYCLOAK_URL",
-                "KEYCLOAK_REALM",
-                "GITLAB_URL",
-                "GITLAB_TOKEN",
-                "GITLAB_PROJECT_ID",
-            ]));
+        figment = figment.merge(Env::raw().only(&[
+            "PORT",
+            "HOST",
+            "JWT_SECRET",
+            "KEYCLOAK_URL",
+            "KEYCLOAK_REALM",
+            "GITLAB_URL",
+            "GITLAB_TOKEN",
+            "GITLAB_PROJECT_ID",
+        ]));
 
         let config: Config = figment.extract()?;
-        
+
         info!(
             port = config.port,
             host = %config.host,
@@ -210,10 +210,11 @@ impl Config {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)]
 pub enum ConfigError {
     #[error("Missing required config: {0}")]
     Missing(String),
-    
+
     #[error("Invalid config value: {0}")]
     Invalid(String),
 }

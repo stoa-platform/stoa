@@ -9,18 +9,19 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::time::Instant;
 use tracing::{debug, error, instrument, warn};
 
-use crate::metrics;
 use crate::mcp::tools::{ToolContext, ToolDefinition};
+use crate::metrics;
 use crate::state::AppState;
 
 // === Request/Response Types ===
 
 #[derive(Debug, Deserialize)]
 pub struct ToolsListRequest {
+    #[allow(dead_code)]
     #[serde(default)]
     pub cursor: Option<String>,
 }
@@ -56,14 +57,14 @@ pub enum ToolContent {
 // === Handlers ===
 
 /// POST /mcp/tools/list - List available tools
-#[instrument(name = "mcp.tools.list", skip(state, headers, request), fields(otel.kind = "server"))]
+#[instrument(name = "mcp.tools.list", skip(state, headers, _request), fields(otel.kind = "server"))]
 pub async fn mcp_tools_list(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(request): Json<ToolsListRequest>,
+    Json(_request): Json<ToolsListRequest>,
 ) -> impl IntoResponse {
     let tenant_id = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
-    
+
     debug!(tenant_id = %tenant_id, "Listing MCP tools");
 
     let tools = state.tool_registry.list(Some(&tenant_id));
@@ -83,7 +84,7 @@ pub async fn mcp_tools_call(
 ) -> impl IntoResponse {
     let tenant_id = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
     let request_id = uuid::Uuid::new_v4().to_string();
-    
+
     debug!(
         tenant_id = %tenant_id,
         tool = %request.name,
@@ -142,14 +143,22 @@ pub async fn mcp_tools_call(
         Ok(result) => {
             let duration = start.elapsed().as_secs_f64();
             metrics::record_tool_call(&request.name, &tenant_id, "success", duration);
-            
+
             (
                 StatusCode::OK,
                 Json(ToolsCallResponse {
-                    content: result.content.into_iter().map(|c| match c {
-                        crate::mcp::tools::ToolContent::Text { text } => ToolContent::Text { text },
-                        _ => ToolContent::Text { text: "[unsupported content type]".to_string() },
-                    }).collect(),
+                    content: result
+                        .content
+                        .into_iter()
+                        .map(|c| match c {
+                            crate::mcp::tools::ToolContent::Text { text } => {
+                                ToolContent::Text { text }
+                            }
+                            _ => ToolContent::Text {
+                                text: "[unsupported content type]".to_string(),
+                            },
+                        })
+                        .collect(),
                     is_error: result.is_error,
                 }),
             )
@@ -158,7 +167,7 @@ pub async fn mcp_tools_call(
             let duration = start.elapsed().as_secs_f64();
             error!(tool = %request.name, error = %e, "Tool execution failed");
             metrics::record_tool_call(&request.name, &tenant_id, "error", duration);
-            
+
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ToolsCallResponse {

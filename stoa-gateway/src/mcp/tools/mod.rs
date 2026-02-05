@@ -3,11 +3,11 @@
 //! Provides the Tool abstraction for MCP tools with proper action requirements.
 
 use async_trait::async_trait;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
 
 pub mod proxy_tool;
 pub mod stoa_tools;
@@ -60,9 +60,12 @@ impl ToolResult {
         }
     }
 
+    #[allow(dead_code)]
     pub fn error(message: impl Into<String>) -> Self {
         Self {
-            content: vec![ToolContent::Text { text: message.into() }],
+            content: vec![ToolContent::Text {
+                text: message.into(),
+            }],
             is_error: Some(true),
         }
     }
@@ -74,6 +77,7 @@ pub struct ToolContext {
     pub tenant_id: String,
     pub user_id: Option<String>,
     pub user_email: Option<String>,
+    #[allow(dead_code)]
     pub request_id: String,
     pub roles: Vec<String>,
     /// Raw JWT token for forwarding to downstream services (Control Plane)
@@ -85,22 +89,22 @@ pub struct ToolContext {
 pub trait Tool: Send + Sync {
     /// Tool name (must be unique)
     fn name(&self) -> &str;
-    
+
     /// Human-readable description
     fn description(&self) -> &str;
-    
+
     /// JSON Schema for input parameters
     fn input_schema(&self) -> ToolSchema;
-    
+
     /// Required UAC action to execute this tool
     /// Override this to specify the action (default: Read)
     fn required_action(&self) -> Action {
         Action::Read
     }
-    
+
     /// Execute the tool with given arguments
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError>;
-    
+
     /// Get tool definition for MCP tools/list
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
@@ -113,19 +117,20 @@ pub trait Tool: Send + Sync {
 
 /// Tool execution error
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)]
 pub enum ToolError {
     #[error("Invalid arguments: {0}")]
     InvalidArguments(String),
-    
+
     #[error("Execution failed: {0}")]
     ExecutionFailed(String),
-    
+
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
-    
+
     #[error("Not found: {0}")]
     NotFound(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -157,11 +162,7 @@ impl ToolRegistry {
     /// List all tools (optionally filtered by tenant)
     pub fn list(&self, _tenant_id: Option<&str>) -> Vec<ToolDefinition> {
         // TODO: Add tenant filtering based on subscriptions
-        self.tools
-            .read()
-            .values()
-            .map(|t| t.definition())
-            .collect()
+        self.tools.read().values().map(|t| t.definition()).collect()
     }
 
     /// Get tool count
@@ -181,6 +182,7 @@ impl Default for ToolRegistry {
 // ============================================
 
 /// Example: STOA Create API Tool
+#[allow(dead_code)]
 pub struct StoaCreateApiTool {
     control_plane: Arc<dyn std::any::Any + Send + Sync>,
     git_sync: Arc<dyn std::any::Any + Send + Sync>,
@@ -188,6 +190,7 @@ pub struct StoaCreateApiTool {
 }
 
 impl StoaCreateApiTool {
+    #[allow(dead_code)]
     pub fn new(
         control_plane: Arc<dyn std::any::Any + Send + Sync>,
         git_sync: Arc<dyn std::any::Any + Send + Sync>,
@@ -238,7 +241,11 @@ impl Tool for StoaCreateApiTool {
         ToolSchema {
             schema_type: "object".to_string(),
             properties,
-            required: vec!["name".to_string(), "version".to_string(), "openapi_spec".to_string()],
+            required: vec![
+                "name".to_string(),
+                "version".to_string(),
+                "openapi_spec".to_string(),
+            ],
         }
     }
 
@@ -248,11 +255,13 @@ impl Tool for StoaCreateApiTool {
     }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
-        let name = args.get("name")
+        let name = args
+            .get("name")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'name' field".into()))?;
-        
-        let version = args.get("version")
+
+        let version = args
+            .get("version")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'version' field".into()))?;
 
@@ -261,7 +270,7 @@ impl Tool for StoaCreateApiTool {
         // 2. Validate against schema
         // 3. Create API in control plane
         // 4. Sync to Git
-        
+
         Ok(ToolResult::text(format!(
             "API '{}' version '{}' created successfully for tenant '{}'",
             name, version, ctx.tenant_id
@@ -277,16 +286,16 @@ mod tests {
     fn test_tool_registry() {
         let registry = ToolRegistry::new();
         assert_eq!(registry.count(), 0);
-        
+
         let tool = Arc::new(StoaCreateApiTool::new(
             Arc::new(()),
             Arc::new(()),
             Arc::new(()),
         ));
-        
+
         registry.register(tool);
         assert_eq!(registry.count(), 1);
-        
+
         let retrieved = registry.get("stoa_create_api");
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().required_action(), Action::CreateApi);
@@ -294,12 +303,8 @@ mod tests {
 
     #[test]
     fn test_tool_definition() {
-        let tool = StoaCreateApiTool::new(
-            Arc::new(()),
-            Arc::new(()),
-            Arc::new(()),
-        );
-        
+        let tool = StoaCreateApiTool::new(Arc::new(()), Arc::new(()), Arc::new(()));
+
         let def = tool.definition();
         assert_eq!(def.name, "stoa_create_api");
         assert!(!def.description.is_empty());
@@ -308,12 +313,8 @@ mod tests {
 
     #[test]
     fn test_required_action_override() {
-        let tool = StoaCreateApiTool::new(
-            Arc::new(()),
-            Arc::new(()),
-            Arc::new(()),
-        );
-        
+        let tool = StoaCreateApiTool::new(Arc::new(()), Arc::new(()), Arc::new(()));
+
         // Should override default Read action
         assert_eq!(tool.required_action(), Action::CreateApi);
     }

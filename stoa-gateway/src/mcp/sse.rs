@@ -9,17 +9,17 @@ use axum::{
     response::{sse::Event, IntoResponse, Response, Sse},
     Json,
 };
-use futures::stream::{self, Stream};
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{convert::Infallible, pin::Pin, sync::Arc, time::Duration};
+use std::{convert::Infallible, time::Duration};
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::mcp::session::{Session, SessionManager};
-use crate::mcp::tools::{ToolContext, ToolRegistry};
+use crate::mcp::session::Session;
+use crate::mcp::tools::ToolContext;
 use crate::metrics;
 use crate::state::AppState;
 
@@ -79,6 +79,7 @@ impl JsonRpcResponse {
 }
 
 // JSON-RPC Error Codes
+#[allow(dead_code)]
 const PARSE_ERROR: i32 = -32700;
 const INVALID_REQUEST: i32 = -32600;
 const METHOD_NOT_FOUND: i32 = -32601;
@@ -101,7 +102,7 @@ pub struct SseQueryParams {
 // ============================================
 
 /// POST /mcp/sse - Handle JSON-RPC request
-/// 
+///
 /// Accepts JSON-RPC requests and returns either:
 /// - JSON response for simple requests
 /// - SSE stream for streaming responses
@@ -169,30 +170,31 @@ pub async fn handle_sse_post(
         });
 
     // Validate JWT and extract user identity
-    let (tenant_id, user_id, user_email, roles, validated_token) =
-        if let Some(ref token) = raw_token {
-            if let Some(ref validator) = state.jwt_validator {
-                match validator.validate(token).await {
-                    Ok(claims) => {
-                        let tenant = claims
-                            .tenant_id()
-                            .map(|t| t.to_string())
-                            .or_else(|| extract_tenant(&headers))
-                            .unwrap_or_else(|| "default".to_string());
-                        let uid = Some(claims.user_id().to_string());
-                        let email = claims.email.clone();
-                        let r: Vec<String> =
-                            claims.realm_roles().iter().map(|s| s.to_string()).collect();
-                        debug!(
-                            user_id = ?uid,
-                            tenant_id = %tenant,
-                            "JWT validated — user authenticated"
-                        );
-                        (tenant, uid, email, r, Some(token.clone()))
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "JWT validation failed");
-                        return (
+    let (tenant_id, user_id, user_email, roles, validated_token) = if let Some(ref token) =
+        raw_token
+    {
+        if let Some(ref validator) = state.jwt_validator {
+            match validator.validate(token).await {
+                Ok(claims) => {
+                    let tenant = claims
+                        .tenant_id()
+                        .map(|t| t.to_string())
+                        .or_else(|| extract_tenant(&headers))
+                        .unwrap_or_else(|| "default".to_string());
+                    let uid = Some(claims.user_id().to_string());
+                    let email = claims.email.clone();
+                    let r: Vec<String> =
+                        claims.realm_roles().iter().map(|s| s.to_string()).collect();
+                    debug!(
+                        user_id = ?uid,
+                        tenant_id = %tenant,
+                        "JWT validated — user authenticated"
+                    );
+                    (tenant, uid, email, r, Some(token.clone()))
+                }
+                Err(e) => {
+                    warn!(error = %e, "JWT validation failed");
+                    return (
                             StatusCode::UNAUTHORIZED,
                             [(
                                 "WWW-Authenticate",
@@ -205,20 +207,19 @@ pub async fn handle_sse_post(
                             )),
                         )
                             .into_response();
-                    }
                 }
-            } else {
-                // No JWT validator configured — accept token but don't validate
-                debug!("JWT validator not configured — skipping token validation");
-                let tenant =
-                    extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
-                (tenant, None, None, vec![], Some(token.clone()))
             }
         } else {
-            // No token present (public methods only reach here)
+            // No JWT validator configured — accept token but don't validate
+            debug!("JWT validator not configured — skipping token validation");
             let tenant = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
-            (tenant, None, None, vec![], None)
-        };
+            (tenant, None, None, vec![], Some(token.clone()))
+        }
+    } else {
+        // No token present (public methods only reach here)
+        let tenant = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
+        (tenant, None, None, vec![], None)
+    };
 
     // Resolve or create session
     let session_id = match params.session_id {
@@ -267,10 +268,8 @@ pub async fn handle_sse_post(
 
     // Always return Mcp-Session-Id header (required by Streamable HTTP transport)
     let mut resp = Json(response).into_response();
-    resp.headers_mut().insert(
-        "Mcp-Session-Id",
-        session_id.parse().unwrap(),
-    );
+    resp.headers_mut()
+        .insert("Mcp-Session-Id", session_id.parse().unwrap());
     resp
 }
 
@@ -282,7 +281,9 @@ pub async fn handle_sse_get(
     headers: HeaderMap,
     Query(params): Query<SseQueryParams>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let session_id = params.session_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let session_id = params
+        .session_id
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
     let tenant_id = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
 
     info!(
@@ -299,12 +300,12 @@ pub async fn handle_sse_get(
 
     // Create event stream
     let (tx, rx) = mpsc::channel::<Event>(32);
-    
+
     // Send initial endpoint event
     let endpoint_event = Event::default()
         .event("endpoint")
         .data(format!("/mcp/sse?sessionId={}", session_id));
-    
+
     let _ = tx.send(endpoint_event).await;
 
     // Spawn keepalive task
@@ -371,15 +372,15 @@ pub async fn handle_sse_delete(
 // ============================================
 
 async fn handle_initialize(
-    state: &AppState,
+    _state: &AppState,
     request: &JsonRpcRequest,
-    ctx: &ToolContext,
+    _ctx: &ToolContext,
 ) -> JsonRpcResponse {
     debug!("Handling initialize request");
 
     // Parse client info from params
     let client_info = request.params.as_ref().and_then(|p| p.get("clientInfo"));
-    
+
     if let Some(info) = client_info {
         debug!(client_info = ?info, "Client connected");
     }
@@ -418,7 +419,7 @@ async fn handle_tools_list(
     ctx: &ToolContext,
 ) -> JsonRpcResponse {
     let tools = state.tool_registry.list(Some(&ctx.tenant_id));
-    
+
     let result = json!({
         "tools": tools
     });
@@ -434,22 +435,14 @@ async fn handle_tools_call(
     let params = match &request.params {
         Some(p) => p,
         None => {
-            return JsonRpcResponse::error(
-                request.id.clone(),
-                INVALID_PARAMS,
-                "Missing params",
-            );
+            return JsonRpcResponse::error(request.id.clone(), INVALID_PARAMS, "Missing params");
         }
     };
 
     let tool_name = match params.get("name").and_then(|v| v.as_str()) {
         Some(n) => n,
         None => {
-            return JsonRpcResponse::error(
-                request.id.clone(),
-                INVALID_PARAMS,
-                "Missing tool name",
-            );
+            return JsonRpcResponse::error(request.id.clone(), INVALID_PARAMS, "Missing tool name");
         }
     };
 
@@ -469,7 +462,11 @@ async fn handle_tools_call(
 
     // Check UAC permission using tool's required_action (FIX for hardcoded action)
     let required_action = tool.required_action();
-    if let Err(e) = state.uac_enforcer.check(&ctx.tenant_id, required_action).await {
+    if let Err(e) = state
+        .uac_enforcer
+        .check(&ctx.tenant_id, required_action)
+        .await
+    {
         warn!(
             tool = %tool_name,
             action = ?required_action,
@@ -497,19 +494,12 @@ async fn handle_tools_call(
         }
         Err(e) => {
             error!(tool = %tool_name, error = %e, "Tool execution failed");
-            JsonRpcResponse::error(
-                request.id.clone(),
-                INTERNAL_ERROR,
-                e.to_string(),
-            )
+            JsonRpcResponse::error(request.id.clone(), INTERNAL_ERROR, e.to_string())
         }
     }
 }
 
-async fn handle_resources_list(
-    state: &AppState,
-    request: &JsonRpcRequest,
-) -> JsonRpcResponse {
+async fn handle_resources_list(_state: &AppState, request: &JsonRpcRequest) -> JsonRpcResponse {
     // TODO: Implement resource listing
     let result = json!({
         "resources": []
@@ -526,7 +516,7 @@ fn extract_tenant(headers: &HeaderMap) -> Option<String> {
     if let Some(tenant) = headers.get("X-Tenant-ID") {
         return tenant.to_str().ok().map(|s| s.to_string());
     }
-    
+
     // TODO: Extract from JWT token
     None
 }

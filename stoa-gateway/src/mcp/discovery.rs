@@ -5,7 +5,7 @@
 //! - GET /mcp/capabilities - Detailed capabilities
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::json;
 
 use crate::state::AppState;
@@ -38,7 +38,7 @@ pub struct EndpointInfo {
 }
 
 /// GET /mcp - Server Discovery
-pub async fn mcp_discovery(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn mcp_discovery(State(_state): State<AppState>) -> impl IntoResponse {
     let response = DiscoveryResponse {
         server: ServerInfo {
             name: "STOA Gateway".to_string(),

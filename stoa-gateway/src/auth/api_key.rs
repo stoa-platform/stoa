@@ -1,6 +1,7 @@
 //! API Key Authentication
 //!
 //! Validates API keys against Control Plane with moka cache.
+#![allow(dead_code)]
 
 use axum::{
     extract::{Request, State},
@@ -62,10 +63,10 @@ impl ApiKeyValidator {
 
         // Call Control Plane
         let info = self.validate_with_control_plane(api_key).await?;
-        
+
         // Cache result
         self.cache.insert(api_key.to_string(), info.clone());
-        
+
         if info.valid {
             Ok(info)
         } else {
@@ -75,11 +76,13 @@ impl ApiKeyValidator {
 
     async fn validate_with_control_plane(&self, api_key: &str) -> Result<ApiKeyInfo, ApiKeyError> {
         if self.control_plane_url.is_empty() {
-            return Err(ApiKeyError::ConfigError("Control Plane URL not configured".into()));
+            return Err(ApiKeyError::ConfigError(
+                "Control Plane URL not configured".into(),
+            ));
         }
 
         let url = format!("{}/api/v1/keys/validate", self.control_plane_url);
-        
+
         let response = self
             .http_client
             .post(&url)
@@ -129,19 +132,19 @@ impl ApiKeyValidator {
 pub enum ApiKeyError {
     #[error("Invalid API key")]
     Invalid,
-    
+
     #[error("API key missing")]
     Missing,
-    
+
     #[error("Network error: {0}")]
     NetworkError(String),
-    
+
     #[error("Parse error: {0}")]
     ParseError(String),
-    
+
     #[error("Control plane error: {0}")]
     ControlPlaneError(String),
-    
+
     #[error("Configuration error: {0}")]
     ConfigError(String),
 }

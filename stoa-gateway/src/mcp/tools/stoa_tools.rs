@@ -30,11 +30,7 @@ fn schema(props: serde_json::Value, required: Vec<&str>) -> ToolSchema {
 }
 
 /// Convert a remote tool definition into a ProxyTool and register it.
-fn register_remote_tool(
-    registry: &ToolRegistry,
-    def: &RemoteToolDef,
-    cp: &Arc<ToolProxyClient>,
-) {
+fn register_remote_tool(registry: &ToolRegistry, def: &RemoteToolDef, cp: &Arc<ToolProxyClient>) {
     let tool_schema = ToolSchema {
         schema_type: def.input_schema.schema_type.clone(),
         properties: def.input_schema.properties.clone(),
@@ -102,7 +98,10 @@ pub fn start_tool_refresh_task(registry: Arc<ToolRegistry>, cp: Arc<ToolProxyCli
                     for def in &defs {
                         register_remote_tool(&registry, def, &cp);
                     }
-                    tracing::debug!(tool_count = defs.len(), "Refreshed tools from Control Plane");
+                    tracing::debug!(
+                        tool_count = defs.len(),
+                        "Refreshed tools from Control Plane"
+                    );
                 }
                 Err(e) => {
                     tracing::debug!(error = %e, "Tool refresh from CP failed (keeping existing tools)");
@@ -329,5 +328,8 @@ pub fn register_static_tools(registry: &ToolRegistry, cp: Arc<ToolProxyClient>) 
         cp.clone(),
     )));
 
-    tracing::info!(tool_count = registry.count(), "Static STOA tools registered (fallback)");
+    tracing::info!(
+        tool_count = registry.count(),
+        "Static STOA tools registered (fallback)"
+    );
 }

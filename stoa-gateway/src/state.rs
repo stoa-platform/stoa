@@ -12,7 +12,7 @@ use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::rate_limit::RateLimiter;
-use crate::routes::{RouteRegistry, PolicyRegistry};
+use crate::routes::{PolicyRegistry, RouteRegistry};
 
 /// Application state shared across all handlers
 #[derive(Clone)]
@@ -21,6 +21,7 @@ pub struct AppState {
     pub tool_registry: Arc<ToolRegistry>,
     pub session_manager: Arc<SessionManager>,
     pub rate_limiter: Arc<RateLimiter>,
+    #[allow(dead_code)]
     pub api_key_validator: Arc<ApiKeyValidator>,
     pub uac_enforcer: Arc<UacEnforcer>,
     pub control_plane: Arc<ToolProxyClient>,
@@ -72,11 +73,7 @@ impl AppState {
         // Build JWT validator if Keycloak is configured (for user token validation)
         let jwt_validator = if let Some(url) = &config.keycloak_url {
             let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
-            let issuer_url = format!(
-                "{}/realms/{}",
-                url.trim_end_matches('/'),
-                realm
-            );
+            let issuer_url = format!("{}/realms/{}", url.trim_end_matches('/'), realm);
             let client_id = config
                 .keycloak_client_id
                 .as_deref()
@@ -122,7 +119,7 @@ impl AppState {
     pub fn start_background_tasks(&self) {
         // Start session cleanup
         self.session_manager.clone().start_cleanup_task();
-        
+
         // Start rate limiter cleanup
         self.rate_limiter.clone().start_cleanup_task();
     }

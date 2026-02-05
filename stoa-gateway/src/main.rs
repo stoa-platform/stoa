@@ -25,12 +25,12 @@ mod state;
 mod uac;
 
 use config::Config;
+use handlers::admin;
 use mcp::{
     discovery::{mcp_capabilities, mcp_discovery, mcp_health},
     handlers::{mcp_tools_call, mcp_tools_list},
     sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
 };
-use handlers::admin;
 use proxy::dynamic_proxy;
 use state::AppState;
 
@@ -43,14 +43,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing (with optional OTel export if configured)
     init_tracing(&config);
 
-    info!(
-        version = env!("CARGO_PKG_VERSION"),
-        "Starting STOA Gateway"
-    );
+    info!(version = env!("CARGO_PKG_VERSION"), "Starting STOA Gateway");
 
     // Initialize application state
     let state = AppState::new(config.clone());
-    
+
     // Start background tasks
     state.start_background_tasks();
 
@@ -96,7 +93,9 @@ fn init_tracing(config: &Config) {
         // TODO: Re-enable OTel tracing once opentelemetry 0.27 API is stabilized.
         // The current opentelemetry_sdk 0.27 changed SdkTracerProvider/Resource APIs.
         // For now, use plain tracing subscriber and log a warning.
-        warn!("STOA_OTEL_ENDPOINT set but OTel export not yet available — using local tracing only");
+        warn!(
+            "STOA_OTEL_ENDPOINT set but OTel export not yet available — using local tracing only"
+        );
     }
 
     tracing_subscriber::registry()
@@ -127,7 +126,6 @@ fn build_router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(prometheus_metrics))
-
         // OAuth Discovery + Proxy (RFC 9728, RFC 8414, OIDC, DCR)
         .route(
             "/.well-known/oauth-protected-resource",
@@ -143,16 +141,13 @@ fn build_router(state: AppState) -> Router {
         )
         .route("/oauth/token", post(oauth::proxy::token_proxy))
         .route("/oauth/register", post(oauth::proxy::register_proxy))
-
         // MCP Discovery
         .route("/mcp", get(mcp_discovery))
         .route("/mcp/capabilities", get(mcp_capabilities))
         .route("/mcp/health", get(mcp_health))
-
         // MCP Tools (REST-style for backward compat)
         .route("/mcp/tools/list", post(mcp_tools_list))
         .route("/mcp/tools/call", post(mcp_tools_call))
-
         // MCP SSE Transport (Streamable HTTP)
         .route(
             "/mcp/sse",
@@ -160,13 +155,10 @@ fn build_router(state: AppState) -> Router {
                 .post(handle_sse_post)
                 .delete(handle_sse_delete),
         )
-
         // Admin API (Control Plane → Gateway)
         .nest("/admin", admin_router)
-
         // Dynamic proxy fallback — must be LAST
         .fallback(dynamic_proxy)
-
         // Add state
         .with_state(state)
 }
@@ -190,10 +182,7 @@ async fn register_tools(state: &AppState) {
     }
 
     // Background refresh: sync tools from CP every 60s
-    stoa_tools::start_tool_refresh_task(
-        state.tool_registry.clone(),
-        state.control_plane.clone(),
-    );
+    stoa_tools::start_tool_refresh_task(state.tool_registry.clone(), state.control_plane.clone());
 }
 
 // === Health Endpoints ===

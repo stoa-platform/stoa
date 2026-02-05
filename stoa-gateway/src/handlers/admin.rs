@@ -106,10 +106,7 @@ pub async fn list_apis(State(state): State<AppState>) -> Json<Vec<ApiRoute>> {
     Json(state.route_registry.list())
 }
 
-pub async fn get_api(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
+pub async fn get_api(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     match state.route_registry.get(&id) {
         Some(route) => Json(route).into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
@@ -170,14 +167,16 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
         middleware,
-        routing::{delete, get, post},
+        routing::{delete, get},
         Router,
     };
     use tower::ServiceExt;
 
     fn create_test_state(admin_token: Option<&str>) -> AppState {
-        let mut config = Config::default();
-        config.admin_api_token = admin_token.map(|s| s.to_string());
+        let config = Config {
+            admin_api_token: admin_token.map(|s| s.to_string()),
+            ..Config::default()
+        };
         AppState::new(config)
     }
 

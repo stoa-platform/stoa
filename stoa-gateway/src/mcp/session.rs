@@ -13,9 +13,12 @@ use tracing::{debug, info};
 #[derive(Debug, Clone)]
 pub struct Session {
     pub id: String,
+    #[allow(dead_code)]
     pub tenant_id: String,
+    #[allow(dead_code)]
     pub created_at: DateTime<Utc>,
     pub last_activity: DateTime<Utc>,
+    #[allow(dead_code)]
     pub metadata: HashMap<String, String>,
 }
 
@@ -81,7 +84,7 @@ impl SessionManager {
     pub fn cleanup_expired(&self) {
         let mut sessions = self.sessions.write();
         let before = sessions.len();
-        
+
         sessions.retain(|id, session| {
             let keep = !session.is_expired(self.ttl);
             if !keep {
@@ -92,7 +95,11 @@ impl SessionManager {
 
         let removed = before - sessions.len();
         if removed > 0 {
-            info!(removed = removed, remaining = sessions.len(), "Cleaned up expired sessions");
+            info!(
+                removed = removed,
+                remaining = sessions.len(),
+                "Cleaned up expired sessions"
+            );
         }
     }
 
@@ -107,7 +114,10 @@ impl SessionManager {
                 manager.cleanup_expired();
             }
         });
-        info!(ttl_minutes = self.ttl.num_minutes(), "Session cleanup task started");
+        info!(
+            ttl_minutes = self.ttl.num_minutes(),
+            "Session cleanup task started"
+        );
     }
 
     /// Get active session count (for metrics)
@@ -139,9 +149,9 @@ mod tests {
     async fn test_create_and_get() {
         let manager = SessionManager::new(30);
         let session = Session::new("test-1".into(), "tenant-1".into());
-        
+
         manager.create(session).await;
-        
+
         let retrieved = manager.get("test-1").await;
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().tenant_id, "tenant-1");
@@ -151,7 +161,7 @@ mod tests {
     async fn test_remove() {
         let manager = SessionManager::new(30);
         let session = Session::new("test-1".into(), "tenant-1".into());
-        
+
         manager.create(session).await;
         assert!(manager.remove("test-1").await);
         assert!(manager.get("test-1").await.is_none());
@@ -161,9 +171,9 @@ mod tests {
     fn test_session_expiry() {
         let mut session = Session::new("test".into(), "tenant".into());
         let short_ttl = Duration::seconds(1);
-        
+
         assert!(!session.is_expired(short_ttl));
-        
+
         // Simulate old activity
         session.last_activity = Utc::now() - Duration::seconds(10);
         assert!(session.is_expired(short_ttl));

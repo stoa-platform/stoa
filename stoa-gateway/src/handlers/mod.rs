@@ -1,2 +1,2 @@
-mod health;
 pub mod admin;
+mod health;

@@ -15,9 +15,7 @@ use crate::state::AppState;
 /// GET /.well-known/oauth-protected-resource
 ///
 /// RFC 9728 — tells clients (e.g. Claude.ai) where to authenticate.
-pub async fn protected_resource_metadata(
-    State(state): State<AppState>,
-) -> Json<Value> {
+pub async fn protected_resource_metadata(State(state): State<AppState>) -> Json<Value> {
     let config = &state.config;
 
     let gateway_url = config
@@ -51,9 +49,7 @@ pub async fn protected_resource_metadata(
 /// RFC 8414 — authorization server metadata.
 /// token_endpoint and registration_endpoint point to the gateway (proxy),
 /// authorization_endpoint points to Keycloak (browser-facing).
-pub async fn authorization_server_metadata(
-    State(state): State<AppState>,
-) -> Json<Value> {
+pub async fn authorization_server_metadata(State(state): State<AppState>) -> Json<Value> {
     let config = &state.config;
 
     let gateway_url = config
@@ -64,11 +60,7 @@ pub async fn authorization_server_metadata(
 
     let keycloak_url = config.keycloak_url.as_deref().unwrap_or("");
     let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
-    let kc_base = format!(
-        "{}/realms/{}",
-        keycloak_url.trim_end_matches('/'),
-        realm
-    );
+    let kc_base = format!("{}/realms/{}", keycloak_url.trim_end_matches('/'), realm);
 
     debug!(
         issuer = %kc_base,
@@ -141,14 +133,10 @@ pub async fn openid_configuration(
         .build()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let resp = client
-        .get(&discovery_url)
-        .send()
-        .await
-        .map_err(|e| {
-            warn!(error = %e, "Failed to fetch Keycloak OIDC config");
-            StatusCode::BAD_GATEWAY
-        })?;
+    let resp = client.get(&discovery_url).send().await.map_err(|e| {
+        warn!(error = %e, "Failed to fetch Keycloak OIDC config");
+        StatusCode::BAD_GATEWAY
+    })?;
 
     if !resp.status().is_success() {
         warn!(status = %resp.status(), "Keycloak OIDC config returned error");

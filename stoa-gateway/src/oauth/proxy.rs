@@ -91,9 +91,7 @@ pub async fn token_proxy(
     // Build axum response
     let mut response = (status, body).into_response();
     if let Ok(ct_val) = resp_content_type.parse() {
-        response
-            .headers_mut()
-            .insert("content-type", ct_val);
+        response.headers_mut().insert("content-type", ct_val);
     }
 
     response
@@ -104,10 +102,7 @@ pub async fn token_proxy(
 /// Dynamic Client Registration proxy to Keycloak.
 /// After registration, patches the client to be public (no client_secret)
 /// with S256 PKCE support — required for Claude.ai PKCE flow.
-pub async fn register_proxy(
-    State(state): State<AppState>,
-    Json(payload): Json<Value>,
-) -> Response {
+pub async fn register_proxy(State(state): State<AppState>, Json(payload): Json<Value>) -> Response {
     let config = &state.config;
 
     let keycloak_url = match config.keycloak_url.as_deref() {
@@ -168,8 +163,7 @@ pub async fn register_proxy(
     };
 
     if dcr_status_code >= 400 {
-        let status =
-            StatusCode::from_u16(dcr_status_code).unwrap_or(StatusCode::BAD_GATEWAY);
+        let status = StatusCode::from_u16(dcr_status_code).unwrap_or(StatusCode::BAD_GATEWAY);
         return (status, Json(dcr_body)).into_response();
     }
 
@@ -182,15 +176,7 @@ pub async fn register_proxy(
 
     // Step 2: Patch to public client with PKCE (if admin password configured)
     if let Some(ref admin_password) = config.keycloak_admin_password {
-        match patch_public_client(
-            &client,
-            keycloak_url,
-            realm,
-            admin_password,
-            &dcr_body,
-        )
-        .await
-        {
+        match patch_public_client(&client, keycloak_url, realm, admin_password, &dcr_body).await {
             Ok(()) => {
                 info!(client_id = %client_id, "Client patched to public + PKCE S256");
             }
@@ -210,8 +196,7 @@ pub async fn register_proxy(
     }
 
     // Return original DCR response (Claude.ai needs client_id, registration_access_token, etc.)
-    let status =
-        StatusCode::from_u16(dcr_status_code).unwrap_or(StatusCode::CREATED);
+    let status = StatusCode::from_u16(dcr_status_code).unwrap_or(StatusCode::CREATED);
     (status, Json(dcr_body)).into_response()
 }
 
@@ -305,14 +290,9 @@ async fn patch_public_client(
         obj.remove("secret");
 
         // Set PKCE code challenge method
-        let attrs = obj
-            .entry("attributes")
-            .or_insert_with(|| json!({}));
+        let attrs = obj.entry("attributes").or_insert_with(|| json!({}));
         if let Some(attrs_obj) = attrs.as_object_mut() {
-            attrs_obj.insert(
-                "pkce.code.challenge.method".to_string(),
-                json!("S256"),
-            );
+            attrs_obj.insert("pkce.code.challenge.method".to_string(), json!("S256"));
         }
     }
 
@@ -327,10 +307,7 @@ async fn patch_public_client(
     let patch_status = patch_resp.status();
     if !patch_status.is_success() {
         let body = patch_resp.text().await.unwrap_or_default();
-        return Err(format!(
-            "Client patch returned {}: {}",
-            patch_status, body
-        ));
+        return Err(format!("Client patch returned {}: {}", patch_status, body));
     }
 
     Ok(())

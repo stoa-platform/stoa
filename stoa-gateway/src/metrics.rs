@@ -5,14 +5,10 @@
 //! - SSE connection duration
 //! - Request counters
 
-use std::collections::HashMap;
-
 use once_cell::sync::Lazy;
 use prometheus::{
-    register_counter_vec, register_gauge, register_histogram_vec,
-    CounterVec, Gauge, HistogramVec,
+    register_counter_vec, register_gauge, register_histogram_vec, CounterVec, Gauge, HistogramVec,
 };
-use tracing::Span;
 
 // === Tool Metrics ===
 
@@ -63,11 +59,8 @@ pub static MCP_SSE_CONNECTIONS_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
 
 /// Gauge of active MCP sessions
 pub static MCP_SESSIONS_ACTIVE: Lazy<Gauge> = Lazy::new(|| {
-    register_gauge!(
-        "stoa_mcp_sessions_active",
-        "Number of active MCP sessions"
-    )
-    .expect("Failed to create stoa_mcp_sessions_active metric")
+    register_gauge!("stoa_mcp_sessions_active", "Number of active MCP sessions")
+        .expect("Failed to create stoa_mcp_sessions_active metric")
 });
 
 // === Rate Limit Metrics ===
@@ -95,6 +88,7 @@ pub static RATE_LIMIT_BUCKETS: Lazy<Gauge> = Lazy::new(|| {
 
 /// Extract the current OTel trace_id from the active tracing span (if any).
 /// TODO: Re-enable once OpenTelemetry deps are stabilized (CAB-1088).
+#[allow(dead_code)]
 fn current_trace_id() -> Option<String> {
     // Disabled: opentelemetry 0.27 API changes pending resolution
     None

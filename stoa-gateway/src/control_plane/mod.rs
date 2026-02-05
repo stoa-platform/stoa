@@ -6,4 +6,4 @@
 // pub mod client;
 pub mod tool_proxy;
 
-pub use tool_proxy::{OidcConfig, RemoteToolDef, RemoteToolSchema, ToolProxyClient};
+pub use tool_proxy::{OidcConfig, RemoteToolDef, ToolProxyClient};

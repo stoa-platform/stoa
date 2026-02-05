@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::time::Duration;
-use tracing::{debug, error, instrument, warn, Span};
+use tracing::{debug, error, instrument, warn};
 
 use crate::state::AppState;
 
@@ -53,7 +53,11 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     // Check method allowed (empty methods list = all methods allowed)
     let method_str = method.to_string();
     if !route.methods.is_empty() && !route.methods.contains(&method_str) {
-        return (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed for this API").into_response();
+        return (
+            StatusCode::METHOD_NOT_ALLOWED,
+            "Method not allowed for this API",
+        )
+            .into_response();
     }
 
     // Build target URL: replace path_prefix with backend_url
@@ -206,9 +210,9 @@ async fn convert_response(resp: reqwest::Response) -> Response {
         }
     }
 
-    response.body(Body::from(body)).unwrap_or_else(|_| {
-        (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response()
-    })
+    response
+        .body(Body::from(body))
+        .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response())
 }
 
 /// Inject W3C Trace Context `traceparent` header into outgoing request.

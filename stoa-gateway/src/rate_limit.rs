@@ -1,5 +1,5 @@
 //! Rate Limiter with parking_lot RwLock and automatic cleanup
-//! 
+//!
 //! Replaces std::sync::RwLock to avoid poisoning panics.
 //! Adds periodic cleanup of stale tenant buckets.
 
@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::{interval, Duration as TokioDuration};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::config::Config;
 use crate::metrics;
@@ -82,7 +82,7 @@ impl RateLimiter {
     /// Check if request is allowed for tenant
     pub fn check(&self, tenant_id: &str) -> RateLimitResult {
         let mut buckets = self.buckets.write();
-        
+
         let bucket = buckets
             .entry(tenant_id.to_string())
             .or_insert_with(TenantBucket::new);
@@ -103,7 +103,7 @@ impl RateLimiter {
     pub fn cleanup_stale_buckets(&self) {
         let cutoff = Utc::now() - self.stale_threshold;
         let mut buckets = self.buckets.write();
-        
+
         let before_count = buckets.len();
         buckets.retain(|tenant_id, bucket| {
             let keep = bucket.last_activity > cutoff;
@@ -112,10 +112,14 @@ impl RateLimiter {
             }
             keep
         });
-        
+
         let removed = before_count - buckets.len();
         if removed > 0 {
-            info!(removed = removed, remaining = buckets.len(), "Cleaned up stale rate limit buckets");
+            info!(
+                removed = removed,
+                remaining = buckets.len(),
+                "Cleaned up stale rate limit buckets"
+            );
         }
         metrics::update_rate_limit_buckets(buckets.len());
     }
@@ -134,6 +138,7 @@ impl RateLimiter {
     }
 
     /// Get current bucket count (for metrics)
+    #[allow(dead_code)]
     pub fn bucket_count(&self) -> usize {
         self.buckets.read().len()
     }
@@ -141,6 +146,7 @@ impl RateLimiter {
 
 /// Result of a rate limit check
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RateLimitResult {
     pub allowed: bool,
     pub limit: usize,
@@ -150,16 +156,17 @@ pub struct RateLimitResult {
 
 impl RateLimitResult {
     /// Generate X-RateLimit-* headers
+    #[allow(dead_code)]
     pub fn headers(&self) -> Vec<(&'static str, String)> {
         let mut headers = vec![
             ("X-RateLimit-Limit", self.limit.to_string()),
             ("X-RateLimit-Remaining", self.remaining.to_string()),
         ];
-        
+
         if let Some(reset) = self.reset_at {
             headers.push(("X-RateLimit-Reset", reset.timestamp().to_string()));
         }
-        
+
         headers
     }
 }
@@ -179,7 +186,7 @@ mod tests {
     #[test]
     fn test_rate_limit_allows_within_limit() {
         let limiter = RateLimiter::new(&test_config());
-        
+
         for i in 0..5 {
             let result = limiter.check("tenant-1");
             assert!(result.allowed, "Request {} should be allowed", i + 1);
@@ -190,12 +197,12 @@ mod tests {
     #[test]
     fn test_rate_limit_blocks_over_limit() {
         let limiter = RateLimiter::new(&test_config());
-        
+
         // Exhaust limit
         for _ in 0..5 {
             limiter.check("tenant-1");
         }
-        
+
         // Should be blocked
         let result = limiter.check("tenant-1");
         assert!(!result.allowed);
@@ -205,12 +212,12 @@ mod tests {
     #[test]
     fn test_separate_tenant_buckets() {
         let limiter = RateLimiter::new(&test_config());
-        
+
         // Exhaust tenant-1
         for _ in 0..5 {
             limiter.check("tenant-1");
         }
-        
+
         // tenant-2 should still be allowed
         let result = limiter.check("tenant-2");
         assert!(result.allowed);
@@ -219,15 +226,15 @@ mod tests {
 
     #[test]
     fn test_cleanup_stale_buckets() {
-        let mut config = test_config();
+        let config = test_config();
         let limiter = RateLimiter::new(&config);
-        
+
         // Add some buckets
         limiter.check("tenant-1");
         limiter.check("tenant-2");
-        
+
         assert_eq!(limiter.bucket_count(), 2);
-        
+
         // Cleanup (none should be removed - not stale yet)
         limiter.cleanup_stale_buckets();
         assert_eq!(limiter.bucket_count(), 2);
@@ -241,7 +248,7 @@ mod tests {
             remaining: 500,
             reset_at: Some(Utc::now()),
         };
-        
+
         let headers = result.headers();
         assert_eq!(headers.len(), 3);
         assert_eq!(headers[0].0, "X-RateLimit-Limit");

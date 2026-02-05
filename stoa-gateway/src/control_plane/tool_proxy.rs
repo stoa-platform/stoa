@@ -210,15 +210,10 @@ impl ToolProxyClient {
         let url = format!("{}/tools", self.base_url);
         debug!(url = %url, "Discovering tools (unauthenticated)");
 
-        let resp = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| {
-                warn!(error = %e, "Failed to reach Control Plane");
-                e.to_string()
-            })?;
+        let resp = self.client.get(&url).send().await.map_err(|e| {
+            warn!(error = %e, "Failed to reach Control Plane");
+            e.to_string()
+        })?;
 
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
@@ -227,7 +222,10 @@ impl ToolProxyClient {
         }
 
         let list: ToolsListResponse = resp.json().await.map_err(|e| e.to_string())?;
-        info!(count = list.tools.len(), "Discovered tools (unauthenticated)");
+        info!(
+            count = list.tools.len(),
+            "Discovered tools (unauthenticated)"
+        );
         Ok(list.tools)
     }
 

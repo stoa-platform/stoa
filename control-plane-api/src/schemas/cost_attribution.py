@@ -4,17 +4,10 @@ Per-tenant usage accounting: call counts, bandwidth, trace spans,
 log volume, estimated cost, quota utilization.
 """
 from datetime import datetime
-from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
-class TenantTier(StrEnum):
-    """Tenant commercial tier."""
-    DEMO = "demo"
-    PLATFORM = "platform"
-    BUSINESS = "business"
-    ENTERPRISE = "enterprise"
+from ..models.tenant import TenantTier
 
 
 class UsageMetric(BaseModel):

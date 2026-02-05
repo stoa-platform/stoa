@@ -14,7 +14,12 @@
 //   Faro SDK -> Alloy Faro receiver (:12347) -> Loki (logs) + Tempo (traces)
 // =============================================================================
 
-import { getWebInstrumentations, initializeFaro } from '@grafana/faro-web-sdk';
+import {
+  getWebInstrumentations,
+  initializeFaro,
+  LogLevel,
+  TransportItemType,
+} from '@grafana/faro-web-sdk';
 import { TracingInstrumentation } from '@grafana/faro-web-tracing';
 
 let faroInstance: ReturnType<typeof initializeFaro> | null = null;
@@ -62,7 +67,7 @@ export function initFaro(config: FaroConfig = {}): void {
         // Web Vitals + error capture + console instrumentation
         ...getWebInstrumentations({
           captureConsole: true,
-          captureConsoleDisabledLevels: ['debug', 'trace'],
+          captureConsoleDisabledLevels: [LogLevel.DEBUG, LogLevel.TRACE],
         }),
 
         // Distributed tracing (W3C TraceContext propagation)
@@ -94,7 +99,7 @@ export function initFaro(config: FaroConfig = {}): void {
       // Don't send events before user interaction (reduces noise)
       beforeSend: (item) => {
         // Filter out known noisy errors
-        if (item.type === 'error') {
+        if (item.type === TransportItemType.EXCEPTION) {
           const message = (item as { payload?: { message?: string } }).payload?.message || '';
           // Skip ResizeObserver loop errors (browser bug, harmless)
           if (message.includes('ResizeObserver loop')) {

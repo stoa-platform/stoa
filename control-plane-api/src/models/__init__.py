@@ -41,6 +41,6 @@ from .mcp_subscription import (
 from .prospect_event import EventType, ProspectEvent
 from .prospect_feedback import ProspectFeedback
 from .subscription import Subscription, SubscriptionStatus
-from .tenant import Tenant, TenantStatus
+from .tenant import Tenant, TenantStatus, TenantTier
 from .traces import PipelineTrace, TraceStatus, TraceStep, trace_store
 from .webhook import TenantWebhook, WebhookDelivery, WebhookDeliveryStatus, WebhookEventType

@@ -17,6 +17,14 @@ class TenantStatus(enum.StrEnum):
     ARCHIVED = "archived"
 
 
+class TenantTier(enum.StrEnum):
+    """Tenant commercial tier for SLO differentiation."""
+    DEMO = "demo"
+    PLATFORM = "platform"
+    BUSINESS = "business"
+    ENTERPRISE = "enterprise"
+
+
 class Tenant(Base):
     """Tenant model - represents an organization/tenant in the platform."""
     __tablename__ = "tenants"
@@ -32,6 +40,9 @@ class Tenant(Base):
 
     # Status: active, suspended, archived
     status = Column(String(32), default=TenantStatus.ACTIVE.value, nullable=False)
+
+    # Commercial tier (demo / platform / business / enterprise)
+    tier = Column(String(32), default=TenantTier.PLATFORM.value, nullable=False)
 
     # Tenant settings (JSON) - quotas, features, etc.
     settings = Column(JSON, default=dict, nullable=False)

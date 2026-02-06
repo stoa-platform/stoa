@@ -60,3 +60,7 @@ spec:
               value: "control-plane-ui"
             - name: VITE_API_URL
               value: "https://apis.gostoa.dev/gateway/Control-Plane-API/2.0"
+            - name: LOGS_BACKEND_URL
+              value: "http://opensearch-dashboards.stoa-system.svc:5601"
+            - name: GRAFANA_BACKEND_URL
+              value: "http://grafana.stoa-system.svc:3000"

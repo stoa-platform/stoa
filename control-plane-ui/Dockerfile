@@ -89,8 +89,15 @@ RUN npm run build
 # Production stage - Use nginx-unprivileged for security (non-root)
 FROM nginxinc/nginx-unprivileged:alpine
 
-# Copy custom nginx config (nginx-unprivileged uses 8080 by default)
-COPY control-plane-ui/nginx.conf /etc/nginx/conf.d/default.conf
+# Default backend URLs (overridable via K8s env vars)
+ENV LOGS_BACKEND_URL=http://opensearch-dashboards:5601 \
+    GRAFANA_BACKEND_URL=http://grafana:3000
+
+# Only substitute our custom vars (preserve nginx $uri, $host, etc.)
+ENV NGINX_ENVSUBST_FILTER='${LOGS_BACKEND_URL} ${GRAFANA_BACKEND_URL}'
+
+# Copy nginx template (processed by built-in 20-envsubst-on-templates.sh at startup)
+COPY control-plane-ui/nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # Copy built app
 COPY --from=builder /app/control-plane-ui/dist /usr/share/nginx/html

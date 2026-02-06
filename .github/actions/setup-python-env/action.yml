@@ -38,6 +38,9 @@ runs:
         if [ -n "$INSTALL_CMD" ]; then
           eval "$INSTALL_CMD"
         elif [ -f "pyproject.toml" ]; then
+          # Install main dependencies from requirements.txt if it exists
+          [ -f "requirements.txt" ] && pip install -r requirements.txt
+          # Install dev dependencies from pyproject.toml
           pip install -e ".[dev,k8s]" 2>/dev/null || pip install -e ".[dev]" 2>/dev/null || pip install -e "."
         elif [ -f "requirements.txt" ]; then
           pip install -r requirements.txt

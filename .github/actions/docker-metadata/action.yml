@@ -22,7 +22,7 @@ inputs:
   platforms:
     description: 'Docker target platforms'
     required: false
-    default: 'linux/amd64,linux/arm64'
+    default: 'linux/amd64'
 
 outputs:
   tags:

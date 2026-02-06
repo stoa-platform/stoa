@@ -108,7 +108,7 @@ jobs:
           # Use repo root context for UI apps that depend on shared/
           context: ${{ (matrix.service == 'portal' || matrix.service == 'control-plane-ui') && '.' || format('./{0}', matrix.service) }}
           file: ./${{ matrix.service }}/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

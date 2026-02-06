@@ -70,7 +70,7 @@ jobs:
       component: mcp-gateway
       ecr-repository: apim/mcp-gateway
       environment: ${{ github.event.inputs.environment || 'dev' }}
-      platforms: linux/amd64,linux/arm64
+      platforms: linux/amd64
     permissions:
       contents: read
       id-token: write

@@ -73,7 +73,7 @@ jobs:
       component: portal
       ecr-repository: apim/stoa-portal
       environment: ${{ github.event.inputs.environment || 'dev' }}
-      platforms: linux/amd64,linux/arm64
+      platforms: linux/amd64
       use-monorepo-context: true
       build-args: |
         VITE_BASE_DOMAIN=gostoa.dev

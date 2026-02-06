@@ -435,6 +435,54 @@ class ApiService {
   async deletePolicyBinding(id: string): Promise<void> {
     await this.client.delete(`/v1/admin/policies/bindings/${id}`);
   }
+
+  // =========================================================================
+  // Operations Dashboard (CAB-Observability)
+  // =========================================================================
+
+  async getOperationsMetrics(): Promise<OperationsMetrics> {
+    const { data } = await this.client.get('/v1/operations/metrics');
+    return data;
+  }
+
+  // =========================================================================
+  // Business Analytics (CAB-Observability)
+  // =========================================================================
+
+  async getBusinessMetrics(): Promise<BusinessMetrics> {
+    const { data } = await this.client.get('/v1/business/metrics');
+    return data;
+  }
+
+  async getTopAPIs(limit = 10): Promise<TopAPI[]> {
+    const { data } = await this.client.get(`/v1/business/top-apis?limit=${limit}`);
+    return data;
+  }
+}
+
+// Operations metrics types (CAB-Observability)
+export interface OperationsMetrics {
+  error_rate: number;
+  p95_latency_ms: number;
+  requests_per_minute: number;
+  active_alerts: number;
+  uptime: number;
+}
+
+// Business metrics types (CAB-Observability)
+export interface BusinessMetrics {
+  active_tenants: number;
+  new_tenants_30d: number;
+  tenant_growth: number;
+  apdex_score: number;
+  total_tokens: number;
+  total_calls: number;
+}
+
+export interface TopAPI {
+  tool_name: string;
+  display_name: string;
+  calls: number;
 }
 
 // Platform Status types (CAB-654)

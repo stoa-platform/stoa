@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50">
+  <defs>
+    <linearGradient id="stoaLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon -->
+  <circle cx="25" cy="25" r="22" fill="url(#stoaLogoGradient)"/>
+  <path d="M15 18 Q15 13, 25 13 Q35 13, 35 18 Q35 23, 25 23 Q15 23, 15 28 Q15 33, 25 33 Q35 33, 35 38"
+        stroke="white"
+        stroke-width="3"
+        stroke-linecap="round"
+        fill="none"/>
+  <circle cx="11" cy="23" r="2" fill="white" opacity="0.8"/>
+  <circle cx="39" cy="23" r="2" fill="white" opacity="0.8"/>
+  <circle cx="11" cy="28" r="2" fill="white" opacity="0.8"/>
+  <circle cx="39" cy="28" r="2" fill="white" opacity="0.8"/>
+
+  <!-- Text -->
+  <text x="58" y="35" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="700" fill="#1f2937">
+    STOA
+  </text>
+  <text x="118" y="35" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="400" fill="#6b7280">
+    Platform
+  </text>
+</svg>

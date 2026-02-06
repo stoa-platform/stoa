@@ -1,0 +1,176 @@
+{{- if .Values.stoaSidecar.enabled }}
+---
+# ==============================================================================
+# STOA Sidecar Deployment
+# ==============================================================================
+# Deploys STOA Gateway in sidecar mode alongside third-party gateways
+# (WebMethods, Kong, Envoy, etc.). The sidecar provides:
+# - ext_authz endpoint for policy enforcement
+# - Rate limiting
+# - Usage metering (Kafka pipeline)
+# - OIDC token validation
+#
+# Third-party gateway configures ext_authz to point to the sidecar:
+#   ext_authz_url: http://localhost:8081/authz
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.stoaSidecar.targetGateway | default "third-party" }}-with-stoa-sidecar
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-sidecar
+    app.kubernetes.io/component: sidecar
+    stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.stoaSidecar.replicas | default 2 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stoa-sidecar
+      stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: stoa-sidecar
+        app.kubernetes.io/component: sidecar
+        stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+        {{- include "stoa-platform.labels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: {{ .Values.stoaSidecar.serviceAccount | default "default" }}
+      containers:
+        # --- Main Gateway Container (third-party: WebMethods, Kong, etc.) ---
+        {{- if .Values.stoaSidecar.mainGateway.enabled }}
+        - name: {{ .Values.stoaSidecar.targetGateway | default "gateway" }}
+          image: "{{ .Values.stoaSidecar.mainGateway.image.repository }}:{{ .Values.stoaSidecar.mainGateway.image.tag }}"
+          imagePullPolicy: {{ .Values.stoaSidecar.mainGateway.image.pullPolicy | default "Always" }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.stoaSidecar.mainGateway.port | default 8080 }}
+              protocol: TCP
+          env:
+            {{- with .Values.stoaSidecar.mainGateway.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            # Configure ext_authz to point to STOA sidecar
+            - name: EXT_AUTHZ_URL
+              value: "http://localhost:8081/authz"
+          resources:
+            {{- toYaml .Values.stoaSidecar.mainGateway.resources | nindent 12 }}
+        {{- end }}
+
+        # --- STOA Sidecar Container ---
+        - name: stoa-sidecar
+          image: "{{ .Values.stoaSidecar.image.repository }}:{{ .Values.stoaSidecar.image.tag }}"
+          imagePullPolicy: {{ .Values.stoaSidecar.image.pullPolicy | default "Always" }}
+          ports:
+            - name: authz
+              containerPort: 8081
+              protocol: TCP
+          env:
+            # Sidecar mode configuration
+            - name: STOA_GATEWAY_MODE
+              value: "sidecar"
+            - name: STOA_PORT
+              value: "8081"
+            - name: STOA_HOST
+              value: "127.0.0.1"  # Only accessible from localhost (within pod)
+            - name: STOA_AUTO_REGISTER
+              value: "true"
+            - name: STOA_ENVIRONMENT
+              value: {{ .Values.stoaSidecar.environment | default "dev" | quote }}
+
+            # Control Plane connection
+            - name: STOA_CONTROL_PLANE_URL
+              value: {{ .Values.stoaSidecar.controlPlaneUrl | default "http://control-plane-api.stoa-system.svc.cluster.local:8000" | quote }}
+            {{- if .Values.stoaSidecar.secretName }}
+            - name: STOA_CONTROL_PLANE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.stoaSidecar.secretName }}
+                  key: control-plane-api-key
+                  optional: true
+            {{- end }}
+
+            # OIDC configuration (for token validation)
+            - name: STOA_KEYCLOAK_URL
+              value: {{ .Values.stoaSidecar.keycloakUrl | default "" | quote }}
+            - name: STOA_KEYCLOAK_REALM
+              value: {{ .Values.stoaSidecar.keycloakRealm | default "stoa" | quote }}
+            - name: STOA_KEYCLOAK_CLIENT_ID
+              value: {{ .Values.stoaSidecar.keycloakClientId | default "stoa-sidecar" | quote }}
+            {{- if .Values.stoaSidecar.secretName }}
+            - name: STOA_KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.stoaSidecar.secretName }}
+                  key: keycloak-client-secret
+                  optional: true
+            {{- end }}
+
+            # Policy engine
+            - name: STOA_POLICY_ENABLED
+              value: {{ .Values.stoaSidecar.policyEnabled | default "true" | quote }}
+
+            # Logging
+            - name: STOA_LOG_LEVEL
+              value: {{ .Values.stoaSidecar.logLevel | default "info" | quote }}
+            - name: STOA_LOG_FORMAT
+              value: {{ .Values.stoaSidecar.logFormat | default "json" | quote }}
+
+            {{- with .Values.stoaSidecar.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: authz
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: authz
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.stoaSidecar.resources | nindent 12 }}
+      {{- with .Values.stoaSidecar.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.stoaSidecar.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+---
+# Service for exposing the main gateway (external traffic)
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.stoaSidecar.targetGateway | default "third-party" }}-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-sidecar
+    stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.stoaSidecar.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.stoaSidecar.service.port | default 80 }}
+      targetPort: {{ .Values.stoaSidecar.mainGateway.port | default 8080 }}
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: stoa-sidecar
+    stoa.io/target-gateway: {{ .Values.stoaSidecar.targetGateway | default "generic" }}
+{{- end }}

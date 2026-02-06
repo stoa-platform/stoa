@@ -94,6 +94,104 @@ stoaGateway:
   tolerations: []
   extraEnv: []
 
+# ==============================================================================
+# STOA Sidecar Configuration (ADR-028: Tier 2 - Third-Party Gateway Integration)
+# ==============================================================================
+# Deploy STOA Gateway in sidecar mode alongside third-party gateways
+# (WebMethods, Kong, Envoy, Apigee). Provides:
+# - ext_authz endpoint for policy enforcement
+# - Rate limiting
+# - Usage metering via Kafka
+# - OIDC token validation
+#
+# Example usage for WebMethods:
+#   stoaSidecar:
+#     enabled: true
+#     targetGateway: webmethods
+#     mainGateway:
+#       enabled: true
+#       image:
+#         repository: softwareag/webmethods-api-gateway
+#         tag: "10.15"
+#       port: 9072
+#       env:
+#         - name: EXT_AUTHZ_URL
+#           value: "http://localhost:8081/authz"
+# ==============================================================================
+stoaSidecar:
+  enabled: false
+  # Target gateway type (for labeling/identification)
+  targetGateway: webmethods  # webmethods | kong | envoy | apigee | generic
+
+  # STOA Sidecar image (Rust gateway in sidecar mode)
+  image:
+    repository: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-gateway
+    tag: latest
+    pullPolicy: Always
+
+  replicas: 2
+  serviceAccount: default
+  environment: dev  # dev | staging | prod
+
+  # Control Plane connection (for auto-registration)
+  controlPlaneUrl: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+
+  # Keycloak OIDC (for token validation)
+  keycloakUrl: ""
+  keycloakRealm: stoa
+  keycloakClientId: stoa-sidecar
+
+  # Secret containing credentials
+  secretName: stoa-sidecar-secrets
+
+  # Policy enforcement
+  policyEnabled: true
+
+  # Logging
+  logLevel: info
+  logFormat: json
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+
+  # Main gateway container (third-party gateway running alongside)
+  mainGateway:
+    enabled: true
+    image:
+      repository: softwareag/webmethods-api-gateway
+      tag: "10.15"
+      pullPolicy: IfNotPresent
+    port: 9072
+    env:
+      # WebMethods-specific environment variables
+      - name: JAVA_OPTS
+        value: "-Xms512m -Xmx1g"
+      # Configure ext_authz to point to STOA sidecar
+      - name: EXT_AUTHZ_ENABLED
+        value: "true"
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+  # STOA sidecar resources (minimal footprint)
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+  nodeSelector: {}
+  tolerations: []
+  extraEnv: []
+
 # Gateway OpenAPI Sync Configuration
 # Automatically syncs OpenAPI spec from Control-Plane-API to webMethods Gateway
 gatewaySync:

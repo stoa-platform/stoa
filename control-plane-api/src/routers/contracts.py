@@ -16,7 +16,6 @@ from src.config import settings
 from src.database import get_db
 from src.logging_config import get_logger
 from src.models.contract import Contract, ProtocolBinding, ProtocolType
-from src.services.cache_service import contract_cache
 from src.schemas.contract import (
     BindingsListResponse,
     ContractCreate,
@@ -28,6 +27,7 @@ from src.schemas.contract import (
     EnableBindingResponse,
     ProtocolBindingResponse,
 )
+from src.services.cache_service import contract_cache
 
 logger = get_logger(__name__)
 

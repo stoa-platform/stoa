@@ -23,6 +23,8 @@ import {
   Network,
   ArrowUpDown,
   BarChart3,
+  PieChart,
+  TrendingUp,
   Menu,
   X,
   Search,
@@ -38,6 +40,9 @@ interface LayoutProps {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, shortcut: ['g', 'd'] },
+  { name: 'Operations', href: '/operations', icon: Activity, permission: 'tenants:read', shortcut: ['g', 'o'] },
+  { name: 'My Usage', href: '/my-usage', icon: PieChart, shortcut: ['g', 'u'] },
+  { name: 'Business', href: '/business', icon: TrendingUp, permission: 'tenants:read', shortcut: ['g', 'b'] },
   { name: 'Tenants', href: '/tenants', icon: Building2, permission: 'tenants:read', shortcut: ['g', 't'] },
   { name: 'APIs', href: '/apis', icon: Layers, permission: 'apis:read', shortcut: ['g', 'a'] },
   { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read', shortcut: ['g', 'w'] },

@@ -26,7 +26,10 @@ import {
   TrendingUp,
   AlertTriangle,
   Timer,
+  ExternalLink,
+  Gauge,
 } from 'lucide-react';
+import { config } from '../config';
 import { clsx } from 'clsx';
 
 // =============================================================================
@@ -571,6 +574,15 @@ export function APIMonitoring() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <a
+            href={`${config.services.grafana.url}/d/stoa-incident-response`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Open in Grafana
+          </a>
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={clsx(
@@ -595,7 +607,7 @@ export function APIMonitoring() {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatsCard
             title="Total Requests"
             value={stats.total_requests.toLocaleString()}
@@ -616,6 +628,13 @@ export function APIMonitoring() {
             subtitle={`P95: ${stats.p95_latency_ms}ms | P99: ${stats.p99_latency_ms}ms`}
             icon={Timer}
             color="bg-purple-500"
+          />
+          <StatsCard
+            title="APDEX"
+            value="0.91"
+            subtitle="Good (T=500ms)"
+            icon={Gauge}
+            color="bg-indigo-500"
           />
           <StatsCard
             title="Errors"

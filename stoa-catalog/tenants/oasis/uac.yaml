@@ -1,0 +1,818 @@
+# =============================================================================
+# STOA Platform - Universal API Contract (UAC)
+# Tenant: OASIS
+# Tier: ENTERPRISE (AI-First Company Demo)
+# Theme: Ready Player One - Le monde virtuel de James Halliday
+# =============================================================================
+# Demo tenant showcasing: AI/ML APIs, MCP tools, DevOps automation
+# Use cases: HuggingFace, GitHub MCP, Response transformation, Token tracking
+# =============================================================================
+
+apiVersion: stoa.io/v1
+kind: UniversalAPIContract
+metadata:
+  name: "oasis"
+  tier: enterprise
+  created: "2026-02-06"
+  labels:
+    tenant-id: "oasis"
+    admin-email: "anorak@oasis.io"
+    keycloak-realm: "stoa"
+    demo-theme: "ready-player-one"
+    use-case: "ai-first-company"
+    account-manager: "demo"
+    contract-id: "DEMO-OASIS-2026"
+
+spec:
+  # ===========================================================================
+  # 1. API CLASSIFICATIONS
+  # ===========================================================================
+  classifications:
+
+    H:  # High volume - DevOps APIs (GitHub)
+      description: "DevOps automation APIs - high throughput"
+      rate_limit: 10000
+      burst: 1000
+      timeout: 30s
+      retry_policy:
+        max_retries: 5
+        backoff: exponential
+        initial_delay: 50ms
+        max_delay: 10s
+        jitter: true
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 10
+        reset_timeout: 30s
+      connection_pool:
+        max_connections: 500
+        idle_timeout: 120s
+
+    VH:  # Very High - AI Inference APIs
+      description: "AI/ML inference APIs - latency sensitive"
+      rate_limit: 2000
+      burst: 200
+      timeout: 120s            # Longer for AI inference
+      retry_policy:
+        max_retries: 2
+        backoff: exponential
+        initial_delay: 100ms
+        max_delay: 30s
+        retry_on:
+          - 502
+          - 503
+          - 504
+          - timeout
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 5
+        reset_timeout: 60s
+      priority: high
+      # Token budget tracking for AI APIs
+      token_tracking:
+        enabled: true
+        budget_per_request: 4000
+        budget_per_day: 1000000
+
+    VVH:  # Mission-critical - Production AI pipelines
+      description: "Production AI pipelines - high reliability"
+      enabled: true
+      rate_limit: 500
+      burst: 50
+      timeout: 300s            # 5 min for complex AI operations
+      retry_policy:
+        max_retries: 1
+        backoff: exponential
+        initial_delay: 500ms
+        max_delay: 60s
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 3
+        reset_timeout: 120s
+        notify_on_open: true
+      priority: critical
+      idempotency_required: true
+      audit_logging: true
+      token_tracking:
+        enabled: true
+        strict_budget: true
+      sla_override:
+        availability: 99.99
+
+  # ===========================================================================
+  # 2. SECURITY POLICIES (AI-Focused)
+  # ===========================================================================
+  security:
+
+    authentication:
+      required: true
+      methods:
+        - oauth2
+        - api_key
+        - mtls
+      oauth2:
+        issuer: "https://auth.gostoa.dev/realms/stoa"
+        audience: "oasis"
+        token_expiry: 3600
+        refresh_enabled: true
+        refresh_expiry: 86400
+        # AI-specific scopes
+        ai_scopes:
+          - "ai:inference"
+          - "ai:training"
+          - "ai:models"
+      api_key:
+        header_name: "X-API-Key"
+        rotation_days: 60
+        max_keys_per_consumer: 20
+        restrictions:
+          ip_binding: false      # More flexible for AI agents
+          expiry_required: true
+      mtls:
+        enabled: true
+        verify_client: true
+
+    authorization:
+      rbac_enabled: true
+      abac_enabled: true
+      policy_engine: opa
+      default_scopes:
+        - read
+        - write
+        - admin
+      custom_scopes:
+        - "oasis:github:read"
+        - "oasis:github:write"
+        - "oasis:ml:inference"
+        - "oasis:ml:train"
+        - "oasis:notifications:send"
+        - "oasis:devops:deploy"
+
+    # AI-specific: Model access control
+    model_access_control:
+      enabled: true
+      allowed_models:
+        - "gpt-4"
+        - "gpt-3.5-turbo"
+        - "claude-3-opus"
+        - "claude-3-sonnet"
+        - "llama-3"
+        - "mistral-7b"
+        - "stable-diffusion-xl"
+      cost_tracking: true
+      budget_alerts: true
+
+    ip_allowlist:
+      enabled: false             # Disabled for AI agent flexibility
+
+    request_validation:
+      enabled: true
+      max_body_size: 100mb       # Large for AI payloads (images, etc.)
+      content_types:
+        - application/json
+        - multipart/form-data
+        - application/octet-stream
+        - image/png
+        - image/jpeg
+      schema_validation:
+        enabled: true
+        strict_mode: false       # More lenient for AI APIs
+
+    secrets:
+      provider: vault
+      path: "secret/data/tenants/oasis"
+      rotation_enabled: true
+
+  # ===========================================================================
+  # 3. RATE LIMITING (AI-Optimized)
+  # ===========================================================================
+  rateLimits:
+
+    global:
+      requests_per_minute: 10000
+      requests_per_hour: 200000
+      requests_per_day: 2000000
+      burst_allowance: 3.0       # Higher burst for AI workloads
+
+    per_api:
+      default: 5000
+      overrides:
+        github-api: 5000
+        huggingface: 1000        # Lower for AI inference
+        together-ai: 500
+        stability-ai: 200        # Image generation is heavy
+        notifications: 2000
+
+    per_consumer:
+      default: 2000
+      max_consumers: -1
+
+    headers:
+      enabled: true
+      include_remaining: true
+      include_reset: true
+      include_limit: true
+      include_policy: true
+      # AI-specific headers
+      include_tokens_remaining: true
+      include_budget_used: true
+
+    dynamic:
+      enabled: true
+      auto_scaling: true
+      fair_share: true
+
+    # Token-based rate limiting for AI
+    token_limits:
+      enabled: true
+      tokens_per_minute: 100000
+      tokens_per_day: 5000000
+
+  # ===========================================================================
+  # 4. QUOTAS (AI-Heavy)
+  # ===========================================================================
+  quotas:
+
+    monthly_requests: 10000000   # 10M for AI workloads
+    monthly_bandwidth_gb: 1000   # 1TB for AI data
+
+    # AI-specific quotas
+    ai_quotas:
+      monthly_tokens: 50000000   # 50M tokens
+      monthly_images: 10000      # Image generation
+      monthly_embeddings: 1000000
+      monthly_training_hours: 100
+
+    max_apis: -1
+    max_subscriptions: -1
+    max_consumers: -1
+    max_environments: -1
+
+    log_storage_gb: 200
+
+    tracking:
+      enabled: true
+      granularity: hourly
+      export_enabled: true
+      cost_tracking: true
+
+    alerts:
+      anomaly_detection: true
+      baseline_window: 7d
+      deviation_threshold: 3.0
+      token_budget_warning: 80   # Warn at 80% token usage
+      notify_channels:
+        - email: "anorak@oasis.io"
+        - slack: "https://hooks.slack.com/oasis-alerts"
+
+  # ===========================================================================
+  # 5. OBSERVABILITY (AI-Enhanced)
+  # ===========================================================================
+  observability:
+
+    logging:
+      level: info
+      retention_days: 90
+      format: json
+      include_request_body: true
+      include_response_body: true
+      pii_masking: true
+      pii_fields:
+        - email
+        - api_key
+        - token
+      # AI-specific logging
+      ai_logging:
+        log_prompts: false       # Don't log prompts (privacy)
+        log_token_usage: true
+        log_model_used: true
+        log_latency_breakdown: true
+      forwarding:
+        enabled: true
+        destinations:
+          - type: loki
+            endpoint: "http://loki:3100"
+
+    metrics:
+      enabled: true
+      granularity: 1m
+      retention_days: 365
+      custom_metrics: true
+      business_metrics: true
+      # AI-specific metrics
+      ai_metrics:
+        enabled: true
+        track_tokens: true
+        track_model_usage: true
+        track_inference_latency: true
+        track_cost: true
+      export:
+        enabled: true
+        format: prometheus
+        endpoint: "/metrics"
+      dashboards:
+        enabled: true
+        custom_dashboards: true
+        ai_dashboard: true       # Dedicated AI metrics dashboard
+
+    tracing:
+      enabled: true
+      sampling_rate: 1.0
+      propagation: w3c
+      include_db_queries: true
+      include_cache_operations: true
+      include_external_calls: true
+      # AI-specific tracing
+      ai_tracing:
+        trace_inference_chain: true
+        trace_tool_calls: true
+        trace_mcp_messages: true
+
+    alerting:
+      enabled: true
+      channels:
+        - type: email
+          target: "anorak@oasis.io"
+        - type: slack
+          webhook: "https://hooks.slack.com/oasis-alerts"
+      rules:
+        - name: high_error_rate
+          condition: "error_rate > 1%"
+          window: 1m
+          severity: critical
+        - name: ai_latency_spike
+          condition: "ai_inference_p99 > 30s"
+          window: 5m
+          severity: warning
+        - name: token_budget_exceeded
+          condition: "daily_tokens > budget * 0.9"
+          window: 1h
+          severity: warning
+        - name: model_cost_anomaly
+          condition: "hourly_cost > baseline * 2"
+          window: 1h
+          severity: critical
+
+    audit:
+      enabled: true
+      retention_days: 365
+      events:
+        - authentication
+        - authorization
+        - api_access
+        - ai_inference
+        - model_change
+        - tool_invocation
+      tamper_proof: true
+
+  # ===========================================================================
+  # 6. SLA (AI-Focused)
+  # ===========================================================================
+  sla:
+
+    availability: 99.9            # Lower for AI variability
+
+    availability_by_classification:
+      H: 99.9
+      VH: 99.5                   # AI APIs may have variability
+      VVH: 99.9
+
+    # AI-specific SLAs
+    ai_sla:
+      inference_p99_latency: 30s
+      model_availability: 99.5
+      tool_availability: 99.9
+
+    support:
+      response_hours: 4
+      response_by_severity:
+        P1_critical: 2
+        P2_high: 8
+        P3_medium: 24
+        P4_low: 48
+      channels:
+        - email
+        - slack
+        - discord                # AI community prefers Discord
+      hours: 24x7
+      dedicated:
+        technical_account_manager: true
+        ai_specialist: true      # Dedicated AI support
+
+    maintenance:
+      scheduled_window: "Sunday 02:00-04:00 UTC"
+      advance_notice_hours: 168
+      customer_approval: true
+
+    credits:
+      enabled: true
+      tiers:
+        - availability_below: 99.9
+          credit_percent: 10
+
+  # ===========================================================================
+  # 7. FEATURES (AI-Focused)
+  # ===========================================================================
+  features:
+
+    custom_domains: true
+    path_based_routing: true
+    header_based_routing: true
+
+    api_versioning: true
+    api_deprecation: true
+    api_lifecycle_management: true
+    openapi_validation: true
+    graphql_support: true
+    grpc_support: true
+    websocket_support: true      # For streaming AI responses
+
+    developer_portal: true
+    custom_portal_branding: true
+    interactive_docs: true
+    sandbox_environment: true
+    mock_servers: true
+
+    webhook_notifications: true
+    email_notifications: true
+    slack_integration: true
+
+    basic_analytics: true
+    advanced_analytics: true
+    predictive_analytics: true
+    business_intelligence: true
+
+    waf_protection: true
+    ddos_protection: true
+    secrets_management: true
+
+    ci_cd_integration: true
+    terraform_provider: true
+    api_as_code: true
+    automated_testing: true
+
+    # MCP Gateway - PRIMARY FOCUS
+    mcp_gateway_access: true
+    mcp_tools_limit: -1
+    mcp_advanced_features:
+      streaming: true            # SSE streaming for AI responses
+      function_calling: true
+      context_caching: true
+      semantic_caching: true
+      response_transformation: true
+      token_tracking: true       # Track token usage per tool
+      cost_allocation: true      # Allocate costs per consumer
+
+    # AI-Specific Features
+    ai_features:
+      model_routing: true        # Route to different models
+      fallback_models: true      # Fallback if primary fails
+      prompt_caching: true       # Cache similar prompts
+      response_streaming: true   # Stream long responses
+      batch_inference: true      # Batch multiple requests
+      async_inference: true      # Async for long operations
+
+    # External MCP Servers
+    external_mcp_servers:
+      enabled: true
+      allowed_servers:
+        - github-mcp
+        - filesystem-mcp
+        - memory-mcp
+
+    api_governance: true
+    change_management: true
+    audit_trails: true
+
+  # ===========================================================================
+  # 8. NETWORKING (AI-Optimized)
+  # ===========================================================================
+  networking:
+
+    connect_timeout: 10s
+    read_timeout: 300s           # 5 min for AI inference
+    write_timeout: 120s
+    idle_timeout: 300s
+
+    keepalive:
+      enabled: true
+      timeout: 300s
+      max_requests: 10000
+
+    connection_pool:
+      enabled: true
+      max_idle_connections: 2000
+      max_connections_per_host: 1000
+
+    cors:
+      enabled: true
+      allowed_origins:
+        - "https://*.gostoa.dev"
+        - "https://*.oasis.io"
+        - "http://localhost:*"   # Dev-friendly
+      allowed_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS
+      allowed_headers:
+        - Authorization
+        - Content-Type
+        - X-API-Key
+        - X-Request-ID
+        - X-Model-ID
+        - X-Token-Budget
+      expose_headers:
+        - X-Request-ID
+        - X-Tokens-Used
+        - X-Model-Used
+        - X-Inference-Time
+      max_age: 86400
+
+    # Streaming support for AI
+    streaming:
+      enabled: true
+      protocols:
+        - sse                    # Server-Sent Events
+        - websocket
+      buffer_size: 64kb
+      timeout: 600s              # 10 min for streaming
+
+  # ===========================================================================
+  # 9. COMPLIANCE (AI-Focused)
+  # ===========================================================================
+  compliance:
+
+    gdpr:
+      enabled: true
+      data_residency: eu
+      right_to_erasure: true
+      data_portability: true
+      # AI-specific GDPR
+      ai_gdpr:
+        no_training_on_user_data: true
+        prompt_privacy: true
+        response_anonymization: true
+
+    soc2:
+      enabled: true
+      type: 2
+      trust_principles:
+        - security
+        - availability
+        - confidentiality
+
+    # AI Ethics compliance
+    ai_ethics:
+      enabled: true
+      content_filtering: true
+      bias_monitoring: true
+      explainability_logs: true
+      human_in_loop_required: false
+
+  # ===========================================================================
+  # 10. REGISTERED APIs (AI/DevOps Demo)
+  # ===========================================================================
+  # These APIs showcase AI pipeline bridging and DevOps automation
+  apis:
+
+    # ======================== AI/ML APIs ========================
+
+    - name: huggingface
+      displayName: "HuggingFace Inference"
+      description: "AI/ML model inference via HuggingFace"
+      backend: "https://api-inference.huggingface.co"
+      classification: VH
+      authentication:
+        type: bearer
+        header: "Authorization"
+        env_var: "HUGGINGFACE_API_KEY"
+      tags:
+        - ai
+        - ml
+        - inference
+        - nlp
+      token_tracking:
+        enabled: true
+        count_method: tiktoken
+      operations:
+        - name: sentiment_analysis
+          method: POST
+          path: "/models/distilbert-base-uncased-finetuned-sst-2-english"
+          description: "Analyze sentiment of text"
+          input_schema:
+            type: object
+            properties:
+              inputs:
+                type: string
+                description: "Text to analyze"
+        - name: text_classification
+          method: POST
+          path: "/models/facebook/bart-large-mnli"
+          description: "Zero-shot text classification"
+        - name: question_answering
+          method: POST
+          path: "/models/deepset/roberta-base-squad2"
+          description: "Answer questions from context"
+        - name: summarization
+          method: POST
+          path: "/models/facebook/bart-large-cnn"
+          description: "Summarize long text"
+
+    - name: together-ai
+      displayName: "Together.ai (OpenAI-compatible)"
+      description: "Open-source LLM inference"
+      backend: "https://api.together.xyz/v1"
+      classification: VH
+      authentication:
+        type: bearer
+        header: "Authorization"
+        env_var: "TOGETHER_API_KEY"
+      tags:
+        - ai
+        - llm
+        - openai-compatible
+      token_tracking:
+        enabled: true
+        cost_per_1k_tokens: 0.002
+      operations:
+        - name: chat_completion
+          method: POST
+          path: "/chat/completions"
+          description: "Chat completion (OpenAI-compatible)"
+        - name: embeddings
+          method: POST
+          path: "/embeddings"
+          description: "Generate text embeddings"
+
+    - name: stability-ai
+      displayName: "Stability AI"
+      description: "Image generation via Stable Diffusion"
+      backend: "https://api.stability.ai/v1"
+      classification: VVH
+      authentication:
+        type: bearer
+        header: "Authorization"
+        env_var: "STABILITY_API_KEY"
+      tags:
+        - ai
+        - image-generation
+        - stable-diffusion
+      operations:
+        - name: text_to_image
+          method: POST
+          path: "/generation/stable-diffusion-xl-1024-v1-0/text-to-image"
+          description: "Generate image from text prompt"
+        - name: image_to_image
+          method: POST
+          path: "/generation/stable-diffusion-xl-1024-v1-0/image-to-image"
+          description: "Transform image with prompt"
+
+    # ======================== DevOps APIs ========================
+
+    - name: github-api
+      displayName: "GitHub REST API"
+      description: "GitHub repository management"
+      backend: "https://api.github.com"
+      classification: H
+      authentication:
+        type: bearer
+        header: "Authorization"
+        env_var: "GITHUB_TOKEN"
+      tags:
+        - devops
+        - github
+        - git
+      operations:
+        - name: list_issues
+          method: GET
+          path: "/repos/{owner}/{repo}/issues"
+          description: "List repository issues"
+        - name: create_issue
+          method: POST
+          path: "/repos/{owner}/{repo}/issues"
+          description: "Create a new issue"
+        - name: list_pull_requests
+          method: GET
+          path: "/repos/{owner}/{repo}/pulls"
+          description: "List pull requests"
+        - name: create_pull_request
+          method: POST
+          path: "/repos/{owner}/{repo}/pulls"
+          description: "Create a pull request"
+        - name: get_commits
+          method: GET
+          path: "/repos/{owner}/{repo}/commits"
+          description: "List commits"
+        - name: search_code
+          method: GET
+          path: "/search/code"
+          description: "Search code across repositories"
+
+    - name: notifications
+      displayName: "Notification Service"
+      description: "Send notifications via various channels"
+      backend: "https://httpbin.org"  # Mock for demo
+      classification: H
+      tags:
+        - notifications
+        - slack
+        - email
+      operations:
+        - name: send_slack
+          method: POST
+          path: "/post"
+          description: "Send Slack notification"
+        - name: send_email
+          method: POST
+          path: "/post"
+          description: "Send email notification"
+        - name: send_webhook
+          method: POST
+          path: "/post"
+          description: "Send webhook notification"
+
+    # ======================== Mock APIs ========================
+
+    - name: mock-crud
+      displayName: "Mock CRUD API"
+      description: "JSONPlaceholder for testing"
+      backend: "https://jsonplaceholder.typicode.com"
+      classification: H
+      tags:
+        - mock
+        - testing
+        - crud
+      operations:
+        - name: list_posts
+          method: GET
+          path: "/posts"
+          description: "List all posts"
+        - name: get_post
+          method: GET
+          path: "/posts/{id}"
+          description: "Get a specific post"
+        - name: create_post
+          method: POST
+          path: "/posts"
+          description: "Create a new post"
+        - name: update_post
+          method: PUT
+          path: "/posts/{id}"
+          description: "Update a post"
+        - name: delete_post
+          method: DELETE
+          path: "/posts/{id}"
+          description: "Delete a post"
+
+  # ===========================================================================
+  # 11. MCP TOOLS CONFIGURATION
+  # ===========================================================================
+  # Pre-configured MCP tools for AI agent integration
+  mcp_tools:
+
+    # Core platform tools
+    core_tools:
+      - stoa_catalog
+      - stoa_subscription
+      - stoa_observability
+      - stoa_platform
+
+    # Proxied tools (auto-generated from APIs above)
+    proxied_tools:
+      - "oasis:huggingface:sentiment_analysis"
+      - "oasis:huggingface:text_classification"
+      - "oasis:huggingface:summarization"
+      - "oasis:together-ai:chat_completion"
+      - "oasis:together-ai:embeddings"
+      - "oasis:stability-ai:text_to_image"
+      - "oasis:github-api:list_issues"
+      - "oasis:github-api:create_issue"
+      - "oasis:github-api:create_pull_request"
+      - "oasis:notifications:send_slack"
+
+    # External MCP servers
+    external_servers:
+      - name: github-mcp
+        url: "stdio://github-mcp-server"
+        enabled: true
+      - name: filesystem-mcp
+        url: "stdio://filesystem-mcp-server"
+        enabled: true
+        sandboxed: true
+      - name: memory-mcp
+        url: "stdio://memory-mcp-server"
+        enabled: true
+
+# =============================================================================
+# END OF OASIS UAC
+# =============================================================================
+# Demo scenarios supported:
+# 1. AI Pipeline Bridge: HuggingFace sentiment → classification → summary
+# 2. DevOps Workflow: GitHub issues → PR creation → Slack notification
+# 3. Image Generation: Stability AI text-to-image via MCP
+# 4. Token Tracking: Cost allocation and budget monitoring
+# 5. External MCP: GitHub MCP server integration
+# =============================================================================

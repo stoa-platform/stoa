@@ -1,0 +1,413 @@
+# =============================================================================
+# STOA Platform - Universal API Contract (UAC)
+# Tenant: HIGH-FIVE
+# Tier: STARTER (Fintech Startup Demo)
+# Theme: Ready Player One - Startup de Wade Watts et ses amis
+# =============================================================================
+# Demo tenant showcasing: Crypto APIs, Payments, Real-time alerts
+# Use cases: Semantic caching, Rate limiting, Audit trail
+# =============================================================================
+
+apiVersion: stoa.io/v1
+kind: UniversalAPIContract
+metadata:
+  name: "high-five"
+  tier: starter
+  created: "2026-02-06"
+  labels:
+    tenant-id: "high-five"
+    admin-email: "parzival@high-five.io"
+    keycloak-realm: "stoa"
+    demo-theme: "ready-player-one"
+    use-case: "fintech-startup"
+
+spec:
+  # ===========================================================================
+  # 1. API CLASSIFICATIONS
+  # ===========================================================================
+  classifications:
+
+    H:  # High volume - Crypto price APIs (CoinGecko)
+      description: "High-frequency crypto price queries"
+      rate_limit: 1000          # 1K req/hour - demo-friendly
+      burst: 100
+      timeout: 30s
+      retry_policy:
+        max_retries: 3
+        backoff: exponential
+        initial_delay: 100ms
+        max_delay: 5s
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 5
+        reset_timeout: 30s
+
+    VH:  # Very High - Payment operations (Stripe)
+      description: "Payment processing - requires audit"
+      rate_limit: 100
+      burst: 20
+      timeout: 60s
+      retry_policy:
+        max_retries: 2
+        backoff: exponential
+        initial_delay: 200ms
+        max_delay: 10s
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 3
+        reset_timeout: 60s
+      priority: high
+      audit_logging: true
+
+    VVH:  # Mission-critical - disabled for starter
+      description: "Not available in Starter tier"
+      enabled: false
+      rate_limit: 0
+      burst: 0
+      timeout: 0s
+
+  # ===========================================================================
+  # 2. SECURITY POLICIES
+  # ===========================================================================
+  security:
+
+    authentication:
+      required: true
+      methods:
+        - oauth2
+        - api_key
+      oauth2:
+        issuer: "https://auth.gostoa.dev/realms/stoa"
+        audience: "high-five"
+        token_expiry: 3600
+        refresh_enabled: true
+      api_key:
+        header_name: "X-API-Key"
+        rotation_days: 90
+        max_keys_per_consumer: 5
+
+    authorization:
+      rbac_enabled: true
+      default_scopes:
+        - read
+        - write
+      custom_scopes:
+        - "high-five:crypto:read"
+        - "high-five:payments:write"
+        - "high-five:alerts:send"
+
+    ip_allowlist: []
+
+    request_validation:
+      enabled: true
+      max_body_size: 1mb
+      content_types:
+        - application/json
+
+  # ===========================================================================
+  # 3. RATE LIMITING
+  # ===========================================================================
+  rateLimits:
+
+    global:
+      requests_per_minute: 1000
+      requests_per_hour: 10000
+      requests_per_day: 50000
+
+    per_api:
+      default: 500
+      overrides:
+        crypto-prices: 2000      # Higher for price queries
+        payments: 100            # Lower for payment ops
+        alerts: 200
+
+    per_consumer:
+      default: 200
+      max_consumers: 50
+
+    headers:
+      enabled: true
+      include_remaining: true
+      include_reset: true
+
+  # ===========================================================================
+  # 4. QUOTAS
+  # ===========================================================================
+  quotas:
+
+    monthly_requests: 500000     # 500K for demo
+    monthly_bandwidth_gb: 50
+
+    max_apis: 10
+    max_subscriptions: 50
+    max_consumers: 100
+    max_environments: 3          # dev, staging, prod
+
+    log_storage_gb: 5
+
+    alerts:
+      quota_warning_percent: 80
+      quota_critical_percent: 95
+      notify_email: "parzival@high-five.io"
+
+  # ===========================================================================
+  # 5. OBSERVABILITY
+  # ===========================================================================
+  observability:
+
+    logging:
+      level: info
+      retention_days: 30
+      format: json
+      exclude_fields:
+        - authorization
+        - cookie
+      pii_masking: true
+
+    metrics:
+      enabled: true
+      granularity: 1m            # 1-minute for demo visibility
+      retention_days: 30
+      custom_metrics: true       # Enable for demo dashboards
+
+    tracing:
+      enabled: true
+      sampling_rate: 1.0         # 100% for demo visibility
+      propagation: w3c
+
+    alerting:
+      enabled: true
+      channels:
+        - type: email
+          target: "parzival@high-five.io"
+      rules:
+        - name: high_error_rate
+          condition: "error_rate > 5%"
+          window: 5m
+          severity: warning
+        - name: payment_failure
+          condition: "api:payments:error_rate > 1%"
+          window: 1m
+          severity: critical
+
+  # ===========================================================================
+  # 6. SLA
+  # ===========================================================================
+  sla:
+
+    availability: 99.5
+
+    support:
+      response_hours: 24
+      channels:
+        - email
+        - slack
+      hours: business
+
+    maintenance:
+      scheduled_window: "Sunday 02:00-06:00 UTC"
+      advance_notice_hours: 48
+
+    credits:
+      enabled: false
+
+  # ===========================================================================
+  # 7. FEATURES
+  # ===========================================================================
+  features:
+
+    custom_domains: false
+    path_based_routing: true
+
+    api_versioning: true
+    api_deprecation: true
+    openapi_validation: true
+
+    developer_portal: true
+    interactive_docs: true
+    sandbox_environment: true
+
+    webhook_notifications: true    # Enabled for alerts demo
+    email_notifications: true
+
+    basic_analytics: true
+    advanced_analytics: true       # Enabled for demo dashboards
+
+    waf_protection: true
+    ddos_protection: true
+    secrets_management: false
+
+    ci_cd_integration: true
+    terraform_provider: false
+
+    # MCP Gateway (AI-Native) - DEMO FOCUS
+    mcp_gateway_access: true
+    mcp_tools_limit: 10            # More tools for demo
+    mcp_features:
+      semantic_caching: true       # KEY DEMO FEATURE
+      response_transformation: true
+      token_tracking: true
+
+  # ===========================================================================
+  # 8. NETWORKING
+  # ===========================================================================
+  networking:
+
+    connect_timeout: 5s
+    read_timeout: 30s
+    write_timeout: 30s
+    idle_timeout: 60s
+
+    keepalive:
+      enabled: true
+      timeout: 60s
+      max_requests: 100
+
+    cors:
+      enabled: true
+      allowed_origins:
+        - "https://*.gostoa.dev"
+        - "https://demo.high-five.io"
+      allowed_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+      allowed_headers:
+        - Authorization
+        - Content-Type
+        - X-API-Key
+        - X-Request-ID
+      max_age: 3600
+
+  # ===========================================================================
+  # 9. COMPLIANCE
+  # ===========================================================================
+  compliance:
+
+    gdpr:
+      enabled: true
+      data_residency: eu
+      right_to_erasure: true
+
+  # ===========================================================================
+  # 10. REGISTERED APIs (Demo)
+  # ===========================================================================
+  # These APIs are registered for the demo scenarios
+  apis:
+
+    - name: crypto-prices
+      displayName: "Crypto Price API"
+      description: "Real-time cryptocurrency prices from CoinGecko"
+      backend: "https://api.coingecko.com/api/v3"
+      classification: H
+      tags:
+        - crypto
+        - finance
+        - real-time
+      operations:
+        - name: get_prices
+          method: GET
+          path: "/simple/price"
+          description: "Get current prices for specified cryptocurrencies"
+          parameters:
+            - name: ids
+              in: query
+              required: true
+              description: "Comma-separated coin IDs (bitcoin,ethereum)"
+            - name: vs_currencies
+              in: query
+              required: true
+              description: "Target currencies (usd,eur)"
+        - name: get_markets
+          method: GET
+          path: "/coins/markets"
+          description: "Get market data for coins"
+          parameters:
+            - name: vs_currency
+              in: query
+              required: true
+            - name: order
+              in: query
+              default: "market_cap_desc"
+
+    - name: payments
+      displayName: "Stripe Payments (Test)"
+      description: "Payment processing via Stripe Test Mode"
+      backend: "https://api.stripe.com/v1"
+      classification: VH
+      authentication:
+        type: bearer
+        header: "Authorization"
+      tags:
+        - payments
+        - fintech
+        - pci
+      operations:
+        - name: create_charge
+          method: POST
+          path: "/charges"
+          description: "Create a payment charge"
+        - name: list_charges
+          method: GET
+          path: "/charges"
+          description: "List recent charges"
+        - name: get_balance
+          method: GET
+          path: "/balance"
+          description: "Get account balance"
+
+    - name: weather
+      displayName: "Weather API"
+      description: "Weather forecasts from Open-Meteo (no auth)"
+      backend: "https://api.open-meteo.com/v1"
+      classification: H
+      tags:
+        - weather
+        - free
+        - no-auth
+      operations:
+        - name: get_forecast
+          method: GET
+          path: "/forecast"
+          description: "Get weather forecast"
+          parameters:
+            - name: latitude
+              in: query
+              required: true
+            - name: longitude
+              in: query
+              required: true
+            - name: current_weather
+              in: query
+              default: "true"
+
+    - name: alerts
+      displayName: "Alert Service"
+      description: "Send notifications and alerts"
+      backend: "https://httpbin.org"  # Mock for demo
+      classification: H
+      tags:
+        - notifications
+        - alerts
+        - webhooks
+      operations:
+        - name: send_alert
+          method: POST
+          path: "/post"
+          description: "Send an alert notification"
+        - name: send_email
+          method: POST
+          path: "/post"
+          description: "Send email notification"
+
+# =============================================================================
+# END OF HIGH-FIVE UAC
+# =============================================================================
+# Demo scenarios supported:
+# 1. Semantic caching: Repeated crypto price queries
+# 2. Payment flow: Stripe test mode with audit trail
+# 3. Real-time alerts: Webhook notifications
+# 4. Rate limiting: Different limits per API
+# =============================================================================

@@ -58,8 +58,12 @@ apply-manifest:
     - name: Update kubeconfig
       run: aws eks update-kubeconfig --name apim-dev-cluster --region eu-west-1
     - name: Apply k8s manifest
-      run: kubectl apply -f <component>/k8s/deployment.yaml
+      run: |
+        kubectl apply -f <component>/k8s/deployment.yaml 2>/dev/null \
+          || kubectl replace --force -f <component>/k8s/deployment.yaml
 ```
+
+**Gotcha**: `kubectl apply` fails with "spec.selector: field is immutable" if the deployment was originally created by Helm (different selector labels). The `replace --force` fallback deletes and recreates the deployment, which handles selector mismatches.
 
 And the deploy job must depend on it:
 ```yaml

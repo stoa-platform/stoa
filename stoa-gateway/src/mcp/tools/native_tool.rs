@@ -221,7 +221,7 @@ impl NativeTool {
             "platform": "STOA",
             "gateway": "stoa-gateway (Rust)",
             "version": env!("CARGO_PKG_VERSION"),
-            "mcp_protocol": "2024-11-05",
+            "mcp_protocol": "2025-03-26",
             "features": [
                 "MCP SSE Transport",
                 "OAuth 2.1 (RFC 9728)",
@@ -229,7 +229,10 @@ impl NativeTool {
                 "API Key Authentication",
                 "Multi-tenant Isolation",
                 "Tool Discovery",
-                "Prometheus Metrics"
+                "Prometheus Metrics",
+                "Tool Annotations (MCP 2025-03-26)",
+                "Batch Requests",
+                "Elicitation"
             ],
             "status": "operational"
         });

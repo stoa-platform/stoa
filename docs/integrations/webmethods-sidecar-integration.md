@@ -256,7 +256,7 @@ If the gateway shows OFFLINE in Console but is running:
 
 ## Related Documentation
 
-- [ADR-028: Gateway Auto-Registration](../architecture/adr/adr-028-gateway-auto-registration.md) — Zero-config gateway onboarding
+- [ADR-036: Gateway Auto-Registration](https://docs.gostoa.dev/architecture/adr/adr-036-gateway-auto-registration) — Zero-config gateway onboarding
 - [ADR-024: Gateway Unified Modes](https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes) — Gateway modes architecture
 - [Gateway Auto-Registration Guide](../guides/gateway-auto-registration.md) — Practical operations guide
 - [Gateway Registration Runbook](../runbooks/high/gateway-registration-failed.md) — Troubleshooting registration issues

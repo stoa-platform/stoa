@@ -391,7 +391,7 @@ kubectl exec -n stoa-system deployment/stoa-gateway -- env | grep STOA_CONTROL_P
 
 ## Related Documentation
 
-- [ADR-028: Gateway Auto-Registration](../architecture/adr/adr-028-gateway-auto-registration.md) — Architecture decision record
+- [ADR-036: Gateway Auto-Registration](https://docs.gostoa.dev/architecture/adr/adr-036-gateway-auto-registration) — Architecture decision record
 - [ADR-024: Gateway Unified Modes](https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes) — Gateway modes (edge-mcp, sidecar, proxy, shadow)
 - [WebMethods Sidecar Integration](../integrations/webmethods-sidecar-integration.md) — Specific guide for WebMethods
-- [Gateway Adapter Pattern](../architecture/adr/adr-027-gateway-adapter-pattern.md) — How CP orchestrates gateways
+- [ADR-035: Gateway Adapter Pattern](https://docs.gostoa.dev/architecture/adr/adr-035-gateway-adapter-pattern) — How CP orchestrates gateways

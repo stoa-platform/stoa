@@ -33,9 +33,12 @@ Welcome to the STOA Platform documentation. STOA is a multi-tenant API managemen
 
 ### Architecture Decisions (ADRs)
 
+ADRs live in [stoa-docs](https://docs.gostoa.dev/architecture/adr/):
+
 - **[ADR-024: Gateway Unified Modes](https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes)** - edge-mcp, sidecar, proxy, shadow
-- **[ADR-027: Gateway Adapter Pattern](./architecture/adr/adr-027-gateway-adapter-pattern.md)** - Multi-gateway orchestration
-- **[ADR-028: Gateway Auto-Registration](./architecture/adr/adr-028-gateway-auto-registration.md)** - Apple-style gateway onboarding
+- **[ADR-035: Gateway Adapter Pattern](https://docs.gostoa.dev/architecture/adr/adr-035-gateway-adapter-pattern)** - Multi-gateway orchestration
+- **[ADR-036: Gateway Auto-Registration](https://docs.gostoa.dev/architecture/adr/adr-036-gateway-auto-registration)** - Zero-config gateway onboarding
+- **[ADR-037: Deployment Modes Sovereign](https://docs.gostoa.dev/architecture/adr/adr-037-deployment-modes-sovereign-first)** - Sovereign-first strategy
 
 ### Operations
 

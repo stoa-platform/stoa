@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..database import get_session_factory
+from ..database import _get_session_factory
 from ..models.gateway_instance import GatewayInstance, GatewayInstanceStatus, GatewayType
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class GatewayHealthWorker:
 
     async def _check_gateway_health(self):
         """Check all gateways for stale heartbeats."""
-        session_factory = get_session_factory()
+        session_factory = _get_session_factory()
         async with session_factory() as session:
             await self._mark_stale_gateways_offline(session)
             await session.commit()

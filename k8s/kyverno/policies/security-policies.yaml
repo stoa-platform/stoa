@@ -1,0 +1,150 @@
+# Kyverno Security Policies
+# CAB-CD-001: Enterprise CD Architecture
+#
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-labels
+  annotations:
+    policies.kyverno.io/title: Require Labels
+    policies.kyverno.io/category: Best Practices
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-tenant-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+                - Deployment
+                - StatefulSet
+              namespaces:
+                - stoa-*
+      validate:
+        message: "The label 'app.kubernetes.io/part-of' is required."
+        pattern:
+          metadata:
+            labels:
+              app.kubernetes.io/part-of: "?*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-probes
+  annotations:
+    policies.kyverno.io/title: Require Health Probes
+    policies.kyverno.io/category: Best Practices
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-liveness-probe
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+              namespaces:
+                - stoa-system
+      validate:
+        message: "Liveness probe is required for all containers."
+        pattern:
+          spec:
+            template:
+              spec:
+                containers:
+                  - livenessProbe:
+                      httpGet:
+                        path: "?*"
+                        port: "?*"
+    - name: require-readiness-probe
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+              namespaces:
+                - stoa-system
+      validate:
+        message: "Readiness probe is required for all containers."
+        pattern:
+          spec:
+            template:
+              spec:
+                containers:
+                  - readinessProbe:
+                      httpGet:
+                        path: "?*"
+                        port: "?*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-external-secrets
+  annotations:
+    policies.kyverno.io/title: Require External Secrets
+    policies.kyverno.io/category: Security
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: block-raw-secrets
+      match:
+        any:
+          - resources:
+              kinds:
+                - Secret
+              namespaces:
+                - stoa-system
+                - stoa-*
+      exclude:
+        any:
+          - resources:
+              annotations:
+                externalsecrets.io/managed: "true"
+          - resources:
+              names:
+                - "*-token-*"
+                - "default-token-*"
+                - "sh.helm.release.*"
+      validate:
+        message: "Secrets must be managed by External Secrets Operator. Add annotation 'externalsecrets.io/managed: true'."
+        pattern:
+          metadata:
+            annotations:
+              externalsecrets.io/managed: "true"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-privileged
+  annotations:
+    policies.kyverno.io/title: Restrict Privileged Containers
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: deny-privileged
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - stoa-system
+                - stoa-*
+      validate:
+        message: "Privileged containers are not allowed."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  privileged: "false"
+            initContainers:
+              - securityContext:
+                  privileged: "false"

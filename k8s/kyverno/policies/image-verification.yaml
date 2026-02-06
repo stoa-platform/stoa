@@ -1,0 +1,67 @@
+# Kyverno Image Verification Policy
+# CAB-CD-001: Enterprise CD Architecture
+#
+# Verifies that all container images in stoa namespaces are signed
+# using Cosign keyless signing with GitHub Actions OIDC.
+#
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signatures
+  annotations:
+    policies.kyverno.io/title: Verify Image Signatures
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Verifies that container images are signed using Cosign keyless
+      signing with GitHub Actions OIDC.
+spec:
+  validationFailureAction: Audit
+  background: true
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: verify-ghcr-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - stoa-system
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/stoa-platform/*"
+          mutateDigest: false
+          verifyDigest: false
+          required: false
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/stoa-platform/stoa/.github/workflows/*"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url: https://rekor.sigstore.dev
+
+    - name: verify-ecr-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - stoa-system
+      verifyImages:
+        - imageReferences:
+            - "848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/*"
+          mutateDigest: false
+          verifyDigest: false
+          required: false
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/stoa-platform/stoa/.github/workflows/*"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url: https://rekor.sigstore.dev

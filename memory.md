@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Last updated: 2026-02-05 (Session 7 — Context Management Architecture Refactor)
+> Last updated: 2026-02-06 (Session 8 — Enterprise CD Architecture Deployment)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
@@ -22,6 +22,7 @@
 | DONE | CAB-1062 | Docker image + CI deploy | PR #74, Session 6 |
 | DONE | ADR-030 | AI context management architecture | Session 7 |
 | DONE | — | Context refactor: CLAUDE.md 11KB→3KB + 8 rules + 8 component docs + 8 skills + hooks | Session 7 |
+| DONE | CAB-CD-001 | Enterprise CD Architecture deployed on EKS | Session 8, commit 46401a3b |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe | — |
 | NEXT | — | Browser-based demo walkthrough | — |
 | NEXT | — | Record video backup for demo | — |
@@ -32,6 +33,20 @@
 - 2026-02-05: ADRs live in stoa-docs, not stoa (ADR-030)
 - 2026-02-05: Retire .stoa-ai/ — migrate to native Claude Code features (skills, rules, hooks)
 - 2026-02-05: CLAUDE.md hierarchy: root (compact) + .claude/rules/ (modular) + component CLAUDE.md (lazy)
+- 2026-02-06: Kyverno policies in Audit mode first, switch to Enforce after validation
+- 2026-02-06: ArgoCD ApplicationSet uses goTemplate mode for multi-env deployments
+
+## CD Infrastructure (Session 8 — 2026-02-06)
+- **Argo Rollouts**: Installed for progressive delivery (canary deployments)
+- **Kyverno v1.17.0**: 9 pods, 5 policies in Audit mode
+  - `verify-image-signatures`: Cosign keyless with GitHub OIDC
+  - `require-labels`: app.kubernetes.io/part-of required
+  - `require-probes`: Liveness/readiness required for deployments
+  - `require-external-secrets`: Block raw secrets, force ESO
+  - `restrict-privileged`: Block privileged containers (Enforce mode)
+- **ArgoCD ApplicationSet**: 15 apps (5 components × 3 envs) with sync waves
+- **PrometheusRule**: DORA metrics (success rate, lead time, failure rate)
+- **TODO**: Switch Kyverno policies to Enforce mode after validation period
 
 ## Known Issues
 - Loki behind oauth2-proxy — requires Grafana for direct queries

@@ -72,7 +72,7 @@ spec:
             runAsNonRoot: true
             runAsUser: 101
             runAsGroup: 101
-            readOnlyRootFilesystem: true
+            readOnlyRootFilesystem: false
             allowPrivilegeEscalation: false
             capabilities:
               drop:

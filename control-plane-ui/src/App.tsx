@@ -9,22 +9,27 @@ import { CommandPaletteProvider } from '@stoa/shared/components/CommandPalette';
 import { ThemeProvider } from '@stoa/shared/contexts';
 
 // Lazy load pages for code splitting
+// Consolidated imports — single module loader per multi-export file
+const aiToolsModule = () => import('./pages/AITools');
+const externalMcpModule = () => import('./pages/ExternalMCPServers');
+const gatewaysModule = () => import('./pages/Gateways');
+
 const Tenants = lazy(() => import('./pages/Tenants').then(m => ({ default: m.Tenants })));
 const APIs = lazy(() => import('./pages/APIs').then(m => ({ default: m.APIs })));
 const Applications = lazy(() => import('./pages/Applications').then(m => ({ default: m.Applications })));
 const Deployments = lazy(() => import('./pages/Deployments').then(m => ({ default: m.Deployments })));
 const APIMonitoring = lazy(() => import('./pages/APIMonitoring').then(m => ({ default: m.APIMonitoring })));
 const ErrorSnapshots = lazy(() => import('./pages/ErrorSnapshots').then(m => ({ default: m.ErrorSnapshots })));
-const ToolCatalog = lazy(() => import('./pages/AITools').then(m => ({ default: m.ToolCatalog })));
-const ToolDetail = lazy(() => import('./pages/AITools').then(m => ({ default: m.ToolDetail })));
-const MySubscriptions = lazy(() => import('./pages/AITools').then(m => ({ default: m.MySubscriptions })));
-const UsageDashboard = lazy(() => import('./pages/AITools').then(m => ({ default: m.UsageDashboard })));
-const ExternalMCPServersList = lazy(() => import('./pages/ExternalMCPServers').then(m => ({ default: m.ExternalMCPServersList })));
-const ExternalMCPServerDetail = lazy(() => import('./pages/ExternalMCPServers').then(m => ({ default: m.ExternalMCPServerDetail })));
+const ToolCatalog = lazy(() => aiToolsModule().then(m => ({ default: m.ToolCatalog })));
+const ToolDetail = lazy(() => aiToolsModule().then(m => ({ default: m.ToolDetail })));
+const MySubscriptions = lazy(() => aiToolsModule().then(m => ({ default: m.MySubscriptions })));
+const UsageDashboard = lazy(() => aiToolsModule().then(m => ({ default: m.UsageDashboard })));
+const ExternalMCPServersList = lazy(() => externalMcpModule().then(m => ({ default: m.ExternalMCPServersList })));
+const ExternalMCPServerDetail = lazy(() => externalMcpModule().then(m => ({ default: m.ExternalMCPServerDetail })));
 const AdminProspects = lazy(() => import('./pages/AdminProspects').then(m => ({ default: m.AdminProspects })));
 const GatewayStatus = lazy(() => import('./pages/GatewayStatus'));
-const GatewayRegistry = lazy(() => import('./pages/Gateways').then(m => ({ default: m.GatewayList })));
-const GatewayModes = lazy(() => import('./pages/Gateways').then(m => ({ default: m.GatewayModesDashboard })));
+const GatewayRegistry = lazy(() => gatewaysModule().then(m => ({ default: m.GatewayList })));
+const GatewayModes = lazy(() => gatewaysModule().then(m => ({ default: m.GatewayModesDashboard })));
 const GatewayDeployments = lazy(() => import('./pages/GatewayDeployments').then(m => ({ default: m.GatewayDeploymentsDashboard })));
 const GatewayObservability = lazy(() => import('./pages/GatewayObservability').then(m => ({ default: m.GatewayObservabilityDashboard })));
 const OperationsDashboard = lazy(() => import('./pages/Operations').then(m => ({ default: m.OperationsDashboard })));
@@ -37,21 +42,7 @@ const IdentityEmbed = lazy(() => import('./pages/IdentityEmbed'));
 // CAB-1114: OpenSearch Dashboards for API trace logs
 const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 
-// Branded loading screen for auth init (similar to portal)
-function LoadingScreen() {
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 flex items-center justify-center transition-colors">
-      <div className="text-center">
-        <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-          <span className="text-white font-bold text-xl">SC</span>
-        </div>
-        <p className="text-gray-500 dark:text-neutral-400">Loading STOA Console...</p>
-      </div>
-    </div>
-  );
-}
-
-// Loading spinner for lazy-loaded pages
+// Loading spinner for lazy-loaded pages and auth init skeleton
 function PageLoader() {
   return (
     <div className="flex items-center justify-center min-h-[400px]">
@@ -71,21 +62,21 @@ function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-2">Welcome to STOA Control Plane</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+        <p className="text-gray-500 dark:text-neutral-400 mt-2">Welcome to STOA Control Plane</p>
       </div>
 
       {/* Welcome Card */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+          <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
             <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Hello, {user?.name || 'User'}!</h2>
-            <p className="text-sm text-gray-500">{user?.email}</p>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Hello, {user?.name || 'User'}!</h2>
+            <p className="text-sm text-gray-500 dark:text-neutral-400">{user?.email}</p>
           </div>
         </div>
       </div>
@@ -144,8 +135,8 @@ function Dashboard() {
 
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Links</h3>
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Links</h3>
           <ul className="space-y-3">
             {quickLinks.map((link) => (
               <li key={link.name}>
@@ -160,9 +151,9 @@ function Dashboard() {
           </ul>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Getting Started</h3>
-          <ol className="space-y-3 text-sm text-gray-600">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Getting Started</h3>
+          <ol className="space-y-3 text-sm text-gray-600 dark:text-neutral-400">
             <li className="flex gap-2">
               <span className="font-bold text-blue-600">1.</span>
               <span>Go to <a href="/apis" className="text-blue-600 hover:underline">APIs</a> and create a new API</span>
@@ -223,7 +214,12 @@ function ProtectedRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return <LoadingScreen />;
+    // Show app shell (sidebar + header) immediately while auth initializes
+    return (
+      <Layout>
+        <PageLoader />
+      </Layout>
+    );
   }
 
   if (!isAuthenticated) {

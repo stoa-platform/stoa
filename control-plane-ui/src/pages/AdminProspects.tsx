@@ -6,6 +6,7 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useDebounce } from '../hooks/useDebounce';
 import {
   useProspects,
   useProspectsMetrics,
@@ -35,18 +36,6 @@ import {
   Eye,
   MousePointerClick,
 } from 'lucide-react';
-
-// Debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-
-  return debouncedValue;
-}
 
 const PAGE_SIZE = 25;
 

@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { useAuth as useOidcAuth, hasAuthParams } from 'react-oidc-context';
+import { useQueryClient } from '@tanstack/react-query';
 import type { User } from '../types';
 import { apiService } from '../services/api';
 import { mcpGatewayService } from '../services/mcpGatewayApi';
@@ -87,36 +88,45 @@ function extractUserFromToken(oidcUser: any): User | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const oidc = useOidcAuth();
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const prevTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
-    console.log('[AuthContext] useEffect triggered, oidc.user:', !!oidc.user);
     if (oidc.user) {
-      setUser(extractUserFromToken(oidc.user));
-      // Set the access token for API calls
-      if (oidc.user.access_token) {
-        console.log('[AuthContext] Setting auth token');
-        apiService.setAuthToken(oidc.user.access_token);
-        mcpGatewayService.setAuthToken(oidc.user.access_token);
-        setIsReady(true); // Token is now set
-      } else {
-        console.warn('[AuthContext] oidc.user exists but no access_token');
+      const token = oidc.user.access_token;
+      // Skip re-extraction if token hasn't changed (StrictMode + silent renew)
+      if (token && token !== prevTokenRef.current) {
+        prevTokenRef.current = token;
+        setUser(extractUserFromToken(oidc.user));
+        apiService.setAuthToken(token);
+        mcpGatewayService.setAuthToken(token);
+        setIsReady(true);
+        // Prefetch tenants immediately — most pages need this data
+        queryClient.prefetchQuery({
+          queryKey: ['tenants'],
+          queryFn: () => apiService.getTenants(),
+          staleTime: 5 * 60 * 1000, // 5 minutes
+        });
+      } else if (!token) {
+        setUser(extractUserFromToken(oidc.user));
       }
     } else {
+      prevTokenRef.current = null;
       setUser(null);
       apiService.clearAuthToken();
       mcpGatewayService.clearAuthToken();
       setIsReady(false);
     }
-  }, [oidc.user]);
+  }, [oidc.user, queryClient]);
 
   // Auto-login if we have auth params in URL (callback from Keycloak)
   useEffect(() => {
     if (!oidc.isAuthenticated && !oidc.isLoading && hasAuthParams()) {
       oidc.signinRedirect();
     }
-  }, [oidc.isAuthenticated, oidc.isLoading]);
+  }, [oidc.isAuthenticated, oidc.isLoading, oidc]);
 
   const hasPermission = useCallback((permission: string): boolean => {
     return user?.permissions.includes(permission) ?? false;

@@ -1,28 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useDebounce } from '../hooks/useDebounce';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
-import type { Application, ApplicationCreate, Tenant, API } from '../types';
-
-// Debounce hook for search optimization
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
+import type { Application, ApplicationCreate, API } from '../types';
 
 const PAGE_SIZE = 12;
 
@@ -31,10 +16,9 @@ export function Applications() {
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [applications, setApplications] = useState<Application[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [apis, setApis] = useState<API[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingApp, setEditingApp] = useState<Application | null>(null);
@@ -47,11 +31,20 @@ export function Applications() {
   // Debounce search for performance (300ms delay)
   const debouncedSearch = useDebounce(searchQuery, 300);
 
+  // Fetch tenants via React Query (benefits from prefetch in AuthContext)
+  const { data: tenants = [], isLoading: tenantsLoading, error: tenantsError } = useQuery({
+    queryKey: ['tenants'],
+    queryFn: () => apiService.getTenants(),
+    enabled: isReady,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Auto-select first tenant when tenants load
   useEffect(() => {
-    if (isReady) {
-      loadTenants();
+    if (tenants.length > 0 && !selectedTenant) {
+      setSelectedTenant(tenants[0].id);
     }
-  }, [isReady]);
+  }, [tenants, selectedTenant]);
 
   useEffect(() => {
     if (selectedTenant) {
@@ -64,20 +57,6 @@ export function Applications() {
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearch, statusFilter, selectedTenant]);
-
-  async function loadTenants() {
-    try {
-      const data = await apiService.getTenants();
-      setTenants(data);
-      if (data.length > 0) {
-        setSelectedTenant(data[0].id);
-      }
-      setLoading(false);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load tenants');
-      setLoading(false);
-    }
-  }
 
   // Parallel loading of applications and APIs
   async function loadTenantData(tenantId: string) {
@@ -183,7 +162,7 @@ export function Applications() {
     suspended: 'bg-red-100 text-red-800',
   };
 
-  if (loading && tenants.length === 0) {
+  if ((tenantsLoading || loading) && tenants.length === 0) {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
@@ -286,9 +265,9 @@ export function Applications() {
         </div>
       </div>
 
-      {error && (
+      {(error || tenantsError) && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
+          {error || 'Failed to load tenants'}
           <button onClick={() => setError(null)} className="float-right font-bold">&times;</button>
         </div>
       )}

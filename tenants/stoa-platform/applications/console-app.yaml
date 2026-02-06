@@ -25,7 +25,7 @@ spec:
         - control-plane-ui
 
   # Contact information
-  contactEmail: admin@cab-i.com
+  contactEmail: admin@gostoa.dev
 
   # APIs this application can consume
   consumingAPIs:

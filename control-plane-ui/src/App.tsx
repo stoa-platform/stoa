@@ -34,6 +34,8 @@ const BusinessDashboard = lazy(() => import('./pages/Business').then(m => ({ def
 // CAB-1108: Embedded iframe pages for unified STOA experience
 const GrafanaEmbed = lazy(() => import('./pages/GrafanaEmbed'));
 const IdentityEmbed = lazy(() => import('./pages/IdentityEmbed'));
+// CAB-1114: OpenSearch Dashboards for API trace logs
+const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 
 // Branded loading screen for auth init (similar to portal)
 function LoadingScreen() {
@@ -258,6 +260,8 @@ function ProtectedRoutes() {
             {/* CAB-1108: Embedded observability and identity management */}
             <Route path="/observability" element={<GrafanaEmbed />} />
             <Route path="/identity" element={<IdentityEmbed />} />
+            {/* CAB-1114: OpenSearch Dashboards for API trace logs */}
+            <Route path="/logs" element={<LogsEmbed />} />
           </Routes>
         </Suspense>
       </Layout>

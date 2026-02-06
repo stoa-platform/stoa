@@ -1,0 +1,43 @@
+# =============================================================================
+# STOA Platform - Ready Player One Demo Kustomization
+# =============================================================================
+# Deploy all RPO demo tenants and their MCP tools
+# Usage: kubectl apply -k deploy/demo-rpo/
+# =============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: demo-rpo
+  annotations:
+    stoa.io/description: "Ready Player One themed demo for STOA Platform"
+    stoa.io/demo-duration: "30-45 minutes"
+    stoa.io/audience: "Enterprise clients"
+
+# Note: Each tool file defines its own namespace (tenant-high-five, tenant-ioi, tenant-oasis)
+# We don't use namespace override here to preserve tenant isolation
+
+# Resources to deploy
+resources:
+  # MCP Tool definitions per tenant
+  - tools/high-five-tools.yaml   # Fintech startup
+  - tools/ioi-tools.yaml         # Enterprise legacy
+  - tools/oasis-tools.yaml       # AI-first company
+
+# Common labels for all resources
+commonLabels:
+  app.kubernetes.io/part-of: stoa-platform
+  stoa.io/demo: "true"
+  stoa.io/demo-theme: ready-player-one
+
+# Common annotations
+commonAnnotations:
+  stoa.io/created-by: demo-setup
+  stoa.io/demo-scenarios: |
+    1. Legacy-to-MCP Bridge (IOI)
+    2. Fintech Agent (HIGH-FIVE)
+    3. Multi-Tenant Isolation
+    4. DevOps Workflow (OASIS)
+    5. AI Pipeline Bridge (OASIS)
+    6. Compliance & Audit (IOI)

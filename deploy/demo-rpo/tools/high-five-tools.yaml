@@ -1,0 +1,396 @@
+# =============================================================================
+# STOA Platform - HIGH-FIVE Tenant MCP Tools
+# Theme: Ready Player One - Fintech Startup
+# =============================================================================
+# Demo tools for crypto, payments, and alerts scenarios
+# =============================================================================
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-high-five
+  labels:
+    gostoa.dev/tenant: high-five
+    gostoa.dev/environment: demo
+    gostoa.dev/theme: ready-player-one
+---
+# =============================================================================
+# Tool 1: Crypto Price Checker (CoinGecko)
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: crypto-prices
+  namespace: tenant-high-five
+  labels:
+    gostoa.dev/tenant: high-five
+    gostoa.dev/category: finance
+    gostoa.dev/demo: "true"
+  annotations:
+    gostoa.dev/owner: parzival
+    gostoa.dev/demo-scenario: fintech-agent
+spec:
+  displayName: "Crypto Price Checker"
+  description: "Get real-time cryptocurrency prices from CoinGecko. Supports multiple coins and currencies. Perfect for portfolio tracking and trading decisions."
+  version: "1.0.0"
+  tags:
+    - crypto
+    - finance
+    - real-time
+    - coingecko
+
+  endpoint: "https://api.coingecko.com/api/v3/simple/price"
+  method: GET
+
+  inputSchema:
+    type: object
+    properties:
+      ids:
+        type: string
+        description: "Comma-separated coin IDs (e.g., bitcoin,ethereum,solana)"
+        examples:
+          - "bitcoin"
+          - "bitcoin,ethereum"
+          - "bitcoin,ethereum,solana,cardano"
+      vs_currencies:
+        type: string
+        description: "Target currencies (e.g., usd,eur,btc)"
+        default: "usd"
+      include_market_cap:
+        type: boolean
+        description: "Include market cap in response"
+        default: false
+      include_24hr_vol:
+        type: boolean
+        description: "Include 24h volume in response"
+        default: false
+      include_24hr_change:
+        type: boolean
+        description: "Include 24h price change percentage"
+        default: true
+    required:
+      - ids
+
+  authentication:
+    type: none
+
+  timeout: "30s"
+
+  rateLimit:
+    requestsPerMinute: 30
+    burst: 10
+
+  # Note: caching configuration moved to mcp-gateway config
+  # Semantic caching enabled for this tool (TTL: 60s)
+
+  enabled: true
+
+  apiRef:
+    name: "CoinGecko-API"
+    version: "3.0"
+    operationId: "getSimplePrice"
+---
+# =============================================================================
+# Tool 2: Market Data (CoinGecko Markets)
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: crypto-markets
+  namespace: tenant-high-five
+  labels:
+    gostoa.dev/tenant: high-five
+    gostoa.dev/category: finance
+    gostoa.dev/demo: "true"
+spec:
+  displayName: "Crypto Market Data"
+  description: "Get comprehensive market data for cryptocurrencies including market cap, volume, and rankings."
+  version: "1.0.0"
+  tags:
+    - crypto
+    - markets
+    - analytics
+
+  endpoint: "https://api.coingecko.com/api/v3/coins/markets"
+  method: GET
+
+  inputSchema:
+    type: object
+    properties:
+      vs_currency:
+        type: string
+        description: "Target currency for prices"
+        default: "usd"
+      order:
+        type: string
+        description: "Sort order"
+        enum:
+          - market_cap_desc
+          - market_cap_asc
+          - volume_desc
+          - volume_asc
+        default: "market_cap_desc"
+      per_page:
+        type: integer
+        description: "Number of results per page (max 250)"
+        default: 10
+        maximum: 250
+      page:
+        type: integer
+        description: "Page number"
+        default: 1
+    required:
+      - vs_currency
+
+  authentication:
+    type: none
+
+  timeout: "30s"
+
+  rateLimit:
+    requestsPerMinute: 20
+    burst: 5
+
+  enabled: true
+---
+# =============================================================================
+# Tool 3: Weather Forecast (Open-Meteo)
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: weather-forecast
+  namespace: tenant-high-five
+  labels:
+    gostoa.dev/tenant: high-five
+    gostoa.dev/category: utility
+    gostoa.dev/demo: "true"
+spec:
+  displayName: "Weather Forecast"
+  description: "Get weather forecasts for any location. Free, no API key required. Useful for location-based services and planning."
+  version: "1.0.0"
+  tags:
+    - weather
+    - forecast
+    - free
+
+  endpoint: "https://api.open-meteo.com/v1/forecast"
+  method: GET
+
+  inputSchema:
+    type: object
+    properties:
+      latitude:
+        type: number
+        description: "Latitude of the location"
+        examples:
+          - 48.8566  # Paris
+          - 40.7128  # New York
+      longitude:
+        type: number
+        description: "Longitude of the location"
+        examples:
+          - 2.3522   # Paris
+          - -74.0060 # New York
+      current_weather:
+        type: boolean
+        description: "Include current weather conditions"
+        default: true
+      hourly:
+        type: string
+        description: "Hourly variables to include"
+        default: "temperature_2m,precipitation"
+      daily:
+        type: string
+        description: "Daily variables to include"
+        default: "temperature_2m_max,temperature_2m_min"
+      timezone:
+        type: string
+        description: "Timezone for the response"
+        default: "auto"
+    required:
+      - latitude
+      - longitude
+
+  authentication:
+    type: none
+
+  timeout: "15s"
+
+  rateLimit:
+    requestsPerMinute: 60
+    burst: 20
+
+  enabled: true
+---
+# =============================================================================
+# Tool 4: Payment Charge (Stripe Test)
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: payment-charge
+  namespace: tenant-high-five
+  labels:
+    gostoa.dev/tenant: high-five
+    gostoa.dev/category: payments
+    gostoa.dev/demo: "true"
+    gostoa.dev/classification: VH
+  annotations:
+    gostoa.dev/requires-audit: "true"
+spec:
+  displayName: "Create Payment Charge"
+  description: "Create a payment charge via Stripe (Test Mode). Use test card 4242424242424242 for successful charges."
+  version: "1.0.0"
+  tags:
+    - payments
+    - stripe
+    - fintech
+    - pci
+
+  # Note: For demo, we use httpbin to simulate responses
+  # In production, this would be https://api.stripe.com/v1/charges
+  endpoint: "https://httpbin.org/post"
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      amount:
+        type: integer
+        description: "Amount in cents (e.g., 1000 = $10.00)"
+        minimum: 50
+      currency:
+        type: string
+        description: "Three-letter ISO currency code"
+        default: "usd"
+        enum:
+          - usd
+          - eur
+          - gbp
+      source:
+        type: string
+        description: "Payment source (card token or test token)"
+        default: "tok_visa"
+      description:
+        type: string
+        description: "Description for the charge"
+    required:
+      - amount
+
+  authentication:
+    type: bearer
+    headerName: "Authorization"
+
+  timeout: "60s"
+
+  rateLimit:
+    requestsPerMinute: 100
+    burst: 20
+
+  # Note: audit logging configured at gateway level
+  # All payment operations are automatically audited
+
+  enabled: true
+
+  apiRef:
+    name: "Stripe-API"
+    version: "2023-10-16"
+    operationId: "createCharge"
+---
+# =============================================================================
+# Tool 5: Send Alert Notification
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: send-alert
+  namespace: tenant-high-five
+  labels:
+    gostoa.dev/tenant: high-five
+    gostoa.dev/category: notifications
+    gostoa.dev/demo: "true"
+spec:
+  displayName: "Send Alert"
+  description: "Send an alert notification via webhook, email, or Slack. Perfect for price alerts and system notifications."
+  version: "1.0.0"
+  tags:
+    - notifications
+    - alerts
+    - webhook
+
+  endpoint: "https://httpbin.org/post"
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      channel:
+        type: string
+        description: "Notification channel"
+        enum:
+          - webhook
+          - email
+          - slack
+        default: "webhook"
+      message:
+        type: string
+        description: "Alert message content"
+      severity:
+        type: string
+        description: "Alert severity level"
+        enum:
+          - info
+          - warning
+          - critical
+        default: "info"
+      metadata:
+        type: object
+        description: "Additional metadata for the alert"
+        additionalProperties: true
+    required:
+      - message
+
+  authentication:
+    type: none
+
+  timeout: "30s"
+
+  rateLimit:
+    requestsPerMinute: 100
+    burst: 30
+
+  enabled: true
+---
+# =============================================================================
+# ConfigMap: Demo Response Data
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: high-five-demo-responses
+  namespace: tenant-high-five
+  labels:
+    gostoa.dev/tenant: high-five
+data:
+  crypto-prices-example.json: |
+    {
+      "bitcoin": {
+        "usd": 67432.00,
+        "usd_24h_change": 2.34
+      },
+      "ethereum": {
+        "usd": 3521.50,
+        "usd_24h_change": 1.87
+      }
+    }
+  payment-success.json: |
+    {
+      "id": "ch_demo_123456",
+      "object": "charge",
+      "amount": 1000,
+      "currency": "usd",
+      "status": "succeeded",
+      "paid": true,
+      "created": 1707235200
+    }

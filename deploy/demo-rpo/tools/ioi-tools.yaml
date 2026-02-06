@@ -1,0 +1,378 @@
+# =============================================================================
+# STOA Platform - IOI Tenant MCP Tools
+# Theme: Ready Player One - Enterprise Legacy
+# =============================================================================
+# Demo tools for shadow mode, legacy API discovery, and compliance
+# =============================================================================
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-ioi
+  labels:
+    gostoa.dev/tenant: ioi
+    gostoa.dev/environment: demo
+    gostoa.dev/theme: ready-player-one
+    gostoa.dev/tier: enterprise
+---
+# =============================================================================
+# Tool 1: Legacy ERP - Inventory Query
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: erp-inventory
+  namespace: tenant-ioi
+  labels:
+    gostoa.dev/tenant: ioi
+    gostoa.dev/category: erp
+    gostoa.dev/demo: "true"
+    gostoa.dev/legacy: "true"
+  annotations:
+    gostoa.dev/shadow-mode: enabled
+    gostoa.dev/auto-discovered: "true"
+    gostoa.dev/demo-scenario: shadow-mode
+spec:
+  displayName: "Legacy ERP Inventory"
+  description: "Query inventory from legacy ERP system. This tool was auto-discovered via STOA Shadow Mode from undocumented API traffic."
+  version: "1.0.0"
+  tags:
+    - legacy
+    - erp
+    - inventory
+    - shadow-mode
+
+  endpoint: "https://httpbin.org/anything/inventory"
+  method: GET
+
+  inputSchema:
+    type: object
+    properties:
+      product_id:
+        type: string
+        description: "Product identifier"
+      warehouse:
+        type: string
+        description: "Warehouse code"
+        enum:
+          - WH-EU-01
+          - WH-EU-02
+          - WH-US-01
+          - WH-APAC-01
+      include_reserved:
+        type: boolean
+        description: "Include reserved stock"
+        default: false
+    required: []
+
+  authentication:
+    type: apiKey
+    headerName: "X-Legacy-Auth"
+
+  timeout: "45s"
+
+  rateLimit:
+    requestsPerMinute: 50
+    burst: 10
+
+  # Note: Shadow mode config in ioi-demo-config ConfigMap
+  # Auto-discovered via STOA Shadow Mode
+
+  enabled: true
+
+  apiRef:
+    name: "Legacy-ERP"
+    version: "unknown"
+    operationId: "getInventory"
+---
+# =============================================================================
+# Tool 2: Legacy ERP - Order Management
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: erp-orders
+  namespace: tenant-ioi
+  labels:
+    gostoa.dev/tenant: ioi
+    gostoa.dev/category: erp
+    gostoa.dev/demo: "true"
+    gostoa.dev/legacy: "true"
+spec:
+  displayName: "Legacy ERP Orders"
+  description: "Manage orders in legacy ERP system. Auto-discovered via Shadow Mode."
+  version: "1.0.0"
+  tags:
+    - legacy
+    - erp
+    - orders
+
+  endpoint: "https://httpbin.org/anything/orders"
+  method: GET
+
+  inputSchema:
+    type: object
+    properties:
+      order_id:
+        type: string
+        description: "Order ID to retrieve"
+      status:
+        type: string
+        description: "Filter by order status"
+        enum:
+          - pending
+          - processing
+          - shipped
+          - delivered
+          - cancelled
+      date_from:
+        type: string
+        description: "Start date (ISO format)"
+        format: date
+      date_to:
+        type: string
+        description: "End date (ISO format)"
+        format: date
+      limit:
+        type: integer
+        description: "Maximum results"
+        default: 50
+        maximum: 500
+
+  authentication:
+    type: apiKey
+    headerName: "X-Legacy-Auth"
+
+  timeout: "60s"
+
+  rateLimit:
+    requestsPerMinute: 30
+    burst: 5
+
+  # Note: Shadow mode and audit logging configured at gateway level
+
+  enabled: true
+---
+# =============================================================================
+# Tool 3: Legacy CRM - Customer Search (with PII)
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: crm-customers
+  namespace: tenant-ioi
+  labels:
+    gostoa.dev/tenant: ioi
+    gostoa.dev/category: crm
+    gostoa.dev/demo: "true"
+    gostoa.dev/pii: "true"
+  annotations:
+    gostoa.dev/demo-scenario: pii-masking
+spec:
+  displayName: "Legacy CRM Customers"
+  description: "Search customer database in legacy CRM. Contains PII - automatic masking applied."
+  version: "1.0.0"
+  tags:
+    - legacy
+    - crm
+    - customers
+    - pii
+
+  # Using DummyJSON which returns realistic user data with PII
+  # Note: reqres.in returns 403 due to Cloudflare, using DummyJSON as fallback
+  endpoint: "https://dummyjson.com/users"
+  method: GET
+
+  inputSchema:
+    type: object
+    properties:
+      limit:
+        type: integer
+        description: "Number of results"
+        default: 10
+        maximum: 30
+      skip:
+        type: integer
+        description: "Number of results to skip"
+        default: 0
+
+  authentication:
+    type: none
+
+  timeout: "30s"
+
+  rateLimit:
+    requestsPerMinute: 60
+    burst: 20
+
+  # Note: PII handling and audit logging configured at gateway level
+  # Fields masked: email, first_name, last_name (partial masking)
+
+  enabled: true
+---
+# =============================================================================
+# Tool 4: Legacy CRM - Customer Detail
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: crm-customer-detail
+  namespace: tenant-ioi
+  labels:
+    gostoa.dev/tenant: ioi
+    gostoa.dev/category: crm
+    gostoa.dev/demo: "true"
+    gostoa.dev/pii: "true"
+spec:
+  displayName: "Customer Detail"
+  description: "Get detailed customer information. PII masking applied for GDPR compliance."
+  version: "1.0.0"
+  tags:
+    - crm
+    - customers
+    - detail
+    - gdpr
+
+  endpoint: "https://dummyjson.com/users/{id}"
+  method: GET
+
+  inputSchema:
+    type: object
+    properties:
+      id:
+        type: integer
+        description: "Customer ID"
+        minimum: 1
+        maximum: 12
+    required:
+      - id
+
+  authentication:
+    type: none
+
+  timeout: "15s"
+
+  rateLimit:
+    requestsPerMinute: 100
+    burst: 30
+
+  # Note: PII masking (email) configured at gateway level - GDPR compliant
+
+  enabled: true
+---
+# =============================================================================
+# Tool 5: Financial Reports (VVH - Highest Security)
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: financial-reports
+  namespace: tenant-ioi
+  labels:
+    gostoa.dev/tenant: ioi
+    gostoa.dev/category: finance
+    gostoa.dev/demo: "true"
+    gostoa.dev/classification: VVH
+  annotations:
+    gostoa.dev/demo-scenario: compliance-audit
+    gostoa.dev/sox-compliant: "true"
+spec:
+  displayName: "Financial Reports"
+  description: "Access financial reports. VVH classification - full audit trail, SOX compliant."
+  version: "1.0.0"
+  tags:
+    - finance
+    - reports
+    - sox
+    - audit
+
+  # Using JSONPlaceholder for mock reports
+  endpoint: "https://jsonplaceholder.typicode.com/posts"
+  method: GET
+
+  inputSchema:
+    type: object
+    properties:
+      report_type:
+        type: string
+        description: "Type of financial report"
+        enum:
+          - balance_sheet
+          - income_statement
+          - cash_flow
+          - quarterly_summary
+      fiscal_year:
+        type: integer
+        description: "Fiscal year"
+        minimum: 2020
+        maximum: 2026
+      quarter:
+        type: integer
+        description: "Quarter (1-4)"
+        minimum: 1
+        maximum: 4
+      _limit:
+        type: integer
+        description: "Limit results (maps to JSONPlaceholder)"
+        default: 5
+
+  authentication:
+    type: bearer
+    headerName: "Authorization"
+
+  timeout: "120s"
+
+  rateLimit:
+    requestsPerMinute: 10
+    burst: 2
+
+  # Note: VVH classification, SOX/GDPR compliance, and audit logging
+  # configured at gateway level with 365-day retention
+
+  enabled: true
+---
+# =============================================================================
+# ConfigMap: IOI Demo Configuration
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ioi-demo-config
+  namespace: tenant-ioi
+  labels:
+    gostoa.dev/tenant: ioi
+data:
+  shadow-mode-config.yaml: |
+    shadow:
+      enabled: true
+      capture:
+        requests: true
+        responses: true
+        headers: true
+      uac_generation:
+        enabled: true
+        confidence_threshold: 0.8
+        require_human_review: true
+      pii_detection:
+        enabled: true
+        auto_mask: true
+        patterns:
+          - email
+          - phone
+          - ssn
+          - credit_card
+
+  compliance-policies.yaml: |
+    compliance:
+      gdpr:
+        enabled: true
+        data_residency: eu
+        pii_masking: true
+        retention_days: 90
+      sox:
+        enabled: true
+        audit_logging: true
+        segregation_of_duties: true
+      pci:
+        enabled: true
+        mask_card_numbers: true

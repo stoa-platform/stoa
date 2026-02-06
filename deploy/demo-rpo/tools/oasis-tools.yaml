@@ -1,0 +1,615 @@
+# =============================================================================
+# STOA Platform - OASIS Tenant MCP Tools
+# Theme: Ready Player One - AI-First Company
+# =============================================================================
+# Demo tools for AI/ML inference, DevOps automation, and external MCP servers
+# =============================================================================
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-oasis
+  labels:
+    gostoa.dev/tenant: oasis
+    gostoa.dev/environment: demo
+    gostoa.dev/theme: ready-player-one
+    gostoa.dev/tier: enterprise
+    gostoa.dev/ai-native: "true"
+---
+# =============================================================================
+# Tool 1: Sentiment Analysis (HuggingFace)
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: sentiment-analysis
+  namespace: tenant-oasis
+  labels:
+    gostoa.dev/tenant: oasis
+    gostoa.dev/category: ai
+    gostoa.dev/demo: "true"
+  annotations:
+    gostoa.dev/demo-scenario: ai-pipeline
+    gostoa.dev/model: distilbert-sst2
+spec:
+  displayName: "Sentiment Analysis"
+  description: "Analyze sentiment of text using DistilBERT. Returns positive/negative classification with confidence scores."
+  version: "1.0.0"
+  tags:
+    - ai
+    - nlp
+    - sentiment
+    - huggingface
+
+  # Note: For demo without API key, using httpbin to simulate
+  # Real endpoint: https://api-inference.huggingface.co/models/distilbert-base-uncased-finetuned-sst-2-english
+  endpoint: "https://httpbin.org/post"
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      inputs:
+        type: string
+        description: "Text to analyze for sentiment"
+        examples:
+          - "I love this product! It's amazing!"
+          - "This is terrible, very disappointed."
+          - "The service was okay, nothing special."
+    required:
+      - inputs
+
+  authentication:
+    type: bearer
+    headerName: "Authorization"
+
+  timeout: "60s"
+
+  rateLimit:
+    requestsPerMinute: 30
+    burst: 10
+
+  # Note: AI metrics (tokens, latency, model) tracked at gateway level
+  # Response transformation via HuggingFace adapter configured in gateway
+
+  enabled: true
+
+  apiRef:
+    name: "HuggingFace-Inference"
+    version: "1.0"
+    operationId: "sentiment-analysis"
+---
+# =============================================================================
+# Tool 2: Text Classification (Zero-Shot)
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: text-classification
+  namespace: tenant-oasis
+  labels:
+    gostoa.dev/tenant: oasis
+    gostoa.dev/category: ai
+    gostoa.dev/demo: "true"
+spec:
+  displayName: "Text Classification"
+  description: "Zero-shot text classification using BART. Classify text into custom categories without training."
+  version: "1.0.0"
+  tags:
+    - ai
+    - nlp
+    - classification
+    - zero-shot
+
+  endpoint: "https://httpbin.org/post"
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      inputs:
+        type: string
+        description: "Text to classify"
+      parameters:
+        type: object
+        properties:
+          candidate_labels:
+            type: array
+            items:
+              type: string
+            description: "Possible categories for classification"
+            examples:
+              - ["urgent", "not urgent"]
+              - ["bug", "feature request", "question"]
+              - ["positive", "negative", "neutral"]
+        required:
+          - candidate_labels
+    required:
+      - inputs
+      - parameters
+
+  authentication:
+    type: bearer
+    headerName: "Authorization"
+
+  timeout: "90s"
+
+  rateLimit:
+    requestsPerMinute: 20
+    burst: 5
+
+  # Note: AI metrics tracked at gateway level
+
+  enabled: true
+---
+# =============================================================================
+# Tool 3: Text Summarization
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: summarize-text
+  namespace: tenant-oasis
+  labels:
+    gostoa.dev/tenant: oasis
+    gostoa.dev/category: ai
+    gostoa.dev/demo: "true"
+spec:
+  displayName: "Text Summarization"
+  description: "Summarize long text using BART-CNN model. Ideal for documents, articles, and reports."
+  version: "1.0.0"
+  tags:
+    - ai
+    - nlp
+    - summarization
+
+  endpoint: "https://httpbin.org/post"
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      inputs:
+        type: string
+        description: "Long text to summarize"
+      parameters:
+        type: object
+        properties:
+          max_length:
+            type: integer
+            description: "Maximum summary length"
+            default: 130
+          min_length:
+            type: integer
+            description: "Minimum summary length"
+            default: 30
+          do_sample:
+            type: boolean
+            description: "Use sampling for generation"
+            default: false
+
+  authentication:
+    type: bearer
+
+  timeout: "120s"
+
+  rateLimit:
+    requestsPerMinute: 15
+    burst: 3
+
+  # Note: Token tracking (budget: 2000/request, tiktoken) at gateway level
+
+  enabled: true
+---
+# =============================================================================
+# Tool 4: GitHub Issues List
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: github-list-issues
+  namespace: tenant-oasis
+  labels:
+    gostoa.dev/tenant: oasis
+    gostoa.dev/category: devops
+    gostoa.dev/demo: "true"
+  annotations:
+    gostoa.dev/demo-scenario: devops-workflow
+spec:
+  displayName: "GitHub List Issues"
+  description: "List issues from a GitHub repository. Perfect for tracking bugs and feature requests."
+  version: "1.0.0"
+  tags:
+    - devops
+    - github
+    - issues
+    - automation
+
+  endpoint: "https://api.github.com/repos/{owner}/{repo}/issues"
+  method: GET
+
+  inputSchema:
+    type: object
+    properties:
+      owner:
+        type: string
+        description: "Repository owner (user or organization)"
+        examples:
+          - "stoa-platform"
+          - "anthropics"
+      repo:
+        type: string
+        description: "Repository name"
+        examples:
+          - "stoa"
+          - "claude-code"
+      state:
+        type: string
+        description: "Issue state filter"
+        enum:
+          - open
+          - closed
+          - all
+        default: "open"
+      labels:
+        type: string
+        description: "Comma-separated list of label names"
+      sort:
+        type: string
+        description: "Sort field"
+        enum:
+          - created
+          - updated
+          - comments
+        default: "created"
+      direction:
+        type: string
+        description: "Sort direction"
+        enum:
+          - asc
+          - desc
+        default: "desc"
+      per_page:
+        type: integer
+        description: "Results per page"
+        default: 10
+        maximum: 100
+    required:
+      - owner
+      - repo
+
+  authentication:
+    type: bearer
+    headerName: "Authorization"
+
+  timeout: "30s"
+
+  rateLimit:
+    requestsPerMinute: 60
+    burst: 20
+
+  # Note: Caching (TTL 300s) configured at gateway level
+
+  enabled: true
+
+  apiRef:
+    name: "GitHub-REST"
+    version: "2022-11-28"
+    operationId: "issues/list-for-repo"
+---
+# =============================================================================
+# Tool 5: GitHub Create Issue
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: github-create-issue
+  namespace: tenant-oasis
+  labels:
+    gostoa.dev/tenant: oasis
+    gostoa.dev/category: devops
+    gostoa.dev/demo: "true"
+spec:
+  displayName: "GitHub Create Issue"
+  description: "Create a new issue in a GitHub repository. Supports labels, assignees, and milestones."
+  version: "1.0.0"
+  tags:
+    - devops
+    - github
+    - issues
+    - automation
+
+  endpoint: "https://httpbin.org/post"  # Mock for demo safety
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      owner:
+        type: string
+        description: "Repository owner"
+      repo:
+        type: string
+        description: "Repository name"
+      title:
+        type: string
+        description: "Issue title"
+      body:
+        type: string
+        description: "Issue description (Markdown supported)"
+      labels:
+        type: array
+        items:
+          type: string
+        description: "Labels to assign"
+      assignees:
+        type: array
+        items:
+          type: string
+        description: "GitHub usernames to assign"
+    required:
+      - owner
+      - repo
+      - title
+
+  authentication:
+    type: bearer
+
+  timeout: "30s"
+
+  rateLimit:
+    requestsPerMinute: 30
+    burst: 10
+
+  # Note: Audit logging enabled at gateway level for write operations
+
+  enabled: true
+---
+# =============================================================================
+# Tool 6: GitHub Create PR
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: github-create-pr
+  namespace: tenant-oasis
+  labels:
+    gostoa.dev/tenant: oasis
+    gostoa.dev/category: devops
+    gostoa.dev/demo: "true"
+spec:
+  displayName: "GitHub Create Pull Request"
+  description: "Create a pull request in a GitHub repository. Perfect for automated code reviews and deployments."
+  version: "1.0.0"
+  tags:
+    - devops
+    - github
+    - pull-request
+    - ci-cd
+
+  endpoint: "https://httpbin.org/post"  # Mock for demo
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      owner:
+        type: string
+        description: "Repository owner"
+      repo:
+        type: string
+        description: "Repository name"
+      title:
+        type: string
+        description: "PR title"
+      body:
+        type: string
+        description: "PR description"
+      head:
+        type: string
+        description: "Branch containing changes"
+      base:
+        type: string
+        description: "Branch to merge into"
+        default: "main"
+      draft:
+        type: boolean
+        description: "Create as draft PR"
+        default: false
+    required:
+      - owner
+      - repo
+      - title
+      - head
+
+  authentication:
+    type: bearer
+
+  timeout: "30s"
+
+  rateLimit:
+    requestsPerMinute: 20
+    burst: 5
+
+  # Note: Audit logging enabled at gateway level for write operations
+
+  enabled: true
+---
+# =============================================================================
+# Tool 7: Send Slack Notification
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: slack-notify
+  namespace: tenant-oasis
+  labels:
+    gostoa.dev/tenant: oasis
+    gostoa.dev/category: notifications
+    gostoa.dev/demo: "true"
+spec:
+  displayName: "Slack Notification"
+  description: "Send a notification to a Slack channel. Supports rich formatting and attachments."
+  version: "1.0.0"
+  tags:
+    - notifications
+    - slack
+    - devops
+
+  endpoint: "https://httpbin.org/post"  # Mock webhook
+  method: POST
+
+  inputSchema:
+    type: object
+    properties:
+      channel:
+        type: string
+        description: "Slack channel (e.g., #devops, #alerts)"
+        default: "#general"
+      message:
+        type: string
+        description: "Message text (Slack markdown supported)"
+      username:
+        type: string
+        description: "Bot username"
+        default: "STOA Bot"
+      icon_emoji:
+        type: string
+        description: "Bot emoji icon"
+        default: ":robot_face:"
+      attachments:
+        type: array
+        description: "Rich message attachments"
+        items:
+          type: object
+          properties:
+            color:
+              type: string
+            title:
+              type: string
+            text:
+              type: string
+    required:
+      - message
+
+  authentication:
+    type: none
+
+  timeout: "15s"
+
+  rateLimit:
+    requestsPerMinute: 60
+    burst: 20
+
+  enabled: true
+---
+# =============================================================================
+# Tool 8: Mock CRUD Operations (JSONPlaceholder)
+# =============================================================================
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: crud-posts
+  namespace: tenant-oasis
+  labels:
+    gostoa.dev/tenant: oasis
+    gostoa.dev/category: testing
+    gostoa.dev/demo: "true"
+spec:
+  displayName: "CRUD Posts"
+  description: "CRUD operations on posts using JSONPlaceholder. Perfect for testing and prototyping."
+  version: "1.0.0"
+  tags:
+    - testing
+    - crud
+    - mock
+
+  endpoint: "https://jsonplaceholder.typicode.com/posts"
+  method: GET
+
+  inputSchema:
+    type: object
+    properties:
+      id:
+        type: integer
+        description: "Post ID (optional, for single post)"
+      userId:
+        type: integer
+        description: "Filter by user ID"
+      _limit:
+        type: integer
+        description: "Limit results"
+        default: 10
+
+  authentication:
+    type: none
+
+  timeout: "15s"
+
+  rateLimit:
+    requestsPerMinute: 120
+    burst: 40
+
+  # Note: Semantic caching (TTL 60s) configured at gateway level
+
+  enabled: true
+---
+# =============================================================================
+# ConfigMap: OASIS AI Configuration
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oasis-ai-config
+  namespace: tenant-oasis
+  labels:
+    gostoa.dev/tenant: oasis
+data:
+  ai-models.yaml: |
+    models:
+      huggingface:
+        sentiment: distilbert-base-uncased-finetuned-sst-2-english
+        classification: facebook/bart-large-mnli
+        summarization: facebook/bart-large-cnn
+        qa: deepset/roberta-base-squad2
+      together:
+        chat: meta-llama/Llama-2-70b-chat-hf
+        embeddings: togethercomputer/m2-bert-80M-8k-retrieval
+      stability:
+        image: stable-diffusion-xl-1024-v1-0
+
+  token-budgets.yaml: |
+    budgets:
+      daily:
+        huggingface: 100000
+        together: 50000
+        stability: 1000
+      per_request:
+        sentiment: 500
+        classification: 1000
+        summarization: 2000
+        chat: 4000
+
+  external-mcp-servers.yaml: |
+    servers:
+      - name: github-mcp
+        url: stdio://github-mcp-server
+        enabled: true
+        capabilities:
+          - create_issue
+          - create_pr
+          - search_code
+      - name: filesystem-mcp
+        url: stdio://filesystem-mcp-server
+        enabled: true
+        sandboxed: true
+        allowed_paths:
+          - /workspace
+          - /tmp
+      - name: memory-mcp
+        url: stdio://memory-mcp-server
+        enabled: true
+        capabilities:
+          - store
+          - retrieve
+          - search

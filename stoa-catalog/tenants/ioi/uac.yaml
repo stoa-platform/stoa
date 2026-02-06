@@ -1,0 +1,635 @@
+# =============================================================================
+# STOA Platform - Universal API Contract (UAC)
+# Tenant: IOI (Innovative Online Industries)
+# Tier: ENTERPRISE (Legacy Enterprise Demo)
+# Theme: Ready Player One - Le conglomerat de Sorrento
+# =============================================================================
+# Demo tenant showcasing: Shadow mode, Legacy API discovery, Compliance
+# Use cases: API documentation auto-generation, Migration legacy-to-MCP
+# =============================================================================
+
+apiVersion: stoa.io/v1
+kind: UniversalAPIContract
+metadata:
+  name: "ioi"
+  tier: enterprise
+  created: "2026-02-06"
+  labels:
+    tenant-id: "ioi"
+    admin-email: "sorrento@ioi-corp.com"
+    keycloak-realm: "stoa"
+    demo-theme: "ready-player-one"
+    use-case: "enterprise-legacy-migration"
+    account-manager: "demo"
+    contract-id: "DEMO-IOI-2026"
+
+spec:
+  # ===========================================================================
+  # 1. API CLASSIFICATIONS
+  # ===========================================================================
+  classifications:
+
+    H:  # High volume - Legacy ERP APIs
+      description: "Legacy ERP read operations - high volume"
+      rate_limit: 5000
+      burst: 500
+      timeout: 30s
+      retry_policy:
+        max_retries: 3
+        backoff: exponential
+        initial_delay: 100ms
+        max_delay: 5s
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 10
+        reset_timeout: 30s
+
+    VH:  # Very High - CRM operations
+      description: "CRM operations requiring data integrity"
+      rate_limit: 1000
+      burst: 100
+      timeout: 60s
+      retry_policy:
+        max_retries: 2
+        backoff: exponential
+        initial_delay: 200ms
+        max_delay: 10s
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 5
+        reset_timeout: 60s
+      priority: high
+      audit_logging: true
+
+    VVH:  # Mission-critical - Financial operations
+      description: "Financial operations - full audit, strict SLA"
+      enabled: true
+      rate_limit: 100
+      burst: 20
+      timeout: 120s
+      retry_policy:
+        max_retries: 1
+        backoff: exponential
+        initial_delay: 500ms
+        max_delay: 30s
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 3
+        reset_timeout: 120s
+        notify_on_open: true
+      priority: critical
+      idempotency_required: true
+      audit_logging: true
+      sla_override:
+        availability: 99.99
+
+  # ===========================================================================
+  # 2. SECURITY POLICIES (Enterprise)
+  # ===========================================================================
+  security:
+
+    authentication:
+      required: true
+      methods:
+        - oauth2
+        - api_key
+        - mtls                   # Enterprise: mTLS for service-to-service
+      oauth2:
+        issuer: "https://auth.gostoa.dev/realms/stoa"
+        audience: "ioi"
+        token_expiry: 1800       # 30 min for tighter security
+        refresh_enabled: true
+        refresh_expiry: 86400
+      api_key:
+        header_name: "X-API-Key"
+        rotation_days: 30        # Stricter rotation
+        max_keys_per_consumer: 10
+        restrictions:
+          ip_binding: true
+          expiry_required: true
+      mtls:
+        enabled: true
+        verify_client: true
+        allow_expired: false
+
+    authorization:
+      rbac_enabled: true
+      abac_enabled: true         # Enterprise: Attribute-Based Access Control
+      policy_engine: opa
+      default_scopes:
+        - read
+        - write
+        - admin
+      custom_scopes:
+        - "ioi:erp:read"
+        - "ioi:erp:write"
+        - "ioi:crm:read"
+        - "ioi:crm:write"
+        - "ioi:finance:read"
+        - "ioi:audit:read"
+
+    ip_allowlist:
+      enabled: true
+      mode: audit                # Start with audit mode
+      cidrs:
+        - "10.0.0.0/8"           # Internal network
+        - "192.168.0.0/16"
+
+    request_validation:
+      enabled: true
+      max_body_size: 50mb
+      content_types:
+        - application/json
+        - application/xml
+        - multipart/form-data
+      schema_validation:
+        enabled: true
+        strict_mode: true
+
+    waf:
+      enabled: true
+      mode: enforce
+      rules:
+        - owasp_crs
+        - sql_injection
+        - xss
+        - path_traversal
+
+    secrets:
+      provider: vault
+      path: "secret/data/tenants/ioi"
+      rotation_enabled: true
+
+  # ===========================================================================
+  # 3. RATE LIMITING (Enterprise)
+  # ===========================================================================
+  rateLimits:
+
+    global:
+      requests_per_minute: 5000
+      requests_per_hour: 100000
+      requests_per_day: 500000
+      burst_allowance: 2.0
+
+    per_api:
+      default: 2000
+      overrides:
+        legacy-erp: 5000
+        legacy-crm: 2000
+        financial-reports: 500
+
+    per_consumer:
+      default: 1000
+      max_consumers: -1          # Unlimited
+
+    headers:
+      enabled: true
+      include_remaining: true
+      include_reset: true
+      include_limit: true
+      include_policy: true
+
+    dynamic:
+      enabled: true
+      auto_scaling: true
+      fair_share: true
+
+  # ===========================================================================
+  # 4. QUOTAS (Enterprise - High Limits)
+  # ===========================================================================
+  quotas:
+
+    monthly_requests: 5000000    # 5M for enterprise demo
+    monthly_bandwidth_gb: 500
+
+    max_apis: -1                 # Unlimited
+    max_subscriptions: -1
+    max_consumers: -1
+    max_environments: -1
+
+    log_storage_gb: 100
+
+    tracking:
+      enabled: true
+      granularity: hourly
+      export_enabled: true
+
+    alerts:
+      anomaly_detection: true
+      baseline_window: 7d
+      deviation_threshold: 3.0
+      notify_channels:
+        - email: "sorrento@ioi-corp.com"
+
+  # ===========================================================================
+  # 5. OBSERVABILITY (Full Enterprise Stack)
+  # ===========================================================================
+  observability:
+
+    logging:
+      level: debug               # Full debug for demo
+      retention_days: 90
+      format: json
+      include_request_body: true
+      include_response_body: true
+      pii_masking: true
+      pii_fields:
+        - email
+        - phone
+        - ssn
+        - credit_card
+        - employee_id
+      forwarding:
+        enabled: true
+        destinations:
+          - type: loki
+            endpoint: "http://loki:3100"
+
+    metrics:
+      enabled: true
+      granularity: 1m
+      retention_days: 365
+      custom_metrics: true
+      business_metrics: true
+      export:
+        enabled: true
+        format: prometheus
+        endpoint: "/metrics"
+      dashboards:
+        enabled: true
+        custom_dashboards: true
+
+    tracing:
+      enabled: true
+      sampling_rate: 1.0         # 100% for demo
+      propagation: w3c
+      include_db_queries: true
+      include_cache_operations: true
+      include_external_calls: true
+
+    alerting:
+      enabled: true
+      channels:
+        - type: email
+          target: "sorrento@ioi-corp.com"
+        - type: slack
+          webhook: "https://hooks.slack.com/demo"
+      rules:
+        - name: high_error_rate
+          condition: "error_rate > 1%"
+          window: 1m
+          severity: critical
+        - name: high_latency_p99
+          condition: "latency_p99 > 2s"
+          window: 5m
+          severity: warning
+        - name: shadow_capture_anomaly
+          condition: "shadow_traffic_spike > 200%"
+          window: 15m
+          severity: warning
+
+    # CRITICAL FOR DEMO: Full Audit Logging
+    audit:
+      enabled: true
+      retention_days: 365
+      events:
+        - authentication
+        - authorization
+        - configuration_change
+        - api_access
+        - admin_action
+        - shadow_capture
+      tamper_proof: true
+      export:
+        enabled: true
+        destination: "audit-archive"
+
+  # ===========================================================================
+  # 6. SLA (Enterprise)
+  # ===========================================================================
+  sla:
+
+    availability: 99.95
+
+    availability_by_classification:
+      H: 99.9
+      VH: 99.95
+      VVH: 99.99
+
+    support:
+      response_hours: 4
+      response_by_severity:
+        P1_critical: 1
+        P2_high: 4
+        P3_medium: 8
+        P4_low: 24
+      channels:
+        - email
+        - phone
+        - slack
+        - video
+      hours: 24x7
+      dedicated:
+        technical_account_manager: true
+        named_support_engineers: 2
+        quarterly_business_review: true
+
+    maintenance:
+      scheduled_window: "Sunday 02:00-04:00 UTC"
+      advance_notice_hours: 168
+      customer_approval: true
+      rollback_sla: 30m
+
+    credits:
+      enabled: true
+      tiers:
+        - availability_below: 99.95
+          credit_percent: 10
+        - availability_below: 99.9
+          credit_percent: 25
+
+    disaster_recovery:
+      rpo: 1h
+      rto: 4h
+      geo_redundancy: true
+
+  # ===========================================================================
+  # 7. FEATURES (Enterprise Full)
+  # ===========================================================================
+  features:
+
+    custom_domains: true
+    wildcard_domains: true
+    path_based_routing: true
+    header_based_routing: true
+
+    api_versioning: true
+    api_deprecation: true
+    api_lifecycle_management: true
+    openapi_validation: true
+    graphql_support: true
+    grpc_support: true
+
+    developer_portal: true
+    custom_portal_branding: true
+    interactive_docs: true
+    sandbox_environment: true
+    mock_servers: true
+
+    webhook_notifications: true
+    email_notifications: true
+    slack_integration: true
+
+    basic_analytics: true
+    advanced_analytics: true
+    predictive_analytics: true
+    business_intelligence: true
+
+    waf_protection: true
+    ddos_protection: true
+    bot_protection: true
+    secrets_management: true
+    encryption_at_rest: true
+    encryption_in_transit: true
+
+    ci_cd_integration: true
+    terraform_provider: true
+    api_as_code: true
+    automated_testing: true
+
+    # MCP Gateway - DEMO FOCUS
+    mcp_gateway_access: true
+    mcp_tools_limit: -1          # Unlimited
+    mcp_advanced_features:
+      streaming: true
+      function_calling: true
+      context_caching: true
+
+    # CRITICAL: Shadow Mode for Legacy Discovery
+    shadow_mode:
+      enabled: true
+      capture_requests: true
+      capture_responses: true
+      uac_auto_generation: true
+      human_review_required: true
+      retention_days: 30
+
+    # Enterprise Integrations
+    sso_integration: true
+    ldap_integration: true
+    scim_provisioning: true
+    siem_integration: true
+
+    api_governance: true
+    change_management: true
+    audit_trails: true
+
+  # ===========================================================================
+  # 8. NETWORKING (Enterprise)
+  # ===========================================================================
+  networking:
+
+    connect_timeout: 10s
+    read_timeout: 120s
+    write_timeout: 120s
+    idle_timeout: 300s
+
+    keepalive:
+      enabled: true
+      timeout: 300s
+      max_requests: 10000
+
+    connection_pool:
+      enabled: true
+      max_idle_connections: 1000
+      max_connections_per_host: 500
+
+    cors:
+      enabled: true
+      allowed_origins:
+        - "https://*.gostoa.dev"
+        - "https://*.ioi-corp.com"
+      allowed_methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS
+        - HEAD
+      allowed_headers:
+        - Authorization
+        - Content-Type
+        - X-API-Key
+        - X-Request-ID
+        - X-Correlation-ID
+      expose_headers:
+        - X-Request-ID
+        - X-RateLimit-Remaining
+        - X-RateLimit-Reset
+      max_age: 86400
+
+    private_connectivity:
+      enabled: true
+      options:
+        - type: vpc_peering
+          enabled: true
+
+    load_balancing:
+      algorithm: round_robin
+      health_check:
+        enabled: true
+        interval: 10s
+        timeout: 5s
+
+  # ===========================================================================
+  # 9. COMPLIANCE (Full Enterprise)
+  # ===========================================================================
+  compliance:
+
+    gdpr:
+      enabled: true
+      data_residency: eu
+      right_to_erasure: true
+      data_portability: true
+      consent_management: true
+      dpo_contact: "dpo@ioi-corp.com"
+
+    sox:
+      enabled: true
+      controls_testing: true
+      segregation_of_duties: true
+
+    pci_dss:
+      enabled: true
+      level: 2
+      quarterly_scans: true
+
+    iso_27001:
+      enabled: true
+      certification_date: "2025-01-15"
+      next_audit: "2026-01-15"
+
+    soc2:
+      enabled: true
+      type: 2
+      trust_principles:
+        - security
+        - availability
+        - confidentiality
+
+  # ===========================================================================
+  # 10. DISASTER RECOVERY
+  # ===========================================================================
+  disaster_recovery:
+
+    enabled: true
+
+    backup:
+      enabled: true
+      frequency: hourly
+      retention_days: 90
+      encryption: true
+      cross_region: true
+      destinations:
+        - region: eu-west-1
+          type: primary
+
+    replication:
+      enabled: true
+      mode: async
+      lag_threshold: 60s
+
+    failover:
+      automatic: false
+      approval_required: true
+
+    testing:
+      frequency: quarterly
+
+  # ===========================================================================
+  # 11. REGISTERED APIs (Legacy Demo)
+  # ===========================================================================
+  # These APIs simulate legacy enterprise systems for shadow mode demo
+  apis:
+
+    - name: legacy-erp
+      displayName: "Legacy ERP System"
+      description: "Simulated undocumented ERP API (httpbin.org)"
+      backend: "https://httpbin.org"
+      classification: H
+      shadow_mode:
+        enabled: true            # DEMO: Shadow mode capture
+        auto_discover: true
+      tags:
+        - legacy
+        - erp
+        - shadow-mode
+      operations:
+        - name: get_inventory
+          method: GET
+          path: "/get"
+          description: "Get inventory data (simulated)"
+        - name: update_inventory
+          method: POST
+          path: "/post"
+          description: "Update inventory (simulated)"
+        - name: get_orders
+          method: GET
+          path: "/get"
+          description: "Get orders (simulated)"
+
+    - name: legacy-crm
+      displayName: "Legacy CRM System"
+      description: "Simulated CRM with PII (DummyJSON)"
+      backend: "https://dummyjson.com"
+      classification: VH
+      shadow_mode:
+        enabled: true
+        pii_detection: true      # DEMO: PII masking
+      tags:
+        - legacy
+        - crm
+        - pii
+      operations:
+        - name: list_users
+          method: GET
+          path: "/users"
+          description: "List CRM users (contains PII)"
+        - name: get_user
+          method: GET
+          path: "/users/{id}"
+          description: "Get user details (contains PII)"
+        - name: create_user
+          method: POST
+          path: "/users"
+          description: "Create user"
+
+    - name: financial-reports
+      displayName: "Financial Reporting"
+      description: "Financial data API (mock)"
+      backend: "https://jsonplaceholder.typicode.com"
+      classification: VVH
+      tags:
+        - finance
+        - reports
+        - audit
+      operations:
+        - name: get_reports
+          method: GET
+          path: "/posts"
+          description: "Get financial reports (simulated)"
+        - name: get_report_detail
+          method: GET
+          path: "/posts/{id}"
+          description: "Get report detail"
+
+# =============================================================================
+# END OF IOI UAC
+# =============================================================================
+# Demo scenarios supported:
+# 1. Shadow mode: Observe legacy ERP traffic, auto-generate UAC
+# 2. PII masking: CRM data with automatic masking
+# 3. Compliance audit: Full audit trail, SOX/GDPR compliance
+# 4. Enterprise security: mTLS, WAF, OPA policies
+# =============================================================================

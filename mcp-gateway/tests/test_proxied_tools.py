@@ -216,18 +216,25 @@ class TestProxiedToolRegistry:
     def test_register_proxied_tool(
         self, registry: ToolRegistry, sample_proxied_tool: ProxiedTool
     ):
-        """Test registering a ProxiedTool."""
+        """Test registering a ProxiedTool.
+
+        CAB-605 Phase 2: Uses internal_key for storage (includes tenant with ::).
+        """
         registry.register_proxied_tool(sample_proxied_tool)
-        assert sample_proxied_tool.namespaced_name in registry._proxied_tools
+        # CAB-605: internal_key uses :: separator for tenant
+        assert sample_proxied_tool.internal_key in registry._proxied_tools
 
     def test_unregister_proxied_tool(
         self, registry: ToolRegistry, sample_proxied_tool: ProxiedTool
     ):
-        """Test unregistering a ProxiedTool."""
+        """Test unregistering a ProxiedTool.
+
+        CAB-605 Phase 2: Unregister uses internal_key.
+        """
         registry.register_proxied_tool(sample_proxied_tool)
-        result = registry.unregister_proxied_tool(sample_proxied_tool.namespaced_name)
+        result = registry.unregister_proxied_tool(sample_proxied_tool.internal_key)
         assert result is True
-        assert sample_proxied_tool.namespaced_name not in registry._proxied_tools
+        assert sample_proxied_tool.internal_key not in registry._proxied_tools
 
     def test_unregister_nonexistent_proxied_tool(self, registry: ToolRegistry):
         """Test unregistering non-existent ProxiedTool returns False."""

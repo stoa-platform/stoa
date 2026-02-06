@@ -31,6 +31,10 @@ const OperationsDashboard = lazy(() => import('./pages/Operations').then(m => ({
 const TenantDashboard = lazy(() => import('./pages/TenantDashboard').then(m => ({ default: m.TenantDashboard })));
 const BusinessDashboard = lazy(() => import('./pages/Business').then(m => ({ default: m.BusinessDashboard })));
 
+// CAB-1108: Embedded iframe pages for unified STOA experience
+const GrafanaEmbed = lazy(() => import('./pages/GrafanaEmbed'));
+const IdentityEmbed = lazy(() => import('./pages/IdentityEmbed'));
+
 // Branded loading screen for auth init (similar to portal)
 function LoadingScreen() {
   return (
@@ -251,6 +255,9 @@ function ProtectedRoutes() {
             <Route path="/my-usage" element={<TenantDashboard />} />
             <Route path="/business" element={<BusinessDashboard />} />
             <Route path="/admin/prospects" element={<AdminProspects />} />
+            {/* CAB-1108: Embedded observability and identity management */}
+            <Route path="/observability" element={<GrafanaEmbed />} />
+            <Route path="/identity" element={<IdentityEmbed />} />
           </Routes>
         </Suspense>
       </Layout>

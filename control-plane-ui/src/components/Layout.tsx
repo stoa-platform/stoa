@@ -31,6 +31,8 @@ import {
   Plus,
   Sun,
   Moon,
+  Shield,
+  Gauge,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -43,6 +45,9 @@ const navigation = [
   { name: 'Operations', href: '/operations', icon: Activity, permission: 'tenants:read', shortcut: ['g', 'o'] },
   { name: 'My Usage', href: '/my-usage', icon: PieChart, shortcut: ['g', 'u'] },
   { name: 'Business', href: '/business', icon: TrendingUp, permission: 'tenants:read', shortcut: ['g', 'b'] },
+  // CAB-1108: Embedded platform services
+  { name: 'Observability', href: '/observability', icon: Gauge, shortcut: ['g', 'g'] },
+  { name: 'Identity', href: '/identity', icon: Shield, shortcut: ['g', 'i'] },
   { name: 'Tenants', href: '/tenants', icon: Building2, permission: 'tenants:read', shortcut: ['g', 't'] },
   { name: 'APIs', href: '/apis', icon: Layers, permission: 'apis:read', shortcut: ['g', 'a'] },
   { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read', shortcut: ['g', 'w'] },
@@ -50,7 +55,7 @@ const navigation = [
   { name: 'Gateway', href: '/gateway', icon: Server, permission: 'apis:read' },
   { name: 'Gateway Registry', href: '/gateways', icon: Network, permission: 'tenants:read' },
   { name: 'Gateway Deployments', href: '/gateway-deployments', icon: ArrowUpDown, permission: 'tenants:read' },
-  { name: 'Observability', href: '/gateway-observability', icon: BarChart3, permission: 'tenants:read' },
+  { name: 'Gateway Metrics', href: '/gateway-observability', icon: BarChart3, permission: 'tenants:read' },
   { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
   { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
   { name: 'API Monitoring', href: '/monitoring', icon: Activity, permission: 'apis:read' },

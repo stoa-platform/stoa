@@ -9,7 +9,8 @@
 
     <title>${msg("loginTitle",(realm.displayName!'STOA Platform'))}</title>
 
-    <!-- Favicon -->
+    <!-- Favicon (PNG first for compatibility, SVG as modern fallback) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="${url.resourcesPath}/img/favicon.png">
     <link rel="icon" type="image/svg+xml" href="${url.resourcesPath}/img/favicon.svg">
 
     <!-- Fonts -->

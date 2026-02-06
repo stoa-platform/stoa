@@ -154,14 +154,17 @@ def test_portal_response_includes_synced_at():
 # ============================================================
 
 def test_portal_mcp_endpoint_has_visibility_filtering():
-    """Verify visibility filtering is in the portal endpoint."""
+    """Verify visibility filtering is in the portal endpoint (via SQL helper)."""
     import inspect
-    from src.routers.portal import list_portal_mcp_servers
-    source = inspect.getsource(list_portal_mcp_servers)
+    from src.routers.portal import _build_visibility_filter, list_portal_mcp_servers
 
-    assert "visibility" in source
-    assert "public" in source
-    assert "excludeRoles" in source or "exclude_roles" in source
+    endpoint_source = inspect.getsource(list_portal_mcp_servers)
+    helper_source = inspect.getsource(_build_visibility_filter)
+
+    assert "visibility_filter" in endpoint_source
+    assert "visibility" in helper_source
+    assert "public" in helper_source
+    assert "excludeRoles" in helper_source or "exclude_roles" in helper_source
 
 
 # ============================================================

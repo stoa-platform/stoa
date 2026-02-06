@@ -2,10 +2,19 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider as OidcProvider } from 'react-oidc-context';
+import { WebStorageStateStore } from 'oidc-client-ts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { onCLS, onLCP, onINP } from 'web-vitals';
 import App from './App';
 import { config } from './config';
 import './index.css';
+
+// Log Core Web Vitals in dev mode
+if (config.app.isDev) {
+  onLCP(({ value }) => console.log('[WebVitals] LCP:', value, 'ms'));
+  onINP(({ value }) => console.log('[WebVitals] INP:', value, 'ms'));
+  onCLS(({ value }) => console.log('[WebVitals] CLS:', value));
+}
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -31,6 +40,8 @@ const oidcConfig = {
   // Explicitly require PKCE (S256 is the only secure option)
   // This ensures code_challenge and code_challenge_method are sent
   pkce_method: 'S256',
+  // Persist tokens in localStorage for cross-tab session and faster boot
+  userStore: new WebStorageStateStore({ store: window.localStorage }),
   onSigninCallback: () => {
     // Remove OIDC params from URL after successful login
     window.history.replaceState({}, document.title, window.location.pathname);

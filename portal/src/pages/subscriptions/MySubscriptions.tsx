@@ -7,8 +7,9 @@
  * Reference: Linear CAB-247
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   TrendingUp,
   AlertCircle,
@@ -35,7 +36,7 @@ import { ExportConfigModal } from '../../components/subscriptions/ExportConfigMo
 import { mcpServersService } from '../../services/mcpServers';
 import { useAuth } from '../../contexts/AuthContext';
 import { StatCardWithIconSkeleton, ServerCardSkeletonGrid } from '../../components/skeletons';
-import type { MCPSubscription, MCPServerSubscription } from '../../types';
+import type { MCPSubscription } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'expired' | 'revoked' | 'pending' | 'suspended';
 type TabType = 'servers' | 'tools';
@@ -53,84 +54,76 @@ const statusConfig: Record<string, {
   suspended: { label: 'Suspended', color: 'text-orange-700', bgColor: 'bg-orange-100', icon: AlertCircle },
 };
 
+type ModalState = {
+  type: 'reveal' | 'rotate' | 'export';
+  subscription: MCPSubscription;
+} | null;
+
+type RevokeState = {
+  confirmId: string | null;
+  revokingId: string | null;
+};
+
 export function MySubscriptions() {
   const { isAuthenticated, accessToken } = useAuth();
   const toast = useToastActions();
+  const queryClient = useQueryClient();
+
+  // 5 useState total (was 11)
   const [activeTab, setActiveTab] = useState<TabType>('servers');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-  const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
-  const [revealModalSubscription, setRevealModalSubscription] = useState<MCPSubscription | null>(null);
-  const [rotateModalSubscription, setRotateModalSubscription] = useState<MCPSubscription | null>(null);
-  const [exportModalSubscription, setExportModalSubscription] = useState<MCPSubscription | null>(null);
+  const [activeModal, setActiveModal] = useState<ModalState>(null);
+  const [revokeState, setRevokeState] = useState<RevokeState>({ confirmId: null, revokingId: null });
 
-  // Server subscriptions state
-  const [serverSubscriptions, setServerSubscriptions] = useState<MCPServerSubscription[]>([]);
-  const [serverSubsLoading, setServerSubsLoading] = useState(false);
-  const [serverSubsError, setServerSubsError] = useState<string | null>(null);
+  const isReady = isAuthenticated && !!accessToken;
 
-  // Tool subscriptions (legacy)
+  // Server subscriptions via React Query (replaces 3 useState + 1 useEffect)
+  const {
+    data: serverSubscriptions = [],
+    isLoading: serverSubsLoading,
+    error: serverSubsErrorObj,
+  } = useQuery({
+    queryKey: ['server-subscriptions'],
+    queryFn: () => mcpServersService.getMyServerSubscriptions(),
+    enabled: isReady,
+  });
+
+  const serverSubsError = serverSubsErrorObj
+    ? (serverSubsErrorObj instanceof Error ? serverSubsErrorObj.message : 'Failed to load server subscriptions')
+    : null;
+
+  // Tool subscriptions (legacy) — already React Query
   const {
     data: subscriptionsData,
     isLoading: toolSubsLoading,
     isError: toolSubsError,
     error: toolError,
-    refetch: refetchToolSubs,
   } = useSubscriptions();
 
   const revokeMutation = useRevokeSubscription();
   const rotateKeyMutation = useRotateApiKey();
 
-  // Load server subscriptions
-  useEffect(() => {
-    if (!isAuthenticated || !accessToken) return;
-
-    async function loadServerSubscriptions() {
-      setServerSubsLoading(true);
-      setServerSubsError(null);
-      try {
-        const subs = await mcpServersService.getMyServerSubscriptions();
-        setServerSubscriptions(subs);
-      } catch (err) {
-        setServerSubsError(err instanceof Error ? err.message : 'Failed to load server subscriptions');
-        setServerSubscriptions([]);
-      } finally {
-        setServerSubsLoading(false);
-      }
-    }
-
-    loadServerSubscriptions();
-  }, [isAuthenticated, accessToken]);
-
   const handleRevokeSubscription = (subscriptionId: string) => {
-    setConfirmRevokeId(subscriptionId);
+    setRevokeState(prev => ({ ...prev, confirmId: subscriptionId }));
   };
 
   const confirmRevoke = async () => {
-    if (!confirmRevokeId) return;
-    setRevokingId(confirmRevokeId);
+    if (!revokeState.confirmId) return;
+    setRevokeState(prev => ({ ...prev, revokingId: prev.confirmId }));
     try {
-      await revokeMutation.mutateAsync(confirmRevokeId);
+      await revokeMutation.mutateAsync(revokeState.confirmId);
       toast.success('Subscription revoked', 'Your API key has been invalidated.');
-    } catch (error) {
-      toast.error('Failed to revoke subscription', error instanceof Error ? error.message : 'An error occurred');
+    } catch (err) {
+      toast.error('Failed to revoke subscription', err instanceof Error ? err.message : 'An error occurred');
     } finally {
-      setRevokingId(null);
-      setConfirmRevokeId(null);
+      setRevokeState({ confirmId: null, revokingId: null });
     }
   };
 
   const refetchAll = () => {
-    refetchToolSubs();
-    // Reload server subscriptions
-    if (isAuthenticated && accessToken) {
-      setServerSubsLoading(true);
-      mcpServersService.getMyServerSubscriptions()
-        .then(setServerSubscriptions)
-        .catch(() => setServerSubscriptions([]))
-        .finally(() => setServerSubsLoading(false));
-    }
+    queryClient.invalidateQueries({ queryKey: ['server-subscriptions'] });
+    queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
   };
 
   // Get tool subscriptions array
@@ -512,14 +505,14 @@ export function MySubscriptions() {
                     {subscription.status === 'active' && (
                       <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
                         <button
-                          onClick={() => setRevealModalSubscription(subscription)}
+                          onClick={() => setActiveModal({ type: 'reveal', subscription })}
                           className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
                         >
                           <Eye className="h-3 w-3" />
                           Reveal Key
                         </button>
                         <button
-                          onClick={() => setExportModalSubscription(subscription)}
+                          onClick={() => setActiveModal({ type: 'export', subscription })}
                           className="inline-flex items-center gap-1 text-sm text-green-600 hover:text-green-700 font-medium"
                         >
                           <Download className="h-3 w-3" />
@@ -527,7 +520,7 @@ export function MySubscriptions() {
                         </button>
                         <button
                           onClick={() => handleRevokeSubscription(subscription.id)}
-                          disabled={revokingId === subscription.id}
+                          disabled={revokeState.revokingId === subscription.id}
                           className="text-sm text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
                         >
                           Revoke
@@ -543,23 +536,23 @@ export function MySubscriptions() {
       )}
 
       {/* Reveal Key Modal */}
-      {revealModalSubscription && (
+      {activeModal?.type === 'reveal' && (
         <RevealKeyModal
-          subscription={revealModalSubscription}
+          subscription={activeModal.subscription}
           isOpen={true}
-          onClose={() => setRevealModalSubscription(null)}
+          onClose={() => setActiveModal(null)}
         />
       )}
 
       {/* Rotate Key Modal */}
-      {rotateModalSubscription && (
+      {activeModal?.type === 'rotate' && (
         <RotateKeyModal
-          subscription={rotateModalSubscription}
+          subscription={activeModal.subscription}
           isOpen={true}
-          onClose={() => setRotateModalSubscription(null)}
+          onClose={() => setActiveModal(null)}
           onRotate={async (gracePeriodHours) => {
             const result = await rotateKeyMutation.mutateAsync({
-              id: rotateModalSubscription.id,
+              id: activeModal.subscription.id,
               gracePeriodHours,
             });
             return result;
@@ -569,24 +562,24 @@ export function MySubscriptions() {
       )}
 
       {/* Export Config Modal */}
-      {exportModalSubscription && (
+      {activeModal?.type === 'export' && (
         <ExportConfigModal
-          subscription={exportModalSubscription}
+          subscription={activeModal.subscription}
           isOpen={true}
-          onClose={() => setExportModalSubscription(null)}
+          onClose={() => setActiveModal(null)}
         />
       )}
 
       {/* Revoke Confirmation Dialog */}
       <ConfirmDialog
-        open={!!confirmRevokeId}
+        open={!!revokeState.confirmId}
         title="Revoke Subscription"
         message="Are you sure you want to revoke this subscription? Your API key will be invalidated immediately."
         confirmLabel="Revoke"
         variant="danger"
         onConfirm={confirmRevoke}
-        onCancel={() => setConfirmRevokeId(null)}
-        loading={revokingId === confirmRevokeId}
+        onCancel={() => setRevokeState({ confirmId: null, revokingId: null })}
+        loading={revokeState.revokingId === revokeState.confirmId}
       />
     </div>
   );

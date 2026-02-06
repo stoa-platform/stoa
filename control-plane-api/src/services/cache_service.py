@@ -85,6 +85,14 @@ class TTLCache:
             del self._cache[k]
         return len(expired_keys)
 
+    async def delete_by_prefix(self, prefix: str) -> int:
+        """Delete all keys matching a prefix."""
+        async with self._lock:
+            keys_to_delete = [k for k in self._cache if k.startswith(prefix)]
+            for k in keys_to_delete:
+                del self._cache[k]
+            return len(keys_to_delete)
+
     async def clear(self) -> None:
         """Clear all entries from cache."""
         async with self._lock:
@@ -101,6 +109,8 @@ class TTLCache:
 
 # Global cache instances
 api_key_cache = TTLCache(default_ttl_seconds=10, max_size=10000)
+tenant_cache = TTLCache(default_ttl_seconds=30, max_size=1000)
+contract_cache = TTLCache(default_ttl_seconds=60, max_size=5000)
 
 
 def cached(cache: TTLCache, key_prefix: str, ttl_seconds: int | None = None):

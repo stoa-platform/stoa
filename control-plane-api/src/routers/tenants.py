@@ -9,6 +9,7 @@ from ..auth import Permission, Role, User, get_current_user, require_permission
 from ..database import get_db
 from ..models.tenant import Tenant, TenantStatus
 from ..repositories.tenant import TenantRepository
+from ..services.cache_service import tenant_cache
 from ..services.kafka_service import Topics, kafka_service
 from ..services.keycloak_service import keycloak_service
 
@@ -93,10 +94,16 @@ async def get_tenant(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get tenant by ID from database"""
+    """Get tenant by ID from database (cached, TTL 30s)."""
     # Check access
     if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    # Check cache first
+    cache_key = f"tenant:{tenant_id}"
+    cached = await tenant_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     try:
         repo = TenantRepository(db)
@@ -105,7 +112,9 @@ async def get_tenant(
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
 
-        return _tenant_to_response(tenant)
+        response = _tenant_to_response(tenant)
+        await tenant_cache.set(cache_key, response)
+        return response
 
     except HTTPException:
         raise
@@ -226,6 +235,9 @@ async def update_tenant(
 
         tenant = await repo.update(tenant)
 
+        # Invalidate cache
+        await tenant_cache.delete(f"tenant:{tenant_id}")
+
         # Emit audit event
         await kafka_service.emit_audit_event(
             tenant_id=tenant_id,
@@ -270,6 +282,9 @@ async def delete_tenant(
         # Soft delete - set status to archived
         tenant.status = TenantStatus.ARCHIVED.value
         await repo.update(tenant)
+
+        # Invalidate cache
+        await tenant_cache.delete(f"tenant:{tenant_id}")
 
         # Emit Kafka event
         await kafka_service.publish(

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import type { API, APICreate, Tenant } from '../types';
+import type { API, APICreate } from '../types';
 import yaml from 'js-yaml';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
@@ -40,16 +41,12 @@ const statusColors: Record<string, string> = {
 export function APIs() {
   const { isReady } = useAuth();
   const toast = useToastActions();
+  const queryClient = useQueryClient();
   const [confirm, ConfirmDialog] = useConfirm();
   const { celebrate } = useCelebration();
-  const [apis, setApis] = useState<API[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingApi, setEditingApi] = useState<API | null>(null);
-  const [isFirstApi, setIsFirstApi] = useState(false);
 
   // Search and pagination state
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,58 +56,35 @@ export function APIs() {
   // Debounce search for performance (300ms delay)
   const debouncedSearch = useDebounce(searchQuery, 300);
 
-  useEffect(() => {
-    console.log('[APIs] isReady changed:', isReady);
-    if (isReady) {
-      loadTenants();
-    }
-  }, [isReady]);
+  // Fetch tenants via React Query
+  const { data: tenants = [], isLoading: tenantsLoading, error: tenantsError } = useQuery({
+    queryKey: ['tenants'],
+    queryFn: () => apiService.getTenants(),
+    enabled: isReady,
+  });
 
+  // Auto-select first tenant when tenants load
   useEffect(() => {
-    if (selectedTenant) {
-      loadApis(selectedTenant);
+    if (tenants.length > 0 && !selectedTenant) {
+      setSelectedTenant(tenants[0].id);
     }
-  }, [selectedTenant]);
+  }, [tenants, selectedTenant]);
+
+  // Fetch APIs for selected tenant via React Query
+  const { data: apis = [], isLoading: apisLoading, error: apisError } = useQuery({
+    queryKey: ['apis', selectedTenant],
+    queryFn: () => apiService.getApis(selectedTenant),
+    enabled: !!selectedTenant,
+  });
+
+  const isFirstApi = apis.length === 0 && !apisLoading;
+  const loading = tenantsLoading || apisLoading;
+  const error = tenantsError || apisError;
 
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearch, statusFilter, selectedTenant]);
-
-  async function loadTenants() {
-    try {
-      console.log('[APIs] Loading tenants...');
-      const data = await apiService.getTenants();
-      console.log('[APIs] Loaded tenants:', data);
-      setTenants(data);
-      if (data.length > 0) {
-        setSelectedTenant(data[0].id);
-      }
-      setLoading(false);
-    } catch (err: any) {
-      console.error('[APIs] Failed to load tenants:', err);
-      setError(err.message || 'Failed to load tenants');
-      setLoading(false);
-    }
-  }
-
-  async function loadApis(tenantId: string) {
-    try {
-      setLoading(true);
-      console.log('[APIs] Loading APIs for tenant:', tenantId);
-      const data = await apiService.getApis(tenantId);
-      console.log('[APIs] Loaded APIs:', data);
-      setIsFirstApi(data.length === 0);
-      setApis(data);
-      setError(null);
-    } catch (err: any) {
-      console.error('[APIs] Failed to load APIs:', err);
-      setError(err.message || 'Failed to load APIs');
-      setApis([]);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   // Client-side filtering and pagination (memoized for performance)
   const filteredApis = useMemo(() => {
@@ -143,6 +117,10 @@ export function APIs() {
 
   const totalPages = Math.ceil(filteredApis.length / PAGE_SIZE);
 
+  const invalidateApis = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['apis', selectedTenant] });
+  }, [queryClient, selectedTenant]);
+
   // Memoized handlers to prevent unnecessary re-renders
   const handleCreate = useCallback(async (api: APICreate, deployToDev: boolean) => {
     try {
@@ -159,7 +137,7 @@ export function APIs() {
       }
 
       setShowCreateModal(false);
-      await loadApis(selectedTenant);
+      invalidateApis();
 
       // Celebrate first API creation
       if (wasFirstApi) {
@@ -171,17 +149,17 @@ export function APIs() {
     } catch (err: any) {
       toast.error('Creation failed', err.message || 'Failed to create API');
     }
-  }, [selectedTenant, isFirstApi, celebrate, toast]);
+  }, [selectedTenant, isFirstApi, celebrate, toast, invalidateApis]);
 
   const handleUpdate = useCallback(async (apiId: string, api: Partial<APICreate>) => {
     try {
       await apiService.updateApi(selectedTenant, apiId, api);
       setEditingApi(null);
-      loadApis(selectedTenant);
+      invalidateApis();
     } catch (err: any) {
-      setError(err.message || 'Failed to update API');
+      toast.error('Update failed', err.message || 'Failed to update API');
     }
-  }, [selectedTenant]);
+  }, [selectedTenant, invalidateApis, toast]);
 
   const handleDelete = useCallback(async (apiId: string, apiName: string) => {
     const confirmed = await confirm({
@@ -196,11 +174,11 @@ export function APIs() {
     try {
       await apiService.deleteApi(selectedTenant, apiId);
       toast.success('API deleted', `${apiName} has been removed`);
-      loadApis(selectedTenant);
+      invalidateApis();
     } catch (err: any) {
       toast.error('Delete failed', err.message || 'Failed to delete API');
     }
-  }, [selectedTenant, confirm, toast]);
+  }, [selectedTenant, confirm, toast, invalidateApis]);
 
   const handleDeploy = useCallback(async (api: API, environment: 'dev' | 'staging') => {
     try {
@@ -213,11 +191,11 @@ export function APIs() {
         `Deployment started`,
         `${api.name} is being deployed to ${environment.toUpperCase()}`
       );
-      loadApis(selectedTenant);
+      invalidateApis();
     } catch (err: any) {
       toast.error('Deployment failed', err.message || 'Failed to deploy API');
     }
-  }, [selectedTenant, toast]);
+  }, [selectedTenant, toast, invalidateApis]);
 
   // Memoized filter clear handler
   const clearFilters = useCallback(() => {
@@ -326,8 +304,7 @@ export function APIs() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-          <button onClick={() => setError(null)} className="float-right font-bold">&times;</button>
+          {error.message || 'An error occurred'}
         </div>
       )}
 

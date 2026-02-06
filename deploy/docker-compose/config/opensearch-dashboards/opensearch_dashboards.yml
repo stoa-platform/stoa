@@ -1,0 +1,23 @@
+# =============================================================================
+# STOA Logs - OpenSearch Dashboards Configuration
+# =============================================================================
+# CAB-1114 Phase 1: Branding + sub-path serving for reverse proxy
+# =============================================================================
+
+server.host: "0.0.0.0"
+server.port: 5601
+server.basePath: "/logs"
+server.rewriteBasePath: true
+
+opensearch.hosts: ["http://opensearch:9200"]
+
+# STOA Branding
+opensearchDashboards.branding:
+  applicationTitle: "STOA Logs"
+  mark:
+    defaultUrl: "/assets/stoa-logo-mark.svg"
+  logo:
+    defaultUrl: "/assets/stoa-logo-mark.svg"
+  faviconUrl: "/assets/stoa-favicon.svg"
+  loadingLogo:
+    defaultUrl: "/assets/stoa-logo-mark.svg"

@@ -3,15 +3,19 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.rbac import require_role
 from src.database import get_db
+from src.models.gateway_instance import GatewayInstance
 from src.schemas.gateway import (
     GatewayHealthCheckResponse,
     GatewayInstanceCreate,
     GatewayInstanceResponse,
     GatewayInstanceUpdate,
+    GatewayModeStats,
+    ModeStatItem,
     PaginatedGatewayInstances,
 )
 from src.schemas.gateway_import import ImportPreviewResponse, ImportResultResponse
@@ -62,6 +66,62 @@ async def list_gateways(
         page_size=page_size,
     )
     return PaginatedGatewayInstances(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get("/modes/stats", response_model=GatewayModeStats)
+async def get_gateway_mode_stats(
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_role(["cpi-admin", "tenant-admin"])),
+):
+    """Get gateway statistics grouped by mode (ADR-024).
+
+    Returns counts of online/offline/degraded gateways for each STOA mode:
+    - edge-mcp: MCP protocol with SSE transport
+    - sidecar: Policy enforcement behind existing gateway
+    - proxy: Inline request/response transformation
+    - shadow: Passive traffic capture and analysis
+    """
+    # Query aggregated stats by mode for STOA gateways
+    stmt = (
+        select(
+            GatewayInstance.mode,
+            func.count(GatewayInstance.id).label("total"),
+            func.count(case((GatewayInstance.status == "online", 1))).label("online"),
+            func.count(case((GatewayInstance.status == "offline", 1))).label("offline"),
+            func.count(case((GatewayInstance.status == "degraded", 1))).label("degraded"),
+        )
+        .where(GatewayInstance.gateway_type.like("stoa%"))
+        .group_by(GatewayInstance.mode)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    # Build response with all 4 modes (even if count is 0)
+    mode_data = {row.mode: row for row in rows if row.mode}
+    all_modes = ["edge-mcp", "sidecar", "proxy", "shadow"]
+
+    modes = []
+    total_gateways = 0
+    for mode in all_modes:
+        if mode in mode_data:
+            row = mode_data[mode]
+            modes.append(
+                ModeStatItem(
+                    mode=mode,
+                    total=row.total,
+                    online=row.online,
+                    offline=row.offline,
+                    degraded=row.degraded,
+                )
+            )
+            total_gateways += row.total
+        else:
+            modes.append(
+                ModeStatItem(mode=mode, total=0, online=0, offline=0, degraded=0)
+            )
+
+    return GatewayModeStats(modes=modes, total_gateways=total_gateways)
 
 
 @router.get("/{gateway_id}", response_model=GatewayInstanceResponse)

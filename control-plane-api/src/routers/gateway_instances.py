@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.rbac import require_role
 from src.database import get_db
-from src.models.gateway_instance import GatewayInstance
+from src.models.gateway_instance import GatewayInstance, GatewayInstanceStatus
 from src.schemas.gateway import (
     GatewayHealthCheckResponse,
     GatewayInstanceCreate,
@@ -86,9 +86,15 @@ async def get_gateway_mode_stats(
         select(
             GatewayInstance.mode,
             func.count(GatewayInstance.id).label("total"),
-            func.count(case((GatewayInstance.status == "online", 1))).label("online"),
-            func.count(case((GatewayInstance.status == "offline", 1))).label("offline"),
-            func.count(case((GatewayInstance.status == "degraded", 1))).label("degraded"),
+            func.count(case((GatewayInstance.status == GatewayInstanceStatus.ONLINE, 1))).label(
+                "online"
+            ),
+            func.count(case((GatewayInstance.status == GatewayInstanceStatus.OFFLINE, 1))).label(
+                "offline"
+            ),
+            func.count(
+                case((GatewayInstance.status == GatewayInstanceStatus.DEGRADED, 1))
+            ).label("degraded"),
         )
         .where(GatewayInstance.gateway_type.like("stoa%"))
         .group_by(GatewayInstance.mode)

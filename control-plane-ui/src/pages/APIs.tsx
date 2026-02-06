@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useDebounce } from '../hooks/useDebounce';
 import type { API, APICreate } from '../types';
 import yaml from 'js-yaml';
 import { useToastActions } from '@stoa/shared/components/Toast';
@@ -11,23 +12,6 @@ import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import { useCelebration } from '@stoa/shared/components/Celebration';
 import { Collapsible } from '@stoa/shared/components/Collapsible';
 import { FileText, Server, Code2, Settings } from 'lucide-react';
-
-// Debounce hook for search optimization
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
 
 const PAGE_SIZE = 20;
 
@@ -56,11 +40,12 @@ export function APIs() {
   // Debounce search for performance (300ms delay)
   const debouncedSearch = useDebounce(searchQuery, 300);
 
-  // Fetch tenants via React Query
+  // Fetch tenants via React Query (long staleTime — tenants rarely change)
   const { data: tenants = [], isLoading: tenantsLoading, error: tenantsError } = useQuery({
     queryKey: ['tenants'],
     queryFn: () => apiService.getTenants(),
     enabled: isReady,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Auto-select first tenant when tenants load

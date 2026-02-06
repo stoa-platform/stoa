@@ -31,6 +31,7 @@ export default defineConfig({
           'vendor-query': ['@tanstack/react-query'],
           'vendor-auth': ['react-oidc-context', 'oidc-client-ts'],
           'vendor-utils': ['axios', 'clsx', 'js-yaml'],
+          'vendor-icons': ['lucide-react'],
         },
       },
     },

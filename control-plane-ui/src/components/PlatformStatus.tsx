@@ -4,7 +4,7 @@
  * Displays GitOps sync status for platform components via Argo CD.
  * Shows sync status, health, recent deployment events, and external links.
  */
-import { useState } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlatformStatus, useSyncComponent } from '../hooks/usePlatformStatus';
 import { ComponentStatus } from '../services/api';
@@ -89,36 +89,34 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
   const syncMutation = useSyncComponent();
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Update lastUpdated when data changes
-  if (status && !lastUpdated) {
-    setLastUpdated(new Date());
-  }
+  // Update lastUpdated and notify parent when status data changes
+  useEffect(() => {
+    if (status) {
+      setLastUpdated(new Date());
+      onStatusChange?.(status.gitops.status);
+    }
+  }, [status, onStatusChange]);
 
-  // Notify parent of status changes
-  if (status && onStatusChange) {
-    onStatusChange(status.gitops.status);
-  }
-
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     refetch();
     setLastUpdated(new Date());
-  };
+  }, [refetch]);
 
-  const handleSync = async (componentName: string) => {
+  const handleSync = useCallback(async (componentName: string) => {
     try {
       await syncMutation.mutateAsync(componentName);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Failed to sync component:', err);
     }
-  };
+  }, [syncMutation]);
 
   if (isLoading && !status) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
         <div className="flex items-center justify-center">
           <RefreshIcon className="w-5 h-5 animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-500">Loading platform status...</span>
+          <span className="ml-2 text-gray-500 dark:text-neutral-400">Loading platform status...</span>
         </div>
       </div>
     );
@@ -126,7 +124,7 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
 
   if (error && !status) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
         <div className="flex items-center gap-2 text-red-600">
           <ExclamationCircleIcon className="w-5 h-5" />
           <span>Failed to load platform status</span>
@@ -173,13 +171,13 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
   }
 
   return (
-    <div className="bg-white rounded-lg shadow">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-neutral-700">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Platform Status</h3>
-            <p className="text-sm text-gray-500">GitOps sync status via Argo CD</p>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Platform Status</h3>
+            <p className="text-sm text-gray-500 dark:text-neutral-400">GitOps sync status via Argo CD</p>
           </div>
           <div className="flex items-center gap-3">
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${overallConfig.bg} ${overallConfig.color}`}>
@@ -188,10 +186,10 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
             <button
               onClick={handleRefresh}
               disabled={isLoading}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
               title="Refresh status"
             >
-              <RefreshIcon className={`w-5 h-5 text-gray-600 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshIcon className={`w-5 h-5 text-gray-600 dark:text-neutral-400 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
@@ -292,17 +290,17 @@ interface ComponentCardProps {
   isSyncing: boolean;
 }
 
-function ComponentCard({ component, onSync, isSyncing }: ComponentCardProps) {
+const ComponentCard = memo(function ComponentCard({ component, onSync, isSyncing }: ComponentCardProps) {
   const syncColor = syncStatusColors[component.sync_status] || syncStatusColors.Unknown;
   const healthColor = healthStatusColors[component.health_status] || healthStatusColors.Unknown;
   const isOutOfSync = component.sync_status === 'OutOfSync';
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
+    <div className="border border-gray-200 dark:border-neutral-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-neutral-600 transition-colors">
       <div className="flex items-start justify-between">
         <div>
-          <h4 className="font-medium text-gray-900">{component.display_name}</h4>
-          <p className="text-xs text-gray-500 mt-0.5">{component.name}</p>
+          <h4 className="font-medium text-gray-900 dark:text-white">{component.display_name}</h4>
+          <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">{component.name}</p>
         </div>
         <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${syncColor}`}>
           {component.sync_status}
@@ -352,7 +350,7 @@ function ComponentCard({ component, onSync, isSyncing }: ComponentCardProps) {
       </div>
     </div>
   );
-}
+});
 
 function formatRelativeTime(isoString: string): string {
   const date = new Date(isoString);

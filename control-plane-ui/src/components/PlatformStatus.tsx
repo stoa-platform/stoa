@@ -5,8 +5,10 @@
  * Shows sync status, health, recent deployment events, and external links.
  */
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePlatformStatus, useSyncComponent } from '../hooks/usePlatformStatus';
 import { ComponentStatus } from '../services/api';
+import { observabilityPath, logsPath } from '../utils/navigation';
 
 // Status color mappings
 const syncStatusColors: Record<string, string> = {
@@ -80,6 +82,7 @@ interface PlatformStatusProps {
 }
 
 export function PlatformStatus({ compact = false, onStatusChange }: PlatformStatusProps) {
+  const navigate = useNavigate();
   const { data: status, isLoading, error, refetch } = usePlatformStatus({
     refetchInterval: 30000, // Refresh every 30 seconds
   });
@@ -247,33 +250,27 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
                 <ExternalLinkIcon className="w-4 h-4" />
                 ArgoCD
               </a>
-              <a
-                href={status.external_links.grafana}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => navigate(observabilityPath(status.external_links.grafana))}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 <ExternalLinkIcon className="w-4 h-4" />
                 Grafana
-              </a>
-              <a
-                href={status.external_links.prometheus}
-                target="_blank"
-                rel="noopener noreferrer"
+              </button>
+              <button
+                onClick={() => navigate(observabilityPath(status.external_links.prometheus))}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 <ExternalLinkIcon className="w-4 h-4" />
                 Prometheus
-              </a>
-              <a
-                href={status.external_links.logs}
-                target="_blank"
-                rel="noopener noreferrer"
+              </button>
+              <button
+                onClick={() => navigate(logsPath(status.external_links.logs))}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 <ExternalLinkIcon className="w-4 h-4" />
                 Logs
-              </a>
+              </button>
             </div>
           </div>
         )}

@@ -1,18 +1,29 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { config } from '../config';
+import { isAllowedEmbedUrl } from '../utils/navigation';
 import { ExternalLink, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
 
 /**
- * GrafanaEmbed - Embedded Grafana dashboard view
+ * GrafanaEmbed - Embedded Grafana / Prometheus dashboard view
  * Part of CAB-1108 Phase 2: Console Integration
+ *
+ * Supports deep-linking via ?url= query parameter.
+ * Example: /observability?url=https://grafana.gostoa.dev/d/stoa-gateway-overview
  */
 export function GrafanaEmbed() {
+  const [searchParams] = useSearchParams();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [key, setKey] = useState(0); // For forcing iframe reload
+  const [key, setKey] = useState(0);
 
-  const grafanaUrl = config.services.grafana.url;
+  const targetUrl = searchParams.get('url');
+  const iframeUrl =
+    targetUrl && isAllowedEmbedUrl(targetUrl) ? targetUrl : config.services.grafana.url;
+
+  const isPrometheus = iframeUrl.includes('prometheus');
+  const serviceLabel = isPrometheus ? 'Prometheus' : 'Grafana';
 
   const handleIframeLoad = () => {
     setIsLoading(false);
@@ -21,23 +32,27 @@ export function GrafanaEmbed() {
 
   const handleIframeError = () => {
     setIsLoading(false);
-    setError('Failed to load Grafana. Please check your connection.');
+    setError(`Failed to load ${serviceLabel}. Please check your connection.`);
   };
 
   const handleRefresh = () => {
     setIsLoading(true);
     setError(null);
-    setKey(prev => prev + 1);
+    setKey((prev) => prev + 1);
   };
 
   const handleOpenExternal = () => {
-    window.open(grafanaUrl, '_blank', 'noopener,noreferrer');
+    window.open(iframeUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
-    <div className={`${isFullscreen ? 'fixed inset-0 z-50 bg-white dark:bg-neutral-900' : 'space-y-4'}`}>
+    <div
+      className={`${isFullscreen ? 'fixed inset-0 z-50 bg-white dark:bg-neutral-900' : 'space-y-4'}`}
+    >
       {/* Header */}
-      <div className={`flex items-center justify-between ${isFullscreen ? 'p-4 border-b border-gray-200 dark:border-neutral-700' : ''}`}>
+      <div
+        className={`flex items-center justify-between ${isFullscreen ? 'p-4 border-b border-gray-200 dark:border-neutral-700' : ''}`}
+      >
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             STOA Observability
@@ -73,7 +88,7 @@ export function GrafanaEmbed() {
             title="Open in new tab"
           >
             <ExternalLink className="h-4 w-4" />
-            <span className="hidden sm:inline">Open in Grafana</span>
+            <span className="hidden sm:inline">Open in {serviceLabel}</span>
           </button>
         </div>
       </div>
@@ -90,7 +105,7 @@ export function GrafanaEmbed() {
           <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-neutral-900 z-10">
             <div className="text-center">
               <div className="w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-neutral-400">Loading Grafana...</p>
+              <p className="text-gray-500 dark:text-neutral-400">Loading {serviceLabel}...</p>
             </div>
           </div>
         )}
@@ -103,7 +118,7 @@ export function GrafanaEmbed() {
                 <span className="text-2xl">⚠️</span>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Unable to Load Grafana
+                Unable to Load {serviceLabel}
               </h3>
               <p className="text-gray-500 dark:text-neutral-400 mb-4">{error}</p>
               <div className="flex gap-2 justify-center">
@@ -124,11 +139,11 @@ export function GrafanaEmbed() {
           </div>
         )}
 
-        {/* Grafana Iframe */}
+        {/* Iframe */}
         <iframe
           key={key}
-          src={grafanaUrl}
-          title="STOA Observability - Grafana"
+          src={iframeUrl}
+          title={`STOA Observability - ${serviceLabel}`}
           className="w-full h-full border-0"
           onLoad={handleIframeLoad}
           onError={handleIframeError}

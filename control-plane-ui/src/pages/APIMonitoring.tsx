@@ -29,7 +29,9 @@ import {
   ExternalLink,
   Gauge,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { config } from '../config';
+import { observabilityPath } from '../utils/navigation';
 import { clsx } from 'clsx';
 
 // =============================================================================
@@ -499,6 +501,7 @@ function generateDemoTransaction(id: string): APITransaction {
 // =============================================================================
 
 export function APIMonitoring() {
+  const navigate = useNavigate();
   const [transactions, setTransactions] = useState<APITransactionSummary[]>([]);
   const [stats, setStats] = useState<APITransactionStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -574,15 +577,13 @@ export function APIMonitoring() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <a
-            href={`${config.services.grafana.url}/d/stoa-incident-response`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => navigate(observabilityPath(`${config.services.grafana.url}/d/stoa-incident-response`))}
             className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
           >
             <ExternalLink className="h-4 w-4" />
             Open in Grafana
-          </a>
+          </button>
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={clsx(

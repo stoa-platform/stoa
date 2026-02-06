@@ -24,6 +24,9 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # CAB-1108: Prometheus iframe embedding requires oauth2-proxy
+    # authentication. User must visit prometheus.gostoa.dev first.
+    # oauth2-proxy uses --cookie-samesite=none for cross-origin iframe support
 spec:
   ingressClassName: nginx
   tls:

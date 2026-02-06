@@ -14,8 +14,10 @@
 #   - console:     Console UI (port 3000)
 #   - prometheus:  Metrics (port 9090)
 #   - grafana:     Dashboards (port 3001)
+#   - opensearch:  Search engine (port 9200)
+#   - dashboards:  STOA Logs UI (port 5601, via /logs)
 #
-# Total RAM: ~1.5GB (works on 8GB machines)
+# Total RAM: ~2.5GB (works on 8GB machines)
 # =============================================================================
 
 services:
@@ -165,7 +167,7 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
-  # Reverse Proxy (nginx) - CAB-1108 Phase 3
+  # Reverse Proxy (nginx) - CAB-1108 Phase 3 + CAB-1114
   # ==========================================================================
   nginx:
     image: nginx:1.25-alpine
@@ -179,6 +181,7 @@ services:
       - control-plane-api
       - grafana
       - keycloak
+      - opensearch-dashboards
     networks:
       - stoa-network
     healthcheck:
@@ -187,6 +190,84 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
+
+  # ==========================================================================
+  # OpenSearch (Search Engine) - CAB-1114 Phase 1
+  # ==========================================================================
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: stoa-opensearch
+    ports:
+      - "${PORT_OPENSEARCH:-9200}:9200"
+    environment:
+      - cluster.name=stoa-cluster
+      - node.name=stoa-node-1
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # OpenSearch Dashboards (STOA Logs UI) - CAB-1114 Phase 1
+  # ==========================================================================
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.0
+    container_name: stoa-opensearch-dashboards
+    ports:
+      - "${PORT_OPENSEARCH_DASHBOARDS:-5601}:5601"
+    environment:
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+      - OPENSEARCH_HOSTS=["http://opensearch:9200"]
+    volumes:
+      - ./config/opensearch-dashboards/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml:ro
+      - ./config/opensearch-dashboards/img/stoa-logo-mark.svg:/usr/share/opensearch-dashboards/assets/stoa-logo-mark.svg:ro
+      - ./config/opensearch-dashboards/img/stoa-favicon.svg:/usr/share/opensearch-dashboards/assets/stoa-favicon.svg:ro
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5601/logs/api/status || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # OpenSearch Init (one-shot) - CAB-1114 Phase 1
+  # ==========================================================================
+  opensearch-init:
+    image: curlimages/curl:8.5.0
+    container_name: stoa-opensearch-init
+    volumes:
+      - ./init/init-opensearch.sh:/init-opensearch.sh:ro
+    entrypoint: ["sh", "/init-opensearch.sh"]
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    restart: "no"
 
   # ==========================================================================
   # Prometheus (Metrics)
@@ -296,3 +377,4 @@ volumes:
   prometheus-data:
   grafana-data:
   loki-data:
+  opensearch-data:

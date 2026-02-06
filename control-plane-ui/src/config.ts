@@ -104,7 +104,7 @@ export const config = {
       },
     },
     grafana: {
-      url: import.meta.env.VITE_GRAFANA_URL || `https://grafana.${BASE_DOMAIN}`,
+      url: import.meta.env.VITE_GRAFANA_URL || '/grafana/',
     },
     prometheus: {
       url: import.meta.env.VITE_PROMETHEUS_URL || `https://prometheus.${BASE_DOMAIN}`,

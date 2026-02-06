@@ -1,0 +1,92 @@
+server {
+    listen 8080;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+
+    # =========================================================================
+    # OpenSearch Dashboards proxy (STOA Logs — CAB-1114)
+    # Dashboards configured with server.basePath="/logs", rewriteBasePath=true
+    # =========================================================================
+    location /logs/ {
+        proxy_pass ${LOGS_BACKEND_URL};
+        proxy_hide_header X-Frame-Options;
+        add_header Content-Security-Policy "frame-ancestors 'self' https://console.gostoa.dev" always;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Cookie $http_cookie;
+        proxy_buffer_size 128k;
+        proxy_buffers 4 256k;
+        proxy_busy_buffers_size 256k;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # =========================================================================
+    # Grafana proxy (Observability — CAB-1108)
+    # Grafana configured with GF_SERVER_SERVE_FROM_SUB_PATH=true
+    # =========================================================================
+    location /grafana/ {
+        proxy_pass ${GRAFANA_BACKEND_URL};
+        proxy_hide_header X-Frame-Options;
+        add_header Content-Security-Policy "frame-ancestors 'self' https://console.gostoa.dev" always;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # Grafana WebSocket for Live features
+    location /grafana/api/live/ {
+        proxy_pass ${GRAFANA_BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+
+    # SPA routing - serve index.html for all unmatched routes
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API proxy
+    location /api/ {
+        proxy_pass http://control-plane-api:8000/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Health check
+    location /health {
+        return 200 'OK';
+        add_header Content-Type text/plain;
+    }
+
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}

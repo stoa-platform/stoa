@@ -68,6 +68,7 @@ spec:
             - name: GRAFANA_BACKEND_URL
               value: "http://grafana.stoa-system.svc:3000"
           securityContext:
+            privileged: false
             runAsNonRoot: true
             runAsUser: 101
             runAsGroup: 101

@@ -8,12 +8,20 @@ server {
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
 
+    # DNS resolver for dynamic proxy_pass (K8s CoreDNS or Docker DNS)
+    # Extracted at startup from /etc/resolv.conf by 15-extract-dns-resolver.envsh
+    resolver ${DNS_RESOLVER} valid=30s ipv6=off;
+
+    # Backend URLs resolved at request time (not startup) via variables
+    set $logs_backend "${LOGS_BACKEND_URL}";
+    set $grafana_backend "${GRAFANA_BACKEND_URL}";
+
     # =========================================================================
     # OpenSearch Dashboards proxy (STOA Logs — CAB-1114)
     # Dashboards configured with server.basePath="/logs", rewriteBasePath=true
     # =========================================================================
     location /logs/ {
-        proxy_pass ${LOGS_BACKEND_URL};
+        proxy_pass $logs_backend;
         proxy_hide_header X-Frame-Options;
         add_header Content-Security-Policy "frame-ancestors 'self' https://console.gostoa.dev" always;
         proxy_set_header Host $http_host;
@@ -34,7 +42,7 @@ server {
     # Grafana configured with GF_SERVER_SERVE_FROM_SUB_PATH=true
     # =========================================================================
     location /grafana/ {
-        proxy_pass ${GRAFANA_BACKEND_URL};
+        proxy_pass $grafana_backend;
         proxy_hide_header X-Frame-Options;
         add_header Content-Security-Policy "frame-ancestors 'self' https://console.gostoa.dev" always;
         proxy_set_header Host $http_host;
@@ -48,7 +56,7 @@ server {
 
     # Grafana WebSocket for Live features
     location /grafana/api/live/ {
-        proxy_pass ${GRAFANA_BACKEND_URL};
+        proxy_pass $grafana_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';

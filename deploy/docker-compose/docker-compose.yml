@@ -305,6 +305,7 @@ services:
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/stoa-overview.json
       # STOA Branding (CAB-1108)
       GF_APP_TITLE: "STOA Observability"
+      GF_USERS_HIDE_VERSION: "true"
       # Phase 2: Allow iframe embedding in Console
       GF_SECURITY_ALLOW_EMBEDDING: "true"
       # Phase 3: Sub-path serving for reverse proxy

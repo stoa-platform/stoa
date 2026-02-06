@@ -2,9 +2,7 @@
 //!
 //! Custom Resource Definitions for dynamic tool registration.
 //!
-//! Requires: `k8s` feature flag
-
-#![cfg(feature = "k8s")]
+//! Requires: `k8s` feature flag (enforced by mod.rs)
 
 use kube::CustomResource;
 use schemars::JsonSchema;

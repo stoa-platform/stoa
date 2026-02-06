@@ -20,6 +20,7 @@ pub mod crds;
 pub mod watcher;
 
 #[cfg(feature = "k8s")]
+#[allow(unused_imports)]
 pub use crds::{Tool, ToolSet, ToolSetSpec, ToolSpec};
 #[cfg(feature = "k8s")]
 pub use watcher::CrdWatcher;
@@ -97,56 +98,54 @@ pub use stubs::*;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde_json::json;
-
     #[test]
+    #[cfg(not(feature = "k8s"))]
     fn test_tool_spec_serialization() {
-        #[cfg(not(feature = "k8s"))]
-        {
-            let spec = ToolSpec {
-                display_name: "Weather API".to_string(),
-                description: "Get weather forecasts".to_string(),
-                endpoint: "https://api.weather.example/v1/forecast".to_string(),
-                method: "POST".to_string(),
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "location": {"type": "string"}
-                    }
-                }),
-                output_schema: None,
-                auth: "bearer".to_string(),
-                rate_limit: Some("100/min".to_string()),
-                annotations: None,
-            };
+        use super::*;
+        use serde_json::json;
 
-            let json = serde_json::to_value(&spec).unwrap();
-            assert_eq!(json["display_name"], "Weather API");
-            assert_eq!(json["method"], "POST");
-        }
+        let spec = ToolSpec {
+            display_name: "Weather API".to_string(),
+            description: "Get weather forecasts".to_string(),
+            endpoint: "https://api.weather.example/v1/forecast".to_string(),
+            method: "POST".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"}
+                }
+            }),
+            output_schema: None,
+            auth: "bearer".to_string(),
+            rate_limit: Some("100/min".to_string()),
+            annotations: None,
+        };
+
+        let json_val = serde_json::to_value(&spec).unwrap();
+        assert_eq!(json_val["display_name"], "Weather API");
+        assert_eq!(json_val["method"], "POST");
     }
 
     #[test]
+    #[cfg(not(feature = "k8s"))]
     fn test_toolset_spec_serialization() {
-        #[cfg(not(feature = "k8s"))]
-        {
-            let spec = ToolSetSpec {
-                upstream: UpstreamConfig {
-                    url: "https://mcp.example.com".to_string(),
-                    transport: "sse".to_string(),
-                    auth: Some(UpstreamAuth {
-                        auth_type: "bearer".to_string(),
-                        secret_ref: "mcp-token-secret".to_string(),
-                    }),
-                },
-                tools: vec!["tool1".to_string(), "tool2".to_string()],
-            };
+        use super::*;
 
-            let json = serde_json::to_value(&spec).unwrap();
-            assert_eq!(json["upstream"]["url"], "https://mcp.example.com");
-            assert_eq!(json["upstream"]["transport"], "sse");
-            assert_eq!(json["tools"].as_array().unwrap().len(), 2);
-        }
+        let spec = ToolSetSpec {
+            upstream: UpstreamConfig {
+                url: "https://mcp.example.com".to_string(),
+                transport: "sse".to_string(),
+                auth: Some(UpstreamAuth {
+                    auth_type: "bearer".to_string(),
+                    secret_ref: "mcp-token-secret".to_string(),
+                }),
+            },
+            tools: vec!["tool1".to_string(), "tool2".to_string()],
+        };
+
+        let json_val = serde_json::to_value(&spec).unwrap();
+        assert_eq!(json_val["upstream"]["url"], "https://mcp.example.com");
+        assert_eq!(json_val["upstream"]["transport"], "sse");
+        assert_eq!(json_val["tools"].as_array().unwrap().len(), 2);
     }
 }

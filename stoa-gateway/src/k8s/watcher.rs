@@ -2,9 +2,7 @@
 //!
 //! Watches Tool and ToolSet CRDs and dynamically registers/unregisters tools.
 //!
-//! Requires: `k8s` feature flag
-
-#![cfg(feature = "k8s")]
+//! Requires: `k8s` feature flag (enforced by mod.rs)
 
 use std::sync::Arc;
 

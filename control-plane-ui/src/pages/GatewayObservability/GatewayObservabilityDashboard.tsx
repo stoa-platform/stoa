@@ -3,7 +3,9 @@ import { RefreshCw, ExternalLink, Gauge } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { useNavigate } from 'react-router-dom';
 import { config } from '../../config';
+import { observabilityPath } from '../../utils/navigation';
 import type { AggregatedMetrics } from '../../types';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
@@ -94,6 +96,7 @@ function APDEXGauge({ score }: { score: number }) {
 
 
 export function GatewayObservabilityDashboard() {
+  const navigate = useNavigate();
   const { isReady } = useAuth();
   const [metrics, setMetrics] = useState<AggregatedMetrics | null>(null);
   const [apdexScore, setApdexScore] = useState(0.92); // Default fallback
@@ -147,15 +150,13 @@ export function GatewayObservabilityDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href={`${config.services.grafana.url}/d/stoa-gateway-overview`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => navigate(observabilityPath(`${config.services.grafana.url}/d/stoa-gateway-overview`))}
             className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition-colors"
           >
             <ExternalLink className="h-4 w-4" />
             Open in Grafana
-          </a>
+          </button>
           <button
             onClick={loadData}
             className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50"

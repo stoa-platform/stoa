@@ -10,10 +10,12 @@ import {
   BarChart2,
   ExternalLink,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { config } from '../../config';
+import { observabilityPath } from '../../utils/navigation';
 
 const AUTO_REFRESH_INTERVAL = 60_000; // 1 minute for business metrics
 
@@ -212,6 +214,7 @@ function TopAPIItem({ api, rank, maxCalls }: { api: TopAPI; rank: number; maxCal
 }
 
 export function BusinessDashboard() {
+  const navigate = useNavigate();
   const { isReady, hasPermission } = useAuth();
   const [metrics, setMetrics] = useState<BusinessMetrics | null>(null);
   const [modeAdoption, setModeAdoption] = useState<GatewayModeAdoption[]>([]);
@@ -339,16 +342,14 @@ export function BusinessDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <a
-            href={grafanaUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => navigate(observabilityPath(grafanaUrl))}
             className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
           >
             <BarChart2 className="h-4 w-4" />
             Advanced Analytics
             <ExternalLink className="h-3 w-3" />
-          </a>
+          </button>
           <button
             onClick={loadData}
             disabled={loading}
@@ -516,15 +517,13 @@ export function BusinessDashboard() {
                   <span className="font-semibold text-green-600">156%</span>, indicating strong demand for
                   AI-powered development tools.
                 </p>
-                <a
-                  href={grafanaUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={() => navigate(observabilityPath(grafanaUrl))}
                   className="inline-flex items-center gap-1 mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline"
                 >
                   View detailed analytics in Grafana
                   <ExternalLink className="h-3 w-3" />
-                </a>
+                </button>
               </div>
             </div>
           </div>

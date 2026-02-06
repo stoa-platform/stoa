@@ -12,11 +12,13 @@ import {
   Zap,
   Shield,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import type { AggregatedMetrics, PlatformStatusResponse } from '../../types';
 import { config } from '../../config';
+import { observabilityPath } from '../../utils/navigation';
 
 const AUTO_REFRESH_INTERVAL = 15_000; // 15 seconds for operations
 
@@ -123,6 +125,7 @@ function DeploymentItem({ deployment }: { deployment: RecentDeployment }) {
 }
 
 export function OperationsDashboard() {
+  const navigate = useNavigate();
   const { isReady } = useAuth();
   const [gatewayMetrics, setGatewayMetrics] = useState<AggregatedMetrics | null>(null);
   const [platformStatus, setPlatformStatus] = useState<PlatformStatusResponse | null>(null);
@@ -379,15 +382,13 @@ export function OperationsDashboard() {
                 <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase">
                   Active Incidents
                 </h2>
-                <a
-                  href={grafanaUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={() => navigate(observabilityPath(grafanaUrl))}
                   className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                 >
                   Open Grafana
                   <ExternalLink className="h-3 w-3" />
-                </a>
+                </button>
               </div>
               {operationsMetrics?.activeAlerts === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8">
@@ -424,11 +425,9 @@ export function OperationsDashboard() {
               Observability Tools
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <a
-                href={grafanaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
+              <button
+                onClick={() => navigate(observabilityPath(grafanaUrl))}
+                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-left"
               >
                 <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
                   <Activity className="h-5 w-5 text-orange-600" />
@@ -438,12 +437,10 @@ export function OperationsDashboard() {
                   <p className="text-xs text-gray-500 dark:text-gray-400">Dashboards</p>
                 </div>
                 <ExternalLink className="h-4 w-4 text-gray-400 ml-auto" />
-              </a>
-              <a
-                href={prometheusUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
+              </button>
+              <button
+                onClick={() => navigate(observabilityPath(prometheusUrl))}
+                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-left"
               >
                 <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
                   <TrendingUp className="h-5 w-5 text-red-600" />
@@ -453,7 +450,7 @@ export function OperationsDashboard() {
                   <p className="text-xs text-gray-500 dark:text-gray-400">Metrics</p>
                 </div>
                 <ExternalLink className="h-4 w-4 text-gray-400 ml-auto" />
-              </a>
+              </button>
               <a
                 href="/monitoring"
                 className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"

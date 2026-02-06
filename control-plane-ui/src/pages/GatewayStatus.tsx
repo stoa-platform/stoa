@@ -1,6 +1,8 @@
 import { memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGatewayStatus, useGatewayPlatformInfo } from '../hooks/useGatewayStatus';
 import { config } from '../config';
+import { observabilityPath, logsPath } from '../utils/navigation';
 import {
   Server,
   Activity,
@@ -103,6 +105,7 @@ function HealthBadge({ status }: { status: string }) {
 }
 
 export default function GatewayStatus() {
+  const navigate = useNavigate();
   const { data, isLoading, error, refetch, dataUpdatedAt } = useGatewayStatus();
   const platform = useGatewayPlatformInfo();
 
@@ -403,36 +406,27 @@ export default function GatewayStatus() {
           </div>
           <p className="text-xs text-gray-500 mb-3">Metrics, dashboards &amp; logs</p>
           <div className="space-y-2">
-            <a
-              href={config.services.grafana.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center p-2 rounded-md hover:bg-gray-50 text-sm text-gray-700"
+            <button
+              onClick={() => navigate(observabilityPath())}
+              className="flex items-center w-full p-2 rounded-md hover:bg-gray-50 text-sm text-gray-700 text-left"
             >
               <BarChart3 className="w-4 h-4 mr-2 text-orange-500" />
               Grafana Dashboards
-              <ExternalLink className="w-3 h-3 ml-auto text-gray-400" />
-            </a>
-            <a
-              href={config.services.prometheus.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center p-2 rounded-md hover:bg-gray-50 text-sm text-gray-700"
+            </button>
+            <button
+              onClick={() => navigate(observabilityPath(config.services.prometheus.url))}
+              className="flex items-center w-full p-2 rounded-md hover:bg-gray-50 text-sm text-gray-700 text-left"
             >
               <Search className="w-4 h-4 mr-2 text-red-500" />
               Prometheus
-              <ExternalLink className="w-3 h-3 ml-auto text-gray-400" />
-            </a>
-            <a
-              href={config.services.logs.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center p-2 rounded-md hover:bg-gray-50 text-sm text-gray-700"
+            </button>
+            <button
+              onClick={() => navigate(logsPath())}
+              className="flex items-center w-full p-2 rounded-md hover:bg-gray-50 text-sm text-gray-700 text-left"
             >
               <Activity className="w-4 h-4 mr-2 text-green-500" />
               Logs Explorer
-              <ExternalLink className="w-3 h-3 ml-auto text-gray-400" />
-            </a>
+            </button>
           </div>
         </div>
 
@@ -472,14 +466,12 @@ export default function GatewayStatus() {
               </p>
             </div>
           ) : null}
-          <a
-            href={`${config.services.prometheus.url}/alerts`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => navigate(observabilityPath(`${config.services.prometheus.url}/alerts`))}
             className="mt-3 inline-flex items-center text-xs text-indigo-600 hover:text-indigo-800"
           >
-            View Alerts <ExternalLink className="w-3 h-3 ml-1" />
-          </a>
+            View Alerts
+          </button>
         </div>
       </div>
 

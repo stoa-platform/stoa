@@ -107,6 +107,26 @@ jobs:
             exit 1
           fi
 
+      - name: Diagnose failure
+        if: failure() && steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        run: |
+          echo "=== Deployment Description ==="
+          kubectl describe deployment/${{ inputs.component }} -n ${{ inputs.namespace }} || true
+          echo ""
+          echo "=== ReplicaSets ==="
+          kubectl get rs -n ${{ inputs.namespace }} -l app=${{ inputs.component }} -o wide || \
+            kubectl get rs -n ${{ inputs.namespace }} -l app.kubernetes.io/name=${{ inputs.component }} -o wide || true
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods -n ${{ inputs.namespace }} -l app=${{ inputs.component }} -o wide || \
+            kubectl get pods -n ${{ inputs.namespace }} -l app.kubernetes.io/name=${{ inputs.component }} -o wide || true
+          echo ""
+          echo "=== Recent Events (last 10 min) ==="
+          kubectl get events -n ${{ inputs.namespace }} --sort-by='.lastTimestamp' | tail -30 || true
+          echo ""
+          echo "=== Node Resources ==="
+          kubectl top nodes 2>/dev/null || kubectl get nodes -o wide || true
+
       - name: Verify deployment
         if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
@@ -114,7 +134,8 @@ jobs:
           kubectl get deployment ${{ inputs.component }} -n ${{ inputs.namespace }}
           echo ""
           echo "=== Pods ==="
-          kubectl get pods -n ${{ inputs.namespace }} -l app.kubernetes.io/name=${{ inputs.component }}
+          kubectl get pods -n ${{ inputs.namespace }} -l app=${{ inputs.component }} -o wide || \
+            kubectl get pods -n ${{ inputs.namespace }} -l app.kubernetes.io/name=${{ inputs.component }} -o wide || true
 
       - name: Post-deploy endpoint check
         if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true' && inputs.verify-endpoint != ''

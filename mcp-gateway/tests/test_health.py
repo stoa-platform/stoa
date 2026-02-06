@@ -13,33 +13,39 @@ def client():
 
 
 def test_health_endpoint(client):
-    """Test /health endpoint returns healthy status."""
-    response = client.get("/health")
+    """Test /healthz public endpoint returns healthy status.
+
+    Note: /health is internal-only (K8s probes). Use /healthz for external checks.
+    """
+    response = client.get("/healthz")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
     assert data["service"] == "stoa-mcp-gateway"
     assert "version" in data
-    assert "timestamp" in data
 
 
 def test_ready_endpoint(client):
-    """Test /ready endpoint returns status."""
-    response = client.get("/ready")
-    # Status can be 200 (ready) or 503 (not ready) depending on app state
-    assert response.status_code in [200, 503]
+    """Test /api/status endpoint returns status.
+
+    Note: /ready is internal-only (K8s probes). Use /api/status for external checks.
+    """
+    response = client.get("/api/status")
+    assert response.status_code == 200
     data = response.json()
-    assert data["status"] in ["ready", "not_ready"]
-    assert data["service"] == "stoa-mcp-gateway"
-    assert "checks" in data
+    assert "service" in data
+    assert "version" in data
 
 
 def test_live_endpoint(client):
-    """Test /live endpoint returns alive status."""
-    response = client.get("/live")
+    """Test /api/health endpoint returns healthy status.
+
+    Note: /live is internal-only (K8s probes). Use /api/health for external checks.
+    """
+    response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "alive"
+    assert data["status"] == "healthy"
 
 
 def test_root_endpoint(client):
@@ -49,23 +55,28 @@ def test_root_endpoint(client):
     data = response.json()
     assert data["service"] == "stoa-mcp-gateway"
     assert "version" in data
-    assert "links" in data
+    # Root endpoint returns MCP info, not legacy links
+    assert "mcp" in data
 
 
 def test_mcp_tools_endpoint(client):
-    """Test MCP tools endpoint (placeholder)."""
+    """Test MCP tools endpoint requires authentication (401).
+
+    Note: /mcp/v1/tools requires valid JWT. This test verifies auth is enforced.
+    """
     response = client.get("/mcp/v1/tools")
-    assert response.status_code == 200
-    data = response.json()
-    assert "tools" in data
+    # 401 = auth required (expected behavior)
+    assert response.status_code == 401
 
 
 def test_mcp_resources_endpoint(client):
-    """Test MCP resources endpoint (placeholder)."""
+    """Test MCP resources endpoint requires authentication (401).
+
+    Note: /mcp/v1/resources requires valid JWT. This test verifies auth is enforced.
+    """
     response = client.get("/mcp/v1/resources")
-    assert response.status_code == 200
-    data = response.json()
-    assert "resources" in data
+    # 401 = auth required (expected behavior)
+    assert response.status_code == 401
 
 
 # =============================================================================

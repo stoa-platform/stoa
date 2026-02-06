@@ -103,23 +103,25 @@ class NotionLiteAdapter(TransformerAdapter):
         prop_type = prop.get("type", "")
 
         # Title: [{"plain_text": "..."}] → "..."
+        # Note: Notion plain_text values already include spacing, so use empty join
         if prop_type == "title":
             title_arr = prop.get("title", [])
             if isinstance(title_arr, list) and title_arr:
-                return " ".join(
+                return "".join(
                     t.get("plain_text", "") for t in title_arr
                     if isinstance(t, dict)
-                ).strip()
+                )
             return ""
 
         # Rich text: [{"plain_text": "..."}] → "..."
+        # Note: Notion plain_text values already include spacing, so use empty join
         if prop_type == "rich_text":
             text_arr = prop.get("rich_text", [])
             if isinstance(text_arr, list) and text_arr:
-                return " ".join(
+                return "".join(
                     t.get("plain_text", "") for t in text_arr
                     if isinstance(t, dict)
-                ).strip()
+                )
             return ""
 
         # Select: {"select": {"name": "..."}} → "..."

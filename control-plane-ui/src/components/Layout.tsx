@@ -65,6 +65,16 @@ const navigation = [
   { name: 'Error Snapshots', href: '/mcp/errors', icon: AlertTriangle, permission: 'apis:read' },
 ];
 
+// Prefetch route chunks on hover — loads JS before click for instant navigation
+const routePrefetchMap: Record<string, () => Promise<unknown>> = {
+  '/apis': () => import('../pages/APIs'),
+  '/tenants': () => import('../pages/Tenants'),
+  '/ai-tools': () => import('../pages/AITools'),
+  '/applications': () => import('../pages/Applications'),
+  '/deployments': () => import('../pages/Deployments'),
+  '/monitoring': () => import('../pages/APIMonitoring'),
+};
+
 export function Layout({ children }: LayoutProps) {
   const { user, logout, hasPermission } = useAuth();
   const location = useLocation();
@@ -74,8 +84,9 @@ export function Layout({ children }: LayoutProps) {
   const { resolvedTheme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const filteredNavigation = navigation.filter(
-    item => !item.permission || hasPermission(item.permission)
+  const filteredNavigation = useMemo(
+    () => navigation.filter(item => !item.permission || hasPermission(item.permission)),
+    [hasPermission]
   );
 
   // Close sidebar when route changes (mobile)
@@ -97,20 +108,25 @@ export function Layout({ children }: LayoutProps) {
 
   useSequenceShortcuts(sequenceShortcuts);
 
-  // Register command palette items
+  // Memoize navigation commands separately (only changes when nav items change)
+  const navigationCommands = useMemo(() =>
+    filteredNavigation.map(item => ({
+      id: `nav-${item.href}`,
+      label: item.name,
+      description: `Navigate to ${item.name}`,
+      icon: <item.icon className="h-4 w-4" />,
+      section: 'Navigation' as const,
+      shortcut: item.shortcut ? ['G', item.shortcut[1].toUpperCase()] : undefined,
+      keywords: [item.name.toLowerCase(), 'go', 'navigate'],
+      onSelect: () => navigate(item.href),
+    })),
+    [filteredNavigation, navigate]
+  );
+
+  // Register command palette items — only theme-dependent items rebuild on theme change
   useEffect(() => {
     const commands: CommandItem[] = [
-      // Navigation commands
-      ...filteredNavigation.map(item => ({
-        id: `nav-${item.href}`,
-        label: item.name,
-        description: `Navigate to ${item.name}`,
-        icon: <item.icon className="h-4 w-4" />,
-        section: 'Navigation',
-        shortcut: item.shortcut ? ['G', item.shortcut[1].toUpperCase()] : undefined,
-        keywords: [item.name.toLowerCase(), 'go', 'navigate'],
-        onSelect: () => navigate(item.href),
-      })),
+      ...navigationCommands,
       // Quick actions
       {
         id: 'action-new-api',
@@ -122,7 +138,6 @@ export function Layout({ children }: LayoutProps) {
         keywords: ['new', 'create', 'add', 'api'],
         onSelect: () => {
           navigate('/apis');
-          // The page will need to handle opening the create modal
         },
       },
       {
@@ -159,7 +174,7 @@ export function Layout({ children }: LayoutProps) {
     ];
 
     setCommandItems(commands);
-  }, [filteredNavigation, navigate, logout, setCommandItems, resolvedTheme, toggleTheme]);
+  }, [navigationCommands, navigate, logout, setCommandItems, resolvedTheme, toggleTheme]);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-neutral-900 transition-colors">
@@ -199,6 +214,7 @@ export function Layout({ children }: LayoutProps) {
                 <li key={item.name}>
                   <Link
                     to={item.href}
+                    onMouseEnter={() => routePrefetchMap[item.href]?.()}
                     className={clsx(
                       'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                       isActive
@@ -227,16 +243,27 @@ export function Layout({ children }: LayoutProps) {
               <User className="h-5 w-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium text-white">{user?.name}</p>
-              <p className="truncate text-xs text-gray-400">{user?.roles.join(', ')}</p>
+              {user ? (
+                <>
+                  <p className="truncate text-sm font-medium text-white">{user.name}</p>
+                  <p className="truncate text-xs text-gray-400">{user.roles.join(', ')}</p>
+                </>
+              ) : (
+                <>
+                  <div className="h-4 w-24 bg-gray-700 rounded animate-pulse" />
+                  <div className="h-3 w-16 bg-gray-700 rounded animate-pulse mt-1" />
+                </>
+              )}
             </div>
-            <button
-              onClick={logout}
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 dark:hover:bg-neutral-800 hover:text-white flex-shrink-0"
-              title="Logout"
-            >
-              <LogOut className="h-5 w-5" />
-            </button>
+            {user && (
+              <button
+                onClick={logout}
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 dark:hover:bg-neutral-800 hover:text-white flex-shrink-0"
+                title="Logout"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            )}
           </div>
         </div>
       </div>

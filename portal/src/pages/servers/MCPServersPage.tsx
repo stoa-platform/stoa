@@ -42,9 +42,9 @@ const categoryConfig: Record<ServerCategory, {
 };
 
 const statusColors: Record<string, { bg: string; text: string }> = {
-  active: { bg: 'bg-green-100', text: 'text-green-700' },
-  maintenance: { bg: 'bg-amber-100', text: 'text-amber-700' },
-  deprecated: { bg: 'bg-red-100', text: 'text-red-700' },
+  active: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400' },
+  maintenance: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-400' },
+  deprecated: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400' },
 };
 
 export function MCPServersPage() {
@@ -165,15 +165,15 @@ export function MCPServersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">AI Tools</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Tools</h1>
+          <p className="text-gray-500 dark:text-neutral-400 mt-1">
             Discover and subscribe to AI-powered tool collections
           </p>
         </div>
         <button
           onClick={handleRefresh}
           disabled={isLoading}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           Refresh
@@ -182,12 +182,12 @@ export function MCPServersPage() {
 
       {/* Admin Notice */}
       {isAdminUser && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
+            <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
             <div>
-              <h3 className="font-medium text-blue-800">Admin Access</h3>
-              <p className="text-sm text-blue-600 mt-1">
+              <h3 className="font-medium text-blue-800 dark:text-blue-300">Admin Access</h3>
+              <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
                 You have access to Platform Tools (STOA administration) which are not visible to standard users.
               </p>
             </div>
@@ -204,13 +204,13 @@ export function MCPServersPage() {
             placeholder="Search AI tools..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
       </div>
 
       {/* Category Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-4">
+      <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-neutral-700 pb-4">
         {availableCategories.map((cat) => {
           const config = categoryConfig[cat];
           const Icon = config.icon;
@@ -224,14 +224,14 @@ export function MCPServersPage() {
               onClick={() => setSelectedCategory(cat)}
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 selectedCategory === cat
-                  ? 'bg-primary-100 text-primary-700 border border-primary-200'
-                  : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
+                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700'
+                  : 'bg-gray-50 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300 border border-gray-200 dark:border-neutral-700 hover:bg-gray-100 dark:hover:bg-neutral-700'
               }`}
             >
               <Icon className="h-4 w-4" />
               {config.label}
               <span className={`px-2 py-0.5 rounded-full text-xs ${
-                selectedCategory === cat ? 'bg-primary-200' : 'bg-gray-200'
+                selectedCategory === cat ? 'bg-primary-200 dark:bg-primary-800' : 'bg-gray-200 dark:bg-neutral-700'
               }`}>
                 {count}
               </span>
@@ -245,15 +245,15 @@ export function MCPServersPage() {
 
       {/* Error State */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
           <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
+            <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5" />
             <div>
-              <h3 className="font-medium text-red-800">Failed to load servers</h3>
-              <p className="text-sm text-red-600 mt-1">{error}</p>
+              <h3 className="font-medium text-red-800 dark:text-red-300">Failed to load servers</h3>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">{error}</p>
               <button
                 onClick={handleRefresh}
-                className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-medium transition-colors"
+                className="mt-3 px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 text-sm font-medium transition-colors"
               >
                 Try Again
               </button>
@@ -274,7 +274,7 @@ export function MCPServersPage() {
               <Link
                 key={server.id}
                 to={`/servers/${server.id}`}
-                className="bg-white rounded-lg border border-gray-200 p-5 hover:border-primary-300 hover:shadow-md transition-all group"
+                className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-5 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all group"
               >
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
@@ -302,21 +302,21 @@ export function MCPServersPage() {
                 </div>
 
                 {/* Title & Description */}
-                <h3 className="font-semibold text-gray-900 group-hover:text-primary-700 transition-colors">
+                <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-400 transition-colors">
                   {server.displayName}
                 </h3>
-                <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1 line-clamp-2">
                   {server.description}
                 </p>
 
                 {/* Tools Count */}
-                <div className="flex items-center gap-4 mt-4 text-sm text-gray-500">
+                <div className="flex items-center gap-4 mt-4 text-sm text-gray-500 dark:text-neutral-400">
                   <div className="flex items-center gap-1">
                     <Wrench className="h-4 w-4" />
                     <span>{server.tools.length} tools</span>
                   </div>
                   {server.version && (
-                    <span className="text-gray-400">v{server.version}</span>
+                    <span className="text-gray-400 dark:text-neutral-500">v{server.version}</span>
                   )}
                 </div>
 
@@ -325,21 +325,21 @@ export function MCPServersPage() {
                   {server.tools.slice(0, 3).map((tool) => (
                     <span
                       key={tool.id}
-                      className="inline-flex items-center px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full"
+                      className="inline-flex items-center px-2 py-0.5 text-xs bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 rounded-full"
                     >
                       {tool.displayName}
                     </span>
                   ))}
                   {server.tools.length > 3 && (
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-400 dark:text-neutral-500">
                       +{server.tools.length - 3} more
                     </span>
                   )}
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded capitalize">
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-neutral-700">
+                  <span className="text-xs font-medium text-gray-500 dark:text-neutral-400 bg-gray-100 dark:bg-neutral-700 px-2 py-1 rounded capitalize">
                     {server.category}
                   </span>
                   <span className="flex items-center gap-1 text-sm font-medium text-primary-600 group-hover:text-primary-700">
@@ -355,12 +355,12 @@ export function MCPServersPage() {
 
       {/* Empty State */}
       {!isLoading && !error && filteredServers.length === 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <div className="inline-flex p-4 bg-gray-100 rounded-full mb-4">
-            <Wrench className="h-8 w-8 text-gray-400" />
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
+          <div className="inline-flex p-4 bg-gray-100 dark:bg-neutral-700 rounded-full mb-4">
+            <Wrench className="h-8 w-8 text-gray-400 dark:text-neutral-500" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">No AI Tools Found</h2>
-          <p className="text-gray-500 max-w-md mx-auto mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No AI Tools Found</h2>
+          <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
             {searchQuery || selectedCategory !== 'all'
               ? 'No tools match your current filters. Try adjusting your search or category.'
               : 'No AI tools are currently available for your account.'}

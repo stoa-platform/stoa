@@ -69,26 +69,26 @@ export const CreateContractPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-neutral-900">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200">
+      <header className="bg-white dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/contracts')}
-              className="text-gray-500 hover:text-gray-700 transition-colors"
+              className="text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <FileCode className="h-5 w-5 text-blue-600" />
+              <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <FileCode className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">
+                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
                   Create Contract
                 </h1>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 dark:text-neutral-400">
                   Define once, expose via REST, MCP, GraphQL & more
                 </p>
               </div>
@@ -102,8 +102,8 @@ export const CreateContractPage: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Error message */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-sm text-red-700">{error}</p>
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             </div>
           )}
 
@@ -111,7 +111,7 @@ export const CreateContractPage: React.FC = () => {
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
             >
               Contract Name <span className="text-red-500">*</span>
             </label>
@@ -123,9 +123,9 @@ export const CreateContractPage: React.FC = () => {
               value={formData.name}
               onChange={handleInputChange}
               placeholder="e.g., customer-api"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
               Lowercase, hyphens allowed. Used in endpoints.
             </p>
           </div>
@@ -134,7 +134,7 @@ export const CreateContractPage: React.FC = () => {
           <div>
             <label
               htmlFor="display_name"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
             >
               Display Name
             </label>
@@ -145,7 +145,7 @@ export const CreateContractPage: React.FC = () => {
               value={formData.display_name || ''}
               onChange={handleInputChange}
               placeholder="e.g., Customer API"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -153,7 +153,7 @@ export const CreateContractPage: React.FC = () => {
           <div>
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
             >
               Description
             </label>
@@ -164,7 +164,7 @@ export const CreateContractPage: React.FC = () => {
               value={formData.description || ''}
               onChange={handleInputChange}
               placeholder="What does this API do?"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -172,7 +172,7 @@ export const CreateContractPage: React.FC = () => {
           <div>
             <label
               htmlFor="version"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
             >
               Version
             </label>
@@ -183,7 +183,7 @@ export const CreateContractPage: React.FC = () => {
               value={formData.version || ''}
               onChange={handleInputChange}
               placeholder="1.0.0"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -191,7 +191,7 @@ export const CreateContractPage: React.FC = () => {
           <div>
             <label
               htmlFor="openapi_spec_url"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
             >
               OpenAPI Spec URL
             </label>
@@ -202,22 +202,22 @@ export const CreateContractPage: React.FC = () => {
               value={formData.openapi_spec_url || ''}
               onChange={handleInputChange}
               placeholder="https://example.com/openapi.yaml"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-neutral-400 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
               Optional. Link to your OpenAPI/Swagger specification.
             </p>
           </div>
 
           {/* Info box */}
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <span className="text-2xl">🤖</span>
               <div>
-                <p className="text-sm font-medium text-purple-800">
+                <p className="text-sm font-medium text-purple-800 dark:text-purple-300">
                   MCP binding auto-generated
                 </p>
-                <p className="text-sm text-purple-700 mt-1">
+                <p className="text-sm text-purple-700 dark:text-purple-400 mt-1">
                   When you publish this contract, STOA will automatically create
                   an MCP tool that AI agents can use. No extra configuration needed!
                 </p>
@@ -226,11 +226,11 @@ export const CreateContractPage: React.FC = () => {
           </div>
 
           {/* Submit button */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-neutral-700">
             <button
               type="button"
               onClick={() => navigate('/contracts')}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 bg-white dark:bg-neutral-700 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-600 transition-colors"
             >
               Cancel
             </button>

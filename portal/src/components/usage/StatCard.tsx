@@ -21,34 +21,34 @@ interface StatCardProps {
 
 const colorClasses = {
   cyan: {
-    bg: 'bg-cyan-50',
-    border: 'border-cyan-200',
-    text: 'text-cyan-600',
-    icon: 'text-cyan-500',
+    bg: 'bg-cyan-50 dark:bg-cyan-900/20',
+    border: 'border-cyan-200 dark:border-cyan-800',
+    text: 'text-cyan-600 dark:text-cyan-400',
+    icon: 'text-cyan-500 dark:text-cyan-400',
   },
   emerald: {
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    text: 'text-emerald-600',
-    icon: 'text-emerald-500',
+    bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+    border: 'border-emerald-200 dark:border-emerald-800',
+    text: 'text-emerald-600 dark:text-emerald-400',
+    icon: 'text-emerald-500 dark:text-emerald-400',
   },
   amber: {
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    text: 'text-amber-600',
-    icon: 'text-amber-500',
+    bg: 'bg-amber-50 dark:bg-amber-900/20',
+    border: 'border-amber-200 dark:border-amber-800',
+    text: 'text-amber-600 dark:text-amber-400',
+    icon: 'text-amber-500 dark:text-amber-400',
   },
   red: {
-    bg: 'bg-red-50',
-    border: 'border-red-200',
-    text: 'text-red-600',
-    icon: 'text-red-500',
+    bg: 'bg-red-50 dark:bg-red-900/20',
+    border: 'border-red-200 dark:border-red-800',
+    text: 'text-red-600 dark:text-red-400',
+    icon: 'text-red-500 dark:text-red-400',
   },
   purple: {
-    bg: 'bg-purple-50',
-    border: 'border-purple-200',
-    text: 'text-purple-600',
-    icon: 'text-purple-500',
+    bg: 'bg-purple-50 dark:bg-purple-900/20',
+    border: 'border-purple-200 dark:border-purple-800',
+    text: 'text-purple-600 dark:text-purple-400',
+    icon: 'text-purple-500 dark:text-purple-400',
   },
 };
 
@@ -66,9 +66,9 @@ export const StatCard = memo(function StatCard({
   if (isLoading) {
     return (
       <div className={`rounded-xl border ${colors.border} ${colors.bg} p-6 animate-pulse`}>
-        <div className="h-4 w-24 bg-gray-200 rounded mb-3" />
-        <div className="h-8 w-32 bg-gray-200 rounded mb-2" />
-        <div className="h-3 w-20 bg-gray-200 rounded" />
+        <div className="h-4 w-24 bg-gray-200 dark:bg-neutral-700 rounded mb-3" />
+        <div className="h-8 w-32 bg-gray-200 dark:bg-neutral-700 rounded mb-2" />
+        <div className="h-3 w-20 bg-gray-200 dark:bg-neutral-700 rounded" />
       </div>
     );
   }
@@ -76,7 +76,7 @@ export const StatCard = memo(function StatCard({
   return (
     <div className={`rounded-xl border ${colors.border} ${colors.bg} p-6 transition-shadow hover:shadow-md`}>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+        <span className="text-sm font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wide">
           {title}
         </span>
         {icon && (
@@ -92,15 +92,15 @@ export const StatCard = memo(function StatCard({
 
       <div className="flex items-center gap-2">
         {subtitle && (
-          <span className="text-sm text-gray-500">{subtitle}</span>
+          <span className="text-sm text-gray-500 dark:text-neutral-400">{subtitle}</span>
         )}
 
         {trend && (
           <span className={`
             text-xs font-medium px-2 py-0.5 rounded-full
             ${trend.isPositive
-              ? 'bg-emerald-100 text-emerald-600'
-              : 'bg-red-100 text-red-600'
+              ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+              : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
             }
           `}>
             {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%

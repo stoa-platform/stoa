@@ -87,20 +87,20 @@ export function APICatalog() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">API Catalog</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">API Catalog</h1>
+          <p className="text-gray-500 dark:text-neutral-400 mt-1">
             Browse and discover available APIs
           </p>
         </div>
         <div className="flex items-center gap-2">
           {/* View mode toggle */}
-          <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+          <div className="flex items-center border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode('grid')}
               className={`p-2 ${
                 viewMode === 'grid'
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'bg-white text-gray-500 hover:bg-gray-50'
+                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                  : 'bg-white dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-700'
               }`}
               title="Grid view"
             >
@@ -110,8 +110,8 @@ export function APICatalog() {
               onClick={() => setViewMode('list')}
               className={`p-2 ${
                 viewMode === 'list'
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'bg-white text-gray-500 hover:bg-gray-50'
+                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                  : 'bg-white dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-700'
               }`}
               title="List view"
             >
@@ -122,7 +122,7 @@ export function APICatalog() {
           <button
             onClick={() => refetchAPIs()}
             disabled={apisLoading}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             title="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${apisLoading ? 'animate-spin' : ''}`} />
@@ -145,7 +145,7 @@ export function APICatalog() {
 
       {/* Results count */}
       {!apisLoading && !apisError && (
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-gray-500 dark:text-neutral-400">
           {totalCount === 0 ? (
             'No APIs found'
           ) : totalCount === 1 ? (
@@ -159,25 +159,25 @@ export function APICatalog() {
 
       {/* Loading state */}
       {apisLoading && (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
           <Loader2 className="h-8 w-8 text-primary-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Loading APIs...</p>
+          <p className="text-gray-500 dark:text-neutral-400">Loading APIs...</p>
         </div>
       )}
 
       {/* Error state */}
       {apisError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
           <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
+            <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5" />
             <div>
-              <h3 className="font-medium text-red-800">Failed to load APIs</h3>
-              <p className="text-sm text-red-600 mt-1">
+              <h3 className="font-medium text-red-800 dark:text-red-300">Failed to load APIs</h3>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
                 {(apisErrorDetails as Error)?.message || 'An unexpected error occurred'}
               </p>
               <button
                 onClick={() => refetchAPIs()}
-                className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-medium transition-colors"
+                className="mt-3 px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 text-sm font-medium transition-colors"
               >
                 Try Again
               </button>
@@ -188,12 +188,12 @@ export function APICatalog() {
 
       {/* Empty state */}
       {!apisLoading && !apisError && apis.length === 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <div className="inline-flex p-4 bg-gray-100 rounded-full mb-4">
-            <BookOpen className="h-8 w-8 text-gray-400" />
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
+          <div className="inline-flex p-4 bg-gray-100 dark:bg-neutral-700 rounded-full mb-4">
+            <BookOpen className="h-8 w-8 text-gray-400 dark:text-neutral-500" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">No APIs Found</h2>
-          <p className="text-gray-500 max-w-md mx-auto">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No APIs Found</h2>
+          <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto">
             {search || category || universe
               ? 'No APIs match your current filters. Try adjusting your search criteria.'
               : 'There are no published APIs available yet. Check back later!'}
@@ -232,22 +232,22 @@ export function APICatalog() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-              <div className="text-sm text-gray-500">
+            <div className="flex items-center justify-between border-t border-gray-200 dark:border-neutral-700 pt-4">
+              <div className="text-sm text-gray-500 dark:text-neutral-400">
                 Page {page} of {totalPages}
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
                 </button>

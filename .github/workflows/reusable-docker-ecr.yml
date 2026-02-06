@@ -20,7 +20,7 @@ on:
         description: 'Docker target platforms'
         required: false
         type: string
-        default: 'linux/amd64,linux/arm64'
+        default: 'linux/amd64'
       build-args:
         description: 'Docker build-args (newline-separated KEY=VALUE)'
         required: false

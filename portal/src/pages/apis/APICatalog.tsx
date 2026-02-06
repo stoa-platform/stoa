@@ -5,11 +5,13 @@
  * Optimized with debounced search and server-side filtering.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Grid3X3, List, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAPIs, useAPICategories, useUniverses } from '../../hooks/useAPIs';
 import { APICard } from '../../components/apis/APICard';
 import { APIFilters } from '../../components/apis/APIFilters';
+import { apiCatalogService } from '../../services/apiCatalog';
 import type { API } from '../../types';
 
 type ViewMode = 'grid' | 'list';
@@ -32,12 +34,22 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 export function APICatalog() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [universe, setUniverse] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [page, setPage] = useState(1);
   const pageSize = 12;
+
+  // Prefetch API detail on hover for faster navigation
+  const prefetchAPI = useCallback((id: string) => {
+    queryClient.prefetchQuery({
+      queryKey: ['api', id],
+      queryFn: () => apiCatalogService.getAPI(id),
+      staleTime: 60 * 1000, // 1 minute, matches useAPI hook
+    });
+  }, [queryClient]);
 
   // Debounce search for better performance (300ms delay)
   const debouncedSearch = useDebounce(search, 300);
@@ -219,13 +231,21 @@ export function APICatalog() {
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {apis.map((api: API) => (
-                <APICard key={api.id} api={api} />
+                <APICard
+                  key={api.id}
+                  api={api}
+                  onMouseEnter={() => prefetchAPI(api.id)}
+                />
               ))}
             </div>
           ) : (
             <div className="space-y-4">
               {apis.map((api: API) => (
-                <APICard key={api.id} api={api} />
+                <APICard
+                  key={api.id}
+                  api={api}
+                  onMouseEnter={() => prefetchAPI(api.id)}
+                />
               ))}
             </div>
           )}

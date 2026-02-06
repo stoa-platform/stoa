@@ -49,11 +49,7 @@ spec:
             - name: STOA_LOG_FORMAT
               value: "json"
             - name: STOA_KEYCLOAK_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: stoa-gateway-config
-                  key: STOA_KEYCLOAK_URL
-                  optional: true
+              value: "https://auth.gostoa.dev"
             - name: STOA_KEYCLOAK_REALM
               value: "stoa"
             - name: STOA_KEYCLOAK_CLIENT_ID

@@ -1,0 +1,64 @@
+# SLO Definitions for STOA Platform Deployments
+# CAB-CD-001: Enterprise CD Architecture
+#
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stoa-deployment-alerts
+  namespace: stoa-monitoring
+  labels:
+    app.kubernetes.io/name: stoa-deployment-alerts
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  groups:
+    - name: stoa.deployment.slo
+      interval: 1m
+      rules:
+        # Recording rules for SLO calculations
+        - record: stoa:deployment:success_rate:7d
+          expr: |
+            sum(increase(argocd_app_sync_total{project=~"stoa.*",phase="Succeeded"}[7d]))
+            /
+            sum(increase(argocd_app_sync_total{project=~"stoa.*"}[7d]))
+
+        - record: stoa:deployment:failure_rate:7d
+          expr: |
+            sum(increase(argocd_app_sync_total{project=~"stoa.*",phase="Failed"}[7d]))
+            /
+            sum(increase(argocd_app_sync_total{project=~"stoa.*"}[7d]))
+
+        - record: stoa:deployment:lead_time:avg
+          expr: |
+            avg(argocd_app_reconcile_duration_seconds{project=~"stoa.*"})
+
+        # Alerting rules
+        - alert: StoaDeploymentSuccessRateLow
+          expr: stoa:deployment:success_rate:7d < 0.95
+          for: 5m
+          labels:
+            severity: critical
+            component: cd-pipeline
+          annotations:
+            summary: "Deployment success rate critically low"
+            description: "Deployment success rate is {{ $value | humanizePercentage }} over the last 7 days"
+
+        - alert: StoaDeploymentSuccessRateWarning
+          expr: stoa:deployment:success_rate:7d < 0.99 and stoa:deployment:success_rate:7d >= 0.95
+          for: 15m
+          labels:
+            severity: warning
+            component: cd-pipeline
+          annotations:
+            summary: "Deployment success rate below SLO"
+            description: "Deployment success rate is {{ $value | humanizePercentage }}, below 99% target"
+
+        - alert: StoaApplicationDegraded
+          expr: count(argocd_app_info{project=~"stoa.*",health_status="Degraded"}) > 0
+          for: 5m
+          labels:
+            severity: critical
+            component: platform
+          annotations:
+            summary: "STOA application degraded"
+            description: "{{ $value }} STOA application(s) are in Degraded state"

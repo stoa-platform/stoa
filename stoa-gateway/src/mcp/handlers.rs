@@ -139,6 +139,35 @@ pub async fn mcp_tools_call(
         raw_token: None,
     };
 
+    // Check UAC permission using OPA policy engine (Phase 2: CAB-1105)
+    let required_action = tool.required_action();
+    if let Err(e) = state.uac_enforcer.check_with_context(
+        ctx.user_id.clone(),
+        ctx.user_email.clone(),
+        &ctx.tenant_id,
+        &request.name,
+        required_action,
+        ctx.scopes.clone(),
+        ctx.roles.clone(),
+    ) {
+        warn!(
+            tool = %request.name,
+            action = ?required_action,
+            tenant = %tenant_id,
+            "UAC policy denied: {}",
+            e
+        );
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ToolsCallResponse {
+                content: vec![ToolContent::Text {
+                    text: format!("Permission denied: {}", e),
+                }],
+                is_error: Some(true),
+            }),
+        );
+    }
+
     // Execute tool
     match tool.execute(request.arguments, &ctx).await {
         Ok(result) => {

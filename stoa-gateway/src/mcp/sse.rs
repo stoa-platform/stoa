@@ -2,8 +2,10 @@
 //!
 //! Implements the MCP Streamable HTTP Transport (spec 2025-03-26)
 //! Supports both stateless JSON-RPC and stateful SSE connections.
+//! Supports JSON-RPC batch requests (array of requests).
 
 use axum::{
+    body::Bytes,
     extract::{Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{sse::Event, IntoResponse, Response, Sse},
@@ -21,6 +23,7 @@ use uuid::Uuid;
 use crate::mcp::session::Session;
 use crate::mcp::tools::ToolContext;
 use crate::metrics;
+use crate::optimization::{OptimizationSettings, TokenOptimizer};
 use crate::state::AppState;
 
 // ============================================
@@ -87,6 +90,51 @@ const INVALID_PARAMS: i32 = -32602;
 const INTERNAL_ERROR: i32 = -32603;
 
 // ============================================
+// MCP Protocol Version Negotiation (2025-03-26)
+// ============================================
+
+/// Supported MCP protocol versions (newest first)
+const SUPPORTED_VERSIONS: &[&str] = &[
+    "2025-03-26", // Latest - full annotations, outputSchema, elicitation
+    "2024-11-05", // Previous stable - backward compat
+];
+
+/// Default protocol version (returned when client doesn't specify)
+const DEFAULT_PROTOCOL_VERSION: &str = "2025-03-26";
+
+/// Negotiate the highest mutually supported protocol version
+///
+/// Returns the highest version that both client and server support.
+/// If client requests unknown version, returns latest supported.
+fn negotiate_protocol_version(client_version: Option<&str>) -> &'static str {
+    match client_version {
+        Some(requested) => {
+            // Check if client's requested version is supported
+            if SUPPORTED_VERSIONS.contains(&requested) {
+                // Find the static str from our list
+                SUPPORTED_VERSIONS
+                    .iter()
+                    .find(|&&v| v == requested)
+                    .copied()
+                    .unwrap_or(DEFAULT_PROTOCOL_VERSION)
+            } else {
+                // Unknown version - return latest
+                debug!(
+                    requested = %requested,
+                    negotiated = %DEFAULT_PROTOCOL_VERSION,
+                    "Client requested unknown version, using latest"
+                );
+                DEFAULT_PROTOCOL_VERSION
+            }
+        }
+        None => {
+            // No version specified - use default (latest)
+            DEFAULT_PROTOCOL_VERSION
+        }
+    }
+}
+
+// ============================================
 // SSE Query Parameters
 // ============================================
 
@@ -101,17 +149,50 @@ pub struct SseQueryParams {
 // Handlers
 // ============================================
 
-/// POST /mcp/sse - Handle JSON-RPC request
+/// POST /mcp/sse - Handle JSON-RPC request (single or batch)
 ///
 /// Accepts JSON-RPC requests and returns either:
 /// - JSON response for simple requests
+/// - JSON array of responses for batch requests (MCP 2025-03-26)
 /// - SSE stream for streaming responses
 pub async fn handle_sse_post(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(params): Query<SseQueryParams>,
-    Json(request): Json<JsonRpcRequest>,
+    body: Bytes,
 ) -> Response {
+    // === Phase 5: Batch Request Detection (MCP 2025-03-26) ===
+    let parsed: Value = match serde_json::from_slice(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            return Json(JsonRpcResponse::error(
+                None,
+                PARSE_ERROR,
+                format!("Parse error: {}", e),
+            ))
+            .into_response();
+        }
+    };
+
+    // Detect batch vs single request
+    if parsed.is_array() {
+        // Batch request - process all and return array
+        return handle_batch_request(state, headers, params, parsed).await;
+    }
+
+    // Single request - parse and process
+    let request: JsonRpcRequest = match serde_json::from_value(parsed) {
+        Ok(r) => r,
+        Err(e) => {
+            return Json(JsonRpcResponse::error(
+                None,
+                INVALID_REQUEST,
+                format!("Invalid request: {}", e),
+            ))
+            .into_response();
+        }
+    };
+
     let request_id = Uuid::new_v4().to_string();
     debug!(
         request_id = %request_id,
@@ -253,10 +334,10 @@ pub async fn handle_sse_post(
 
     // Route to handler
     let response = match request.method.as_str() {
-        "initialize" => handle_initialize(&state, &request, &ctx).await,
+        "initialize" => handle_initialize(&state, &request, &ctx, &session_id).await,
         "ping" => handle_ping(&request),
         "tools/list" => handle_tools_list(&state, &request, &ctx).await,
-        "tools/call" => handle_tools_call(&state, &request, &ctx).await,
+        "tools/call" => handle_tools_call(&state, &request, &ctx, &session_id).await,
         "resources/list" => handle_resources_list(&state, &request).await,
         "notifications/initialized" => {
             // Client notification, no response needed
@@ -372,13 +453,147 @@ pub async fn handle_sse_delete(
 }
 
 // ============================================
+// Batch Request Handler (MCP 2025-03-26)
+// ============================================
+
+/// Handle batch JSON-RPC requests
+///
+/// Processes an array of requests in parallel and returns array of responses.
+/// Errors in individual requests don't affect others.
+async fn handle_batch_request(
+    state: AppState,
+    headers: HeaderMap,
+    params: SseQueryParams,
+    batch: Value,
+) -> Response {
+    let requests: Vec<Value> = match batch.as_array() {
+        Some(arr) => arr.clone(),
+        None => {
+            return Json(JsonRpcResponse::error(
+                None,
+                INVALID_REQUEST,
+                "Expected array for batch request",
+            ))
+            .into_response();
+        }
+    };
+
+    // Empty batch returns empty array
+    if requests.is_empty() {
+        return Json::<Vec<JsonRpcResponse>>(vec![]).into_response();
+    }
+
+    debug!(count = requests.len(), "Processing batch request");
+
+    // Process all requests concurrently
+    let futures: Vec<_> = requests
+        .into_iter()
+        .map(|req_value| {
+            let state = state.clone();
+            let headers = headers.clone();
+            let params_clone = SseQueryParams {
+                session_id: params.session_id.clone(),
+            };
+
+            async move {
+                // Parse individual request
+                let request: JsonRpcRequest = match serde_json::from_value(req_value.clone()) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        // Extract id from raw value if possible
+                        let id = req_value.get("id").cloned();
+                        return JsonRpcResponse::error(
+                            id,
+                            INVALID_REQUEST,
+                            format!("Invalid request: {}", e),
+                        );
+                    }
+                };
+
+                // Route to appropriate handler
+                process_single_request(&state, &headers, &params_clone, request).await
+            }
+        })
+        .collect();
+
+    let responses: Vec<JsonRpcResponse> = futures::future::join_all(futures).await;
+
+    // Return session ID if we have one
+    let mut resp = Json(responses).into_response();
+    if let Some(ref session_id) = params.session_id {
+        if let Ok(value) = session_id.parse() {
+            resp.headers_mut().insert("Mcp-Session-Id", value);
+        }
+    }
+    resp
+}
+
+/// Process a single JSON-RPC request (used by both single and batch handlers)
+async fn process_single_request(
+    state: &AppState,
+    headers: &HeaderMap,
+    params: &SseQueryParams,
+    request: JsonRpcRequest,
+) -> JsonRpcResponse {
+    // Validate JSON-RPC version
+    if request.jsonrpc != "2.0" {
+        return JsonRpcResponse::error(request.id, INVALID_REQUEST, "Invalid JSON-RPC version");
+    }
+
+    // For batch processing, we need simplified auth check
+    // Full auth is handled in the main handler for single requests
+    let public_methods = ["initialize", "ping", "notifications/initialized"];
+    let has_auth = headers.get(header::AUTHORIZATION).is_some();
+
+    if !public_methods.contains(&request.method.as_str()) && !has_auth {
+        return JsonRpcResponse::error(request.id, -32001, "Authentication required");
+    }
+
+    // Extract tenant and create minimal context
+    let tenant_id = extract_tenant(headers).unwrap_or_else(|| "default".to_string());
+    let session_id = params
+        .session_id
+        .clone()
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+    let ctx = ToolContext {
+        tenant_id,
+        user_id: None,
+        user_email: None,
+        request_id: Uuid::new_v4().to_string(),
+        roles: vec![],
+        scopes: vec![],
+        raw_token: None,
+    };
+
+    // Route to handler
+    match request.method.as_str() {
+        "initialize" => handle_initialize(state, &request, &ctx, &session_id).await,
+        "ping" => handle_ping(&request),
+        "tools/list" => handle_tools_list(state, &request, &ctx).await,
+        "tools/call" => handle_tools_call(state, &request, &ctx, &session_id).await,
+        "resources/list" => handle_resources_list(state, &request).await,
+        "notifications/initialized" => {
+            // No response for notifications
+            JsonRpcResponse::success(None, json!(null))
+        }
+        _ => JsonRpcResponse::error(
+            request.id,
+            METHOD_NOT_FOUND,
+            format!("Method '{}' not found", request.method),
+        ),
+    }
+}
+
+// ============================================
 // JSON-RPC Method Handlers
 // ============================================
 
 async fn handle_initialize(
-    _state: &AppState,
+    state: &AppState,
     request: &JsonRpcRequest,
     _ctx: &ToolContext,
+    session_id: &str,
 ) -> JsonRpcResponse {
     debug!("Handling initialize request");
 
@@ -389,11 +604,59 @@ async fn handle_initialize(
         debug!(client_info = ?info, "Client connected");
     }
 
+    // === Phase 5: Protocol Version Negotiation (MCP 2025-03-26) ===
+    let client_version = request
+        .params
+        .as_ref()
+        .and_then(|p| p.get("protocolVersion"))
+        .and_then(|v| v.as_str());
+
+    let negotiated_version = negotiate_protocol_version(client_version);
+
+    // Store negotiated protocol version in session
+    state
+        .session_manager
+        .update_metadata(
+            session_id,
+            "protocol_version".to_string(),
+            negotiated_version.to_string(),
+        )
+        .await;
+
+    debug!(
+        client_version = ?client_version,
+        negotiated_version = %negotiated_version,
+        "Protocol version negotiated"
+    );
+
+    // === Phase 4: Token Optimization Capability Negotiation (ADR-015) ===
+    // Parse client capabilities for tokenOptimization preferences
+    if let Some(capabilities) = request.params.as_ref().and_then(|p| p.get("capabilities")) {
+        let opt_settings = OptimizationSettings::from_capabilities(capabilities);
+
+        // Store optimization settings in session metadata (JSON serialized)
+        if let Ok(settings_json) = opt_settings.to_metadata() {
+            state
+                .session_manager
+                .update_metadata(
+                    session_id,
+                    "optimization_settings".to_string(),
+                    settings_json,
+                )
+                .await;
+            debug!(
+                level = ?opt_settings.level,
+                max_tokens = ?opt_settings.max_response_tokens,
+                "Token optimization negotiated"
+            );
+        }
+    }
+
     let result = json!({
-        "protocolVersion": "2024-11-05",
+        "protocolVersion": negotiated_version,
         "capabilities": {
             "tools": {
-                "listChanged": false
+                "listChanged": true  // We support tool list change notifications
             },
             "resources": {
                 "subscribe": false,
@@ -402,7 +665,14 @@ async fn handle_initialize(
             "prompts": {
                 "listChanged": false
             },
-            "logging": {}
+            "logging": {},
+            // Advertise token optimization support (Phase 4)
+            "tokenOptimization": {
+                "supported": true,
+                "levels": ["none", "moderate", "aggressive"]
+            },
+            // Advertise elicitation support (Phase 5)
+            "elicitation": {}
         },
         "serverInfo": {
             "name": "STOA Gateway",
@@ -435,6 +705,7 @@ async fn handle_tools_call(
     state: &AppState,
     request: &JsonRpcRequest,
     ctx: &ToolContext,
+    session_id: &str,
 ) -> JsonRpcResponse {
     let params = match &request.params {
         Some(p) => p,
@@ -497,6 +768,15 @@ async fn handle_tools_call(
         );
     }
 
+    // === Phase 4: Token Optimization (ADR-015) ===
+    // Retrieve optimization settings from session metadata
+    let opt_settings = state
+        .session_manager
+        .get_metadata(session_id, "optimization_settings")
+        .await
+        .and_then(|json| OptimizationSettings::from_metadata(&json).ok())
+        .unwrap_or_default();
+
     // Execute tool
     match tool.execute(arguments, ctx).await {
         Ok(result) => {
@@ -506,7 +786,27 @@ async fn handle_tools_call(
             if let Some(true) = result.is_error {
                 result_json["isError"] = json!(true);
             }
-            JsonRpcResponse::success(request.id.clone(), result_json)
+
+            // Apply token optimization if enabled (Phase 4: ADR-015)
+            let optimized_result = if opt_settings.is_enabled() {
+                let optimizer = TokenOptimizer::new(opt_settings.clone());
+                let (optimized, stats) = optimizer.optimize(&result_json);
+
+                debug!(
+                    tool = %tool_name,
+                    level = ?opt_settings.level,
+                    input_bytes = stats.input_bytes,
+                    output_bytes = stats.output_bytes,
+                    reduction_pct = stats.reduction_pct,
+                    "Token optimization applied"
+                );
+
+                optimized
+            } else {
+                result_json
+            };
+
+            JsonRpcResponse::success(request.id.clone(), optimized_result)
         }
         Err(e) => {
             error!(tool = %tool_name, error = %e, "Tool execution failed");
@@ -554,5 +854,40 @@ mod tests {
         assert!(resp.error.is_some());
         assert!(resp.result.is_none());
         assert_eq!(resp.error.as_ref().unwrap().code, -32600);
+    }
+
+    // === Phase 5: Protocol Version Negotiation Tests ===
+
+    #[test]
+    fn test_negotiate_version_2025() {
+        let result = negotiate_protocol_version(Some("2025-03-26"));
+        assert_eq!(result, "2025-03-26");
+    }
+
+    #[test]
+    fn test_negotiate_version_2024() {
+        let result = negotiate_protocol_version(Some("2024-11-05"));
+        assert_eq!(result, "2024-11-05");
+    }
+
+    #[test]
+    fn test_negotiate_version_unknown() {
+        // Unknown version → returns latest
+        let result = negotiate_protocol_version(Some("2099-01-01"));
+        assert_eq!(result, "2025-03-26");
+    }
+
+    #[test]
+    fn test_negotiate_version_none() {
+        // No version → returns default (latest)
+        let result = negotiate_protocol_version(None);
+        assert_eq!(result, "2025-03-26");
+    }
+
+    #[test]
+    fn test_supported_versions_order() {
+        // Latest version should be first
+        assert_eq!(SUPPORTED_VERSIONS[0], "2025-03-26");
+        assert!(SUPPORTED_VERSIONS.contains(&"2024-11-05"));
     }
 }

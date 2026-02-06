@@ -10,6 +10,7 @@ import type {
   GatewayInstance,
   GatewayType,
   GatewayInstanceStatus,
+  GatewayMode,
 } from '../../types';
 
 const statusColors: Record<GatewayInstanceStatus, string> = {
@@ -19,12 +20,30 @@ const statusColors: Record<GatewayInstanceStatus, string> = {
   maintenance: 'bg-blue-100 text-blue-800',
 };
 
+const modeColors: Record<GatewayMode, string> = {
+  'edge-mcp': 'bg-blue-100 text-blue-800 border-blue-200',
+  sidecar: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  proxy: 'bg-purple-100 text-purple-800 border-purple-200',
+  shadow: 'bg-orange-100 text-orange-800 border-orange-200',
+};
+
+const modeLabels: Record<GatewayMode, string> = {
+  'edge-mcp': 'Edge MCP',
+  sidecar: 'Sidecar',
+  proxy: 'Proxy',
+  shadow: 'Shadow',
+};
+
 const typeLabels: Record<GatewayType, string> = {
   webmethods: 'webMethods',
   kong: 'Kong',
   apigee: 'Apigee',
   aws_apigateway: 'AWS API Gateway',
   stoa: 'STOA',
+  stoa_edge_mcp: 'STOA Edge MCP',
+  stoa_sidecar: 'STOA Sidecar',
+  stoa_proxy: 'STOA Proxy',
+  stoa_shadow: 'STOA Shadow',
 };
 
 export function GatewayList() {
@@ -36,6 +55,23 @@ export function GatewayList() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [healthChecking, setHealthChecking] = useState<string | null>(null);
+  const [modeFilter, setModeFilter] = useState<GatewayMode | ''>('');
+
+  // Filter gateways by mode
+  const filteredGateways = modeFilter
+    ? gateways.filter((gw) => gw.mode === modeFilter)
+    : gateways;
+
+  // Count STOA gateways by mode for the filter dropdown
+  const modeCounts = gateways.reduce(
+    (acc, gw) => {
+      if (gw.mode) {
+        acc[gw.mode] = (acc[gw.mode] || 0) + 1;
+      }
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 
   const loadGateways = useCallback(async () => {
     try {
@@ -68,23 +104,26 @@ export function GatewayList() {
     }
   };
 
-  const handleDelete = useCallback(async (id: string, name: string) => {
-    const confirmed = await confirm({
-      title: 'Delete Gateway',
-      message: `Are you sure you want to delete "${name}"? This cannot be undone.`,
-      confirmLabel: 'Delete',
-      variant: 'danger',
-    });
-    if (!confirmed) return;
+  const handleDelete = useCallback(
+    async (id: string, name: string) => {
+      const confirmed = await confirm({
+        title: 'Delete Gateway',
+        message: `Are you sure you want to delete "${name}"? This cannot be undone.`,
+        confirmLabel: 'Delete',
+        variant: 'danger',
+      });
+      if (!confirmed) return;
 
-    try {
-      await apiService.deleteGatewayInstance(id);
-      toast.success(`Gateway "${name}" deleted successfully`);
-      await loadGateways();
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to delete gateway');
-    }
-  }, [confirm, toast, loadGateways]);
+      try {
+        await apiService.deleteGatewayInstance(id);
+        toast.success(`Gateway "${name}" deleted successfully`);
+        await loadGateways();
+      } catch (err: any) {
+        toast.error(err.response?.data?.detail || 'Failed to delete gateway');
+      }
+    },
+    [confirm, toast, loadGateways],
+  );
 
   const handleCreated = () => {
     setShowForm(false);
@@ -117,12 +156,31 @@ export function GatewayList() {
             Manage registered gateway instances across all environments
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-        >
-          {showForm ? 'Cancel' : '+ Register Gateway'}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Mode Filter */}
+          {Object.keys(modeCounts).length > 0 && (
+            <select
+              value={modeFilter}
+              onChange={(e) => setModeFilter(e.target.value as GatewayMode | '')}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All Modes ({gateways.length})</option>
+              {(['edge-mcp', 'sidecar', 'proxy', 'shadow'] as GatewayMode[]).map((mode) =>
+                modeCounts[mode] ? (
+                  <option key={mode} value={mode}>
+                    {modeLabels[mode]} ({modeCounts[mode]})
+                  </option>
+                ) : null,
+              )}
+            </select>
+          )}
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          >
+            {showForm ? 'Cancel' : '+ Register Gateway'}
+          </button>
+        </div>
       </div>
 
       {/* Error Banner */}
@@ -137,32 +195,44 @@ export function GatewayList() {
 
       {/* Registration Form */}
       {showForm && (
-        <GatewayRegistrationForm
-          onCreated={handleCreated}
-          onCancel={() => setShowForm(false)}
-        />
+        <GatewayRegistrationForm onCreated={handleCreated} onCancel={() => setShowForm(false)} />
       )}
 
       {/* Gateway Cards */}
-      {gateways.length === 0 ? (
+      {filteredGateways.length === 0 ? (
         <div className="bg-white rounded-lg shadow">
           <EmptyState
             variant="servers"
-            title="No gateways registered"
-            description="Register your first gateway instance to start multi-gateway orchestration."
+            title={modeFilter ? `No ${modeLabels[modeFilter]} gateways` : 'No gateways registered'}
+            description={
+              modeFilter
+                ? 'Try clearing the filter or register a new gateway.'
+                : 'Register your first gateway instance to start multi-gateway orchestration.'
+            }
             action={{ label: 'Register Gateway', onClick: () => setShowForm(true) }}
           />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {gateways.map((gw) => (
+          {filteredGateways.map((gw) => (
             <div key={gw.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
               <div className="p-6">
                 {/* Header row */}
                 <div className="flex items-center justify-between mb-3">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[gw.status]}`}>
-                    {gw.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[gw.status]}`}
+                    >
+                      {gw.status}
+                    </span>
+                    {gw.mode && (
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded-full border ${modeColors[gw.mode]}`}
+                      >
+                        {modeLabels[gw.mode]}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-gray-400 font-mono">
                     {typeLabels[gw.gateway_type] || gw.gateway_type}
                   </span>
@@ -184,7 +254,10 @@ export function GatewayList() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Base URL</span>
-                    <span className="font-mono text-xs text-gray-700 truncate ml-2 max-w-[180px]" title={gw.base_url}>
+                    <span
+                      className="font-mono text-xs text-gray-700 truncate ml-2 max-w-[180px]"
+                      title={gw.base_url}
+                    >
                       {gw.base_url}
                     </span>
                   </div>

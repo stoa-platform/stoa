@@ -326,6 +326,20 @@ class ApiService {
     return data;
   }
 
+  async getGatewayModeStats(): Promise<{
+    modes: Array<{
+      mode: string;
+      total: number;
+      online: number;
+      offline: number;
+      degraded: number;
+    }>;
+    total_gateways: number;
+  }> {
+    const { data } = await this.client.get('/v1/admin/gateways/modes/stats');
+    return data;
+  }
+
   // Gateway Deployments
   async getDeploymentStatusSummary(): Promise<any> {
     const { data } = await this.client.get('/v1/admin/deployments/status');

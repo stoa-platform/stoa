@@ -81,12 +81,32 @@ def _derive_instance_name(hostname: str, mode: str, environment: str) -> str:
 
 
 def _mode_to_gateway_type(mode: str) -> GatewayType:
-    """Map gateway mode to GatewayType enum."""
-    mode_lower = mode.lower().replace("_", "").replace("-", "")
-    if mode_lower == "sidecar":
-        return GatewayType.STOA_SIDECAR
-    # All other modes (edge_mcp, proxy, shadow) are full STOA gateways
-    return GatewayType.STOA
+    """Map gateway mode to GatewayType enum (ADR-024)."""
+    mode_lower = mode.lower().replace("_", "-")
+    mode_map = {
+        "edge-mcp": GatewayType.STOA_EDGE_MCP,
+        "edgemcp": GatewayType.STOA_EDGE_MCP,
+        "mcp": GatewayType.STOA_EDGE_MCP,
+        "sidecar": GatewayType.STOA_SIDECAR,
+        "proxy": GatewayType.STOA_PROXY,
+        "shadow": GatewayType.STOA_SHADOW,
+    }
+    return mode_map.get(mode_lower, GatewayType.STOA)
+
+
+def _normalize_mode(mode: str) -> str:
+    """Normalize mode string to canonical form (ADR-024)."""
+    mode_lower = mode.lower().replace("_", "-")
+    mode_map = {
+        "edge-mcp": "edge-mcp",
+        "edgemcp": "edge-mcp",
+        "edge_mcp": "edge-mcp",
+        "mcp": "edge-mcp",
+        "sidecar": "sidecar",
+        "proxy": "proxy",
+        "shadow": "shadow",
+    }
+    return mode_map.get(mode_lower, "edge-mcp")
 
 
 # --- Endpoints ---
@@ -109,9 +129,10 @@ async def register_gateway(
 
     repo = GatewayInstanceRepository(db)
 
-    # Derive deterministic instance name
+    # Derive deterministic instance name and normalize mode
     instance_name = _derive_instance_name(payload.hostname, payload.mode, payload.environment)
     gateway_type = _mode_to_gateway_type(payload.mode)
+    normalized_mode = _normalize_mode(payload.mode)
 
     logger.info(
         "Gateway registration request: name=%s, type=%s, version=%s, capabilities=%s",
@@ -132,9 +153,10 @@ async def register_gateway(
         existing.base_url = payload.admin_url
         existing.status = GatewayInstanceStatus.ONLINE
         existing.last_health_check = now
+        existing.mode = normalized_mode  # ADR-024
         existing.health_details = {
             "registered_at": now.isoformat(),
-            "mode": payload.mode,
+            "mode": normalized_mode,
             "hostname": payload.hostname,
         }
         instance = await repo.update(existing)
@@ -144,7 +166,7 @@ async def register_gateway(
         # Create new registration
         instance = GatewayInstance(
             name=instance_name,
-            display_name=f"STOA Gateway ({payload.mode})",
+            display_name=f"STOA Gateway ({normalized_mode})",
             gateway_type=gateway_type,
             environment=payload.environment,
             tenant_id=payload.tenant_id,
@@ -152,14 +174,15 @@ async def register_gateway(
             auth_config={"type": "gateway_key"},  # Internal auth via heartbeat
             status=GatewayInstanceStatus.ONLINE,
             last_health_check=now,
+            mode=normalized_mode,  # ADR-024
             health_details={
                 "registered_at": now.isoformat(),
-                "mode": payload.mode,
+                "mode": normalized_mode,
                 "hostname": payload.hostname,
             },
             capabilities=payload.capabilities,
             version=payload.version,
-            tags=[f"mode:{payload.mode}", "auto-registered"],
+            tags=[f"mode:{normalized_mode}", "auto-registered"],
         )
         instance = await repo.create(instance)
         await db.commit()

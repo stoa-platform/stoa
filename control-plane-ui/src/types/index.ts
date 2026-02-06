@@ -825,7 +825,17 @@ export interface ProspectsFilters {
 // Gateway Instance Types (Control Plane Agnostique)
 // =============================================================================
 
-export type GatewayType = 'webmethods' | 'kong' | 'apigee' | 'aws_apigateway' | 'stoa';
+export type GatewayType =
+  | 'webmethods'
+  | 'kong'
+  | 'apigee'
+  | 'aws_apigateway'
+  | 'stoa'
+  | 'stoa_edge_mcp'
+  | 'stoa_sidecar'
+  | 'stoa_proxy'
+  | 'stoa_shadow';
+export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow';
 export type GatewayInstanceStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
 export type DeploymentSyncStatus = 'pending' | 'syncing' | 'synced' | 'drifted' | 'error' | 'deleting';
 
@@ -844,6 +854,7 @@ export interface GatewayInstance {
   capabilities: string[];
   version?: string;
   tags: string[];
+  mode?: GatewayMode;
   created_at: string;
   updated_at: string;
 }

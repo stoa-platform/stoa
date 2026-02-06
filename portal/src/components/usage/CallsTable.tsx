@@ -3,7 +3,7 @@
  * Table des derniers appels MCP avec filtres
  */
 
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Check, X, Clock } from 'lucide-react';
 import type { UsageCall, UsageCallStatus } from '../../types';
 import { formatLatency } from '../../services/usage';
@@ -84,17 +84,36 @@ function TableSkeleton() {
   );
 }
 
+const PAGE_SIZE = 25;
+
 export function CallsTable({ calls, isLoading = false, onFilterChange }: CallsTableProps) {
   const [selectedStatus, setSelectedStatus] = useState<UsageCallStatus | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const handleStatusFilter = (status: UsageCallStatus | null) => {
     setSelectedStatus(status);
     onFilterChange?.(status, null);
   };
 
-  const filteredCalls = selectedStatus
-    ? calls.filter(c => c.status === selectedStatus)
-    : calls;
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedStatus]);
+
+  // Memoize filtered calls for performance
+  const filteredCalls = useMemo(
+    () => selectedStatus ? calls.filter(c => c.status === selectedStatus) : calls,
+    [calls, selectedStatus]
+  );
+
+  // Calculate pagination
+  const totalPages = Math.max(1, Math.ceil(filteredCalls.length / PAGE_SIZE));
+
+  // Memoize paginated calls
+  const paginatedCalls = useMemo(
+    () => filteredCalls.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredCalls, currentPage]
+  );
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 overflow-hidden">
@@ -138,7 +157,7 @@ export function CallsTable({ calls, isLoading = false, onFilterChange }: CallsTa
               </tr>
             </thead>
             <tbody>
-              {filteredCalls.map((call) => (
+              {paginatedCalls.map((call) => (
                 <tr
                   key={call.id}
                   className="border-b border-gray-50 dark:border-neutral-700/50 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
@@ -171,7 +190,7 @@ export function CallsTable({ calls, isLoading = false, onFilterChange }: CallsTa
           </table>
 
           {/* Empty state */}
-          {filteredCalls.length === 0 && (
+          {paginatedCalls.length === 0 && (
             <div className="p-8 text-center">
               <p className="text-gray-500 dark:text-neutral-400">No calls found</p>
             </div>
@@ -179,14 +198,27 @@ export function CallsTable({ calls, isLoading = false, onFilterChange }: CallsTa
         </div>
       )}
 
-      {/* Footer */}
+      {/* Footer with pagination */}
       <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900">
         <span className="text-sm text-gray-500 dark:text-neutral-400">
-          Showing {filteredCalls.length} of {calls.length} calls
+          {filteredCalls.length} results — Page {currentPage}/{totalPages}
         </span>
-        <button className="text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors">
-          View all →
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+          >
+            Previous
+          </button>
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );

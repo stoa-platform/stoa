@@ -27,9 +27,11 @@ async function getStats(): Promise<DashboardStats> {
  * Fallback: aggregate stats from existing endpoints
  */
 async function getFallbackStats(): Promise<DashboardStats> {
+  // Limit requests to avoid loading too much data in fallback mode
+  // We only need counts, not full data
   const [toolsResponse, subscriptionsResponse, usageResponse] = await Promise.allSettled([
-    mcpClient.get('/tools'),
-    mcpClient.get('/subscriptions'),
+    mcpClient.get('/tools', { params: { limit: 1 } }), // Just need total_count
+    mcpClient.get('/subscriptions', { params: { page_size: 100 } }), // Reasonable limit for counting
     apiClient.get('/v1/usage/me'),
   ]);
 

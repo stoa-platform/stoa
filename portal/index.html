@@ -5,6 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>STOA Developer Portal</title>
+    <!-- Preconnect to auth, API and MCP for faster initial load -->
+    <link rel="preconnect" href="https://auth.gostoa.dev" crossorigin>
+    <link rel="dns-prefetch" href="https://auth.gostoa.dev">
+    <link rel="preconnect" href="https://api.gostoa.dev" crossorigin>
+    <link rel="dns-prefetch" href="https://api.gostoa.dev">
+    <link rel="preconnect" href="https://mcp.gostoa.dev" crossorigin>
+    <link rel="dns-prefetch" href="https://mcp.gostoa.dev">
   </head>
   <body>
     <div id="root"></div>

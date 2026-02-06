@@ -258,19 +258,39 @@ export function useMyAPISubscriptions() {
 
 /**
  * Hook to get subscriptions for an application
+ * Uses server-side filtering via application_id parameter (CAB-XXX)
+ * Falls back to client-side filtering if backend doesn't fully support it
  */
 export function useApplicationSubscriptions(applicationId: string | undefined) {
-  const { data: allSubscriptions, ...rest } = useMyAPISubscriptions();
-
-  // Filter subscriptions by application ID
-  const subscriptions = allSubscriptions?.filter(
-    (sub) => sub.applicationId === applicationId
-  );
-
-  return {
-    ...rest,
-    data: subscriptions,
-  };
+  return useQuery<APISubscription[]>({
+    queryKey: ['my-api-subscriptions', { application_id: applicationId }],
+    queryFn: async () => {
+      if (!applicationId) return [];
+      // Request with application_id filter for server-side filtering
+      const response = await apiSubscriptionsService.listMySubscriptions({
+        application_id: applicationId,
+      });
+      const subscriptions = response.items.map((item) => ({
+        id: item.id,
+        applicationId: item.application_id,
+        applicationName: item.application_name,
+        apiId: item.api_id,
+        apiName: item.api_name,
+        apiVersion: item.api_version,
+        tenantId: item.tenant_id,
+        planId: item.plan_id || undefined,
+        planName: item.plan_name || undefined,
+        status: item.status,
+        apiKeyPrefix: item.api_key_prefix,
+        createdAt: item.created_at,
+        expiresAt: item.expires_at || undefined,
+      }));
+      // Client-side filter as fallback if backend doesn't filter
+      return subscriptions.filter((sub) => sub.applicationId === applicationId);
+    },
+    enabled: !!applicationId,
+    staleTime: 30 * 1000, // 30 seconds
+  });
 }
 
 /**

@@ -4,7 +4,7 @@
  * Browse and discover MCP Tools with search and category filtering.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search,
@@ -16,6 +16,8 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useTools, useToolCategories, useToolCategoriesWithCounts } from '../../hooks/useTools';
 import type { MCPTool } from '../../types';
@@ -32,10 +34,13 @@ const statusConfig: Record<ToolStatus, {
   deprecated: { label: 'Deprecated', color: 'text-red-700', bg: 'bg-red-100' },
 };
 
+const PAGE_SIZE = 24; // Multiple of 3 for grid layout
+
 export function ToolsCatalog() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
   // Debounce search query for API calls
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -46,6 +51,11 @@ export function ToolsCatalog() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, selectedCategory, selectedTags]);
 
   const {
     data: toolsData,
@@ -62,8 +72,16 @@ export function ToolsCatalog() {
   const { data: categories } = useToolCategories();
   const { data: categoriesWithCounts } = useToolCategoriesWithCounts();
 
-  const tools = toolsData?.tools || [];
+  // Memoize tools to ensure stable reference for pagination useMemo
+  const tools = useMemo(() => toolsData?.tools || [], [toolsData?.tools]);
   const allCategories = ['All', ...(categories || [])];
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(tools.length / PAGE_SIZE));
+  const paginatedTools = useMemo(
+    () => tools.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [tools, currentPage]
+  );
 
   // Get tag counts from categories for display
   const getCategoryCount = (categoryName: string) => {
@@ -203,12 +221,15 @@ export function ToolsCatalog() {
       {/* Tools Grid */}
       {!isLoading && !isError && tools.length > 0 && (
         <>
-          <div className="text-sm text-gray-500">
-            {tools.length === 1 ? '1 tool' : `${tools.length} tools`}
-            {selectedCategory !== 'All' && ` in ${selectedCategory}`}
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              {tools.length === 1 ? '1 tool' : `${tools.length} tools`}
+              {selectedCategory !== 'All' && ` in ${selectedCategory}`}
+              {totalPages > 1 && ` — Page ${currentPage}/${totalPages}`}
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tools.map((tool: MCPTool, index: number) => {
+            {paginatedTools.map((tool: MCPTool, index: number) => {
               const status = statusConfig[(tool.status || 'active') as ToolStatus] || statusConfig.active;
               const toolId = tool.name || tool.id || `tool-${index}`; // MCP tools use name as identifier
 
@@ -304,6 +325,31 @@ export function ToolsCatalog() {
               );
             })}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 pt-4">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </button>
+              <span className="text-sm text-gray-500 dark:text-neutral-400">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </>
       )}
 

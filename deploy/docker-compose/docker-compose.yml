@@ -57,8 +57,12 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_RELATIVE_PATH: /
+      # Phase 2: Allow iframe embedding in Console (CAB-1108)
+      KC_SPI_X_FRAME_OPTIONS: ""
+      KC_SPI_CONTENT_SECURITY_POLICY: "frame-ancestors 'self' http://localhost:* https://console.gostoa.dev"
     volumes:
       - ./init/keycloak-realm.json:/opt/keycloak/data/import/stoa-realm.json:ro
+      - ../../keycloak/themes/stoa:/opt/keycloak/themes/stoa:ro
       - keycloak-data:/opt/keycloak/data
     networks:
       - stoa-network
@@ -190,9 +194,15 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/stoa-overview.json
+      # STOA Branding (CAB-1108)
+      GF_APP_TITLE: "STOA Observability"
+      # Phase 2: Allow iframe embedding in Console
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./config/grafana/img/stoa-logo-navbar.svg:/usr/share/grafana/public/img/grafana_icon.svg:ro
+      - ./config/grafana/img/fav32.png:/usr/share/grafana/public/img/fav32.png:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus

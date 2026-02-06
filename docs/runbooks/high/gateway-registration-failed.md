@@ -264,7 +264,7 @@ curl -s "https://api.gostoa.dev/v1/internal/gateways/$GATEWAY_ID/config" \
 ### Documentation
 
 - [Gateway Auto-Registration Guide](../guides/gateway-auto-registration.md)
-- [ADR-028: Gateway Auto-Registration](../architecture/adr/adr-028-gateway-auto-registration.md)
+- [ADR-036: Gateway Auto-Registration](https://docs.gostoa.dev/architecture/adr/adr-036-gateway-auto-registration)
 - [ADR-024: Gateway Unified Modes](https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes)
 
 ### Grafana Dashboards

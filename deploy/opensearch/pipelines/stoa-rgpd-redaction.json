@@ -1,0 +1,29 @@
+{
+  "description": "RGPD Art.4 PII redaction — CAB-1114 Phase 2 (patterns from control-plane-api/src/core/pii/patterns.py)",
+  "processors": [
+    {
+      "remove": {
+        "description": "Strip payloads for successful responses (2xx/3xx) — RGPD: no payload stored on success",
+        "field": ["request_body", "response_body"],
+        "ignore_missing": true,
+        "if": "ctx.status != null && ctx.status < 400"
+      }
+    },
+    {
+      "script": {
+        "description": "Redact PII from error payloads (4xx/5xx) — 7 pattern types",
+        "if": "ctx.status != null && ctx.status >= 400",
+        "lang": "painless",
+        "source": "def redactedFields = new ArrayList(); for (def f : ['request_body', 'response_body', 'error_message']) { if (ctx.containsKey(f) && ctx[f] != null) { def text = ctx[f].toString(); def original = text; text = /eyJ[A-Za-z0-9_-]*\\.eyJ[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]*/.matcher(text).replaceAll('[TOKEN:REDACTED]'); text = /\\b[A-Z]{2}\\d{2}[A-Z0-9]{4,30}\\b/.matcher(text).replaceAll('[IBAN:REDACTED]'); text = /\\b(?:4\\d{12}(?:\\d{3})?|5[1-5]\\d{14}|3[47]\\d{13})\\b/.matcher(text).replaceAll('[CARD:REDACTED]'); text = /\\b[12]\\d{2}(?:0[1-9]|1[0-2])\\d{5}\\d{3}(?:\\s?\\d{2})?\\b/.matcher(text).replaceAll('[SSN:REDACTED]'); text = /\\b(?:sk|pk|api|key|token|secret)[-_]?[A-Za-z0-9]{16,}\\b/.matcher(text).replaceAll('[APIKEY:REDACTED]'); text = /\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b/.matcher(text).replaceAll('[EMAIL:REDACTED]'); text = /(?:\\+33|0033|0)[1-9](?:[\\s.-]?\\d{2}){4}/.matcher(text).replaceAll('[PHONE:REDACTED]'); if (!text.equals(original)) { redactedFields.add(f); } ctx[f] = text; } } ctx.rgpd_redacted = redactedFields.size() > 0; ctx.rgpd_redacted_fields = redactedFields;"
+      }
+    },
+    {
+      "set": {
+        "description": "Initialize RGPD audit fields for non-error responses",
+        "field": "rgpd_redacted",
+        "value": false,
+        "if": "ctx.rgpd_redacted == null"
+      }
+    }
+  ]
+}

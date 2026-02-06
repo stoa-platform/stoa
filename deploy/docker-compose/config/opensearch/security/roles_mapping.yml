@@ -1,0 +1,55 @@
+# =============================================================================
+# STOA Platform - OpenSearch Roles Mapping
+# =============================================================================
+# CAB-1114 Phase 3: Map Keycloak users/roles to OpenSearch roles
+# =============================================================================
+# Mapping uses 'users' (preferred_username from JWT subject_key) for
+# tenant-specific roles, since backend_roles (realm roles like tenant-admin)
+# are shared across tenants.
+# =============================================================================
+
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+
+# Admin access for internal admin user
+all_access:
+  reserved: false
+  backend_roles:
+    - "admin"
+
+# Dashboards internal service account
+kibana_server:
+  reserved: true
+  users:
+    - "kibanaserver"
+
+# All OIDC users get basic Dashboards access
+kibana_user:
+  reserved: false
+  backend_roles:
+    - "cpi-admin"
+    - "tenant-admin"
+    - "devops"
+    - "viewer"
+
+# Platform admins see all tenant logs
+stoa_logs_admin:
+  reserved: false
+  backend_roles:
+    - "cpi-admin"
+
+# Oasis Gunters tenant members
+stoa_logs_tenant_oasis_gunters:
+  reserved: false
+  users:
+    - "parzival"
+    - "art3mis"
+    - "aech"
+
+# IOI Sixers tenant members
+stoa_logs_tenant_ioi_sixers:
+  reserved: false
+  users:
+    - "sorrento"
+    - "sixer42"

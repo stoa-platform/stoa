@@ -18,7 +18,7 @@
     app_name: "{{ app_def.metadata.name }}"
     app_description: "{{ app_def.metadata.description | default('') }}"
     app_client_id: "{{ app_def.spec.clientId }}"
-    app_contact_email: "{{ app_def.spec.contactEmail | default('admin@cab-i.com') }}"
+    app_contact_email: "{{ app_def.spec.contactEmail | default('admin@gostoa.dev') }}"
     app_consuming_apis: "{{ app_def.spec.consumingAPIs | default([]) }}"
     app_auth_strategy: "{{ app_def.spec.authStrategy | default('') }}"
 

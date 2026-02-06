@@ -332,7 +332,7 @@ app = FastAPI(
     contact={
         "name": "CAB Ingénierie",
         "url": "https://gostoa.dev",
-        "email": "support@cab-i.com",
+        "email": "support@gostoa.dev",
     },
     license_info={
         "name": "Apache 2.0",

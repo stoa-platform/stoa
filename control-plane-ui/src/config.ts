@@ -110,7 +110,7 @@ export const config = {
       url: import.meta.env.VITE_PROMETHEUS_URL || `https://prometheus.${BASE_DOMAIN}`,
     },
     logs: {
-      url: import.meta.env.VITE_LOGS_URL || `https://grafana.${BASE_DOMAIN}/explore`,
+      url: import.meta.env.VITE_LOGS_URL || '/logs/',
     },
   },
 

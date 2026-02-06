@@ -652,7 +652,7 @@
           name: "control-plane-ui"
           description: "STOA Control Plane UI Application"
           contactEmails:
-            - "admin@cab-i.com"
+            - "admin@gostoa.dev"
           identifiers:
             - key: "openIdClaims"
               name: "client_id"
@@ -687,7 +687,7 @@
           name: "control-plane-ui"
           description: "STOA Control Plane UI Application"
           contactEmails:
-            - "admin@cab-i.com"
+            - "admin@gostoa.dev"
           authStrategyIds:
             - "{{ oauth_strategy_id }}"
           identifiers:

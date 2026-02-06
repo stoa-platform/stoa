@@ -9,8 +9,8 @@
 set -uo pipefail
 
 # Configuration
-MCP_GATEWAY="${MCP_GATEWAY:-https://mcp.stoa.cab-i.com}"
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.stoa.cab-i.com}"
+MCP_GATEWAY="${MCP_GATEWAY:-https://mcp.gostoa.dev}"
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 REALM="${REALM:-stoa}"
 
 # Test credentials (from Keycloak)

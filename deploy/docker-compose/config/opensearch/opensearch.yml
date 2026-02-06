@@ -1,0 +1,46 @@
+# =============================================================================
+# STOA Platform - OpenSearch Configuration
+# =============================================================================
+# CAB-1114 Phase 3: Security enabled with TLS (demo certs) + OIDC
+# =============================================================================
+
+cluster.name: stoa-cluster
+node.name: stoa-node-1
+discovery.type: single-node
+bootstrap.memory_lock: true
+network.host: 0.0.0.0
+
+# Painless regex for RGPD redaction pipeline (Phase 2)
+script.painless.regex.enabled: true
+
+# ---------------------------------------------------------------------------
+# Security Plugin - TLS (using demo certificates shipped with the image)
+# ---------------------------------------------------------------------------
+plugins.security.ssl.transport.pemcert_filepath: esnode.pem
+plugins.security.ssl.transport.pemkey_filepath: esnode-key.pem
+plugins.security.ssl.transport.pemtrustedcas_filepath: root-ca.pem
+plugins.security.ssl.transport.enforce_hostname_verification: false
+
+plugins.security.ssl.http.enabled: true
+plugins.security.ssl.http.pemcert_filepath: esnode.pem
+plugins.security.ssl.http.pemkey_filepath: esnode-key.pem
+plugins.security.ssl.http.pemtrustedcas_filepath: root-ca.pem
+
+# ---------------------------------------------------------------------------
+# Security Plugin - Admin & Node DNs (matching demo certificates)
+# ---------------------------------------------------------------------------
+plugins.security.authcz.admin_dn:
+  - "CN=kirk,OU=client,O=client,L=test,C=de"
+
+plugins.security.nodes_dn:
+  - "CN=*.example.com,OU=SSL,O=Test,L=Test,C=DE"
+  - "CN=node.example.com,OU=SSL,O=Test,L=Test,C=DE"
+
+# ---------------------------------------------------------------------------
+# Security Plugin - Demo mode flags
+# ---------------------------------------------------------------------------
+plugins.security.allow_default_init_securityindex: true
+plugins.security.allow_unsafe_democertificates: true
+
+# Audit logging
+plugins.security.audit.type: internal_opensearch

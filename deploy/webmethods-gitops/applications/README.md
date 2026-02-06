@@ -59,7 +59,7 @@ curl -X POST \
   -d '{
     "name": "AppName",
     "description": "Description",
-    "contactEmails": ["admin@cab-i.com"],
+    "contactEmails": ["admin@gostoa.dev"],
     "identifiers": [{
       "key": "openIdClaims",
       "name": "azp",

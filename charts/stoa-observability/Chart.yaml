@@ -6,7 +6,7 @@ version: 0.1.0
 appVersion: "1.0.0"
 maintainers:
   - name: CAB Ingenierie
-    email: support@cab-i.com
+    email: support@gostoa.dev
 dependencies:
   # Grafana Alloy - Unified OTel collector (replaces Prometheus scrape + Promtail)
   - name: alloy

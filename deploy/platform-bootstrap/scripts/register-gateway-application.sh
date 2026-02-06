@@ -40,7 +40,7 @@ GATEWAY_PASSWORD="${GATEWAY_PASSWORD:-manage}"
 APP_NAME="${APP_NAME:-control-plane-ui}"
 APP_CLIENT_ID="${APP_CLIENT_ID:-control-plane-ui}"
 APP_DESCRIPTION="${APP_DESCRIPTION:-STOA Console UI - API Consumer application}"
-CONTACT_EMAIL="${CONTACT_EMAIL:-admin@cab-i.com}"
+CONTACT_EMAIL="${CONTACT_EMAIL:-admin@gostoa.dev}"
 API_ID="${API_ID:-}"
 
 log_step "Registering Application: ${APP_NAME}"

@@ -1,0 +1,75 @@
+# =============================================================================
+# STOA Platform - OpenSearch Roles (Multi-Tenant)
+# =============================================================================
+# CAB-1114 Phase 3: Per-tenant index isolation for STOA Logs
+# =============================================================================
+
+_meta:
+  type: "roles"
+  config_version: 2
+
+# ---------------------------------------------------------------------------
+# Platform admin: access to ALL tenant log indices
+# Mapped to: cpi-admin realm role (halliday, morrow)
+# ---------------------------------------------------------------------------
+stoa_logs_admin:
+  reserved: false
+  cluster_permissions:
+    - "cluster_composite_ops_ro"
+  index_permissions:
+    - index_patterns:
+        - "stoa-logs-*"
+      allowed_actions:
+        - "read"
+        - "search"
+    - index_patterns:
+        - ".kibana*"
+        - ".opensearch_dashboards*"
+      allowed_actions:
+        - "read"
+        - "write"
+        - "create_index"
+
+# ---------------------------------------------------------------------------
+# Tenant: oasis-gunters
+# Mapped to: parzival, art3mis, aech
+# ---------------------------------------------------------------------------
+stoa_logs_tenant_oasis_gunters:
+  reserved: false
+  cluster_permissions:
+    - "cluster_composite_ops_ro"
+  index_permissions:
+    - index_patterns:
+        - "stoa-logs-oasis-gunters-*"
+      allowed_actions:
+        - "read"
+        - "search"
+    - index_patterns:
+        - ".kibana*"
+        - ".opensearch_dashboards*"
+      allowed_actions:
+        - "read"
+        - "write"
+        - "create_index"
+
+# ---------------------------------------------------------------------------
+# Tenant: ioi-sixers
+# Mapped to: sorrento, sixer42
+# ---------------------------------------------------------------------------
+stoa_logs_tenant_ioi_sixers:
+  reserved: false
+  cluster_permissions:
+    - "cluster_composite_ops_ro"
+  index_permissions:
+    - index_patterns:
+        - "stoa-logs-ioi-sixers-*"
+      allowed_actions:
+        - "read"
+        - "search"
+    - index_patterns:
+        - ".kibana*"
+        - ".opensearch_dashboards*"
+      allowed_actions:
+        - "read"
+        - "write"
+        - "create_index"

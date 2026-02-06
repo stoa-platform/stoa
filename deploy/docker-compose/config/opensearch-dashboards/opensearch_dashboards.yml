@@ -1,7 +1,7 @@
 # =============================================================================
 # STOA Logs - OpenSearch Dashboards Configuration
 # =============================================================================
-# CAB-1114 Phase 1: Branding + sub-path serving for reverse proxy
+# CAB-1114 Phase 3: OIDC Authentication via Keycloak + Multi-tenancy
 # =============================================================================
 
 server.host: "0.0.0.0"
@@ -9,9 +9,39 @@ server.port: 5601
 server.basePath: "/logs"
 server.rewriteBasePath: true
 
-opensearch.hosts: ["http://opensearch:9200"]
+# ---------------------------------------------------------------------------
+# OpenSearch connection (TLS enabled, demo certs)
+# ---------------------------------------------------------------------------
+opensearch.hosts: ["https://opensearch:9200"]
+opensearch.ssl.verificationMode: none
+opensearch.username: "kibanaserver"
+opensearch.password: "kibanaserver"
+opensearch.requestHeadersAllowlist: ["Authorization", "securitytenant"]
 
+# ---------------------------------------------------------------------------
+# Security Plugin - OIDC via Keycloak
+# ---------------------------------------------------------------------------
+opensearch_security.auth.type: ["openid"]
+opensearch_security.auth.multiple_auth_enabled: false
+opensearch_security.openid.connect_url: "http://keycloak:8080/realms/stoa/.well-known/openid-configuration"
+opensearch_security.openid.client_id: "opensearch-dashboards"
+opensearch_security.openid.client_secret: "opensearch-dashboards-dev-secret"
+opensearch_security.openid.scope: "openid profile email roles"
+opensearch_security.openid.base_redirect_url: "http://localhost/logs"
+opensearch_security.openid.logout_url: "http://localhost/auth/realms/stoa/protocol/openid-connect/logout?redirect_uri=http://localhost/logs"
+opensearch_security.openid.root_ca: ""
+opensearch_security.openid.verify_hostnames: false
+opensearch_security.openid.trust_dynamic_headers: true
+
+# ---------------------------------------------------------------------------
+# Multi-tenancy (saved objects isolation per tenant)
+# ---------------------------------------------------------------------------
+opensearch_security.multitenancy.enabled: true
+opensearch_security.multitenancy.tenants.preferred: ["Private", "Global"]
+
+# ---------------------------------------------------------------------------
 # STOA Branding
+# ---------------------------------------------------------------------------
 opensearchDashboards.branding:
   applicationTitle: "STOA Logs"
   mark:

@@ -170,7 +170,7 @@ applications:
   control_plane_ui:
     name: control-plane-ui
     description: "STOA Control Plane UI Application"
-    contact_email: admin@cab-i.com
+    contact_email: admin@gostoa.dev
     identifier:
       key: openIdClaims
       name: client_id          # Use client_id claim
@@ -183,7 +183,7 @@ applications:
   awx_automation:
     name: awx-automation
     description: "AWX Ansible Automation Service Account for OIDC proxy access"
-    contact_email: admin@cab-i.com
+    contact_email: admin@gostoa.dev
     identifier:
       key: openIdClaims
       name: client_id          # Use client_id claim (not azp)
@@ -196,7 +196,7 @@ applications:
   control_plane_gateway_admin:
     name: control-plane-gateway-admin
     description: "Control-Plane API backend for Gateway Admin access"
-    contact_email: admin@cab-i.com
+    contact_email: admin@gostoa.dev
     identifier:
       key: openIdClaims
       name: client_id          # Use client_id claim
@@ -207,7 +207,7 @@ applications:
   stoa_portal:
     name: stoa-portal
     description: "STOA Developer Portal Application"
-    contact_email: developers@cab-i.com
+    contact_email: developers@gostoa.dev
     identifier:
       key: openIdClaims
       name: client_id

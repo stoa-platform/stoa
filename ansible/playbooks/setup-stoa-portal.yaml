@@ -303,7 +303,7 @@
           name: "stoa-portal"
           description: "STOA Developer Portal Application"
           contactEmails:
-            - "developers@cab-i.com"
+            - "developers@gostoa.dev"
           authStrategyIds:
             - "{{ portal_strategy_id }}"
           identifiers:

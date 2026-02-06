@@ -17,7 +17,7 @@ infrastructure:
   K8S_NAMESPACE_PREFIX: "stoa"
 
   # Base domain
-  BASE_DOMAIN: "stoa.cab-i.com"
+  BASE_DOMAIN: "gostoa.dev"
 
   # ArgoCD
   ARGOCD_NAMESPACE: "argocd"

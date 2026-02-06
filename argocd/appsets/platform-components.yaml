@@ -1,0 +1,60 @@
+# ApplicationSet for STOA Platform Components with Sync Waves
+# CAB-CD-001: Enterprise CD Architecture
+#
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: stoa-platform-components
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: stoa-platform-components
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - environment: dev
+                  cluster: https://kubernetes.default.svc
+                - environment: staging
+                  cluster: https://kubernetes.default.svc
+                - environment: prod
+                  cluster: https://kubernetes.default.svc
+          - list:
+              elements:
+                - component: external-secrets
+                  wave: "1"
+                - component: control-plane-api
+                  wave: "2"
+                - component: mcp-gateway
+                  wave: "3"
+                - component: control-plane-ui
+                  wave: "4"
+                - component: portal
+                  wave: "5"
+  template:
+    metadata:
+      name: '{{.component}}-{{.environment}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{.wave}}'
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: stoa-deployments
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: stoa-alerts
+    spec:
+      project: stoa-platform
+      source:
+        repoURL: https://gitlab.com/cab6961310/stoa-gitops.git
+        targetRevision: main
+        path: 'platform/{{.component}}'
+        helm:
+          valueFiles:
+            - values.yaml
+            - 'values-{{.environment}}.yaml'
+      destination:
+        server: '{{.cluster}}'
+        namespace: stoa-system
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true

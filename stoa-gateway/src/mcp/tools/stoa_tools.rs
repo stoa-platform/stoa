@@ -75,13 +75,14 @@ fn infer_action(tool_name: &str) -> Action {
 /// Native tools (12 STOA tools) are always registered and call CP API directly.
 /// Additional tools discovered from CP are registered as ProxyTool (fallback).
 pub async fn discover_and_register(
-    registry: &ToolRegistry,
+    registry: Arc<ToolRegistry>,
     cp: &Arc<ToolProxyClient>,
 ) -> Result<usize, String> {
     // First, register all native tools
     let cp_url = cp.base_url();
     let http_client = create_http_client();
-    register_native_tools(registry, http_client, cp_url, Arc::new(ToolRegistry::new()));
+    // Pass the actual registry so stoa_tools can introspect it
+    register_native_tools(&registry, http_client, cp_url, registry.clone());
 
     tracing::info!("Native tools registered (12 STOA tools, direct CP API calls)");
 
@@ -91,7 +92,7 @@ pub async fn discover_and_register(
             let mut proxy_count = 0;
             for def in &defs {
                 if !has_native_implementation(&def.name) {
-                    register_remote_tool(registry, def, cp);
+                    register_remote_tool(&registry, def, cp);
                     proxy_count += 1;
                 }
             }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
 import { useAuth as useOidcAuth, hasAuthParams } from 'react-oidc-context';
 import type { User } from '../types';
 import { apiService } from '../services/api';
@@ -118,24 +118,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [oidc.isAuthenticated, oidc.isLoading]);
 
-  const hasPermission = (permission: string): boolean => {
+  const hasPermission = useCallback((permission: string): boolean => {
     return user?.permissions.includes(permission) ?? false;
-  };
+  }, [user]);
 
-  const hasRole = (role: string): boolean => {
+  const hasRole = useCallback((role: string): boolean => {
     return user?.roles.includes(role) ?? false;
-  };
+  }, [user]);
 
-  const value: AuthContextType = {
+  const login = useCallback(() => oidc.signinRedirect(), [oidc]);
+  const logout = useCallback(() => oidc.signoutRedirect(), [oidc]);
+
+  const value: AuthContextType = useMemo(() => ({
     user,
     isAuthenticated: oidc.isAuthenticated,
     isLoading: oidc.isLoading,
-    isReady, // Token is set and ready for API calls
-    login: () => oidc.signinRedirect(),
-    logout: () => oidc.signoutRedirect(),
+    isReady,
+    login,
+    logout,
     hasPermission,
     hasRole,
-  };
+  }), [user, oidc.isAuthenticated, oidc.isLoading, isReady, login, logout, hasPermission, hasRole]);
 
   return (
     <AuthContext.Provider value={value}>

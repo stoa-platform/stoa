@@ -7,7 +7,7 @@
  * Reference: CAB-564 - UAC Badge & Tooltips
  */
 
-import React from 'react';
+import React, { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, FileCode2, AlertCircle, Loader2 } from 'lucide-react';
 import { useContracts } from '../../hooks/useContracts';
@@ -35,12 +35,12 @@ const ProtocolBadge: React.FC<{ protocol: ProtocolType }> = ({ protocol }) => {
   );
 };
 
-// Contract card component
+// Contract card component - memoized to prevent unnecessary re-renders in grid
 interface ContractCardProps {
   contract: Contract;
 }
 
-const ContractCard: React.FC<ContractCardProps> = ({ contract }) => {
+const ContractCard = memo<ContractCardProps>(function ContractCard({ contract }) {
   // Prepare bindings for UACBadge
   const badgeBindings: ProtocolBinding[] = contract.bindings?.map((b) => ({
     protocol: b.protocol,
@@ -124,7 +124,7 @@ const ContractCard: React.FC<ContractCardProps> = ({ contract }) => {
       </div>
     </Link>
   );
-};
+});
 
 // Empty state component
 const EmptyState: React.FC = () => (

@@ -12,6 +12,7 @@ import type { API } from '../../types';
 
 interface APICardProps {
   api: API;
+  onMouseEnter?: () => void;
 }
 
 // Move static objects outside component to prevent recreation on each render
@@ -28,7 +29,7 @@ const dateFormatOptions: Intl.DateTimeFormatOptions = {
   year: 'numeric',
 };
 
-export const APICard = memo(function APICard({ api }: APICardProps) {
+export const APICard = memo(function APICard({ api, onMouseEnter }: APICardProps) {
   // Memoize the formatted date to avoid recalculating on each render
   const formattedDate = useMemo(() => {
     return new Date(api.updatedAt).toLocaleDateString('en-US', dateFormatOptions);
@@ -37,6 +38,7 @@ export const APICard = memo(function APICard({ api }: APICardProps) {
   return (
     <Link
       to={`/apis/${api.id}`}
+      onMouseEnter={onMouseEnter}
       className="group bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all"
     >
       <div className="flex items-start justify-between mb-3">

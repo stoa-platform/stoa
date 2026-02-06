@@ -70,6 +70,7 @@ export interface ListAPISubscriptionsParams {
   page?: number;
   page_size?: number;
   status?: APISubscriptionStatus;
+  application_id?: string; // Server-side filter when backend supports it
 }
 
 export interface KeyRotationRequest {
@@ -129,6 +130,7 @@ export const apiSubscriptionsService = {
         page: params?.page || 1,
         page_size: params?.page_size || 20,
         status: params?.status,
+        application_id: params?.application_id, // Server-side filter when backend supports it
       },
     });
     return response.data;

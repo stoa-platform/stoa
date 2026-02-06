@@ -80,6 +80,24 @@ impl SessionManager {
         self.sessions.write().remove(id).is_some()
     }
 
+    /// Update session metadata
+    pub async fn update_metadata(&self, id: &str, key: String, value: String) -> bool {
+        let mut sessions = self.sessions.write();
+        if let Some(session) = sessions.get_mut(id) {
+            session.metadata.insert(key, value);
+            session.touch();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Get session metadata value
+    pub async fn get_metadata(&self, id: &str, key: &str) -> Option<String> {
+        let sessions = self.sessions.read();
+        sessions.get(id).and_then(|s| s.metadata.get(key).cloned())
+    }
+
     /// Cleanup expired sessions
     pub fn cleanup_expired(&self) {
         let mut sessions = self.sessions.write();

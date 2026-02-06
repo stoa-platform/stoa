@@ -12,20 +12,27 @@ use tracing::{info, warn};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod auth;
+mod cache;
 mod config;
 mod control_plane;
+mod federation;
 mod governance;
 mod handlers;
+mod k8s;
 mod mcp;
+mod metering;
 mod metrics;
 mod mode;
 mod oauth;
+mod optimization;
 mod policy;
 mod proxy;
 mod rate_limit;
+mod resilience;
 mod routes;
 mod shadow;
 mod state;
+mod telemetry;
 mod uac;
 
 use config::Config;
@@ -92,6 +99,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start background tasks
     state.start_background_tasks();
 
+    // Initialize Kafka metering (Phase 3: CAB-1105)
+    let _metering = init_metering(&config);
+
+    // Initialize K8s CRD watcher (Phase 7: CAB-1105)
+    init_k8s_watcher(&config, &state).await;
+
     // Register tools: try CP discovery, fallback to static
     register_tools(&state).await;
 
@@ -157,6 +170,12 @@ fn build_router(state: AppState) -> Router {
             get(admin::list_policies).post(admin::upsert_policy),
         )
         .route("/policies/:id", delete(admin::delete_policy))
+        // Phase 6: Circuit Breaker admin
+        .route("/circuit-breaker/stats", get(admin::circuit_breaker_stats))
+        .route("/circuit-breaker/reset", post(admin::circuit_breaker_reset))
+        // Phase 6: Cache admin
+        .route("/cache/stats", get(admin::cache_stats))
+        .route("/cache/clear", post(admin::cache_clear))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
@@ -206,20 +225,26 @@ fn build_router(state: AppState) -> Router {
 
 /// Register MCP tools.
 ///
-/// 1. Try dynamic discovery from Control Plane (no rebuild needed)
-/// 2. Fallback to static definitions if CP is unreachable
-/// 3. Start background refresh task to pick up CP changes
+/// Phase 1: Native tools call CP API directly (STOA_NATIVE_TOOLS_ENABLED=true, default)
+/// Legacy: ProxyTool calls Python mcp-gateway (STOA_NATIVE_TOOLS_ENABLED=false)
 async fn register_tools(state: &AppState) {
     use mcp::tools::stoa_tools;
 
-    match stoa_tools::discover_and_register(&state.tool_registry, &state.control_plane).await {
-        Ok(count) => {
-            info!(count, "Tools discovered from Control Plane");
+    if state.config.native_tools_enabled {
+        info!("Native tools enabled (direct CP API calls)");
+        match stoa_tools::discover_and_register(state.tool_registry.clone(), &state.control_plane)
+            .await
+        {
+            Ok(count) => {
+                info!(count, "Tools registered (native mode)");
+            }
+            Err(e) => {
+                warn!(error = %e, "CP unreachable — native tools only");
+            }
         }
-        Err(e) => {
-            info!(error = %e, "CP unreachable — using static tool definitions");
-            stoa_tools::register_static_tools(&state.tool_registry, state.control_plane.clone());
-        }
+    } else {
+        info!("Native tools DISABLED (STOA_NATIVE_TOOLS_ENABLED=false) — using proxy mode");
+        stoa_tools::register_static_tools(&state.tool_registry, state.control_plane.clone());
     }
 
     // Background refresh: sync tools from CP every 60s
@@ -269,6 +294,83 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => info!("Received Ctrl+C, initiating shutdown..."),
         _ = terminate => info!("Received SIGTERM, initiating shutdown..."),
+    }
+}
+
+// === Metering Initialization (Phase 3: CAB-1105) ===
+
+/// Initialize Kafka metering producer
+///
+/// Returns `Some(producer)` if metering is enabled and Kafka is reachable.
+/// Returns `None` if disabled or Kafka is unavailable (graceful degradation).
+fn init_metering(config: &Config) -> Option<std::sync::Arc<metering::MeteringProducer>> {
+    if !config.kafka_enabled {
+        info!("Kafka metering disabled (STOA_KAFKA_ENABLED=false)");
+        return None;
+    }
+
+    let kafka_config = metering::KafkaConfig {
+        brokers: config.kafka_brokers.clone(),
+        metering_topic: config.kafka_metering_topic.clone(),
+        errors_topic: config.kafka_errors_topic.clone(),
+        enabled: true,
+    };
+
+    let producer_config = metering::MeteringProducerConfig::from(&kafka_config);
+
+    match metering::MeteringProducer::new(producer_config) {
+        Ok(producer) => {
+            info!(
+                brokers = %config.kafka_brokers,
+                metering_topic = %config.kafka_metering_topic,
+                errors_topic = %config.kafka_errors_topic,
+                "Kafka metering enabled"
+            );
+            Some(std::sync::Arc::new(producer))
+        }
+        Err(e) => {
+            warn!(error = %e, "Kafka metering initialization failed — metering disabled");
+            None
+        }
+    }
+}
+
+/// Initialize K8s CRD watcher for dynamic tool registration (Phase 7: CAB-1105)
+///
+/// Graceful degradation: if K8s is not available, the gateway continues without
+/// dynamic tool registration. Tools can still be registered via CP discovery.
+#[allow(unused_variables)] // state used only when k8s feature enabled
+async fn init_k8s_watcher(config: &Config, state: &AppState) {
+    if !config.k8s_enabled {
+        info!("K8s CRD watcher disabled (STOA_K8S_ENABLED=false)");
+        return;
+    }
+
+    #[cfg(feature = "k8s")]
+    {
+        info!("Initializing K8s CRD watcher for dynamic tool registration");
+        match kube::Client::try_default().await {
+            Ok(client) => {
+                let watcher = k8s::CrdWatcher::new(client, state.tool_registry.clone());
+                tokio::spawn(async move {
+                    watcher.start().await;
+                });
+                info!("K8s CRD watcher started");
+            }
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    "K8s client initialization failed — CRD watcher disabled (gateway continues)"
+                );
+            }
+        }
+    }
+
+    #[cfg(not(feature = "k8s"))]
+    {
+        warn!(
+            "K8s CRD watcher requested but 'k8s' feature not enabled — compile with --features k8s"
+        );
     }
 }
 

@@ -10,8 +10,8 @@ use serde_json::json;
 
 use crate::state::AppState;
 
-/// MCP Protocol Version
-pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
+/// MCP Protocol Version (latest supported)
+pub const MCP_PROTOCOL_VERSION: &str = "2025-03-26";
 
 /// Server info for discovery
 #[derive(Debug, Serialize)]
@@ -148,6 +148,6 @@ mod tests {
 
     #[test]
     fn test_protocol_version() {
-        assert_eq!(MCP_PROTOCOL_VERSION, "2024-11-05");
+        assert_eq!(MCP_PROTOCOL_VERSION, "2025-03-26");
     }
 }

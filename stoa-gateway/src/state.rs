@@ -7,12 +7,14 @@ use std::sync::Arc;
 use crate::auth::api_key::ApiKeyValidator;
 use crate::auth::jwt::{JwtValidator, JwtValidatorConfig};
 use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
+use crate::cache::{SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
 use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
 use crate::rate_limit::RateLimiter;
+use crate::resilience::{CircuitBreaker, CircuitBreakerConfig};
 use crate::routes::{PolicyRegistry, RouteRegistry};
 use crate::uac::Action;
 
@@ -31,6 +33,10 @@ pub struct AppState {
     pub policy_registry: Arc<PolicyRegistry>,
     /// JWT validator for user token authentication (None if Keycloak not configured)
     pub jwt_validator: Option<Arc<JwtValidator>>,
+    /// Semantic cache for read-only tool responses (Phase 6)
+    pub semantic_cache: Arc<SemanticCache>,
+    /// Circuit breaker for Control Plane API calls (Phase 6)
+    pub cp_circuit_breaker: Arc<CircuitBreaker>,
 }
 
 impl AppState {
@@ -124,6 +130,14 @@ impl AppState {
             None
         };
 
+        // Initialize semantic cache for tool responses (Phase 6)
+        let semantic_cache = Arc::new(SemanticCache::new(SemanticCacheConfig::default()));
+        tracing::info!("Semantic cache initialized");
+
+        // Initialize circuit breaker for CP API (Phase 6)
+        let cp_circuit_breaker = CircuitBreaker::new("cp-api", CircuitBreakerConfig::default());
+        tracing::info!("Circuit breaker initialized for CP API");
+
         Self {
             config,
             tool_registry,
@@ -135,6 +149,8 @@ impl AppState {
             route_registry,
             policy_registry,
             jwt_validator,
+            semantic_cache,
+            cp_circuit_breaker,
         }
     }
 

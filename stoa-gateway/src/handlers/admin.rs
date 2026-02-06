@@ -156,6 +156,78 @@ pub async fn delete_policy(
 }
 
 // =============================================================================
+// Circuit Breaker (Phase 6)
+// =============================================================================
+
+#[derive(Serialize)]
+pub struct CircuitBreakerStatsResponse {
+    pub name: String,
+    pub state: String,
+    pub success_count: u64,
+    pub failure_count: u64,
+    pub consecutive_failures: u32,
+    pub open_count: u64,
+    pub rejected_count: u64,
+}
+
+/// GET /admin/circuit-breaker/stats
+pub async fn circuit_breaker_stats(
+    State(state): State<AppState>,
+) -> Json<CircuitBreakerStatsResponse> {
+    let stats = state.cp_circuit_breaker.stats();
+    Json(CircuitBreakerStatsResponse {
+        name: state.cp_circuit_breaker.name().to_string(),
+        state: stats.state.to_string(),
+        success_count: stats.success_count,
+        failure_count: stats.failure_count,
+        consecutive_failures: stats.consecutive_failures,
+        open_count: stats.open_count,
+        rejected_count: stats.rejected_count,
+    })
+}
+
+/// POST /admin/circuit-breaker/reset
+pub async fn circuit_breaker_reset(State(state): State<AppState>) -> impl IntoResponse {
+    state.cp_circuit_breaker.reset();
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({"status": "ok", "message": "Circuit breaker reset to closed"})),
+    )
+}
+
+// =============================================================================
+// Semantic Cache (Phase 6)
+// =============================================================================
+
+#[derive(Serialize)]
+pub struct CacheStatsResponse {
+    pub hits: u64,
+    pub misses: u64,
+    pub entry_count: u64,
+    pub hit_rate: f64,
+}
+
+/// GET /admin/cache/stats
+pub async fn cache_stats(State(state): State<AppState>) -> Json<CacheStatsResponse> {
+    let stats = state.semantic_cache.stats();
+    Json(CacheStatsResponse {
+        hits: stats.hits,
+        misses: stats.misses,
+        entry_count: stats.entry_count,
+        hit_rate: stats.hit_rate,
+    })
+}
+
+/// POST /admin/cache/clear
+pub async fn cache_clear(State(state): State<AppState>) -> impl IntoResponse {
+    state.semantic_cache.clear().await;
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({"status": "ok", "message": "Cache cleared"})),
+    )
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

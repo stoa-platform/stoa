@@ -166,6 +166,40 @@ pub struct Config {
     /// Env: STOA_HEARTBEAT_INTERVAL_SECS
     #[serde(default = "default_heartbeat_interval")]
     pub heartbeat_interval_secs: u64,
+
+    // === Native Tools (Phase 1) ===
+    /// Enable native tool implementations (default: true)
+    /// Set STOA_NATIVE_TOOLS_ENABLED=false to fallback to proxy mode
+    /// Env: STOA_NATIVE_TOOLS_ENABLED
+    #[serde(default = "default_native_tools_enabled")]
+    pub native_tools_enabled: bool,
+
+    // === Kafka Metering (Phase 3: CAB-1105) ===
+    /// Enable Kafka metering (default: false — explicit opt-in)
+    /// Env: STOA_KAFKA_ENABLED
+    #[serde(default)]
+    pub kafka_enabled: bool,
+
+    /// Kafka broker addresses (comma-separated)
+    /// Env: STOA_KAFKA_BROKERS
+    #[serde(default = "default_kafka_brokers")]
+    pub kafka_brokers: String,
+
+    /// Kafka topic for metering events
+    /// Env: STOA_KAFKA_METERING_TOPIC
+    #[serde(default = "default_kafka_metering_topic")]
+    pub kafka_metering_topic: String,
+
+    /// Kafka topic for error snapshots
+    /// Env: STOA_KAFKA_ERRORS_TOPIC
+    #[serde(default = "default_kafka_errors_topic")]
+    pub kafka_errors_topic: String,
+
+    // === K8s CRD Watcher (Phase 7: CAB-1105) ===
+    /// Enable K8s CRD watching for dynamic tool registration
+    /// Env: STOA_K8S_ENABLED (default: false — explicit opt-in)
+    #[serde(default)]
+    pub k8s_enabled: bool,
 }
 
 fn default_port() -> u16 {
@@ -216,6 +250,22 @@ fn default_heartbeat_interval() -> u64 {
     30 // 30 seconds per ADR-028
 }
 
+fn default_native_tools_enabled() -> bool {
+    true // Phase 1: native tools call CP API directly
+}
+
+fn default_kafka_brokers() -> String {
+    "redpanda:9092".to_string()
+}
+
+fn default_kafka_metering_topic() -> String {
+    "stoa.metering".to_string()
+}
+
+fn default_kafka_errors_topic() -> String {
+    "stoa.errors".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -254,6 +304,12 @@ impl Default for Config {
             environment: default_environment(),
             auto_register: default_auto_register(),
             heartbeat_interval_secs: default_heartbeat_interval(),
+            native_tools_enabled: default_native_tools_enabled(),
+            kafka_enabled: false,
+            kafka_brokers: default_kafka_brokers(),
+            kafka_metering_topic: default_kafka_metering_topic(),
+            kafka_errors_topic: default_kafka_errors_topic(),
+            k8s_enabled: false,
         }
     }
 }

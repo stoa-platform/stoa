@@ -255,7 +255,7 @@ impl GatewayRegistrar {
         payload: HeartbeatPayload,
     ) -> Result<(), RegistrationError> {
         let url = format!(
-            "{}/v1/internal/gateways/heartbeat/{}",
+            "{}/v1/internal/gateways/{}/heartbeat",
             self.cp_url, gateway_id
         );
 

@@ -20,6 +20,7 @@ class GatewayType(enum.StrEnum):
     APIGEE = "apigee"
     AWS_APIGATEWAY = "aws_apigateway"
     STOA = "stoa"
+    STOA_SIDECAR = "stoa_sidecar"  # STOA in sidecar mode (ADR-028)
 
 
 class GatewayInstanceStatus(enum.StrEnum):

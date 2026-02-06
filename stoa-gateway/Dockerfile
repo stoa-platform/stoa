@@ -60,14 +60,15 @@ RUN apt-get update && apt-get install -y \
       curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -r stoa && useradd -r -g stoa stoa
+# UID 1000 for k8s runAsNonRoot compatibility
+RUN groupadd -r -g 1000 stoa && useradd -r -u 1000 -g stoa -d /app stoa
 
 WORKDIR /app
 
 COPY --from=builder /app/target/release/stoa-gateway /app/stoa-gateway
 RUN chown -R stoa:stoa /app
 
-USER stoa
+USER 1000
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

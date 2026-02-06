@@ -1,0 +1,80 @@
+{
+  "index_patterns": ["stoa-logs-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index": {
+        "lifecycle": {
+          "name": "stoa-logs-policy",
+          "rollover_alias": "stoa-logs"
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date"
+        },
+        "tenant_id": {
+          "type": "keyword"
+        },
+        "correlation_id": {
+          "type": "keyword"
+        },
+        "method": {
+          "type": "keyword"
+        },
+        "path": {
+          "type": "keyword"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "consumer_id": {
+          "type": "keyword"
+        },
+        "consumer_name": {
+          "type": "keyword"
+        },
+        "api_name": {
+          "type": "keyword"
+        },
+        "api_version": {
+          "type": "keyword"
+        },
+        "latency_ms": {
+          "type": "float"
+        },
+        "request_size_bytes": {
+          "type": "long"
+        },
+        "response_size_bytes": {
+          "type": "long"
+        },
+        "error_message": {
+          "type": "text"
+        },
+        "error_code": {
+          "type": "keyword"
+        },
+        "gateway_instance": {
+          "type": "keyword"
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "tags": {
+          "type": "keyword"
+        }
+      }
+    }
+  },
+  "priority": 100,
+  "version": 1,
+  "_meta": {
+    "description": "STOA Platform - API Call Logs Index (14 days retention, per-tenant)",
+    "managed_by": "stoa-logs-service",
+    "retention_days": 14
+  }
+}

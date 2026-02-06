@@ -1,9 +1,10 @@
 """Applications router - Consumer applications management"""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
+from ..schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/applications", tags=["Applications"])
 
@@ -30,12 +31,17 @@ class ApplicationCredentials(BaseModel):
     client_id: str
     client_secret: str
 
-@router.get("", response_model=list[ApplicationResponse])
+@router.get("", response_model=PaginatedResponse[ApplicationResponse])
 @require_tenant_access
-async def list_applications(tenant_id: str, user: User = Depends(get_current_user)):
-    """List all applications for a tenant"""
+async def list_applications(
+    tenant_id: str,
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    user: User = Depends(get_current_user),
+):
+    """List all applications for a tenant (paginated)."""
     # TODO: Implement with Keycloak service
-    return []
+    return PaginatedResponse(items=[], total=0, page=page, page_size=page_size)
 
 @router.get("/{app_id}", response_model=ApplicationResponse)
 @require_tenant_access

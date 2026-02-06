@@ -25,6 +25,7 @@
     "react-oidc-context": "^2.3.1",
     "react-router-dom": "^6.21.2",
     "tailwind-merge": "^2.2.0",
+    "web-vitals": "^5.1.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {

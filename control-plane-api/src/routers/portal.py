@@ -8,19 +8,21 @@ PERFORMANCE OPTIMIZATION (CAB-682):
 - Latency reduced from 2-5 seconds to <200ms
 - Cache is synced from GitLab via the catalog sync service
 """
+
 import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import String, bindparam, func, or_, select, text
+from sqlalchemy.dialects.postgresql import ARRAY as PgARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from ..auth.dependencies import User, get_current_user
 from ..database import get_db as get_async_db
-from ..models.mcp_subscription import MCPServer, MCPServerStatus
-from ..repositories.catalog import CatalogRepository
+from ..models.mcp_subscription import MCPServer, MCPServerCategory, MCPServerStatus, MCPServerTool
+from ..repositories.catalog import CatalogRepository, escape_like
+from ..schemas.portal import APIListItem, MCPServerListItem
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/portal", tags=["Portal"])
@@ -44,8 +46,10 @@ UNIVERSE_LABELS = {
 # Response Models
 # ============================================================================
 
+
 class PortalAPIResponse(BaseModel):
     """API response for Portal catalog."""
+
     id: str
     name: str
     display_name: str
@@ -68,7 +72,8 @@ class PortalAPIResponse(BaseModel):
 
 class PortalAPIsResponse(BaseModel):
     """Paginated API list response."""
-    apis: list[PortalAPIResponse]
+
+    apis: list[APIListItem]
     total: int
     page: int
     page_size: int
@@ -76,6 +81,7 @@ class PortalAPIsResponse(BaseModel):
 
 class PortalMCPServerResponse(BaseModel):
     """MCP Server response for Portal catalog."""
+
     id: str
     name: str
     display_name: str
@@ -96,7 +102,8 @@ class PortalMCPServerResponse(BaseModel):
 
 class PortalMCPServersResponse(BaseModel):
     """Paginated MCP servers list response."""
-    servers: list[PortalMCPServerResponse]
+
+    servers: list[MCPServerListItem]
     total: int
     page: int
     page_size: int
@@ -106,6 +113,7 @@ class PortalMCPServersResponse(BaseModel):
 # ============================================================================
 # API Catalog Endpoints (CAB-682: Now using PostgreSQL cache)
 # ============================================================================
+
 
 @router.get("/apis", response_model=PortalAPIsResponse)
 async def list_portal_apis(
@@ -146,7 +154,7 @@ async def list_portal_apis(
 
         return PortalAPIsResponse(
             apis=[
-                PortalAPIResponse(
+                APIListItem(
                     id=api.api_id,
                     name=api.api_name or api.api_id,
                     display_name=(api.api_metadata or {}).get("display_name", api.api_name or api.api_id),
@@ -155,10 +163,8 @@ async def list_portal_apis(
                     tenant_id=api.tenant_id,
                     tenant_name=api.tenant_id,
                     status=api.status or "draft",
-                    backend_url=(api.api_metadata or {}).get("backend_url"),
                     category=api.category,
                     tags=api.tags or [],
-                    deployments=(api.api_metadata or {}).get("deployments", {}),
                     is_promoted=api.portal_published,
                 )
                 for api in apis
@@ -254,11 +260,8 @@ async def get_portal_api_openapi(
             # Return minimal spec if not available
             return {
                 "openapi": "3.0.0",
-                "info": {
-                    "title": api.api_name or api.api_id,
-                    "version": api.version or "1.0.0"
-                },
-                "paths": {}
+                "info": {"title": api.api_name or api.api_id, "version": api.version or "1.0.0"},
+                "paths": {},
             }
 
         return api.openapi_spec
@@ -273,6 +276,36 @@ async def get_portal_api_openapi(
 # ============================================================================
 # MCP Server Catalog Endpoints
 # ============================================================================
+
+
+def _build_visibility_filter(user_roles: list[str]) -> text:
+    """Build SQL WHERE clause for MCP server visibility.
+
+    Translates the JSONB visibility rules to SQL:
+    - NULL or missing 'public' key → visible (default public=True)
+    - public=true → visible
+    - public=false → check roles/excludeRoles
+
+    Uses ::jsonb cast because the column is JSON type (not JSONB),
+    and ?/? | operators require JSONB.
+    """
+    return text(
+        "(visibility IS NULL"
+        " OR (visibility->>'public') IS NULL"
+        " OR (visibility->>'public') = 'true'"
+        " OR ("
+        "   (visibility->>'public') = 'false'"
+        "   AND ("
+        "     NOT ((visibility)::jsonb ? 'excludeRoles')"
+        "     OR NOT ((visibility)::jsonb -> 'excludeRoles' ?| :user_roles)"
+        "   )"
+        "   AND ("
+        "     NOT ((visibility)::jsonb ? 'roles')"
+        "     OR (visibility)::jsonb -> 'roles' ?| :user_roles"
+        "   )"
+        " ))"
+    ).bindparams(bindparam("user_roles", value=user_roles, type_=PgARRAY(String)))
+
 
 @router.get("/mcp-servers", response_model=PortalMCPServersResponse)
 async def list_portal_mcp_servers(
@@ -289,18 +322,37 @@ async def list_portal_mcp_servers(
     Source: PostgreSQL cache (synced from GitLab via GitOps — CAB-689)
 
     Returns only active servers that the user can see based on visibility rules.
+    All filtering, sorting, and pagination is done in SQL.
     Includes synced_at timestamp for cache freshness tracking.
     Falls back to Git sync if cache is empty (Obligation #3).
     """
     try:
-        # Build query
-        query = select(MCPServer).where(
-            MCPServer.status == MCPServerStatus.ACTIVE
-        ).options(selectinload(MCPServer.tools))
+        user_roles = list(user.roles or [])
 
-        # Filter by category if specified
+        # Subquery: count enabled tools per server (no relationship loading)
+        tools_count_subq = (
+            select(func.count(MCPServerTool.id))
+            .where(MCPServerTool.server_id == MCPServer.id)
+            .where(MCPServerTool.enabled.is_(True))
+            .correlate(MCPServer)
+            .scalar_subquery()
+            .label("tools_count")
+        )
+
+        # Build query: active servers + visibility filter + window count
+        visibility_filter = _build_visibility_filter(user_roles)
+        query = (
+            select(
+                MCPServer,
+                tools_count_subq,
+                func.count().over().label("total_count"),
+            )
+            .where(MCPServer.status == MCPServerStatus.ACTIVE)
+            .where(visibility_filter)
+        )
+
+        # Category filter (SQL)
         if category:
-            from ..models.mcp_subscription import MCPServerCategory
             cat_map = {
                 "platform": MCPServerCategory.PLATFORM,
                 "tenant": MCPServerCategory.TENANT,
@@ -309,97 +361,77 @@ async def list_portal_mcp_servers(
             if category in cat_map:
                 query = query.where(MCPServer.category == cat_map[category])
 
+        # Search filter (SQL ILIKE)
+        if search and search.strip():
+            search_term = escape_like(search.strip().lower())
+            search_pattern = f"%{search_term}%"
+            query = query.where(
+                or_(
+                    func.lower(MCPServer.name).like(search_pattern, escape="\\"),
+                    func.lower(MCPServer.display_name).like(search_pattern, escape="\\"),
+                    func.lower(func.coalesce(MCPServer.description, "")).like(search_pattern, escape="\\"),
+                )
+            )
+
+        # Sort + paginate in SQL
+        query = query.order_by(func.coalesce(MCPServer.display_name, MCPServer.name))
+        query = query.offset((page - 1) * page_size).limit(page_size)
+
         result = await db.execute(query)
-        all_servers = result.scalars().all()
+        rows = result.all()
 
         # CAB-689 Obligation #3: Fallback if cache is empty
-        if not all_servers:
-            logger.warning("MCP servers cache empty, falling back to Git sync")
-            try:
-                from ..services.catalog_sync_service import CatalogSyncService
-                from ..services.git_service import git_service
-                sync_service = CatalogSyncService(db, git_service)
-                await sync_service.sync_mcp_servers()
-                await db.commit()
+        if not rows:
+            count_result = await db.execute(
+                select(func.count(MCPServer.id)).where(MCPServer.status == MCPServerStatus.ACTIVE)
+            )
+            if count_result.scalar_one() == 0:
+                logger.warning("MCP servers cache empty, falling back to Git sync")
+                try:
+                    from ..services.catalog_sync_service import CatalogSyncService
+                    from ..services.git_service import git_service
 
-                # Re-query after sync
-                result = await db.execute(query)
-                all_servers = result.scalars().all()
-            except Exception as sync_err:
-                logger.error(f"Fallback Git sync failed: {sync_err}")
+                    sync_service = CatalogSyncService(db, git_service)
+                    await sync_service.sync_mcp_servers()
+                    await db.commit()
 
-        # Filter by visibility (Obligation #6)
-        visible_servers = []
-        user_roles = set(user.roles or [])
+                    # Re-query after sync
+                    result = await db.execute(query)
+                    rows = result.all()
+                except Exception as sync_err:
+                    logger.error(f"Fallback Git sync failed: {sync_err}")
 
-        for server in all_servers:
-            visibility = server.visibility or {"public": True}
-
-            # Check if server is public
-            if visibility.get("public", True):
-                visible_servers.append(server)
-                continue
-
-            # Check role-based visibility
-            required_roles = visibility.get("roles", [])
-            exclude_roles = visibility.get("excludeRoles", [])
-
-            # If user has any excluded role, skip
-            if any(role in user_roles for role in exclude_roles):
-                continue
-
-            # If roles specified, user must have at least one
-            if required_roles:
-                if any(role in user_roles for role in required_roles):
-                    visible_servers.append(server)
-            else:
-                # No specific roles required, visible to all
-                visible_servers.append(server)
-
-        # Apply search filter
-        if search:
-            search_lower = search.lower()
-            visible_servers = [
-                s for s in visible_servers
-                if search_lower in s.name.lower()
-                or search_lower in s.display_name.lower()
-                or search_lower in (s.description or "").lower()
+        # Extract results from single query
+        if rows:
+            total = rows[0].total_count
+            servers = [
+                MCPServerListItem(
+                    id=str(row.MCPServer.id),
+                    name=row.MCPServer.name,
+                    display_name=row.MCPServer.display_name,
+                    description=row.MCPServer.description or "",
+                    icon=row.MCPServer.icon,
+                    category=row.MCPServer.category.value,
+                    tenant_id=row.MCPServer.tenant_id,
+                    status=row.MCPServer.status.value,
+                    version=row.MCPServer.version,
+                    documentation_url=row.MCPServer.documentation_url,
+                    requires_approval=row.MCPServer.requires_approval,
+                    tools_count=row.tools_count or 0,
+                    created_at=row.MCPServer.created_at,
+                )
+                for row in rows
             ]
-
-        # Sort by name
-        visible_servers.sort(key=lambda s: s.display_name or s.name)
+        else:
+            total = 0
+            servers = []
 
         # CAB-689 Obligation #4: Get last synced_at
-        synced_at_result = await db.execute(
-            select(func.max(MCPServer.last_synced_at))
-        )
+        synced_at_result = await db.execute(select(func.max(MCPServer.last_synced_at)))
         last_synced_at = synced_at_result.scalar_one_or_none()
 
-        # Paginate
-        total = len(visible_servers)
-        start = (page - 1) * page_size
-        end = start + page_size
-        paginated_servers = visible_servers[start:end]
-
         return PortalMCPServersResponse(
-            servers=[
-                PortalMCPServerResponse(
-                    id=str(server.id),
-                    name=server.name,
-                    display_name=server.display_name,
-                    description=server.description or "",
-                    icon=server.icon,
-                    category=server.category.value,
-                    tenant_id=server.tenant_id,
-                    status=server.status.value,
-                    version=server.version,
-                    documentation_url=server.documentation_url,
-                    requires_approval=server.requires_approval,
-                    tools_count=len([t for t in server.tools if t.enabled]),
-                    created_at=server.created_at,
-                )
-                for server in paginated_servers
-            ],
+            servers=servers,
             total=total,
             page=page,
             page_size=page_size,
@@ -414,6 +446,7 @@ async def list_portal_mcp_servers(
 # ============================================================================
 # Categories and Tags (CAB-682: Now from database)
 # ============================================================================
+
 
 @router.get("/api-categories", response_model=list[str])
 async def get_api_categories(
@@ -435,6 +468,7 @@ async def get_api_categories(
 
 class UniverseResponse(BaseModel):
     """Universe metadata for Portal filtering (CAB-848)."""
+
     id: str
     label: str
 
@@ -444,10 +478,7 @@ async def get_api_universes(
     user: User = Depends(get_current_user),
 ):
     """Get available API universes for filtering (CAB-848)."""
-    return [
-        UniverseResponse(id=uid, label=label)
-        for uid, label in UNIVERSE_LABELS.items()
-    ]
+    return [UniverseResponse(id=uid, label=label) for uid, label in UNIVERSE_LABELS.items()]
 
 
 @router.get("/api-tags", response_model=list[str])

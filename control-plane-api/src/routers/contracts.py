@@ -16,6 +16,7 @@ from src.config import settings
 from src.database import get_db
 from src.logging_config import get_logger
 from src.models.contract import Contract, ProtocolBinding, ProtocolType
+from src.services.cache_service import contract_cache
 from src.schemas.contract import (
     BindingsListResponse,
     ContractCreate,
@@ -191,6 +192,9 @@ async def create_contract(
     # Create default bindings (all disabled)
     bindings = await _get_or_create_default_bindings(db, contract)
 
+    # Invalidate contract list cache for this tenant
+    await contract_cache.delete_by_prefix(f"contracts:{tenant_id}")
+
     logger.info(
         "Contract created",
         contract_id=str(contract.id),
@@ -223,16 +227,23 @@ async def list_contracts(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List contracts for the user's tenant."""
+    """List contracts for the user's tenant (cached, TTL 60s)."""
     tenant_id = user.tenant_id
     if not tenant_id and "cpi-admin" not in (user.roles or []):
         raise HTTPException(status_code=400, detail="User must belong to a tenant")
+
+    # Check cache
+    is_admin = "cpi-admin" in (user.roles or [])
+    cache_key = f"contracts:{tenant_id}:{is_admin}:{page}:{page_size}:{status}"
+    cached = await contract_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     query = select(Contract)
     count_query = select(func.count(Contract.id))
 
     # Filter by tenant unless admin
-    if "cpi-admin" not in (user.roles or []):
+    if not is_admin:
         query = query.where(Contract.tenant_id == tenant_id)
         count_query = count_query.where(Contract.tenant_id == tenant_id)
 
@@ -271,7 +282,9 @@ async def list_contracts(
             )
         )
 
-    return ContractListResponse(items=items, total=total, page=page, page_size=page_size)
+    response = ContractListResponse(items=items, total=total, page=page, page_size=page_size)
+    await contract_cache.set(cache_key, response)
+    return response
 
 
 @router.get("/{contract_id}", response_model=ContractResponse)
@@ -343,6 +356,9 @@ async def update_contract(
 
     await db.flush()
 
+    # Invalidate contract list cache for this tenant
+    await contract_cache.delete_by_prefix(f"contracts:{contract.tenant_id}")
+
     bindings = await _get_or_create_default_bindings(db, contract)
 
     logger.info(
@@ -383,12 +399,16 @@ async def delete_contract(
     if not _has_tenant_access(user, contract.tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this contract")
 
+    tenant_id = contract.tenant_id
     await db.delete(contract)  # Cascade deletes bindings
+
+    # Invalidate contract list cache for this tenant
+    await contract_cache.delete_by_prefix(f"contracts:{tenant_id}")
 
     logger.info(
         "Contract deleted",
         contract_id=str(contract_id),
-        tenant_id=contract.tenant_id,
+        tenant_id=tenant_id,
         user_id=user.id,
     )
 

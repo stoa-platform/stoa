@@ -3,7 +3,7 @@
  * Table des derniers appels MCP avec filtres
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, memo } from 'react';
 import { Check, X, Clock } from 'lucide-react';
 import type { UsageCall, UsageCallStatus } from '../../types';
 import { formatLatency } from '../../services/usage';
@@ -86,7 +86,7 @@ function TableSkeleton() {
 
 const PAGE_SIZE = 25;
 
-export function CallsTable({ calls, isLoading = false, onFilterChange }: CallsTableProps) {
+export const CallsTable = memo(function CallsTable({ calls, isLoading = false, onFilterChange }: CallsTableProps) {
   const [selectedStatus, setSelectedStatus] = useState<UsageCallStatus | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -222,4 +222,4 @@ export function CallsTable({ calls, isLoading = false, onFilterChange }: CallsTa
       </div>
     </div>
   );
-}
+});

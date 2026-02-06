@@ -12,12 +12,13 @@ Benefits:
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from ..auth import Permission, User, get_current_user, require_permission
 from ..config import settings
+from ..schemas.pagination import PaginatedResponse
 from ..services.gateway_service import gateway_service
 
 logger = logging.getLogger(__name__)
@@ -107,19 +108,21 @@ async def get_auth_token(
 # API Operations
 # ============================================================================
 
-@router.get("/apis", response_model=list[GatewayAPIResponse])
+@router.get("/apis", response_model=PaginatedResponse[GatewayAPIResponse])
 @require_permission(Permission.APIS_READ)
 async def list_gateway_apis(
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     user: User = Depends(get_current_user),
-    token: str = Depends(get_auth_token)
+    token: str = Depends(get_auth_token),
 ):
-    """List all APIs registered in the Gateway.
+    """List APIs registered in the Gateway (paginated).
 
     Requires: cpi-admin or devops role
     """
     try:
         apis = await gateway_service.list_apis(auth_token=token)
-        return [
+        all_items = [
             GatewayAPIResponse(
                 id=api.get("api", {}).get("id", api.get("id", "")),
                 apiName=api.get("api", {}).get("apiName", api.get("apiName", "")),
@@ -130,9 +133,13 @@ async def list_gateway_apis(
             )
             for api in apis
         ]
+        total = len(all_items)
+        start = (page - 1) * page_size
+        items = all_items[start : start + page_size]
+        return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
     except Exception as e:
         logger.error(f"Failed to list Gateway APIs: {e}")
-        return []
+        return PaginatedResponse(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.post("/apis", response_model=ImportAPIResponse)
@@ -274,19 +281,21 @@ async def delete_gateway_api(
 # Application Operations
 # ============================================================================
 
-@router.get("/applications", response_model=list[GatewayApplicationResponse])
+@router.get("/applications", response_model=PaginatedResponse[GatewayApplicationResponse])
 @require_permission(Permission.APIS_READ)
 async def list_gateway_applications(
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     user: User = Depends(get_current_user),
-    token: str = Depends(get_auth_token)
+    token: str = Depends(get_auth_token),
 ):
-    """List all applications registered in the Gateway.
+    """List applications registered in the Gateway (paginated).
 
     Requires: cpi-admin or tenant-admin role
     """
     try:
         apps = await gateway_service.list_applications(auth_token=token)
-        return [
+        all_items = [
             GatewayApplicationResponse(
                 id=app.get("id", ""),
                 name=app.get("name", ""),
@@ -295,9 +304,13 @@ async def list_gateway_applications(
             )
             for app in apps
         ]
+        total = len(all_items)
+        start = (page - 1) * page_size
+        items = all_items[start : start + page_size]
+        return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
     except Exception as e:
         logger.error(f"Failed to list Gateway applications: {e}")
-        return []
+        return PaginatedResponse(items=[], total=0, page=page, page_size=page_size)
 
 
 # ============================================================================

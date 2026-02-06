@@ -100,8 +100,10 @@ class ApiService {
 
   // APIs
   async getApis(tenantId: string): Promise<API[]> {
-    const { data } = await this.client.get(`/v1/tenants/${tenantId}/apis`);
-    return data;
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/apis`, {
+      params: { page: 1, page_size: 100 },
+    });
+    return data.items ?? data;
   }
 
   async getApi(tenantId: string, apiId: string): Promise<API> {
@@ -125,8 +127,10 @@ class ApiService {
 
   // Applications
   async getApplications(tenantId: string): Promise<Application[]> {
-    const { data } = await this.client.get(`/v1/tenants/${tenantId}/applications`);
-    return data;
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/applications`, {
+      params: { page: 1, page_size: 100 },
+    });
+    return data.items ?? data;
   }
 
   async getApplication(tenantId: string, appId: string): Promise<Application> {

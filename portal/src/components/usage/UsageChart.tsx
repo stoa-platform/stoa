@@ -3,6 +3,7 @@
  * Graphique d'évolution des appels sur 7 jours
  */
 
+import { memo } from 'react';
 import type { DailyCallStat } from '../../types';
 
 interface UsageChartProps {
@@ -26,7 +27,7 @@ function ChartSkeleton() {
   );
 }
 
-export function UsageChart({ data, isLoading = false }: UsageChartProps) {
+export const UsageChart = memo(function UsageChart({ data, isLoading = false }: UsageChartProps) {
   if (isLoading) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-6">
@@ -96,4 +97,4 @@ export function UsageChart({ data, isLoading = false }: UsageChartProps) {
       </div>
     </div>
   );
-}
+});

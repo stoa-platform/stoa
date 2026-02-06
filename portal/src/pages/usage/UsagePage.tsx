@@ -5,74 +5,50 @@
  * Page principale /usage dans le Portal STOA
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, CheckCircle, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
 import { StatCard, CallsTable, UsageChart, TopTools, SubscriptionsList } from '../../components/usage';
 import { usageService, formatLatency } from '../../services/usage';
 import { useAuth } from '../../contexts/AuthContext';
-import type { UsageSummary, UsageCallsResponse, ActiveSubscription } from '../../types';
 
 type Period = 'today' | 'week' | 'month';
 
 export function UsagePage() {
   const { isAuthenticated, isLoading: authLoading, accessToken } = useAuth();
-
-  const [summary, setSummary] = useState<UsageSummary | null>(null);
-  const [callsResponse, setCallsResponse] = useState<UsageCallsResponse | null>(null);
-  const [subscriptions, setSubscriptions] = useState<ActiveSubscription[]>([]);
-
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [callsLoading, setCallsLoading] = useState(true);
-  const [subsLoading, setSubsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
-  const [error, setError] = useState<string | null>(null);
 
-  // Fetch data
-  const fetchData = async () => {
-    setError(null);
+  const isReady = isAuthenticated && !authLoading && !!accessToken;
 
-    // Fetch summary
-    setSummaryLoading(true);
-    try {
-      const summaryData = await usageService.getSummary();
-      setSummary(summaryData);
-    } catch (err) {
-      console.error('Failed to fetch usage summary:', err);
-      setError('Failed to load usage data');
-    } finally {
-      setSummaryLoading(false);
-    }
+  // 3 parallel queries — no waterfall
+  const { data: summary = null, isLoading: summaryLoading, error: summaryError } = useQuery({
+    queryKey: ['usage', 'summary'],
+    queryFn: () => usageService.getSummary(),
+    enabled: isReady,
+    staleTime: 30_000,
+  });
 
-    // Fetch calls
-    setCallsLoading(true);
-    try {
-      const callsData = await usageService.getCalls({ limit: 20 });
-      setCallsResponse(callsData);
-    } catch (err) {
-      console.error('Failed to fetch calls:', err);
-    } finally {
-      setCallsLoading(false);
-    }
+  const { data: callsResponse = null, isLoading: callsLoading } = useQuery({
+    queryKey: ['usage', 'calls'],
+    queryFn: () => usageService.getCalls({ limit: 20 }),
+    enabled: isReady,
+    staleTime: 30_000,
+  });
 
-    // Fetch subscriptions
-    setSubsLoading(true);
-    try {
-      const subsData = await usageService.getActiveSubscriptions();
-      setSubscriptions(subsData);
-    } catch (err) {
-      console.error('Failed to fetch subscriptions:', err);
-    } finally {
-      setSubsLoading(false);
-    }
+  const { data: subscriptions = [], isLoading: subsLoading } = useQuery({
+    queryKey: ['usage', 'subscriptions'],
+    queryFn: () => usageService.getActiveSubscriptions(),
+    enabled: isReady,
+    staleTime: 30_000,
+  });
+
+  const error = summaryError ? (summaryError.message || 'Failed to load usage data') : null;
+
+  const refetchAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['usage'] });
   };
-
-  useEffect(() => {
-    // Only fetch data when authenticated, auth is not loading, and token is available
-    if (isAuthenticated && !authLoading && accessToken) {
-      fetchData();
-    }
-  }, [isAuthenticated, authLoading, accessToken]);
 
   // Get stats for selected period
   const getPeriodStats = () => {
@@ -104,7 +80,7 @@ export function UsagePage() {
           </div>
 
           <button
-            onClick={fetchData}
+            onClick={refetchAll}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
           >
             <RefreshCw className="w-4 h-4" />

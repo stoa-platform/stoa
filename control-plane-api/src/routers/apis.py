@@ -2,10 +2,11 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
+from ..schemas.pagination import PaginatedResponse
 from ..services.git_service import git_service
 from ..services.kafka_service import kafka_service
 
@@ -72,16 +73,25 @@ def _api_from_yaml(tenant_id: str, api_data: dict) -> APIResponse:
     )
 
 
-@router.get("", response_model=list[APIResponse])
+@router.get("", response_model=PaginatedResponse[APIResponse])
 @require_tenant_access
-async def list_apis(tenant_id: str, user: User = Depends(get_current_user)):
-    """List all APIs for a tenant from GitLab"""
+async def list_apis(
+    tenant_id: str,
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    user: User = Depends(get_current_user),
+):
+    """List APIs for a tenant from GitLab (paginated)."""
     try:
         apis = await git_service.list_apis(tenant_id)
-        return [_api_from_yaml(tenant_id, api) for api in apis]
+        all_items = [_api_from_yaml(tenant_id, api) for api in apis]
+        total = len(all_items)
+        start = (page - 1) * page_size
+        items = all_items[start : start + page_size]
+        return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
     except Exception as e:
         logger.error(f"Failed to list APIs for tenant {tenant_id}: {e}")
-        return []
+        return PaginatedResponse(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{api_id}", response_model=APIResponse)

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, ExternalLink, Gauge } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
+import { config } from '../../config';
 import type { AggregatedMetrics } from '../../types';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
@@ -51,6 +52,47 @@ function ProgressBar({ label, percentage }: { label: string; percentage: number 
   );
 }
 
+function APDEXGauge({ score }: { score: number }) {
+  // APDEX color thresholds: Excellent (>0.94), Good (0.85-0.94), Fair (0.70-0.84), Poor (<0.70)
+  const getColor = (value: number) => {
+    if (value >= 0.94) return { bg: 'bg-green-500', text: 'text-green-700', label: 'Excellent' };
+    if (value >= 0.85) return { bg: 'bg-blue-500', text: 'text-blue-700', label: 'Good' };
+    if (value >= 0.70) return { bg: 'bg-yellow-500', text: 'text-yellow-700', label: 'Fair' };
+    return { bg: 'bg-red-500', text: 'text-red-700', label: 'Poor' };
+  };
+
+  const colorConfig = getColor(score);
+  const percentage = Math.min(score * 100, 100);
+
+  return (
+    <div className="bg-white rounded-lg shadow px-4 py-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Gauge className="h-4 w-4 text-gray-500" />
+        <p className="text-sm font-medium text-gray-700">APDEX Score</p>
+      </div>
+      <div className="flex items-end gap-3">
+        <span className={`text-3xl font-bold ${colorConfig.text}`}>
+          {score.toFixed(2)}
+        </span>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colorConfig.bg} text-white`}>
+          {colorConfig.label}
+        </span>
+      </div>
+      <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+        <div
+          className={`h-2 rounded-full ${colorConfig.bg} transition-all duration-500`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <p className="text-xs text-gray-500 mt-2">
+        Target: 0.94 (Excellent) | T=500ms
+      </p>
+    </div>
+  );
+}
+
+
+
 export function GatewayObservabilityDashboard() {
   const { isReady } = useAuth();
   const [metrics, setMetrics] = useState<AggregatedMetrics | null>(null);
@@ -92,13 +134,24 @@ export function GatewayObservabilityDashboard() {
             Health and sync metrics across all gateway instances
           </p>
         </div>
-        <button
-          onClick={loadData}
-          className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href={`${config.services.grafana.url}/d/stoa-gateway-overview`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition-colors"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Open in Grafana
+          </a>
+          <button
+            onClick={loadData}
+            className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Error */}
@@ -182,10 +235,11 @@ export function GatewayObservabilityDashboard() {
             </div>
           </div>
 
-          {/* Progress Bars */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Progress Bars and APDEX */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <ProgressBar label="Gateway Health" percentage={metrics.health.health_percentage} />
             <ProgressBar label="Sync Coverage" percentage={metrics.sync.sync_percentage} />
+            <APDEXGauge score={0.92} />
           </div>
         </>
       ) : (

@@ -12,7 +12,7 @@ metadata:
     app.kubernetes.io/component: monitoring
   annotations:
     gostoa.dev/description: "Infrastructure Networking dashboard for STOA Platform"
-    grafana_folder: "STOA"
+    grafana_folder: "02-Operations"
 data:
   infrastructure-networking.json: |
     {

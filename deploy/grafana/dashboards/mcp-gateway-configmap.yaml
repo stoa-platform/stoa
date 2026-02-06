@@ -10,6 +10,7 @@ metadata:
     app.kubernetes.io/part-of: stoa-platform
   annotations:
     gostoa.dev/created-by: cab-282
+    grafana_folder: "03-Gateway"
 data:
   mcp-gateway-traceability.json: |
     {

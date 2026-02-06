@@ -1,0 +1,28 @@
+# STOA Platform - Grafana Dashboard Provisioning
+# This configures dashboard providers for auto-loading from ConfigMaps
+#
+# Folder Structure:
+#   01-Overview/      - Platform overview, SLO dashboards
+#   02-Operations/    - Incident response, deployment health
+#   03-Gateway/       - MCP Gateway metrics, tracing
+#   04-Security/      - Security events, audit trails
+#   05-Tenant/        - Multi-tenant views, analytics
+#   06-Business/      - Business metrics, adoption
+#
+# Note: When using Grafana sidecar (k8s-sidecar), folders are defined
+# via the 'grafana_folder' label on ConfigMaps
+#
+apiVersion: 1
+
+providers:
+  - name: 'stoa-default'
+    orgId: 1
+    folder: 'STOA Platform'
+    folderUid: 'stoa'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/default
+      foldersFromFilesStructure: true

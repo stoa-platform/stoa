@@ -27,12 +27,34 @@ const GatewayRegistry = lazy(() => import('./pages/Gateways').then(m => ({ defau
 const GatewayModes = lazy(() => import('./pages/Gateways').then(m => ({ default: m.GatewayModesDashboard })));
 const GatewayDeployments = lazy(() => import('./pages/GatewayDeployments').then(m => ({ default: m.GatewayDeploymentsDashboard })));
 const GatewayObservability = lazy(() => import('./pages/GatewayObservability').then(m => ({ default: m.GatewayObservabilityDashboard })));
+const OperationsDashboard = lazy(() => import('./pages/Operations').then(m => ({ default: m.OperationsDashboard })));
+const TenantDashboard = lazy(() => import('./pages/TenantDashboard').then(m => ({ default: m.TenantDashboard })));
+const BusinessDashboard = lazy(() => import('./pages/Business').then(m => ({ default: m.BusinessDashboard })));
+
+// Branded loading screen for auth init (similar to portal)
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 flex items-center justify-center transition-colors">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4 animate-pulse">
+          <span className="text-white font-bold text-xl">SC</span>
+        </div>
+        <p className="text-gray-500 dark:text-neutral-400">Loading STOA Console...</p>
+      </div>
+    </div>
+  );
+}
 
 // Loading spinner for lazy-loaded pages
 function PageLoader() {
   return (
     <div className="flex items-center justify-center min-h-[400px]">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="text-center">
+        <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-3 animate-pulse">
+          <span className="text-white font-bold text-sm">SC</span>
+        </div>
+        <p className="text-gray-500 dark:text-neutral-400 text-sm">Loading...</p>
+      </div>
     </div>
   );
 }
@@ -195,11 +217,7 @@ function ProtectedRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (!isAuthenticated) {
@@ -229,6 +247,9 @@ function ProtectedRoutes() {
             <Route path="/gateways" element={<GatewayRegistry />} />
             <Route path="/gateway-deployments" element={<GatewayDeployments />} />
             <Route path="/gateway-observability" element={<GatewayObservability />} />
+            <Route path="/operations" element={<OperationsDashboard />} />
+            <Route path="/my-usage" element={<TenantDashboard />} />
+            <Route path="/business" element={<BusinessDashboard />} />
             <Route path="/admin/prospects" element={<AdminProspects />} />
           </Routes>
         </Suspense>

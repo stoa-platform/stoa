@@ -10,6 +10,11 @@ metadata:
     app.kubernetes.io/part-of: stoa-platform
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app: stoa-gateway
@@ -32,10 +37,28 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+          env:
+            - name: STOA_PORT
+              value: "8080"
+            - name: STOA_HOST
+              value: "0.0.0.0"
+            - name: STOA_CONTROL_PLANE_URL
+              value: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+            - name: STOA_LOG_LEVEL
+              value: "info"
+            - name: STOA_LOG_FORMAT
+              value: "json"
+            - name: STOA_KEYCLOAK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: stoa-gateway-config
+                  key: STOA_KEYCLOAK_URL
+                  optional: true
+            - name: STOA_KEYCLOAK_REALM
+              value: "stoa"
+            - name: STOA_KEYCLOAK_CLIENT_ID
+              value: "stoa-mcp-gateway"
           envFrom:
-            - configMapRef:
-                name: stoa-gateway-config
-                optional: true
             - secretRef:
                 name: stoa-gateway-secrets
                 optional: true

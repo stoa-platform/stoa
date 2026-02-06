@@ -7,6 +7,7 @@ metadata:
     app: control-plane-ui
     app.kubernetes.io/name: control-plane-ui
     app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: stoa-platform
 spec:
   replicas: 1
   strategy:
@@ -23,6 +24,7 @@ spec:
         app: control-plane-ui
         app.kubernetes.io/name: control-plane-ui
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: control-plane-ui
           image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/control-plane-ui:latest
@@ -33,20 +35,16 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /
-              port: 8080
-            initialDelaySeconds: 10
+              path: /health
+              port: http
+            initialDelaySeconds: 5
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /
-              port: 8080
-            initialDelaySeconds: 5
+              path: /health
+              port: http
+            initialDelaySeconds: 3
             periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
           resources:
             requests:
               memory: "64Mi"
@@ -69,3 +67,48 @@ spec:
               value: "http://opensearch-dashboards.stoa-system.svc:5601"
             - name: GRAFANA_BACKEND_URL
               value: "http://grafana.stoa-system.svc:3000"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 101
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-plane-ui
+  namespace: stoa-system
+  labels:
+    app: control-plane-ui
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: control-plane-ui

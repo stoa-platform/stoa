@@ -110,7 +110,7 @@ jobs:
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name apim-dev-cluster --region eu-west-1
       - name: Apply k8s manifest
-        run: kubectl apply -f portal/k8s/deployment.yaml
+        run: kubectl apply --server-side --force-conflicts -f portal/k8s/deployment.yaml
 
   # === Deploy: EKS rollout with auto-rollback ===
   deploy:

@@ -213,22 +213,16 @@ const QuickActionCard = memo(function QuickActionCard({ title, description, href
 function ProtectedRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) {
-    // Show app shell (sidebar + header) immediately while auth initializes
-    return (
-      <Layout>
-        <PageLoader />
-      </Layout>
-    );
-  }
-
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !isLoading) {
     return <Navigate to="/login" replace />;
   }
 
   return (
     <CommandPaletteProvider>
       <Layout>
+        {isLoading ? (
+          <PageLoader />
+        ) : (
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -260,6 +254,7 @@ function ProtectedRoutes() {
             <Route path="/logs" element={<LogsEmbed />} />
           </Routes>
         </Suspense>
+        )}
       </Layout>
     </CommandPaletteProvider>
   );

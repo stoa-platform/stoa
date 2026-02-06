@@ -209,7 +209,7 @@
       name: "{{ oidc_app_name }}"
       description: "Application {{ oidc_app_name }} for OIDC authentication"
       contactEmails:
-        - "admin@cab-i.com"
+        - "admin@gostoa.dev"
     status_code: [200, 201]
   register: app_result_oidc
   when: app_id_oidc is not defined
@@ -242,7 +242,7 @@
       name: "{{ oidc_app_name }}"
       description: "Application {{ oidc_app_name }} for OIDC authentication"
       contactEmails:
-        - "admin@cab-i.com"
+        - "admin@gostoa.dev"
       authStrategyIds:
         - "{{ strategy_id_oidc }}"
       identifiers:

@@ -292,7 +292,7 @@ class GatewayAdminService:
         payload = {
             "name": name,
             "description": description,
-            "contactEmails": contact_emails or ["admin@cab-i.com"],
+            "contactEmails": contact_emails or ["admin@gostoa.dev"],
         }
         result = await self._request("POST", "/applications", auth_token=auth_token, json=payload)
         logger.info(f"Created application {name}")

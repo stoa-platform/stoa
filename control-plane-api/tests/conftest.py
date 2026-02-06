@@ -64,16 +64,19 @@ _mock_metrics_service = MagicMock()
 _mock_metrics_service.connect = AsyncMock()
 _mock_metrics_service.disconnect = AsyncMock()
 
+# Import src.main explicitly before patching (fixes AttributeError in CI)
+# This ensures the submodule is properly loaded before patch() tries to access it
+import src.main as _main_module
+
 # Patch services in the main module where they're imported and used
-# These patches target 'src.main.<service>' because main.py does:
-#   from .services import kafka_service, git_service, ...
-patch('src.main.kafka_service', _mock_kafka_service).start()
-patch('src.main.git_service', _mock_git_service).start()
-patch('src.main.awx_service', _mock_awx_service).start()
-patch('src.main.keycloak_service', _mock_keycloak_service).start()
-patch('src.main.gateway_service', _mock_gateway_service).start()
-patch('src.main.argocd_service', _mock_argocd_service).start()
-patch('src.main.metrics_service', _mock_metrics_service).start()
+# Using patch.object() instead of string-based patching for reliability
+patch.object(_main_module, 'kafka_service', _mock_kafka_service).start()
+patch.object(_main_module, 'git_service', _mock_git_service).start()
+patch.object(_main_module, 'awx_service', _mock_awx_service).start()
+patch.object(_main_module, 'keycloak_service', _mock_keycloak_service).start()
+patch.object(_main_module, 'gateway_service', _mock_gateway_service).start()
+patch.object(_main_module, 'argocd_service', _mock_argocd_service).start()
+patch.object(_main_module, 'metrics_service', _mock_metrics_service).start()
 
 # Also patch at service module level for routers that import directly
 patch('src.services.kafka_service.kafka_service', _mock_kafka_service).start()
@@ -82,11 +85,11 @@ patch('src.services.keycloak_service.keycloak_service', _mock_keycloak_service).
 patch('src.services.metrics_service.metrics_service', _mock_metrics_service).start()
 
 # Patch OpenSearch setup
-patch('src.main.setup_opensearch', AsyncMock()).start()
+patch.object(_main_module, 'setup_opensearch', AsyncMock()).start()
 
 # Patch error snapshots
-patch('src.main.connect_error_snapshots', AsyncMock(return_value=None)).start()
-patch('src.main.add_error_snapshot_middleware', MagicMock()).start()
+patch.object(_main_module, 'connect_error_snapshots', AsyncMock(return_value=None)).start()
+patch.object(_main_module, 'add_error_snapshot_middleware', MagicMock()).start()
 
 import asyncio
 from collections.abc import AsyncGenerator, Generator

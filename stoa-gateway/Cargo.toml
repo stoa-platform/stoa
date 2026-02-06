@@ -21,7 +21,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "1"
 chrono = { version = "0.4", features = ["serde"] }
-prometheus = { version = "0.13", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
+prometheus = { version = "0.14", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
 jsonwebtoken = "9"
 reqwest = { version = "0.11", features = ["json"] }
 async-trait = "0.1"

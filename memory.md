@@ -1,11 +1,11 @@
 # STOA Memory
 
-> Last updated: 2026-02-06 (Session 8 — Enterprise CD Architecture Deployment)
+> Last updated: 2026-02-06 (Session 14 — CAB-1114 Phase 4 Console Integration)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: AI context management architecture (ADR-030)
+- **Focus**: CAB-1114 OpenSearch Logs — Phase 4 Console integration done, all 4 phases complete
 
 ## Session State
 
@@ -23,6 +23,12 @@
 | DONE | ADR-030 | AI context management architecture | Session 7 |
 | DONE | — | Context refactor: CLAUDE.md 11KB→3KB + 8 rules + 8 component docs + 8 skills + hooks | Session 7 |
 | DONE | CAB-CD-001 | Enterprise CD Architecture deployed on EKS | Session 8, commit 46401a3b |
+| DONE | CAB-1113 | Performance Phase 5: SQL filtering + DTOs légers (portal.py) | Session 9 |
+| DONE | CAB-1113 | Performance Phase 6: Cache + Keycloak Boot + Web Vitals | PR #139, Session 10 |
+| DONE | CAB-1114 | OpenSearch Phase 1: Deploy + Dashboards + Ingestion | commit 03665d57, e6e72a52 |
+| DONE | CAB-1114 | OpenSearch Phase 2: RGPD redaction pipeline (7 PII patterns) | commit 35fa3943, Session 11 |
+| DONE | CAB-1114 | OpenSearch Phase 3: Multi-Tenant OIDC Security | Session 12+13, 6/6 tests |
+| DONE | CAB-1114 | OpenSearch Phase 4: Console Integration (SSO iframe) | Session 14, LogsEmbed.tsx + route + sidebar |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe | — |
 | NEXT | — | Browser-based demo walkthrough | — |
 | NEXT | — | Record video backup for demo | — |
@@ -35,6 +41,19 @@
 - 2026-02-05: CLAUDE.md hierarchy: root (compact) + .claude/rules/ (modular) + component CLAUDE.md (lazy)
 - 2026-02-06: Kyverno policies in Audit mode first, switch to Enforce after validation
 - 2026-02-06: ArgoCD ApplicationSet uses goTemplate mode for multi-env deployments
+- 2026-02-06: OpenSearch 2.11.0 doesn't support `_meta` on ingest pipelines (only on index templates)
+- 2026-02-06: Painless regex requires `script.painless.regex.enabled=true` in OpenSearch env for reliable `.matcher().replaceAll()`
+- 2026-02-06: `default_pipeline` on index template applies to all `_bulk` writes — pipeline must exist before seeding data
+- 2026-02-06: OpenSearch OIDC requires `extra_hosts: localhost:host-gateway` for Docker containers to reach nginx (OIDC discovery URL)
+- 2026-02-06: Fallback OIDC discovery URL: `http://nginx/auth/realms/stoa/.well-known/openid-configuration` if host-gateway fails
+- 2026-02-06: OpenSearch security plugin requires demo certs (`allow_unsafe_democertificates: true`) for single-node dev
+- 2026-02-06: `securityadmin.sh` needs kirk.pem admin cert to push security config — run from opensearch image container
+- 2026-02-06: Tenant alignment: `tenant-alpha/beta` renamed to `oasis-gunters/ioi-sixers` to match Keycloak users
+- 2026-02-06: Demo certs must be extracted from OpenSearch image and mounted — `DISABLE_INSTALL_DEMO_CONFIG=true` required
+- 2026-02-06: `securityadmin.sh` requires ALL 8 config files (incl. `nodes_dn.yml`, `whitelist.yml`)
+- 2026-02-06: Dashboards OIDC `connect_url` must use `http://keycloak:8080` (not nginx) to avoid circular dependency
+- 2026-02-06: OpenSearch `roles_key` does NOT support nested paths — use flat `roles` claim, not `realm_access.roles`
+- 2026-02-06: nginx alpine healthcheck: use `127.0.0.1` not `localhost` (IPv6 `::1` issue)
 
 ## CD Infrastructure (Session 8 — 2026-02-06)
 - **Argo Rollouts**: Installed for progressive delivery (canary deployments)
@@ -49,9 +68,9 @@
 - **TODO**: Switch Kyverno policies to Enforce mode after validation period
 
 ## Known Issues
+- **CI/CD pipelines broken** since PR #76 — startup_failure on workflow files. Pods won't auto-update until fixed.
 - Loki behind oauth2-proxy — requires Grafana for direct queries
 - Portal has 2 APIs in catalog; Console has 0 per tenant until seed
-- ADR-027 numbering conflict: stoa/ has "Gateway Adapter Pattern", stoa-docs has "X.509 Header Auth"
 
 ## E2E Validation (Session 3 — 2026-02-04)
 - **24/24 tests passed** (22.6s)

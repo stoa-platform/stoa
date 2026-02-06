@@ -1,0 +1,21 @@
+# =============================================================================
+# STOA Platform - OpenSearch Dashboards Tenants
+# =============================================================================
+# CAB-1114 Phase 3: Tenant spaces for saved objects isolation
+# =============================================================================
+
+_meta:
+  type: "tenants"
+  config_version: 2
+
+oasis_gunters_tenant:
+  reserved: false
+  description: "Oasis Gunters - Saved objects and dashboards"
+
+ioi_sixers_tenant:
+  reserved: false
+  description: "IOI Sixers - Saved objects and dashboards"
+
+admin_tenant:
+  reserved: false
+  description: "Platform admin - Global dashboards"

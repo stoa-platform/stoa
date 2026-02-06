@@ -1,0 +1,7 @@
+---
+# OpenSearch Security - Allowed API list
+_meta:
+  type: "whitelist"
+  config_version: 2
+config:
+  enabled: false

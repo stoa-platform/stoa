@@ -1,0 +1,43 @@
+# =============================================================================
+# STOA Platform - OpenSearch Security Configuration
+# =============================================================================
+# CAB-1114 Phase 3: OIDC Authentication via Keycloak + Internal users
+# =============================================================================
+
+_meta:
+  type: "config"
+  config_version: 2
+
+config:
+  dynamic:
+    http:
+      anonymous_auth_enabled: false
+
+    authc:
+      # Internal users (admin, kibanaserver) — used by init scripts and Dashboards
+      basic_internal_auth_domain:
+        description: "Internal users for admin and service accounts"
+        http_enabled: true
+        transport_enabled: true
+        order: 0
+        http_authenticator:
+          type: "basic"
+          challenge: false
+        authentication_backend:
+          type: "internal"
+
+      # Keycloak OIDC — used by browser-based Dashboards login
+      openid_auth_domain:
+        description: "Keycloak OIDC authentication for STOA users"
+        http_enabled: true
+        transport_enabled: false
+        order: 1
+        http_authenticator:
+          type: "openid"
+          challenge: false
+          config:
+            subject_key: "preferred_username"
+            roles_key: "roles"
+            openid_connect_url: "http://localhost/auth/realms/stoa/.well-known/openid-configuration"
+        authentication_backend:
+          type: "noop"

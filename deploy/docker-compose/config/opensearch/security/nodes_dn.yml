@@ -1,0 +1,6 @@
+---
+# OpenSearch Security - Node Distinguished Names
+# Used for inter-node communication (single-node setup = minimal config)
+_meta:
+  type: "nodesdn"
+  config_version: 2

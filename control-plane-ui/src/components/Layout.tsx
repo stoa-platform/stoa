@@ -33,6 +33,7 @@ import {
   Moon,
   Shield,
   Gauge,
+  ScrollText,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -48,6 +49,8 @@ const navigation = [
   // CAB-1108: Embedded platform services
   { name: 'Observability', href: '/observability', icon: Gauge, shortcut: ['g', 'g'] },
   { name: 'Identity', href: '/identity', icon: Shield, shortcut: ['g', 'i'] },
+  // CAB-1114: OpenSearch Dashboards for API trace logs
+  { name: 'Logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
   { name: 'Tenants', href: '/tenants', icon: Building2, permission: 'tenants:read', shortcut: ['g', 't'] },
   { name: 'APIs', href: '/apis', icon: Layers, permission: 'apis:read', shortcut: ['g', 'a'] },
   { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read', shortcut: ['g', 'w'] },

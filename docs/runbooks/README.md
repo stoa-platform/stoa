@@ -25,6 +25,7 @@ This directory contains operational procedures for incident management on the ST
 | Runbook | Description | Impact |
 |---------|-------------|--------|
 | [Gateway High Latency](high/gateway-high-latency.md) | High latency on Gateway | Latency SLA compromised |
+| [Gateway Registration Failed](high/gateway-registration-failed.md) | Gateway auto-registration issues | Gateway not orchestrated by CP |
 | [Kafka Lag](high/kafka-lag.md) | High consumer lag on Redpanda | Deployments delayed |
 | [Certificate Expiration](high/certificate-expiration.md) | TLS certificates expiring/expired | HTTPS services inaccessible |
 
@@ -140,3 +141,4 @@ To add or modify a runbook:
 | Date | Modification |
 |------|--------------|
 | 2024-12-28 | Initial creation - 9 runbooks |
+| 2026-02-06 | Added Gateway Registration Failed runbook (ADR-028) |

@@ -48,6 +48,8 @@ jobs:
         working-directory: ${{ inputs.component }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install system dependencies for rdkafka
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake
       - uses: ./.github/actions/setup-rust-env
         with:
           components: clippy
@@ -67,6 +69,8 @@ jobs:
         working-directory: ${{ inputs.component }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install system dependencies for rdkafka
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev cmake
       - uses: ./.github/actions/setup-rust-env
         with:
           working-directory: ${{ inputs.component }}

@@ -1,40 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import type { Tenant } from '../types';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
 import { Users } from 'lucide-react';
 
 export function Tenants() {
   const { isReady } = useAuth();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Only load tenants when token is ready
-    console.log('[Tenants] isReady changed:', isReady);
-    if (isReady) {
-      loadTenants();
-    }
-  }, [isReady]);
-
-  async function loadTenants() {
-    try {
-      setLoading(true);
-      console.log('[Tenants] Loading tenants...');
-      const data = await apiService.getTenants();
-      console.log('[Tenants] Loaded tenants:', data);
-      setTenants(data);
-      setError(null);
-    } catch (err: any) {
-      console.error('[Tenants] Failed to load tenants:', err);
-      setError(err.message || 'Failed to load tenants');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: tenants = [], isLoading: loading, error } = useQuery({
+    queryKey: ['tenants'],
+    queryFn: () => apiService.getTenants(),
+    enabled: isReady,
+  });
 
   const statusColors: Record<string, string> = {
     active: 'bg-green-100 text-green-800',
@@ -68,8 +46,7 @@ export function Tenants() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-          <button onClick={() => setError(null)} className="float-right font-bold">&times;</button>
+          {error.message || 'Failed to load tenants'}
         </div>
       )}
 

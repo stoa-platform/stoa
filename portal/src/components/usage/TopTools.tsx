@@ -3,7 +3,7 @@
  * Top 5 tools les plus utilisés
  */
 
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import { Wrench } from 'lucide-react';
 import type { ToolUsageStat } from '../../types';
 import { formatLatency } from '../../services/usage';
@@ -30,7 +30,7 @@ function ToolsSkeleton() {
   );
 }
 
-export function TopTools({ tools, isLoading = false }: TopToolsProps) {
+export const TopTools = memo(function TopTools({ tools, isLoading = false }: TopToolsProps) {
   // Memoize maxCalls for performance - only recalculate when tools change
   // Note: Must be called before any early returns to satisfy React Hooks rules
   const maxCalls = useMemo(
@@ -101,4 +101,4 @@ export function TopTools({ tools, isLoading = false }: TopToolsProps) {
       )}
     </div>
   );
-}
+});

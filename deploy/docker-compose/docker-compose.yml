@@ -57,6 +57,10 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_RELATIVE_PATH: /
+      # Phase 3: Reverse proxy configuration (CAB-1108)
+      KC_HOSTNAME_URL: "http://localhost/auth"
+      KC_HOSTNAME_ADMIN_URL: "http://localhost/auth"
+      KC_PROXY_HEADERS: "xforwarded"
       # Phase 2: Allow iframe embedding in Console (CAB-1108)
       KC_SPI_X_FRAME_OPTIONS: ""
       KC_SPI_CONTENT_SECURITY_POLICY: "frame-ancestors 'self' http://localhost:* https://console.gostoa.dev"
@@ -161,6 +165,30 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
+  # Reverse Proxy (nginx) - CAB-1108 Phase 3
+  # ==========================================================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: stoa-proxy
+    ports:
+      - "${PORT_PROXY:-80}:80"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - control-plane-ui
+      - control-plane-api
+      - grafana
+      - keycloak
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ==========================================================================
   # Prometheus (Metrics)
   # ==========================================================================
   prometheus:
@@ -198,6 +226,9 @@ services:
       GF_APP_TITLE: "STOA Observability"
       # Phase 2: Allow iframe embedding in Console
       GF_SECURITY_ALLOW_EMBEDDING: "true"
+      # Phase 3: Sub-path serving for reverse proxy
+      GF_SERVER_ROOT_URL: "http://localhost/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro

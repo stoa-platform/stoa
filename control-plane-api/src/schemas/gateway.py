@@ -48,6 +48,7 @@ class GatewayInstanceResponse(BaseModel):
     capabilities: list[str]
     version: str | None
     tags: list[str]
+    mode: str | None = Field(None, description="STOA Gateway mode: edge-mcp, sidecar, proxy, shadow")
     created_at: datetime
     updated_at: datetime
 
@@ -60,6 +61,26 @@ class GatewayHealthCheckResponse(BaseModel):
     details: dict | None = None
     gateway_name: str
     gateway_type: str
+
+
+# =========================================================================
+# Gateway Mode Statistics (ADR-024)
+# =========================================================================
+
+
+class ModeStatItem(BaseModel):
+    """Statistics for a single gateway mode."""
+    mode: str
+    total: int
+    online: int
+    offline: int
+    degraded: int
+
+
+class GatewayModeStats(BaseModel):
+    """Gateway statistics grouped by mode."""
+    modes: list[ModeStatItem]
+    total_gateways: int
 
 
 # =========================================================================

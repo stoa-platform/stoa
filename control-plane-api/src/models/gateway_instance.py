@@ -20,7 +20,11 @@ class GatewayType(enum.StrEnum):
     APIGEE = "apigee"
     AWS_APIGATEWAY = "aws_apigateway"
     STOA = "stoa"
-    STOA_SIDECAR = "stoa_sidecar"  # STOA in sidecar mode (ADR-028)
+    # STOA Gateway modes (ADR-024) — for filtering/grouping
+    STOA_EDGE_MCP = "stoa_edge_mcp"
+    STOA_SIDECAR = "stoa_sidecar"
+    STOA_PROXY = "stoa_proxy"
+    STOA_SHADOW = "stoa_shadow"
 
 
 class GatewayInstanceStatus(enum.StrEnum):
@@ -81,6 +85,9 @@ class GatewayInstance(Base):
     # Capabilities
     capabilities = Column(JSONB, nullable=False, default=list)
     # e.g. ["rest", "graphql", "websocket", "oidc", "rate_limiting", "mcp"]
+
+    # STOA Gateway mode (ADR-024)
+    mode = Column(String(50), nullable=True, index=True)  # edge-mcp, sidecar, proxy, shadow
 
     # Metadata
     version = Column(String(50), nullable=True)     # Gateway software version

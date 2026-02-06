@@ -34,6 +34,7 @@ from .routers import (
     gateway,
     gateway_deployments,
     gateway_instances,
+    gateway_internal,
     gateway_observability,
     gateway_policies,
     git,
@@ -73,6 +74,7 @@ from .services.gateway_service import gateway_service
 from .tracing_config import configure_tracing, shutdown_tracing
 from .workers.deployment_worker import deployment_worker
 from .workers.error_snapshot_consumer import error_snapshot_consumer
+from .workers.gateway_health_worker import gateway_health_worker
 from .workers.sync_engine import sync_engine
 
 # Configure structured logging (CAB-281)
@@ -83,6 +85,7 @@ logger = get_logger(__name__)
 ENABLE_WORKER = os.getenv("ENABLE_DEPLOYMENT_WORKER", "true").lower() == "true"
 ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
 ENABLE_SYNC_ENGINE = os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
+ENABLE_GATEWAY_HEALTH_WORKER = os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true").lower() == "true"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -176,6 +179,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start sync engine", error=str(e))
 
+    # Start gateway health worker (ADR-028 auto-registration)
+    gateway_health_task = None
+    if ENABLE_GATEWAY_HEALTH_WORKER:
+        try:
+            gateway_health_task = asyncio.create_task(gateway_health_worker.start())
+            logger.info("Gateway health worker started")
+        except Exception as e:
+            logger.warning("Failed to start gateway health worker", error=str(e))
+
     yield
 
     # Shutdown
@@ -201,6 +213,13 @@ async def lifespan(app: FastAPI):
         sync_engine_task.cancel()
         with suppress(asyncio.CancelledError):
             await sync_engine_task
+
+    # Stop gateway health worker
+    if ENABLE_GATEWAY_HEALTH_WORKER and gateway_health_task:
+        await gateway_health_worker.stop()
+        gateway_health_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await gateway_health_task
 
     await kafka_service.disconnect()
     await git_service.disconnect()
@@ -306,6 +325,7 @@ app = FastAPI(
         {"name": "Gateway Deployments", "description": "API deployment to gateways (sync engine)"},
         {"name": "Gateway Policies", "description": "Gateway-agnostic policy management"},
         {"name": "Gateway Observability", "description": "Multi-gateway health and sync metrics"},
+        {"name": "Gateway Internal", "description": "Internal gateway auto-registration (ADR-028)"},
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -422,6 +442,8 @@ app.include_router(gateway_observability.router)
 app.include_router(gateway_instances.router)
 app.include_router(gateway_deployments.router)
 app.include_router(gateway_policies.router)
+# Internal gateway registration API (ADR-028 auto-registration)
+app.include_router(gateway_internal.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

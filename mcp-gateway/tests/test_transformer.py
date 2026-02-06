@@ -232,7 +232,9 @@ class TestFieldSelection:
             LINEAR_ISSUE_PAYLOAD, config.fields, config.max_depth
         )
         # Should only contain whitelisted fields
-        assert set(result.keys()).issubset(set(config.fields))
+        # Note: dot-notation fields like "state.name" result in "state" key at top level
+        top_level_fields = {f.split(".")[0] for f in config.fields}
+        assert set(result.keys()).issubset(top_level_fields)
         assert "id" in result
         assert "title" in result
         assert "state" in result

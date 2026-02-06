@@ -18,12 +18,11 @@ import csv
 import io
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from ..auth import User, get_current_user, require_tenant_access
 
@@ -101,7 +100,7 @@ def _init_demo_data():
     if _demo_audit_entries:
         return
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Generate demo audit entries
     actions = [
@@ -279,7 +278,7 @@ async def export_audit_csv(
         content=csv_content,
         media_type="text/csv",
         headers={
-            "Content-Disposition": f'attachment; filename="audit_{tenant_id}_{datetime.now(timezone.utc).strftime("%Y%m%d")}.csv"'
+            "Content-Disposition": f'attachment; filename="audit_{tenant_id}_{datetime.now(UTC).strftime("%Y%m%d")}.csv"'
         },
     )
 
@@ -310,7 +309,7 @@ async def export_audit_json(
 
     export_data = {
         "tenant_id": tenant_id,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_at": datetime.now(UTC).isoformat(),
         "total_entries": len(entries),
         "entries": entries,
     }
@@ -321,7 +320,7 @@ async def export_audit_json(
         content=json_content,
         media_type="application/json",
         headers={
-            "Content-Disposition": f'attachment; filename="audit_{tenant_id}_{datetime.now(timezone.utc).strftime("%Y%m%d")}.json"'
+            "Content-Disposition": f'attachment; filename="audit_{tenant_id}_{datetime.now(UTC).strftime("%Y%m%d")}.json"'
         },
     )
 
@@ -399,7 +398,7 @@ async def test_tenant_isolation(
         # Record security event
         _demo_security_events.append({
             "id": f"sec-{len(_demo_security_events):04d}",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "tenant_id": tenant_id,
             "event_type": "cross_tenant",
             "severity": "critical",
@@ -472,5 +471,5 @@ async def get_global_audit_summary(
         "entries_by_tenant": by_tenant,
         "entries_by_action": by_action,
         "security_by_severity": security_by_severity,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }

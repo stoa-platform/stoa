@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Proprietary" }
 authors = [
-    { name = "CAB Ingénierie", email = "dev@cab-i.com" }
+    { name = "CAB Ingénierie", email = "dev@gostoa.dev" }
 ]
 
 [project.optional-dependencies]

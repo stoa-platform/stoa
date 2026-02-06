@@ -9,7 +9,7 @@
 #   - api_ids: List of API IDs to consume
 #
 # Optional variables:
-#   - contact_email: Contact email (default: admin@cab-i.com)
+#   - contact_email: Contact email (default: admin@gostoa.dev)
 #   - auth_strategy_id: OIDC strategy ID (if not specified, uses existing or none)
 #
 # IMPORTANT: The playbook uses newApisForAssociation with consumingAPIs=[] format
@@ -31,7 +31,7 @@
     _app_description: ""
     _client_id: ""
     _api_ids: []
-    _contact_email: "admin@cab-i.com"
+    _contact_email: "admin@gostoa.dev"
     _auth_strategy_id: ""
 
     # Final values

@@ -5,7 +5,7 @@
     "description": "## Gateway Administration API\n\nOIDC-protected proxy to webMethods API Gateway administration endpoints.\n\n### Purpose\n\nThis API provides secure access to Gateway administration functions through the Control-Plane API, eliminating the need for direct Basic Auth access to the Gateway admin port (5555).\n\n### Authentication\n\nAll endpoints require a valid JWT token from Keycloak (realm: `stoa`).\n- Users with `cpi-admin` role can access all operations\n- Token is forwarded to Gateway for audit trail\n\n### Backend\n\nProxy to: `http://apigateway.stoa-system.svc.cluster.local:5555/rest/apigateway`\n\n### Features\n\n- **API Management**: List, activate, deactivate APIs\n- **Application Management**: Manage OAuth applications\n- **Scope Management**: Configure OAuth scopes\n- **OIDC Configuration**: Set up External Authorization Servers\n",
     "contact": {
       "name": "CAB Ingenierie",
-      "email": "admin@cab-i.com"
+      "email": "admin@gostoa.dev"
     },
     "license": {
       "name": "Proprietary"

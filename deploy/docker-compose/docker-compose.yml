@@ -185,14 +185,15 @@ services:
     networks:
       - stoa-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"]
       interval: 10s
       timeout: 5s
       retries: 3
     restart: unless-stopped
 
   # ==========================================================================
-  # OpenSearch (Search Engine) - CAB-1114 Phase 1
+  # OpenSearch (Search Engine) - CAB-1114 Phase 1+3
+  # Phase 3: Security plugin enabled with TLS + OIDC via Keycloak
   # ==========================================================================
   opensearch:
     image: opensearchproject/opensearch:2.11.0
@@ -200,12 +201,11 @@ services:
     ports:
       - "${PORT_OPENSEARCH:-9200}:9200"
     environment:
-      - cluster.name=stoa-cluster
-      - node.name=stoa-node-1
-      - discovery.type=single-node
-      - DISABLE_SECURITY_PLUGIN=true
       - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
-      - bootstrap.memory_lock=true
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=StOa_Admin_2026!
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+    extra_hosts:
+      - "localhost:host-gateway"
     ulimits:
       memlock:
         soft: -1
@@ -215,18 +215,31 @@ services:
         hard: 65536
     volumes:
       - opensearch-data:/usr/share/opensearch/data
+      - ./config/opensearch/opensearch.yml:/usr/share/opensearch/config/opensearch.yml:ro
+      - ./config/opensearch/security/config.yml:/usr/share/opensearch/config/opensearch-security/config.yml:ro
+      - ./config/opensearch/security/internal_users.yml:/usr/share/opensearch/config/opensearch-security/internal_users.yml:ro
+      - ./config/opensearch/security/roles.yml:/usr/share/opensearch/config/opensearch-security/roles.yml:ro
+      - ./config/opensearch/security/roles_mapping.yml:/usr/share/opensearch/config/opensearch-security/roles_mapping.yml:ro
+      - ./config/opensearch/security/action_groups.yml:/usr/share/opensearch/config/opensearch-security/action_groups.yml:ro
+      - ./config/opensearch/security/tenants.yml:/usr/share/opensearch/config/opensearch-security/tenants.yml:ro
+      - ./config/opensearch/certs/esnode.pem:/usr/share/opensearch/config/esnode.pem:ro
+      - ./config/opensearch/certs/esnode-key.pem:/usr/share/opensearch/config/esnode-key.pem:ro
+      - ./config/opensearch/certs/root-ca.pem:/usr/share/opensearch/config/root-ca.pem:ro
+      - ./config/opensearch/certs/kirk.pem:/usr/share/opensearch/config/kirk.pem:ro
+      - ./config/opensearch/certs/kirk-key.pem:/usr/share/opensearch/config/kirk-key.pem:ro
     networks:
       - stoa-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sfk https://localhost:9200/_cluster/health -u admin:StOa_Admin_2026! || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 20
-      start_period: 30s
+      start_period: 45s
     restart: unless-stopped
 
   # ==========================================================================
-  # OpenSearch Dashboards (STOA Logs UI) - CAB-1114 Phase 1
+  # OpenSearch Dashboards (STOA Logs UI) - CAB-1114 Phase 1+3
+  # Phase 3: OIDC via Keycloak + multi-tenancy
   # ==========================================================================
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:2.11.0
@@ -234,8 +247,9 @@ services:
     ports:
       - "${PORT_OPENSEARCH_DASHBOARDS:-5601}:5601"
     environment:
-      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
-      - OPENSEARCH_HOSTS=["http://opensearch:9200"]
+      - OPENSEARCH_HOSTS=["https://opensearch:9200"]
+    extra_hosts:
+      - "localhost:host-gateway"
     volumes:
       - ./config/opensearch-dashboards/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml:ro
       - ./config/opensearch-dashboards/img/stoa-logo-mark.svg:/usr/share/opensearch-dashboards/assets/stoa-logo-mark.svg:ro
@@ -243,25 +257,36 @@ services:
     depends_on:
       opensearch:
         condition: service_healthy
+      keycloak:
+        condition: service_healthy
     networks:
       - stoa-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:5601/logs/api/status || exit 1"]
+      test: ["CMD-SHELL", "curl -so /dev/null -w '%{http_code}' http://localhost:5601/logs/api/status | grep -qE '200|401' || exit 1"]
       interval: 10s
       timeout: 10s
-      retries: 10
-      start_period: 30s
+      retries: 15
+      start_period: 60s
     restart: unless-stopped
 
   # ==========================================================================
-  # OpenSearch Init (one-shot) - CAB-1114 Phase 1
+  # OpenSearch Init (one-shot) - CAB-1114 Phase 1+3
+  # Phase 3: Uses opensearch image for securityadmin.sh + authenticated curl
   # ==========================================================================
   opensearch-init:
-    image: curlimages/curl:8.5.0
+    image: opensearchproject/opensearch:2.11.0
     container_name: stoa-opensearch-init
+    entrypoint: ["sh", "/init/init-opensearch.sh"]
+    environment:
+      - OPENSEARCH_ADMIN_USER=admin
+      - OPENSEARCH_ADMIN_PASSWORD=StOa_Admin_2026!
     volumes:
-      - ./init/init-opensearch.sh:/init-opensearch.sh:ro
-    entrypoint: ["sh", "/init-opensearch.sh"]
+      - ./init/init-opensearch.sh:/init/init-opensearch.sh:ro
+      - ../opensearch/pipelines/stoa-rgpd-redaction.json:/init/stoa-rgpd-redaction.json:ro
+      - ./config/opensearch/security:/init/security:ro
+      - ./config/opensearch/certs/root-ca.pem:/init/certs/root-ca.pem:ro
+      - ./config/opensearch/certs/kirk.pem:/init/certs/kirk.pem:ro
+      - ./config/opensearch/certs/kirk-key.pem:/init/certs/kirk-key.pem:ro
     depends_on:
       opensearch:
         condition: service_healthy

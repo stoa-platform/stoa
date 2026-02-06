@@ -1,0 +1,25 @@
+# =============================================================================
+# STOA Platform - OpenSearch Internal Users
+# =============================================================================
+# CAB-1114 Phase 3: Service accounts for admin and Dashboards
+# =============================================================================
+
+_meta:
+  type: "internalusers"
+  config_version: 2
+
+# Admin user — used by init scripts and securityadmin CLI
+# Password: StOa_Admin_2026!
+admin:
+  hash: "$2b$12$E0zui4m/YvdWD5SHmAbw2eQe3XlAHsKoyIRfHPTVGPNDVbiDENf0a"
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "OpenSearch admin user"
+
+# Dashboards service account — used by OpenSearch Dashboards to communicate with OpenSearch
+# Password: kibanaserver
+kibanaserver:
+  hash: "$2b$12$ah75LtRfVJGYGtMziMU4GOHXDeZpsgMHp/gk5eFmMgD.B/Wwtim1a"
+  reserved: true
+  description: "OpenSearch Dashboards internal service account"

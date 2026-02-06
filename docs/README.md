@@ -26,6 +26,17 @@ Welcome to the STOA Platform documentation. STOA is a multi-tenant API managemen
 - **[MCP Subscriptions](./MCP-SUBSCRIPTIONS.md)** - MCP Gateway subscriptions
 - **[MCP Claude AI Integration](./MCP-CLAUDEAI-INTEGRATION.md)** - Claude AI integration
 
+### Gateway
+
+- **[Gateway Auto-Registration](./guides/gateway-auto-registration.md)** - Zero-config gateway deployment (ADR-028)
+- **[WebMethods Sidecar Integration](./integrations/webmethods-sidecar-integration.md)** - STOA sidecar with WebMethods
+
+### Architecture Decisions (ADRs)
+
+- **[ADR-024: Gateway Unified Modes](https://docs.gostoa.dev/architecture/adr/adr-024-gateway-unified-modes)** - edge-mcp, sidecar, proxy, shadow
+- **[ADR-027: Gateway Adapter Pattern](./architecture/adr/adr-027-gateway-adapter-pattern.md)** - Multi-gateway orchestration
+- **[ADR-028: Gateway Auto-Registration](./architecture/adr/adr-028-gateway-auto-registration.md)** - Apple-style gateway onboarding
+
 ### Operations
 
 - **[Observability](./OBSERVABILITY.md)** - Monitoring and logging
@@ -45,6 +56,7 @@ Operational runbooks organized by severity:
 ### Integrations
 
 - **[IBM webMethods Gateway API](./ibm/webmethods-gateway-api.md)** - Gateway integration
+- **[WebMethods + STOA Sidecar](./integrations/webmethods-sidecar-integration.md)** - Policy enforcement via sidecar
 
 ## Getting Help
 

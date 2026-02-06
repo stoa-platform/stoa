@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+**Accepted** — Implemented 2026-02-06
 
 ## Date
 

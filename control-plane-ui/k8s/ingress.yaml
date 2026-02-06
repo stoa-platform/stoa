@@ -8,6 +8,10 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # CAB-1108: Allow iframe embedding of Grafana, Keycloak, OpenSearch Dashboards
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_hide_header X-Frame-Options;
+      add_header Content-Security-Policy "frame-ancestors 'self' https://console.gostoa.dev" always;
 spec:
   ingressClassName: nginx
   tls:

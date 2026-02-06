@@ -1,0 +1,104 @@
+# STOA Platform - Grafana Dashboards Kustomization
+#
+# Folder Structure:
+#   01-Overview/      Platform overview, SLO
+#   02-Operations/    Incident response, deployment health
+#   03-Gateway/       MCP Gateway metrics, tracing
+#   04-Security/      Security events, audit trails
+#   05-Tenant/        Multi-tenant views, analytics
+#   06-Business/      Business metrics, adoption
+#
+# Dashboard → Folder Mapping:
+#   incident-response.json       → 02-Operations
+#   mcp-gateway-traceability.json → 03-Gateway
+#   security-events.json         → 04-Security
+#   multi-tenant-overview.json   → 05-Tenant
+#   tenant-analytics.json        → 05-Tenant
+#   business-analytics.json      → 06-Business
+#   demo-overview.json           → 01-Overview
+#
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: stoa-monitoring
+
+resources:
+  # Existing ConfigMaps
+  - mcp-gateway-configmap.yaml
+  - infrastructure-networking-configmap.yaml
+  - stoa-gateway-configmap.yaml
+
+configMapGenerator:
+  # 02-Operations folder
+  - name: grafana-dashboard-incident-response
+    namespace: stoa-monitoring
+    options:
+      labels:
+        grafana_dashboard: "1"
+        app.kubernetes.io/part-of: stoa-platform
+      annotations:
+        grafana_folder: "02-Operations"
+    files:
+      - incident-response.json
+
+  # 04-Security folder
+  - name: grafana-dashboard-security-events
+    namespace: stoa-monitoring
+    options:
+      labels:
+        grafana_dashboard: "1"
+        app.kubernetes.io/part-of: stoa-platform
+      annotations:
+        grafana_folder: "04-Security"
+    files:
+      - security-events.json
+
+  # 05-Tenant folder
+  - name: grafana-dashboard-multi-tenant
+    namespace: stoa-monitoring
+    options:
+      labels:
+        grafana_dashboard: "1"
+        app.kubernetes.io/part-of: stoa-platform
+      annotations:
+        grafana_folder: "05-Tenant"
+    files:
+      - multi-tenant-overview.json
+
+  - name: grafana-dashboard-tenant-analytics
+    namespace: stoa-monitoring
+    options:
+      labels:
+        grafana_dashboard: "1"
+        app.kubernetes.io/part-of: stoa-platform
+      annotations:
+        grafana_folder: "05-Tenant"
+    files:
+      - tenant-analytics.json
+
+  # 06-Business folder
+  - name: grafana-dashboard-business-analytics
+    namespace: stoa-monitoring
+    options:
+      labels:
+        grafana_dashboard: "1"
+        app.kubernetes.io/part-of: stoa-platform
+      annotations:
+        grafana_folder: "06-Business"
+    files:
+      - business-analytics.json
+
+  # 01-Overview folder
+  - name: grafana-dashboard-demo-overview
+    namespace: stoa-monitoring
+    options:
+      labels:
+        grafana_dashboard: "1"
+        app.kubernetes.io/part-of: stoa-platform
+      annotations:
+        grafana_folder: "01-Overview"
+    files:
+      - demo-overview.json
+
+generatorOptions:
+  disableNameSuffixHash: true

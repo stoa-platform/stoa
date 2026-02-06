@@ -8,6 +8,8 @@ metadata:
   labels:
     grafana_dashboard: "1"
     app.kubernetes.io/part-of: stoa-platform
+  annotations:
+    grafana_folder: "03-Gateway"
 data:
   stoa-gateway.json: |
     {

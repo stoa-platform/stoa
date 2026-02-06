@@ -16,6 +16,8 @@ import {
   Search,
   ShieldAlert,
   Loader2,
+  Target,
+  Gauge,
 } from 'lucide-react';
 
 const healthConfig = {
@@ -264,6 +266,81 @@ export default function GatewayStatus() {
               <ExternalLink className="w-3 h-3 ml-1" />
             </a>
           </div>
+        </div>
+      </div>
+
+      {/* SLO Compliance Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* SLO Compliance Card */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <div className="p-2 bg-green-50 rounded-lg">
+                <Target className="w-5 h-5 text-green-600" />
+              </div>
+              <h3 className="ml-3 text-sm font-semibold text-gray-900">SLO Compliance</h3>
+            </div>
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
+              On Track
+            </span>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">Availability (99.9% target)</span>
+                <span className="font-medium text-gray-900">99.95%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="h-2 rounded-full bg-green-500" style={{ width: '99.95%' }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">Latency P95 (&lt;500ms target)</span>
+                <span className="font-medium text-gray-900">342ms</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="h-2 rounded-full bg-green-500" style={{ width: '68%' }} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Error Budget Card */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <Gauge className="w-5 h-5 text-blue-600" />
+              </div>
+              <h3 className="ml-3 text-sm font-semibold text-gray-900">Error Budget</h3>
+            </div>
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+              30d Window
+            </span>
+          </div>
+          <div className="flex items-end gap-4">
+            <div>
+              <p className="text-3xl font-bold text-blue-600">67.2%</p>
+              <p className="text-xs text-gray-500">remaining this month</p>
+            </div>
+            <div className="flex-1">
+              <div className="w-full bg-gray-200 rounded-full h-4">
+                <div
+                  className="h-4 rounded-full bg-gradient-to-r from-blue-500 to-blue-400"
+                  style={{ width: '67.2%' }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>0%</span>
+                <span>Consumed: 32.8%</span>
+                <span>100%</span>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-3">
+            Based on 99.9% availability SLO = 43.2 min downtime/month allowed
+          </p>
         </div>
       </div>
 

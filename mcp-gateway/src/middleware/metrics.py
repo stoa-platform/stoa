@@ -100,6 +100,70 @@ SERVICE_INFO.info({
     "environment": settings.environment,
 })
 
+# =============================================================================
+# APDEX Metrics (CAB-Observability)
+# =============================================================================
+
+# APDEX thresholds: T = 500ms (satisfied < T, tolerating < 4T, frustrated >= 4T)
+APDEX_THRESHOLD_T = 0.5  # 500ms
+APDEX_THRESHOLD_4T = 2.0  # 2000ms
+
+APDEX_SATISFIED_TOTAL = Counter(
+    f"{prefix}_apdex_satisfied_total",
+    "Requests with response time < T (satisfied users)",
+    ["tenant_id"],
+)
+
+APDEX_TOLERATING_TOTAL = Counter(
+    f"{prefix}_apdex_tolerating_total",
+    "Requests with response time between T and 4T (tolerating users)",
+    ["tenant_id"],
+)
+
+APDEX_FRUSTRATED_TOTAL = Counter(
+    f"{prefix}_apdex_frustrated_total",
+    "Requests with response time >= 4T (frustrated users)",
+    ["tenant_id"],
+)
+
+# =============================================================================
+# Billing/Usage Metrics (CAB-Observability)
+# =============================================================================
+
+BILLABLE_REQUESTS_TOTAL = Counter(
+    f"{prefix}_billable_requests_total",
+    "Total billable API requests",
+    ["tenant_id", "tool_name"],
+)
+
+TOKENS_CONSUMED_TOTAL = Counter(
+    f"{prefix}_tokens_consumed_total",
+    "Total tokens consumed",
+    ["tenant_id", "tool_name", "direction"],  # direction: input/output
+)
+
+TOKENS_COST_TOTAL = Counter(
+    f"{prefix}_tokens_cost_total",
+    "Estimated cost of tokens consumed (in micro-cents)",
+    ["tenant_id"],
+)
+
+# =============================================================================
+# Business Metrics (CAB-Observability)
+# =============================================================================
+
+UNIQUE_USERS_TOTAL = Gauge(
+    f"{prefix}_unique_users_total",
+    "Number of unique active users",
+    ["tenant_id", "period"],  # period: 1h, 24h, 7d
+)
+
+SESSIONS_TOTAL = Counter(
+    f"{prefix}_sessions_total",
+    "Total user sessions",
+    ["tenant_id"],
+)
+
 
 # =============================================================================
 # Middleware
@@ -154,6 +218,11 @@ class MetricsMiddleware(BaseHTTPMiddleware):
                 endpoint=endpoint,
                 status_code=str(status_code),
             ).inc()
+
+            # Record APDEX metrics (CAB-Observability)
+            # Extract tenant_id from request state if available
+            tenant_id = getattr(request.state, "tenant_id", None) or "default"
+            record_apdex(duration, tenant_id)
 
             # Decrease in-progress counter
             HTTP_REQUESTS_IN_PROGRESS.labels(
@@ -246,3 +315,93 @@ def record_backend_request(
 def update_tools_registered(count: int) -> None:
     """Update the count of registered tools."""
     MCP_TOOLS_REGISTERED.set(count)
+
+
+# =============================================================================
+# APDEX & Billing Recording Functions (CAB-Observability)
+# =============================================================================
+
+
+def record_apdex(
+    duration_seconds: float,
+    tenant_id: str = "default",
+) -> None:
+    """Record APDEX satisfaction level based on response time.
+
+    APDEX thresholds:
+    - Satisfied: < T (500ms)
+    - Tolerating: T to 4T (500ms to 2s)
+    - Frustrated: >= 4T (>= 2s)
+    """
+    if duration_seconds < APDEX_THRESHOLD_T:
+        APDEX_SATISFIED_TOTAL.labels(tenant_id=tenant_id).inc()
+    elif duration_seconds < APDEX_THRESHOLD_4T:
+        APDEX_TOLERATING_TOTAL.labels(tenant_id=tenant_id).inc()
+    else:
+        APDEX_FRUSTRATED_TOTAL.labels(tenant_id=tenant_id).inc()
+
+
+def record_billable_request(
+    tenant_id: str,
+    tool_name: str,
+) -> None:
+    """Record a billable API request."""
+    BILLABLE_REQUESTS_TOTAL.labels(
+        tenant_id=tenant_id,
+        tool_name=tool_name,
+    ).inc()
+
+
+def record_tokens_consumed(
+    tenant_id: str,
+    tool_name: str,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cost_micro_cents: int = 0,
+) -> None:
+    """Record token consumption for billing.
+
+    Args:
+        tenant_id: The tenant identifier
+        tool_name: The MCP tool name
+        input_tokens: Number of input tokens consumed
+        output_tokens: Number of output tokens generated
+        cost_micro_cents: Estimated cost in micro-cents (1/10000 of a cent)
+    """
+    if input_tokens > 0:
+        TOKENS_CONSUMED_TOTAL.labels(
+            tenant_id=tenant_id,
+            tool_name=tool_name,
+            direction="input",
+        ).inc(input_tokens)
+    if output_tokens > 0:
+        TOKENS_CONSUMED_TOTAL.labels(
+            tenant_id=tenant_id,
+            tool_name=tool_name,
+            direction="output",
+        ).inc(output_tokens)
+    if cost_micro_cents > 0:
+        TOKENS_COST_TOTAL.labels(tenant_id=tenant_id).inc(cost_micro_cents)
+
+
+def record_session(tenant_id: str) -> None:
+    """Record a new user session."""
+    SESSIONS_TOTAL.labels(tenant_id=tenant_id).inc()
+
+
+def update_unique_users(
+    tenant_id: str,
+    count: int,
+    period: str = "24h",
+) -> None:
+    """Update the count of unique active users.
+
+    Args:
+        tenant_id: The tenant identifier
+        count: Number of unique users
+        period: Time period (1h, 24h, 7d)
+    """
+    UNIQUE_USERS_TOTAL.labels(
+        tenant_id=tenant_id,
+        period=period,
+    ).set(count)

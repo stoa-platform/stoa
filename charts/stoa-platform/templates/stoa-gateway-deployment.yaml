@@ -96,6 +96,26 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.stoaGateway.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1000
+      volumes:
+        - name: tmp
+          emptyDir: {}
       {{- with .Values.stoaGateway.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

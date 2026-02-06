@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
-RUN groupadd -r stoa && useradd -r -g stoa -d /app stoa
+# Create non-root user for security (UID 1000 for k8s runAsNonRoot compatibility)
+RUN groupadd -r -g 1000 stoa && useradd -r -u 1000 -g stoa -d /app stoa
 
 # Install Python dependencies
 COPY requirements.txt .
@@ -27,6 +27,10 @@ RUN chown -R stoa:stoa /app
 
 # Environment variables with defaults
 # Override at runtime via docker run -e or Kubernetes ConfigMap/Secrets
+
+# Python optimization
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # Core Configuration
 ENV BASE_DOMAIN=stoa.cab-i.com \
@@ -76,8 +80,8 @@ ENV RATE_LIMIT_REQUESTS=100 \
 # Expose port
 EXPOSE 8000
 
-# Switch to non-root user
-USER stoa
+# Switch to non-root user (numeric UID required by k8s runAsNonRoot)
+USER 1000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

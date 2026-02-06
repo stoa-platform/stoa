@@ -1,0 +1,9 @@
+#!/bin/sh
+# Extract DNS resolver from /etc/resolv.conf for nginx reverse proxy.
+# Sourced by docker-entrypoint.sh BEFORE 20-envsubst-on-templates.sh,
+# so $DNS_RESOLVER is available for template substitution.
+#
+# K8s: CoreDNS IP (e.g. 10.96.0.10)
+# Docker: embedded DNS (127.0.0.11)
+DNS_RESOLVER=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf)
+export DNS_RESOLVER="${DNS_RESOLVER:-127.0.0.11}"

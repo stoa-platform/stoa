@@ -113,6 +113,7 @@ jobs:
       component: control-plane-ui
     permissions:
       contents: read
+      id-token: write
     secrets: inherit
 
   # === Notify: Slack ===

@@ -142,14 +142,27 @@ export function OperationsDashboard() {
       setGatewayMetrics(metrics);
       setPlatformStatus(status);
 
-      // Simulated operations metrics (would come from Prometheus in production)
-      setOperationsMetrics({
-        errorRate: Math.random() * 0.5, // 0-0.5%
-        p95Latency: 120 + Math.random() * 80, // 120-200ms
-        requestsPerMinute: 450 + Math.floor(Math.random() * 100),
-        activeAlerts: Math.floor(Math.random() * 3),
-        uptime: 99.95 + Math.random() * 0.05,
-      });
+      // Fetch real operations metrics from API (CAB-Observability)
+      try {
+        const opsMetrics = await apiService.getOperationsMetrics();
+        setOperationsMetrics({
+          errorRate: opsMetrics.error_rate,
+          p95Latency: opsMetrics.p95_latency_ms,
+          requestsPerMinute: opsMetrics.requests_per_minute,
+          activeAlerts: opsMetrics.active_alerts,
+          uptime: opsMetrics.uptime,
+        });
+      } catch (err) {
+        console.warn('Operations metrics unavailable, using defaults');
+        // Fallback to defaults if API unavailable
+        setOperationsMetrics({
+          errorRate: 0,
+          p95Latency: 0,
+          requestsPerMinute: 0,
+          activeAlerts: 0,
+          uptime: 100,
+        });
+      }
 
       setError(null);
       setLastRefresh(new Date());

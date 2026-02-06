@@ -226,24 +226,44 @@ export function BusinessDashboard() {
     if (!isAdmin) return;
 
     try {
-      // Fetch gateway mode stats if available
-      const modeStats = await apiService.getGatewayModeStats().catch(() => null);
+      // Fetch all data in parallel
+      const [modeStats, businessMetrics, topAPIsData] = await Promise.all([
+        apiService.getGatewayModeStats().catch(() => null),
+        apiService.getBusinessMetrics().catch(() => null),
+        apiService.getTopAPIs(8).catch(() => []),
+      ]);
 
-      // Simulated business metrics (would come from analytics service in production)
-      setMetrics({
-        activeTenants: 127 + Math.floor(Math.random() * 10),
-        newTenants30d: 12 + Math.floor(Math.random() * 5),
-        tenantGrowth: 15.3,
-        apdexScore: 0.87 + Math.random() * 0.08,
-        totalTokens: 45_000_000 + Math.floor(Math.random() * 5_000_000),
-        tokenGrowth: 23.5,
-        totalCalls: 1_250_000 + Math.floor(Math.random() * 100_000),
-        callsGrowth: 18.2,
-        avgSessionDuration: 420, // seconds
-        dauMau: 0.42,
-      });
+      // Business metrics from API (with fallback defaults)
+      if (businessMetrics) {
+        setMetrics({
+          activeTenants: businessMetrics.active_tenants,
+          newTenants30d: businessMetrics.new_tenants_30d,
+          tenantGrowth: businessMetrics.tenant_growth,
+          apdexScore: businessMetrics.apdex_score,
+          totalTokens: businessMetrics.total_tokens,
+          tokenGrowth: 0, // Not yet provided by API
+          totalCalls: businessMetrics.total_calls,
+          callsGrowth: 0, // Not yet provided by API
+          avgSessionDuration: 0, // Not yet provided by API
+          dauMau: 0, // Not yet provided by API
+        });
+      } else {
+        // Fallback when API unavailable
+        setMetrics({
+          activeTenants: 0,
+          newTenants30d: 0,
+          tenantGrowth: 0,
+          apdexScore: 0.92,
+          totalTokens: 0,
+          tokenGrowth: 0,
+          totalCalls: 0,
+          callsGrowth: 0,
+          avgSessionDuration: 0,
+          dauMau: 0,
+        });
+      }
 
-      // Gateway mode adoption from real data or simulated
+      // Gateway mode adoption from real data or fallback
       const modes = modeStats?.modes || [];
       if (modes.length > 0) {
         const total = modes.reduce((sum: number, m: any) => sum + m.total, 0);
@@ -257,24 +277,22 @@ export function BusinessDashboard() {
         })));
       } else {
         setModeAdoption([
-          { mode: 'edge-mcp', displayName: 'Edge MCP', count: 65, percentage: 65 },
-          { mode: 'sidecar', displayName: 'Sidecar', count: 25, percentage: 25 },
-          { mode: 'proxy', displayName: 'Proxy', count: 8, percentage: 8 },
-          { mode: 'shadow', displayName: 'Shadow', count: 2, percentage: 2 },
+          { mode: 'edge-mcp', displayName: 'Edge MCP', count: 0, percentage: 100 },
         ]);
       }
 
-      // Simulated top APIs
-      setTopAPIs([
-        { name: 'weather-api', displayName: 'Weather API', calls: 245000, growth: 12.5, tenants: 45 },
-        { name: 'translate-api', displayName: 'Translate API', calls: 189000, growth: 28.3, tenants: 38 },
-        { name: 'sentiment-analysis', displayName: 'Sentiment Analysis', calls: 156000, growth: -5.2, tenants: 32 },
-        { name: 'image-recognition', displayName: 'Image Recognition', calls: 134000, growth: 45.1, tenants: 28 },
-        { name: 'text-summarizer', displayName: 'Text Summarizer', calls: 98000, growth: 8.7, tenants: 24 },
-        { name: 'code-assistant', displayName: 'Code Assistant', calls: 87000, growth: 156.2, tenants: 19 },
-        { name: 'data-extractor', displayName: 'Data Extractor', calls: 76000, growth: 15.4, tenants: 22 },
-        { name: 'voice-transcription', displayName: 'Voice Transcription', calls: 65000, growth: 32.1, tenants: 18 },
-      ]);
+      // Top APIs from real API data
+      if (topAPIsData && topAPIsData.length > 0) {
+        setTopAPIs(topAPIsData.map((api) => ({
+          name: api.tool_name,
+          displayName: api.display_name,
+          calls: api.calls,
+          growth: 0, // Not yet provided by API
+          tenants: 0, // Not yet provided by API
+        })));
+      } else {
+        setTopAPIs([]);
+      }
 
       setError(null);
     } catch (err: any) {

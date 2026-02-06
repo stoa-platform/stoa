@@ -96,13 +96,25 @@ function APDEXGauge({ score }: { score: number }) {
 export function GatewayObservabilityDashboard() {
   const { isReady } = useAuth();
   const [metrics, setMetrics] = useState<AggregatedMetrics | null>(null);
+  const [apdexScore, setApdexScore] = useState(0.92); // Default fallback
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
-      const result = await apiService.getGatewayAggregatedMetrics();
-      setMetrics(result);
+      // Fetch gateway metrics and APDEX in parallel
+      const [gatewayMetrics, businessMetrics] = await Promise.all([
+        apiService.getGatewayAggregatedMetrics(),
+        apiService.getBusinessMetrics().catch(() => null),
+      ]);
+
+      setMetrics(gatewayMetrics);
+
+      // Update APDEX score from business metrics if available
+      if (businessMetrics?.apdex_score) {
+        setApdexScore(businessMetrics.apdex_score);
+      }
+
       setError(null);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load metrics');
@@ -239,7 +251,7 @@ export function GatewayObservabilityDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <ProgressBar label="Gateway Health" percentage={metrics.health.health_percentage} />
             <ProgressBar label="Sync Coverage" percentage={metrics.sync.sync_percentage} />
-            <APDEXGauge score={0.92} />
+            <APDEXGauge score={apdexScore} />
           </div>
         </>
       ) : (

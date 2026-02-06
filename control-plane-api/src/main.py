@@ -26,6 +26,7 @@ from .routers import (
     admin_prospects,
     apis,
     applications,
+    business,
     catalog_admin,
     certificates,
     contracts,
@@ -43,6 +44,7 @@ from .routers import (
     mcp_policy_proxy,
     mcp_proxy,
     monitoring,
+    operations,
     platform,
     portal,
     portal_applications,
@@ -429,6 +431,10 @@ app.include_router(catalog_admin.router)
 
 # Admin Prospects Dashboard (CAB-911 - Conversion Cockpit)
 app.include_router(admin_prospects.router)
+
+# Operations and Business Analytics (CAB-Observability)
+app.include_router(operations.router)
+app.include_router(business.router)
 
 # User profile and permissions (Single Source of Truth for RBAC)
 app.include_router(users.router)

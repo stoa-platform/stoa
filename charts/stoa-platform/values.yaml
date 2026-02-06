@@ -40,9 +40,9 @@ gateway:
     # retentionDays: 30
 
 # STOA Gateway (Rust) Configuration
-# Emerging Rust implementation - will replace Python mcp-gateway Q4 2026
+# Replaces Python mcp-gateway — now the primary gateway
 stoaGateway:
-  enabled: false  # Enable when ready for production
+  enabled: true
   image:
     repository: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-gateway
     tag: latest

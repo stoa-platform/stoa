@@ -112,7 +112,6 @@ function KPICard({
 }
 
 function ApdexGauge({ score }: { score: number }) {
-  const _percentage = Math.round(score * 100);  // Used for future gauge rendering
   const rotation = (score * 180) - 90; // -90 to 90 degrees
   const color = getApdexColor(score);
 
@@ -245,9 +244,10 @@ export function BusinessDashboard() {
       });
 
       // Gateway mode adoption from real data or simulated
-      if (modeStats && modeStats.length > 0) {
-        const total = modeStats.reduce((sum: number, m: any) => sum + m.total, 0);
-        setModeAdoption(modeStats.map((m: any) => ({
+      const modes = modeStats?.modes || [];
+      if (modes.length > 0) {
+        const total = modes.reduce((sum: number, m: any) => sum + m.total, 0);
+        setModeAdoption(modes.map((m: any) => ({
           mode: m.mode,
           displayName: m.mode === 'edge-mcp' ? 'Edge MCP' :
                       m.mode === 'sidecar' ? 'Sidecar' :
@@ -296,7 +296,7 @@ export function BusinessDashboard() {
   }, [isReady, loadData]);
 
   const maxAPICalls = Math.max(...topAPIs.map(a => a.calls), 1);
-  const grafanaUrl = config.externalLinks?.grafana || '#';
+  const grafanaUrl = `${config.services.grafana.url}/d/stoa-business-analytics`;
 
   if (!isAdmin) {
     return (

@@ -197,8 +197,8 @@ export function OperationsDashboard() {
   const platformHealth = Math.round((healthyComponents / totalComponents) * 100);
 
   // External links
-  const grafanaUrl = platformStatus?.external_links?.grafana || config.externalLinks?.grafana || '#';
-  const prometheusUrl = platformStatus?.external_links?.prometheus || config.externalLinks?.prometheus || '#';
+  const grafanaUrl = platformStatus?.external_links?.grafana || `${config.services.grafana.url}/d/stoa-incident-response`;
+  const prometheusUrl = platformStatus?.external_links?.prometheus || config.services.prometheus.url;
 
   return (
     <div className="space-y-6">

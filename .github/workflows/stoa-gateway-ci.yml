@@ -77,9 +77,31 @@ jobs:
       attestations: write
     secrets: inherit
 
+  # === Apply: update k8s manifest before rollout ===
+  apply-manifest:
+    needs: docker
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
+          aws-region: eu-west-1
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name apim-dev-cluster --region eu-west-1
+      - name: Apply k8s manifest
+        run: kubectl apply -f stoa-gateway/k8s/deployment.yaml
+
   # === Deploy: EKS rollout with auto-rollback ===
   deploy:
-    needs: docker
+    needs: [docker, apply-manifest]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/reusable-k8s-deploy.yml
     with:

@@ -1,0 +1,166 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+
+// Mock AuthContext
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuth: vi.fn(() => ({
+    user: { id: 'user-admin', email: 'parzival@oasis.gg', name: 'Parzival', roles: ['cpi-admin'], tenant_id: 'oasis-gunters', permissions: ['tenants:read'] },
+    isAuthenticated: true,
+    isLoading: false,
+    isReady: true,
+    login: vi.fn(),
+    logout: vi.fn(),
+    hasPermission: vi.fn((p: string) => p === 'tenants:read'),
+    hasRole: vi.fn(() => true),
+  })),
+}));
+
+// Mock api service
+vi.mock('../../services/api', () => ({
+  apiService: {
+    setAuthToken: vi.fn(),
+    clearAuthToken: vi.fn(),
+    getBusinessMetrics: vi.fn().mockResolvedValue({
+      active_tenants: 12,
+      new_tenants_30d: 3,
+      tenant_growth: 33.3,
+      apdex_score: 0.92,
+      total_tokens: 15000,
+      total_calls: 5600,
+    }),
+    getGatewayModeStats: vi.fn().mockResolvedValue({
+      modes: [
+        { mode: 'edge-mcp', total: 8 },
+        { mode: 'sidecar', total: 2 },
+      ],
+    }),
+    getTopAPIs: vi.fn().mockResolvedValue([
+      { tool_name: 'weather-api', display_name: 'Weather API', calls: 12450 },
+      { tool_name: 'translate-api', display_name: 'Translate API', calls: 8230 },
+    ]),
+  },
+}));
+
+// Mock config
+vi.mock('../../config', () => ({
+  config: {
+    services: {
+      grafana: { url: '/grafana/' },
+    },
+  },
+}));
+
+// Mock navigation
+vi.mock('../../utils/navigation', () => ({
+  observabilityPath: (url?: string) => url || '/observability',
+}));
+
+// Mock shared components
+vi.mock('@stoa/shared/components/Skeleton', () => ({
+  CardSkeleton: ({ className }: { className?: string }) => <div data-testid="card-skeleton" className={className} />,
+}));
+
+import { BusinessDashboard } from './BusinessDashboard';
+
+function renderComponent() {
+  return render(
+    <MemoryRouter>
+      <BusinessDashboard />
+    </MemoryRouter>
+  );
+}
+
+describe('BusinessDashboard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders the heading', async () => {
+    renderComponent();
+    expect(await screen.findByRole('heading', { name: 'Business Analytics' })).toBeInTheDocument();
+  });
+
+  it('renders the subtitle', async () => {
+    renderComponent();
+    expect(await screen.findByText('Platform adoption, usage trends, and business metrics')).toBeInTheDocument();
+  });
+
+  it('shows KPI cards after loading', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Active Tenants')).toBeInTheDocument();
+    });
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText('New Tenants (30d)')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  it('shows token and call metrics', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Total Tokens (Month)')).toBeInTheDocument();
+    });
+    expect(screen.getByText('15.0K')).toBeInTheDocument();
+    expect(screen.getByText('API Calls (Month)')).toBeInTheDocument();
+    expect(screen.getByText('5.6K')).toBeInTheDocument();
+  });
+
+  it('shows User Satisfaction section with APDEX', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('User Satisfaction')).toBeInTheDocument();
+    });
+    expect(screen.getByText('0.92')).toBeInTheDocument();
+    expect(screen.getByText('APDEX Score')).toBeInTheDocument();
+  });
+
+  it('shows Gateway Mode Adoption section', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Gateway Mode Adoption')).toBeInTheDocument();
+    });
+  });
+
+  it('shows Top APIs section', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText(/Top APIs by Usage/)).toBeInTheDocument();
+    });
+    expect(screen.getByText('Weather API')).toBeInTheDocument();
+    expect(screen.getByText('Translate API')).toBeInTheDocument();
+  });
+
+  it('shows Growth Insights banner', async () => {
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Growth Insights')).toBeInTheDocument();
+    });
+  });
+
+  it('shows Refresh button', () => {
+    renderComponent();
+    expect(screen.getByText('Refresh')).toBeInTheDocument();
+  });
+
+  it('shows Advanced Analytics link', () => {
+    renderComponent();
+    expect(screen.getByText('Advanced Analytics')).toBeInTheDocument();
+  });
+
+  it('denies access to non-admin users', async () => {
+    const { useAuth } = await import('../../contexts/AuthContext');
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: 'user-viewer', email: 'viewer@oasis.gg', name: 'Viewer', roles: ['viewer'], tenant_id: 'oasis-gunters', permissions: ['apis:read'] },
+      isAuthenticated: true,
+      isLoading: false,
+      isReady: true,
+      login: vi.fn(),
+      logout: vi.fn(),
+      hasPermission: vi.fn(() => false),
+      hasRole: vi.fn(() => false),
+    });
+    renderComponent();
+    expect(await screen.findByText(/don't have permission/)).toBeInTheDocument();
+  });
+});

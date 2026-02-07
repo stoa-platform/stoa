@@ -234,8 +234,8 @@ impl GatewayRegistrar {
                         uptime_seconds: registrar.start_time.elapsed().as_secs(),
                         routes_count: state.route_registry.count(),
                         policies_count: state.policy_registry.count(),
-                        requests_total: None, // TODO: Wire up metrics
-                        error_rate: None,     // TODO: Wire up metrics
+                        requests_total: Some(crate::metrics::get_requests_total()),
+                        error_rate: Some(crate::metrics::get_error_rate()),
                     };
 
                     if let Err(e) = registrar.send_heartbeat(id, payload).await {

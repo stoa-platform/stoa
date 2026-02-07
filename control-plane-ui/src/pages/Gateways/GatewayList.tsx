@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { GatewayRegistrationForm } from './GatewayRegistrationForm';
@@ -6,7 +7,12 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
-import type { GatewayInstance, GatewayType, GatewayInstanceStatus, GatewayMode } from '../../types';
+import type {
+  GatewayInstance,
+  GatewayType,
+  GatewayInstanceStatus,
+  GatewayMode,
+} from '../../types';
 
 const statusColors: Record<GatewayInstanceStatus, string> = {
   online: 'bg-green-100 text-green-800',
@@ -41,19 +47,56 @@ const typeLabels: Record<GatewayType, string> = {
   stoa_shadow: 'STOA Shadow',
 };
 
+/** Returns true if the gateway heartbeat is recent (< 90s). */
+function isLive(gw: GatewayInstance): boolean {
+  if (!gw.last_health_check) return false;
+  const elapsed = Date.now() - new Date(gw.last_health_check).getTime();
+  return elapsed < 90_000;
+}
+
+/** Format seconds into a human-readable uptime string. */
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
 export function GatewayList() {
   const { isReady } = useAuth();
+  const queryClient = useQueryClient();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
-  const [gateways, setGateways] = useState<GatewayInstance[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [healthChecking, setHealthChecking] = useState<string | null>(null);
   const [modeFilter, setModeFilter] = useState<GatewayMode | ''>('');
+  const [selectedGateway, setSelectedGateway] = useState<GatewayInstance | null>(null);
+
+  // Auto-refresh gateway list every 30s via useQuery
+  const {
+    data: gatewaysData,
+    isLoading,
+    error: queryError,
+  } = useQuery({
+    queryKey: ['gateways'],
+    queryFn: () => apiService.getGatewayInstances(),
+    enabled: isReady,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
+  });
+
+  const gateways = gatewaysData?.items ?? [];
+  const error = queryError
+    ? (queryError as any).response?.data?.detail ||
+      (queryError as Error).message ||
+      'Failed to load gateways'
+    : null;
 
   // Filter gateways by mode
-  const filteredGateways = modeFilter ? gateways.filter((gw) => gw.mode === modeFilter) : gateways;
+  const filteredGateways = modeFilter
+    ? gateways.filter((gw) => gw.mode === modeFilter)
+    : gateways;
 
   // Count STOA gateways by mode for the filter dropdown
   const modeCounts = gateways.reduce(
@@ -63,35 +106,20 @@ export function GatewayList() {
       }
       return acc;
     },
-    {} as Record<string, number>
+    {} as Record<string, number>,
   );
 
-  const loadGateways = useCallback(async () => {
-    try {
-      setLoading(true);
-      const result = await apiService.getGatewayInstances();
-      setGateways(result.items);
-      setError(null);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'Failed to load gateways');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isReady) {
-      loadGateways();
-    }
-  }, [isReady, loadGateways]);
+  const refetchGateways = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['gateways'] });
+  }, [queryClient]);
 
   const handleHealthCheck = async (id: string) => {
     setHealthChecking(id);
     try {
       await apiService.checkGatewayHealth(id);
-      await loadGateways();
+      refetchGateways();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Health check failed');
+      toast.error(err.response?.data?.detail || 'Health check failed');
     } finally {
       setHealthChecking(null);
     }
@@ -110,20 +138,21 @@ export function GatewayList() {
       try {
         await apiService.deleteGatewayInstance(id);
         toast.success(`Gateway "${name}" deleted successfully`);
-        await loadGateways();
+        if (selectedGateway?.id === id) setSelectedGateway(null);
+        refetchGateways();
       } catch (err: any) {
         toast.error(err.response?.data?.detail || 'Failed to delete gateway');
       }
     },
-    [confirm, toast, loadGateways]
+    [confirm, toast, refetchGateways, selectedGateway],
   );
 
   const handleCreated = () => {
     setShowForm(false);
-    loadGateways();
+    refetchGateways();
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -163,7 +192,7 @@ export function GatewayList() {
                   <option key={mode} value={mode}>
                     {modeLabels[mode]} ({modeCounts[mode]})
                   </option>
-                ) : null
+                ) : null,
               )}
             </select>
           )}
@@ -180,7 +209,7 @@ export function GatewayList() {
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
+          <button onClick={() => void 0} className="text-red-500 hover:text-red-700">
             &times;
           </button>
         </div>
@@ -210,12 +239,24 @@ export function GatewayList() {
           {filteredGateways.map((gw) => (
             <div
               key={gw.id}
-              className="bg-white rounded-lg shadow hover:shadow-md transition-shadow"
+              className="bg-white rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => setSelectedGateway(gw)}
             >
               <div className="p-6">
                 {/* Header row */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
+                    {/* Live indicator */}
+                    <span
+                      className={`inline-block w-2.5 h-2.5 rounded-full ${
+                        isLive(gw)
+                          ? 'bg-green-500 animate-pulse'
+                          : gw.status === 'degraded'
+                            ? 'bg-yellow-500'
+                            : 'bg-gray-400'
+                      }`}
+                      title={isLive(gw) ? 'Live (heartbeat active)' : 'No recent heartbeat'}
+                    />
                     <span
                       className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[gw.status]}`}
                     >
@@ -288,7 +329,10 @@ export function GatewayList() {
               {/* Actions */}
               <div className="border-t px-6 py-3 flex gap-2">
                 <button
-                  onClick={() => handleHealthCheck(gw.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleHealthCheck(gw.id);
+                  }}
                   disabled={healthChecking === gw.id}
                   className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
                 >
@@ -296,7 +340,10 @@ export function GatewayList() {
                 </button>
                 <span className="text-gray-300">|</span>
                 <button
-                  onClick={() => handleDelete(gw.id, gw.name)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(gw.id, gw.name);
+                  }}
                   className="text-sm text-red-600 hover:text-red-800"
                 >
                   Delete
@@ -307,7 +354,213 @@ export function GatewayList() {
         </div>
       )}
 
+      {/* Gateway Detail Panel */}
+      {selectedGateway && (
+        <GatewayDetailPanel
+          gateway={selectedGateway}
+          onClose={() => setSelectedGateway(null)}
+        />
+      )}
+
       {ConfirmDialog}
+    </div>
+  );
+}
+
+// --- Gateway Detail Panel (slide-over) ---
+
+function GatewayDetailPanel({
+  gateway: gw,
+  onClose,
+}: {
+  gateway: GatewayInstance;
+  onClose: () => void;
+}) {
+  const hd = (gw.health_details ?? {}) as Record<string, unknown>;
+  const errorRate = typeof hd.error_rate === 'number' ? hd.error_rate : null;
+  const isDegraded = errorRate !== null && errorRate > 0.05;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex justify-end"
+      onClick={onClose}
+      data-testid="gateway-detail-overlay"
+    >
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/30" />
+
+      {/* Panel */}
+      <div
+        className="relative w-full max-w-md bg-white shadow-xl overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="gateway-detail-panel"
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-block w-3 h-3 rounded-full ${
+                isLive(gw) ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+              }`}
+            />
+            <h2 className="text-lg font-semibold text-gray-900 truncate">{gw.display_name}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            aria-label="Close detail panel"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-6">
+          {/* Status badges */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[gw.status]}`}>
+              {gw.status}
+            </span>
+            {isDegraded && (
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                degraded (error rate &gt; 5%)
+              </span>
+            )}
+            {gw.mode && (
+              <span className={`px-2 py-1 text-xs font-medium rounded-full border ${modeColors[gw.mode]}`}>
+                {modeLabels[gw.mode]}
+              </span>
+            )}
+          </div>
+
+          {/* Heartbeat metrics */}
+          <section>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Heartbeat Metrics</h3>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <MetricItem
+                label="Uptime"
+                value={
+                  typeof hd.uptime_seconds === 'number'
+                    ? formatUptime(hd.uptime_seconds)
+                    : '--'
+                }
+              />
+              <MetricItem
+                label="Routes"
+                value={hd.routes_count != null ? String(hd.routes_count) : '--'}
+              />
+              <MetricItem
+                label="Policies"
+                value={hd.policies_count != null ? String(hd.policies_count) : '--'}
+              />
+              <MetricItem
+                label="Requests"
+                value={hd.requests_total != null ? String(hd.requests_total) : '--'}
+              />
+              <MetricItem
+                label="Error Rate"
+                value={errorRate !== null ? `${(errorRate * 100).toFixed(1)}%` : '--'}
+                warn={isDegraded}
+              />
+              <MetricItem
+                label="Last Heartbeat"
+                value={
+                  typeof hd.last_heartbeat === 'string'
+                    ? new Date(hd.last_heartbeat).toLocaleTimeString()
+                    : gw.last_health_check
+                      ? new Date(gw.last_health_check).toLocaleTimeString()
+                      : '--'
+                }
+              />
+            </dl>
+          </section>
+
+          {/* Instance info */}
+          <section>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Instance Info</h3>
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Name</dt>
+                <dd className="font-mono text-gray-900 text-xs truncate max-w-[220px]">{gw.name}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Type</dt>
+                <dd className="text-gray-900">{typeLabels[gw.gateway_type] || gw.gateway_type}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Environment</dt>
+                <dd className="text-gray-900">{gw.environment}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Base URL</dt>
+                <dd className="font-mono text-xs text-gray-700 truncate max-w-[220px]">{gw.base_url}</dd>
+              </div>
+              {gw.version && (
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">Version</dt>
+                  <dd className="font-mono text-gray-900">{gw.version}</dd>
+                </div>
+              )}
+              {typeof hd.registered_at === 'string' && (
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">Registered</dt>
+                  <dd className="text-gray-900">{new Date(hd.registered_at).toLocaleString()}</dd>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Created</dt>
+                <dd className="text-gray-900">{new Date(gw.created_at).toLocaleString()}</dd>
+              </div>
+            </dl>
+          </section>
+
+          {/* Capabilities */}
+          {gw.capabilities.length > 0 && (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">Capabilities</h3>
+              <div className="flex flex-wrap gap-1">
+                {gw.capabilities.map((cap) => (
+                  <span key={cap} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                    {cap}
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Tags */}
+          {gw.tags.length > 0 && (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">Tags</h3>
+              <div className="flex flex-wrap gap-1">
+                {gw.tags.map((tag) => (
+                  <span key={tag} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricItem({
+  label,
+  value,
+  warn,
+}: {
+  label: string;
+  value: string;
+  warn?: boolean;
+}) {
+  return (
+    <div className="bg-gray-50 rounded-lg p-3">
+      <dt className="text-xs text-gray-500">{label}</dt>
+      <dd className={`text-lg font-semibold ${warn ? 'text-orange-600' : 'text-gray-900'}`}>
+        {value}
+      </dd>
     </div>
   );
 }

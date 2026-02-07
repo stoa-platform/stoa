@@ -121,6 +121,16 @@ jobs:
           kubectl get pods -n ${{ inputs.namespace }} -l app=${{ inputs.component }} -o wide || \
             kubectl get pods -n ${{ inputs.namespace }} -l app.kubernetes.io/name=${{ inputs.component }} -o wide || true
           echo ""
+          echo "=== Container Logs (last 50 lines) ==="
+          POD=$(kubectl get pods -n ${{ inputs.namespace }} -l app=${{ inputs.component }} \
+            --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null) || true
+          if [ -n "$POD" ]; then
+            kubectl logs "$POD" -n ${{ inputs.namespace }} --tail=50 2>&1 || true
+            echo ""
+            echo "=== Previous Container Logs ==="
+            kubectl logs "$POD" -n ${{ inputs.namespace }} --previous --tail=30 2>&1 || true
+          fi
+          echo ""
           echo "=== Recent Events (last 10 min) ==="
           kubectl get events -n ${{ inputs.namespace }} --sort-by='.lastTimestamp' | tail -30 || true
           echo ""

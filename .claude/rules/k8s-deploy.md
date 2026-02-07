@@ -67,6 +67,14 @@ Use the dedicated health endpoint, not `/` (which may return SPA HTML even when 
 ### 7. Runtime env vars for nginx proxy backends
 If the container uses `nginx.conf.template` with `proxy_pass` variables, the corresponding env vars MUST be in the deployment manifest AND in the Dockerfile's `NGINX_ENVSUBST_FILTER`.
 
+### 8. Dockerfile `NGINX_ENVSUBST_FILTER` — escape `$` with `\$` (CRITICAL)
+Docker's `ENV` instruction expands `${VAR}` at build time — single quotes do NOT prevent expansion. If `NGINX_ENVSUBST_FILTER` uses `'${API_BACKEND_URL} ...'`, Docker substitutes the actual values, and envsubst at runtime does nothing (leaving template variables unresolved → nginx crash).
+
+**Always escape `$` with `\$`:**
+```dockerfile
+ENV NGINX_ENVSUBST_FILTER="\${API_BACKEND_URL} \${LOGS_BACKEND_URL} \${DNS_RESOLVER}"
+```
+
 ## CI Workflow (`*-ci.yml`)
 
 ### apply-manifest Job (CRITICAL)

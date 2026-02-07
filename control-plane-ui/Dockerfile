@@ -95,7 +95,8 @@ ENV API_BACKEND_URL=http://control-plane-api:8000 \
     GRAFANA_BACKEND_URL=http://grafana:3000
 
 # Only substitute our custom vars (preserve nginx $uri, $host, etc.)
-ENV NGINX_ENVSUBST_FILTER='${API_BACKEND_URL} ${LOGS_BACKEND_URL} ${GRAFANA_BACKEND_URL} ${DNS_RESOLVER}'
+# IMPORTANT: Use \$ to escape — Docker expands ${VAR} in ENV even inside single quotes
+ENV NGINX_ENVSUBST_FILTER="\${API_BACKEND_URL} \${LOGS_BACKEND_URL} \${GRAFANA_BACKEND_URL} \${DNS_RESOLVER}"
 
 # Extract DNS resolver from /etc/resolv.conf at startup (before envsubst)
 COPY control-plane-ui/docker-entrypoint.d/15-extract-dns-resolver.envsh /docker-entrypoint.d/15-extract-dns-resolver.envsh

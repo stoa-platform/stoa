@@ -55,6 +55,7 @@ spec:
             periodSeconds: 5
           # CAB-945: Container hardening
           securityContext:
+            privileged: false
             runAsNonRoot: true
             runAsUser: 101  # nginx user
             runAsGroup: 101

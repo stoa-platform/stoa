@@ -1,89 +1,94 @@
-## CAB-1114 — STOA Logs : OpenSearch Multi-Tenant OIDC + RGPD
+## CAB-1116 — Test Automation Strategy (21 SP, 5 phases)
 
 ### Vue d'ensemble
 
-| Phase | Sujet | Status |
-|-------|-------|--------|
-| Phase 1 | Déploiement OpenSearch + Ingestion | ✅ Done |
-| Phase 2 | RGPD Pipeline (redaction) | ✅ Done |
-| Phase 3 | Multi-Tenant OIDC Security | ✅ Done |
-| Phase 4 | Intégration Console STOA | ✅ Done |
+| Phase | Sujet | Status | DoD |
+|-------|-------|--------|-----|
+| Phase 1 | Console UI unit tests (MSW) | ✅ DONE | 25 test files, 50.98% coverage, 232 tests PASS |
+| Phase 2 | Portal unit tests + API 45%→65% | ⬜ Pending | Portal 10+ files, API pytest 65% |
+| Phase 3 | Integration tests + contract tests | ⬜ Pending | API↔UI schema validation in CI |
+| Phase 4 | E2E completeness 52→75+ scenarios | ⬜ Pending | 75+ Playwright scenarios, all @smoke pass |
+| Phase 5 | Quality gates | ⬜ Pending | Coverage ratchet, pre-commit hooks, security gates |
 
 ---
 
-### Phase 1 — Déploiement OpenSearch + Ingestion ✅
+### Phase 1 — Console UI Unit Tests ✅ DONE
 
-- ✅ OpenSearch 2.11.0 + healthcheck
-- ✅ Dashboards brandé "STOA Logs"
-- ✅ Nginx `/logs/*` + strip X-Frame-Options
-- ✅ Index template `stoa-logs-*` + ISM 14 jours
-- ✅ 2 tenants avec données réalistes (tenant-alpha, tenant-beta)
+#### Résultat final
+- **25 test files**, **232 tests**, tous PASS
+- **50.98% statement coverage** (seuil: 50%)
+- **4 mock files** MSW: `handlers.ts`, `server.ts`, `keycloak.ts`, `data.ts`
+- Coverage thresholds relevés: lines 50%, statements 50%, branches 60%, functions 35%
+
+#### Fichiers testés (25)
+- `App.test.tsx` (6 tests)
+- `components/Layout.test.tsx` (10 tests)
+- `components/tools/ToolCard.test.tsx`
+- `components/tools/ToolSchemaViewer.test.tsx`
+- `contexts/AuthContext.test.tsx`
+- `pages/Dashboard.test.tsx` (7 tests)
+- `pages/APIs.test.tsx`
+- `pages/APIMonitoring.test.tsx` (8 tests)
+- `pages/AdminProspects.test.tsx`
+- `pages/Applications.test.tsx`
+- `pages/Tenants.test.tsx`
+- `pages/Gateways/GatewayList.test.tsx`
+- `pages/GatewayObservability/GatewayObservabilityDashboard.test.tsx`
+- `pages/GrafanaEmbed.test.tsx`
+- `pages/IdentityEmbed.test.tsx`
+- `pages/LogsEmbed.test.tsx`
+- `pages/Deployments.test.tsx` (9 tests) — NEW
+- `pages/ErrorSnapshots.test.tsx` (11 tests) — NEW
+- `pages/GatewayStatus.test.tsx` (14 tests) — NEW
+- `pages/Business/BusinessDashboard.test.tsx` (11 tests) — NEW
+- `pages/Operations/OperationsDashboard.test.tsx` (10 tests) — NEW
+- `pages/TenantDashboard/TenantDashboard.test.tsx` (10 tests) — NEW
+- `pages/ExternalMCPServers/ExternalMCPServersList.test.tsx` (12 tests) — NEW
+- `pages/AITools/ToolCatalog.test.tsx` (9 tests) — NEW
+- `pages/Gateways/GatewayModesDashboard.test.tsx` (8 tests) — NEW
+
+#### Fichiers NON testés (19 restants — Phase 2+)
+
+**Components (4):**
+- `components/PlatformStatus.tsx`
+- `components/SyncStatusBadge.tsx`
+- `components/tools/QuickStartGuide.tsx`
+- `components/tools/UsageChart.tsx`
+
+**Pages (10):**
+- `pages/AITools/MySubscriptions.tsx`
+- `pages/AITools/ToolDetail.tsx`
+- `pages/AITools/UsageDashboard.tsx`
+- `pages/ExternalMCPServers/ExternalMCPServerDetail.tsx`
+- `pages/ExternalMCPServers/ExternalMCPServerModal.tsx`
+- `pages/GatewayDeployments/DeployAPIDialog.tsx`
+- `pages/GatewayDeployments/GatewayDeploymentsDashboard.tsx`
+- `pages/Gateways/GatewayRegistrationForm.tsx`
+
+**Hooks + Services (non prioritaire):**
+- 6 hooks, 5 services — coverage indirecte via page tests
 
 ---
 
-### Phase 2 — RGPD Pipeline (redaction) ✅
+### Phase 2 — Portal + API (next)
+- Portal: 10+ test files vitest, même pattern MSW
+- API: pytest coverage 45%→65%, focus sur endpoints CRUD + RBAC
 
-- ✅ **Mode nominal (2xx)** : `request_body` + `response_body` strippés entièrement par le processor `remove`
-- ✅ **Mode erreur (4xx/5xx)** : payload indexé avec redaction automatique via Painless script (7 patterns PII)
-  - JWT → `[TOKEN:REDACTED]`
-  - IBAN → `[IBAN:REDACTED]`
-  - Carte bancaire → `[CARD:REDACTED]`
-  - N° sécu FR → `[SSN:REDACTED]`
-  - API key/token → `[APIKEY:REDACTED]`
-  - Email → `[EMAIL:REDACTED]`
-  - Téléphone FR → `[PHONE:REDACTED]`
-- ✅ Ingest pipeline `stoa-rgpd-redaction` configuré (3 processors: remove/script/set)
-- ✅ Pipeline attaché à l'index template `stoa-logs-*` (`default_pipeline`)
-- ✅ Patterns dans fichier externalisé : `deploy/opensearch/pipelines/stoa-rgpd-redaction.json`
-- ✅ **Test positif** : appel 500 avec email+JWT → masqués dans l'index
-- ✅ **Test positif** : appel 400 avec IBAN+téléphone → masqués dans l'index
-- ✅ **Test négatif** : appel 200 → zéro payload stocké
-- ✅ Init script mis à jour avec données de test RGPD + vérification automatisée
-- ✅ 4 champs ajoutés : `request_body`, `response_body`, `rgpd_redacted`, `rgpd_redacted_fields`
-- **Commit** : `35fa3943` — `feat(mcp): add RGPD redaction pipeline for API traces (CAB-1114)`
+### Phase 3 — Integration + Contract Tests
+- API↔UI schema validation in CI
+- Contract tests automatisés
 
----
+### Phase 4 — E2E Completeness
+- 52→75+ Playwright BDD scenarios
+- Tous les @smoke pass
 
-### Phase 3 — Multi-Tenant OIDC Security ✅
-
-- ✅ OpenSearch Security plugin activé (remplace `DISABLE_SECURITY_PLUGIN=true`)
-- ✅ TLS avec demo certificates + `opensearch.yml` config externalisée
-- ✅ Intégration OIDC : Keycloak → OpenSearch backend authentication (`openid_auth_domain`)
-- ✅ Client OIDC `opensearch-dashboards` dans Keycloak realm (confidential, avec `tenant_id` mapper)
-- ✅ 3 rôles OpenSearch : `stoa_logs_admin` (all), `stoa_logs_tenant_oasis_gunters`, `stoa_logs_tenant_ioi_sixers`
-- ✅ Mapping rôle OIDC → tenant : `cpi-admin` → admin, users → tenant-specific roles
-- ✅ Tenants alignés avec Keycloak : `tenant-alpha/beta` → `oasis-gunters/ioi-sixers`
-- ✅ OpenSearch Dashboards : login via Keycloak SSO (`opensearch_security.auth.type: ["openid"]`)
-- ✅ Multi-tenancy Dashboards : saved objects isolation (`opensearch_security.multitenancy.enabled: true`)
-- ✅ Init script : `securityadmin.sh` + auth curl + RGPD pipeline + tenant rename
-- ✅ `extra_hosts: localhost:host-gateway` pour OIDC discovery depuis les containers Docker
-- ✅ **Test script** : `test/test-tenant-isolation.sh` (6 assertions : 3 positifs, 3 négatifs)
-- ✅ Nginx : cookie forwarding pour sessions OIDC
-- **Fichiers clés** :
-  - `config/opensearch/opensearch.yml` — Config principale avec TLS
-  - `config/opensearch/security/` — 6 fichiers (config, internal_users, roles, roles_mapping, action_groups, tenants)
-  - `config/opensearch-dashboards/opensearch_dashboards.yml` — OIDC + multitenancy
-  - `init/keycloak-realm.json` — Client `opensearch-dashboards` ajouté
-  - `init/init-opensearch.sh` — Rewrite complet Phase 1+2+3
-
----
-
-### Phase 4 — Intégration Console STOA ✅
-
-- ✅ `LogsEmbed.tsx` créé (iframe avec loading/error/fullscreen, thème amber)
-- ✅ Route `/logs` dans `App.tsx` (lazy-loaded)
-- ✅ Navigation sidebar "Logs" avec icône `ScrollText` + raccourci `g+l`
-- ✅ `config.ts` : `logs.url` corrigé (`/logs/` via reverse proxy, remplace Grafana)
-- ✅ SSO transparent : même domaine Keycloak, cookies forwarded par nginx (`proxy_set_header Cookie`)
-- ✅ Nginx `/logs/*` : `X-Frame-Options` strippé + CSP `frame-ancestors` autorise Console
-- ✅ Lint (0 errors) + TypeScript (0 errors)
-- **Validation restante** : parcours complet Console → Logs → recherche appel erreur → payload masqué visible (nécessite `docker compose up`)
+### Phase 5 — Quality Gates
+- Coverage ratchet (fail if coverage drops)
+- Pre-commit hooks (lint + format + type-check)
+- Security gates (bandit, npm audit)
 
 ---
 
 ### Règle de fallback
-
-- Phase 1 + 2 = démo RGPD crédible ✅✅
-- Phase 1 + 2 + 3 = démo complète multi-tenant ✅✅✅
-- Phase 1 + 2 + 3 + 4 = intégration produit complète ✅✅✅✅
 - **Ne jamais commencer Phase N+1 si Phase N n'est pas 100% DoD**
+- Verdict binaire par phase: DONE / NOT DONE

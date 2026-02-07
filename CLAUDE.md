@@ -66,6 +66,23 @@ Gateway: 4 modes (ADR-024) — edge-mcp (current, Python), sidecar (Q2), proxy (
 5. Update `memory.md` before ending session
 6. Commit often with conventional messages
 
+## AI Factory
+
+### Subagents (`.claude/agents/`)
+| Agent | Specialite | Mode |
+|-------|-----------|------|
+| `security-reviewer` | OWASP, secrets, RBAC, deps vulns | Read-only (plan) |
+| `test-writer` | vitest, pytest, Playwright BDD | Full access |
+| `k8s-ops` | K8s debug, Helm, nginx, rollout | Read-only (plan) |
+| `docs-writer` | ADRs, guides, runbooks, memory | No Bash |
+
+### Skills (`.claude/skills/`)
+- 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`
+- 2 modernes: `/ci-debug [PR|run-url]` (fork), `/parallel-review [PR|path]` (inline)
+
+### Agent Teams (experimental)
+Prerequis: `brew install tmux` + `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+
 ## Repos
 
 | Repo | Stack | URL |

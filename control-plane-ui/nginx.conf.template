@@ -9,29 +9,28 @@ server {
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
 
     # DNS resolver for dynamic proxy_pass (K8s CoreDNS or Docker DNS)
-    # DNS_RESOLVER is exported by our 15-extract-dns-resolver.envsh (reads /etc/resolv.conf)
+    # DNS_RESOLVER is exported by 15-extract-dns-resolver.envsh (reads /etc/resolv.conf)
     resolver ${DNS_RESOLVER} valid=30s ipv6=off;
 
     # Backend URLs resolved at request time (not startup) via variables
     # NEVER use static proxy_pass hostnames — nginx crashes if DNS fails at startup
-    # NOTE: All nginx variables use $$ prefix so envsubst leaves them as literal $
-    set $$api_backend "${API_BACKEND_URL}";
-    set $$logs_backend "${LOGS_BACKEND_URL}";
-    set $$grafana_backend "${GRAFANA_BACKEND_URL}";
+    set $api_backend "${API_BACKEND_URL}";
+    set $logs_backend "${LOGS_BACKEND_URL}";
+    set $grafana_backend "${GRAFANA_BACKEND_URL}";
 
     # =========================================================================
     # OpenSearch Dashboards proxy (STOA Logs — CAB-1114)
     # Dashboards configured with server.basePath="/logs", rewriteBasePath=true
     # =========================================================================
     location /logs/ {
-        proxy_pass $$logs_backend;
+        proxy_pass $logs_backend;
         proxy_hide_header X-Frame-Options;
         add_header Content-Security-Policy "frame-ancestors 'self' https://console.gostoa.dev" always;
-        proxy_set_header Host $$http_host;
-        proxy_set_header X-Real-IP $$remote_addr;
-        proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $$scheme;
-        proxy_set_header Cookie $$http_cookie;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Cookie $http_cookie;
         proxy_buffer_size 128k;
         proxy_buffers 4 256k;
         proxy_busy_buffers_size 256k;
@@ -45,13 +44,13 @@ server {
     # Grafana configured with GF_SERVER_SERVE_FROM_SUB_PATH=true
     # =========================================================================
     location /grafana/ {
-        proxy_pass $$grafana_backend;
+        proxy_pass $grafana_backend;
         proxy_hide_header X-Frame-Options;
         add_header Content-Security-Policy "frame-ancestors 'self' https://console.gostoa.dev" always;
-        proxy_set_header Host $$http_host;
-        proxy_set_header X-Real-IP $$remote_addr;
-        proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $$scheme;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
@@ -59,34 +58,34 @@ server {
 
     # Grafana WebSocket for Live features
     location /grafana/api/live/ {
-        proxy_pass $$grafana_backend;
+        proxy_pass $grafana_backend;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $$http_host;
-        proxy_set_header X-Real-IP $$remote_addr;
-        proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $$scheme;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
 
     # SPA routing - serve index.html for all unmatched routes
     location / {
-        try_files $$uri $$uri/ /index.html;
+        try_files $uri $uri/ /index.html;
     }
 
     # API proxy (Swagger UI requires unsafe-eval + unsafe-inline for JS rendering)
     location /api/ {
-        proxy_pass $$api_backend/;
+        proxy_pass $api_backend/;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $$host;
-        proxy_set_header X-Real-IP $$remote_addr;
-        proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $$scheme;
-        proxy_cache_bypass $$http_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://fastapi.tiangolo.com; font-src 'self' data:; connect-src 'self'" always;
     }
 

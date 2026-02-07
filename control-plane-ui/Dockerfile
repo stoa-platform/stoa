@@ -90,18 +90,19 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:alpine
 
 # Default backend URLs (overridable via K8s env vars)
-# Template uses $$ prefix for nginx variables so envsubst leaves them alone
 ENV API_BACKEND_URL=http://control-plane-api:8000 \
     LOGS_BACKEND_URL=http://opensearch-dashboards:5601 \
     GRAFANA_BACKEND_URL=http://grafana:3000
 
-# Extract DNS resolver from /etc/resolv.conf at startup (before envsubst)
-# Must use our own script because nginx's built-in 15-local-resolvers.envsh
-# does not export NGINX_LOCAL_RESOLVERS to subprocesses (envsubst can't see it)
+# Entrypoint scripts (run in alphabetical order at container startup):
+# 15-extract-dns-resolver.envsh — exports DNS_RESOLVER from /etc/resolv.conf
+# 19-envsubst-custom.sh — runs envsubst with explicit filter (only our 4 vars)
+# The template is in /etc/nginx/custom-templates/ (NOT /etc/nginx/templates/)
+# so the built-in 20-envsubst-on-templates.sh has nothing to process and
+# won't clobber nginx variables like $uri, $host, $http_upgrade, etc.
 COPY control-plane-ui/docker-entrypoint.d/15-extract-dns-resolver.envsh /docker-entrypoint.d/15-extract-dns-resolver.envsh
-
-# Copy nginx template (processed by built-in 20-envsubst-on-templates.sh at startup)
-COPY control-plane-ui/nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY control-plane-ui/docker-entrypoint.d/19-envsubst-custom.sh /docker-entrypoint.d/19-envsubst-custom.sh
+COPY control-plane-ui/nginx.conf.template /etc/nginx/custom-templates/default.conf.template
 
 # Copy built app
 COPY --from=builder /app/control-plane-ui/dist /usr/share/nginx/html

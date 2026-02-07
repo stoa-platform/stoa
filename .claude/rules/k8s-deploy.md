@@ -65,19 +65,28 @@ Always verify: `kubectl get svc -n stoa-system`
 Use the dedicated health endpoint, not `/` (which may return SPA HTML even when backend proxies are broken).
 
 ### 7. Runtime env vars for nginx proxy backends
-If the container uses `nginx.conf.template` with `proxy_pass` variables, the corresponding env vars MUST be in the deployment manifest AND in the Dockerfile's `NGINX_ENVSUBST_FILTER`.
+If the container uses `nginx.conf.template` with `proxy_pass` variables, the corresponding env vars MUST be in the deployment manifest.
 
-### 8. Nginx envsubst templates — use `$$` prefix for nginx variables (CRITICAL)
-Do NOT use `NGINX_ENVSUBST_FILTER` — the latest nginx Docker image's entrypoint uses awk to process it as a regex, and `${VAR}` syntax breaks awk. Also, Docker's `ENV` expands `${VAR}` at build time.
+### 8. Nginx envsubst — use custom script, NOT built-in (CRITICAL)
+Do NOT use `NGINX_ENVSUBST_FILTER` or the built-in `20-envsubst-on-templates.sh`:
+- `NGINX_ENVSUBST_FILTER`: latest nginx image uses awk to process it, `${VAR}` breaks awk regex
+- Docker `ENV` expands `${VAR}` at build time (single quotes don't prevent this)
+- Without filter, envsubst replaces ALL `$var` refs (including nginx `$uri`, `$host`) with empty strings
+- `$$` is NOT an escape in envsubst — `$$var` becomes `$` + empty string, not `$var`
 
-**Instead, use `$$` prefix** for all nginx variables in the template (envsubst converts `$$` → `$`):
-```nginx
-set $$api_backend "${API_BACKEND_URL}";     # envsubst: $$api_backend → $api_backend
-proxy_pass $$api_backend;                    # envsubst: leaves $api_backend
-proxy_set_header Host $$http_host;           # envsubst: $$http_host → $http_host
-resolver ${NGINX_LOCAL_RESOLVERS} valid=30s; # envsubst: substitutes the IP
+**Solution**: Custom entrypoint script with explicit filter + non-standard template dir:
+```dockerfile
+# Template in custom dir (NOT /etc/nginx/templates/) so built-in script skips it
+COPY 19-envsubst-custom.sh /docker-entrypoint.d/19-envsubst-custom.sh
+COPY nginx.conf.template /etc/nginx/custom-templates/default.conf.template
 ```
-Use `NGINX_LOCAL_RESOLVERS` (built-in from nginx image's `15-local-resolvers.envsh`) instead of a custom DNS resolver script.
+```bash
+#!/bin/sh
+# 19-envsubst-custom.sh — only substitute our 4 variables
+envsubst '${API_BACKEND_URL} ${LOGS_BACKEND_URL} ${GRAFANA_BACKEND_URL} ${DNS_RESOLVER}' \
+  < /etc/nginx/custom-templates/default.conf.template \
+  > /etc/nginx/conf.d/default.conf
+```
 
 ## CI Workflow (`*-ci.yml`)
 

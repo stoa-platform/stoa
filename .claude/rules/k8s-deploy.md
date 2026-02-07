@@ -67,13 +67,17 @@ Use the dedicated health endpoint, not `/` (which may return SPA HTML even when 
 ### 7. Runtime env vars for nginx proxy backends
 If the container uses `nginx.conf.template` with `proxy_pass` variables, the corresponding env vars MUST be in the deployment manifest AND in the Dockerfile's `NGINX_ENVSUBST_FILTER`.
 
-### 8. Dockerfile `NGINX_ENVSUBST_FILTER` — escape `$` with `\$` (CRITICAL)
-Docker's `ENV` instruction expands `${VAR}` at build time — single quotes do NOT prevent expansion. If `NGINX_ENVSUBST_FILTER` uses `'${API_BACKEND_URL} ...'`, Docker substitutes the actual values, and envsubst at runtime does nothing (leaving template variables unresolved → nginx crash).
+### 8. Nginx envsubst templates — use `$$` prefix for nginx variables (CRITICAL)
+Do NOT use `NGINX_ENVSUBST_FILTER` — the latest nginx Docker image's entrypoint uses awk to process it as a regex, and `${VAR}` syntax breaks awk. Also, Docker's `ENV` expands `${VAR}` at build time.
 
-**Always escape `$` with `\$`:**
-```dockerfile
-ENV NGINX_ENVSUBST_FILTER="\${API_BACKEND_URL} \${LOGS_BACKEND_URL} \${DNS_RESOLVER}"
+**Instead, use `$$` prefix** for all nginx variables in the template (envsubst converts `$$` → `$`):
+```nginx
+set $$api_backend "${API_BACKEND_URL}";     # envsubst: $$api_backend → $api_backend
+proxy_pass $$api_backend;                    # envsubst: leaves $api_backend
+proxy_set_header Host $$http_host;           # envsubst: $$http_host → $http_host
+resolver ${NGINX_LOCAL_RESOLVERS} valid=30s; # envsubst: substitutes the IP
 ```
+Use `NGINX_LOCAL_RESOLVERS` (built-in from nginx image's `15-local-resolvers.envsh`) instead of a custom DNS resolver script.
 
 ## CI Workflow (`*-ci.yml`)
 

@@ -56,7 +56,7 @@ jobs:
     with:
       component: control-plane-api
       python-version: '3.11'
-      coverage-threshold: 45
+      coverage-threshold: 53
       test-markers: not integration
     permissions:
       contents: read

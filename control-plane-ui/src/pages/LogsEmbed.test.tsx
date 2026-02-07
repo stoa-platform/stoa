@@ -13,10 +13,8 @@ vi.mock('../config', () => ({
 }));
 
 describe('LogsEmbed', () => {
-  let windowOpenSpy: ReturnType<typeof vi.spyOn<typeof window, 'open'>>;
-
   beforeEach(() => {
-    windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    vi.spyOn(window, 'open').mockImplementation(() => null);
   });
 
   it('renders title heading', () => {
@@ -66,7 +64,7 @@ describe('LogsEmbed', () => {
     render(<LogsEmbed />);
     const openButton = screen.getByTitle('Open in new tab');
     fireEvent.click(openButton);
-    expect(windowOpenSpy).toHaveBeenCalledWith('/logs/', '_blank', 'noopener,noreferrer');
+    expect(window.open).toHaveBeenCalledWith('/logs/', '_blank', 'noopener,noreferrer');
   });
 
   it('handles iframe load event and hides loading', () => {

@@ -16,7 +16,7 @@ const mockUseAuth = vi.fn(() => ({
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: (...args: unknown[]) => mockUseAuth(...args),
+  useAuth: () => mockUseAuth(),
 }));
 
 vi.mock('../hooks/useBreadcrumbs', () => ({
@@ -109,11 +109,11 @@ describe('Layout', () => {
     mockUseAuth.mockReturnValueOnce({
       user: {
         id: 'u2', email: 'viewer@oasis.gg', name: 'Viewer',
-        roles: ['viewer'], permissions: ['apis:read', 'apps:read', 'audit:read'],
+        roles: ['viewer'], tenant_id: 'viewer-tenant', permissions: ['apis:read', 'apps:read', 'audit:read'],
       },
       isAuthenticated: true, isLoading: false, isReady: true,
       login: vi.fn(), logout: vi.fn(),
-      hasPermission: vi.fn((p: string) => ['apis:read', 'apps:read', 'audit:read'].includes(p)),
+      hasPermission: vi.fn().mockImplementation((p: string) => ['apis:read', 'apps:read', 'audit:read'].includes(p)),
       hasRole: vi.fn(() => false),
     });
 

@@ -16,7 +16,7 @@ const mockUseAuth = vi.fn(() => ({
 }));
 
 vi.mock('./contexts/AuthContext', () => ({
-  useAuth: (...args: unknown[]) => mockUseAuth(...args),
+  useAuth: () => mockUseAuth(),
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -116,7 +116,7 @@ describe('App', () => {
 
   it('blocks protected route when not authenticated', () => {
     mockUseAuth.mockReturnValueOnce({
-      user: null, isAuthenticated: false, isLoading: false, isReady: false,
+      user: null as never, isAuthenticated: false, isLoading: false, isReady: false,
       login: vi.fn(), logout: vi.fn(),
       hasPermission: vi.fn(() => false), hasRole: vi.fn(() => false),
     });
@@ -127,7 +127,7 @@ describe('App', () => {
 
   it('shows loading state when auth is loading', () => {
     mockUseAuth.mockReturnValueOnce({
-      user: null, isAuthenticated: true, isLoading: true, isReady: false,
+      user: null as never, isAuthenticated: true, isLoading: true, isReady: false,
       login: vi.fn(), logout: vi.fn(),
       hasPermission: vi.fn(() => false), hasRole: vi.fn(() => false),
     });

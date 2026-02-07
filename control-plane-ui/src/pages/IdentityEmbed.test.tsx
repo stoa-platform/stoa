@@ -12,10 +12,8 @@ vi.mock('../config', () => ({
 }));
 
 describe('IdentityEmbed', () => {
-  let windowOpenSpy: ReturnType<typeof vi.spyOn<typeof window, 'open'>>;
-
   beforeEach(() => {
-    windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    vi.spyOn(window, 'open').mockImplementation(() => null);
   });
 
   it('renders title heading', () => {
@@ -67,7 +65,7 @@ describe('IdentityEmbed', () => {
     render(<IdentityEmbed />);
     const openButton = screen.getByTitle('Open in new tab');
     fireEvent.click(openButton);
-    expect(windowOpenSpy).toHaveBeenCalledWith(
+    expect(window.open).toHaveBeenCalledWith(
       'https://auth.gostoa.dev/realms/stoa/account',
       '_blank',
       'noopener,noreferrer'

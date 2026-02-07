@@ -22,10 +22,8 @@ vi.mock('../utils/navigation', () => ({
 }));
 
 describe('GrafanaEmbed', () => {
-  let windowOpenSpy: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
-    windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    vi.spyOn(window, 'open').mockImplementation(() => null);
     mockSearchParams.delete('url');
   });
 
@@ -76,7 +74,7 @@ describe('GrafanaEmbed', () => {
     render(<GrafanaEmbed />);
     const openButton = screen.getByTitle('Open in new tab');
     fireEvent.click(openButton);
-    expect(windowOpenSpy).toHaveBeenCalledWith('/grafana/', '_blank', 'noopener,noreferrer');
+    expect(window.open).toHaveBeenCalledWith('/grafana/', '_blank', 'noopener,noreferrer');
   });
 
   it('handles iframe load event and hides loading', () => {

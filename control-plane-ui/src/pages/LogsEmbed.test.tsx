@@ -13,7 +13,7 @@ vi.mock('../config', () => ({
 }));
 
 describe('LogsEmbed', () => {
-  let windowOpenSpy: ReturnType<typeof vi.spyOn>;
+  let windowOpenSpy: ReturnType<typeof vi.spyOn<typeof window, 'open'>>;
 
   beforeEach(() => {
     windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);

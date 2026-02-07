@@ -12,7 +12,7 @@ vi.mock('../config', () => ({
 }));
 
 describe('IdentityEmbed', () => {
-  let windowOpenSpy: ReturnType<typeof vi.spyOn>;
+  let windowOpenSpy: ReturnType<typeof vi.spyOn<typeof window, 'open'>>;
 
   beforeEach(() => {
     windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);

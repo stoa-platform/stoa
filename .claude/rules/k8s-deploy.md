@@ -10,9 +10,8 @@ globs: "**/k8s/**,**/*-ci.yml,.github/workflows/reusable-k8s-deploy.yml"
 Every deployment manifest MUST include:
 
 ### 1. Rollout Strategy (CRITICAL)
-Single-replica deployments with default `maxSurge: 1, maxUnavailable: 0` will **deadlock** on resource-constrained clusters (no room to schedule the surge pod).
+Single-replica deployments with default `maxSurge: 1, maxUnavailable: 0` will **deadlock** on resource-constrained clusters.
 
-**Always set explicitly:**
 ```yaml
 spec:
   strategy:
@@ -22,57 +21,75 @@ spec:
       maxSurge: 0
 ```
 
-### 2. Probes must use `/health` endpoint
+### 2. Kyverno `restrict-privileged` — EXPLICIT `privileged: false` (CRITICAL)
+The cluster has a Kyverno `restrict-privileged` policy in **Enforce** mode. Every container MUST have `securityContext.privileged: false` **explicitly set**. Omitting it (even if the default is false) causes Kyverno to **block pod creation**.
+
+```yaml
+securityContext:
+  privileged: false          # REQUIRED — Kyverno Enforce policy
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+```
+
+### 3. Nginx containers — NO `readOnlyRootFilesystem: true`
+nginx-unprivileged requires writable paths beyond `/var/cache/nginx`, `/var/run`, `/tmp`:
+- `/etc/nginx/conf.d/` — envsubst writes processed templates here at startup
+- Other internal nginx paths
+
+Use `readOnlyRootFilesystem: false` for nginx containers, or mount ALL writable paths as emptyDir.
+
+### 4. Nginx proxy_pass — NEVER use static hostnames
+Static `proxy_pass http://hostname:port/` hostnames are resolved at nginx startup. If the backend DNS doesn't resolve (e.g., service not yet created, wrong name), **nginx will crash immediately**.
+
+**Always use variables** for proxy_pass backends:
+```nginx
+set $api_backend "${API_BACKEND_URL}";
+location /api/ {
+    proxy_pass $api_backend;   # Resolved at request time, not startup
+}
+```
+
+### 5. K8s service names — check ACTUAL service name
+The standalone k8s manifest may use a different service name than the Helm chart:
+- Helm: `stoa-control-plane-api` (prefixed)
+- Standalone: `control-plane-api` (no prefix)
+
+Always verify: `kubectl get svc -n stoa-system`
+
+### 6. Probes must use `/health` endpoint
 Use the dedicated health endpoint, not `/` (which may return SPA HTML even when backend proxies are broken).
 
-### 3. Runtime env vars for nginx proxy backends
-If the container uses `nginx.conf.template` with `proxy_pass` variables, the corresponding env vars (`LOGS_BACKEND_URL`, `GRAFANA_BACKEND_URL`, etc.) MUST be in the deployment manifest.
+### 7. Runtime env vars for nginx proxy backends
+If the container uses `nginx.conf.template` with `proxy_pass` variables, the corresponding env vars MUST be in the deployment manifest AND in the Dockerfile's `NGINX_ENVSUBST_FILTER`.
 
 ## CI Workflow (`*-ci.yml`)
 
 ### apply-manifest Job (CRITICAL)
-The `reusable-k8s-deploy.yml` only runs `kubectl set image` + `kubectl rollout restart`. It does **NOT** apply the full deployment manifest. This means:
-- New env vars are **never applied**
-- Strategy changes are **never applied**
-- Resource limits changes are **never applied**
+`reusable-k8s-deploy.yml` only runs `kubectl set image` + `kubectl rollout restart`. It does **NOT** apply the full deployment manifest.
 
-**Every component CI must have an `apply-manifest` job** between `docker` and `deploy`:
+Every component CI must have an `apply-manifest` job between `docker` and `deploy`:
 
 ```yaml
-apply-manifest:
-  needs: docker
-  if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-  runs-on: ubuntu-latest
-  permissions:
-    contents: read
-    id-token: write
-  environment:
-    name: ${{ github.event.inputs.environment || 'dev' }}
-  steps:
-    - uses: actions/checkout@v4
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
-        aws-region: eu-west-1
-    - name: Update kubeconfig
-      run: aws eks update-kubeconfig --name apim-dev-cluster --region eu-west-1
-    - name: Apply k8s manifest
-      run: |
-        kubectl apply -f <component>/k8s/deployment.yaml 2>/dev/null \
-          || kubectl replace --force -f <component>/k8s/deployment.yaml
+- name: Apply k8s manifest
+  run: |
+    kubectl apply -f <component>/k8s/deployment.yaml 2>&1 || {
+      echo "Apply failed (likely immutable selector). Deleting and recreating..."
+      kubectl delete deployment <name> -n stoa-system --ignore-not-found
+      kubectl apply -f <component>/k8s/deployment.yaml
+    }
 ```
 
-**Gotcha**: `kubectl apply` fails with "spec.selector: field is immutable" if the deployment was originally created by Helm (different selector labels). The `replace --force` fallback deletes and recreates the deployment, which handles selector mismatches.
+**NEVER use `kubectl replace --force`** — it deletes the resource first, and if Kyverno blocks the recreation, the deployment is gone.
 
-And the deploy job must depend on it:
-```yaml
-deploy:
-  needs: [docker, apply-manifest]
-```
+**NEVER use `kubectl apply --server-side`** with Helm-migrated resources — server-side apply merges fields, creating invalid specs (e.g., both `value` and `valueFrom` on the same env var).
 
 ## Reference: Components with apply-manifest
-- `stoa-gateway` (stoa-gateway-ci.yml)
-- `control-plane-ui` (control-plane-ui-ci.yml)
-- `portal` (portal-ci.yml) — **TODO: verify**
-- `control-plane-api` (control-plane-api-ci.yml) — **TODO: verify**
+- `stoa-gateway` (stoa-gateway-ci.yml) ✓
+- `control-plane-ui` (control-plane-ui-ci.yml) ✓
+- `portal` (stoa-portal-ci.yml) ✓
+- `control-plane-api` — **NO** (naming mismatch: CI uses `control-plane-api`, k8s has `stoa-control-plane-api`)

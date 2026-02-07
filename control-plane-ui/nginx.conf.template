@@ -9,8 +9,8 @@ server {
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
 
     # DNS resolver for dynamic proxy_pass (K8s CoreDNS or Docker DNS)
-    # NGINX_LOCAL_RESOLVERS is provided by nginx image's built-in 15-local-resolvers.envsh
-    resolver ${NGINX_LOCAL_RESOLVERS} valid=30s ipv6=off;
+    # DNS_RESOLVER is exported by our 15-extract-dns-resolver.envsh (reads /etc/resolv.conf)
+    resolver ${DNS_RESOLVER} valid=30s ipv6=off;
 
     # Backend URLs resolved at request time (not startup) via variables
     # NEVER use static proxy_pass hostnames — nginx crashes if DNS fails at startup

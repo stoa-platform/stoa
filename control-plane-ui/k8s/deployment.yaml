@@ -53,6 +53,8 @@ spec:
               memory: "256Mi"
               cpu: "200m"
           env:
+            - name: API_BACKEND_URL
+              value: "http://stoa-control-plane-api.stoa-system.svc:80"
             - name: VITE_BASE_DOMAIN
               value: "gostoa.dev"
             - name: VITE_KEYCLOAK_URL

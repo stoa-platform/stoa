@@ -90,11 +90,12 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:alpine
 
 # Default backend URLs (overridable via K8s env vars)
-ENV LOGS_BACKEND_URL=http://opensearch-dashboards:5601 \
+ENV API_BACKEND_URL=http://control-plane-api:8000 \
+    LOGS_BACKEND_URL=http://opensearch-dashboards:5601 \
     GRAFANA_BACKEND_URL=http://grafana:3000
 
 # Only substitute our custom vars (preserve nginx $uri, $host, etc.)
-ENV NGINX_ENVSUBST_FILTER='${LOGS_BACKEND_URL} ${GRAFANA_BACKEND_URL} ${DNS_RESOLVER}'
+ENV NGINX_ENVSUBST_FILTER='${API_BACKEND_URL} ${LOGS_BACKEND_URL} ${GRAFANA_BACKEND_URL} ${DNS_RESOLVER}'
 
 # Extract DNS resolver from /etc/resolv.conf at startup (before envsubst)
 COPY control-plane-ui/docker-entrypoint.d/15-extract-dns-resolver.envsh /docker-entrypoint.d/15-extract-dns-resolver.envsh

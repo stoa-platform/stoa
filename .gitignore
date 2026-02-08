@@ -56,6 +56,9 @@ docker-compose.override.yml
 control-plane-api/.env
 control-plane-api/venv/
 
+# Test artifacts
+junit.xml
+
 # Temporary files
 tmp/
 temp/

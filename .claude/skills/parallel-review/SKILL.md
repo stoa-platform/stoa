@@ -34,9 +34,10 @@ git diff main --name-only -- $0
 | Tout code sans tests correspondants | **test-writer** (identifier les manques) |
 | `Dockerfile`, `k8s/`, `*.yaml` (k8s), `nginx*`, `charts/` | **k8s-ops** |
 | `docs/`, `*.md`, `CLAUDE.md`, `memory.md` | **docs-writer** |
+| `docs/*.md`, `blog/**`, `*.astro` (contenu public) | **content-reviewer** |
 
 **Minimum**: security-reviewer est TOUJOURS lance.
-**Maximum**: 3 subagents en parallele (budget tokens).
+**Maximum**: 4 subagents en parallele (budget tokens).
 
 ### Step 3: Deleguer aux subagents
 
@@ -45,6 +46,7 @@ Lancer les subagents en parallele via le Task tool:
 1. **security-reviewer**: "Analyse de securite des changements de la PR $0"
 2. **test-writer**: "Evaluer la couverture de tests pour les fichiers modifies dans la PR $0. Identifier les tests manquants."
 3. **k8s-ops** (si applicable): "Valider les changements infra/k8s de la PR $0 contre la checklist k8s-deploy.md"
+4. **content-reviewer** (si contenu public): "Audit conformite du contenu public de la PR $0 contre content-compliance.md"
 
 ### Step 4: Synthetiser les resultats
 
@@ -70,6 +72,10 @@ Combiner les rapports des subagents en un rapport unifie:
 ### Deployment (k8s-ops)
 **Verdict**: Go / Fix / Refaire / N/A
 [Resume ou "Pas de changements infra detectes"]
+
+### Conformite Contenu (content-reviewer)
+**Verdict**: Go / Fix / Refaire / N/A
+[Resume: concurrents, clients, prix, reglementations, disclaimers — ou "Pas de contenu public modifie"]
 
 ---
 

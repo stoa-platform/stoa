@@ -1,9 +1,132 @@
 # STOA Platform — Plan
 
-> Last updated: 2026-02-08
+> Last updated: 2026-02-08 22:00 CET
 > Sprint goal: Revenue-ready demo by Feb 24, 2026
 
-## CAB-1116 — Test Automation Strategy (21 SP, 5 phases) — ALL DONE
+---
+
+## Active — In Progress
+
+### CAB-1119 — Brand Unification: Logo S Émeraude + Design Tokens + Portal Menu Cleanup
+
+**Status**: IN PROGRESS | **PR**: #194 (merged, partial) | **Points**: 13 | **Cycle**: 6
+
+#### Phase 1-3 — LIVRÉES ✅ (PR #194)
+
+| Phase | Sujet | Status | Result |
+|-------|-------|--------|--------|
+| Phase 1 | Design Tokens + Favicon Recolor | DONE | Emerald palette, 14 SVG recolors, 3 Keycloak theme files, CSS cleanup |
+| Phase 2 | StoaLogo Component + UI Integration | DONE | Inline SVG component, Console sidebar + Portal header/loading/login |
+| Phase 3 | Portal Menu Restructure | DONE | 3 sections (Discover/Workspace/Account), tabbed WorkspacePage, redirects |
+
+34 files changed. All tests pass (255 console, 236 portal). Both apps build clean.
+
+#### Phase 4-5 — RESTANT 🔴
+
+**Diagnostic post-merge (screenshots 08/02/2026):**
+
+| Surface | Status | Problème |
+|---------|--------|----------|
+| Portal sidebar | ✅ OK | 3 sections, StoaLogo, lien Console ↗ |
+| Portal dark mode | ⚠️ Partiel | Certaines cards/backgrounds restent light |
+| Console sidebar | ❌ KO | Liste plate (~20 items) au lieu de 5 sections groupées |
+| Console light mode | ❌ KO | Sidebar reste dark quand contenu passe en light |
+| Console dark mode | ⚠️ Partiel | Cards/tables restent blanches en dark |
+| Badges "STOA" | ❌ Absent | Shadow Discovery, Token Optimizer, Error Snapshots sans badge violet |
+
+**Phase 4 — Console Sidebar Restructuration:**
+
+- [ ] Regrouper en 5 sections : Overview, Catalog, ⚡Gateway, Insights, Governance
+- [ ] Section headers avec style émeraude pour Gateway
+- [ ] Badges "STOA" violet (#8b5cf6) sur features uniques
+- [ ] Subtitle "Control Plane" sous le logo STOA
+
+**Phase 5 — Dark/Light Mode Complet:**
+
+- [ ] Console sidebar : respecter le mode light (bgSidebar: #f3f4f6)
+- [ ] Console contenu : dark mode complet (cards, tables, backgrounds)
+- [ ] Portal contenu : dark mode complet sur toutes les pages
+- [ ] Design tokens structurés dans `design-tokens.ts` partagé
+- [ ] Favicons multi-tailles (16, 32, 180, 512)
+
+---
+
+### CAB-1112 — Kyverno: Switch Audit → Enforce (5 ClusterPolicies)
+
+**Status**: TODO | **Points**: 2 | **Labels**: mvp-critical | **Cycle**: 6
+**Parent**: CAB-1106
+
+**Prérequis**:
+- [x] CAB-1106 déployé
+- [ ] Minimum 3-5 jours en mode Audit sans faux positifs dans les PolicyReports
+
+**5 ClusterPolicies à basculer**:
+1. `disallow-latest-tag`
+2. `require-requests-limits`
+3. `disallow-privilege-escalation`
+4. `require-non-root`
+5. `restrict-image-registries`
+
+**DoD**:
+- [ ] 5/5 ClusterPolicies en mode `Enforce`
+- [ ] Aucun pod légitime bloqué
+- [ ] PolicyReports propres (0 FAIL sur resources STOA)
+
+**Exécution recommandée**: Claude CLI (ops sensible, feedback live kubectl)
+
+---
+
+## Completed — Cycle 6
+
+### AI Factory Enhancement — CI-awareness, Secrets, Rust Gotchas ✅
+
+**Status**: DONE | **PR**: #195 (merged) | **Cycle**: 6
+
+| Action | File | Description |
+|--------|------|-------------|
+| CREATE | `.claude/rules/ci-quality-gates.md` | Exact CI thresholds (Python 53%/40%, ESLint 93/20, Rust zero), 10 failure patterns, pre-commit checklists |
+| CREATE | `.claude/rules/secrets-management.md` | Vault/ESO/AWS SM architecture, paths, agent checklist, 6 anti-patterns, rotation |
+| UPDATE | `.claude/rules/code-style-rust.md` | 31→128 lines: CI commands, system deps, 7 clippy gotchas, SAST rules |
+| UPDATE | `.claude/agents/test-writer.md` | Real CI thresholds, ESLint ratchet, CI exact commands, 5 gotchas |
+| UPDATE | `.claude/agents/security-reviewer.md` | Vault/ESO compliance checks, authorized paths, anti-patterns |
+| UPDATE | `.claude/agents/k8s-ops.md` | ArgoCD section, ESO diagnostics, Helm nil pointer gotcha |
+| UPDATE | `.claude/rules/ai-factory.md` | Pattern 5 (CI-first development), cross-refs to new rules |
+
+13 rules total (11 original + 2 new). Goal: CI-green at first push for all agents.
+
+---
+
+### CAB-1109 — GitOps Pipeline: Manifests, Helm, Policies-as-Code, Shadow→Git MR Loop ✅
+
+**Status**: DONE | **PR**: #188 (merged) + stoa-infra | **Cycle**: 6 | **DoD**: 8/8
+
+| Phase | Sujet | Status | Description |
+|-------|-------|--------|-------------|
+| 1 | Rego Policies as ConfigMap + SIGHUP | DONE | ConfigMap from `.Files.Glob`, Stakater Reloader, SIGHUP handler in main.rs |
+| 2 | Helm Chart Enhancement | DONE | Kyverno `privileged: false`, RBAC CRD watcher, Ingress, nil-safe conditionals, all env vars |
+| 3 | Tool/ToolSet CRD Manifests | DONE | `tools.gostoa.dev` + `toolsets.gostoa.dev` CRDs matching Rust structs + examples |
+| 4 | Gateway Config Values | DONE | `values-dev.yaml` (1 replica, debug), `values-staging.yaml` (2 replicas, kafka), `values-prod.yaml` (3 replicas, kafka, otel, ingress) |
+| 5 | Shadow → Git MR Loop | DONE | `POST /shadow/submit-uac` → GitClient → branch + commit + MR with review checklist |
+
+**stoa-infra — 9 fichiers (7 créés, 2 modifiés):**
+- `values.yaml` + `deployment.yaml` modifiés (securityContext, probes, env vars, volumes)
+- Créés : `policy-configmap.yaml`, `default.rego`, `rbac.yaml`, `servicemonitor.yaml`, `externalsecret.yaml`, `argocd-application.yaml`, `argocd-crds-application.yaml`
+
+**stoa — 1 fichier modifié:**
+- `.github/workflows/stoa-gateway-ci.yml` → supprimé `apply-manifest`, remplacé par `rollout restart`
+
+267 Rust tests pass, clippy clean, fmt clean. Helm lint: 4 variantes pass.
+
+**Prochaine étape opérationnelle (hors ticket):**
+1. `kubectl delete deployment stoa-gateway -n stoa-system` (selectors immutables)
+2. `kubectl apply -f charts/stoa-gateway/argocd-application.yaml`
+3. `kubectl apply -f charts/stoa-platform/argocd-crds-application.yaml`
+
+---
+
+## Completed — Earlier Cycles
+
+### CAB-1116 — Test Automation Strategy (21 SP, 5 phases) ✅
 
 | Phase | Sujet | Status | PR | Result |
 |-------|-------|--------|-----|--------|
@@ -17,7 +140,7 @@
 | Hotfix | Docker build (tsconfig.app.json) | DONE | #177 | Exclude test files from tsc build |
 | Hotfix | bddgen @wip tag | DONE | #178 | Skip unimplemented demo-showcase.feature |
 
-### CI Pipeline Status (2026-02-08)
+#### CI Pipeline Status (2026-02-08)
 
 | Component | CI | Docker | Deploy | Notes |
 |-----------|-----|--------|--------|-------|
@@ -28,7 +151,7 @@
 
 ---
 
-## CAB-1103 — Control Plane Agnostique (Phases 1-7 DONE)
+### CAB-1103 — Control Plane Agnostique (Phases 1-7) ✅
 
 | Phase | Sujet | Status | PR | Description |
 |-------|-------|--------|-----|-------------|
@@ -36,7 +159,7 @@
 | Phase 6 | Operational Readiness | DONE | #184 | CI hardening, monitoring OIDC, E2E expansion, test loop |
 | Phase 7 | Gateway Auto-Registration | DONE | #121, #122 | ADR-036 merged |
 
-### Phase 6 — Operational Readiness (4 sub-phases) — ALL DONE
+#### Phase 6 — Operational Readiness (4 sub-phases)
 
 | Sub-phase | Sujet | Status | PR | Result |
 |-----------|-------|--------|-----|--------|
@@ -45,15 +168,11 @@
 | 6C | E2E Expansion | DONE | #184 | 22 new BDD scenarios (gateway CRUD, deployment lifecycle, admin RBAC, portal consumer) |
 | 6D | Test Loop Automation | DONE | #184 | weekly-audit.yml (6 jobs) + smoke tests in mcp-gateway-ci + stoa-gateway-ci |
 
-#### Files Changed (23 files, +1659 lines)
-- **6A**: 7 workflow files patched (security-scan, e2e-audit, platform-config-ci, e2e-tests, keycloak-theme, reusable-k8s-deploy, reusable-notify)
-- **6B**: docker-compose.yml, alertmanager.yml, setup-observability-oidc.sh, .env.example, values.yaml
-- **6C**: 4 feature files + 4 step definition files (all `@wip` tagged)
-- **6D**: weekly-audit.yml (new), mcp-gateway-ci.yml, stoa-gateway-ci.yml
+23 files changed, +1659 lines.
 
 ---
 
-## CAB-1105 — Kill Python + Production-Grade MCP Gateway (9 phases) — ALL DONE
+### CAB-1105 — Kill Python + Production-Grade MCP Gateway (9 phases) ✅
 
 | Phase | Sujet | Status | PR | Result |
 |-------|-------|--------|----|--------|
@@ -71,77 +190,6 @@
 
 ---
 
-### CAB-1109 — GitOps Pipeline: Manifests, Helm, Policies-as-Code, Shadow→Git MR Loop — ALL DONE
-
-**Status**: DONE | **PR**: #188 (merged) | **Labels**: flow-ready | **Cycle**: 6
-
-| Phase | Sujet | Status | Description |
-|-------|-------|--------|-------------|
-| 1 | Rego Policies as ConfigMap + SIGHUP | DONE | ConfigMap from `.Files.Glob`, Stakater Reloader, SIGHUP handler in main.rs |
-| 2 | Helm Chart Enhancement | DONE | Kyverno `privileged: false`, RBAC CRD watcher, Ingress, nil-safe conditionals, all env vars |
-| 3 | Tool/ToolSet CRD Manifests | DONE | `tools.gostoa.dev` + `toolsets.gostoa.dev` CRDs matching Rust structs + examples |
-| 4 | Gateway Config Values | DONE | `values-dev.yaml` (1 replica, debug), `values-staging.yaml` (2 replicas, kafka), `values-prod.yaml` (3 replicas, kafka, otel, ingress) |
-| 5 | Shadow → Git MR Loop | DONE | `POST /shadow/submit-uac` → GitClient → branch + commit + MR with review checklist |
-
-267 Rust tests pass, clippy clean, fmt clean. Helm lint passes: base + dev + staging + prod.
-
-**DoD**:
-- [x] Helm chart `stoa-gateway` installable via `helm install`
-- [x] ConfigMap policies Rego monté et hot-reloadé
-- [x] CRD definitions appliquées par ArgoCD
-- [x] `values-dev.yaml`, `values-staging.yaml` et `values-prod.yaml` versionnés
-- [x] RBAC ServiceAccount pour CRD watcher
-- [x] Shadow → Git MR : endpoint POST qui accepte un UAC YAML
-- [x] ArgoCD Application configurée pour sync le chart (stoa-infra)
-- [x] Zéro `kubectl apply` manuel — CI migré vers `rollout restart` + ArgoCD auto-sync
-
----
-
-### CAB-1112 — Kyverno: Switch Audit → Enforce (5 ClusterPolicies)
-
-**Status**: Todo | **Points**: 2 | **Labels**: mvp-critical | **Cycle**: 6
-**Parent**: CAB-1106
-
-**Prérequis**:
-- [x] CAB-1106 déployé
-- [ ] Minimum 3-5 jours en mode Audit sans faux positifs dans les PolicyReports
-
-**Vérification pré-switch**:
-```bash
-# Vérifier les PolicyReports — aucun FAIL sur des resources légitimes
-kubectl get policyreports -A -o json | jq '.items[].results[] | select(.result=="fail")'
-```
-
-**5 ClusterPolicies à basculer**:
-1. `disallow-latest-tag` — Force des tags explicites sur les images
-2. `require-requests-limits` — CPU/memory requests et limits obligatoires
-3. `disallow-privilege-escalation` — Pas de `allowPrivilegeEscalation: true`
-4. `require-non-root` — `runAsNonRoot: true` obligatoire
-5. `restrict-image-registries` — Whitelist registries autorisés
-
-**DoD**:
-- [ ] 5/5 ClusterPolicies en mode `Enforce`
-- [ ] Aucun pod légitime bloqué
-- [ ] PolicyReports propres (0 FAIL sur resources STOA)
-
-**Exécution recommandée**: Claude CLI (ops sensible, feedback live kubectl)
-
----
-
-### CAB-1119 — Brand Unification: Logo S Émeraude + Design Tokens + Portal Menu Cleanup — ALL DONE
-
-**Status**: DONE | **PR**: #194 | **Points**: 13 | **Cycle**: 6
-
-| Phase | Sujet | Status | Result |
-|-------|-------|--------|--------|
-| Phase 1 | Design Tokens + Favicon Recolor | DONE | Emerald palette, 14 SVG recolors, 3 Keycloak theme files, CSS cleanup |
-| Phase 2 | StoaLogo Component + UI Integration | DONE | Inline SVG component, Console sidebar + Portal header/loading/login |
-| Phase 3 | Portal Menu Restructure | DONE | 3 sections (Discover/Workspace/Account), tabbed WorkspacePage, redirects |
-
-34 files changed. All tests pass (255 console, 236 portal). Both apps build clean.
-
----
-
 ## Demo Readiness (Feb 24)
 
 | Priority | Ticket | Description | Status |
@@ -149,10 +197,9 @@ kubectl get policyreports -A -o json | jq '.items[].results[] | select(.result==
 | P0 | CAB-1066 | Landing page gostoa.dev + Stripe | NOT STARTED |
 | P0 | — | Browser-based demo walkthrough | NOT STARTED |
 | P1 | — | Record video backup for demo | NOT STARTED |
-| P1 | CAB-1112 | Kyverno policies: Audit -> Enforce | NOT STARTED |
-| P1 | CAB-1119 | Brand Unification: Logo Émeraude + Design Tokens + Portal Cleanup | DONE (PR #194) |
-| P1 | CAB-1109 | GitOps Pipeline (Helm, CRDs, Policies-as-Code) | DONE (PR #188) |
-| P2 | — | E2E smoke tests on live infra (timeouts) | KNOWN ISSUE |
+| P1 | CAB-1112 | Kyverno policies: Audit → Enforce | NOT STARTED |
+| P1 | CAB-1119 | Brand Unification phases 4-5 (Console sidebar + dark/light) | IN PROGRESS |
+| P1 | CAB-1109 | GitOps Pipeline (Helm, CRDs, ArgoCD) | ✅ DONE |
 
 ### Demo Checklist
 
@@ -168,9 +215,11 @@ kubectl get policyreports -A -o json | jq '.items[].results[] | select(.result==
 - [x] Monitoring OIDC (Grafana + Prometheus + AlertManager)
 - [x] E2E expansion (22 new BDD scenarios)
 - [x] Weekly audit + smoke tests post-deploy
+- [x] Brand Unification phases 1-3 (emerald palette, StoaLogo, Portal menu) — PR #194
+- [x] GitOps pipeline (Helm chart, CRDs, ArgoCD sync, CI migration) — PR #188 + stoa-infra
+- [x] AI Factory: CI quality gates, secrets mgmt rules, agent enhancements — PR #195
+- [ ] Brand Unification phases 4-5 (Console sidebar restructure, dark/light mode complet)
 - [ ] Landing page (gostoa.dev) with Stripe
 - [ ] Demo walkthrough script
 - [ ] Video backup recording
 - [ ] Kyverno Enforce mode
-- [x] Brand Unification (Logo Émeraude + Design Tokens + Portal Menu) — PR #194
-- [x] GitOps pipeline (Helm chart, CRDs, ArgoCD sync) — PR #188

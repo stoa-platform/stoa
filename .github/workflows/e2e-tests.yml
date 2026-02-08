@@ -211,6 +211,7 @@ jobs:
             echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
 
+            # intentional: results.json may not exist if tests crashed before producing output
             TOTAL=$(jq '.stats.expected + .stats.unexpected + .stats.flaky + .stats.skipped' e2e/reports/results.json 2>/dev/null || echo "0")
             PASSED=$(jq '.stats.expected' e2e/reports/results.json 2>/dev/null || echo "0")
             FAILED=$(jq '.stats.unexpected' e2e/reports/results.json 2>/dev/null || echo "0")

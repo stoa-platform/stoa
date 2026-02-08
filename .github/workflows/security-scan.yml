@@ -143,7 +143,7 @@ jobs:
             -ll \
             -f json \
             -o bandit-${{ matrix.project }}.json \
-            --exit-zero || true
+            --exit-zero
 
           # Fail on MEDIUM+ severity and confidence
           bandit -r ${{ matrix.project }}/ --severity-level medium --confidence-level medium
@@ -200,7 +200,7 @@ jobs:
 
       - name: Run ESLint security report (non-blocking)
         if: steps.check.outputs.exists == 'true'
-        continue-on-error: true
+        continue-on-error: true  # Non-blocking: report is collected, blocking gate runs in next step
         working-directory: ${{ matrix.project }}
         run: |
           npx eslint 'src/**/*.{ts,tsx}' \
@@ -223,7 +223,7 @@ jobs:
             npx eslint 'src/**/*.{ts,tsx}' \
               --plugin security \
               --rule '{"security/detect-eval-with-expression": "error", "security/detect-unsafe-regex": "error"}' \
-              --quiet || true
+              --quiet
           }
 
   # ==========================================================================
@@ -354,7 +354,7 @@ jobs:
                 found.append(f\"{p.get('name', '?')}: {lic}\")
           for f in found:
             print(f)
-          " 2>/dev/null || echo "")
+          " 2>/dev/null || echo "")  # intentional: python parse may fail on unexpected spdx format
             if [ -n "$COPYLEFT" ]; then
               echo "::warning::Copyleft licenses detected:"
               echo "$COPYLEFT"

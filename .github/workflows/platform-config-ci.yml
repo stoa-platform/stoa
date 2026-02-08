@@ -69,7 +69,11 @@ jobs:
           yamllint -d relaxed deploy/platform-bootstrap/
 
           echo "=== Linting webmethods templates ==="
-          yamllint -d relaxed gitops-templates/webmethods/ || true
+          if [ -d gitops-templates/webmethods/ ]; then
+            yamllint -d relaxed gitops-templates/webmethods/
+          else
+            echo "gitops-templates/webmethods/ not found, skipping"
+          fi
 
       - name: Validate API configurations
         run: |
@@ -101,7 +105,7 @@ jobs:
           grep -rh '\${[A-Z_]*}' deploy/platform-bootstrap/ | \
             grep -v '\${[A-Z_]*:' | \
             grep -v '\${[A-Z_]*:-' | \
-            sort -u > /tmp/undefined_vars.txt || true
+            sort -u > /tmp/undefined_vars.txt || true  # intentional: grep exit 1 = no matches = success
 
           if [ -s /tmp/undefined_vars.txt ]; then
             echo "WARNING: Variables without defaults found:"
@@ -157,10 +161,10 @@ jobs:
 
           # Also sync webmethods templates if changed
           if [ -d gitops-templates/webmethods/apis ]; then
-            cp gitops-templates/webmethods/apis/*.yaml /tmp/stoa-gitops/webmethods/apis/ 2>/dev/null || true
+            cp gitops-templates/webmethods/apis/*.yaml /tmp/stoa-gitops/webmethods/apis/ 2>/dev/null || true  # intentional: glob may match zero files
           fi
           if [ -d gitops-templates/webmethods/policies ]; then
-            cp gitops-templates/webmethods/policies/*.yaml /tmp/stoa-gitops/webmethods/policies/ 2>/dev/null || true
+            cp gitops-templates/webmethods/policies/*.yaml /tmp/stoa-gitops/webmethods/policies/ 2>/dev/null || true  # intentional: glob may match zero files
           fi
 
       - name: Commit and push to GitLab

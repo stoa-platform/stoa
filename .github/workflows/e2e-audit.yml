@@ -56,7 +56,7 @@ jobs:
 
       - name: Run full E2E suite
         working-directory: e2e
-        continue-on-error: true
+        continue-on-error: true  # intentional: audit collects failures for reporting, not blocking
         env:
           STOA_PORTAL_URL: ${{ secrets.E2E_PORTAL_URL || 'https://portal.gostoa.dev' }}
           STOA_CONSOLE_URL: ${{ secrets.E2E_CONSOLE_URL || 'https://console.gostoa.dev' }}
@@ -80,10 +80,10 @@ jobs:
           TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
         run: |
           # Run auth-setup first
-          npx playwright test --project=auth-setup || echo "Auth setup had failures"
+          npx playwright test --project=auth-setup
 
           # Run all tests with JSON + HTML reporters
-          npx playwright test --reporter=json,html || echo "Some tests failed"
+          npx playwright test --reporter=json,html
 
       - name: Generate audit report
         working-directory: e2e

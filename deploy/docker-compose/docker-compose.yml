@@ -336,6 +336,17 @@ services:
       # Phase 3: Sub-path serving for reverse proxy
       GF_SERVER_ROOT_URL: "http://localhost/grafana/"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      # Phase 6B: OIDC via Keycloak (CAB-1103)
+      GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+      GF_AUTH_GENERIC_OAUTH_NAME: "STOA SSO"
+      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "stoa-observability"
+      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: "${GRAFANA_OIDC_CLIENT_SECRET}"
+      GF_AUTH_GENERIC_OAUTH_SCOPES: "openid profile email"
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: "http://localhost/auth/realms/stoa/protocol/openid-connect/auth"
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: "http://keycloak:8080/realms/stoa/protocol/openid-connect/token"
+      GF_AUTH_GENERIC_OAUTH_API_URL: "http://keycloak:8080/realms/stoa/protocol/openid-connect/userinfo"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'stoa:admin') && 'Admin' || 'Viewer'"
+      GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -347,6 +358,69 @@ services:
       - loki
     networks:
       - stoa-network
+    restart: unless-stopped
+
+  # ==========================================================================
+  # oauth2-proxy for Prometheus — CAB-1103 Phase 6B
+  # ==========================================================================
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    container_name: stoa-oauth2-proxy
+    ports:
+      - "${PORT_OAUTH2_PROXY:-4180}:4180"
+    environment:
+      OAUTH2_PROXY_PROVIDER: "keycloak-oidc"
+      OAUTH2_PROXY_CLIENT_ID: "stoa-observability"
+      OAUTH2_PROXY_CLIENT_SECRET: "${OAUTH2_PROXY_CLIENT_SECRET}"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "http://keycloak:8080/realms/stoa"
+      OAUTH2_PROXY_REDIRECT_URL: "http://localhost/prometheus/oauth2/callback"
+      OAUTH2_PROXY_UPSTREAMS: "http://prometheus:9090"
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_COOKIE_SECRET: "${OAUTH2_PROXY_COOKIE_SECRET}"
+      OAUTH2_PROXY_COOKIE_SECURE: "false"
+      OAUTH2_PROXY_COOKIE_NAME: "_stoa_prometheus_oauth2"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_SCOPE: "openid profile email"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_PASS_ACCESS_TOKEN: "true"
+      OAUTH2_PROXY_PASS_AUTHORIZATION_HEADER: "true"
+      OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY: "true"
+      OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
+      OAUTH2_PROXY_PROXY_PREFIX: "/prometheus/oauth2"
+    depends_on:
+      - prometheus
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4180/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # AlertManager — CAB-1103 Phase 6B
+  # ==========================================================================
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: stoa-alertmanager
+    ports:
+      - "${PORT_ALERTMANAGER:-9093}:9093"
+    volumes:
+      - ./config/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.external-url=http://localhost/alertmanager"
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   # ==========================================================================
@@ -404,3 +478,4 @@ volumes:
   grafana-data:
   loki-data:
   opensearch-data:
+  alertmanager-data:

@@ -88,7 +88,7 @@ jobs:
         if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
           PREV_IMAGE=$(kubectl get deployment/${{ inputs.component }} -n ${{ inputs.namespace }} \
-            -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
+            -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")  # intentional: deployment may not exist yet
           echo "previous_image=$PREV_IMAGE" >> $GITHUB_OUTPUT
           echo "Previous image: $PREV_IMAGE"
 
@@ -110,6 +110,7 @@ jobs:
       - name: Diagnose failure
         if: failure() && steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
         run: |
+          # Diagnostic commands - || true is intentional to collect all available debug info
           echo "=== Deployment Description ==="
           kubectl describe deployment/${{ inputs.component }} -n ${{ inputs.namespace }} || true
           echo ""
@@ -151,7 +152,7 @@ jobs:
         if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true' && inputs.verify-endpoint != ''
         run: |
           sleep 10
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ inputs.verify-endpoint }}" || echo "000")
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ inputs.verify-endpoint }}" || echo "000")  # intentional: network failure returns safe default
           echo "Endpoint check: HTTP $HTTP_CODE (expected ${{ inputs.expected-status }})"
           if [ "$HTTP_CODE" = "${{ inputs.expected-status }}" ]; then
             echo "Endpoint verification PASSED"

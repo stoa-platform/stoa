@@ -135,9 +135,10 @@ export function APITestingSandbox() {
       const fetchResponse = await fetch(url, {
         method: requestConfig.method,
         headers,
-        body: ['POST', 'PUT', 'PATCH'].includes(requestConfig.method) && requestConfig.body
-          ? requestConfig.body
-          : undefined,
+        body:
+          ['POST', 'PUT', 'PATCH'].includes(requestConfig.method) && requestConfig.body
+            ? requestConfig.body
+            : undefined,
         credentials: 'include', // Include cookies for auth
       });
 

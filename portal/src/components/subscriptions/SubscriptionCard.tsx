@@ -31,13 +31,16 @@ interface SubscriptionCardProps {
 type SubscriptionStatus = 'active' | 'pending' | 'suspended' | 'cancelled';
 type SubscriptionPlan = 'free' | 'basic' | 'premium' | 'enterprise';
 
-const statusConfig: Record<SubscriptionStatus, {
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  bg: string;
-  text: string;
-  label: string;
-}> = {
+const statusConfig: Record<
+  SubscriptionStatus,
+  {
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+    bg: string;
+    text: string;
+    label: string;
+  }
+> = {
   active: {
     icon: CheckCircle,
     color: 'text-green-500',
@@ -68,12 +71,15 @@ const statusConfig: Record<SubscriptionStatus, {
   },
 };
 
-const planConfig: Record<SubscriptionPlan, {
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  bg: string;
-  label: string;
-}> = {
+const planConfig: Record<
+  SubscriptionPlan,
+  {
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+    bg: string;
+    label: string;
+  }
+> = {
   free: {
     icon: Check,
     color: 'text-gray-600',
@@ -149,7 +155,9 @@ export const SubscriptionCard = memo(function SubscriptionCard({
         </div>
 
         {/* Status Badge */}
-        <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}>
+        <span
+          className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}
+        >
           <StatusIcon className={`h-3.5 w-3.5 ${status.color}`} />
           {status.label}
         </span>
@@ -158,7 +166,9 @@ export const SubscriptionCard = memo(function SubscriptionCard({
       {/* Plan and App Info */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         {/* Plan Badge */}
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full ${plan.bg} ${plan.color}`}>
+        <span
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full ${plan.bg} ${plan.color}`}
+        >
           <PlanIcon className="h-3.5 w-3.5" />
           {plan.label} Plan
         </span>
@@ -199,8 +209,8 @@ export const SubscriptionCard = memo(function SubscriptionCard({
                     (subscription.usage.callsToday || 0) / subscription.usage.dailyLimit > 0.9
                       ? 'bg-red-500'
                       : (subscription.usage.callsToday || 0) / subscription.usage.dailyLimit > 0.7
-                      ? 'bg-amber-500'
-                      : 'bg-green-500'
+                        ? 'bg-amber-500'
+                        : 'bg-green-500'
                   }`}
                   style={{
                     width: `${Math.min(

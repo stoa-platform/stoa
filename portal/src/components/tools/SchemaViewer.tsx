@@ -81,14 +81,16 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
           depth > 0 ? 'ml-4' : ''
         }`}
         onClick={() => (hasChildren || hasArrayItems) && setIsExpanded(!isExpanded)}
-        onKeyDown={(e) => e.key === 'Enter' && (hasChildren || hasArrayItems) && setIsExpanded(!isExpanded)}
+        onKeyDown={(e) =>
+          e.key === 'Enter' && (hasChildren || hasArrayItems) && setIsExpanded(!isExpanded)
+        }
         role={hasChildren || hasArrayItems ? 'button' : undefined}
         tabIndex={hasChildren || hasArrayItems ? 0 : undefined}
         aria-expanded={hasChildren || hasArrayItems ? isExpanded : undefined}
       >
         {/* Expand/Collapse Icon */}
         <div className="w-4 h-4 mt-0.5 flex-shrink-0">
-          {(hasChildren || hasArrayItems) ? (
+          {hasChildren || hasArrayItems ? (
             isExpanded ? (
               <ChevronDown className="h-4 w-4 text-gray-400" />
             ) : (
@@ -117,7 +119,9 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
             )}
 
             {/* Type Badge */}
-            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded ${typeColor}`}>
+            <span
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded ${typeColor}`}
+            >
               <TypeIcon className="h-3 w-3" />
               {property.type}
               {property.type === 'array' && property.items?.type && (
@@ -161,7 +165,10 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
           {property.enum && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {property.enum.map((value, idx) => (
-                <code key={idx} className="px-2 py-0.5 text-xs bg-indigo-50 text-indigo-700 rounded border border-indigo-200">
+                <code
+                  key={idx}
+                  className="px-2 py-0.5 text-xs bg-indigo-50 text-indigo-700 rounded border border-indigo-200"
+                >
                   "{value}"
                 </code>
               ))}
@@ -171,7 +178,8 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
           {/* Default Value */}
           {property.default !== undefined && (
             <p className="text-xs text-gray-500 mt-1">
-              Default: <code className="bg-gray-100 px-1 rounded">{JSON.stringify(property.default)}</code>
+              Default:{' '}
+              <code className="bg-gray-100 px-1 rounded">{JSON.stringify(property.default)}</code>
             </p>
           )}
         </div>
@@ -208,7 +216,9 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
             ))
           ) : (
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${typeColors[property.items.type] || 'bg-gray-100 text-gray-700'}`}>
+              <span
+                className={`px-1.5 py-0.5 text-xs font-medium rounded ${typeColors[property.items.type] || 'bg-gray-100 text-gray-700'}`}
+              >
                 {property.items.type}
               </span>
               {property.items.description && <span>{property.items.description}</span>}
@@ -220,7 +230,11 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
   );
 }
 
-export function SchemaViewer({ schema, title = 'Input Schema', className = '' }: SchemaViewerProps) {
+export function SchemaViewer({
+  schema,
+  title = 'Input Schema',
+  className = '',
+}: SchemaViewerProps) {
   const [viewMode, setViewMode] = useState<'formatted' | 'raw'>('formatted');
   const [copied, setCopied] = useState(false);
 

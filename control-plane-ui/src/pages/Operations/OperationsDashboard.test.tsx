@@ -5,7 +5,14 @@ import { MemoryRouter } from 'react-router-dom';
 // Mock AuthContext
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
-    user: { id: 'user-admin', email: 'parzival@oasis.gg', name: 'Parzival', roles: ['cpi-admin'], tenant_id: 'oasis-gunters', permissions: ['tenants:read'] },
+    user: {
+      id: 'user-admin',
+      email: 'parzival@oasis.gg',
+      name: 'Parzival',
+      roles: ['cpi-admin'],
+      tenant_id: 'oasis-gunters',
+      permissions: ['tenants:read'],
+    },
     isAuthenticated: true,
     isLoading: false,
     isReady: true,
@@ -26,8 +33,22 @@ vi.mock('../../services/api', () => ({
         gitops: {
           status: 'healthy',
           components: [
-            { name: 'control-plane-api', health_status: 'Healthy', sync_status: 'Synced', revision: 'abc123', last_sync: '2024-01-15T10:00:00Z', message: null },
-            { name: 'mcp-gateway', health_status: 'Healthy', sync_status: 'Synced', revision: 'def456', last_sync: '2024-01-15T10:00:00Z', message: null },
+            {
+              name: 'control-plane-api',
+              health_status: 'Healthy',
+              sync_status: 'Synced',
+              revision: 'abc123',
+              last_sync: '2024-01-15T10:00:00Z',
+              message: null,
+            },
+            {
+              name: 'mcp-gateway',
+              health_status: 'Healthy',
+              sync_status: 'Synced',
+              revision: 'def456',
+              last_sync: '2024-01-15T10:00:00Z',
+              message: null,
+            },
           ],
           checked_at: '2024-01-15T10:00:00Z',
         },
@@ -37,8 +58,24 @@ vi.mock('../../services/api', () => ({
       },
     }),
     getGatewayAggregatedMetrics: vi.fn().mockResolvedValue({
-      health: { total_gateways: 5, online: 3, offline: 1, degraded: 1, maintenance: 0, health_percentage: 80 },
-      sync: { total_deployments: 10, synced: 7, pending: 1, syncing: 1, drifted: 1, error: 0, deleting: 0, sync_percentage: 70 },
+      health: {
+        total_gateways: 5,
+        online: 3,
+        offline: 1,
+        degraded: 1,
+        maintenance: 0,
+        health_percentage: 80,
+      },
+      sync: {
+        total_deployments: 10,
+        synced: 7,
+        pending: 1,
+        syncing: 1,
+        drifted: 1,
+        error: 0,
+        deleting: 0,
+        sync_percentage: 70,
+      },
       overall_status: 'DEGRADED',
     }),
     getOperationsMetrics: vi.fn().mockResolvedValue({
@@ -68,7 +105,9 @@ vi.mock('../../utils/navigation', () => ({
 
 // Mock shared components
 vi.mock('@stoa/shared/components/Skeleton', () => ({
-  CardSkeleton: ({ className }: { className?: string }) => <div data-testid="card-skeleton" className={className} />,
+  CardSkeleton: ({ className }: { className?: string }) => (
+    <div data-testid="card-skeleton" className={className} />
+  ),
 }));
 
 import { OperationsDashboard } from './OperationsDashboard';
@@ -88,12 +127,16 @@ describe('OperationsDashboard', () => {
 
   it('renders the heading', async () => {
     renderComponent();
-    expect(await screen.findByRole('heading', { name: 'Operations Dashboard' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Operations Dashboard' })
+    ).toBeInTheDocument();
   });
 
   it('renders the subtitle', async () => {
     renderComponent();
-    expect(await screen.findByText('Platform health, performance metrics, and incident overview')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Platform health, performance metrics, and incident overview')
+    ).toBeInTheDocument();
   });
 
   it('shows key metrics after loading', async () => {

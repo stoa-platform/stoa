@@ -40,7 +40,9 @@ export function resetMockAuth() {
   mockLogin.mockClear();
   mockLogout.mockClear();
   mockHasPermission.mockClear();
-  mockHasPermission.mockImplementation((p: string) => authState.user?.permissions.includes(p) ?? false);
+  mockHasPermission.mockImplementation(
+    (p: string) => authState.user?.permissions.includes(p) ?? false
+  );
   mockHasRole.mockClear();
   mockHasRole.mockImplementation((r: string) => authState.user?.roles.includes(r) ?? false);
 }

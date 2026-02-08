@@ -6,7 +6,16 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
-import type { Deployment, Tenant, API, TraceSummary, PipelineTrace, TraceStats, TraceStep, TraceStatus } from '../types';
+import type {
+  Deployment,
+  Tenant,
+  API,
+  TraceSummary,
+  PipelineTrace,
+  TraceStats,
+  TraceStep,
+  TraceStatus,
+} from '../types';
 import {
   Activity,
   GitCommit,
@@ -44,8 +53,18 @@ interface Tab {
 }
 
 const tabs: Tab[] = [
-  { id: 'pipelines', name: 'Pipeline Traces', icon: Activity, description: 'GitLab → Kafka → AWX traces' },
-  { id: 'history', name: 'Deployment History', icon: Rocket, description: 'API deployment records' },
+  {
+    id: 'pipelines',
+    name: 'Pipeline Traces',
+    icon: Activity,
+    description: 'GitLab → Kafka → AWX traces',
+  },
+  {
+    id: 'history',
+    name: 'Deployment History',
+    icon: Rocket,
+    description: 'API deployment records',
+  },
   { id: 'config', name: 'GitLab Config', icon: Settings, description: 'GitOps configuration' },
 ];
 
@@ -53,13 +72,14 @@ const tabs: Tab[] = [
 // PIPELINE TRACES TAB (ex-Monitoring)
 // =============================================================================
 
-const statusConfig: Record<TraceStatus, { icon: typeof CheckCircle2; color: string; bg: string }> = {
-  pending: { icon: Clock, color: 'text-gray-500', bg: 'bg-gray-100' },
-  in_progress: { icon: Loader2, color: 'text-blue-500', bg: 'bg-blue-100' },
-  success: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-100' },
-  failed: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-100' },
-  skipped: { icon: AlertCircle, color: 'text-yellow-500', bg: 'bg-yellow-100' },
-};
+const statusConfig: Record<TraceStatus, { icon: typeof CheckCircle2; color: string; bg: string }> =
+  {
+    pending: { icon: Clock, color: 'text-gray-500', bg: 'bg-gray-100' },
+    in_progress: { icon: Loader2, color: 'text-blue-500', bg: 'bg-blue-100' },
+    success: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-100' },
+    failed: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-100' },
+    skipped: { icon: AlertCircle, color: 'text-yellow-500', bg: 'bg-yellow-100' },
+  };
 
 const stepNames: Record<string, { label: string; icon: typeof Activity }> = {
   webhook_received: { label: 'Webhook Received', icon: Radio },
@@ -79,10 +99,20 @@ function formatDuration(ms?: number): string {
 function formatTime(isoString?: string): string {
   if (!isoString) return '-';
   const date = new Date(isoString);
-  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return date.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
-function StatsCard({ title, value, subtitle, icon: Icon, color }: {
+function StatsCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  color,
+}: {
   title: string;
   value: string | number;
   subtitle?: string;
@@ -121,14 +151,22 @@ function StepTimeline({ steps }: { steps: TraceStep[] }) {
             )}
             <div className={clsx('flex items-start gap-3 rounded-lg p-3', cfg.bg)}>
               <div className={clsx('rounded-full p-1', cfg.bg)}>
-                <StepIcon className={clsx('h-5 w-5', cfg.color, step.status === 'in_progress' && 'animate-spin')} />
+                <StepIcon
+                  className={clsx(
+                    'h-5 w-5',
+                    cfg.color,
+                    step.status === 'in_progress' && 'animate-spin'
+                  )}
+                />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <StepTypeIcon className="h-4 w-4 text-gray-400" />
                   <span className="font-medium text-gray-900">{stepInfo.label}</span>
                   {step.duration_ms && (
-                    <span className="text-xs text-gray-500">({formatDuration(step.duration_ms)})</span>
+                    <span className="text-xs text-gray-500">
+                      ({formatDuration(step.duration_ms)})
+                    </span>
                   )}
                 </div>
                 {step.details && (
@@ -162,7 +200,11 @@ function StepTimeline({ steps }: { steps: TraceStep[] }) {
   );
 }
 
-function TraceRow({ trace, isExpanded, onToggle }: {
+function TraceRow({
+  trace,
+  isExpanded,
+  onToggle,
+}: {
   trace: TraceSummary;
   isExpanded: boolean;
   onToggle: () => void;
@@ -175,7 +217,8 @@ function TraceRow({ trace, isExpanded, onToggle }: {
   useEffect(() => {
     if (isExpanded && !details) {
       setLoading(true);
-      apiService.getTrace(trace.id)
+      apiService
+        .getTrace(trace.id)
         .then(setDetails)
         .finally(() => setLoading(false));
     }
@@ -191,7 +234,9 @@ function TraceRow({ trace, isExpanded, onToggle }: {
           {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
         </button>
         <div className={clsx('rounded-full p-1.5', cfg.bg)}>
-          <StatusIcon className={clsx('h-4 w-4', cfg.color, trace.status === 'in_progress' && 'animate-spin')} />
+          <StatusIcon
+            className={clsx('h-4 w-4', cfg.color, trace.status === 'in_progress' && 'animate-spin')}
+          />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -230,9 +275,7 @@ function TraceRow({ trace, isExpanded, onToggle }: {
             <span className="text-red-500 ml-1">({trace.steps_failed})</span>
           )}
         </div>
-        <div className="text-sm text-gray-400 w-24 text-right">
-          {formatTime(trace.created_at)}
-        </div>
+        <div className="text-sm text-gray-400 w-24 text-right">{formatTime(trace.created_at)}</div>
       </div>
 
       {isExpanded && (
@@ -256,7 +299,10 @@ function TraceRow({ trace, isExpanded, onToggle }: {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Author:</span>
-                    <span>{details.git_author} {details.git_author_email && `<${details.git_author_email}>`}</span>
+                    <span>
+                      {details.git_author}{' '}
+                      {details.git_author_email && `<${details.git_author_email}>`}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Commit:</span>
@@ -267,7 +313,9 @@ function TraceRow({ trace, isExpanded, onToggle }: {
                       <span className="text-gray-500">Files changed:</span>
                       <ul className="mt-1 text-xs font-mono text-gray-600 max-h-32 overflow-auto">
                         {details.git_files_changed.map((file, i) => (
-                          <li key={i} className="truncate">{file}</li>
+                          <li key={i} className="truncate">
+                            {file}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -360,7 +408,12 @@ function PipelineTracesTab() {
 
       {stats && (
         <div className="grid grid-cols-4 gap-4">
-          <StatsCard title="Total Pipelines" value={stats.total} icon={Activity} color="bg-blue-500" />
+          <StatsCard
+            title="Total Pipelines"
+            value={stats.total}
+            icon={Activity}
+            color="bg-blue-500"
+          />
           <StatsCard
             title="Success Rate"
             value={`${stats.success_rate}%`}
@@ -368,8 +421,18 @@ function PipelineTracesTab() {
             icon={CheckCircle2}
             color="bg-green-500"
           />
-          <StatsCard title="Failed" value={stats.by_status?.failed || 0} icon={XCircle} color="bg-red-500" />
-          <StatsCard title="Avg Duration" value={formatDuration(stats.avg_duration_ms)} icon={Clock} color="bg-purple-500" />
+          <StatsCard
+            title="Failed"
+            value={stats.by_status?.failed || 0}
+            icon={XCircle}
+            color="bg-red-500"
+          />
+          <StatsCard
+            title="Avg Duration"
+            value={formatDuration(stats.avg_duration_ms)}
+            icon={Clock}
+            color="bg-purple-500"
+          />
         </div>
       )}
 
@@ -468,23 +531,26 @@ function DeploymentHistoryTab() {
     }
   }
 
-  const handleRollback = useCallback(async (deploymentId: string, apiName: string) => {
-    const confirmed = await confirm({
-      title: 'Rollback Deployment',
-      message: `Are you sure you want to rollback the deployment for "${apiName}"? This will restore the previous version.`,
-      confirmLabel: 'Rollback',
-      variant: 'warning',
-    });
-    if (!confirmed) return;
+  const handleRollback = useCallback(
+    async (deploymentId: string, apiName: string) => {
+      const confirmed = await confirm({
+        title: 'Rollback Deployment',
+        message: `Are you sure you want to rollback the deployment for "${apiName}"? This will restore the previous version.`,
+        confirmLabel: 'Rollback',
+        variant: 'warning',
+      });
+      if (!confirmed) return;
 
-    try {
-      await apiService.rollbackDeployment(selectedTenant, deploymentId);
-      toast.success(`Deployment for ${apiName} rolled back successfully`);
-      loadDeployments(selectedTenant, selectedApi || undefined);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to rollback deployment');
-    }
-  }, [selectedTenant, selectedApi, confirm, toast]);
+      try {
+        await apiService.rollbackDeployment(selectedTenant, deploymentId);
+        toast.success(`Deployment for ${apiName} rolled back successfully`);
+        loadDeployments(selectedTenant, selectedApi || undefined);
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to rollback deployment');
+      }
+    },
+    [selectedTenant, selectedApi, confirm, toast]
+  );
 
   const statusColors: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-800',
@@ -550,7 +616,9 @@ function DeploymentHistoryTab() {
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {error}
-          <button onClick={() => setError(null)} className="float-right font-bold">&times;</button>
+          <button onClick={() => setError(null)} className="float-right font-bold">
+            &times;
+          </button>
         </div>
       )}
 
@@ -559,21 +627,32 @@ function DeploymentHistoryTab() {
         {loading ? (
           <TableSkeleton rows={5} columns={7} />
         ) : deployments.length === 0 ? (
-          <EmptyState
-            variant="deployments"
-            description="Deploy an API to see it here."
-          />
+          <EmptyState variant="deployments" description="Deploy an API to see it here." />
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">API</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Environment</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Version</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deployed By</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  API
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Environment
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Version
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Started
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Deployed By
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -584,9 +663,13 @@ function DeploymentHistoryTab() {
                     <div className="text-xs text-gray-500 font-mono">{deployment.api_id}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-medium rounded ${
-                      deployment.environment === 'dev' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-                    }`}>
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded ${
+                        deployment.environment === 'dev'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}
+                    >
                       {deployment.environment.toUpperCase()}
                     </span>
                   </td>
@@ -594,11 +677,16 @@ function DeploymentHistoryTab() {
                     v{deployment.version}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${statusColors[deployment.status]}`}>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${statusColors[deployment.status]}`}
+                    >
                       {deployment.status.replace('_', ' ')}
                     </span>
                     {deployment.error_message && (
-                      <p className="text-xs text-red-600 mt-1 max-w-xs truncate" title={deployment.error_message}>
+                      <p
+                        className="text-xs text-red-600 mt-1 max-w-xs truncate"
+                        title={deployment.error_message}
+                      >
                         {deployment.error_message}
                       </p>
                     )}
@@ -740,8 +828,15 @@ function GitLabConfigTab() {
             </span>
           </div>
           <div className="text-sm text-gray-500">
-            <p><strong>Endpoint:</strong> <code className="bg-gray-100 px-2 py-0.5 rounded">{config.api.baseUrl}/webhooks/gitlab</code></p>
-            <p className="mt-1"><strong>Supported Events:</strong> Push Hook, Merge Request Hook, Tag Push Hook</p>
+            <p>
+              <strong>Endpoint:</strong>{' '}
+              <code className="bg-gray-100 px-2 py-0.5 rounded">
+                {config.api.baseUrl}/webhooks/gitlab
+              </code>
+            </p>
+            <p className="mt-1">
+              <strong>Supported Events:</strong> Push Hook, Merge Request Hook, Tag Push Hook
+            </p>
           </div>
         </div>
       </div>

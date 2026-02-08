@@ -99,9 +99,7 @@ export function MySubscriptions() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Subscriptions</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Manage your subscribed AI tools
-          </p>
+          <p className="text-sm text-gray-500 mt-1">Manage your subscribed AI tools</p>
         </div>
         <Link
           to="/ai-tools"
@@ -155,7 +153,9 @@ export function MySubscriptions() {
                         </div>
                         <div>
                           <button
-                            onClick={() => navigate(`/ai-tools/${encodeURIComponent(sub.toolName)}`)}
+                            onClick={() =>
+                              navigate(`/ai-tools/${encodeURIComponent(sub.toolName)}`)
+                            }
                             className="font-medium text-gray-900 hover:text-blue-600"
                           >
                             {sub.toolName}
@@ -169,7 +169,9 @@ export function MySubscriptions() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[sub.status]}`}>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[sub.status]}`}
+                      >
                         {sub.status}
                       </span>
                     </td>
@@ -178,9 +180,7 @@ export function MySubscriptions() {
                         <Activity className="h-4 w-4 text-gray-400" />
                         <span>{sub.usageCount} calls</span>
                         {sub.usageLimit && (
-                          <span className="text-gray-400">
-                            / {sub.usageLimit} limit
-                          </span>
+                          <span className="text-gray-400">/ {sub.usageLimit} limit</span>
                         )}
                       </div>
                     </td>
@@ -235,9 +235,9 @@ export function MySubscriptions() {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-medium text-blue-900 mb-2">Using Subscribed Tools</h4>
           <p className="text-sm text-blue-700">
-            Subscribed tools are automatically available in your MCP client (Claude Desktop, Cursor, etc.).
-            Configure your client to connect to the STOA MCP Gateway to start using these tools.
-            Visit any tool's "Quick Start" tab for setup instructions.
+            Subscribed tools are automatically available in your MCP client (Claude Desktop, Cursor,
+            etc.). Configure your client to connect to the STOA MCP Gateway to start using these
+            tools. Visit any tool's "Quick Start" tab for setup instructions.
           </p>
         </div>
       )}

@@ -42,7 +42,9 @@ function StatusBadge({ status }: { status: string }) {
   const config = configs[status] || { bg: 'bg-gray-100', text: 'text-gray-700' };
 
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.text}`}>
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.text}`}
+    >
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
@@ -79,9 +81,7 @@ export function SubscriptionsList({ subscriptions, isLoading = false }: Subscrip
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">
           Active Subscriptions
-          <span className="ml-2 text-sm font-normal text-gray-500">
-            ({subscriptions.length})
-          </span>
+          <span className="ml-2 text-sm font-normal text-gray-500">({subscriptions.length})</span>
         </h3>
         <Link
           to="/subscriptions"

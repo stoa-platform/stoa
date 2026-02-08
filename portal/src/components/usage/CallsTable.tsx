@@ -39,10 +39,12 @@ function StatusBadge({ status }: { status: UsageCallStatus }) {
   const config = configs[status];
 
   return (
-    <span className={`
+    <span
+      className={`
       inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
       ${config.bg} ${config.text}
-    `}>
+    `}
+    >
       {config.icon}
       {config.label}
     </span>
@@ -73,7 +75,10 @@ function TableSkeleton() {
   return (
     <div className="animate-pulse">
       {[...Array(5)].map((_, i) => (
-        <div key={i} className="flex items-center gap-4 p-4 border-b border-gray-100 dark:border-neutral-700">
+        <div
+          key={i}
+          className="flex items-center gap-4 p-4 border-b border-gray-100 dark:border-neutral-700"
+        >
           <div className="h-4 w-20 bg-gray-200 dark:bg-neutral-700 rounded" />
           <div className="h-4 w-32 bg-gray-200 dark:bg-neutral-700 rounded flex-1" />
           <div className="h-6 w-16 bg-gray-200 dark:bg-neutral-700 rounded-full" />
@@ -86,7 +91,11 @@ function TableSkeleton() {
 
 const PAGE_SIZE = 25;
 
-export const CallsTable = memo(function CallsTable({ calls, isLoading = false, onFilterChange }: CallsTableProps) {
+export const CallsTable = memo(function CallsTable({
+  calls,
+  isLoading = false,
+  onFilterChange,
+}: CallsTableProps) {
   const [selectedStatus, setSelectedStatus] = useState<UsageCallStatus | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -102,7 +111,7 @@ export const CallsTable = memo(function CallsTable({ calls, isLoading = false, o
 
   // Memoize filtered calls for performance
   const filteredCalls = useMemo(
-    () => selectedStatus ? calls.filter(c => c.status === selectedStatus) : calls,
+    () => (selectedStatus ? calls.filter((c) => c.status === selectedStatus) : calls),
     [calls, selectedStatus]
   );
 
@@ -127,12 +136,15 @@ export const CallsTable = memo(function CallsTable({ calls, isLoading = false, o
           {(['all', 'success', 'error', 'timeout'] as const).map((status) => (
             <button
               key={status}
-              onClick={() => handleStatusFilter(status === 'all' ? null : status as UsageCallStatus)}
+              onClick={() =>
+                handleStatusFilter(status === 'all' ? null : (status as UsageCallStatus))
+              }
               className={`
                 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
-                ${(status === 'all' && !selectedStatus) || selectedStatus === status
-                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700'
-                  : 'bg-gray-50 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 border border-transparent hover:bg-gray-100 dark:hover:bg-neutral-600'
+                ${
+                  (status === 'all' && !selectedStatus) || selectedStatus === status
+                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700'
+                    : 'bg-gray-50 dark:bg-neutral-700 text-gray-600 dark:text-neutral-300 border border-transparent hover:bg-gray-100 dark:hover:bg-neutral-600'
                 }
               `}
             >
@@ -169,18 +181,24 @@ export const CallsTable = memo(function CallsTable({ calls, isLoading = false, o
                   </td>
                   <td className="px-4 py-3">
                     <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{call.tool_name}</div>
-                      <div className="text-xs text-gray-400 dark:text-neutral-500">{call.tool_id}</div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {call.tool_name}
+                      </div>
+                      <div className="text-xs text-gray-400 dark:text-neutral-500">
+                        {call.tool_id}
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={call.status} />
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <span className={`
+                    <span
+                      className={`
                       text-sm font-mono
                       ${call.latency_ms > 500 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-neutral-300'}
-                    `}>
+                    `}
+                    >
                       {formatLatency(call.latency_ms)}
                     </span>
                   </td>
@@ -205,14 +223,14 @@ export const CallsTable = memo(function CallsTable({ calls, isLoading = false, o
         </span>
         <div className="flex gap-2">
           <button
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
             className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
           >
             Previous
           </button>
           <button
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
             className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
           >

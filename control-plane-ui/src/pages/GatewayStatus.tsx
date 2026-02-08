@@ -27,13 +27,20 @@ const healthConfig = {
   unhealthy: { bg: 'bg-red-100', text: 'text-red-800', icon: XCircle, label: 'Disconnected' },
 } as const;
 
-const fallbackHealth = { bg: 'bg-gray-100', text: 'text-gray-800', icon: AlertCircle, label: 'Unknown' };
+const fallbackHealth = {
+  bg: 'bg-gray-100',
+  text: 'text-gray-800',
+  icon: AlertCircle,
+  label: 'Unknown',
+};
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = healthConfig[status as keyof typeof healthConfig] || fallbackHealth;
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}
+    >
       <Icon className="w-3 h-3 mr-1" />
       {cfg.label}
     </span>
@@ -82,7 +89,9 @@ function SyncBadge({ status }: { status: string }) {
   };
   const c = cfg[status] || cfg.Unknown;
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text}`}>
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text}`}
+    >
       {c.label}
     </span>
   );
@@ -98,7 +107,9 @@ function HealthBadge({ status }: { status: string }) {
   };
   const c = cfg[status] || { bg: 'bg-gray-100', text: 'text-gray-800' };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text}`}>
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text}`}
+    >
       {status}
     </span>
   );
@@ -184,24 +195,14 @@ export default function GatewayStatus() {
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-            <StatsCard
-              title="APIs Synced"
-              value={data?.apis.length || 0}
-              icon={Box}
-              color="blue"
-            />
+            <StatsCard title="APIs Synced" value={data?.apis.length || 0} icon={Box} color="blue" />
             <StatsCard
               title="Applications"
               value={data?.applications.length || 0}
               icon={Activity}
               color="green"
             />
-            <StatsCard
-              title="Last Sync"
-              value={lastUpdated}
-              icon={RefreshCw}
-              color="purple"
-            />
+            <StatsCard title="Last Sync" value={lastUpdated} icon={RefreshCw} color="purple" />
           </div>
 
           {/* Resource Details (collapsible) */}
@@ -213,7 +214,9 @@ export default function GatewayStatus() {
               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* APIs */}
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">APIs ({data.apis.length})</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                    APIs ({data.apis.length})
+                  </h4>
                   <ul className="space-y-1 text-sm text-gray-600 max-h-40 overflow-y-auto">
                     {data.apis.slice(0, 10).map((api) => (
                       <li key={api.id} className="flex items-center">
@@ -233,7 +236,9 @@ export default function GatewayStatus() {
 
                 {/* Applications */}
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Applications ({data.applications.length})</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                    Applications ({data.applications.length})
+                  </h4>
                   <ul className="space-y-1 text-sm text-gray-600 max-h-40 overflow-y-auto">
                     {data.applications.slice(0, 10).map((app) => (
                       <li key={app.id} className="flex items-center">
@@ -242,7 +247,9 @@ export default function GatewayStatus() {
                       </li>
                     ))}
                     {data.applications.length > 10 && (
-                      <li className="text-gray-400">... and {data.applications.length - 10} more</li>
+                      <li className="text-gray-400">
+                        ... and {data.applications.length - 10} more
+                      </li>
                     )}
                   </ul>
                 </div>
@@ -257,7 +264,9 @@ export default function GatewayStatus() {
             <div className="flex items-center text-gray-600">
               <GitBranch className="w-4 h-4 mr-2" />
               <span>Configured via GitOps: </span>
-              <code className="ml-1 px-1.5 py-0.5 bg-gray-200 rounded text-xs">webmethods/*.yaml</code>
+              <code className="ml-1 px-1.5 py-0.5 bg-gray-200 rounded text-xs">
+                webmethods/*.yaml
+              </code>
             </div>
             <a
               href="https://docs.gostoa.dev/guides/hybrid-gateway-adapter"
@@ -372,7 +381,10 @@ export default function GatewayStatus() {
               </div>
               {platform.gatewayComponent.revision && (
                 <p className="text-xs text-gray-500">
-                  Rev: <code className="px-1 py-0.5 bg-gray-100 rounded">{platform.gatewayComponent.revision.slice(0, 7)}</code>
+                  Rev:{' '}
+                  <code className="px-1 py-0.5 bg-gray-100 rounded">
+                    {platform.gatewayComponent.revision.slice(0, 7)}
+                  </code>
                 </p>
               )}
               {platform.gatewayComponent.last_sync && (
@@ -385,9 +397,11 @@ export default function GatewayStatus() {
             <p className="text-sm text-gray-500">No gateway component found in ArgoCD</p>
           )}
           <a
-            href={platform.gatewayComponent
-              ? config.services.argocd.getAppUrl(platform.gatewayComponent.name)
-              : config.services.argocd.url}
+            href={
+              platform.gatewayComponent
+                ? config.services.argocd.getAppUrl(platform.gatewayComponent.name)
+                : config.services.argocd.url
+            }
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 inline-flex items-center text-xs text-indigo-600 hover:text-indigo-800"
@@ -449,15 +463,21 @@ export default function GatewayStatus() {
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
-                  <p className="text-lg font-semibold text-green-600">{platform.healthSummary.healthy}</p>
+                  <p className="text-lg font-semibold text-green-600">
+                    {platform.healthSummary.healthy}
+                  </p>
                   <p className="text-xs text-gray-500">Healthy</p>
                 </div>
                 <div>
-                  <p className="text-lg font-semibold text-yellow-600">{platform.healthSummary.progressing}</p>
+                  <p className="text-lg font-semibold text-yellow-600">
+                    {platform.healthSummary.progressing}
+                  </p>
                   <p className="text-xs text-gray-500">In Progress</p>
                 </div>
                 <div>
-                  <p className="text-lg font-semibold text-red-600">{platform.healthSummary.degraded}</p>
+                  <p className="text-lg font-semibold text-red-600">
+                    {platform.healthSummary.degraded}
+                  </p>
                   <p className="text-xs text-gray-500">Degraded</p>
                 </div>
               </div>

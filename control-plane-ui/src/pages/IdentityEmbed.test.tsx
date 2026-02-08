@@ -18,9 +18,7 @@ describe('IdentityEmbed', () => {
 
   it('renders title heading', () => {
     render(<IdentityEmbed />);
-    expect(
-      screen.getByRole('heading', { name: 'Identity Management' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Identity Management' })).toBeInTheDocument();
   });
 
   it('renders iframe with correct src', () => {

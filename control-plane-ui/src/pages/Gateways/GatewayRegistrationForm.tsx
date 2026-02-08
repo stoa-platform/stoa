@@ -50,10 +50,16 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
         base_url: form.base_url,
         tenant_id: form.tenant_id || undefined,
         capabilities: form.capabilities
-          ? form.capabilities.split(',').map((s) => s.trim()).filter(Boolean)
+          ? form.capabilities
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
           : [],
         tags: form.tags
-          ? form.tags.split(',').map((s) => s.trim()).filter(Boolean)
+          ? form.tags
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
           : [],
         auth_config: {},
       };
@@ -168,9 +174,7 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
 
           {/* Tenant (optional) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tenant ID
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tenant ID</label>
             <input
               type="text"
               name="tenant_id"
@@ -183,9 +187,7 @@ export function GatewayRegistrationForm({ onCreated, onCancel }: GatewayRegistra
 
           {/* Capabilities */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Capabilities
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Capabilities</label>
             <input
               type="text"
               name="capabilities"

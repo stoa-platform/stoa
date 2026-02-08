@@ -46,7 +46,11 @@ const thresholds = {
   uptime: { good: 99.9, warning: 99 },
 };
 
-function getStatusColor(value: number, threshold: { good: number; warning: number }, inverse = false) {
+function getStatusColor(
+  value: number,
+  threshold: { good: number; warning: number },
+  inverse = false
+) {
   if (inverse) {
     if (value >= threshold.good) return 'text-green-600';
     if (value >= threshold.warning) return 'text-yellow-600';
@@ -78,7 +82,9 @@ function StatCard({
 
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-4 flex items-start gap-4">
-      <div className={`p-2 rounded-lg ${colorClass?.includes('green') ? 'bg-green-100 dark:bg-green-900/30' : colorClass?.includes('red') ? 'bg-red-100 dark:bg-red-900/30' : colorClass?.includes('yellow') ? 'bg-yellow-100 dark:bg-yellow-900/30' : 'bg-blue-100 dark:bg-blue-900/30'}`}>
+      <div
+        className={`p-2 rounded-lg ${colorClass?.includes('green') ? 'bg-green-100 dark:bg-green-900/30' : colorClass?.includes('red') ? 'bg-red-100 dark:bg-red-900/30' : colorClass?.includes('yellow') ? 'bg-yellow-100 dark:bg-yellow-900/30' : 'bg-blue-100 dark:bg-blue-900/30'}`}
+      >
         <Icon className={`h-5 w-5 ${colorClass || 'text-blue-600 dark:text-blue-400'}`} />
       </div>
       <div className="flex-1">
@@ -89,7 +95,9 @@ function StatCard({
           </p>
           {unit && <span className="text-sm text-gray-500 dark:text-gray-400">{unit}</span>}
           {TrendIcon && (
-            <TrendIcon className={`h-4 w-4 ml-1 ${trend === 'up' ? 'text-red-500' : 'text-green-500'}`} />
+            <TrendIcon
+              className={`h-4 w-4 ml-1 ${trend === 'up' ? 'text-red-500' : 'text-green-500'}`}
+            />
           )}
         </div>
         {subtitle && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{subtitle}</p>}
@@ -112,11 +120,14 @@ function DeploymentItem({ deployment }: { deployment: RecentDeployment }) {
   return (
     <div className="flex items-center gap-3 py-2">
       <div className={`p-1.5 rounded ${config.bg}`}>
-        <Icon className={`h-4 w-4 ${config.color} ${deployment.status === 'syncing' ? 'animate-spin' : ''}`} />
+        <Icon
+          className={`h-4 w-4 ${config.color} ${deployment.status === 'syncing' ? 'animate-spin' : ''}`}
+        />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-          {deployment.name} <span className="text-gray-500 dark:text-gray-400">v{deployment.version}</span>
+          {deployment.name}{' '}
+          <span className="text-gray-500 dark:text-gray-400">v{deployment.version}</span>
         </p>
         <p className="text-xs text-gray-500 dark:text-gray-400">{deployment.timestamp}</p>
       </div>
@@ -139,7 +150,10 @@ export function OperationsDashboard() {
       // Load gateway metrics and platform status in parallel
       const [metrics, status] = await Promise.all([
         apiService.getGatewayAggregatedMetrics().catch(() => null),
-        apiService.get<PlatformStatusResponse>('/v1/platform/status').then(r => r.data).catch(() => null),
+        apiService
+          .get<PlatformStatusResponse>('/v1/platform/status')
+          .then((r) => r.data)
+          .catch(() => null),
       ]);
 
       setGatewayMetrics(metrics);
@@ -188,15 +202,19 @@ export function OperationsDashboard() {
   }, [isReady, loadData]);
 
   // Generate recent deployments from platform events
-  const recentDeployments: RecentDeployment[] = platformStatus?.events
-    ?.slice(0, 5)
-    .map((event, idx) => ({
+  const recentDeployments: RecentDeployment[] =
+    platformStatus?.events?.slice(0, 5).map((event, idx) => ({
       id: String(event.id || idx),
       name: event.component,
       version: event.revision?.slice(0, 7) || 'latest',
-      status: event.status === 'Synced' ? 'synced' :
-              event.status === 'Syncing' ? 'syncing' :
-              event.status === 'Failed' ? 'failed' : 'pending',
+      status:
+        event.status === 'Synced'
+          ? 'synced'
+          : event.status === 'Syncing'
+            ? 'syncing'
+            : event.status === 'Failed'
+              ? 'failed'
+              : 'pending',
       timestamp: new Date(event.timestamp).toLocaleString('fr-FR', {
         day: '2-digit',
         month: 'short',
@@ -206,15 +224,17 @@ export function OperationsDashboard() {
     })) || [];
 
   // Calculate platform health
-  const healthyComponents = platformStatus?.gitops?.components?.filter(
-    c => c.health_status === 'Healthy'
-  ).length || 0;
+  const healthyComponents =
+    platformStatus?.gitops?.components?.filter((c) => c.health_status === 'Healthy').length || 0;
   const totalComponents = platformStatus?.gitops?.components?.length || 1;
   const platformHealth = Math.round((healthyComponents / totalComponents) * 100);
 
   // External links
-  const grafanaUrl = platformStatus?.external_links?.grafana || `${config.services.grafana.url}/d/stoa-incident-response`;
-  const prometheusUrl = platformStatus?.external_links?.prometheus || config.services.prometheus.url;
+  const grafanaUrl =
+    platformStatus?.external_links?.grafana ||
+    `${config.services.grafana.url}/d/stoa-incident-response`;
+  const prometheusUrl =
+    platformStatus?.external_links?.prometheus || config.services.prometheus.url;
 
   return (
     <div className="space-y-6">
@@ -271,7 +291,13 @@ export function OperationsDashboard() {
               label="Platform Health"
               value={`${platformHealth}%`}
               icon={Shield}
-              colorClass={platformHealth >= 100 ? 'text-green-600' : platformHealth >= 80 ? 'text-yellow-600' : 'text-red-600'}
+              colorClass={
+                platformHealth >= 100
+                  ? 'text-green-600'
+                  : platformHealth >= 80
+                    ? 'text-yellow-600'
+                    : 'text-red-600'
+              }
               subtitle={`${healthyComponents}/${totalComponents} components`}
             />
             <StatCard
@@ -280,7 +306,9 @@ export function OperationsDashboard() {
               unit="%"
               icon={AlertTriangle}
               colorClass={getStatusColor(operationsMetrics?.errorRate || 0, thresholds.errorRate)}
-              trend={operationsMetrics?.errorRate && operationsMetrics.errorRate > 0.5 ? 'up' : 'stable'}
+              trend={
+                operationsMetrics?.errorRate && operationsMetrics.errorRate > 0.5 ? 'up' : 'stable'
+              }
             />
             <StatCard
               label="P95 Latency"
@@ -326,11 +354,15 @@ export function OperationsDashboard() {
                   <p className="text-xs text-gray-500 dark:text-gray-400">Total</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-green-600">{gatewayMetrics.health.online}</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {gatewayMetrics.health.online}
+                  </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Online</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-yellow-600">{gatewayMetrics.health.degraded}</p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {gatewayMetrics.health.degraded}
+                  </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Degraded</p>
                 </div>
                 <div className="text-center">
@@ -459,7 +491,9 @@ export function OperationsDashboard() {
                   <Zap className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">API Monitoring</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    API Monitoring
+                  </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Tracing</p>
                 </div>
               </a>
@@ -471,7 +505,9 @@ export function OperationsDashboard() {
                   <AlertTriangle className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">Error Snapshots</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    Error Snapshots
+                  </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Debugging</p>
                 </div>
               </a>

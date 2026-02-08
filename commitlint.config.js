@@ -33,6 +33,7 @@ module.exports = {
         'deps',
         'security',
         'demo',
+        'e2e',
       ],
     ],
     'subject-max-length': [2, 'always', 72],

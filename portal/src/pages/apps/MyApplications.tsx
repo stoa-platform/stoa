@@ -17,13 +17,7 @@ export function MyApplications() {
   const [newlyCreatedApp, setNewlyCreatedApp] = useState<Application | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const {
-    data: applications,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useApplications();
+  const { data: applications, isLoading, isError, error, refetch } = useApplications();
 
   const createMutation = useCreateApplication();
 
@@ -48,9 +42,7 @@ export function MyApplications() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Applications</h1>
-          <p className="text-gray-500 mt-1">
-            Manage your API consumer applications
-          </p>
+          <p className="text-gray-500 mt-1">Manage your API consumer applications</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -135,8 +127,8 @@ export function MyApplications() {
           </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">No Applications Yet</h2>
           <p className="text-gray-500 max-w-md mx-auto mb-6">
-            Create your first application to start using APIs. Each application gets
-            its own credentials for authentication.
+            Create your first application to start using APIs. Each application gets its own
+            credentials for authentication.
           </p>
           <button
             onClick={() => setIsCreateModalOpen(true)}

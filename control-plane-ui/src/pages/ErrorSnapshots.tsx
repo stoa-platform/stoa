@@ -39,17 +39,32 @@ const errorTypeConfig: Record<string, { label: string; color: string; bg: string
   server_internal_error: { label: 'Internal Error', color: 'text-red-600', bg: 'bg-red-100' },
   tool_not_found: { label: 'Tool Not Found', color: 'text-gray-600', bg: 'bg-gray-100' },
   tool_execution_error: { label: 'Tool Error', color: 'text-red-600', bg: 'bg-red-100' },
-  tool_validation_error: { label: 'Validation Error', color: 'text-yellow-600', bg: 'bg-yellow-100' },
+  tool_validation_error: {
+    label: 'Validation Error',
+    color: 'text-yellow-600',
+    bg: 'bg-yellow-100',
+  },
   tool_timeout: { label: 'Tool Timeout', color: 'text-orange-600', bg: 'bg-orange-100' },
-  llm_context_exceeded: { label: 'Context Exceeded', color: 'text-purple-600', bg: 'bg-purple-100' },
-  llm_content_filtered: { label: 'Content Filtered', color: 'text-purple-600', bg: 'bg-purple-100' },
+  llm_context_exceeded: {
+    label: 'Context Exceeded',
+    color: 'text-purple-600',
+    bg: 'bg-purple-100',
+  },
+  llm_content_filtered: {
+    label: 'Content Filtered',
+    color: 'text-purple-600',
+    bg: 'bg-purple-100',
+  },
   llm_quota_exceeded: { label: 'Quota Exceeded', color: 'text-purple-600', bg: 'bg-purple-100' },
   llm_rate_limited: { label: 'LLM Rate Limited', color: 'text-purple-600', bg: 'bg-purple-100' },
   policy_denied: { label: 'Policy Denied', color: 'text-red-600', bg: 'bg-red-100' },
   unknown: { label: 'Unknown', color: 'text-gray-600', bg: 'bg-gray-100' },
 };
 
-const resolutionConfig: Record<SnapshotResolutionStatus, { label: string; color: string; bg: string }> = {
+const resolutionConfig: Record<
+  SnapshotResolutionStatus,
+  { label: string; color: string; bg: string }
+> = {
   unresolved: { label: 'Unresolved', color: 'text-red-600', bg: 'bg-red-100' },
   investigating: { label: 'Investigating', color: 'text-yellow-600', bg: 'bg-yellow-100' },
   resolved: { label: 'Resolved', color: 'text-green-600', bg: 'bg-green-100' },
@@ -257,7 +272,13 @@ function SnapshotRow({
         </button>
 
         {/* Error type badge */}
-        <span className={clsx('px-2 py-1 rounded-full text-xs font-medium', errorConfig.bg, errorConfig.color)}>
+        <span
+          className={clsx(
+            'px-2 py-1 rounded-full text-xs font-medium',
+            errorConfig.bg,
+            errorConfig.color
+          )}
+        >
           {errorConfig.label}
         </span>
 
@@ -265,7 +286,9 @@ function SnapshotRow({
         <span
           className={clsx(
             'px-2 py-0.5 rounded text-xs font-mono',
-            snapshot.response_status >= 500 ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+            snapshot.response_status >= 500
+              ? 'bg-red-100 text-red-800'
+              : 'bg-yellow-100 text-yellow-800'
           )}
         >
           {snapshot.response_status}
@@ -310,7 +333,9 @@ function SnapshotRow({
         />
 
         {/* Timestamp */}
-        <span className="text-xs text-gray-400 w-24 text-right">{formatDateTime(snapshot.timestamp)}</span>
+        <span className="text-xs text-gray-400 w-24 text-right">
+          {formatDateTime(snapshot.timestamp)}
+        </span>
       </div>
 
       {/* Expanded details */}
@@ -325,22 +350,27 @@ function SnapshotRow({
               {/* Resolution actions */}
               <div className="flex items-center gap-2 pb-4 border-b border-gray-200">
                 <span className="text-sm text-gray-600">Set status:</span>
-                {(['unresolved', 'investigating', 'resolved', 'ignored'] as SnapshotResolutionStatus[]).map(
-                  (status) => (
-                    <button
-                      key={status}
-                      onClick={() => onResolutionChange(status)}
-                      className={clsx(
-                        'px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                        details.resolution_status === status
-                          ? `${resolutionConfig[status].bg} ${resolutionConfig[status].color}`
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      )}
-                    >
-                      {resolutionConfig[status].label}
-                    </button>
-                  )
-                )}
+                {(
+                  [
+                    'unresolved',
+                    'investigating',
+                    'resolved',
+                    'ignored',
+                  ] as SnapshotResolutionStatus[]
+                ).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => onResolutionChange(status)}
+                    className={clsx(
+                      'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                      details.resolution_status === status
+                        ? `${resolutionConfig[status].bg} ${resolutionConfig[status].color}`
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    {resolutionConfig[status].label}
+                  </button>
+                ))}
               </div>
 
               <div className="grid grid-cols-3 gap-6">
@@ -354,7 +384,10 @@ function SnapshotRow({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Path:</span>
-                      <span className="font-mono text-xs truncate max-w-48" title={details.request_path}>
+                      <span
+                        className="font-mono text-xs truncate max-w-48"
+                        title={details.request_path}
+                      >
                         {details.request_path || '-'}
                       </span>
                     </div>
@@ -409,7 +442,9 @@ function SnapshotRow({
                     <div className="bg-white rounded-lg p-4">
                       <h5 className="font-medium text-gray-700 mb-2 text-sm">Tool Invocation</h5>
                       <div className="text-xs font-mono bg-gray-50 rounded p-2 max-h-32 overflow-auto">
-                        <pre>{JSON.stringify(details.snapshot.tool_invocation.input_params, null, 2)}</pre>
+                        <pre>
+                          {JSON.stringify(details.snapshot.tool_invocation.input_params, null, 2)}
+                        </pre>
                       </div>
                       {details.snapshot.tool_invocation.duration_ms && (
                         <p className="text-xs text-gray-500 mt-2">
@@ -500,7 +535,11 @@ export function ErrorSnapshots() {
   const loadData = useCallback(async () => {
     try {
       const [snapshotsData, statsData, filtersData] = await Promise.all([
-        errorSnapshotsService.getSnapshots({ ...filters, search: searchQuery || undefined }, page, pageSize),
+        errorSnapshotsService.getSnapshots(
+          { ...filters, search: searchQuery || undefined },
+          page,
+          pageSize
+        ),
         errorSnapshotsService.getStats(),
         availableFilters ? Promise.resolve(availableFilters) : errorSnapshotsService.getFilters(),
       ]);
@@ -673,7 +712,9 @@ export function ErrorSnapshots() {
             onChange={(e) =>
               setFilters((f) => ({
                 ...f,
-                resolution_status: e.target.value ? [e.target.value as SnapshotResolutionStatus] : undefined,
+                resolution_status: e.target.value
+                  ? [e.target.value as SnapshotResolutionStatus]
+                  : undefined,
               }))
             }
             className="border border-gray-300 rounded-lg px-3 py-2"

@@ -17,7 +17,9 @@ export const applicationsService = {
   /**
    * List user's applications
    */
-  listApplications: async (params?: ListApplicationsParams): Promise<PaginatedResponse<Application>> => {
+  listApplications: async (
+    params?: ListApplicationsParams
+  ): Promise<PaginatedResponse<Application>> => {
     const response = await apiClient.get<PaginatedResponse<Application>>('/v1/applications', {
       params: {
         page: params?.page || 1,
@@ -48,7 +50,10 @@ export const applicationsService = {
   /**
    * Update an application
    */
-  updateApplication: async (id: string, data: Partial<ApplicationCreateRequest>): Promise<Application> => {
+  updateApplication: async (
+    id: string,
+    data: Partial<ApplicationCreateRequest>
+  ): Promise<Application> => {
     const response = await apiClient.patch<Application>(`/v1/applications/${id}`, data);
     return response.data;
   },

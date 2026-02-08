@@ -30,14 +30,57 @@ vi.mock('../contexts/AuthContext', () => ({
 vi.mock('../services/api', () => ({
   apiService: {
     getTenants: vi.fn().mockResolvedValue([
-      { id: 'oasis-gunters', name: 'oasis-gunters', display_name: 'Oasis Gunters', status: 'active', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+      {
+        id: 'oasis-gunters',
+        name: 'oasis-gunters',
+        display_name: 'Oasis Gunters',
+        status: 'active',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
     ]),
     getApis: vi.fn().mockResolvedValue([
-      { id: 'api-1', tenant_id: 'oasis-gunters', name: 'payment-api', display_name: 'Payment API', version: '1.0.0', description: 'Handles all payment processing', backend_url: 'https://payments.example.com', status: 'published', deployed_dev: true, deployed_staging: false, tags: ['payments'], created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-15T00:00:00Z' },
+      {
+        id: 'api-1',
+        tenant_id: 'oasis-gunters',
+        name: 'payment-api',
+        display_name: 'Payment API',
+        version: '1.0.0',
+        description: 'Handles all payment processing',
+        backend_url: 'https://payments.example.com',
+        status: 'published',
+        deployed_dev: true,
+        deployed_staging: false,
+        tags: ['payments'],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-15T00:00:00Z',
+      },
     ]),
     getApplications: vi.fn().mockResolvedValue([
-      { id: 'app-1', tenant_id: 'oasis-gunters', name: 'mobile-app', display_name: 'Mobile App', description: 'iOS/Android mobile application', client_id: 'client-abc123', status: 'approved', api_subscriptions: ['api-1'], created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-15T00:00:00Z' },
-      { id: 'app-2', tenant_id: 'oasis-gunters', name: 'web-app', display_name: 'Web Application', description: 'Main web application', client_id: 'client-def456', status: 'pending', api_subscriptions: [], created_at: '2024-01-10T00:00:00Z', updated_at: '2024-01-10T00:00:00Z' },
+      {
+        id: 'app-1',
+        tenant_id: 'oasis-gunters',
+        name: 'mobile-app',
+        display_name: 'Mobile App',
+        description: 'iOS/Android mobile application',
+        client_id: 'client-abc123',
+        status: 'approved',
+        api_subscriptions: ['api-1'],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-15T00:00:00Z',
+      },
+      {
+        id: 'app-2',
+        tenant_id: 'oasis-gunters',
+        name: 'web-app',
+        display_name: 'Web Application',
+        description: 'Main web application',
+        client_id: 'client-def456',
+        status: 'pending',
+        api_subscriptions: [],
+        created_at: '2024-01-10T00:00:00Z',
+        updated_at: '2024-01-10T00:00:00Z',
+      },
     ]),
     createApplication: vi.fn(),
     updateApplication: vi.fn(),
@@ -93,7 +136,9 @@ function renderApplications() {
 describe('Applications', () => {
   it('renders the page heading', async () => {
     renderApplications();
-    expect(await screen.findByText('Manage consumer applications and API subscriptions')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Manage consumer applications and API subscriptions')
+    ).toBeInTheDocument();
   });
 
   it('renders the Create Application button', async () => {

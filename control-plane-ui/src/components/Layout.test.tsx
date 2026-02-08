@@ -5,12 +5,25 @@ import { Layout } from './Layout';
 
 const mockUseAuth = vi.fn(() => ({
   user: {
-    id: 'u1', email: 'parzival@oasis.gg', name: 'Parzival',
-    roles: ['cpi-admin'], tenant_id: 'oasis-gunters',
-    permissions: ['tenants:read', 'apis:read', 'apps:read', 'apis:deploy', 'audit:read', 'admin:servers'],
+    id: 'u1',
+    email: 'parzival@oasis.gg',
+    name: 'Parzival',
+    roles: ['cpi-admin'],
+    tenant_id: 'oasis-gunters',
+    permissions: [
+      'tenants:read',
+      'apis:read',
+      'apps:read',
+      'apis:deploy',
+      'audit:read',
+      'admin:servers',
+    ],
   },
-  isAuthenticated: true, isLoading: false, isReady: true,
-  login: vi.fn(), logout: vi.fn(),
+  isAuthenticated: true,
+  isLoading: false,
+  isReady: true,
+  login: vi.fn(),
+  logout: vi.fn(),
   hasPermission: vi.fn(() => true),
   hasRole: vi.fn(() => true),
 }));
@@ -108,12 +121,21 @@ describe('Layout', () => {
   it('hides navigation items when user lacks permissions', () => {
     mockUseAuth.mockReturnValueOnce({
       user: {
-        id: 'u2', email: 'viewer@oasis.gg', name: 'Viewer',
-        roles: ['viewer'], tenant_id: 'viewer-tenant', permissions: ['apis:read', 'apps:read', 'audit:read'],
+        id: 'u2',
+        email: 'viewer@oasis.gg',
+        name: 'Viewer',
+        roles: ['viewer'],
+        tenant_id: 'viewer-tenant',
+        permissions: ['apis:read', 'apps:read', 'audit:read'],
       },
-      isAuthenticated: true, isLoading: false, isReady: true,
-      login: vi.fn(), logout: vi.fn(),
-      hasPermission: vi.fn().mockImplementation((p: string) => ['apis:read', 'apps:read', 'audit:read'].includes(p)),
+      isAuthenticated: true,
+      isLoading: false,
+      isReady: true,
+      login: vi.fn(),
+      logout: vi.fn(),
+      hasPermission: vi
+        .fn()
+        .mockImplementation((p: string) => ['apis:read', 'apps:read', 'audit:read'].includes(p)),
       hasRole: vi.fn(() => false),
     });
 

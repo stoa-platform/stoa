@@ -43,7 +43,9 @@ export function ProfilePage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 dark:text-neutral-400">Full Name</p>
-                  <p className="font-medium text-gray-900 dark:text-white">{user?.name || 'Not set'}</p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {user?.name || 'Not set'}
+                  </p>
                 </div>
               </div>
 
@@ -53,7 +55,9 @@ export function ProfilePage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 dark:text-neutral-400">Email</p>
-                  <p className="font-medium text-gray-900 dark:text-white">{user?.email || 'Not set'}</p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {user?.email || 'Not set'}
+                  </p>
                 </div>
               </div>
 
@@ -63,7 +67,9 @@ export function ProfilePage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 dark:text-neutral-400">Organization</p>
-                  <p className="font-medium text-gray-900 dark:text-white">{user?.organization || 'Not set'}</p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {user?.organization || 'Not set'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -79,7 +85,9 @@ export function ProfilePage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 dark:text-neutral-400">User ID</p>
-                  <p className="font-mono text-sm text-gray-900 dark:text-white">{user?.id || 'Unknown'}</p>
+                  <p className="font-mono text-sm text-gray-900 dark:text-white">
+                    {user?.id || 'Unknown'}
+                  </p>
                 </div>
               </div>
 
@@ -101,8 +109,8 @@ export function ProfilePage() {
       <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">API Keys</h3>
         <p className="text-gray-500 dark:text-neutral-400">
-          API key management will be available soon. For now, use your OIDC access token
-          for API authentication.
+          API key management will be available soon. For now, use your OIDC access token for API
+          authentication.
         </p>
       </div>
     </div>

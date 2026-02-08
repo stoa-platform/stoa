@@ -13,12 +13,7 @@ interface SkeletonProps {
  * ```
  */
 export function Skeleton({ className = '' }: SkeletonProps) {
-  return (
-    <div
-      className={`animate-pulse rounded bg-gray-200 ${className}`}
-      aria-hidden="true"
-    />
-  );
+  return <div className={`animate-pulse rounded bg-gray-200 ${className}`} aria-hidden="true" />;
 }
 
 /**
@@ -34,10 +29,7 @@ export function TextSkeleton({
   return (
     <div className={`space-y-2 ${className}`}>
       {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton
-          key={i}
-          className={`h-4 ${i === lines - 1 ? 'w-2/3' : 'w-full'}`}
-        />
+        <Skeleton key={i} className={`h-4 ${i === lines - 1 ? 'w-2/3' : 'w-full'}`} />
       ))}
     </div>
   );
@@ -46,11 +38,7 @@ export function TextSkeleton({
 /**
  * Avatar skeleton (circular).
  */
-export function AvatarSkeleton({
-  size = 'md',
-}: {
-  size?: 'sm' | 'md' | 'lg';
-}) {
+export function AvatarSkeleton({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const sizeClasses = {
     sm: 'h-8 w-8',
     md: 'h-10 w-10',
@@ -63,11 +51,7 @@ export function AvatarSkeleton({
 /**
  * Button skeleton.
  */
-export function ButtonSkeleton({
-  size = 'md',
-}: {
-  size?: 'sm' | 'md' | 'lg';
-}) {
+export function ButtonSkeleton({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const sizeClasses = {
     sm: 'h-8 w-20',
     md: 'h-10 w-24',

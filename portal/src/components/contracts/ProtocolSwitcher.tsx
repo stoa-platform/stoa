@@ -54,10 +54,7 @@ const Toast: React.FC<{
     >
       <span>{type === 'success' ? '✓' : '✕'}</span>
       <span className="text-sm font-medium">{message}</span>
-      <button
-        onClick={onClose}
-        className="ml-2 text-white/80 hover:text-white"
-      >
+      <button onClick={onClose} className="ml-2 text-white/80 hover:text-white">
         ×
       </button>
     </div>
@@ -71,12 +68,7 @@ export const ProtocolSwitcher: React.FC<ProtocolSwitcherProps> = ({
   onBindingDisabled,
 }) => {
   // Fetch bindings
-  const {
-    data,
-    isLoading,
-    error,
-    refetch,
-  } = useBindings(contractId);
+  const { data, isLoading, error, refetch } = useBindings(contractId);
 
   // Mutations
   const enableBinding = useEnableBinding(contractId);
@@ -240,13 +232,7 @@ export const ProtocolSwitcher: React.FC<ProtocolSwitcherProps> = ({
       />
 
       {/* Toast notification */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 };

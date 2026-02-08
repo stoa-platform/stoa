@@ -24,11 +24,14 @@ import type { MCPTool } from '../../types';
 
 type ToolStatus = 'active' | 'deprecated' | 'beta';
 
-const statusConfig: Record<ToolStatus, {
-  label: string;
-  color: string;
-  bg: string;
-}> = {
+const statusConfig: Record<
+  ToolStatus,
+  {
+    label: string;
+    color: string;
+    bg: string;
+  }
+> = {
   active: { label: 'Active', color: 'text-green-700', bg: 'bg-green-100' },
   beta: { label: 'Beta', color: 'text-amber-700', bg: 'bg-amber-100' },
   deprecated: { label: 'Deprecated', color: 'text-red-700', bg: 'bg-red-100' },
@@ -86,7 +89,7 @@ export function ToolsCatalog() {
   // Get tag counts from categories for display
   const getCategoryCount = (categoryName: string) => {
     if (categoryName === 'All') return toolsData?.total_count || tools.length;
-    return categoriesWithCounts?.categories.find(c => c.name === categoryName)?.count || 0;
+    return categoriesWithCounts?.categories.find((c) => c.name === categoryName)?.count || 0;
   };
 
   return (
@@ -95,9 +98,7 @@ export function ToolsCatalog() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">AI Tools Catalog</h1>
-          <p className="text-gray-500 mt-1">
-            Discover and subscribe to AI-powered tools
-          </p>
+          <p className="text-gray-500 mt-1">Discover and subscribe to AI-powered tools</p>
         </div>
         <button
           onClick={() => refetch()}
@@ -157,21 +158,20 @@ export function ToolsCatalog() {
               key={tag}
               type="button"
               className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm cursor-pointer hover:bg-blue-200"
-              onClick={() => setSelectedTags(selectedTags.filter(t => t !== tag))}
+              onClick={() => setSelectedTags(selectedTags.filter((t) => t !== tag))}
               aria-label={`Remove ${tag} filter`}
             >
               <Tag className="h-3 w-3" aria-hidden="true" />
               {tag}
-              <span className="ml-1" aria-hidden="true">×</span>
+              <span className="ml-1" aria-hidden="true">
+                ×
+              </span>
             </button>
           ))}
           {searchQuery && (
             <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
               Search: "{searchQuery}"
-              <button
-                onClick={() => setSearchQuery('')}
-                className="hover:text-gray-900 ml-1"
-              >
+              <button onClick={() => setSearchQuery('')} className="hover:text-gray-900 ml-1">
                 ×
               </button>
             </span>
@@ -230,7 +230,8 @@ export function ToolsCatalog() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {paginatedTools.map((tool: MCPTool, index: number) => {
-              const status = statusConfig[(tool.status || 'active') as ToolStatus] || statusConfig.active;
+              const status =
+                statusConfig[(tool.status || 'active') as ToolStatus] || statusConfig.active;
               const toolId = tool.name || tool.id || `tool-${index}`; // MCP tools use name as identifier
 
               return (
@@ -243,7 +244,9 @@ export function ToolsCatalog() {
                     <div className="p-2 bg-primary-50 rounded-lg">
                       <Wrench className="h-5 w-5 text-primary-600" />
                     </div>
-                    <span className={`px-2 py-1 text-xs font-medium rounded ${status.bg} ${status.color}`}>
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded ${status.bg} ${status.color}`}
+                    >
                       {status.label}
                     </span>
                   </div>
@@ -251,9 +254,7 @@ export function ToolsCatalog() {
                   <h3 className="font-semibold text-gray-900 group-hover:text-primary-700 transition-colors">
                     {tool.displayName || tool.name}
                   </h3>
-                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                    {tool.description}
-                  </p>
+                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{tool.description}</p>
 
                   <div className="flex items-center gap-4 mt-4 text-sm text-gray-500">
                     {tool.pricing && (
@@ -265,7 +266,9 @@ export function ToolsCatalog() {
                     {tool.rateLimit && (
                       <div className="flex items-center gap-1">
                         <Tag className="h-4 w-4" />
-                        <span>{tool.rateLimit.requests}/{tool.rateLimit.period}</span>
+                        <span>
+                          {tool.rateLimit.requests}/{tool.rateLimit.period}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -330,7 +333,7 @@ export function ToolsCatalog() {
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-4 pt-4">
               <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
                 className="flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
               >
@@ -341,7 +344,7 @@ export function ToolsCatalog() {
                 Page {currentPage} of {totalPages}
               </span>
               <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
                 className="flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
               >

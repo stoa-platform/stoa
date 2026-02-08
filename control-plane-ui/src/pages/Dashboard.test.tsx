@@ -26,7 +26,8 @@ vi.mock('../contexts/AuthContext', () => ({
 
 vi.mock('../services/api', () => ({
   apiService: {
-    setAuthToken: vi.fn(), clearAuthToken: vi.fn(),
+    setAuthToken: vi.fn(),
+    clearAuthToken: vi.fn(),
     getTenants: vi.fn().mockResolvedValue([]),
     getPlatformStatus: vi.fn().mockResolvedValue({
       gitops: { status: 'healthy', components: [], checked_at: '' },

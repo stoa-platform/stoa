@@ -39,7 +39,12 @@ const overallStatusConfig: Record<string, { color: string; bg: string; label: st
 function CheckCircleIcon({ className = '' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+      />
     </svg>
   );
 }
@@ -47,7 +52,12 @@ function CheckCircleIcon({ className = '' }: { className?: string }) {
 function ExclamationCircleIcon({ className = '' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+      />
     </svg>
   );
 }
@@ -55,7 +65,12 @@ function ExclamationCircleIcon({ className = '' }: { className?: string }) {
 function RefreshIcon({ className = '' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+      />
     </svg>
   );
 }
@@ -63,7 +78,12 @@ function RefreshIcon({ className = '' }: { className?: string }) {
 function GitBranchIcon({ className = '' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
+      />
     </svg>
   );
 }
@@ -71,7 +91,12 @@ function GitBranchIcon({ className = '' }: { className?: string }) {
 function ExternalLinkIcon({ className = '' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+      />
     </svg>
   );
 }
@@ -83,7 +108,12 @@ interface PlatformStatusProps {
 
 export function PlatformStatus({ compact = false, onStatusChange }: PlatformStatusProps) {
   const navigate = useNavigate();
-  const { data: status, isLoading, error, refetch } = usePlatformStatus({
+  const {
+    data: status,
+    isLoading,
+    error,
+    refetch,
+  } = usePlatformStatus({
     refetchInterval: 30000, // Refresh every 30 seconds
   });
   const syncMutation = useSyncComponent();
@@ -102,21 +132,26 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
     setLastUpdated(new Date());
   }, [refetch]);
 
-  const handleSync = useCallback(async (componentName: string) => {
-    try {
-      await syncMutation.mutateAsync(componentName);
-      setLastUpdated(new Date());
-    } catch (err) {
-      console.error('Failed to sync component:', err);
-    }
-  }, [syncMutation]);
+  const handleSync = useCallback(
+    async (componentName: string) => {
+      try {
+        await syncMutation.mutateAsync(componentName);
+        setLastUpdated(new Date());
+      } catch (err) {
+        console.error('Failed to sync component:', err);
+      }
+    },
+    [syncMutation]
+  );
 
   if (isLoading && !status) {
     return (
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
         <div className="flex items-center justify-center">
           <RefreshIcon className="w-5 h-5 animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-500 dark:text-neutral-400">Loading platform status...</span>
+          <span className="ml-2 text-gray-500 dark:text-neutral-400">
+            Loading platform status...
+          </span>
         </div>
       </div>
     );
@@ -153,9 +188,7 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
             ) : (
               <ExclamationCircleIcon className={`w-5 h-5 ${overallConfig.color}`} />
             )}
-            <span className={`font-medium ${overallConfig.color}`}>
-              {overallConfig.label}
-            </span>
+            <span className={`font-medium ${overallConfig.color}`}>{overallConfig.label}</span>
           </div>
           <button
             onClick={handleRefresh}
@@ -177,10 +210,14 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Platform Status</h3>
-            <p className="text-sm text-gray-500 dark:text-neutral-400">GitOps sync status via Argo CD</p>
+            <p className="text-sm text-gray-500 dark:text-neutral-400">
+              GitOps sync status via Argo CD
+            </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${overallConfig.bg} ${overallConfig.color}`}>
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-medium ${overallConfig.bg} ${overallConfig.color}`}
+            >
               {overallConfig.label}
             </span>
             <button
@@ -189,7 +226,9 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
               className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
               title="Refresh status"
             >
-              <RefreshIcon className={`w-5 h-5 text-gray-600 dark:text-neutral-400 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshIcon
+                className={`w-5 h-5 text-gray-600 dark:text-neutral-400 ${isLoading ? 'animate-spin' : ''}`}
+              />
             </button>
           </div>
         </div>
@@ -290,7 +329,11 @@ interface ComponentCardProps {
   isSyncing: boolean;
 }
 
-const ComponentCard = memo(function ComponentCard({ component, onSync, isSyncing }: ComponentCardProps) {
+const ComponentCard = memo(function ComponentCard({
+  component,
+  onSync,
+  isSyncing,
+}: ComponentCardProps) {
   const syncColor = syncStatusColors[component.sync_status] || syncStatusColors.Unknown;
   const healthColor = healthStatusColors[component.health_status] || healthStatusColors.Unknown;
   const isOutOfSync = component.sync_status === 'OutOfSync';
@@ -320,9 +363,7 @@ const ComponentCard = memo(function ComponentCard({ component, onSync, isSyncing
       </div>
 
       {component.message && (
-        <p className="mt-2 text-xs text-red-600 bg-red-50 rounded p-2">
-          {component.message}
-        </p>
+        <p className="mt-2 text-xs text-red-600 bg-red-50 rounded p-2">{component.message}</p>
       )}
 
       <div className="mt-3 flex items-center justify-between">

@@ -149,7 +149,12 @@ export function GatewayModesDashboard() {
                 <div className="flex items-center gap-3 mb-4">
                   <div className={`p-2 rounded-lg bg-white shadow-sm ${mode.color}`}>
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={mode.icon} />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d={mode.icon}
+                      />
                     </svg>
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900">{mode.name}</h3>
@@ -198,14 +203,18 @@ export function GatewayModesDashboard() {
 
       {/* Architecture Info */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">STOA Gateway Architecture (ADR-024)</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          STOA Gateway Architecture (ADR-024)
+        </h2>
         <div className="prose prose-sm text-gray-600">
           <p>
-            The STOA Gateway uses a unified architecture with 4 deployment modes, all from a single Rust binary:
+            The STOA Gateway uses a unified architecture with 4 deployment modes, all from a single
+            Rust binary:
           </p>
           <ul className="mt-2 space-y-1">
             <li>
-              <strong>Edge MCP:</strong> Native MCP protocol with SSE transport for AI agents (Claude, GPT, etc.)
+              <strong>Edge MCP:</strong> Native MCP protocol with SSE transport for AI agents
+              (Claude, GPT, etc.)
             </li>
             <li>
               <strong>Sidecar:</strong> Policy enforcement deployed alongside existing gateways

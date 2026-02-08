@@ -5,7 +5,14 @@ import { MemoryRouter } from 'react-router-dom';
 // Mock AuthContext
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
-    user: { id: 'user-admin', email: 'parzival@oasis.gg', name: 'Parzival', roles: ['cpi-admin'], tenant_id: 'oasis-gunters', permissions: ['tenants:read', 'apis:read'] },
+    user: {
+      id: 'user-admin',
+      email: 'parzival@oasis.gg',
+      name: 'Parzival',
+      roles: ['cpi-admin'],
+      tenant_id: 'oasis-gunters',
+      permissions: ['tenants:read', 'apis:read'],
+    },
     isAuthenticated: true,
     isLoading: false,
     isReady: true,
@@ -25,7 +32,14 @@ const mockGetTraceStats = vi.fn().mockResolvedValue({
   by_status: { success: 40, failed: 2, pending: 0, in_progress: 0, skipped: 0 },
 });
 const mockGetTenants = vi.fn().mockResolvedValue([
-  { id: 'oasis-gunters', name: 'oasis-gunters', display_name: 'Oasis Gunters', status: 'active', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+  {
+    id: 'oasis-gunters',
+    name: 'oasis-gunters',
+    display_name: 'Oasis Gunters',
+    status: 'active',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
 ]);
 const mockGetApis = vi.fn().mockResolvedValue([]);
 const mockGetDeployments = vi.fn().mockResolvedValue([]);
@@ -50,7 +64,10 @@ vi.mock('../config', () => ({
     api: { baseUrl: 'https://api.gostoa.dev' },
     services: {
       gitlab: { url: 'https://gitlab.example.com' },
-      awx: { url: 'https://awx.example.com', getJobUrl: (id: string) => `https://awx.example.com/#/jobs/${id}` },
+      awx: {
+        url: 'https://awx.example.com',
+        getJobUrl: (id: string) => `https://awx.example.com/#/jobs/${id}`,
+      },
     },
   },
 }));
@@ -65,7 +82,9 @@ vi.mock('@stoa/shared/components/ConfirmDialog', () => ({
 }));
 
 vi.mock('@stoa/shared/components/EmptyState', () => ({
-  EmptyState: ({ description }: { description: string }) => <div data-testid="empty-state">{description}</div>,
+  EmptyState: ({ description }: { description: string }) => (
+    <div data-testid="empty-state">{description}</div>
+  ),
 }));
 
 vi.mock('@stoa/shared/components/Skeleton', () => ({
@@ -101,7 +120,9 @@ describe('Deployments', () => {
 
   it('renders the subtitle', () => {
     renderComponent();
-    expect(screen.getByText('GitOps pipeline monitoring and deployment history')).toBeInTheDocument();
+    expect(
+      screen.getByText('GitOps pipeline monitoring and deployment history')
+    ).toBeInTheDocument();
   });
 
   it('renders the three tab buttons', () => {

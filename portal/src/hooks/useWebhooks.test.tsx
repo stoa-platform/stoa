@@ -43,7 +43,9 @@ function createWrapper() {
 }
 
 describe('useWebhookEventTypes', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('should fetch event types', async () => {
     vi.mocked(webhooksService.getEventTypes).mockResolvedValueOnce({
@@ -67,7 +69,9 @@ describe('useWebhookEventTypes', () => {
 });
 
 describe('useWebhooks', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('should list webhooks for tenant', async () => {
     vi.mocked(webhooksService.listWebhooks).mockResolvedValueOnce({
@@ -83,7 +87,9 @@ describe('useWebhooks', () => {
 });
 
 describe('useWebhook', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('should fetch a single webhook', async () => {
     vi.mocked(webhooksService.getWebhook).mockResolvedValueOnce({ id: 'wh-1' } as any);

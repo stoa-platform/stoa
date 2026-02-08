@@ -68,7 +68,10 @@ class ExternalMCPServersService {
    * Update an external MCP server.
    * Endpoint: PUT /v1/admin/external-mcp-servers/{id}
    */
-  async updateServer(serverId: string, update: ExternalMCPServerUpdate): Promise<ExternalMCPServer> {
+  async updateServer(
+    serverId: string,
+    update: ExternalMCPServerUpdate
+  ): Promise<ExternalMCPServer> {
     const { data } = await apiService.put(`/v1/admin/external-mcp-servers/${serverId}`, update);
     return data;
   }
@@ -90,7 +93,9 @@ class ExternalMCPServersService {
    * Endpoint: POST /v1/admin/external-mcp-servers/{id}/test-connection
    */
   async testConnection(serverId: string): Promise<TestConnectionResponse> {
-    const { data } = await apiService.post(`/v1/admin/external-mcp-servers/${serverId}/test-connection`);
+    const { data } = await apiService.post(
+      `/v1/admin/external-mcp-servers/${serverId}/test-connection`
+    );
     return data;
   }
 

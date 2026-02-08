@@ -9,23 +9,23 @@ export interface BreadcrumbItem {
 // Route configuration for breadcrumb labels
 const routeLabels: Record<string, string> = {
   '': 'Dashboard',
-  'tenants': 'Tenants',
-  'apis': 'APIs',
+  tenants: 'Tenants',
+  apis: 'APIs',
   'ai-tools': 'AI Tools',
-  'subscriptions': 'Subscriptions',
-  'usage': 'Usage',
+  subscriptions: 'Subscriptions',
+  usage: 'Usage',
   'external-mcp-servers': 'External MCP Servers',
-  'gateway': 'Gateway',
-  'gateways': 'Gateway Registry',
+  gateway: 'Gateway',
+  gateways: 'Gateway Registry',
   'gateway-deployments': 'Gateway Deployments',
   'gateway-observability': 'Observability',
-  'applications': 'Applications',
-  'deployments': 'Deployments',
-  'monitoring': 'API Monitoring',
-  'mcp': 'MCP',
-  'errors': 'Error Snapshots',
-  'admin': 'Admin',
-  'prospects': 'Prospects',
+  applications: 'Applications',
+  deployments: 'Deployments',
+  monitoring: 'API Monitoring',
+  mcp: 'MCP',
+  errors: 'Error Snapshots',
+  admin: 'Admin',
+  prospects: 'Prospects',
 };
 
 /**
@@ -39,9 +39,7 @@ export function useBreadcrumbs(): BreadcrumbItem[] {
     const pathSegments = location.pathname.split('/').filter(Boolean);
 
     // Always start with Dashboard
-    const breadcrumbs: BreadcrumbItem[] = [
-      { label: 'Dashboard', href: '/' }
-    ];
+    const breadcrumbs: BreadcrumbItem[] = [{ label: 'Dashboard', href: '/' }];
 
     // If we're on the dashboard, don't add more
     if (pathSegments.length === 0) {
@@ -69,7 +67,7 @@ export function useBreadcrumbs(): BreadcrumbItem[] {
           // Format segment as title case
           label = segment
             .split('-')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
         }
       }

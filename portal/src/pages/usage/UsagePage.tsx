@@ -8,7 +8,13 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, CheckCircle, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
-import { StatCard, CallsTable, UsageChart, TopTools, SubscriptionsList } from '../../components/usage';
+import {
+  StatCard,
+  CallsTable,
+  UsageChart,
+  TopTools,
+  SubscriptionsList,
+} from '../../components/usage';
 import { usageService, formatLatency } from '../../services/usage';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -23,7 +29,11 @@ export function UsagePage() {
   const isReady = isAuthenticated && !authLoading && !!accessToken;
 
   // 3 parallel queries — no waterfall
-  const { data: summary = null, isLoading: summaryLoading, error: summaryError } = useQuery({
+  const {
+    data: summary = null,
+    isLoading: summaryLoading,
+    error: summaryError,
+  } = useQuery({
     queryKey: ['usage', 'summary'],
     queryFn: () => usageService.getSummary(),
     enabled: isReady,
@@ -44,7 +54,7 @@ export function UsagePage() {
     staleTime: 30_000,
   });
 
-  const error = summaryError ? (summaryError.message || 'Failed to load usage data') : null;
+  const error = summaryError ? summaryError.message || 'Failed to load usage data' : null;
 
   const refetchAll = () => {
     queryClient.invalidateQueries({ queryKey: ['usage'] });
@@ -71,9 +81,7 @@ export function UsagePage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Usage Dashboard
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Usage Dashboard</h1>
             <p className="text-gray-500 dark:text-neutral-400 mt-1">
               Monitor your MCP tool consumption and performance
             </p>
@@ -101,7 +109,13 @@ export function UsagePage() {
           <StatCard
             title="Total Calls"
             value={periodStats?.total_calls.toLocaleString() ?? '—'}
-            subtitle={selectedPeriod === 'today' ? 'Today' : selectedPeriod === 'week' ? 'This week' : 'This month'}
+            subtitle={
+              selectedPeriod === 'today'
+                ? 'Today'
+                : selectedPeriod === 'week'
+                  ? 'This week'
+                  : 'This month'
+            }
             icon={<Activity className="w-5 h-5" />}
             color="cyan"
             isLoading={summaryLoading}
@@ -141,31 +155,19 @@ export function UsagePage() {
           {/* Left Column - Chart & Calls Table */}
           <div className="lg:col-span-2 space-y-6">
             {/* Usage Chart */}
-            <UsageChart
-              data={summary?.daily_calls ?? []}
-              isLoading={summaryLoading}
-            />
+            <UsageChart data={summary?.daily_calls ?? []} isLoading={summaryLoading} />
 
             {/* Calls Table */}
-            <CallsTable
-              calls={callsResponse?.calls ?? []}
-              isLoading={callsLoading}
-            />
+            <CallsTable calls={callsResponse?.calls ?? []} isLoading={callsLoading} />
           </div>
 
           {/* Right Column - Top Tools & Subscriptions */}
           <div className="space-y-6">
             {/* Top Tools */}
-            <TopTools
-              tools={summary?.top_tools ?? []}
-              isLoading={summaryLoading}
-            />
+            <TopTools tools={summary?.top_tools ?? []} isLoading={summaryLoading} />
 
             {/* Active Subscriptions */}
-            <SubscriptionsList
-              subscriptions={subscriptions}
-              isLoading={subsLoading}
-            />
+            <SubscriptionsList subscriptions={subscriptions} isLoading={subsLoading} />
           </div>
         </div>
 
@@ -178,9 +180,10 @@ export function UsagePage() {
               onClick={() => setSelectedPeriod(period)}
               className={`
                 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                ${selectedPeriod === period
-                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700'
-                  : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700'
+                ${
+                  selectedPeriod === period
+                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700'
+                    : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700'
                 }
               `}
             >

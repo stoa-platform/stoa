@@ -114,7 +114,9 @@ export const mockMcpGatewayService = {
   clearAuthToken: vi.fn(),
   getTools: vi.fn().mockResolvedValue({ tools: mockTools, totalCount: mockTools.length }),
   getTool: vi.fn().mockResolvedValue(mockTool),
-  getToolSchema: vi.fn().mockResolvedValue({ name: mockTool.name, inputSchema: mockTool.inputSchema }),
+  getToolSchema: vi
+    .fn()
+    .mockResolvedValue({ name: mockTool.name, inputSchema: mockTool.inputSchema }),
   getToolTags: vi.fn().mockResolvedValue(['platform', 'apis', 'payments', 'search']),
   getMySubscriptions: vi.fn().mockResolvedValue([mockSubscription]),
   subscribeTool: vi.fn().mockResolvedValue(mockSubscription),

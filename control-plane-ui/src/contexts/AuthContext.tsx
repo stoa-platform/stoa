@@ -1,4 +1,13 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  ReactNode,
+} from 'react';
 import { useAuth as useOidcAuth, hasAuthParams } from 'react-oidc-context';
 import { useQueryClient } from '@tanstack/react-query';
 import type { User } from '../types';
@@ -21,30 +30,44 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Role to permissions mapping (mirrors backend)
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   'cpi-admin': [
-    'tenants:create', 'tenants:read', 'tenants:update', 'tenants:delete',
-    'apis:create', 'apis:read', 'apis:update', 'apis:delete', 'apis:deploy',
-    'apps:create', 'apps:read', 'apps:update', 'apps:delete',
-    'users:create', 'users:read', 'users:update', 'users:delete',
+    'tenants:create',
+    'tenants:read',
+    'tenants:update',
+    'tenants:delete',
+    'apis:create',
+    'apis:read',
+    'apis:update',
+    'apis:delete',
+    'apis:deploy',
+    'apps:create',
+    'apps:read',
+    'apps:update',
+    'apps:delete',
+    'users:create',
+    'users:read',
+    'users:update',
+    'users:delete',
     'audit:read',
     'admin:servers',
   ],
   'tenant-admin': [
-    'apis:create', 'apis:read', 'apis:update', 'apis:delete', 'apis:deploy',
-    'apps:create', 'apps:read', 'apps:update', 'apps:delete',
-    'users:create', 'users:read', 'users:update',
+    'apis:create',
+    'apis:read',
+    'apis:update',
+    'apis:delete',
+    'apis:deploy',
+    'apps:create',
+    'apps:read',
+    'apps:update',
+    'apps:delete',
+    'users:create',
+    'users:read',
+    'users:update',
     'audit:read',
     'admin:servers',
   ],
-  'devops': [
-    'apis:create', 'apis:read', 'apis:update', 'apis:deploy',
-    'apps:read',
-    'audit:read',
-  ],
-  'viewer': [
-    'apis:read',
-    'apps:read',
-    'audit:read',
-  ],
+  devops: ['apis:create', 'apis:read', 'apis:update', 'apis:deploy', 'apps:read', 'audit:read'],
+  viewer: ['apis:read', 'apps:read', 'audit:read'],
 };
 
 function extractUserFromToken(oidcUser: any): User | null {
@@ -73,7 +96,7 @@ function extractUserFromToken(oidcUser: any): User | null {
   const permissions = new Set<string>();
   for (const role of roles) {
     const rolePerms = ROLE_PERMISSIONS[role] || [];
-    rolePerms.forEach(p => permissions.add(p));
+    rolePerms.forEach((p) => permissions.add(p));
   }
 
   return {
@@ -128,33 +151,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [oidc.isAuthenticated, oidc.isLoading, oidc]);
 
-  const hasPermission = useCallback((permission: string): boolean => {
-    return user?.permissions.includes(permission) ?? false;
-  }, [user]);
+  const hasPermission = useCallback(
+    (permission: string): boolean => {
+      return user?.permissions.includes(permission) ?? false;
+    },
+    [user]
+  );
 
-  const hasRole = useCallback((role: string): boolean => {
-    return user?.roles.includes(role) ?? false;
-  }, [user]);
+  const hasRole = useCallback(
+    (role: string): boolean => {
+      return user?.roles.includes(role) ?? false;
+    },
+    [user]
+  );
 
   const login = useCallback(() => oidc.signinRedirect(), [oidc]);
   const logout = useCallback(() => oidc.signoutRedirect(), [oidc]);
 
-  const value: AuthContextType = useMemo(() => ({
-    user,
-    isAuthenticated: oidc.isAuthenticated,
-    isLoading: oidc.isLoading,
-    isReady,
-    login,
-    logout,
-    hasPermission,
-    hasRole,
-  }), [user, oidc.isAuthenticated, oidc.isLoading, isReady, login, logout, hasPermission, hasRole]);
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+  const value: AuthContextType = useMemo(
+    () => ({
+      user,
+      isAuthenticated: oidc.isAuthenticated,
+      isLoading: oidc.isLoading,
+      isReady,
+      login,
+      logout,
+      hasPermission,
+      hasRole,
+    }),
+    [user, oidc.isAuthenticated, oidc.isLoading, isReady, login, logout, hasPermission, hasRole]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

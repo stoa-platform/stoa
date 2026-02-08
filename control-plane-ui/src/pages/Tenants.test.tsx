@@ -30,8 +30,22 @@ vi.mock('../contexts/AuthContext', () => ({
 vi.mock('../services/api', () => ({
   apiService: {
     getTenants: vi.fn().mockResolvedValue([
-      { id: 'oasis-gunters', name: 'oasis-gunters', display_name: 'Oasis Gunters', status: 'active', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
-      { id: 'ioi-sixers', name: 'ioi-sixers', display_name: 'IOI Sixers', status: 'active', created_at: '2024-01-02T00:00:00Z', updated_at: '2024-01-02T00:00:00Z' },
+      {
+        id: 'oasis-gunters',
+        name: 'oasis-gunters',
+        display_name: 'Oasis Gunters',
+        status: 'active',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+      {
+        id: 'ioi-sixers',
+        name: 'ioi-sixers',
+        display_name: 'IOI Sixers',
+        status: 'active',
+        created_at: '2024-01-02T00:00:00Z',
+        updated_at: '2024-01-02T00:00:00Z',
+      },
     ]),
   },
 }));

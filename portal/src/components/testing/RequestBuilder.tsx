@@ -148,11 +148,7 @@ export function RequestBuilder({
           disabled={disabled || isLoading}
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
         >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           Send
         </button>
       </div>
@@ -171,9 +167,10 @@ export function RequestBuilder({
             onClick={() => setActiveTab('params')}
             className={`
               py-2 px-1 border-b-2 text-sm font-medium transition-colors
-              ${activeTab === 'params'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+              ${
+                activeTab === 'params'
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
               }
             `}
           >
@@ -189,9 +186,10 @@ export function RequestBuilder({
             onClick={() => setActiveTab('headers')}
             className={`
               py-2 px-1 border-b-2 text-sm font-medium transition-colors
-              ${activeTab === 'headers'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+              ${
+                activeTab === 'headers'
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
               }
             `}
           >
@@ -208,9 +206,10 @@ export function RequestBuilder({
               onClick={() => setActiveTab('body')}
               className={`
                 py-2 px-1 border-b-2 text-sm font-medium transition-colors
-                ${activeTab === 'body'
-                  ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                ${
+                  activeTab === 'body'
+                    ? 'border-primary-600 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
                 }
               `}
             >

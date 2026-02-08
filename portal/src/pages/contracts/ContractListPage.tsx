@@ -29,9 +29,7 @@ const ProtocolBadge: React.FC<{ protocol: ProtocolType }> = ({ protocol }) => {
   const { label, className } = protocolConfig[protocol];
 
   return (
-    <span className={`px-2 py-0.5 text-xs font-medium rounded border ${className}`}>
-      {label}
-    </span>
+    <span className={`px-2 py-0.5 text-xs font-medium rounded border ${className}`}>{label}</span>
   );
 };
 
@@ -42,13 +40,14 @@ interface ContractCardProps {
 
 const ContractCard = memo<ContractCardProps>(function ContractCard({ contract }) {
   // Prepare bindings for UACBadge
-  const badgeBindings: ProtocolBinding[] = contract.bindings?.map((b) => ({
-    protocol: b.protocol,
-    enabled: b.enabled,
-    endpoint: b.endpoint,
-    tool_name: b.tool_name,
-    operations: b.operations,
-  })) || [];
+  const badgeBindings: ProtocolBinding[] =
+    contract.bindings?.map((b) => ({
+      protocol: b.protocol,
+      enabled: b.enabled,
+      endpoint: b.endpoint,
+      tool_name: b.tool_name,
+      operations: b.operations,
+    })) || [];
 
   const enabledBindings = badgeBindings.filter((b) => b.enabled);
 
@@ -76,19 +75,13 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
 
           {/* UAC Badge */}
           <div className="flex-shrink-0" onClick={(e) => e.preventDefault()}>
-            <UACBadge
-              contractName={contract.name}
-              bindings={badgeBindings}
-              variant="default"
-            />
+            <UACBadge contractName={contract.name} bindings={badgeBindings} variant="default" />
           </div>
         </div>
 
         {/* Description */}
         {contract.description && (
-          <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-            {contract.description}
-          </p>
+          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{contract.description}</p>
         )}
 
         {/* Protocol badges */}
@@ -111,11 +104,13 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
           <span
             className={`
               px-2 py-0.5 rounded-full font-medium
-              ${contract.status === 'published'
-                ? 'bg-green-100 text-green-700'
-                : contract.status === 'draft'
-                  ? 'bg-yellow-100 text-yellow-700'
-                  : 'bg-gray-100 text-gray-600'}
+              ${
+                contract.status === 'published'
+                  ? 'bg-green-100 text-green-700'
+                  : contract.status === 'draft'
+                    ? 'bg-yellow-100 text-yellow-700'
+                    : 'bg-gray-100 text-gray-600'
+              }
             `}
           >
             {contract.status}

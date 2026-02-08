@@ -242,7 +242,9 @@ export function CertificateUploader({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {getStatusIcon(result.certificate)}
-                  <span className="font-medium text-gray-900">{getStatusText(result.certificate)}</span>
+                  <span className="font-medium text-gray-900">
+                    {getStatusText(result.certificate)}
+                  </span>
                 </div>
                 <FileCheck className="h-5 w-5 text-gray-400" />
               </div>
@@ -269,7 +271,9 @@ export function CertificateUploader({
                   <Calendar className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-gray-500 text-xs">Valid From</p>
-                    <p className="text-gray-900">{formatCertificateDate(result.certificate.valid_from)}</p>
+                    <p className="text-gray-900">
+                      {formatCertificateDate(result.certificate.valid_from)}
+                    </p>
                   </div>
                 </div>
 
@@ -277,7 +281,9 @@ export function CertificateUploader({
                   <Calendar className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-gray-500 text-xs">Valid To</p>
-                    <p className="text-gray-900">{formatCertificateDate(result.certificate.valid_to)}</p>
+                    <p className="text-gray-900">
+                      {formatCertificateDate(result.certificate.valid_to)}
+                    </p>
                   </div>
                 </div>
 

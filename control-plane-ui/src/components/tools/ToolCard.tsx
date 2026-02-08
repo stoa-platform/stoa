@@ -18,8 +18,12 @@ const methodColors: Record<string, string> = {
   DELETE: 'bg-red-100 text-red-800',
 };
 
-export const ToolCard = memo(function ToolCard({ tool, onClick, onSubscribe, isSubscribed }: ToolCardProps) {
-
+export const ToolCard = memo(function ToolCard({
+  tool,
+  onClick,
+  onSubscribe,
+  isSubscribed,
+}: ToolCardProps) {
   const paramCount = Object.keys(tool.inputSchema?.properties || {}).length;
   const requiredCount = tool.inputSchema?.required?.length || 0;
 
@@ -40,15 +44,15 @@ export const ToolCard = memo(function ToolCard({ tool, onClick, onSubscribe, isS
               <span className="text-xs text-gray-500">v{tool.version}</span>
             </div>
           </div>
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${methodColors[tool.method] || 'bg-gray-100 text-gray-800'}`}>
+          <span
+            className={`px-2 py-0.5 rounded text-xs font-medium ${methodColors[tool.method] || 'bg-gray-100 text-gray-800'}`}
+          >
             {tool.method}
           </span>
         </div>
 
         {/* Description */}
-        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-          {tool.description}
-        </p>
+        <p className="text-sm text-gray-600 mb-4 line-clamp-2">{tool.description}</p>
 
         {/* Tags */}
         {tool.tags.length > 0 && (
@@ -89,11 +93,7 @@ export const ToolCard = memo(function ToolCard({ tool, onClick, onSubscribe, isS
 
         {/* Actions */}
         <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-          {tool.tenantId && (
-            <span className="text-xs text-gray-400">
-              Tenant: {tool.tenantId}
-            </span>
-          )}
+          {tool.tenantId && <span className="text-xs text-gray-400">Tenant: {tool.tenantId}</span>}
           {!tool.tenantId && <span />}
 
           {onSubscribe && (

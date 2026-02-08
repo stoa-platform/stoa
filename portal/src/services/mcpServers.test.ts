@@ -165,7 +165,13 @@ describe('mcpServersService', () => {
 
   describe('getMyServerSubscriptions', () => {
     it('should call GET /v1/mcp/subscriptions', async () => {
-      const mockSubs = { items: [{ id: 'sub-1' }], total: 1, page: 1, page_size: 20, total_pages: 1 };
+      const mockSubs = {
+        items: [{ id: 'sub-1' }],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        total_pages: 1,
+      };
       mockGet.mockResolvedValueOnce({ data: mockSubs });
 
       const result = await mcpServersService.getMyServerSubscriptions();

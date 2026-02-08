@@ -124,7 +124,9 @@ export const apiSubscriptionsService = {
    * List my subscriptions
    * GET /v1/subscriptions/my
    */
-  listMySubscriptions: async (params?: ListAPISubscriptionsParams): Promise<APISubscriptionListResponse> => {
+  listMySubscriptions: async (
+    params?: ListAPISubscriptionsParams
+  ): Promise<APISubscriptionListResponse> => {
     const response = await apiClient.get<APISubscriptionListResponse>('/v1/subscriptions/my', {
       params: {
         page: params?.page || 1,
@@ -171,12 +173,16 @@ export const apiSubscriptionsService = {
    * Get subscription with rotation info
    * GET /v1/subscriptions/{id}/rotation-info
    */
-  getRotationInfo: async (id: string): Promise<APISubscriptionResponse & {
-    previous_key_expires_at: string | null;
-    last_rotated_at: string | null;
-    rotation_count: number;
-    has_active_grace_period: boolean;
-  }> => {
+  getRotationInfo: async (
+    id: string
+  ): Promise<
+    APISubscriptionResponse & {
+      previous_key_expires_at: string | null;
+      last_rotated_at: string | null;
+      rotation_count: number;
+      has_active_grace_period: boolean;
+    }
+  > => {
     const response = await apiClient.get(`/v1/subscriptions/${id}/rotation-info`);
     return response.data;
   },

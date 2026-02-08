@@ -37,7 +37,7 @@ export const UsageChart = memo(function UsageChart({ data, isLoading = false }: 
     );
   }
 
-  const maxCalls = Math.max(...data.map(d => d.calls), 1);
+  const maxCalls = Math.max(...data.map((d) => d.calls), 1);
 
   // Format date for display
   const formatDate = (dateStr: string) => {
@@ -81,7 +81,9 @@ export const UsageChart = memo(function UsageChart({ data, isLoading = false }: 
               </div>
 
               {/* Label */}
-              <span className={`text-xs ${isToday ? 'text-primary-600 font-medium' : 'text-gray-400'}`}>
+              <span
+                className={`text-xs ${isToday ? 'text-primary-600 font-medium' : 'text-gray-400'}`}
+              >
                 {formatDate(day.date)}
               </span>
             </div>

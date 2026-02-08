@@ -93,11 +93,7 @@ export function usePlatformEvents(
 export function useSyncComponent() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    { message: string; operation: string },
-    Error,
-    string
-  >({
+  return useMutation<{ message: string; operation: string }, Error, string>({
     mutationFn: (name: string) => apiService.syncPlatformComponent(name),
     onSuccess: () => {
       // Invalidate platform status and components to refresh data

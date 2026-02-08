@@ -8,14 +8,7 @@
  * - Last called
  */
 
-import {
-  BarChart3,
-  Clock,
-  CheckCircle,
-  Activity,
-  TrendingUp,
-  Calendar,
-} from 'lucide-react';
+import { BarChart3, Clock, CheckCircle, Activity, TrendingUp, Calendar } from 'lucide-react';
 
 interface UsageStatsProps {
   stats?: {
@@ -47,9 +40,15 @@ function StatCard({ icon: Icon, iconColor, label, value, subtext, trend }: StatC
           <Icon className="h-5 w-5" />
         </div>
         {trend && (
-          <div className={`flex items-center gap-1 text-xs font-medium ${
-            trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-gray-500'
-          }`}>
+          <div
+            className={`flex items-center gap-1 text-xs font-medium ${
+              trend === 'up'
+                ? 'text-green-600'
+                : trend === 'down'
+                  ? 'text-red-600'
+                  : 'text-gray-500'
+            }`}
+          >
             <TrendingUp className={`h-3 w-3 ${trend === 'down' ? 'rotate-180' : ''}`} />
             {trend === 'up' ? 'Increasing' : trend === 'down' ? 'Decreasing' : 'Stable'}
           </div>
@@ -58,9 +57,7 @@ function StatCard({ icon: Icon, iconColor, label, value, subtext, trend }: StatC
       <div className="mt-3">
         <p className="text-2xl font-bold text-gray-900">{value}</p>
         <p className="text-sm text-gray-500 mt-0.5">{label}</p>
-        {subtext && (
-          <p className="text-xs text-gray-400 mt-1">{subtext}</p>
-        )}
+        {subtext && <p className="text-xs text-gray-400 mt-1">{subtext}</p>}
       </div>
     </div>
   );
@@ -115,9 +112,7 @@ export function UsageStats({ stats, className = '' }: UsageStatsProps) {
     <div className={`bg-white border border-gray-200 rounded-lg p-6 ${className}`}>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-900">Usage Statistics</h2>
-        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-          This month
-        </span>
+        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">This month</span>
       </div>
 
       {!hasStats ? (
@@ -151,13 +146,15 @@ export function UsageStats({ stats, className = '' }: UsageStatsProps) {
 
           {/* Success Rate */}
           <StatCard
-            icon={displayStats.successRate && displayStats.successRate >= 99 ? CheckCircle : Activity}
+            icon={
+              displayStats.successRate && displayStats.successRate >= 99 ? CheckCircle : Activity
+            }
             iconColor={
               displayStats.successRate && displayStats.successRate >= 99
                 ? 'bg-green-100 text-green-600'
                 : displayStats.successRate && displayStats.successRate >= 95
-                ? 'bg-amber-100 text-amber-600'
-                : 'bg-red-100 text-red-600'
+                  ? 'bg-amber-100 text-amber-600'
+                  : 'bg-red-100 text-red-600'
             }
             label="Success rate"
             value={displayStats.successRate ? `${displayStats.successRate.toFixed(1)}%` : '-'}
@@ -169,7 +166,9 @@ export function UsageStats({ stats, className = '' }: UsageStatsProps) {
             icon={Calendar}
             iconColor="bg-purple-100 text-purple-600"
             label="Last called"
-            value={displayStats.lastCalledAt ? formatRelativeTime(displayStats.lastCalledAt) : 'Never'}
+            value={
+              displayStats.lastCalledAt ? formatRelativeTime(displayStats.lastCalledAt) : 'Never'
+            }
           />
         </div>
       )}

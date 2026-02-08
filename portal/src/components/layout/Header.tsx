@@ -75,7 +75,10 @@ export function Header({ onMenuClick }: HeaderProps) {
               aria-haspopup="true"
             >
               <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
-                <User className="h-4 w-4 text-primary-600 dark:text-primary-400" aria-hidden="true" />
+                <User
+                  className="h-4 w-4 text-primary-600 dark:text-primary-400"
+                  aria-hidden="true"
+                />
               </div>
               <span className="hidden sm:block text-sm font-medium text-gray-700 dark:text-neutral-300">
                 {user?.name || 'User'}
@@ -86,7 +89,9 @@ export function Header({ onMenuClick }: HeaderProps) {
             <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-md shadow-lg border border-gray-200 dark:border-neutral-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150">
               <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-700">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">{user?.name}</p>
-                <p className="text-xs text-gray-500 dark:text-neutral-400 truncate">{user?.email}</p>
+                <p className="text-xs text-gray-500 dark:text-neutral-400 truncate">
+                  {user?.email}
+                </p>
               </div>
               <div className="py-1">
                 <Link

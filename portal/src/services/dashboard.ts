@@ -90,24 +90,27 @@ async function getFallbackActivity(limit: number): Promise<RecentActivityItem[]>
     const response = await apiClient.get('/v1/usage/me/calls', { params: { limit } });
     const calls = response.data?.calls || [];
 
-    return calls.map((call: {
-      id: string;
-      tool_id: string;
-      tool_name?: string;
-      timestamp: string;
-      status: string;
-      latency_ms?: number;
-    }) => ({
-      id: call.id,
-      type: 'api.call' as const,
-      title: `API call to ${call.tool_name || call.tool_id}`,
-      description: call.status === 'success'
-        ? `Completed in ${call.latency_ms}ms`
-        : `Failed: ${call.status}`,
-      tool_id: call.tool_id,
-      tool_name: call.tool_name,
-      timestamp: call.timestamp,
-    }));
+    return calls.map(
+      (call: {
+        id: string;
+        tool_id: string;
+        tool_name?: string;
+        timestamp: string;
+        status: string;
+        latency_ms?: number;
+      }) => ({
+        id: call.id,
+        type: 'api.call' as const,
+        title: `API call to ${call.tool_name || call.tool_id}`,
+        description:
+          call.status === 'success'
+            ? `Completed in ${call.latency_ms}ms`
+            : `Failed: ${call.status}`,
+        tool_id: call.tool_id,
+        tool_name: call.tool_name,
+        timestamp: call.timestamp,
+      })
+    );
   } catch {
     return [];
   }
@@ -117,10 +120,7 @@ async function getFallbackActivity(limit: number): Promise<RecentActivityItem[]>
  * Fetch complete dashboard data
  */
 async function getDashboard(): Promise<DashboardData> {
-  const [stats, activity] = await Promise.all([
-    getStats(),
-    getRecentActivity(),
-  ]);
+  const [stats, activity] = await Promise.all([getStats(), getRecentActivity()]);
 
   return {
     stats,

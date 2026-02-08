@@ -54,16 +54,10 @@ export const webhooksService = {
    * List webhooks for a tenant
    * GET /tenants/{tenantId}/webhooks
    */
-  listWebhooks: async (
-    tenantId: string,
-    enabledOnly?: boolean
-  ): Promise<WebhookListResponse> => {
-    const response = await apiClient.get<WebhookListResponse>(
-      `/tenants/${tenantId}/webhooks`,
-      {
-        params: { enabled_only: enabledOnly },
-      }
-    );
+  listWebhooks: async (tenantId: string, enabledOnly?: boolean): Promise<WebhookListResponse> => {
+    const response = await apiClient.get<WebhookListResponse>(`/tenants/${tenantId}/webhooks`, {
+      params: { enabled_only: enabledOnly },
+    });
     return response.data;
   },
 
@@ -71,10 +65,7 @@ export const webhooksService = {
    * Get a specific webhook
    * GET /tenants/{tenantId}/webhooks/{webhookId}
    */
-  getWebhook: async (
-    tenantId: string,
-    webhookId: string
-  ): Promise<TenantWebhook> => {
+  getWebhook: async (tenantId: string, webhookId: string): Promise<TenantWebhook> => {
     const response = await apiClient.get<TenantWebhook>(
       `/tenants/${tenantId}/webhooks/${webhookId}`
     );
@@ -85,14 +76,8 @@ export const webhooksService = {
    * Create a new webhook
    * POST /tenants/{tenantId}/webhooks
    */
-  createWebhook: async (
-    tenantId: string,
-    data: WebhookCreate
-  ): Promise<TenantWebhook> => {
-    const response = await apiClient.post<TenantWebhook>(
-      `/tenants/${tenantId}/webhooks`,
-      data
-    );
+  createWebhook: async (tenantId: string, data: WebhookCreate): Promise<TenantWebhook> => {
+    const response = await apiClient.post<TenantWebhook>(`/tenants/${tenantId}/webhooks`, data);
     return response.data;
   },
 
@@ -116,10 +101,7 @@ export const webhooksService = {
    * Delete a webhook
    * DELETE /tenants/{tenantId}/webhooks/{webhookId}
    */
-  deleteWebhook: async (
-    tenantId: string,
-    webhookId: string
-  ): Promise<void> => {
+  deleteWebhook: async (tenantId: string, webhookId: string): Promise<void> => {
     await apiClient.delete(`/tenants/${tenantId}/webhooks/${webhookId}`);
   },
 

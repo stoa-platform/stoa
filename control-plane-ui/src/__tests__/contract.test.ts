@@ -68,15 +68,7 @@ const CONSOLE_TYPE_MAPPINGS: Record<string, string[]> = {
   ],
 
   // ContractResponse → Contract (TS uses 'bindings')
-  ContractResponse: [
-    'id',
-    'tenant_id',
-    'name',
-    'version',
-    'status',
-    'created_at',
-    'updated_at',
-  ],
+  ContractResponse: ['id', 'tenant_id', 'name', 'version', 'status', 'created_at', 'updated_at'],
 
   // PlatformStatusResponse → PlatformStatusResponse
   PlatformStatusResponse: ['gitops', 'events', 'external_links', 'timestamp'],
@@ -101,28 +93,25 @@ describe('OpenAPI Contract — Console UI', () => {
     expect(Object.keys(typedSchema.components.schemas).length).toBeGreaterThan(50);
   });
 
-  describe.each(Object.entries(CONSOLE_TYPE_MAPPINGS))(
-    'Schema %s',
-    (schemaName, tsProperties) => {
-      it(`should exist in OpenAPI snapshot`, () => {
-        const props = getSchemaProperties(schemaName);
-        expect(props.length).toBeGreaterThan(0);
-      });
+  describe.each(Object.entries(CONSOLE_TYPE_MAPPINGS))('Schema %s', (schemaName, tsProperties) => {
+    it(`should exist in OpenAPI snapshot`, () => {
+      const props = getSchemaProperties(schemaName);
+      expect(props.length).toBeGreaterThan(0);
+    });
 
-      it(`should have all TS-declared properties in OpenAPI`, () => {
-        const apiProps = getSchemaProperties(schemaName);
-        const missing = tsProperties.filter((p) => !apiProps.includes(p));
-        expect(missing).toEqual([]);
-      });
+    it(`should have all TS-declared properties in OpenAPI`, () => {
+      const apiProps = getSchemaProperties(schemaName);
+      const missing = tsProperties.filter((p) => !apiProps.includes(p));
+      expect(missing).toEqual([]);
+    });
 
-      it(`should have required properties covered by TS type`, () => {
-        const required = getRequiredProperties(schemaName);
-        const covered = tsProperties.filter((p) => required.includes(p));
-        // At least half of required fields should be in the TS type
-        expect(covered.length).toBeGreaterThanOrEqual(Math.min(required.length, 3));
-      });
-    }
-  );
+    it(`should have required properties covered by TS type`, () => {
+      const required = getRequiredProperties(schemaName);
+      const covered = tsProperties.filter((p) => required.includes(p));
+      // At least half of required fields should be in the TS type
+      expect(covered.length).toBeGreaterThanOrEqual(Math.min(required.length, 3));
+    });
+  });
 
   it('should not have unexpected schema removals', () => {
     const expectedSchemas = [

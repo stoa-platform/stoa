@@ -5,8 +5,20 @@ import { MemoryRouter } from 'react-router-dom';
 // Mock mcpGatewayService
 const mockGetTools = vi.fn().mockResolvedValue({
   tools: [
-    { name: 'weather-api', displayName: 'Weather API', description: 'Get weather forecasts', tags: ['weather', 'forecast'], isActive: true },
-    { name: 'translate-api', displayName: 'Translate API', description: 'Text translation service', tags: ['nlp', 'translate'], isActive: true },
+    {
+      name: 'weather-api',
+      displayName: 'Weather API',
+      description: 'Get weather forecasts',
+      tags: ['weather', 'forecast'],
+      isActive: true,
+    },
+    {
+      name: 'translate-api',
+      displayName: 'Translate API',
+      description: 'Text translation service',
+      tags: ['nlp', 'translate'],
+      isActive: true,
+    },
   ],
   totalCount: 2,
 });
@@ -23,7 +35,13 @@ vi.mock('../../services/mcpGatewayApi', () => ({
 
 // Mock ToolCard component
 vi.mock('../../components/tools', () => ({
-  ToolCard: ({ tool, onClick }: { tool: { name: string; displayName: string; description: string }; onClick: () => void }) => (
+  ToolCard: ({
+    tool,
+    onClick,
+  }: {
+    tool: { name: string; displayName: string; description: string };
+    onClick: () => void;
+  }) => (
     <div data-testid={`tool-card-${tool.name}`} onClick={onClick}>
       <h3>{tool.displayName}</h3>
       <p>{tool.description}</p>
@@ -90,7 +108,9 @@ describe('ToolCatalog', () => {
 
   it('shows search input', async () => {
     renderComponent();
-    expect(await screen.findByPlaceholderText('Search tools by name or description...')).toBeInTheDocument();
+    expect(
+      await screen.findByPlaceholderText('Search tools by name or description...')
+    ).toBeInTheDocument();
   });
 
   it('shows tag filter dropdown', async () => {

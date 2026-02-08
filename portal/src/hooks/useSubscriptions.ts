@@ -16,7 +16,13 @@ import {
   RevealKeyResponse,
   ToggleTotpResponse,
 } from '../services/subscriptions';
-import type { MCPSubscription, MCPSubscriptionCreate, MCPSubscriptionConfig, APISubscription, KeyRotationResponse } from '../types';
+import type {
+  MCPSubscription,
+  MCPSubscriptionCreate,
+  MCPSubscriptionConfig,
+  APISubscription,
+  KeyRotationResponse,
+} from '../types';
 
 /**
  * Hook to list user's MCP subscriptions
@@ -150,7 +156,10 @@ export function useRotateApiKey() {
 
   return useMutation<KeyRotationResponse, Error, { id: string; gracePeriodHours?: number }>({
     mutationFn: ({ id, gracePeriodHours }) =>
-      subscriptionsService.rotateApiKey(id, gracePeriodHours ? { grace_period_hours: gracePeriodHours } : undefined),
+      subscriptionsService.rotateApiKey(
+        id,
+        gracePeriodHours ? { grace_period_hours: gracePeriodHours } : undefined
+      ),
     onSuccess: (_, { id }) => {
       // Invalidate subscriptions to reflect new key prefix
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
@@ -316,7 +325,10 @@ export function useRotateAPISubscriptionKey() {
 
   return useMutation<APIKeyRotationResponse, Error, { id: string; gracePeriodHours?: number }>({
     mutationFn: ({ id, gracePeriodHours }) =>
-      apiSubscriptionsService.rotateKey(id, gracePeriodHours ? { grace_period_hours: gracePeriodHours } : undefined),
+      apiSubscriptionsService.rotateKey(
+        id,
+        gracePeriodHours ? { grace_period_hours: gracePeriodHours } : undefined
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['my-api-subscriptions'] });

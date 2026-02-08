@@ -157,11 +157,7 @@ export const ProtocolRow: React.FC<ProtocolRowProps> = ({
             <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
           </div>
         ) : (
-          <ToggleSwitch
-            checked={binding.enabled}
-            onChange={onToggle}
-            disabled={isLoading}
-          />
+          <ToggleSwitch checked={binding.enabled} onChange={onToggle} disabled={isLoading} />
         )}
 
         {/* Protocol badge */}

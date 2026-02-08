@@ -13,9 +13,7 @@ vi.mock('../hooks/useGatewayStatus', () => ({
         { id: 'api-1', apiName: 'Payment API', apiVersion: '1.0.0', isActive: true },
         { id: 'api-2', apiName: 'User API', apiVersion: '2.0.0', isActive: false },
       ],
-      applications: [
-        { id: 'app-1', name: 'Mobile App' },
-      ],
+      applications: [{ id: 'app-1', name: 'Mobile App' }],
     },
     isLoading: false,
     error: null,
@@ -45,7 +43,10 @@ vi.mock('../hooks/useGatewayStatus', () => ({
 vi.mock('../config', () => ({
   config: {
     services: {
-      argocd: { url: 'https://argocd.gostoa.dev', getAppUrl: (name: string) => `https://argocd.gostoa.dev/applications/${name}` },
+      argocd: {
+        url: 'https://argocd.gostoa.dev',
+        getAppUrl: (name: string) => `https://argocd.gostoa.dev/applications/${name}`,
+      },
       prometheus: { url: 'https://prometheus.gostoa.dev' },
       grafana: { url: '/grafana/' },
     },

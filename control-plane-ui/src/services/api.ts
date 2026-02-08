@@ -1,13 +1,23 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { config } from '../config';
 import type {
-  Tenant, TenantCreate,
-  API, APICreate,
-  Application, ApplicationCreate,
-  Deployment, DeploymentRequest,
-  CommitInfo, MergeRequest,
-  TraceSummary, PipelineTrace, TraceTimeline, TraceStats,
-  ProspectListResponse, ProspectsMetricsResponse, ProspectDetail,
+  Tenant,
+  TenantCreate,
+  API,
+  APICreate,
+  Application,
+  ApplicationCreate,
+  Deployment,
+  DeploymentRequest,
+  CommitInfo,
+  MergeRequest,
+  TraceSummary,
+  PipelineTrace,
+  TraceTimeline,
+  TraceStats,
+  ProspectListResponse,
+  ProspectsMetricsResponse,
+  ProspectDetail,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -138,7 +148,11 @@ class ApiService {
     return data;
   }
 
-  async updateApplication(tenantId: string, appId: string, app: Partial<ApplicationCreate>): Promise<Application> {
+  async updateApplication(
+    tenantId: string,
+    appId: string,
+    app: Partial<ApplicationCreate>
+  ): Promise<Application> {
     const { data } = await this.client.put(`/v1/tenants/${tenantId}/applications/${appId}`, app);
     return data;
   }
@@ -159,7 +173,11 @@ class ApiService {
     return data;
   }
 
-  async rollbackDeployment(tenantId: string, deploymentId: string, targetVersion?: string): Promise<Deployment> {
+  async rollbackDeployment(
+    tenantId: string,
+    deploymentId: string,
+    targetVersion?: string
+  ): Promise<Deployment> {
     const { data } = await this.client.post(
       `/v1/tenants/${tenantId}/deployments/${deploymentId}/rollback`,
       { target_version: targetVersion }
@@ -187,7 +205,11 @@ class ApiService {
   }
 
   // Pipeline Traces
-  async getTraces(limit?: number, tenantId?: string, status?: string): Promise<{ traces: TraceSummary[], total: number }> {
+  async getTraces(
+    limit?: number,
+    tenantId?: string,
+    status?: string
+  ): Promise<{ traces: TraceSummary[]; total: number }> {
     const params: Record<string, any> = {};
     if (limit) params.limit = limit;
     if (tenantId) params.tenant_id = tenantId;
@@ -211,7 +233,7 @@ class ApiService {
     return data;
   }
 
-  async getLiveTraces(): Promise<{ traces: PipelineTrace[], count: number }> {
+  async getLiveTraces(): Promise<{ traces: PipelineTrace[]; count: number }> {
     const { data } = await this.client.get('/v1/traces/live');
     return data;
   }

@@ -26,10 +26,23 @@ import type {
   ExternalMCPHealthStatus,
 } from '../../types';
 
-const healthStatusConfig: Record<ExternalMCPHealthStatus, { color: string; bgColor: string; icon: typeof CheckCircle; label: string }> = {
+const healthStatusConfig: Record<
+  ExternalMCPHealthStatus,
+  { color: string; bgColor: string; icon: typeof CheckCircle; label: string }
+> = {
   unknown: { color: 'text-gray-600', bgColor: 'bg-gray-100', icon: Clock, label: 'Unknown' },
-  healthy: { color: 'text-green-600', bgColor: 'bg-green-100', icon: CheckCircle, label: 'Healthy' },
-  degraded: { color: 'text-yellow-600', bgColor: 'bg-yellow-100', icon: AlertCircle, label: 'Degraded' },
+  healthy: {
+    color: 'text-green-600',
+    bgColor: 'bg-green-100',
+    icon: CheckCircle,
+    label: 'Healthy',
+  },
+  degraded: {
+    color: 'text-yellow-600',
+    bgColor: 'bg-yellow-100',
+    icon: AlertCircle,
+    label: 'Degraded',
+  },
   unhealthy: { color: 'text-red-600', bgColor: 'bg-red-100', icon: XCircle, label: 'Unhealthy' },
 };
 
@@ -70,17 +83,20 @@ export function ExternalMCPServerDetail() {
     }
   }
 
-  const handleUpdate = useCallback(async (data: ExternalMCPServerUpdate) => {
-    if (!id) return;
+  const handleUpdate = useCallback(
+    async (data: ExternalMCPServerUpdate) => {
+      if (!id) return;
 
-    try {
-      await externalMcpServersService.updateServer(id, data);
-      setShowEditModal(false);
-      await loadServer();
-    } catch (err: any) {
-      throw new Error(err.response?.data?.detail || err.message || 'Failed to update server');
-    }
-  }, [id]);
+      try {
+        await externalMcpServersService.updateServer(id, data);
+        setShowEditModal(false);
+        await loadServer();
+      } catch (err: any) {
+        throw new Error(err.response?.data?.detail || err.message || 'Failed to update server');
+      }
+    },
+    [id]
+  );
 
   const handleTestConnection = useCallback(async () => {
     if (!id) return;
@@ -123,20 +139,23 @@ export function ExternalMCPServerDetail() {
     }
   }, [id, toast]);
 
-  const handleToggleTool = useCallback(async (toolId: string, enabled: boolean) => {
-    if (!id) return;
+  const handleToggleTool = useCallback(
+    async (toolId: string, enabled: boolean) => {
+      if (!id) return;
 
-    try {
-      setTogglingTool(toolId);
-      await externalMcpServersService.updateTool(id, toolId, { enabled });
-      await loadServer();
-      toast.success(enabled ? 'Tool enabled' : 'Tool disabled');
-    } catch (err: any) {
-      toast.error('Failed to update tool', err.message);
-    } finally {
-      setTogglingTool(null);
-    }
-  }, [id, toast]);
+      try {
+        setTogglingTool(toolId);
+        await externalMcpServersService.updateTool(id, toolId, { enabled });
+        await loadServer();
+        toast.success(enabled ? 'Tool enabled' : 'Tool disabled');
+      } catch (err: any) {
+        toast.error('Failed to update tool', err.message);
+      } finally {
+        setTogglingTool(null);
+      }
+    },
+    [id, toast]
+  );
 
   const handleDelete = useCallback(async () => {
     if (!id || !server) return;
@@ -254,9 +273,13 @@ export function ExternalMCPServerDetail() {
           {/* Health Status */}
           <div>
             <label className="block text-sm font-medium text-gray-500 mb-1">Health Status</label>
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${healthConfig.bgColor}`}>
+            <div
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${healthConfig.bgColor}`}
+            >
               <HealthIcon className={`h-4 w-4 ${healthConfig.color}`} />
-              <span className={`text-sm font-medium ${healthConfig.color}`}>{healthConfig.label}</span>
+              <span className={`text-sm font-medium ${healthConfig.color}`}>
+                {healthConfig.label}
+              </span>
             </div>
             {server.last_health_check && (
               <p className="text-xs text-gray-500 mt-1">
@@ -290,7 +313,9 @@ export function ExternalMCPServerDetail() {
           {/* Status */}
           <div>
             <label className="block text-sm font-medium text-gray-500 mb-1">Status</label>
-            <span className={`inline-flex px-2 py-1 text-xs rounded-full ${server.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+            <span
+              className={`inline-flex px-2 py-1 text-xs rounded-full ${server.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}
+            >
               {server.enabled ? 'Enabled' : 'Disabled'}
             </span>
           </div>
@@ -335,9 +360,7 @@ export function ExternalMCPServerDetail() {
       {/* Tools List */}
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Tools ({server.tools.length})
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-900">Tools ({server.tools.length})</h2>
           <p className="text-sm text-gray-500">
             Enable/disable tools to control which are exposed via STOA
           </p>
@@ -353,7 +376,10 @@ export function ExternalMCPServerDetail() {
         ) : (
           <div className="divide-y">
             {server.tools.map((tool) => (
-              <div key={tool.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
+              <div
+                key={tool.id}
+                className="px-6 py-4 flex items-center justify-between hover:bg-gray-50"
+              >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-medium text-gray-900 truncate">

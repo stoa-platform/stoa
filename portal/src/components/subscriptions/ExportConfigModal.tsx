@@ -30,14 +30,11 @@ interface ExportConfigModalProps {
 type AuthMethod = 'apiKey' | 'oauth2';
 
 // STOA logo URL for Claude Desktop display
-const STOA_LOGO_URL = 'https://raw.githubusercontent.com/stoa-platform/stoa/main/docs/assets/logo.svg';
+const STOA_LOGO_URL =
+  'https://raw.githubusercontent.com/stoa-platform/stoa/main/docs/assets/logo.svg';
 const MCP_GATEWAY_URL = 'https://mcp.gostoa.dev';
 
-export function ExportConfigModal({
-  subscription,
-  isOpen,
-  onClose,
-}: ExportConfigModalProps) {
+export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfigModalProps) {
   const [authMethod, setAuthMethod] = useState<AuthMethod>('oauth2');
   const [apiKey, setApiKey] = useState('');
   const [clientId, setClientId] = useState('');
@@ -135,9 +132,10 @@ export function ExportConfigModal({
 
   if (!isOpen) return null;
 
-  const isValid = authMethod === 'apiKey'
-    ? apiKey.trim().length > 0
-    : clientId.trim().length > 0 && clientSecret.trim().length > 0;
+  const isValid =
+    authMethod === 'apiKey'
+      ? apiKey.trim().length > 0
+      : clientId.trim().length > 0 && clientSecret.trim().length > 0;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -161,12 +159,8 @@ export function ExportConfigModal({
                 <FileJson className="h-5 w-5 text-primary-600" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Export MCP Config
-                </h3>
-                <p className="text-sm text-gray-500">
-                  For Claude Desktop / Cursor
-                </p>
+                <h3 className="text-lg font-semibold text-gray-900">Export MCP Config</h3>
+                <p className="text-sm text-gray-500">For Claude Desktop / Cursor</p>
               </div>
             </div>
             <button
@@ -244,10 +238,7 @@ export function ExportConfigModal({
             {/* Auth Inputs */}
             {authMethod === 'apiKey' ? (
               <div>
-                <label
-                  htmlFor="apiKey"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
+                <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700 mb-1">
                   API Key
                 </label>
                 <input
@@ -297,9 +288,7 @@ export function ExportConfigModal({
                   />
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500">
-                    Create service accounts in your profile.
-                  </p>
+                  <p className="text-xs text-gray-500">Create service accounts in your profile.</p>
                   <Link
                     to="/service-accounts"
                     onClick={handleClose}
@@ -344,9 +333,7 @@ export function ExportConfigModal({
                 <li>Download or copy the config</li>
                 <li>
                   Merge into your{' '}
-                  <code className="bg-blue-100 px-1 rounded">
-                    claude_desktop_config.json
-                  </code>
+                  <code className="bg-blue-100 px-1 rounded">claude_desktop_config.json</code>
                 </li>
                 <li>Restart Claude Desktop / Cursor</li>
               </ol>

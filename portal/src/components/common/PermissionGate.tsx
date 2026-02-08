@@ -76,9 +76,7 @@ export function PermissionGate({
 
   // Check multiple permissions
   if (permissions && permissions.length > 0) {
-    const hasAccess = requireAll
-      ? hasAllPermissions(permissions)
-      : hasAnyPermission(permissions);
+    const hasAccess = requireAll ? hasAllPermissions(permissions) : hasAnyPermission(permissions);
     if (!hasAccess) {
       return <>{fallback}</>;
     }

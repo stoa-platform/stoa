@@ -4,7 +4,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 // Mock AuthContext
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
-    user: { id: 'user-admin', email: 'parzival@oasis.gg', name: 'Parzival', roles: ['cpi-admin'], tenant_id: 'oasis-gunters', permissions: ['tenants:read'] },
+    user: {
+      id: 'user-admin',
+      email: 'parzival@oasis.gg',
+      name: 'Parzival',
+      roles: ['cpi-admin'],
+      tenant_id: 'oasis-gunters',
+      permissions: ['tenants:read'],
+    },
     isAuthenticated: true,
     isLoading: false,
     isReady: true,
@@ -83,7 +90,9 @@ describe('GatewayModesDashboard', () => {
     renderComponent();
     // Mode descriptions appear in both mode cards and architecture section
     await waitFor(() => {
-      expect(screen.getAllByText(/MCP protocol with SSE transport/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/MCP protocol with SSE transport/).length).toBeGreaterThanOrEqual(
+        1
+      );
     });
     expect(screen.getAllByText(/Policy enforcement/).length).toBeGreaterThanOrEqual(1);
   });

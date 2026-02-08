@@ -41,11 +41,17 @@ export function ServiceAccountsPage() {
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newAccount, setNewAccount] = useState<NewServiceAccount | null>(null);
-  const [regeneratedSecret, setRegeneratedSecret] = useState<{ id: string; secret: string } | null>(null);
+  const [regeneratedSecret, setRegeneratedSecret] = useState<{ id: string; secret: string } | null>(
+    null
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Fetch service accounts
-  const { data: accounts, isLoading, error } = useQuery<ServiceAccount[]>({
+  const {
+    data: accounts,
+    isLoading,
+    error,
+  } = useQuery<ServiceAccount[]>({
     queryKey: ['service-accounts'],
     queryFn: async () => {
       const res = await apiClient.get('/v1/service-accounts');
@@ -160,7 +166,9 @@ export function ServiceAccountsPage() {
               onDelete={() => setDeletingId(account.id)}
               onRegenerate={() => regenerateMutation.mutate(account.id)}
               isRegenerating={regenerateMutation.isPending}
-              regeneratedSecret={regeneratedSecret?.id === account.id ? regeneratedSecret.secret : null}
+              regeneratedSecret={
+                regeneratedSecret?.id === account.id ? regeneratedSecret.secret : null
+              }
               onClearSecret={() => setRegeneratedSecret(null)}
             />
           ))}
@@ -179,10 +187,7 @@ export function ServiceAccountsPage() {
 
       {/* New Account Created Modal (shows secret) */}
       {newAccount && (
-        <NewAccountCreatedModal
-          account={newAccount}
-          onClose={() => setNewAccount(null)}
-        />
+        <NewAccountCreatedModal account={newAccount} onClose={() => setNewAccount(null)} />
       )}
 
       {/* Delete Confirmation */}
@@ -239,7 +244,9 @@ function ServiceAccountCard({
           </div>
           <div>
             <h3 className="font-medium text-gray-900">{account.name}</h3>
-            <p className="text-sm text-gray-500 mt-0.5">{account.description || 'No description'}</p>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {account.description || 'No description'}
+            </p>
             <div className="flex items-center gap-2 mt-2">
               <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
                 {account.client_id}
@@ -249,7 +256,11 @@ function ServiceAccountCard({
                 className="text-gray-400 hover:text-gray-600"
                 title="Copy client_id"
               >
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
               </button>
             </div>
           </div>
@@ -294,10 +305,7 @@ function ServiceAccountCard({
                 >
                   {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
-                <button
-                  onClick={handleCopySecret}
-                  className="text-amber-600 hover:text-amber-700"
-                >
+                <button onClick={handleCopySecret} className="text-amber-600 hover:text-amber-700">
                   <Copy className="h-4 w-4" />
                 </button>
               </div>
@@ -351,7 +359,10 @@ function CreateServiceAccountModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="sa-name" className="block text-sm font-medium text-gray-700 mb-1">
-              Name <span className="text-red-500" aria-hidden="true">*</span>
+              Name{' '}
+              <span className="text-red-500" aria-hidden="true">
+                *
+              </span>
               <span className="sr-only">(required)</span>
             </label>
             <input
@@ -366,7 +377,10 @@ function CreateServiceAccountModal({
           </div>
 
           <div>
-            <label htmlFor="sa-description" className="block text-sm font-medium text-gray-700 mb-1">
+            <label
+              htmlFor="sa-description"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
               Description
             </label>
             <input
@@ -488,22 +502,36 @@ function NewAccountCreatedModal({
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" aria-hidden="true" />
             <p className="text-sm text-amber-800">
-              <strong>Important:</strong> Save these credentials now. The client secret will not be shown again.
+              <strong>Important:</strong> Save these credentials now. The client secret will not be
+              shown again.
             </p>
           </div>
         </div>
 
         <div className="space-y-3 mb-6">
           <div>
-            <span id="sa-client-id-label" className="block text-xs font-medium text-gray-500 mb-1">Client ID</span>
-            <code className="block w-full p-2 bg-gray-100 rounded text-sm font-mono break-all" aria-labelledby="sa-client-id-label">
+            <span id="sa-client-id-label" className="block text-xs font-medium text-gray-500 mb-1">
+              Client ID
+            </span>
+            <code
+              className="block w-full p-2 bg-gray-100 rounded text-sm font-mono break-all"
+              aria-labelledby="sa-client-id-label"
+            >
               {account.client_id}
             </code>
           </div>
           <div>
-            <span id="sa-client-secret-label" className="block text-xs font-medium text-gray-500 mb-1">Client Secret</span>
+            <span
+              id="sa-client-secret-label"
+              className="block text-xs font-medium text-gray-500 mb-1"
+            >
+              Client Secret
+            </span>
             <div className="flex items-center gap-2">
-              <code className="flex-1 p-2 bg-gray-100 rounded text-sm font-mono break-all" aria-labelledby="sa-client-secret-label">
+              <code
+                className="flex-1 p-2 bg-gray-100 rounded text-sm font-mono break-all"
+                aria-labelledby="sa-client-secret-label"
+              >
                 {showSecret ? account.client_secret : '••••••••••••••••••••••••••••••••'}
               </code>
               <button
@@ -511,7 +539,11 @@ function NewAccountCreatedModal({
                 className="p-2 text-gray-500 hover:text-gray-700"
                 aria-label={showSecret ? 'Hide client secret' : 'Show client secret'}
               >
-                {showSecret ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+                {showSecret ? (
+                  <EyeOff className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                )}
               </button>
             </div>
           </div>
@@ -576,15 +608,12 @@ function DeleteConfirmModal({
         </div>
 
         <p className="text-gray-600 mb-6">
-          This will immediately revoke access for any MCP clients using this account.
-          This action cannot be undone.
+          This will immediately revoke access for any MCP clients using this account. This action
+          cannot be undone.
         </p>
 
         <div className="flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-gray-700 hover:text-gray-900"
-          >
+          <button onClick={onCancel} className="px-4 py-2 text-gray-700 hover:text-gray-900">
             Cancel
           </button>
           <button

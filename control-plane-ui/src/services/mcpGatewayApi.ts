@@ -164,7 +164,9 @@ class MCPToolsService {
       endDate?: string;
     }
   ): Promise<ToolUsageSummary> {
-    const { data } = await apiService.get(`/v1/usage/tools/${encodeURIComponent(toolName)}`, { params });
+    const { data } = await apiService.get(`/v1/usage/tools/${encodeURIComponent(toolName)}`, {
+      params,
+    });
     return data;
   }
 

@@ -1,0 +1,16 @@
+{
+  "control-plane-ui/src/**/*.{ts,tsx}": [
+    "bash -c 'cd control-plane-ui && npx eslint --no-error-on-unmatched-pattern \"$@\"' _",
+    "bash -c 'cd control-plane-ui && npx prettier --check \"$@\"' _"
+  ],
+  "portal/src/**/*.{ts,tsx}": [
+    "bash -c 'cd portal && npx eslint --no-error-on-unmatched-pattern \"$@\"' _",
+    "bash -c 'cd portal && npx prettier --check \"$@\"' _"
+  ],
+  "control-plane-api/src/**/*.py": [
+    "bash -c 'cd control-plane-api && python -m ruff check \"$@\"' _"
+  ],
+  "mcp-gateway/src/**/*.py": [
+    "bash -c 'cd mcp-gateway && python -m ruff check \"$@\"' _"
+  ]
+}

@@ -8,9 +8,17 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
-import type { ExternalMCPServer, ExternalMCPServerCreate, ExternalMCPServerUpdate, ExternalMCPHealthStatus } from '../../types';
+import type {
+  ExternalMCPServer,
+  ExternalMCPServerCreate,
+  ExternalMCPServerUpdate,
+  ExternalMCPHealthStatus,
+} from '../../types';
 
-const healthStatusConfig: Record<ExternalMCPHealthStatus, { color: string; icon: typeof CheckCircle; label: string }> = {
+const healthStatusConfig: Record<
+  ExternalMCPHealthStatus,
+  { color: string; icon: typeof CheckCircle; label: string }
+> = {
   unknown: { color: 'bg-gray-100 text-gray-800', icon: Clock, label: 'Unknown' },
   healthy: { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Healthy' },
   degraded: { color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle, label: 'Degraded' },
@@ -55,70 +63,82 @@ export function ExternalMCPServersList() {
     }
   }
 
-  const handleCreate = useCallback(async (data: ExternalMCPServerCreate | ExternalMCPServerUpdate) => {
-    try {
-      await externalMcpServersService.createServer(data as ExternalMCPServerCreate);
-      setShowCreateModal(false);
-      await loadServers();
-    } catch (err: any) {
-      throw new Error(err.response?.data?.detail || err.message || 'Failed to create server');
-    }
-  }, []);
-
-  const handleTestConnection = useCallback(async (serverId: string) => {
-    try {
-      setTestingServerId(serverId);
-      const result = await externalMcpServersService.testConnection(serverId);
-      await loadServers(); // Refresh to get updated health status
-
-      if (result.success) {
-        toast.success(
-          'Connection successful',
-          `${result.tools_discovered !== undefined ? `Found ${result.tools_discovered} tools. ` : ''}Latency: ${result.latency_ms}ms`
-        );
-      } else {
-        toast.error('Connection failed', result.error);
+  const handleCreate = useCallback(
+    async (data: ExternalMCPServerCreate | ExternalMCPServerUpdate) => {
+      try {
+        await externalMcpServersService.createServer(data as ExternalMCPServerCreate);
+        setShowCreateModal(false);
+        await loadServers();
+      } catch (err: any) {
+        throw new Error(err.response?.data?.detail || err.message || 'Failed to create server');
       }
-    } catch (err: any) {
-      toast.error('Test failed', err.message);
-    } finally {
-      setTestingServerId(null);
-    }
-  }, [toast]);
+    },
+    []
+  );
 
-  const handleSyncTools = useCallback(async (serverId: string) => {
-    try {
-      setSyncingServerId(serverId);
-      const result = await externalMcpServersService.syncTools(serverId);
-      await loadServers(); // Refresh to get updated tool count
-      toast.success(
-        'Tools synchronized',
-        `Synced ${result.synced_count} tools${result.removed_count > 0 ? `. Removed ${result.removed_count} obsolete.` : ''}`
-      );
-    } catch (err: any) {
-      toast.error('Sync failed', err.message);
-    } finally {
-      setSyncingServerId(null);
-    }
-  }, [toast]);
+  const handleTestConnection = useCallback(
+    async (serverId: string) => {
+      try {
+        setTestingServerId(serverId);
+        const result = await externalMcpServersService.testConnection(serverId);
+        await loadServers(); // Refresh to get updated health status
 
-  const handleDelete = useCallback(async (server: ExternalMCPServer) => {
-    const confirmed = await confirm({
-      title: 'Delete MCP Server',
-      message: `Are you sure you want to delete "${server.display_name}"? This will also delete all synced tools.`,
-      confirmLabel: 'Delete',
-      variant: 'danger',
-    });
-    if (!confirmed) return;
+        if (result.success) {
+          toast.success(
+            'Connection successful',
+            `${result.tools_discovered !== undefined ? `Found ${result.tools_discovered} tools. ` : ''}Latency: ${result.latency_ms}ms`
+          );
+        } else {
+          toast.error('Connection failed', result.error);
+        }
+      } catch (err: any) {
+        toast.error('Test failed', err.message);
+      } finally {
+        setTestingServerId(null);
+      }
+    },
+    [toast]
+  );
 
-    try {
-      await externalMcpServersService.deleteServer(server.id);
-      toast.success('Server deleted', `${server.display_name} has been removed`);
-      await loadServers();
-    } catch (err: any) {
-      toast.error('Delete failed', err.message);
-    }
-  }, [toast, confirm]);
+  const handleSyncTools = useCallback(
+    async (serverId: string) => {
+      try {
+        setSyncingServerId(serverId);
+        const result = await externalMcpServersService.syncTools(serverId);
+        await loadServers(); // Refresh to get updated tool count
+        toast.success(
+          'Tools synchronized',
+          `Synced ${result.synced_count} tools${result.removed_count > 0 ? `. Removed ${result.removed_count} obsolete.` : ''}`
+        );
+      } catch (err: any) {
+        toast.error('Sync failed', err.message);
+      } finally {
+        setSyncingServerId(null);
+      }
+    },
+    [toast]
+  );
+
+  const handleDelete = useCallback(
+    async (server: ExternalMCPServer) => {
+      const confirmed = await confirm({
+        title: 'Delete MCP Server',
+        message: `Are you sure you want to delete "${server.display_name}"? This will also delete all synced tools.`,
+        confirmLabel: 'Delete',
+        variant: 'danger',
+      });
+      if (!confirmed) return;
+
+      try {
+        await externalMcpServersService.deleteServer(server.id);
+        toast.success('Server deleted', `${server.display_name} has been removed`);
+        await loadServers();
+      } catch (err: any) {
+        toast.error('Delete failed', err.message);
+      }
+    },
+    [toast, confirm]
+  );
 
   if (loading) {
     return (
@@ -146,7 +166,8 @@ export function ExternalMCPServersList() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">External MCP Servers</h1>
           <p className="text-gray-500 mt-1">
-            Register external MCP servers (Linear, GitHub, etc.) to proxy through STOA with governance
+            Register external MCP servers (Linear, GitHub, etc.) to proxy through STOA with
+            governance
           </p>
         </div>
         <div className="flex gap-3">
@@ -171,7 +192,9 @@ export function ExternalMCPServersList() {
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {error}
-          <button onClick={() => setError(null)} className="float-right font-bold">&times;</button>
+          <button onClick={() => setError(null)} className="float-right font-bold">
+            &times;
+          </button>
         </div>
       )}
 
@@ -211,7 +234,9 @@ export function ExternalMCPServersList() {
                       <p className="text-sm text-gray-500 font-mono">{server.name}</p>
                     </div>
                   </div>
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 ${healthConfig.color}`}>
+                  <span
+                    className={`px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 ${healthConfig.color}`}
+                  >
                     <HealthIcon className="h-3 w-3" />
                     {healthConfig.label}
                   </span>
@@ -221,7 +246,9 @@ export function ExternalMCPServersList() {
                 <div className="space-y-2 text-sm text-gray-600 mb-4">
                   <div className="flex justify-between">
                     <span className="text-gray-500">Transport:</span>
-                    <span className="font-mono">{transportLabels[server.transport] || server.transport}</span>
+                    <span className="font-mono">
+                      {transportLabels[server.transport] || server.transport}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Auth:</span>
@@ -239,7 +266,9 @@ export function ExternalMCPServersList() {
                   )}
                   <div className="flex justify-between items-center">
                     <span className="text-gray-500">Status:</span>
-                    <span className={`px-2 py-0.5 text-xs rounded ${server.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                    <span
+                      className={`px-2 py-0.5 text-xs rounded ${server.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}
+                    >
                       {server.enabled ? 'Enabled' : 'Disabled'}
                     </span>
                   </div>
@@ -247,7 +276,10 @@ export function ExternalMCPServersList() {
 
                 {/* Sync Error */}
                 {server.sync_error && (
-                  <div className="mb-4 p-2 bg-red-50 border border-red-100 rounded text-xs text-red-700 truncate" title={server.sync_error}>
+                  <div
+                    className="mb-4 p-2 bg-red-50 border border-red-100 rounded text-xs text-red-700 truncate"
+                    title={server.sync_error}
+                  >
                     {server.sync_error}
                   </div>
                 )}
@@ -291,10 +323,7 @@ export function ExternalMCPServersList() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <ExternalMCPServerModal
-          onClose={() => setShowCreateModal(false)}
-          onSubmit={handleCreate}
-        />
+        <ExternalMCPServerModal onClose={() => setShowCreateModal(false)} onSubmit={handleCreate} />
       )}
 
       {ConfirmDialog}

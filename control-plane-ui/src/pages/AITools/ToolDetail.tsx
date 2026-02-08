@@ -221,7 +221,9 @@ export function ToolDetail() {
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium text-gray-900">JSON Schema</h3>
               <button
-                onClick={() => navigator.clipboard.writeText(JSON.stringify(tool.inputSchema, null, 2))}
+                onClick={() =>
+                  navigator.clipboard.writeText(JSON.stringify(tool.inputSchema, null, 2))
+                }
                 className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <Code className="h-4 w-4" />
@@ -241,7 +243,9 @@ export function ToolDetail() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-500 mb-1">Total Calls</div>
-                    <div className="text-2xl font-bold text-gray-900">{usage.totalCalls.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {usage.totalCalls.toLocaleString()}
+                    </div>
                   </div>
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-500 mb-1">Success Rate</div>
@@ -251,11 +255,15 @@ export function ToolDetail() {
                   </div>
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-500 mb-1">Avg Latency</div>
-                    <div className="text-2xl font-bold text-gray-900">{usage.avgLatencyMs.toFixed(0)}ms</div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {usage.avgLatencyMs.toFixed(0)}ms
+                    </div>
                   </div>
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-500 mb-1">Cost Units</div>
-                    <div className="text-2xl font-bold text-purple-600">${usage.totalCostUnits.toFixed(4)}</div>
+                    <div className="text-2xl font-bold text-purple-600">
+                      ${usage.totalCostUnits.toFixed(4)}
+                    </div>
                   </div>
                 </div>
 

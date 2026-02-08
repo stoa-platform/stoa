@@ -22,8 +22,8 @@ if (config.app.isDev) {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30 * 1000,        // 30s (comme Console)
-      gcTime: 30 * 60 * 1000,      // 30min
+      staleTime: 30 * 1000, // 30s (comme Console)
+      gcTime: 30 * 60 * 1000, // 30min
       refetchOnWindowFocus: false,
       retry: 1,
     },

@@ -58,6 +58,7 @@ jobs:
     with:
       component: control-plane-ui
       node-version: '20'
+      run-coverage: true
       run-build: true
       upload-artifact: true
     permissions:

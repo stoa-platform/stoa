@@ -49,9 +49,10 @@ export function EnvironmentSelector({
             border rounded-lg appearance-none cursor-pointer
             focus:ring-2 focus:ring-primary-500 focus:border-primary-500
             disabled:bg-gray-100 disabled:cursor-not-allowed
-            ${selectedEnvironment?.isProduction
-              ? 'border-amber-300 bg-amber-50'
-              : 'border-gray-300 bg-white'
+            ${
+              selectedEnvironment?.isProduction
+                ? 'border-amber-300 bg-amber-50'
+                : 'border-gray-300 bg-white'
             }
           `}
         >

@@ -23,15 +23,7 @@ const statusFilterOptions: { value: string; label: string }[] = [
   { value: 'deleting', label: 'Deleting' },
 ];
 
-function StatCard({
-  label,
-  count,
-  color,
-}: {
-  label: string;
-  count: number;
-  color: string;
-}) {
+function StatCard({ label, count, color }: { label: string; count: number; color: string }) {
   return (
     <div className="bg-white rounded-lg shadow px-4 py-3">
       <p className="text-xs font-medium text-gray-500 uppercase">{label}</p>
@@ -103,26 +95,29 @@ export function GatewayDeploymentsDashboard() {
     }
   };
 
-  const handleUndeploy = useCallback(async (id: string, apiName?: string) => {
-    const confirmed = await confirm({
-      title: 'Undeploy API',
-      message: `Are you sure you want to undeploy "${apiName || 'this API'}"? This will remove it from the gateway.`,
-      confirmLabel: 'Undeploy',
-      variant: 'danger',
-    });
-    if (!confirmed) return;
+  const handleUndeploy = useCallback(
+    async (id: string, apiName?: string) => {
+      const confirmed = await confirm({
+        title: 'Undeploy API',
+        message: `Are you sure you want to undeploy "${apiName || 'this API'}"? This will remove it from the gateway.`,
+        confirmLabel: 'Undeploy',
+        variant: 'danger',
+      });
+      if (!confirmed) return;
 
-    setActionLoading(id);
-    try {
-      await apiService.undeployFromGateway(id);
-      toast.success(`${apiName || 'API'} undeployed successfully`);
-      await loadData();
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Undeploy failed');
-    } finally {
-      setActionLoading(null);
-    }
-  }, [confirm, toast, loadData]);
+      setActionLoading(id);
+      try {
+        await apiService.undeployFromGateway(id);
+        toast.success(`${apiName || 'API'} undeployed successfully`);
+        await loadData();
+      } catch (err: any) {
+        toast.error(err.response?.data?.detail || 'Undeploy failed');
+      } finally {
+        setActionLoading(null);
+      }
+    },
+    [confirm, toast, loadData]
+  );
 
   const handleDeployed = () => {
     setShowDeployDialog(false);
@@ -263,7 +258,10 @@ export function GatewayDeploymentsDashboard() {
                   <td className="px-6 py-4">
                     <SyncStatusBadge status={dep.sync_status} />
                     {dep.sync_error && (
-                      <p className="text-xs text-red-500 mt-1 max-w-xs truncate" title={dep.sync_error}>
+                      <p
+                        className="text-xs text-red-500 mt-1 max-w-xs truncate"
+                        title={dep.sync_error}
+                      >
                         {dep.sync_error}
                       </p>
                     )}
@@ -330,10 +328,7 @@ export function GatewayDeploymentsDashboard() {
 
       {/* Deploy Dialog */}
       {showDeployDialog && (
-        <DeployAPIDialog
-          onClose={() => setShowDeployDialog(false)}
-          onDeployed={handleDeployed}
-        />
+        <DeployAPIDialog onClose={() => setShowDeployDialog(false)} onDeployed={handleDeployed} />
       )}
 
       {ConfirmDialog}

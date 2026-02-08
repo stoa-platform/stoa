@@ -45,9 +45,12 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
   const [showDescription, setShowDescription] = useState(false);
   const [jsonError, setJsonError] = useState<string | null>(null);
 
-  const handleChange = useCallback((newValue: unknown) => {
-    onChange(newValue);
-  }, [onChange]);
+  const handleChange = useCallback(
+    (newValue: unknown) => {
+      onChange(newValue);
+    },
+    [onChange]
+  );
 
   // String input
   if (property.type === 'string') {
@@ -68,12 +71,12 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           >
             <option value="">Select {name}...</option>
             {property.enum.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
             ))}
           </select>
-          {property.description && (
-            <p className="text-xs text-gray-500">{property.description}</p>
-          )}
+          {property.description && <p className="text-xs text-gray-500">{property.description}</p>}
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
       );
@@ -96,9 +99,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
               error ? 'border-red-300' : 'border-gray-300'
             }`}
           />
-          {property.description && (
-            <p className="text-xs text-gray-500">{property.description}</p>
-          )}
+          {property.description && <p className="text-xs text-gray-500">{property.description}</p>}
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
       );
@@ -157,9 +158,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             error ? 'border-red-300' : 'border-gray-300'
           }`}
         />
-        {property.description && (
-          <p className="text-xs text-gray-500">{property.description}</p>
-        )}
+        {property.description && <p className="text-xs text-gray-500">{property.description}</p>}
         {(property.minimum !== undefined || property.maximum !== undefined) && (
           <p className="text-xs text-gray-400">
             {property.minimum !== undefined && `Min: ${property.minimum}`}
@@ -240,9 +239,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             Add item
           </button>
         </div>
-        {property.description && (
-          <p className="text-xs text-gray-500">{property.description}</p>
-        )}
+        {property.description && <p className="text-xs text-gray-500">{property.description}</p>}
         {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
     );
@@ -276,12 +273,8 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             jsonError || error ? 'border-red-300' : 'border-gray-300'
           }`}
         />
-        {property.description && (
-          <p className="text-xs text-gray-500">{property.description}</p>
-        )}
-        {(jsonError || error) && (
-          <p className="text-xs text-red-600">{jsonError || error}</p>
-        )}
+        {property.description && <p className="text-xs text-gray-500">{property.description}</p>}
+        {(jsonError || error) && <p className="text-xs text-red-600">{jsonError || error}</p>}
       </div>
     );
   }
@@ -307,7 +300,13 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
   );
 }
 
-export function TryItForm({ schema, toolName, onInvoke, isLoading = false, className = '' }: TryItFormProps) {
+export function TryItForm({
+  schema,
+  toolName,
+  onInvoke,
+  isLoading = false,
+  className = '',
+}: TryItFormProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [response, setResponse] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
@@ -332,7 +331,7 @@ export function TryItForm({ schema, toolName, onInvoke, isLoading = false, class
   };
 
   const handleFieldChange = useCallback((fieldName: string, value: unknown) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       [fieldName]: value,
     }));
@@ -345,7 +344,7 @@ export function TryItForm({ schema, toolName, onInvoke, isLoading = false, class
 
     // Validate required fields
     const missingRequired = requiredFields.filter(
-      field => formData[field] === undefined || formData[field] === ''
+      (field) => formData[field] === undefined || formData[field] === ''
     );
     if (missingRequired.length > 0) {
       setError(`Missing required fields: ${missingRequired.join(', ')}`);
@@ -401,9 +400,7 @@ export function TryItForm({ schema, toolName, onInvoke, isLoading = false, class
         <div className="text-center py-8">
           <AlertCircle className="h-12 w-12 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 text-sm">No input schema available</p>
-          <p className="text-gray-400 text-xs mt-1">
-            This tool doesn't define input parameters
-          </p>
+          <p className="text-gray-400 text-xs mt-1">This tool doesn't define input parameters</p>
         </div>
       </div>
     );
@@ -414,9 +411,7 @@ export function TryItForm({ schema, toolName, onInvoke, isLoading = false, class
       {/* Header */}
       <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
         <h2 className="text-lg font-semibold text-gray-900">Try It</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Test this tool with your own parameters
-        </p>
+        <p className="text-sm text-gray-500 mt-1">Test this tool with your own parameters</p>
       </div>
 
       <form onSubmit={handleSubmit} className="p-6 space-y-4">

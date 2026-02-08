@@ -12,11 +12,7 @@ export function ToolSchemaViewer({ schema, title = 'Input Schema' }: ToolSchemaV
   const required = schema.required || [];
 
   if (Object.keys(properties).length === 0) {
-    return (
-      <div className="text-sm text-gray-500 italic">
-        This tool has no input parameters.
-      </div>
-    );
+    return <div className="text-sm text-gray-500 italic">This tool has no input parameters.</div>;
   }
 
   return (
@@ -97,9 +93,7 @@ function PropertyRow({ name, property, isRequired, depth = 0 }: PropertyRowProps
               </span>
             )}
             {property.enum && (
-              <span className="text-xs text-gray-400">
-                enum: [{property.enum.join(', ')}]
-              </span>
+              <span className="text-xs text-gray-400">enum: [{property.enum.join(', ')}]</span>
             )}
             {property.default !== undefined && (
               <span className="text-xs text-gray-400">

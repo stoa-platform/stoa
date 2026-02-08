@@ -60,9 +60,7 @@ export function FeaturedAPIs() {
           <div className="py-8 text-center">
             <BookOpen className="h-8 w-8 text-gray-300 mx-auto mb-2" />
             <p className="text-gray-500 text-sm">No APIs available</p>
-            <p className="text-gray-400 text-xs mt-1">
-              APIs will appear here once published
-            </p>
+            <p className="text-gray-400 text-xs mt-1">APIs will appear here once published</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -86,9 +84,7 @@ export function FeaturedAPIs() {
                       <Globe className="h-3 w-3 text-gray-400" />
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">
-                    {api.description}
-                  </p>
+                  <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{api.description}</p>
                   {api.tags && api.tags.length > 0 && (
                     <div className="flex items-center gap-1 mt-1.5">
                       <Tag className="h-3 w-3 text-gray-400" />

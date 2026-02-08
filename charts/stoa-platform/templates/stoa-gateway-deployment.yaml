@@ -11,6 +11,11 @@ metadata:
     {{- include "stoa-platform.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.stoaGateway.replicas | default 2 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: stoa-gateway
@@ -25,7 +30,11 @@ spec:
         prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
     spec:
+      {{- if and .Values.stoaGateway.k8s .Values.stoaGateway.k8s.enabled }}
+      serviceAccountName: stoa-gateway
+      {{- else }}
       serviceAccountName: {{ .Values.stoaGateway.serviceAccount | default "default" }}
+      {{- end }}
       containers:
         - name: stoa-gateway
           image: "{{ .Values.stoaGateway.image.repository }}:{{ .Values.stoaGateway.image.tag }}"
@@ -51,6 +60,36 @@ spec:
               value: {{ .Values.stoaGateway.logLevel | default "info" | quote }}
             - name: STOA_LOG_FORMAT
               value: {{ .Values.stoaGateway.logFormat | default "json" | quote }}
+            - name: STOA_GATEWAY_MODE
+              value: {{ .Values.stoaGateway.mode | default "edge-mcp" | quote }}
+            {{- if and .Values.stoaGateway.policies .Values.stoaGateway.policies.enabled }}
+            - name: STOA_POLICY_ENABLED
+              value: "true"
+            - name: STOA_POLICY_PATH
+              value: {{ .Values.stoaGateway.policies.path | default "/etc/stoa/policies/default.rego" | quote }}
+            {{- end }}
+            {{- if and .Values.stoaGateway.k8s .Values.stoaGateway.k8s.enabled }}
+            - name: STOA_K8S_ENABLED
+              value: "true"
+            {{- end }}
+            - name: STOA_AUTO_REGISTER
+              value: {{ .Values.stoaGateway.autoRegister | default true | quote }}
+            - name: STOA_ENVIRONMENT
+              value: {{ .Values.stoaGateway.environment | default "dev" | quote }}
+            {{- if and .Values.stoaGateway.kafka .Values.stoaGateway.kafka.enabled }}
+            - name: STOA_KAFKA_ENABLED
+              value: "true"
+            - name: STOA_KAFKA_BROKERS
+              value: {{ .Values.stoaGateway.kafka.brokers | quote }}
+            {{- if .Values.stoaGateway.kafka.meteringTopic }}
+            - name: STOA_KAFKA_METERING_TOPIC
+              value: {{ .Values.stoaGateway.kafka.meteringTopic | quote }}
+            {{- end }}
+            {{- if .Values.stoaGateway.kafka.errorsTopic }}
+            - name: STOA_KAFKA_ERRORS_TOPIC
+              value: {{ .Values.stoaGateway.kafka.errorsTopic | quote }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.stoaGateway.otelEndpoint }}
             - name: STOA_OTEL_ENDPOINT
               value: {{ .Values.stoaGateway.otelEndpoint | quote }}
@@ -103,6 +142,7 @@ spec:
           resources:
             {{- toYaml .Values.stoaGateway.resources | nindent 12 }}
           securityContext:
+            privileged: false
             runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
@@ -116,12 +156,22 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if and .Values.stoaGateway.policies .Values.stoaGateway.policies.enabled }}
+            - name: policies
+              mountPath: /etc/stoa/policies
+              readOnly: true
+            {{- end }}
       securityContext:
         runAsNonRoot: true
         fsGroup: 1000
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if and .Values.stoaGateway.policies .Values.stoaGateway.policies.enabled }}
+        - name: policies
+          configMap:
+            name: stoa-gateway-policies
+        {{- end }}
       {{- with .Values.stoaGateway.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

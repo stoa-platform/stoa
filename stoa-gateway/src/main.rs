@@ -8,7 +8,7 @@ use axum::{
 };
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod auth;
@@ -16,6 +16,7 @@ mod cache;
 mod config;
 mod control_plane;
 mod federation;
+mod git;
 mod governance;
 mod handlers;
 mod k8s;
@@ -63,6 +64,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize application state
     let state = AppState::new(config.clone());
+
+    // SIGHUP handler for policy hot-reload (CAB-1109)
+    #[cfg(unix)]
+    {
+        let policy_engine = state.uac_enforcer.policy_engine().clone();
+        tokio::spawn(async move {
+            let mut sighup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
+                .expect("Failed to install SIGHUP handler");
+            loop {
+                sighup.recv().await;
+                info!("Received SIGHUP - reloading policies");
+                match policy_engine.reload() {
+                    Ok(()) => info!("Policies reloaded successfully"),
+                    Err(e) => error!(error = %e, "Policy reload failed"),
+                }
+            }
+        });
+    }
 
     // Initialize mode-specific components
     init_mode_components(&config).await;
@@ -281,11 +300,40 @@ fn build_router(state: AppState) -> Router {
         GatewayMode::Shadow => {
             // Shadow: passive traffic capture and UAC generation
             let shadow_settings = mode::ShadowSettings::from_env();
-            let shadow_service =
-                std::sync::Arc::new(mode::shadow::ShadowService::new(shadow_settings));
+
+            // Build GitClient if GitLab is configured (CAB-1109 Phase 5)
+            let shadow_service = if let (Some(api_url), Some(token), Some(project_id)) = (
+                &state.config.gitlab_api_url,
+                &state.config.gitlab_token,
+                &state.config.gitlab_project_id,
+            ) {
+                use crate::git::{GitClient, GitClientConfig};
+                match GitClient::new(GitClientConfig {
+                    api_url: api_url.clone(),
+                    project_id: project_id.clone(),
+                    token: token.clone(),
+                    ..GitClientConfig::default()
+                }) {
+                    Ok(client) => {
+                        info!("Shadow mode: GitLab client configured for UAC MR submission");
+                        std::sync::Arc::new(mode::shadow::ShadowService::with_git_client(
+                            shadow_settings,
+                            std::sync::Arc::new(client),
+                        ))
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "Shadow mode: GitLab client init failed, MR submission disabled");
+                        std::sync::Arc::new(mode::shadow::ShadowService::new(shadow_settings))
+                    }
+                }
+            } else {
+                info!("Shadow mode: GitLab not configured, MR submission disabled");
+                std::sync::Arc::new(mode::shadow::ShadowService::new(shadow_settings))
+            };
 
             let svc_status = shadow_service.clone();
             let svc_generate = shadow_service.clone();
+            let svc_submit = shadow_service.clone();
 
             base.route(
                 "/shadow/status",
@@ -313,6 +361,33 @@ fn build_router(state: AppState) -> Router {
                         }
                     }
                 }),
+            )
+            .route(
+                "/shadow/submit-uac",
+                post(
+                    move |axum::Json(req): axum::Json<mode::shadow::SubmitUacRequest>| {
+                        let svc = svc_submit.clone();
+                        async move {
+                            use axum::http::StatusCode;
+                            use axum::response::IntoResponse;
+
+                            match svc.submit_uac_to_git(req).await {
+                                Ok(result) => axum::Json(serde_json::json!(result)).into_response(),
+                                Err(e) => {
+                                    let error_msg = e.to_string();
+                                    (
+                                        StatusCode::SERVICE_UNAVAILABLE,
+                                        axum::Json(serde_json::json!({
+                                            "success": false,
+                                            "error": error_msg
+                                        })),
+                                    )
+                                        .into_response()
+                                }
+                            }
+                        }
+                    },
+                ),
             )
             .with_state(state)
         }

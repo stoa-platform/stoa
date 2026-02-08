@@ -1,0 +1,37 @@
+{{- if .Values.stoaGateway.enabled }}
+{{- if and .Values.stoaGateway.ingress .Values.stoaGateway.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stoa-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-gateway
+    app.kubernetes.io/component: gateway
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+  {{- with .Values.stoaGateway.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.stoaGateway.ingress.className }}
+  ingressClassName: {{ .Values.stoaGateway.ingress.className }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.stoaGateway.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stoa-gateway
+                port:
+                  number: 80
+  {{- with .Values.stoaGateway.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

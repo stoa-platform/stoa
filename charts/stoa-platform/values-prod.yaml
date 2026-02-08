@@ -43,3 +43,36 @@ autoscaling:
   minReplicas: 3
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
+
+# STOA Gateway (Rust) — Production overrides
+stoaGateway:
+  enabled: true
+  replicas: 3
+  mode: edge-mcp
+  environment: prod
+  keycloakUrl: "https://auth.gostoa.dev"
+  logLevel: info
+  otelEndpoint: "http://stoa-alloy-otlp.stoa-monitoring:4317"
+  policies:
+    enabled: true
+  k8s:
+    enabled: true
+  kafka:
+    enabled: true
+    brokers: "redpanda.stoa-system.svc.cluster.local:9092"
+  ingress:
+    enabled: true
+    host: mcp.gostoa.dev
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls:
+      - secretName: stoa-gateway-tls
+        hosts:
+          - mcp.gostoa.dev
+  resources:
+    requests:
+      cpu: 200m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi

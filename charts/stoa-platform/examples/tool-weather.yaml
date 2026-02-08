@@ -1,0 +1,38 @@
+apiVersion: gostoa.dev/v1alpha1
+kind: Tool
+metadata:
+  name: weather-forecast
+  namespace: tenant-acme
+spec:
+  displayName: Weather Forecast
+  description: Get weather forecasts for a location
+  endpoint: https://api.weather.example/v1/forecast
+  method: POST
+  inputSchema:
+    type: object
+    properties:
+      location:
+        type: string
+        description: City name or coordinates
+      units:
+        type: string
+        enum: [metric, imperial]
+        default: metric
+    required:
+      - location
+  outputSchema:
+    type: object
+    properties:
+      temperature:
+        type: number
+      description:
+        type: string
+      humidity:
+        type: number
+  auth: bearer
+  rateLimit: "100/min"
+  annotations:
+    readOnly: true
+    destructive: false
+    idempotent: true
+    openWorld: true

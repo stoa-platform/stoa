@@ -1,0 +1,21 @@
+{{- if .Values.stoaGateway.enabled }}
+{{- if and .Values.stoaGateway.policies .Values.stoaGateway.policies.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stoa-gateway-policies
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-gateway
+    app.kubernetes.io/component: policies
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+  annotations:
+    reloader.stakater.com/auto: "true"
+data:
+  {{- range $path, $_ := .Files.Glob "policies/*.rego" }}
+  {{ base $path }}: |-
+{{ $.Files.Get $path | indent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

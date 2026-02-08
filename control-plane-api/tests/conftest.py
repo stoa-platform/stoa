@@ -4,6 +4,9 @@ Pytest configuration and fixtures for Control Plane API tests.
 CAB-839: Enhanced fixtures for router testing with 80% coverage target.
 """
 
+# Register integration test fixtures (conftest_integration.py)
+pytest_plugins = ["tests.conftest_integration"]
+
 # IMPORTANT: Fix sys.path to ensure control-plane-api's src is found first
 # This is needed because mcp-gateway is installed as editable and adds its path
 import sys

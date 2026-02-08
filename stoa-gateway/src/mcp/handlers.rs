@@ -343,9 +343,52 @@ pub async fn mcp_tools_call(
     }
     let t_policy = t_policy_start.elapsed();
 
+    // Phase 6: Check semantic cache for read-only tools
+    let annotations = tool.definition().annotations;
+    let is_read_only = annotations
+        .as_ref()
+        .and_then(|a| a.read_only_hint)
+        .unwrap_or(false);
+
+    if is_read_only {
+        if let Some(cached) = state
+            .semantic_cache
+            .get(&request.name, &auth.tenant_id, &request.arguments)
+            .await
+        {
+            let t_gateway_ms = (t_auth + t_policy).as_millis() as u64;
+            metrics::record_tool_call(
+                &request.name,
+                &auth.tenant_id,
+                "cache_hit",
+                start.elapsed().as_secs_f64(),
+            );
+            emit_metering_event(
+                &state,
+                &auth,
+                &request.name,
+                &format!("{:?}", required_action),
+                EventStatus::Success,
+                start,
+                t_gateway_ms,
+                request_size,
+                cached.result.to_string().len() as u64,
+            );
+            let text = serde_json::to_string_pretty(&cached.result)
+                .unwrap_or_else(|_| cached.result.to_string());
+            return (
+                StatusCode::OK,
+                Json(ToolsCallResponse {
+                    content: vec![ToolContent::Text { text }],
+                    is_error: None,
+                }),
+            );
+        }
+    }
+
     // Execute tool (measure backend time separately)
     let t_backend_start = Instant::now();
-    match tool.execute(request.arguments, &ctx).await {
+    match tool.execute(request.arguments.clone(), &ctx).await {
         Ok(result) => {
             let duration = start.elapsed();
             let duration_secs = duration.as_secs_f64();
@@ -388,6 +431,18 @@ pub async fn mcp_tools_call(
             let response_size = serde_json::to_string(&content)
                 .map(|s| s.len() as u64)
                 .unwrap_or(0);
+
+            // Phase 6: Cache result for read-only tools
+            if is_read_only {
+                if let Some(ToolContent::Text { ref text }) = content.first() {
+                    if let Ok(json_val) = serde_json::from_str::<Value>(text) {
+                        state
+                            .semantic_cache
+                            .put(&request.name, &auth.tenant_id, &request.arguments, json_val)
+                            .await;
+                    }
+                }
+            }
 
             // Phase 3: Emit metering event
             emit_metering_event(

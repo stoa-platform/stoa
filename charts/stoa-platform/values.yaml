@@ -219,3 +219,34 @@ gatewaySync:
 
   # Service account for the job
   serviceAccount: "default"
+
+# Vault Monitoring & Credentials Integrity (CAB-1042)
+# NOTE: Vault itself is deployed via stoa-infra (hashicorp/vault Helm chart).
+# These resources add monitoring and credentials verification to the stoa-platform chart.
+vault:
+  # Vault namespace (where hashicorp/vault is deployed)
+  namespace: vault
+
+  monitoring:
+    # ServiceMonitor for Vault metrics scraping
+    serviceMonitor:
+      enabled: false
+      interval: 30s
+      scrapeTimeout: 10s
+      # Optional: bearer token for authenticated /v1/sys/metrics
+      # bearerTokenSecret:
+      #   name: vault-metrics-token
+      #   key: token
+
+    # PrometheusRule with alerts for sealed state, auto-unseal failures, etc.
+    prometheusRule:
+      enabled: false
+
+  # CronJob that verifies PostgreSQL credentials from Vault-synced K8s secret
+  credentialsCheck:
+    enabled: false
+    schedule: "0 */6 * * *"
+    image: postgres:16-alpine
+    serviceAccount: default
+    # K8s secret synced from Vault by External Secrets Operator
+    secretName: postgresql-credentials

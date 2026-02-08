@@ -87,6 +87,13 @@ const navigation = [
   { name: 'Gateway', href: '/gateway', icon: Server, permission: 'apis:read' },
   { name: 'Gateway Registry', href: '/gateways', icon: Network, permission: 'tenants:read' },
   {
+    name: 'Gateway Modes',
+    href: '/gateways/modes',
+    icon: Gauge,
+    permission: 'tenants:read',
+    shortcut: ['g', 'm'],
+  },
+  {
     name: 'Gateway Deployments',
     href: '/gateway-deployments',
     icon: ArrowUpDown,

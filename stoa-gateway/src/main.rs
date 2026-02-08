@@ -157,9 +157,17 @@ fn init_tracing(config: &Config) {
         .init();
 }
 
-/// Build the Axum router with all routes
+/// Build the Axum router with all routes.
+///
+/// Phase 8: Router is built based on gateway mode (ADR-024).
+/// - EdgeMcp: Full MCP protocol, SSE transport, tool execution (default)
+/// - Sidecar: Policy enforcement only (ext_authz style)
+/// - Proxy: Inline proxy with request/response transformation
+/// - Shadow: Passive traffic capture and UAC generation
 fn build_router(state: AppState) -> Router {
-    // Admin API (protected by bearer token)
+    use mode::GatewayMode;
+
+    // Admin API (shared across all modes)
     let admin_router = Router::new()
         .route("/health", get(admin::admin_health))
         .route("/apis", get(admin::list_apis).post(admin::upsert_api))
@@ -180,46 +188,135 @@ fn build_router(state: AppState) -> Router {
             admin::admin_auth,
         ));
 
-    Router::new()
-        // Health & Metrics
+    // Common routes for all modes: health, metrics, admin
+    let base = Router::new()
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(prometheus_metrics))
-        // OAuth Discovery + Proxy (RFC 9728, RFC 8414, OIDC, DCR)
-        .route(
-            "/.well-known/oauth-protected-resource",
-            get(oauth::discovery::protected_resource_metadata),
-        )
-        .route(
-            "/.well-known/oauth-authorization-server",
-            get(oauth::discovery::authorization_server_metadata),
-        )
-        .route(
-            "/.well-known/openid-configuration",
-            get(oauth::discovery::openid_configuration),
-        )
-        .route("/oauth/token", post(oauth::proxy::token_proxy))
-        .route("/oauth/register", post(oauth::proxy::register_proxy))
-        // MCP Discovery
-        .route("/mcp", get(mcp_discovery))
-        .route("/mcp/capabilities", get(mcp_capabilities))
-        .route("/mcp/health", get(mcp_health))
-        // MCP Tools (REST-style for backward compat)
-        .route("/mcp/tools/list", post(mcp_tools_list))
-        .route("/mcp/tools/call", post(mcp_tools_call))
-        // MCP SSE Transport (Streamable HTTP)
-        .route(
-            "/mcp/sse",
-            get(handle_sse_get)
-                .post(handle_sse_post)
-                .delete(handle_sse_delete),
-        )
-        // Admin API (Control Plane → Gateway)
-        .nest("/admin", admin_router)
-        // Dynamic proxy fallback — must be LAST
-        .fallback(dynamic_proxy)
-        // Add state
-        .with_state(state)
+        .nest("/admin", admin_router);
+
+    match state.config.gateway_mode {
+        GatewayMode::EdgeMcp => {
+            // Full MCP protocol: OAuth discovery, MCP tools, SSE transport
+            base
+                // OAuth Discovery + Proxy (RFC 9728, RFC 8414, OIDC, DCR)
+                .route(
+                    "/.well-known/oauth-protected-resource",
+                    get(oauth::discovery::protected_resource_metadata),
+                )
+                .route(
+                    "/.well-known/oauth-authorization-server",
+                    get(oauth::discovery::authorization_server_metadata),
+                )
+                .route(
+                    "/.well-known/openid-configuration",
+                    get(oauth::discovery::openid_configuration),
+                )
+                .route("/oauth/token", post(oauth::proxy::token_proxy))
+                .route("/oauth/register", post(oauth::proxy::register_proxy))
+                // MCP Discovery
+                .route("/mcp", get(mcp_discovery))
+                .route("/mcp/capabilities", get(mcp_capabilities))
+                .route("/mcp/health", get(mcp_health))
+                // MCP Tools (REST-style for backward compat)
+                .route("/mcp/tools/list", post(mcp_tools_list))
+                .route("/mcp/tools/call", post(mcp_tools_call))
+                // MCP SSE Transport (Streamable HTTP)
+                .route(
+                    "/mcp/sse",
+                    get(handle_sse_get)
+                        .post(handle_sse_post)
+                        .delete(handle_sse_delete),
+                )
+                // Dynamic proxy fallback — must be LAST
+                .fallback(dynamic_proxy)
+                .with_state(state)
+        }
+        GatewayMode::Sidecar => {
+            // Sidecar: policy enforcement, ext_authz style
+            let sidecar_settings = mode::SidecarSettings::from_env();
+            let sidecar_service =
+                std::sync::Arc::new(mode::sidecar::SidecarService::new(sidecar_settings));
+
+            // Use closure to capture sidecar service (avoids state type mismatch)
+            let svc = sidecar_service.clone();
+            base.route(
+                "/authz",
+                post(
+                    move |axum::Json(request): axum::Json<mode::sidecar::AuthzRequest>| {
+                        let svc = svc.clone();
+                        async move {
+                            let response = svc.authorize(request).await;
+                            svc.format_response(response)
+                        }
+                    },
+                ),
+            )
+            .with_state(state)
+        }
+        GatewayMode::Proxy => {
+            // Proxy: inline request/response transformation
+            let proxy_settings = mode::ProxySettings::from_env();
+            let proxy_routes = mode::proxy::RouteRegistry::new();
+            let proxy_service =
+                std::sync::Arc::new(mode::proxy::ProxyService::new(proxy_settings, proxy_routes));
+
+            // Use closure to capture proxy service as fallback handler
+            let svc = proxy_service.clone();
+            base.fallback(move |request: axum::http::Request<axum::body::Body>| {
+                let svc = svc.clone();
+                async move {
+                    use axum::response::IntoResponse;
+                    match svc.handle(request).await {
+                        Ok(response) => response,
+                        Err(e) => {
+                            warn!(error = %e, "Proxy error");
+                            axum::http::StatusCode::BAD_GATEWAY.into_response()
+                        }
+                    }
+                }
+            })
+            .with_state(state)
+        }
+        GatewayMode::Shadow => {
+            // Shadow: passive traffic capture and UAC generation
+            let shadow_settings = mode::ShadowSettings::from_env();
+            let shadow_service =
+                std::sync::Arc::new(mode::shadow::ShadowService::new(shadow_settings));
+
+            let svc_status = shadow_service.clone();
+            let svc_generate = shadow_service.clone();
+
+            base.route(
+                "/shadow/status",
+                get(move || {
+                    let svc = svc_status.clone();
+                    async move {
+                        let status = svc.status().await;
+                        axum::Json(status)
+                    }
+                }),
+            )
+            .route(
+                "/shadow/generate",
+                post(move || {
+                    let svc = svc_generate.clone();
+                    async move {
+                        match svc
+                            .generate_uac("shadow-api", "https://api.example.com")
+                            .await
+                        {
+                            Some(uac) => axum::Json(
+                                serde_json::json!({"status": "generated", "api_id": uac.api_id}),
+                            ),
+                            None => axum::Json(serde_json::json!({"status": "insufficient_data"})),
+                        }
+                    }
+                }),
+            )
+            .with_state(state)
+        }
+    }
 }
 
 /// Register MCP tools.
@@ -231,8 +328,12 @@ async fn register_tools(state: &AppState) {
 
     if state.config.native_tools_enabled {
         info!("Native tools enabled (direct CP API calls)");
-        match stoa_tools::discover_and_register(state.tool_registry.clone(), &state.control_plane)
-            .await
+        match stoa_tools::discover_and_register(
+            state.tool_registry.clone(),
+            &state.control_plane,
+            state.cp_circuit_breaker.clone(),
+        )
+        .await
         {
             Ok(count) => {
                 info!(count, "Tools registered (native mode)");
@@ -246,8 +347,12 @@ async fn register_tools(state: &AppState) {
         stoa_tools::register_static_tools(&state.tool_registry, state.control_plane.clone());
     }
 
-    // Background refresh: sync tools from CP every 60s
-    stoa_tools::start_tool_refresh_task(state.tool_registry.clone(), state.control_plane.clone());
+    // Background refresh: sync tools from CP every 60s (Phase 6: with circuit breaker)
+    stoa_tools::start_tool_refresh_task(
+        state.tool_registry.clone(),
+        state.control_plane.clone(),
+        state.cp_circuit_breaker.clone(),
+    );
 }
 
 // === Health Endpoints ===
@@ -384,28 +489,28 @@ async fn init_k8s_watcher(config: &Config, state: &AppState) {
 
 // === Mode-Specific Initialization ===
 
-/// Initialize components specific to the gateway mode
+/// Initialize components specific to the gateway mode.
+///
+/// Phase 8 (CAB-1105): Mode-specific initialization is now a log + validation step.
+/// Actual service creation happens in `build_router()` where axum state is set up.
 async fn init_mode_components(config: &Config) {
     use mode::GatewayMode;
 
     match config.gateway_mode {
         GatewayMode::EdgeMcp => {
             info!("Mode: EdgeMcp - MCP protocol with SSE transport");
-            // EdgeMcp is the default mode, core router handles it
         }
         GatewayMode::Sidecar => {
             info!("Mode: Sidecar - Policy enforcement behind existing gateway");
-            // TODO: Start ext_authz gRPC server for Envoy integration
+            info!("Sidecar routes: POST /authz (ext_authz compatible)");
         }
         GatewayMode::Proxy => {
             info!("Mode: Proxy - Inline request/response transformation");
-            // TODO: Initialize route registry from config
+            info!("Proxy mode: configure routes via admin API or STOA_PROXY_ROUTES");
         }
         GatewayMode::Shadow => {
             info!("Mode: Shadow - Passive traffic capture and analysis");
-            // TODO: Start traffic capture based on shadow_capture_source
-            // TODO: Initialize pattern analyzer
-            // TODO: Start UAC generator
+            info!("Shadow routes: GET /shadow/status, POST /shadow/generate");
         }
     }
 

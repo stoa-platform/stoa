@@ -28,6 +28,8 @@ pub struct NativeTool {
     cp_base_url: String,
     /// Optional reference to the tool registry (for stoa_tools)
     tool_registry: Option<Arc<ToolRegistry>>,
+    /// Optional output schema for structured responses (MCP 2025-03-26)
+    output_schema: Option<Value>,
 }
 
 impl NativeTool {
@@ -47,12 +49,19 @@ impl NativeTool {
             client,
             cp_base_url: cp_base_url.trim_end_matches('/').to_string(),
             tool_registry: None,
+            output_schema: None,
         }
     }
 
     /// Create a NativeTool with access to the tool registry (for stoa_tools)
     pub fn with_registry(mut self, registry: Arc<ToolRegistry>) -> Self {
         self.tool_registry = Some(registry);
+        self
+    }
+
+    /// Set output schema for structured responses (MCP 2025-03-26)
+    pub fn with_output_schema(mut self, schema: Value) -> Self {
+        self.output_schema = Some(schema);
         self
     }
 
@@ -180,6 +189,10 @@ impl Tool for NativeTool {
 
     fn input_schema(&self) -> ToolSchema {
         self.schema.clone()
+    }
+
+    fn output_schema(&self) -> Option<Value> {
+        self.output_schema.clone()
     }
 
     fn required_action(&self) -> Action {
@@ -801,14 +814,28 @@ pub fn register_native_tools(
     };
 
     // 1. stoa_platform_info
-    registry.register(Arc::new(NativeTool::new(
-        "stoa_platform_info",
-        "Get STOA platform version, status, and available features",
-        schema(json!({}), vec![]),
-        Action::Read,
-        client.clone(),
-        url,
-    )));
+    registry.register(Arc::new(
+        NativeTool::new(
+            "stoa_platform_info",
+            "Get STOA platform version, status, and available features",
+            schema(json!({}), vec![]),
+            Action::Read,
+            client.clone(),
+            url,
+        )
+        .with_output_schema(json!({
+            "type": "object",
+            "properties": {
+                "platform": {"type": "string"},
+                "gateway": {"type": "string"},
+                "version": {"type": "string"},
+                "mcp_protocol": {"type": "string"},
+                "features": {"type": "array", "items": {"type": "string"}},
+                "status": {"type": "string", "enum": ["operational", "degraded", "down"]}
+            },
+            "required": ["platform", "version", "status"]
+        })),
+    ));
 
     // 2. stoa_platform_health
     registry.register(Arc::new(NativeTool::new(
@@ -850,24 +877,42 @@ pub fn register_native_tools(
     ));
 
     // 4. stoa_tenants
-    registry.register(Arc::new(NativeTool::new(
-        "stoa_tenants",
-        "List accessible tenants (admin only)",
-        schema(
-            json!({
-                "include_inactive": {"type": "boolean", "default": false}
-            }),
-            vec![],
-        ),
-        Action::Read,
-        client.clone(),
-        url,
-    )));
+    registry.register(Arc::new(
+        NativeTool::new(
+            "stoa_tenants",
+            "List accessible tenants (admin only)",
+            schema(
+                json!({
+                    "include_inactive": {"type": "boolean", "default": false}
+                }),
+                vec![],
+            ),
+            Action::Read,
+            client.clone(),
+            url,
+        )
+        .with_output_schema(json!({
+            "type": "object",
+            "properties": {
+                "tenants": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "name": {"type": "string"},
+                            "status": {"type": "string"}
+                        }
+                    }
+                }
+            }
+        })),
+    ));
 
     // 5. stoa_catalog
     registry.register(Arc::new(NativeTool::new(
         "stoa_catalog",
-        "API catalog: list, get, search, versions, categories",
+        "API catalog: list, get, search, versions, categories. Returns paginated API listings with filtering support.",
         schema(
             json!({
                 "action": {"type": "string", "enum": ["list", "get", "search", "versions", "categories"]},

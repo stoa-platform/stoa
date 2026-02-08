@@ -15,6 +15,7 @@ use super::native_tool::{create_http_client, has_native_implementation, register
 use super::proxy_tool::ProxyTool;
 use super::{ToolRegistry, ToolSchema};
 use crate::control_plane::{RemoteToolDef, ToolProxyClient};
+use crate::resilience::{retry_with_backoff, CircuitBreaker, CircuitBreakerError, RetryConfig};
 use crate::uac::Action;
 
 /// Default refresh interval for tool discovery
@@ -74,9 +75,11 @@ fn infer_action(tool_name: &str) -> Action {
 ///
 /// Native tools (12 STOA tools) are always registered and call CP API directly.
 /// Additional tools discovered from CP are registered as ProxyTool (fallback).
+/// Phase 6: CP discovery is wrapped with circuit breaker + retry for resilience.
 pub async fn discover_and_register(
     registry: Arc<ToolRegistry>,
     cp: &Arc<ToolProxyClient>,
+    cb: Arc<CircuitBreaker>,
 ) -> Result<usize, String> {
     // First, register all native tools
     let cp_url = cp.base_url();
@@ -86,8 +89,10 @@ pub async fn discover_and_register(
 
     tracing::info!("Native tools registered (12 STOA tools, direct CP API calls)");
 
-    // Then, try to discover additional tools from CP
-    match cp.discover_tools().await {
+    // Then, try to discover additional tools from CP (with circuit breaker + retry)
+    let defs_result = discover_with_resilience(cp, &cb).await;
+
+    match defs_result {
         Ok(defs) => {
             let mut proxy_count = 0;
             for def in &defs {
@@ -108,14 +113,52 @@ pub async fn discover_and_register(
     }
 }
 
+/// Discover tools from CP with circuit breaker + retry.
+///
+/// The circuit breaker fast-fails when CP is known to be down.
+/// Retry handles transient network issues with exponential backoff.
+async fn discover_with_resilience(
+    cp: &Arc<ToolProxyClient>,
+    cb: &Arc<CircuitBreaker>,
+) -> Result<Vec<RemoteToolDef>, String> {
+    let retry_config = RetryConfig {
+        max_attempts: 2,
+        initial_delay: Duration::from_millis(500),
+        ..RetryConfig::default()
+    };
+
+    let cp_ref = cp.clone();
+    let cb_ref = cb.clone();
+
+    retry_with_backoff(&retry_config, "cp-discover-tools", || {
+        let cp_inner = cp_ref.clone();
+        let cb_inner = cb_ref.clone();
+        async move {
+            match cb_inner.call(cp_inner.discover_tools()).await {
+                Ok(defs) => Ok(defs),
+                Err(CircuitBreakerError::CircuitOpen) => {
+                    Err("Circuit breaker open — CP API unavailable".to_string())
+                }
+                Err(CircuitBreakerError::OperationFailed(e)) => Err(e),
+            }
+        }
+    })
+    .await
+}
+
 /// Start a background task that periodically refreshes tools from CP.
 /// Only registers tools that don't have native implementations.
-pub fn start_tool_refresh_task(registry: Arc<ToolRegistry>, cp: Arc<ToolProxyClient>) {
+/// Phase 6: Uses circuit breaker + retry for resilient discovery.
+pub fn start_tool_refresh_task(
+    registry: Arc<ToolRegistry>,
+    cp: Arc<ToolProxyClient>,
+    cb: Arc<CircuitBreaker>,
+) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(TOOL_REFRESH_INTERVAL).await;
 
-            match cp.discover_tools().await {
+            match discover_with_resilience(&cp, &cb).await {
                 Ok(defs) => {
                     let mut new_count = 0;
                     for def in &defs {

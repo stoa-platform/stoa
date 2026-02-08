@@ -21,8 +21,7 @@
 mod circuit_breaker;
 mod retry;
 
-pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
+pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
 #[allow(unused_imports)]
 pub use circuit_breaker::{CircuitBreakerStats, CircuitState};
-#[allow(unused_imports)]
 pub use retry::{retry_with_backoff, RetryConfig};

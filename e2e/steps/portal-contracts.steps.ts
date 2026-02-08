@@ -68,7 +68,7 @@ Then('the MCP server detail page loads', async ({ page }) => {
 
 When('I click on the first application', async ({ page }) => {
   const appLink = page.locator(
-    'a[href*="/apps/"], a[href*="/my-applications/"], [class*="card"] a, tr a',
+    'a[href*="/apps/"], a[href*="/workspace"], [class*="card"] a, tr a',
   ).first();
 
   if (await appLink.isVisible({ timeout: 10000 }).catch(() => false)) {
@@ -87,7 +87,7 @@ Then('the application detail page loads', async ({ page }) => {
 
   const loaded =
     url.includes('/apps/') ||
-    url.includes('/my-applications/') ||
+    url.includes('/workspace') ||
     (await heading.isVisible({ timeout: 10000 }).catch(() => false));
 
   expect(loaded).toBe(true);

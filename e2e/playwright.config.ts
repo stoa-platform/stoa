@@ -85,12 +85,13 @@ export default defineConfig({
     },
 
     // Gateway API tests (no browser, just HTTP)
+    // testMatch must NOT match console-gateways — those are browser tests needing auth
     {
       name: 'gateway',
       use: {
         baseURL: process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev',
       },
-      testMatch: /gateway/,
+      testMatch: /gateway-access/,
     },
   ],
 

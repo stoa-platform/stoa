@@ -94,9 +94,21 @@ jobs:
       id-token: write
     secrets: inherit
 
+  # === Smoke Test: E2E @smoke after deploy ===
+  smoke-test:
+    needs: deploy
+    if: needs.deploy.result == 'success'
+    uses: ./.github/workflows/reusable-smoke-test.yml
+    with:
+      component: mcp-gateway
+    permissions:
+      contents: read
+      id-token: write
+    secrets: inherit
+
   # === Notify: Slack ===
   notify:
-    needs: [ci, docker, deploy]
+    needs: [ci, docker, deploy, smoke-test]
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-notify.yml
     with:
@@ -104,4 +116,5 @@ jobs:
       environment: ${{ github.event.inputs.environment || 'dev' }}
       ci-result: ${{ needs.ci.outputs.test-result }}
       deploy-result: ${{ needs.deploy.result }}
+      smoke-result: ${{ needs.smoke-test.result }}
     secrets: inherit

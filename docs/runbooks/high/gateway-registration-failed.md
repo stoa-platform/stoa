@@ -71,8 +71,9 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 | Cause | Probability | Verification |
 |-------|-------------|--------------|
-| GATEWAY_API_KEYS not configured | High | `kubectl exec ... -- env \| grep GATEWAY_API_KEYS` returns empty |
-| API key mismatch | High | Compare gateway key vs CP keys |
+| `stoa-gateway-secrets` Secret missing or empty | High | `kubectl get secret stoa-gateway-secrets -n stoa-system` — if not found, gateway runs in standalone mode |
+| GATEWAY_API_KEYS not configured on CP | High | `kubectl exec ... -- env \| grep GATEWAY_API_KEYS` returns empty |
+| API key mismatch (gateway key != CP key) | High | Compare gateway key vs CP keys |
 | Control Plane unreachable | Medium | `curl` from gateway pod to CP fails |
 | Wrong endpoint URL | Medium | Check `STOA_CONTROL_PLANE_URL` in gateway |
 | Network policy blocking | Low | Check NetworkPolicy resources |

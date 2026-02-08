@@ -66,9 +66,7 @@ export function FeaturedAITools() {
           <div className="py-8 text-center">
             <Wrench className="h-8 w-8 text-gray-300 mx-auto mb-2" />
             <p className="text-gray-500 text-sm">No AI tools available</p>
-            <p className="text-gray-400 text-xs mt-1">
-              AI tools will appear here once configured
-            </p>
+            <p className="text-gray-400 text-xs mt-1">AI tools will appear here once configured</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -87,9 +85,7 @@ export function FeaturedAITools() {
                     <h3 className="font-medium text-gray-900 group-hover:text-primary-700 truncate">
                       {tool.displayName || tool.name}
                     </h3>
-                    <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">
-                      {tool.description}
-                    </p>
+                    <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{tool.description}</p>
                     <div className="flex items-center gap-2 mt-1.5">
                       <span className="text-xs text-gray-400 flex items-center gap-1">
                         <Wrench className="h-3 w-3" />

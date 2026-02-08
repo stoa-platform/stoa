@@ -21,11 +21,14 @@ interface RecentActivityProps {
   isLoading?: boolean;
 }
 
-const activityConfig: Record<ActivityType, {
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  bgColor: string;
-}> = {
+const activityConfig: Record<
+  ActivityType,
+  {
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+    bgColor: string;
+  }
+> = {
   'subscription.created': {
     icon: CreditCard,
     color: 'text-primary-600',
@@ -123,13 +126,9 @@ export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
                   <Icon className={`h-4 w-4 ${config.color}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {item.title}
-                  </p>
+                  <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
                   {item.description && (
-                    <p className="text-xs text-gray-500 truncate">
-                      {item.description}
-                    </p>
+                    <p className="text-xs text-gray-500 truncate">{item.description}</p>
                   )}
                 </div>
                 <span className="text-xs text-gray-400 whitespace-nowrap">

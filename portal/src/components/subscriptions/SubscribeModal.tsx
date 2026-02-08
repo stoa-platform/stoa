@@ -128,7 +128,8 @@ export function SubscribeModal({
 
   if (!isOpen) return null;
 
-  const activeApps = applications?.items.filter((app: Application) => app.status === 'active') || [];
+  const activeApps =
+    applications?.items.filter((app: Application) => app.status === 'active') || [];
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -148,9 +149,7 @@ export function SubscribeModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Subscribe to API
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900">Subscribe to API</h2>
               <p className="text-sm text-gray-500 mt-1">
                 {api.name} v{api.version}
               </p>
@@ -177,7 +176,10 @@ export function SubscribeModal({
 
               {/* Select Application */}
               <div>
-                <label htmlFor="application" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="application"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Select Application <span className="text-red-500">*</span>
                 </label>
                 {appsLoading ? (
@@ -220,7 +222,10 @@ export function SubscribeModal({
               {/* Select Plan */}
               <div role="radiogroup" aria-labelledby="plan-label">
                 <span id="plan-label" className="block text-sm font-medium text-gray-700 mb-3">
-                  Select Plan <span className="text-red-500" aria-hidden="true">*</span>
+                  Select Plan{' '}
+                  <span className="text-red-500" aria-hidden="true">
+                    *
+                  </span>
                   <span className="sr-only">(required)</span>
                 </span>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -246,15 +251,18 @@ export function SubscribeModal({
                             <Icon className={`h-5 w-5 ${plan.color}`} />
                           </div>
                           <div className="flex-1">
-                            <h4 className={`font-semibold ${isSelected ? plan.color : 'text-gray-900'}`}>
+                            <h4
+                              className={`font-semibold ${isSelected ? plan.color : 'text-gray-900'}`}
+                            >
                               {plan.name}
                             </h4>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {plan.description}
-                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">{plan.description}</p>
                             <ul className="mt-2 space-y-1">
                               {plan.features.map((feature, idx) => (
-                                <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-600">
+                                <li
+                                  key={idx}
+                                  className="flex items-center gap-1.5 text-xs text-gray-600"
+                                >
                                   <Check className="h-3 w-3 text-green-500" />
                                   {feature}
                                 </li>

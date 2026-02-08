@@ -63,13 +63,13 @@ export function canUserSeeServer(server: MCPServer, user: User | null): boolean 
 
   // Check excluded roles first
   if (visibility.excludeRoles?.length) {
-    const isExcluded = visibility.excludeRoles.some(role => userRoles.includes(role));
+    const isExcluded = visibility.excludeRoles.some((role) => userRoles.includes(role));
     if (isExcluded) return false;
   }
 
   // If roles are specified, user must have at least one
   if (visibility.roles?.length) {
-    return visibility.roles.some(role => userRoles.includes(role));
+    return visibility.roles.some((role) => userRoles.includes(role));
   }
 
   // No specific visibility rules = visible to all
@@ -80,7 +80,7 @@ export function canUserSeeServer(server: MCPServer, user: User | null): boolean 
  * Filter servers based on user's roles
  */
 export function filterServersByRole(servers: MCPServer[], user: User | null): MCPServer[] {
-  return servers.filter(server => canUserSeeServer(server, user));
+  return servers.filter((server) => canUserSeeServer(server, user));
 }
 
 /**
@@ -124,7 +124,9 @@ async function getMyServerSubscriptions(): Promise<MCPServerSubscription[]> {
  * GET /v1/mcp/subscriptions/{id}
  */
 async function getServerSubscription(subscriptionId: string): Promise<MCPServerSubscription> {
-  const response = await apiClient.get<MCPServerSubscription>(`/v1/mcp/subscriptions/${subscriptionId}`);
+  const response = await apiClient.get<MCPServerSubscription>(
+    `/v1/mcp/subscriptions/${subscriptionId}`
+  );
   return response.data;
 }
 
@@ -135,7 +137,10 @@ async function getServerSubscription(subscriptionId: string): Promise<MCPServerS
 async function subscribeToServer(
   request: MCPServerSubscriptionCreate
 ): Promise<MCPServerSubscriptionWithKey> {
-  const response = await apiClient.post<MCPServerSubscriptionWithKey>('/v1/mcp/subscriptions', request);
+  const response = await apiClient.post<MCPServerSubscriptionWithKey>(
+    '/v1/mcp/subscriptions',
+    request
+  );
   return response.data;
 }
 
@@ -196,9 +201,9 @@ async function getServersByCategory(user: User | null): Promise<{
   const servers = await getVisibleServers(user);
 
   return {
-    platform: servers.filter(s => s.category === 'platform'),
-    tenant: servers.filter(s => s.category === 'tenant'),
-    public: servers.filter(s => s.category === 'public'),
+    platform: servers.filter((s) => s.category === 'platform'),
+    tenant: servers.filter((s) => s.category === 'tenant'),
+    public: servers.filter((s) => s.category === 'public'),
   };
 }
 
@@ -208,7 +213,8 @@ export const MOCK_SERVERS: MCPServer[] = [
     id: 'stoa-platform',
     name: 'stoa-platform',
     displayName: 'STOA Platform Tools',
-    description: 'Administrative tools for managing the STOA platform: tenants, users, deployments, and configurations.',
+    description:
+      'Administrative tools for managing the STOA platform: tenants, users, deployments, and configurations.',
     icon: 'settings',
     category: 'platform',
     visibility: {
@@ -251,7 +257,8 @@ export const MOCK_SERVERS: MCPServer[] = [
     id: 'crm-apis',
     name: 'crm-apis',
     displayName: 'CRM Integration',
-    description: 'Customer Relationship Management APIs for customer data, leads, and opportunities.',
+    description:
+      'Customer Relationship Management APIs for customer data, leads, and opportunities.',
     icon: 'users',
     category: 'tenant',
     tenant_id: 'acme-corp',

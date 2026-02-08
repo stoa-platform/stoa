@@ -53,11 +53,7 @@ describe('dashboardService', () => {
       }); // tools
       mockMcpGet.mockResolvedValueOnce({
         data: {
-          subscriptions: [
-            { status: 'active' },
-            { status: 'active' },
-            { status: 'revoked' },
-          ],
+          subscriptions: [{ status: 'active' }, { status: 'active' }, { status: 'revoked' }],
         },
       }); // subscriptions
       mockApiGet.mockResolvedValueOnce({

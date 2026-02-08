@@ -56,6 +56,12 @@ spec:
               value: {{ .Values.stoaGateway.otelEndpoint | quote }}
             {{- end }}
             {{- if .Values.stoaGateway.secretName }}
+            - name: STOA_CONTROL_PLANE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.stoaGateway.secretName }}
+                  key: control-plane-api-key
+                  optional: true
             - name: STOA_JWT_SECRET
               valueFrom:
                 secretKeyRef:

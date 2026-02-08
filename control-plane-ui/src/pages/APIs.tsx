@@ -41,7 +41,11 @@ export function APIs() {
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   // Fetch tenants via React Query (long staleTime — tenants rarely change)
-  const { data: tenants = [], isLoading: tenantsLoading, error: tenantsError } = useQuery({
+  const {
+    data: tenants = [],
+    isLoading: tenantsLoading,
+    error: tenantsError,
+  } = useQuery({
     queryKey: ['tenants'],
     queryFn: () => apiService.getTenants(),
     enabled: isReady,
@@ -56,7 +60,11 @@ export function APIs() {
   }, [tenants, selectedTenant]);
 
   // Fetch APIs for selected tenant via React Query
-  const { data: apis = [], isLoading: apisLoading, error: apisError } = useQuery({
+  const {
+    data: apis = [],
+    isLoading: apisLoading,
+    error: apisError,
+  } = useQuery({
     queryKey: ['apis', selectedTenant],
     queryFn: () => apiService.getApis(selectedTenant),
     enabled: !!selectedTenant,
@@ -78,17 +86,18 @@ export function APIs() {
     // Apply search filter
     if (debouncedSearch) {
       const searchLower = debouncedSearch.toLowerCase();
-      result = result.filter(api =>
-        api.name.toLowerCase().includes(searchLower) ||
-        (api.display_name || '').toLowerCase().includes(searchLower) ||
-        (api.description || '').toLowerCase().includes(searchLower) ||
-        (api.backend_url || '').toLowerCase().includes(searchLower)
+      result = result.filter(
+        (api) =>
+          api.name.toLowerCase().includes(searchLower) ||
+          (api.display_name || '').toLowerCase().includes(searchLower) ||
+          (api.description || '').toLowerCase().includes(searchLower) ||
+          (api.backend_url || '').toLowerCase().includes(searchLower)
       );
     }
 
     // Apply status filter
     if (statusFilter) {
-      result = result.filter(api => api.status === statusFilter);
+      result = result.filter((api) => api.status === statusFilter);
     }
 
     return result;
@@ -107,80 +116,92 @@ export function APIs() {
   }, [queryClient, selectedTenant]);
 
   // Memoized handlers to prevent unnecessary re-renders
-  const handleCreate = useCallback(async (api: APICreate, deployToDev: boolean) => {
-    try {
-      const wasFirstApi = isFirstApi;
-      const created = await apiService.createApi(selectedTenant, api);
+  const handleCreate = useCallback(
+    async (api: APICreate, deployToDev: boolean) => {
+      try {
+        const wasFirstApi = isFirstApi;
+        const created = await apiService.createApi(selectedTenant, api);
 
-      // Auto-deploy to DEV if requested
-      if (deployToDev) {
+        // Auto-deploy to DEV if requested
+        if (deployToDev) {
+          await apiService.createDeployment(selectedTenant, {
+            api_id: created.id,
+            environment: 'dev',
+            version: api.version,
+          });
+        }
+
+        setShowCreateModal(false);
+        invalidateApis();
+
+        // Celebrate first API creation
+        if (wasFirstApi) {
+          celebrate();
+          toast.success('Welcome!', 'You created your first API. Explore the Deploy options next.');
+        } else {
+          toast.success('API created', `${api.display_name || api.name} has been created`);
+        }
+      } catch (err: any) {
+        toast.error('Creation failed', err.message || 'Failed to create API');
+      }
+    },
+    [selectedTenant, isFirstApi, celebrate, toast, invalidateApis]
+  );
+
+  const handleUpdate = useCallback(
+    async (apiId: string, api: Partial<APICreate>) => {
+      try {
+        await apiService.updateApi(selectedTenant, apiId, api);
+        setEditingApi(null);
+        invalidateApis();
+      } catch (err: any) {
+        toast.error('Update failed', err.message || 'Failed to update API');
+      }
+    },
+    [selectedTenant, invalidateApis, toast]
+  );
+
+  const handleDelete = useCallback(
+    async (apiId: string, apiName: string) => {
+      const confirmed = await confirm({
+        title: 'Delete API',
+        message: `Are you sure you want to delete "${apiName}"? This action cannot be undone.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Cancel',
+        variant: 'danger',
+      });
+      if (!confirmed) return;
+
+      try {
+        await apiService.deleteApi(selectedTenant, apiId);
+        toast.success('API deleted', `${apiName} has been removed`);
+        invalidateApis();
+      } catch (err: any) {
+        toast.error('Delete failed', err.message || 'Failed to delete API');
+      }
+    },
+    [selectedTenant, confirm, toast, invalidateApis]
+  );
+
+  const handleDeploy = useCallback(
+    async (api: API, environment: 'dev' | 'staging') => {
+      try {
         await apiService.createDeployment(selectedTenant, {
-          api_id: created.id,
-          environment: 'dev',
+          api_id: api.id,
+          environment,
           version: api.version,
         });
+        toast.success(
+          `Deployment started`,
+          `${api.name} is being deployed to ${environment.toUpperCase()}`
+        );
+        invalidateApis();
+      } catch (err: any) {
+        toast.error('Deployment failed', err.message || 'Failed to deploy API');
       }
-
-      setShowCreateModal(false);
-      invalidateApis();
-
-      // Celebrate first API creation
-      if (wasFirstApi) {
-        celebrate();
-        toast.success('Welcome!', 'You created your first API. Explore the Deploy options next.');
-      } else {
-        toast.success('API created', `${api.display_name || api.name} has been created`);
-      }
-    } catch (err: any) {
-      toast.error('Creation failed', err.message || 'Failed to create API');
-    }
-  }, [selectedTenant, isFirstApi, celebrate, toast, invalidateApis]);
-
-  const handleUpdate = useCallback(async (apiId: string, api: Partial<APICreate>) => {
-    try {
-      await apiService.updateApi(selectedTenant, apiId, api);
-      setEditingApi(null);
-      invalidateApis();
-    } catch (err: any) {
-      toast.error('Update failed', err.message || 'Failed to update API');
-    }
-  }, [selectedTenant, invalidateApis, toast]);
-
-  const handleDelete = useCallback(async (apiId: string, apiName: string) => {
-    const confirmed = await confirm({
-      title: 'Delete API',
-      message: `Are you sure you want to delete "${apiName}"? This action cannot be undone.`,
-      confirmLabel: 'Delete',
-      cancelLabel: 'Cancel',
-      variant: 'danger',
-    });
-    if (!confirmed) return;
-
-    try {
-      await apiService.deleteApi(selectedTenant, apiId);
-      toast.success('API deleted', `${apiName} has been removed`);
-      invalidateApis();
-    } catch (err: any) {
-      toast.error('Delete failed', err.message || 'Failed to delete API');
-    }
-  }, [selectedTenant, confirm, toast, invalidateApis]);
-
-  const handleDeploy = useCallback(async (api: API, environment: 'dev' | 'staging') => {
-    try {
-      await apiService.createDeployment(selectedTenant, {
-        api_id: api.id,
-        environment,
-        version: api.version,
-      });
-      toast.success(
-        `Deployment started`,
-        `${api.name} is being deployed to ${environment.toUpperCase()}`
-      );
-      invalidateApis();
-    } catch (err: any) {
-      toast.error('Deployment failed', err.message || 'Failed to deploy API');
-    }
-  }, [selectedTenant, toast, invalidateApis]);
+    },
+    [selectedTenant, toast, invalidateApis]
+  );
 
   // Memoized filter clear handler
   const clearFilters = useCallback(() => {
@@ -249,8 +270,18 @@ export function APIs() {
                 placeholder="Search by name, description, URL..."
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 pl-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
-              <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <svg
+                className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
               </svg>
               {searchQuery && (
                 <button
@@ -258,7 +289,12 @@ export function APIs() {
                   className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               )}
@@ -321,12 +357,24 @@ export function APIs() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Version</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Portal</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deployed</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Version
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Portal
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Deployed
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -334,7 +382,9 @@ export function APIs() {
                 <tr key={api.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{api.display_name || api.name}</div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {api.display_name || api.name}
+                      </div>
                       <div className="text-sm text-gray-500">{api.backend_url}</div>
                     </div>
                   </td>
@@ -342,7 +392,9 @@ export function APIs() {
                     v{api.version}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[api.status]}`}>
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[api.status]}`}
+                    >
                       {api.status}
                     </span>
                   </td>
@@ -350,7 +402,11 @@ export function APIs() {
                     {api.portal_promoted || api.tags?.includes('portal:published') ? (
                       <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                            clipRule="evenodd"
+                          />
                         </svg>
                         Published
                       </span>
@@ -360,10 +416,14 @@ export function APIs() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex gap-2">
-                      <span className={`px-2 py-1 rounded text-xs ${api.deployed_dev ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      <span
+                        className={`px-2 py-1 rounded text-xs ${api.deployed_dev ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
+                      >
                         DEV
                       </span>
-                      <span className={`px-2 py-1 rounded text-xs ${api.deployed_staging ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                      <span
+                        className={`px-2 py-1 rounded text-xs ${api.deployed_staging ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}
+                      >
                         STG
                       </span>
                     </div>
@@ -408,11 +468,13 @@ export function APIs() {
         {!loading && filteredApis.length > 0 && totalPages > 1 && (
           <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
             <div className="text-sm text-gray-500">
-              Showing {((currentPage - 1) * PAGE_SIZE) + 1} to {Math.min(currentPage * PAGE_SIZE, filteredApis.length)} of {filteredApis.length} results
+              Showing {(currentPage - 1) * PAGE_SIZE + 1} to{' '}
+              {Math.min(currentPage * PAGE_SIZE, filteredApis.length)} of {filteredApis.length}{' '}
+              results
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
                 className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -422,7 +484,7 @@ export function APIs() {
                 Page {currentPage} of {totalPages}
               </span>
               <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
                 className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -523,7 +585,11 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
 
       // Extract info from spec
       const info = spec.info || {};
-      const apiName = info.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'new-api';
+      const apiName =
+        info.title
+          ?.toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '') || 'new-api';
       const version = info.version || '1.0.0';
       const description = info.description || '';
 
@@ -548,7 +614,6 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
         backend_url: backendUrl,
         openapi_spec: content,
       });
-
     } catch (err: any) {
       setParseError(err.message || 'Failed to parse OpenAPI specification');
     }
@@ -558,7 +623,7 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
     e.preventDefault();
 
     // Build tags array based on portal_promoted flag
-    const tags = [...(formData.tags || [])].filter(tag => tag !== 'portal:published');
+    const tags = [...(formData.tags || [])].filter((tag) => tag !== 'portal:published');
     if (formData.portal_promoted) {
       tags.push('portal:published');
     }
@@ -578,7 +643,12 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
           <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -634,8 +704,18 @@ function APIFormModal({ api, onClose, onSubmit, title, isEdit }: APIFormModalPro
                     onClick={() => fileInputRef.current?.click()}
                     className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors"
                   >
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    <svg
+                      className="w-5 h-5 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                      />
                     </svg>
                     Choose File (.json, .yaml, .yml)
                   </button>
@@ -678,7 +758,8 @@ paths:
 
               {formData.name && !parseError && formData.openapi_spec && (
                 <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
-                  <strong>Parsed successfully!</strong> Found API: {formData.display_name} v{formData.version}
+                  <strong>Parsed successfully!</strong> Found API: {formData.display_name} v
+                  {formData.version}
                 </div>
               )}
             </div>
@@ -694,11 +775,18 @@ paths:
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name (slug)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Name (slug)
+                  </label>
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+                      })
+                    }
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="payment-api"
                     required
@@ -759,7 +847,9 @@ paths:
                 placeholder="https://backend.internal/api/v1"
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">The backend service URL that the Gateway will proxy requests to</p>
+              <p className="text-xs text-gray-500 mt-1">
+                The backend service URL that the Gateway will proxy requests to
+              </p>
             </div>
           </Collapsible>
 
@@ -781,7 +871,9 @@ paths:
                   rows={6}
                   placeholder="Paste OpenAPI/Swagger spec here (YAML or JSON)..."
                 />
-                <p className="text-xs text-gray-500 mt-1">Adding an OpenAPI spec enables API documentation and validation</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Adding an OpenAPI spec enables API documentation and validation
+                </p>
               </div>
             </Collapsible>
           )}
@@ -801,7 +893,9 @@ paths:
                     type="checkbox"
                     id="portalPromoted"
                     checked={formData.portal_promoted}
-                    onChange={(e) => setFormData({ ...formData, portal_promoted: e.target.checked })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, portal_promoted: e.target.checked })
+                    }
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
                 </div>
@@ -810,7 +904,8 @@ paths:
                     Promote to Developer Portal
                   </label>
                   <p className="text-xs text-gray-500 mt-1">
-                    When enabled, this API will be visible in the Developer Portal for consumers to discover and subscribe.
+                    When enabled, this API will be visible in the Developer Portal for consumers to
+                    discover and subscribe.
                   </p>
                 </div>
               </div>
@@ -854,10 +949,15 @@ paths:
             >
               {!isEdit && deployToDev && (
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
                 </svg>
               )}
-              {isEdit ? 'Update API' : (deployToDev ? 'Create & Deploy' : 'Create API')}
+              {isEdit ? 'Update API' : deployToDev ? 'Create & Deploy' : 'Create API'}
             </button>
           </div>
         </form>

@@ -43,22 +43,68 @@ interface LayoutProps {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, shortcut: ['g', 'd'] },
-  { name: 'Operations', href: '/operations', icon: Activity, permission: 'tenants:read', shortcut: ['g', 'o'] },
+  {
+    name: 'Operations',
+    href: '/operations',
+    icon: Activity,
+    permission: 'tenants:read',
+    shortcut: ['g', 'o'],
+  },
   { name: 'My Usage', href: '/my-usage', icon: PieChart, shortcut: ['g', 'u'] },
-  { name: 'Business', href: '/business', icon: TrendingUp, permission: 'tenants:read', shortcut: ['g', 'b'] },
+  {
+    name: 'Business',
+    href: '/business',
+    icon: TrendingUp,
+    permission: 'tenants:read',
+    shortcut: ['g', 'b'],
+  },
   // CAB-1108: Embedded platform services
   { name: 'Observability', href: '/observability', icon: Gauge, shortcut: ['g', 'g'] },
   { name: 'Identity', href: '/identity', icon: Shield, shortcut: ['g', 'i'] },
   // CAB-1114: OpenSearch Dashboards for API trace logs
   { name: 'Logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
-  { name: 'Tenants', href: '/tenants', icon: Building2, permission: 'tenants:read', shortcut: ['g', 't'] },
+  {
+    name: 'Tenants',
+    href: '/tenants',
+    icon: Building2,
+    permission: 'tenants:read',
+    shortcut: ['g', 't'],
+  },
   { name: 'APIs', href: '/apis', icon: Layers, permission: 'apis:read', shortcut: ['g', 'a'] },
-  { name: 'AI Tools', href: '/ai-tools', icon: Wrench, permission: 'apis:read', shortcut: ['g', 'w'] },
-  { name: 'External MCP Servers', href: '/external-mcp-servers', icon: Server, permission: 'admin:servers' },
+  {
+    name: 'AI Tools',
+    href: '/ai-tools',
+    icon: Wrench,
+    permission: 'apis:read',
+    shortcut: ['g', 'w'],
+  },
+  {
+    name: 'External MCP Servers',
+    href: '/external-mcp-servers',
+    icon: Server,
+    permission: 'admin:servers',
+  },
   { name: 'Gateway', href: '/gateway', icon: Server, permission: 'apis:read' },
   { name: 'Gateway Registry', href: '/gateways', icon: Network, permission: 'tenants:read' },
-  { name: 'Gateway Deployments', href: '/gateway-deployments', icon: ArrowUpDown, permission: 'tenants:read' },
-  { name: 'Gateway Metrics', href: '/gateway-observability', icon: BarChart3, permission: 'tenants:read' },
+  {
+    name: 'Gateway Modes',
+    href: '/gateways/modes',
+    icon: Gauge,
+    permission: 'tenants:read',
+    shortcut: ['g', 'm'],
+  },
+  {
+    name: 'Gateway Deployments',
+    href: '/gateway-deployments',
+    icon: ArrowUpDown,
+    permission: 'tenants:read',
+  },
+  {
+    name: 'Gateway Metrics',
+    href: '/gateway-observability',
+    icon: BarChart3,
+    permission: 'tenants:read',
+  },
   { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
   { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
   { name: 'API Monitoring', href: '/monitoring', icon: Activity, permission: 'apis:read' },
@@ -85,7 +131,7 @@ export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const filteredNavigation = useMemo(
-    () => navigation.filter(item => !item.permission || hasPermission(item.permission)),
+    () => navigation.filter((item) => !item.permission || hasPermission(item.permission)),
     [hasPermission]
   );
 
@@ -95,31 +141,33 @@ export function Layout({ children }: LayoutProps) {
   }, [location.pathname]);
 
   // Register sequence shortcuts for navigation (g+key)
-  const sequenceShortcuts = useMemo(() =>
-    filteredNavigation
-      .filter(item => item.shortcut)
-      .map(item => ({
-        keys: item.shortcut!,
-        handler: () => navigate(item.href),
-        description: `Go to ${item.name}`,
-      })),
+  const sequenceShortcuts = useMemo(
+    () =>
+      filteredNavigation
+        .filter((item) => item.shortcut)
+        .map((item) => ({
+          keys: item.shortcut!,
+          handler: () => navigate(item.href),
+          description: `Go to ${item.name}`,
+        })),
     [filteredNavigation, navigate]
   );
 
   useSequenceShortcuts(sequenceShortcuts);
 
   // Memoize navigation commands separately (only changes when nav items change)
-  const navigationCommands = useMemo(() =>
-    filteredNavigation.map(item => ({
-      id: `nav-${item.href}`,
-      label: item.name,
-      description: `Navigate to ${item.name}`,
-      icon: <item.icon className="h-4 w-4" />,
-      section: 'Navigation' as const,
-      shortcut: item.shortcut ? ['G', item.shortcut[1].toUpperCase()] : undefined,
-      keywords: [item.name.toLowerCase(), 'go', 'navigate'],
-      onSelect: () => navigate(item.href),
-    })),
+  const navigationCommands = useMemo(
+    () =>
+      filteredNavigation.map((item) => ({
+        id: `nav-${item.href}`,
+        label: item.name,
+        description: `Navigate to ${item.name}`,
+        icon: <item.icon className="h-4 w-4" />,
+        section: 'Navigation' as const,
+        shortcut: item.shortcut ? ['G', item.shortcut[1].toUpperCase()] : undefined,
+        keywords: [item.name.toLowerCase(), 'go', 'navigate'],
+        onSelect: () => navigate(item.href),
+      })),
     [filteredNavigation, navigate]
   );
 
@@ -207,7 +255,8 @@ export function Layout({ children }: LayoutProps) {
         <nav className="mt-6 px-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
           <ul className="space-y-1">
             {filteredNavigation.map((item) => {
-              const isActive = location.pathname === item.href ||
+              const isActive =
+                location.pathname === item.href ||
                 (item.href !== '/' && location.pathname.startsWith(item.href));
 
               return (
@@ -320,16 +369,16 @@ export function Layout({ children }: LayoutProps) {
           {user?.tenant_id && (
             <div className="hidden sm:flex items-center gap-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 px-3 py-1.5">
               <Building2 className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
-              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 max-w-[120px] truncate">{user.tenant_id}</span>
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 max-w-[120px] truncate">
+                {user.tenant_id}
+              </span>
               <ChevronDown className="h-4 w-4 text-neutral-400" />
             </div>
           )}
         </header>
 
         {/* Page content */}
-        <main className="p-4 sm:p-6">
-          {children}
-        </main>
+        <main className="p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );

@@ -66,20 +66,20 @@ function StatCard({ title, value, subtitle, icon, color, trend, isLoading }: Sta
   }
 
   return (
-    <div className={`rounded-xl border ${colors.border} ${colors.bg} p-6 transition-all hover:shadow-lg hover:scale-[1.02]`}>
+    <div
+      className={`rounded-xl border ${colors.border} ${colors.bg} p-6 transition-all hover:shadow-lg hover:scale-[1.02]`}
+    >
       <div className="flex items-start justify-between">
         <div className={`p-3 rounded-xl ${colors.iconBg}`}>
           <span className={colors.iconColor}>{icon}</span>
         </div>
         {trend !== undefined && trend !== 0 && (
-          <div className={`flex items-center gap-1 text-sm font-medium ${
-            trend > 0 ? 'text-emerald-600' : 'text-red-500'
-          }`}>
-            {trend > 0 ? (
-              <TrendingUp className="h-4 w-4" />
-            ) : (
-              <TrendingDown className="h-4 w-4" />
-            )}
+          <div
+            className={`flex items-center gap-1 text-sm font-medium ${
+              trend > 0 ? 'text-emerald-600' : 'text-red-500'
+            }`}
+          >
+            {trend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
             <span>{Math.abs(trend)}%</span>
           </div>
         )}

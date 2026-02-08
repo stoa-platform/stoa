@@ -111,11 +111,10 @@ export function SubscribeToToolModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Subscribe to Tool
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900">Subscribe to Tool</h2>
               <p className="text-sm text-gray-500 mt-1">
-                {tool.displayName || tool.name}{tool.version ? ` v${tool.version}` : ''}
+                {tool.displayName || tool.name}
+                {tool.version ? ` v${tool.version}` : ''}
               </p>
             </div>
             <button
@@ -152,7 +151,10 @@ export function SubscribeToToolModal({
               {/* Select Plan */}
               <div role="radiogroup" aria-labelledby="tool-plan-label">
                 <span id="tool-plan-label" className="block text-sm font-medium text-gray-700 mb-3">
-                  Select Plan <span className="text-red-500" aria-hidden="true">*</span>
+                  Select Plan{' '}
+                  <span className="text-red-500" aria-hidden="true">
+                    *
+                  </span>
                   <span className="sr-only">(required)</span>
                 </span>
                 <div className="space-y-3">
@@ -178,15 +180,18 @@ export function SubscribeToToolModal({
                             <Icon className={`h-5 w-5 ${plan.color}`} />
                           </div>
                           <div className="flex-1">
-                            <h4 className={`font-semibold ${isSelected ? plan.color : 'text-gray-900'}`}>
+                            <h4
+                              className={`font-semibold ${isSelected ? plan.color : 'text-gray-900'}`}
+                            >
                               {plan.name}
                             </h4>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {plan.description}
-                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">{plan.description}</p>
                             <ul className="mt-2 space-y-1">
                               {plan.features.map((feature, idx) => (
-                                <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-600">
+                                <li
+                                  key={idx}
+                                  className="flex items-center gap-1.5 text-xs text-gray-600"
+                                >
                                   <Check className="h-3 w-3 text-green-500" />
                                   {feature}
                                 </li>
@@ -210,8 +215,8 @@ export function SubscribeToToolModal({
               {/* Info box */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-blue-700">
-                  After subscribing, you'll receive access credentials for this tool.
-                  You can use these credentials with MCP-compatible clients to invoke the tool.
+                  After subscribing, you'll receive access credentials for this tool. You can use
+                  these credentials with MCP-compatible clients to invoke the tool.
                 </p>
               </div>
             </div>

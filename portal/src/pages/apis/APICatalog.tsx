@@ -43,13 +43,16 @@ export function APICatalog() {
   const pageSize = 12;
 
   // Prefetch API detail on hover for faster navigation
-  const prefetchAPI = useCallback((id: string) => {
-    queryClient.prefetchQuery({
-      queryKey: ['api', id],
-      queryFn: () => apiCatalogService.getAPI(id),
-      staleTime: 60 * 1000, // 1 minute, matches useAPI hook
-    });
-  }, [queryClient]);
+  const prefetchAPI = useCallback(
+    (id: string) => {
+      queryClient.prefetchQuery({
+        queryKey: ['api', id],
+        queryFn: () => apiCatalogService.getAPI(id),
+        staleTime: 60 * 1000, // 1 minute, matches useAPI hook
+      });
+    },
+    [queryClient]
+  );
 
   // Debounce search for better performance (300ms delay)
   const debouncedSearch = useDebounce(search, 300);
@@ -158,13 +161,11 @@ export function APICatalog() {
       {/* Results count */}
       {!apisLoading && !apisError && (
         <div className="text-sm text-gray-500 dark:text-neutral-400">
-          {totalCount === 0 ? (
-            'No APIs found'
-          ) : totalCount === 1 ? (
-            '1 API available'
-          ) : (
-            `${totalCount} APIs available`
-          )}
+          {totalCount === 0
+            ? 'No APIs found'
+            : totalCount === 1
+              ? '1 API available'
+              : `${totalCount} APIs available`}
           {(search || category || universe) && ` matching your filters`}
         </div>
       )}
@@ -204,7 +205,9 @@ export function APICatalog() {
           <div className="inline-flex p-4 bg-gray-100 dark:bg-neutral-700 rounded-full mb-4">
             <BookOpen className="h-8 w-8 text-gray-400 dark:text-neutral-500" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No APIs Found</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            No APIs Found
+          </h2>
           <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto">
             {search || category || universe
               ? 'No APIs match your current filters. Try adjusting your search criteria.'
@@ -231,21 +234,13 @@ export function APICatalog() {
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {apis.map((api: API) => (
-                <APICard
-                  key={api.id}
-                  api={api}
-                  onMouseEnter={() => prefetchAPI(api.id)}
-                />
+                <APICard key={api.id} api={api} onMouseEnter={() => prefetchAPI(api.id)} />
               ))}
             </div>
           ) : (
             <div className="space-y-4">
               {apis.map((api: API) => (
-                <APICard
-                  key={api.id}
-                  api={api}
-                  onMouseEnter={() => prefetchAPI(api.id)}
-                />
+                <APICard key={api.id} api={api} onMouseEnter={() => prefetchAPI(api.id)} />
               ))}
             </div>
           )}

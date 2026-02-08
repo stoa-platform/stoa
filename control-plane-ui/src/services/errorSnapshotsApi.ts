@@ -68,19 +68,14 @@ class ErrorSnapshotsService {
    * Get a single error snapshot by ID
    */
   async getSnapshot(snapshotId: string): Promise<MCPErrorSnapshot> {
-    const { data } = await apiService.get<MCPErrorSnapshot>(
-      `${SNAPSHOTS_BASE}/${snapshotId}`
-    );
+    const { data } = await apiService.get<MCPErrorSnapshot>(`${SNAPSHOTS_BASE}/${snapshotId}`);
     return data;
   }
 
   /**
    * Get aggregated error statistics
    */
-  async getStats(
-    startDate?: string,
-    endDate?: string
-  ): Promise<MCPErrorSnapshotStats> {
+  async getStats(startDate?: string, endDate?: string): Promise<MCPErrorSnapshotStats> {
     const params = new URLSearchParams();
     if (startDate) params.set('start_date', startDate);
     if (endDate) params.set('end_date', endDate);
@@ -96,9 +91,7 @@ class ErrorSnapshotsService {
    * Get available filter values
    */
   async getFilters(): Promise<SnapshotFiltersResponse> {
-    const { data } = await apiService.get<SnapshotFiltersResponse>(
-      `${SNAPSHOTS_BASE}/filters`
-    );
+    const { data } = await apiService.get<SnapshotFiltersResponse>(`${SNAPSHOTS_BASE}/filters`);
     return data;
   }
 
@@ -110,13 +103,10 @@ class ErrorSnapshotsService {
     status: SnapshotResolutionStatus,
     notes?: string
   ): Promise<MCPErrorSnapshot> {
-    const { data } = await apiService.patch<MCPErrorSnapshot>(
-      `${SNAPSHOTS_BASE}/${snapshotId}`,
-      {
-        resolution_status: status,
-        resolution_notes: notes,
-      }
-    );
+    const { data } = await apiService.patch<MCPErrorSnapshot>(`${SNAPSHOTS_BASE}/${snapshotId}`, {
+      resolution_status: status,
+      resolution_notes: notes,
+    });
     return data;
   }
 

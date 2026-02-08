@@ -177,16 +177,22 @@ curl -X POST "${mcpGatewayUrl}/mcp/tools/invoke" \\
           {activeTab === 'claude-desktop' && (
             <>
               Add this configuration to your Claude Desktop config file at{' '}
-              <code className="bg-gray-200 px-1 rounded">~/Library/Application Support/Claude/claude_desktop_config.json</code>
+              <code className="bg-gray-200 px-1 rounded">
+                ~/Library/Application Support/Claude/claude_desktop_config.json
+              </code>
             </>
           )}
           {activeTab === 'python' && (
             <>
-              Install the Anthropic SDK: <code className="bg-gray-200 px-1 rounded">pip install anthropic</code>
+              Install the Anthropic SDK:{' '}
+              <code className="bg-gray-200 px-1 rounded">pip install anthropic</code>
             </>
           )}
           {activeTab === 'curl' && (
-            <>Replace <code className="bg-gray-200 px-1 rounded">YOUR_TOKEN</code> with your Keycloak access token.</>
+            <>
+              Replace <code className="bg-gray-200 px-1 rounded">YOUR_TOKEN</code> with your
+              Keycloak access token.
+            </>
           )}
         </p>
       </div>

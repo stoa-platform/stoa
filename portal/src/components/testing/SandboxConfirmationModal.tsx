@@ -139,14 +139,14 @@ export function SandboxConfirmationModal({
               disabled={!understood}
               className={`
                 inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
-                ${understood
-                  ? 'bg-amber-600 text-white hover:bg-amber-700'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                ${
+                  understood
+                    ? 'bg-amber-600 text-white hover:bg-amber-700'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }
               `}
             >
-              <CheckCircle className="h-4 w-4" />
-              I Understand, Continue
+              <CheckCircle className="h-4 w-4" />I Understand, Continue
             </button>
           </div>
         </div>

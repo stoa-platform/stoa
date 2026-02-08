@@ -46,7 +46,9 @@ const dateFormatOptions: Intl.DateTimeFormatOptions = {
   year: 'numeric',
 };
 
-export const ApplicationCard = memo(function ApplicationCard({ application }: ApplicationCardProps) {
+export const ApplicationCard = memo(function ApplicationCard({
+  application,
+}: ApplicationCardProps) {
   const status = statusConfig[application.status] || statusConfig.active;
   const StatusIcon = status.icon;
 
@@ -69,12 +71,12 @@ export const ApplicationCard = memo(function ApplicationCard({ application }: Ap
           </h3>
           <div className="flex items-center gap-2 mt-1">
             <Key className="h-3 w-3 text-gray-400" />
-            <span className="text-xs font-mono text-gray-500 truncate">
-              {application.clientId}
-            </span>
+            <span className="text-xs font-mono text-gray-500 truncate">{application.clientId}</span>
           </div>
         </div>
-        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}>
+        <span
+          className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}
+        >
           <StatusIcon className={`h-3 w-3 ${status.color}`} />
           {status.label}
         </span>

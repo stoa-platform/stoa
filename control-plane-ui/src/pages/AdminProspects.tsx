@@ -134,9 +134,7 @@ export function AdminProspects() {
     );
   }
 
-  const totalPages = prospectsData
-    ? Math.ceil(prospectsData.meta.total / PAGE_SIZE)
-    : 0;
+  const totalPages = prospectsData ? Math.ceil(prospectsData.meta.total / PAGE_SIZE) : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -307,7 +305,10 @@ function MetricsHeader({
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse">
+          <div
+            key={i}
+            className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse"
+          >
             <div className="h-4 bg-gray-200 rounded w-20 mb-2" />
             <div className="h-8 bg-gray-200 rounded w-16" />
           </div>
@@ -379,20 +380,11 @@ function MetricCard({
   );
 }
 
-function ProspectRow({
-  prospect,
-  onClick,
-}: {
-  prospect: ProspectSummary;
-  onClick: () => void;
-}) {
+function ProspectRow({ prospect, onClick }: { prospect: ProspectSummary; onClick: () => void }) {
   const statusStyle = statusColors[prospect.status];
 
   return (
-    <tr
-      onClick={onClick}
-      className="hover:bg-gray-50 cursor-pointer transition-colors"
-    >
+    <tr onClick={onClick} className="hover:bg-gray-50 cursor-pointer transition-colors">
       <td className="px-6 py-4">
         <div className="font-medium text-gray-900">{prospect.company}</div>
         <div className="text-sm text-gray-500">{prospect.email}</div>
@@ -420,9 +412,7 @@ function ProspectRow({
         )}
       </td>
       <td className="px-6 py-4 text-sm text-gray-900">{prospect.total_events}</td>
-      <td className="px-6 py-4 text-sm text-gray-500">
-        {formatDate(prospect.last_activity_at)}
-      </td>
+      <td className="px-6 py-4 text-sm text-gray-500">{formatDate(prospect.last_activity_at)}</td>
     </tr>
   );
 }
@@ -449,17 +439,12 @@ function ProspectDetailModal({
               <div className="h-6 bg-gray-200 rounded w-40 animate-pulse" />
             ) : prospect ? (
               <>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {prospect.company}
-                </h2>
+                <h2 className="text-lg font-semibold text-gray-900">{prospect.company}</h2>
                 <p className="text-sm text-gray-500">{prospect.email}</p>
               </>
             ) : null}
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <X className="h-5 w-5 text-gray-500" />
           </button>
         </div>
@@ -538,13 +523,8 @@ function ProspectDetailModal({
                   </h3>
                   <div className="space-y-2">
                     {prospect.errors.map((event) => (
-                      <div
-                        key={event.id}
-                        className="bg-red-50 rounded-lg p-3 text-sm text-red-700"
-                      >
-                        <span className="text-xs text-red-500">
-                          {formatDate(event.timestamp)}
-                        </span>
+                      <div key={event.id} className="bg-red-50 rounded-lg p-3 text-sm text-red-700">
+                        <span className="text-xs text-red-500">{formatDate(event.timestamp)}</span>
                         <span className="mx-2">—</span>
                         {(event.metadata as { error?: string }).error || 'Unknown error'}
                       </div>
@@ -583,25 +563,15 @@ function StatBox({
   highlight?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-lg p-3 text-center ${
-        highlight ? 'bg-red-50' : 'bg-gray-50'
-      }`}
-    >
-      <Icon
-        className={`h-5 w-5 mx-auto ${highlight ? 'text-red-500' : 'text-gray-400'}`}
-      />
+    <div className={`rounded-lg p-3 text-center ${highlight ? 'bg-red-50' : 'bg-gray-50'}`}>
+      <Icon className={`h-5 w-5 mx-auto ${highlight ? 'text-red-500' : 'text-gray-400'}`} />
       <p className="text-lg font-semibold text-gray-900 mt-1">{value}</p>
       <p className="text-xs text-gray-500">{label}</p>
     </div>
   );
 }
 
-function TimelineEvent({
-  event,
-}: {
-  event: ProspectDetail['timeline'][0];
-}) {
+function TimelineEvent({ event }: { event: ProspectDetail['timeline'][0] }) {
   const eventIcons: Record<string, typeof Activity> = {
     invite_opened: Eye,
     tool_called: MousePointerClick,
@@ -628,14 +598,10 @@ function TimelineEvent({
           </span>
         )}
         {(event.metadata as { tool?: string; page?: string }).tool && (
-          <span className="ml-2 text-gray-500">
-            {(event.metadata as { tool: string }).tool}
-          </span>
+          <span className="ml-2 text-gray-500">{(event.metadata as { tool: string }).tool}</span>
         )}
         {(event.metadata as { page?: string }).page && (
-          <span className="ml-2 text-gray-500">
-            {(event.metadata as { page: string }).page}
-          </span>
+          <span className="ml-2 text-gray-500">{(event.metadata as { page: string }).page}</span>
         )}
       </div>
     </div>

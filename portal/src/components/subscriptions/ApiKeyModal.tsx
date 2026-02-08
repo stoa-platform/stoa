@@ -8,15 +8,7 @@
  */
 
 import { useState } from 'react';
-import {
-  X,
-  Key,
-  Copy,
-  CheckCircle,
-  AlertTriangle,
-  ExternalLink,
-  Download,
-} from 'lucide-react';
+import { X, Key, Copy, CheckCircle, AlertTriangle, ExternalLink, Download } from 'lucide-react';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -26,13 +18,7 @@ interface ApiKeyModalProps {
   toolName?: string;
 }
 
-export function ApiKeyModal({
-  isOpen,
-  onClose,
-  apiKey,
-  toolId,
-  toolName,
-}: ApiKeyModalProps) {
+export function ApiKeyModal({ isOpen, onClose, apiKey, toolId, toolName }: ApiKeyModalProps) {
   const [copied, setCopied] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
 
@@ -103,12 +89,8 @@ export function ApiKeyModal({
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Subscription Created
-                </h2>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {toolName || toolId}
-                </p>
+                <h2 className="text-xl font-semibold text-gray-900">Subscription Created</h2>
+                <p className="text-sm text-gray-500 mt-0.5">{toolName || toolId}</p>
               </div>
             </div>
             {acknowledged && (
@@ -127,13 +109,10 @@ export function ApiKeyModal({
             <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
               <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
               <div>
-                <h4 className="font-medium text-amber-800">
-                  Save Your API Key Now
-                </h4>
+                <h4 className="font-medium text-amber-800">Save Your API Key Now</h4>
                 <p className="text-sm text-amber-700 mt-1">
-                  This API key will only be shown <strong>once</strong>. Make sure to copy
-                  and store it securely before closing this modal. You will not be able
-                  to retrieve it later.
+                  This API key will only be shown <strong>once</strong>. Make sure to copy and store
+                  it securely before closing this modal. You will not be able to retrieve it later.
                 </p>
               </div>
             </div>
@@ -160,17 +139,11 @@ export function ApiKeyModal({
                     }`}
                     title={copied ? 'Copied!' : 'Copy to clipboard'}
                   >
-                    {copied ? (
-                      <CheckCircle className="h-5 w-5" />
-                    ) : (
-                      <Copy className="h-5 w-5" />
-                    )}
+                    {copied ? <CheckCircle className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
                   </button>
                 </div>
                 {copied && (
-                  <p className="mt-2 text-sm text-green-600 font-medium">
-                    Copied to clipboard!
-                  </p>
+                  <p className="mt-2 text-sm text-green-600 font-medium">Copied to clipboard!</p>
                 )}
               </div>
             </div>
@@ -195,12 +168,10 @@ export function ApiKeyModal({
 
             {/* Usage Example */}
             <div>
-              <span className="block text-sm font-medium text-gray-700 mb-2">
-                Usage Example
-              </span>
+              <span className="block text-sm font-medium text-gray-700 mb-2">Usage Example</span>
               <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
                 <pre className="text-sm text-gray-100 font-mono whitespace-pre-wrap">
-{`# Use with Claude Desktop
+                  {`# Use with Claude Desktop
 # Add to ~/.config/claude/claude_desktop_config.json
 
 # Or use the API directly:
@@ -221,8 +192,8 @@ curl -X POST https://mcp.gostoa.dev/mcp/v1/invoke \\
                 className="mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
               />
               <span className="text-sm text-gray-700">
-                I have copied and securely stored my API key. I understand that this
-                key will not be shown again.
+                I have copied and securely stored my API key. I understand that this key will not be
+                shown again.
               </span>
             </label>
           </div>

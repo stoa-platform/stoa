@@ -16,12 +16,15 @@ interface GeneratedBindingRowProps {
   binding: GeneratedBinding;
 }
 
-const protocolConfig: Record<ProtocolType, {
-  label: string;
-  icon: string;
-  color: string;
-  bgColor: string;
-}> = {
+const protocolConfig: Record<
+  ProtocolType,
+  {
+    label: string;
+    icon: string;
+    color: string;
+    bgColor: string;
+  }
+> = {
   rest: {
     label: 'REST',
     icon: '🌐',
@@ -67,46 +70,32 @@ export const GeneratedBindingRow: React.FC<GeneratedBindingRowProps> = ({ bindin
 
   const getEndpointDisplay = () => {
     if (!isCreated) {
-      return (
-        <span className="text-gray-400 text-sm">
-          Enable in Protocol Settings
-        </span>
-      );
+      return <span className="text-gray-400 text-sm">Enable in Protocol Settings</span>;
     }
 
     if (binding.protocol === 'mcp' && binding.tool_name) {
-      return (
-        <span className="text-gray-600 text-sm font-mono">
-          tool: {binding.tool_name}
-        </span>
-      );
+      return <span className="text-gray-600 text-sm font-mono">tool: {binding.tool_name}</span>;
     }
 
     if (binding.protocol === 'graphql' && binding.operations?.length) {
       return (
-        <span className="text-gray-600 text-sm font-mono">
-          {binding.operations.join(', ')}
-        </span>
+        <span className="text-gray-600 text-sm font-mono">{binding.operations.join(', ')}</span>
       );
     }
 
     if (binding.endpoint) {
-      return (
-        <span className="text-gray-600 text-sm font-mono truncate">
-          {binding.endpoint}
-        </span>
-      );
+      return <span className="text-gray-600 text-sm font-mono truncate">{binding.endpoint}</span>;
     }
 
     return null;
   };
 
   return (
-    <div className={`flex items-start gap-3 p-3 rounded-lg ${isCreated ? config.bgColor : 'bg-gray-50'}`}>
+    <div
+      className={`flex items-start gap-3 p-3 rounded-lg ${isCreated ? config.bgColor : 'bg-gray-50'}`}
+    >
       {/* Status icon */}
-      <div className="flex-shrink-0 mt-0.5">
-        {getStatusIcon()}
-      </div>
+      <div className="flex-shrink-0 mt-0.5">{getStatusIcon()}</div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
@@ -125,9 +114,7 @@ export const GeneratedBindingRow: React.FC<GeneratedBindingRowProps> = ({ bindin
           )}
         </div>
 
-        <div className="mt-1">
-          {getEndpointDisplay()}
-        </div>
+        <div className="mt-1">{getEndpointDisplay()}</div>
       </div>
 
       {/* Action link */}

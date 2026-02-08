@@ -59,10 +59,7 @@ export function useProspectsMetrics(
 /**
  * Hook to fetch detailed prospect info with timeline
  */
-export function useProspectDetail(
-  inviteId: string | null,
-  options?: { enabled?: boolean }
-) {
+export function useProspectDetail(inviteId: string | null, options?: { enabled?: boolean }) {
   const { enabled = true } = options || {};
 
   return useQuery<ProspectDetail>({
@@ -120,9 +117,7 @@ export function useRefreshProspects() {
 /**
  * Derived hook for dashboard summary stats
  */
-export function useProspectsSummary(
-  filters?: { date_from?: string; date_to?: string }
-) {
+export function useProspectsSummary(filters?: { date_from?: string; date_to?: string }) {
   const { data: metrics, isLoading, error } = useProspectsMetrics(filters);
 
   if (!metrics) {

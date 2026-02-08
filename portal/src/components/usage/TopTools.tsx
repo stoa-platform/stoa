@@ -33,10 +33,7 @@ function ToolsSkeleton() {
 export const TopTools = memo(function TopTools({ tools, isLoading = false }: TopToolsProps) {
   // Memoize maxCalls for performance - only recalculate when tools change
   // Note: Must be called before any early returns to satisfy React Hooks rules
-  const maxCalls = useMemo(
-    () => Math.max(...tools.map(t => t.call_count), 1),
-    [tools]
-  );
+  const maxCalls = useMemo(() => Math.max(...tools.map((t) => t.call_count), 1), [tools]);
 
   if (isLoading) {
     return (
@@ -65,9 +62,7 @@ export const TopTools = memo(function TopTools({ tools, isLoading = false }: Top
               <div key={tool.tool_id} className="group">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-400 w-4">
-                      {index + 1}.
-                    </span>
+                    <span className="text-xs font-medium text-gray-400 w-4">{index + 1}.</span>
                     <span className="text-sm font-medium text-gray-900 truncate max-w-[150px]">
                       {tool.tool_name}
                     </span>

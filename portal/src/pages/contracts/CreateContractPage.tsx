@@ -47,9 +47,7 @@ export const CreateContractPage: React.FC = () => {
     publishContract.mutate(formData);
   };
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -218,8 +216,8 @@ export const CreateContractPage: React.FC = () => {
                   MCP binding auto-generated
                 </p>
                 <p className="text-sm text-purple-700 dark:text-purple-400 mt-1">
-                  When you publish this contract, STOA will automatically create
-                  an MCP tool that AI agents can use. No extra configuration needed!
+                  When you publish this contract, STOA will automatically create an MCP tool that AI
+                  agents can use. No extra configuration needed!
                 </p>
               </div>
             </div>

@@ -31,7 +31,7 @@ export function IdentityEmbed() {
   const handleRefresh = () => {
     setIsLoading(true);
     setError(null);
-    setKey(prev => prev + 1);
+    setKey((prev) => prev + 1);
   };
 
   const handleOpenExternal = () => {
@@ -39,9 +39,13 @@ export function IdentityEmbed() {
   };
 
   return (
-    <div className={`${isFullscreen ? 'fixed inset-0 z-50 bg-white dark:bg-neutral-900' : 'space-y-4'}`}>
+    <div
+      className={`${isFullscreen ? 'fixed inset-0 z-50 bg-white dark:bg-neutral-900' : 'space-y-4'}`}
+    >
       {/* Header */}
-      <div className={`flex items-center justify-between ${isFullscreen ? 'p-4 border-b border-gray-200 dark:border-neutral-700' : ''}`}>
+      <div
+        className={`flex items-center justify-between ${isFullscreen ? 'p-4 border-b border-gray-200 dark:border-neutral-700' : ''}`}
+      >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
             <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
@@ -69,11 +73,7 @@ export function IdentityEmbed() {
             className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
             title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
           >
-            {isFullscreen ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             <span className="hidden sm:inline">{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
           </button>
           <button

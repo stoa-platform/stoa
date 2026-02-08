@@ -38,11 +38,11 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
   if (!isOpen || !data) return null;
 
   // Separate and count bindings by status
-  const createdBindings = data.bindings_generated.filter(b => b.status === 'created');
-  const availableBindings = data.bindings_generated.filter(b => b.status === 'available');
+  const createdBindings = data.bindings_generated.filter((b) => b.status === 'created');
+  const availableBindings = data.bindings_generated.filter((b) => b.status === 'available');
 
   // Find the first playground URL for the main action button
-  const firstPlayground = createdBindings.find(b => b.playground_url)?.playground_url;
+  const firstPlayground = createdBindings.find((b) => b.playground_url)?.playground_url;
 
   // Sort bindings by predefined order
   const sortedBindings = [...data.bindings_generated].sort(
@@ -63,10 +63,7 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
       aria-labelledby="publish-success-title"
     >
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 transition-opacity"
-        onClick={handleBackdropClick}
-      />
+      <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={handleBackdropClick} />
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
@@ -89,15 +86,11 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
                 </div>
               </div>
               <div>
-                <h2
-                  id="publish-success-title"
-                  className="text-xl font-semibold text-gray-900"
-                >
+                <h2 id="publish-success-title" className="text-xl font-semibold text-gray-900">
                   Contract published!
                 </h2>
                 <p className="text-sm text-gray-500 mt-0.5">
-                  <span className="font-mono font-medium">{data.name}</span>
-                  {' '}v{data.version}
+                  <span className="font-mono font-medium">{data.name}</span> v{data.version}
                 </p>
               </div>
             </div>
@@ -108,27 +101,27 @@ export const PublishSuccessModal: React.FC<PublishSuccessModalProps> = ({
 
           {/* Bindings list */}
           <div className="p-6 pt-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">
-              Auto-generated bindings
-            </h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Auto-generated bindings</h3>
 
             <div className="space-y-2">
               {sortedBindings.map((binding) => (
-                <GeneratedBindingRow
-                  key={binding.protocol}
-                  binding={binding}
-                />
+                <GeneratedBindingRow key={binding.protocol} binding={binding} />
               ))}
             </div>
 
             {/* Stats summary */}
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-sm text-gray-500">
-                <span className="font-medium text-gray-700">{createdBindings.length}</span> binding{createdBindings.length !== 1 ? 's' : ''} active
+                <span className="font-medium text-gray-700">{createdBindings.length}</span> binding
+                {createdBindings.length !== 1 ? 's' : ''} active
                 {availableBindings.length > 0 && (
                   <span>
-                    {' '}&bull;{' '}
-                    <span className="font-medium text-gray-700">{availableBindings.length}</span> more available
+                    {' '}
+                    &bull;{' '}
+                    <span className="font-medium text-gray-700">
+                      {availableBindings.length}
+                    </span>{' '}
+                    more available
                   </span>
                 )}
               </p>

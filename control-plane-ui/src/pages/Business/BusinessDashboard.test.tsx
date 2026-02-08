@@ -5,7 +5,14 @@ import { MemoryRouter } from 'react-router-dom';
 // Mock AuthContext
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
-    user: { id: 'user-admin', email: 'parzival@oasis.gg', name: 'Parzival', roles: ['cpi-admin'], tenant_id: 'oasis-gunters', permissions: ['tenants:read'] },
+    user: {
+      id: 'user-admin',
+      email: 'parzival@oasis.gg',
+      name: 'Parzival',
+      roles: ['cpi-admin'],
+      tenant_id: 'oasis-gunters',
+      permissions: ['tenants:read'],
+    },
     isAuthenticated: true,
     isLoading: false,
     isReady: true,
@@ -58,7 +65,9 @@ vi.mock('../../utils/navigation', () => ({
 
 // Mock shared components
 vi.mock('@stoa/shared/components/Skeleton', () => ({
-  CardSkeleton: ({ className }: { className?: string }) => <div data-testid="card-skeleton" className={className} />,
+  CardSkeleton: ({ className }: { className?: string }) => (
+    <div data-testid="card-skeleton" className={className} />
+  ),
 }));
 
 import { BusinessDashboard } from './BusinessDashboard';
@@ -83,7 +92,9 @@ describe('BusinessDashboard', () => {
 
   it('renders the subtitle', async () => {
     renderComponent();
-    expect(await screen.findByText('Platform adoption, usage trends, and business metrics')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Platform adoption, usage trends, and business metrics')
+    ).toBeInTheDocument();
   });
 
   it('shows KPI cards after loading', async () => {
@@ -151,7 +162,14 @@ describe('BusinessDashboard', () => {
   it('denies access to non-admin users', async () => {
     const { useAuth } = await import('../../contexts/AuthContext');
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'user-viewer', email: 'viewer@oasis.gg', name: 'Viewer', roles: ['viewer'], tenant_id: 'oasis-gunters', permissions: ['apis:read'] },
+      user: {
+        id: 'user-viewer',
+        email: 'viewer@oasis.gg',
+        name: 'Viewer',
+        roles: ['viewer'],
+        tenant_id: 'oasis-gunters',
+        permissions: ['apis:read'],
+      },
       isAuthenticated: true,
       isLoading: false,
       isReady: true,

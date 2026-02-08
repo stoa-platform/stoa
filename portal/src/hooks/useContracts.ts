@@ -23,11 +23,7 @@ import type {
 /**
  * Hook to list contracts for the current tenant
  */
-export function useContracts(params?: {
-  page?: number;
-  page_size?: number;
-  status?: string;
-}) {
+export function useContracts(params?: { page?: number; page_size?: number; status?: string }) {
   return useQuery<ContractListResponse>({
     queryKey: ['contracts', params],
     queryFn: () => contractsService.listContracts(params),

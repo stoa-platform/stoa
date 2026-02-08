@@ -36,11 +36,14 @@ import { toolsService } from '../../services/tools';
 type ToolStatus = 'active' | 'deprecated' | 'beta';
 type TabType = 'overview' | 'schema' | 'try-it';
 
-const statusConfig: Record<ToolStatus, {
-  label: string;
-  color: string;
-  bg: string;
-}> = {
+const statusConfig: Record<
+  ToolStatus,
+  {
+    label: string;
+    color: string;
+    bg: string;
+  }
+> = {
   active: { label: 'Active', color: 'text-green-700', bg: 'bg-green-100' },
   beta: { label: 'Beta', color: 'text-amber-700', bg: 'bg-amber-100' },
   deprecated: { label: 'Deprecated', color: 'text-red-700', bg: 'bg-red-100' },
@@ -66,18 +69,9 @@ export function ToolDetail() {
     toolId: string;
   }>({ isOpen: false, apiKey: '', toolId: '' });
 
-  const {
-    data: tool,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useTool(id);
+  const { data: tool, isLoading, isError, error, refetch } = useTool(id);
 
-  const {
-    data: schema,
-    isLoading: schemaLoading,
-  } = useToolSchema(id);
+  const { data: schema, isLoading: schemaLoading } = useToolSchema(id);
 
   const subscribeMutation = useSubscribeToTool();
 
@@ -175,8 +169,12 @@ export function ToolDetail() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-2xl font-bold text-gray-900">{tool.displayName || tool.name}</h1>
-                  <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${status.bg} ${status.color}`}>
+                  <h1 className="text-2xl font-bold text-gray-900">
+                    {tool.displayName || tool.name}
+                  </h1>
+                  <span
+                    className={`px-2.5 py-1 text-xs font-medium rounded-full ${status.bg} ${status.color}`}
+                  >
                     {status.label}
                   </span>
                 </div>
@@ -199,7 +197,9 @@ export function ToolDetail() {
               {tool.rateLimit && (
                 <div className="flex items-center gap-1.5">
                   <Clock className="h-4 w-4" />
-                  <span>{tool.rateLimit.requests} requests/{tool.rateLimit.period}</span>
+                  <span>
+                    {tool.rateLimit.requests} requests/{tool.rateLimit.period}
+                  </span>
                 </div>
               )}
               {tool.pricing && (
@@ -220,10 +220,7 @@ export function ToolDetail() {
             {tool.tags && tool.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">
                 {tool.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded"
-                  >
+                  <span key={tag} className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
                     {tag}
                   </span>
                 ))}
@@ -317,13 +314,21 @@ export function ToolDetail() {
                 <h3 className="text-sm font-medium text-gray-700 mb-3">Usage Example</h3>
                 <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
                   <pre className="text-sm text-gray-100 font-mono">
-{`// MCP Client Usage
+                    {`// MCP Client Usage
 const response = await mcpClient.callTool({
   name: "${tool.name}",
   arguments: {
-${inputSchema?.properties ? Object.entries(inputSchema.properties).slice(0, 3).map(([key, prop]) =>
-    `    ${key}: ${prop.type === 'string' ? '"example"' : prop.type === 'number' ? '123' : prop.type === 'boolean' ? 'true' : '...'}`
-  ).join(',\n') : '    // Add your input parameters here'}
+${
+  inputSchema?.properties
+    ? Object.entries(inputSchema.properties)
+        .slice(0, 3)
+        .map(
+          ([key, prop]) =>
+            `    ${key}: ${prop.type === 'string' ? '"example"' : prop.type === 'number' ? '123' : prop.type === 'boolean' ? 'true' : '...'}`
+        )
+        .join(',\n')
+    : '    // Add your input parameters here'
+}
   }
 });
 
@@ -377,10 +382,7 @@ console.log(response);`}
               ) : (
                 <>
                   {/* Input Schema */}
-                  <SchemaViewer
-                    schema={inputSchema}
-                    title="Input Schema"
-                  />
+                  <SchemaViewer schema={inputSchema} title="Input Schema" />
 
                   {/* Output Schema */}
                   {tool.outputSchema && (

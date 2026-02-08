@@ -99,8 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start background tasks
     state.start_background_tasks();
 
-    // Initialize Kafka metering (Phase 3: CAB-1105)
-    let _metering = init_metering(&config);
+    // Kafka metering is now initialized inside AppState::new() (Phase 3: CAB-1105)
 
     // Initialize K8s CRD watcher (Phase 7: CAB-1105)
     init_k8s_watcher(&config, &state).await;
@@ -341,44 +340,6 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => info!("Received Ctrl+C, initiating shutdown..."),
         _ = terminate => info!("Received SIGTERM, initiating shutdown..."),
-    }
-}
-
-// === Metering Initialization (Phase 3: CAB-1105) ===
-
-/// Initialize Kafka metering producer
-///
-/// Returns `Some(producer)` if metering is enabled and Kafka is reachable.
-/// Returns `None` if disabled or Kafka is unavailable (graceful degradation).
-fn init_metering(config: &Config) -> Option<std::sync::Arc<metering::MeteringProducer>> {
-    if !config.kafka_enabled {
-        info!("Kafka metering disabled (STOA_KAFKA_ENABLED=false)");
-        return None;
-    }
-
-    let kafka_config = metering::KafkaConfig {
-        brokers: config.kafka_brokers.clone(),
-        metering_topic: config.kafka_metering_topic.clone(),
-        errors_topic: config.kafka_errors_topic.clone(),
-        enabled: true,
-    };
-
-    let producer_config = metering::MeteringProducerConfig::from(&kafka_config);
-
-    match metering::MeteringProducer::new(producer_config) {
-        Ok(producer) => {
-            info!(
-                brokers = %config.kafka_brokers,
-                metering_topic = %config.kafka_metering_topic,
-                errors_topic = %config.kafka_errors_topic,
-                "Kafka metering enabled"
-            );
-            Some(std::sync::Arc::new(producer))
-        }
-        Err(e) => {
-            warn!(error = %e, "Kafka metering initialization failed — metering disabled");
-            None
-        }
     }
 }
 

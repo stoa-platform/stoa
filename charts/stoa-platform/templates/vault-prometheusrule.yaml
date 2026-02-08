@@ -1,0 +1,89 @@
+{{- if (default false .Values.vault.monitoring.prometheusRule.enabled) }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vault-alerts
+  namespace: {{ .Values.vault.namespace | default "vault" }}
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/component: secrets
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: vault.rules
+      rules:
+        # Critical: Vault is sealed — all secret-dependent services will fail
+        - alert: VaultSealed
+          expr: vault_core_unsealed == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Vault is sealed"
+            description: "Vault instance {{ "{{" }} $labels.instance {{ "}}" }} has been sealed for more than 1 minute. All secret-dependent services (Keycloak, Control Plane, Gateway) are impacted."
+            runbook_url: "https://docs.gostoa.dev/runbooks/vault-sealed"
+
+        # Critical: Vault auto-unseal is failing repeatedly
+        - alert: VaultAutoUnsealFailing
+          expr: increase(vault_core_unseal_ops{type="recovery"}[10m]) > 3
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Vault auto-unseal is failing"
+            description: "Vault auto-unseal has failed multiple times in the last 10 minutes. Check AWS KMS connectivity and IRSA configuration."
+            runbook_url: "https://docs.gostoa.dev/runbooks/vault-sealed"
+
+        # Critical: Vault is completely down
+        - alert: VaultDown
+          expr: up{job="vault"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Vault is down"
+            description: "Vault instance {{ "{{" }} $labels.instance {{ "}}" }} is unreachable."
+
+        # Warning: No active Vault leader (HA)
+        - alert: VaultNoActiveNode
+          expr: vault_core_active == 0
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No active Vault leader"
+            description: "No Vault node is reporting as active leader. Raft consensus may be broken."
+
+        # Warning: Vault request latency is high
+        - alert: VaultHighLatency
+          expr: histogram_quantile(0.99, rate(vault_barrier_get_duration_seconds_bucket[5m])) > 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Vault barrier get latency is high"
+            description: "P99 latency for Vault barrier get operations exceeds 1s."
+
+        # Warning: DB credentials verification CronJob is failing
+        - alert: VaultDBCredentialsCheckFailing
+          expr: kube_job_status_failed{job_name=~"vault-db-credentials-check.*"} > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Vault DB credentials check is failing"
+            description: "The CronJob that verifies PostgreSQL credentials match Vault has failed. Credentials may be out of sync."
+
+        # Warning: DB credentials CronJob hasn't run
+        - alert: VaultDBCredentialsCheckNotRunning
+          expr: time() - kube_cronjob_status_last_successful_time{cronjob="vault-db-credentials-check"} > 86400
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Vault DB credentials check hasn't run in 24h"
+            description: "The DB credentials verification CronJob hasn't completed successfully in over 24 hours."
+{{- end }}

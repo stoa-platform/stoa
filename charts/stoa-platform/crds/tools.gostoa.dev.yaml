@@ -1,0 +1,110 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: tools.gostoa.dev
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  group: gostoa.dev
+  names:
+    kind: Tool
+    listKind: ToolList
+    plural: tools
+    singular: tool
+    shortNames:
+      - tool
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Display Name
+          type: string
+          jsonPath: .spec.displayName
+        - name: Endpoint
+          type: string
+          jsonPath: .spec.endpoint
+        - name: Registered
+          type: boolean
+          jsonPath: .status.registered
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - displayName
+                - description
+                - endpoint
+                - method
+                - inputSchema
+              properties:
+                displayName:
+                  type: string
+                  description: Human-readable display name
+                description:
+                  type: string
+                  description: Tool description for LLM context
+                endpoint:
+                  type: string
+                  description: HTTP endpoint of the backend service
+                method:
+                  type: string
+                  description: "HTTP method (GET, POST, PUT, DELETE)"
+                  enum:
+                    - GET
+                    - POST
+                    - PUT
+                    - DELETE
+                    - PATCH
+                inputSchema:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: JSON Schema for tool input arguments
+                outputSchema:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: Optional JSON Schema for tool output
+                auth:
+                  type: string
+                  description: "Authentication type"
+                  default: none
+                  enum:
+                    - bearer
+                    - service_account
+                    - none
+                rateLimit:
+                  type: string
+                  description: "Rate limit expression (e.g. 100/min, 1000/hour)"
+                annotations:
+                  type: object
+                  description: MCP tool annotations
+                  properties:
+                    readOnly:
+                      type: boolean
+                      description: If true, tool only reads data
+                    destructive:
+                      type: boolean
+                      description: If true, tool may perform destructive actions
+                    idempotent:
+                      type: boolean
+                      description: If true, tool is idempotent
+                    openWorld:
+                      type: boolean
+                      description: If true, tool interacts with external world
+            status:
+              type: object
+              properties:
+                registered:
+                  type: boolean
+                  description: Whether the tool is registered in the gateway
+                lastSeen:
+                  type: string
+                  description: Last time the tool was seen/updated
+                error:
+                  type: string
+                  description: Error message if registration failed
+      subresources:
+        status: {}

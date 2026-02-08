@@ -1,0 +1,103 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: toolsets.gostoa.dev
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  group: gostoa.dev
+  names:
+    kind: ToolSet
+    listKind: ToolSetList
+    plural: toolsets
+    singular: toolset
+    shortNames:
+      - ts
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Upstream
+          type: string
+          jsonPath: .spec.upstream.url
+        - name: Tools
+          type: integer
+          jsonPath: .status.toolCount
+        - name: Connected
+          type: boolean
+          jsonPath: .status.connected
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - upstream
+              properties:
+                upstream:
+                  type: object
+                  required:
+                    - url
+                  properties:
+                    url:
+                      type: string
+                      description: MCP server URL
+                    transport:
+                      type: string
+                      description: "Transport type"
+                      default: sse
+                      enum:
+                        - sse
+                        - streamable-http
+                    auth:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          description: "Auth type: bearer or header"
+                          enum:
+                            - bearer
+                            - header
+                        secretRef:
+                          type: string
+                          description: K8s Secret reference containing the credential
+                        headerName:
+                          type: string
+                          description: Header name (for header type)
+                    timeoutSeconds:
+                      type: integer
+                      description: Connection timeout in seconds
+                tools:
+                  type: array
+                  description: "List of tool names to expose (empty = all tools)"
+                  items:
+                    type: string
+                  default: []
+                prefix:
+                  type: string
+                  description: Prefix to add to tool names (to avoid collisions)
+            status:
+              type: object
+              properties:
+                connected:
+                  type: boolean
+                  description: Whether connected to upstream
+                toolCount:
+                  type: integer
+                  description: Number of tools discovered
+                discoveredTools:
+                  type: array
+                  description: List of discovered tool names
+                  items:
+                    type: string
+                lastSync:
+                  type: string
+                  description: Last successful sync timestamp
+                error:
+                  type: string
+                  description: Error message if connection failed
+      subresources:
+        status: {}

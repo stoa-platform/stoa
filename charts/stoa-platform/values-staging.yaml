@@ -31,3 +31,35 @@ ingress:
   tls:
     enabled: true
     issuer: letsencrypt-staging
+
+# STOA Gateway (Rust) — Staging overrides
+stoaGateway:
+  enabled: true
+  replicas: 2
+  mode: edge-mcp
+  environment: staging
+  keycloakUrl: "https://auth.gostoa.dev"
+  logLevel: info
+  policies:
+    enabled: true
+  k8s:
+    enabled: true
+  kafka:
+    enabled: true
+    brokers: "redpanda.stoa-system.svc.cluster.local:9092"
+  ingress:
+    enabled: true
+    host: mcp.staging.gostoa.dev
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-staging
+    tls:
+      - secretName: stoa-gateway-tls
+        hosts:
+          - mcp.staging.gostoa.dev
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi

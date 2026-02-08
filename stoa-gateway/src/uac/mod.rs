@@ -2,6 +2,13 @@
 //!
 //! Defines actions and permissions for API access control.
 
+pub mod cache;
+pub mod classifications;
+pub mod enforcer;
+pub mod safe_mode;
+
+pub use classifications::Classification;
+
 use serde::{Deserialize, Serialize};
 
 /// UAC Actions

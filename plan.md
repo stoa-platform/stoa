@@ -128,6 +128,44 @@ kubectl get policyreports -A -o json | jq '.items[].results[] | select(.result==
 
 ---
 
+### CAB-1119 — Brand Unification: Logo S Émeraude + Design Tokens + Portal Menu Cleanup
+
+**Status**: Todo | **Points**: 13 | **Priority**: High | **Cycle**: 6
+**Dépend de**: CAB-1118 (Console Sidebar Redesign)
+
+**Contexte**: 3 identités visuelles incohérentes (Landing, Portal, Console) → unification sous la palette LIBER Émeraude (#059669).
+
+**Palette HLFH**:
+| Pilier | Couleur | Usage |
+|--------|---------|-------|
+| 🕊️ LIBER | #059669 émeraude | Logo principal, sidebar, accent UI, CTA |
+| ⚔️ HONOR | #8b5cf6 violet | Badge features uniques, accent Gateway |
+| ☀️ HELION | #f59e0b ambre | Warnings, insights, statuts, analytics |
+| 🎯 FOCUS | #ef4444 rouge | Errors, alertes critiques, urgence |
+
+**3 chantiers**:
+
+#### Logo & Favicon
+- [ ] Recolorer le "S" favicon du violet (#8b7cf6) au vert émeraude (#059669)
+- [ ] Générer les tailles favicon (16x16, 32x32, 180x180, 512x512)
+- [ ] Mettre à jour le logo landing page, Console sidebar, Portal (remplacer badge "SP")
+
+#### Design System
+- [ ] Créer `design-tokens.ts` avec tokens dark/light
+- [ ] Toggle dark/light mode sur Console + Portal
+- [ ] Appliquer les tokens sur la landing page
+
+#### Portal Menu Cleanup
+- [ ] Fusionner My Apps + My Subscriptions + Contracts → "My Apps & Credentials" (tabs)
+- [ ] Déplacer Service Accounts → Console > Governance > Identity
+- [ ] Restructurer le menu en 3 sections : Discover, My Workspace, Account
+- [ ] Ajouter le lien "Console ↗" en bas de la sidebar Portal
+
+**Artifacts**: `stoa-logo-study.jsx`, `stoa-design-system-unified.jsx`
+**Réf**: ADR-030 — Console Navigation Redesign, HLFH Charte Fondatrice
+
+---
+
 ## Demo Readiness (Feb 24)
 
 | Priority | Ticket | Description | Status |
@@ -136,6 +174,7 @@ kubectl get policyreports -A -o json | jq '.items[].results[] | select(.result==
 | P0 | — | Browser-based demo walkthrough | NOT STARTED |
 | P1 | — | Record video backup for demo | NOT STARTED |
 | P1 | CAB-1112 | Kyverno policies: Audit -> Enforce | NOT STARTED |
+| P1 | CAB-1119 | Brand Unification: Logo Émeraude + Design Tokens + Portal Cleanup | NOT STARTED |
 | P1 | CAB-1109 | GitOps Pipeline (Helm, CRDs, Policies-as-Code) | DONE (PR #188) |
 | P2 | — | E2E smoke tests on live infra (timeouts) | KNOWN ISSUE |
 
@@ -157,4 +196,5 @@ kubectl get policyreports -A -o json | jq '.items[].results[] | select(.result==
 - [ ] Demo walkthrough script
 - [ ] Video backup recording
 - [ ] Kyverno Enforce mode
+- [ ] Brand Unification (Logo Émeraude + Design Tokens + Portal Menu)
 - [x] GitOps pipeline (Helm chart, CRDs, ArgoCD sync) — PR #188

@@ -250,3 +250,87 @@ vault:
     serviceAccount: default
     # K8s secret synced from Vault by External Secrets Operator
     secretName: postgresql-credentials
+
+# ==============================================================================
+# Monitoring OIDC Configuration (CAB-1103 Phase 6B)
+# ==============================================================================
+# Configures OIDC authentication for Grafana, oauth2-proxy for Prometheus,
+# and AlertManager routing. All secrets are referenced via K8s Secrets.
+
+grafana:
+  oidc:
+    enabled: false
+    name: "STOA SSO"
+    clientId: "stoa-observability"
+    existingSecret: "stoa-observability-oidc"
+    scopes: "openid profile email"
+    authUrl: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/auth"
+    tokenUrl: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token"
+    apiUrl: "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/userinfo"
+    roleAttributePath: "contains(roles[*], 'stoa:admin') && 'Admin' || 'Viewer'"
+    allowAssignGrafanaAdmin: true
+    rootUrl: "https://grafana.gostoa.dev"
+    serveFromSubPath: true
+    allowEmbedding: true
+
+prometheus:
+  oauth2Proxy:
+    enabled: false
+    image:
+      repository: quay.io/oauth2-proxy/oauth2-proxy
+      tag: v7.6.0
+      pullPolicy: IfNotPresent
+    provider: "keycloak-oidc"
+    clientId: "stoa-observability"
+    existingSecret: "stoa-observability-oidc"
+    issuerUrl: "https://auth.gostoa.dev/realms/stoa"
+    redirectUrl: "https://prometheus.gostoa.dev/oauth2/callback"
+    upstream: "http://prometheus:9090"
+    scope: "openid profile email"
+    cookieName: "_stoa_prometheus_oauth2"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+
+alertmanager:
+  enabled: false
+  image:
+    repository: prom/alertmanager
+    tag: v0.27.0
+    pullPolicy: IfNotPresent
+  existingSecret: "stoa-alertmanager-secrets"
+  externalUrl: "https://alertmanager.gostoa.dev"
+  route:
+    receiver: 'default'
+    groupBy: ['alertname', 'namespace']
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    routes:
+      - match:
+          severity: critical
+        receiver: 'slack-incidents'
+        groupWait: 10s
+        repeatInterval: 1h
+      - match:
+          severity: warning
+        receiver: 'slack-alerts'
+        repeatInterval: 4h
+  receivers:
+    - name: 'default'
+      slackChannel: '#alerts'
+    - name: 'slack-incidents'
+      slackChannel: '#incidents'
+    - name: 'slack-alerts'
+      slackChannel: '#alerts'
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi

@@ -12,6 +12,7 @@ description: Multi-agent workflow patterns and subagent delegation guide for STO
 | `test-writer` | sonnet | Read, Grep, Glob, Write, Edit, Bash | Generation de tests, augmentation de couverture, CAB-1116 |
 | `k8s-ops` | sonnet | Read, Grep, Glob, Bash (RO) | Debug deployment, validation manifests k8s, Helm, nginx, rollout |
 | `docs-writer` | sonnet | Read, Grep, Glob, Write, Edit | ADRs, guides, runbooks, memory updates |
+| `content-reviewer` | sonnet | Read, Grep, Glob, Bash (RO) | Audit contenu public: concurrents, prix, clients, reglementations |
 
 ## Quand deleguer vs travailler inline
 
@@ -73,12 +74,22 @@ Usage: refactoring multi-composants, migration majeure, debugging avec hypothese
 ```
 Usage: tout changement de code. Objectif: zero surprise en CI.
 
+### Pattern 6: Content compliance review
+```
+1. [docs-writer] Rediger le contenu
+2. [content-reviewer] Scanner conformite (concurrents, prix, clients, reglementation)
+3. [security-reviewer] Si contenu touche securite/RBAC
+4. [Inline] Corrections + commit + PR
+```
+Usage: tout contenu public avec mentions concurrents, reglementations ou clients.
+
 ## Contraintes
 
 - **Maximum 3-4 subagents actifs simultanement** (au-dela, le cout explose et le temps de review aussi)
-- **security-reviewer et k8s-ops** sont read-only — ils ne modifient JAMAIS le code
+- **security-reviewer, k8s-ops et content-reviewer** sont read-only — ils ne modifient JAMAIS le code
 - **test-writer et docs-writer** modifient le code — verifier leurs outputs
 - Chaque subagent qui review donne un **verdict binaire**: Go / Fix / Refaire
 - Un seul P0 (critique) de n'importe quel subagent → verdict global **Fix**
 - **Toujours consulter `ci-quality-gates.md`** AVANT de committer du code
 - **Toujours consulter `secrets-management.md`** quand un env var ou credential est ajoute/modifie
+- **Toujours consulter `content-compliance.md`** quand du contenu public mentionne concurrents, prix, clients ou reglementations

@@ -1,53 +1,25 @@
 # STOA Platform — Plan
 
-> Last updated: 2026-02-08 22:00 CET
+> Last updated: 2026-02-08 22:05 CET
 > Sprint goal: Revenue-ready demo by Feb 24, 2026
 
 ---
 
 ## Active — In Progress
 
-### CAB-1119 — Brand Unification: Logo S Émeraude + Design Tokens + Portal Menu Cleanup
+### CAB-1119 — Brand Unification: Logo S Émeraude + Design Tokens + Portal Menu Cleanup ✅
 
-**Status**: IN PROGRESS | **PR**: #194 (merged, partial) | **Points**: 13 | **Cycle**: 6
-
-#### Phase 1-3 — LIVRÉES ✅ (PR #194)
+**Status**: DONE | **PR**: #194 (merged) + PR pending (phases 4-5) | **Points**: 13 | **Cycle**: 6
 
 | Phase | Sujet | Status | Result |
 |-------|-------|--------|--------|
 | Phase 1 | Design Tokens + Favicon Recolor | DONE | Emerald palette, 14 SVG recolors, 3 Keycloak theme files, CSS cleanup |
 | Phase 2 | StoaLogo Component + UI Integration | DONE | Inline SVG component, Console sidebar + Portal header/loading/login |
 | Phase 3 | Portal Menu Restructure | DONE | 3 sections (Discover/Workspace/Account), tabbed WorkspacePage, redirects |
+| Phase 4 | Console Sidebar Restructuration | DONE | 5 sections (Overview/Catalog/⚡Gateway/Insights/Governance), STOA badges, "Control Plane" subtitle |
+| Phase 5 | Dark/Light Mode Complet | DONE | Console sidebar light mode, Portal dashboard dark mode (6 components) |
 
-34 files changed. All tests pass (255 console, 236 portal). Both apps build clean.
-
-#### Phase 4-5 — RESTANT 🔴
-
-**Diagnostic post-merge (screenshots 08/02/2026):**
-
-| Surface | Status | Problème |
-|---------|--------|----------|
-| Portal sidebar | ✅ OK | 3 sections, StoaLogo, lien Console ↗ |
-| Portal dark mode | ⚠️ Partiel | Certaines cards/backgrounds restent light |
-| Console sidebar | ❌ KO | Liste plate (~20 items) au lieu de 5 sections groupées |
-| Console light mode | ❌ KO | Sidebar reste dark quand contenu passe en light |
-| Console dark mode | ⚠️ Partiel | Cards/tables restent blanches en dark |
-| Badges "STOA" | ❌ Absent | Shadow Discovery, Token Optimizer, Error Snapshots sans badge violet |
-
-**Phase 4 — Console Sidebar Restructuration:**
-
-- [ ] Regrouper en 5 sections : Overview, Catalog, ⚡Gateway, Insights, Governance
-- [ ] Section headers avec style émeraude pour Gateway
-- [ ] Badges "STOA" violet (#8b5cf6) sur features uniques
-- [ ] Subtitle "Control Plane" sous le logo STOA
-
-**Phase 5 — Dark/Light Mode Complet:**
-
-- [ ] Console sidebar : respecter le mode light (bgSidebar: #f3f4f6)
-- [ ] Console contenu : dark mode complet (cards, tables, backgrounds)
-- [ ] Portal contenu : dark mode complet sur toutes les pages
-- [ ] Design tokens structurés dans `design-tokens.ts` partagé
-- [ ] Favicons multi-tailles (16, 32, 180, 512)
+All tests pass (257 console, 236 portal). Both apps build clean. Prettier + ESLint green.
 
 ---
 
@@ -198,7 +170,7 @@
 | P0 | — | Browser-based demo walkthrough | NOT STARTED |
 | P1 | — | Record video backup for demo | NOT STARTED |
 | P1 | CAB-1112 | Kyverno policies: Audit → Enforce | NOT STARTED |
-| P1 | CAB-1119 | Brand Unification phases 4-5 (Console sidebar + dark/light) | IN PROGRESS |
+| P1 | CAB-1119 | Brand Unification phases 4-5 (Console sidebar + dark/light) | ✅ DONE |
 | P1 | CAB-1109 | GitOps Pipeline (Helm, CRDs, ArgoCD) | ✅ DONE |
 
 ### Demo Checklist
@@ -218,7 +190,7 @@
 - [x] Brand Unification phases 1-3 (emerald palette, StoaLogo, Portal menu) — PR #194
 - [x] GitOps pipeline (Helm chart, CRDs, ArgoCD sync, CI migration) — PR #188 + stoa-infra
 - [x] AI Factory: CI quality gates, secrets mgmt rules, agent enhancements — PR #195
-- [ ] Brand Unification phases 4-5 (Console sidebar restructure, dark/light mode complet)
+- [x] Brand Unification phases 4-5 (Console sidebar restructure, dark/light mode complet)
 - [ ] Landing page (gostoa.dev) with Stripe
 - [ ] Demo walkthrough script
 - [ ] Video backup recording

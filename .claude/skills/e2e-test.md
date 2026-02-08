@@ -65,13 +65,14 @@ Les projets Playwright referencent ces states:
 storageState: 'fixtures/.auth/parzival.json',
 ```
 
-Pour charger une persona dans un step:
+Pour charger une persona dans un step (via `authSession` fixture):
 ```ts
-import { PERSONAS, PersonaKey, getAuthStatePath } from '../fixtures/personas';
+import { PERSONAS, PersonaKey } from '../fixtures/personas';
 
-const authStatePath = getAuthStatePath(personaName as PersonaKey);
-const storageState = JSON.parse(fs.readFileSync(authStatePath, 'utf-8'));
-await context.addCookies(storageState.cookies);
+// switchPersona() creates a new browser context with storageState
+await authSession.switchPersona(personaName as PersonaKey);
+// Use authSession.page for subsequent interactions
+await authSession.page.goto('/apis');
 ```
 
 ## Projets Playwright

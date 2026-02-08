@@ -71,6 +71,67 @@
 
 ---
 
+### CAB-1109 — GitOps Pipeline: Manifests, Helm, Policies-as-Code, Shadow→Git MR Loop
+
+**Status**: Todo | **Labels**: flow-ready | **Cycle**: 6
+
+**Contexte**: CAB-1105 a livré un Rust gateway GitOps-ready (CRD watcher, config env vars, policies filesystem). Le pipeline GitOps complet Git → ArgoCD → cluster → gateway réconciliation n'est pas encore câblé pour les artefacts STOA.
+
+**Ce qui existe**: ArgoCD opérationnel, CRD watcher (Phase 7), Rego policies depuis filesystem, Shadow mode génère du UAC YAML.
+
+| Phase | Sujet | Priorité | Status | Description |
+|-------|-------|----------|--------|-------------|
+| 1 | Rego Policies as ConfigMap | P1 | NOT STARTED | Git `policies/*.rego` → ArgoCD → ConfigMap → Volume mount → Gateway hot-reload (SIGHUP) |
+| 2 | Helm Chart `stoa-gateway` | P1 | NOT STARTED | Deployment, ConfigMap policies, ServiceAccount + RBAC CRD watcher, Service + Ingress, `values.yaml` par env |
+| 3 | Tool/ToolSet CRD Manifests | P1 | NOT STARTED | CRD definitions YAML (`gostoa.dev/v1alpha1`), exemples, ArgoCD Application sync |
+| 4 | Gateway Config Values | P1 | NOT STARTED | `values-dev.yaml` / `values-prod.yaml` (mode, kafka, otel, cache) |
+| 5 | Shadow → Git MR Loop | P2 | NOT STARTED | Shadow UAC YAML → POST endpoint → Git MR/PR → Review humain (jamais auto-merge) |
+
+**DoD**:
+- [ ] Helm chart `stoa-gateway` installable via `helm install`
+- [ ] ConfigMap policies Rego monté et hot-reloadé
+- [ ] CRD definitions appliquées par ArgoCD
+- [ ] `values-dev.yaml` et `values-prod.yaml` versionnés
+- [ ] RBAC ServiceAccount pour CRD watcher
+- [ ] Shadow → Git MR : endpoint POST qui accepte un UAC YAML
+- [ ] ArgoCD Application configurée pour sync le chart
+- [ ] Zéro `kubectl apply` manuel — tout passe par Git → ArgoCD
+
+**Exécution recommandée**: Claude Squad (phases 1-4 parallélisables, phase 5 séquentielle après)
+
+---
+
+### CAB-1112 — Kyverno: Switch Audit → Enforce (5 ClusterPolicies)
+
+**Status**: Todo | **Points**: 2 | **Labels**: mvp-critical | **Cycle**: 6
+**Parent**: CAB-1106
+
+**Prérequis**:
+- [x] CAB-1106 déployé
+- [ ] Minimum 3-5 jours en mode Audit sans faux positifs dans les PolicyReports
+
+**Vérification pré-switch**:
+```bash
+# Vérifier les PolicyReports — aucun FAIL sur des resources légitimes
+kubectl get policyreports -A -o json | jq '.items[].results[] | select(.result=="fail")'
+```
+
+**5 ClusterPolicies à basculer**:
+1. `disallow-latest-tag` — Force des tags explicites sur les images
+2. `require-requests-limits` — CPU/memory requests et limits obligatoires
+3. `disallow-privilege-escalation` — Pas de `allowPrivilegeEscalation: true`
+4. `require-non-root` — `runAsNonRoot: true` obligatoire
+5. `restrict-image-registries` — Whitelist registries autorisés
+
+**DoD**:
+- [ ] 5/5 ClusterPolicies en mode `Enforce`
+- [ ] Aucun pod légitime bloqué
+- [ ] PolicyReports propres (0 FAIL sur resources STOA)
+
+**Exécution recommandée**: Claude CLI (ops sensible, feedback live kubectl)
+
+---
+
 ## Demo Readiness (Feb 24)
 
 | Priority | Ticket | Description | Status |
@@ -78,7 +139,8 @@
 | P0 | CAB-1066 | Landing page gostoa.dev + Stripe | NOT STARTED |
 | P0 | — | Browser-based demo walkthrough | NOT STARTED |
 | P1 | — | Record video backup for demo | NOT STARTED |
-| P1 | — | Kyverno policies: Audit -> Enforce | NOT STARTED |
+| P1 | CAB-1112 | Kyverno policies: Audit -> Enforce | NOT STARTED |
+| P1 | CAB-1109 | GitOps Pipeline (Helm, CRDs, Policies-as-Code) | NOT STARTED |
 | P2 | — | E2E smoke tests on live infra (timeouts) | KNOWN ISSUE |
 
 ### Demo Checklist
@@ -99,3 +161,4 @@
 - [ ] Demo walkthrough script
 - [ ] Video backup recording
 - [ ] Kyverno Enforce mode
+- [ ] GitOps pipeline (Helm chart, CRDs, ArgoCD sync)

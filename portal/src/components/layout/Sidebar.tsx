@@ -1,5 +1,19 @@
 import { NavLink } from 'react-router-dom';
-import { Home, CreditCard, BookOpen, User, X, AppWindow, Webhook, BarChart3, Shield, Wrench, ExternalLink, FileCode2, LucideIcon } from 'lucide-react';
+import {
+  Home,
+  CreditCard,
+  BookOpen,
+  User,
+  X,
+  AppWindow,
+  Webhook,
+  BarChart3,
+  Shield,
+  Wrench,
+  ExternalLink,
+  FileCode2,
+  LucideIcon,
+} from 'lucide-react';
 import { config } from '../../config';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -27,24 +41,66 @@ const navigation: NavItem[] = [
   { name: 'Profile', href: '/profile', icon: User },
 
   // Consumer Catalogs - Main features (requires catalog:read)
-  { name: 'API Catalog', href: '/apis', icon: BookOpen, enabled: config.features.enableAPICatalog, scope: 'stoa:catalog:read' },
-  { name: 'AI Tools', href: '/servers', icon: Wrench, enabled: config.features.enableMCPTools, scope: 'stoa:catalog:read' },
+  {
+    name: 'API Catalog',
+    href: '/apis',
+    icon: BookOpen,
+    enabled: config.features.enableAPICatalog,
+    scope: 'stoa:catalog:read',
+  },
+  {
+    name: 'AI Tools',
+    href: '/servers',
+    icon: Wrench,
+    enabled: config.features.enableMCPTools,
+    scope: 'stoa:catalog:read',
+  },
 
   // Universal API Contracts (UAC) (requires catalog:read)
   { name: 'Contracts', href: '/contracts', icon: FileCode2, scope: 'stoa:catalog:read' },
 
   // Consumer Resources (requires apps:read or subscriptions:read)
-  { name: 'My Apps', href: '/apps', icon: AppWindow, enabled: config.features.enableAPICatalog, permission: 'apps:read' },
-  { name: 'My Subscriptions', href: '/subscriptions', icon: CreditCard, enabled: config.features.enableSubscriptions, scope: 'stoa:subscriptions:read' },
+  {
+    name: 'My Apps',
+    href: '/apps',
+    icon: AppWindow,
+    enabled: config.features.enableAPICatalog,
+    permission: 'apps:read',
+  },
+  {
+    name: 'My Subscriptions',
+    href: '/subscriptions',
+    icon: CreditCard,
+    enabled: config.features.enableSubscriptions,
+    scope: 'stoa:subscriptions:read',
+  },
 
   // Service Accounts - tenant-admin+ (requires subscriptions:write)
-  { name: 'Service Accounts', href: '/service-accounts', icon: Shield, enabled: config.features.enableMCPTools, scope: 'stoa:subscriptions:write' },
+  {
+    name: 'Service Accounts',
+    href: '/service-accounts',
+    icon: Shield,
+    enabled: config.features.enableMCPTools,
+    scope: 'stoa:subscriptions:write',
+  },
 
   // Analytics - requires metrics:read
-  { name: 'Usage', href: '/usage', icon: BarChart3, enabled: config.features.enableSubscriptions, scope: 'stoa:metrics:read' },
+  {
+    name: 'Usage',
+    href: '/usage',
+    icon: BarChart3,
+    enabled: config.features.enableSubscriptions,
+    scope: 'stoa:metrics:read',
+  },
 
   // Tenant Admin - requires subscriptions:write
-  { name: 'Webhooks', href: '/webhooks', icon: Webhook, enabled: config.features.enableSubscriptions, scope: 'stoa:subscriptions:write' },
+  {
+    name: 'Webhooks',
+    href: '/webhooks',
+    icon: Webhook,
+    enabled: config.features.enableSubscriptions,
+    scope: 'stoa:subscriptions:write',
+  },
 ];
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
@@ -53,7 +109,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   // Filter navigation items based on:
   // 1. Feature flags (enabled)
   // 2. Permissions/scopes/roles
-  const filteredNavigation = navigation.filter(item => {
+  const filteredNavigation = navigation.filter((item) => {
     // Check feature flag
     if (item.enabled === false) return false;
 

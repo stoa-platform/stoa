@@ -85,9 +85,7 @@ export function CreateAppModal({
         <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Create New Application
-            </h2>
+            <h2 className="text-xl font-semibold text-gray-900">Create New Application</h2>
             <button
               onClick={handleClose}
               disabled={isLoading}
@@ -127,7 +125,10 @@ export function CreateAppModal({
 
               {/* Description */}
               <div>
-                <label htmlFor="app-description" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="app-description"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Description
                 </label>
                 <textarea
@@ -143,7 +144,10 @@ export function CreateAppModal({
 
               {/* Callback URLs */}
               <div>
-                <label htmlFor="callback-url-0" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="callback-url-0"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Callback URLs (OAuth Redirect URIs)
                 </label>
                 <div className="space-y-2">

@@ -30,11 +30,14 @@ import type { MCPServer, MCPServerSubscription } from '../../types';
 
 type ServerCategory = 'all' | 'platform' | 'tenant' | 'public';
 
-const categoryConfig: Record<ServerCategory, {
-  label: string;
-  icon: React.ElementType;
-  description: string;
-}> = {
+const categoryConfig: Record<
+  ServerCategory,
+  {
+    label: string;
+    icon: React.ElementType;
+    description: string;
+  }
+> = {
   all: { label: 'All Tools', icon: Server, description: 'All available AI tools' },
   platform: { label: 'Platform Tools', icon: Settings, description: 'STOA administration tools' },
   tenant: { label: 'Tenant Tools', icon: Users, description: 'Organization-specific tools' },
@@ -43,7 +46,10 @@ const categoryConfig: Record<ServerCategory, {
 
 const statusColors: Record<string, { bg: string; text: string }> = {
   active: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400' },
-  maintenance: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-400' },
+  maintenance: {
+    bg: 'bg-amber-100 dark:bg-amber-900/30',
+    text: 'text-amber-700 dark:text-amber-400',
+  },
   deprecated: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400' },
 };
 
@@ -59,7 +65,9 @@ export function MCPServersPage() {
   // Check if user has admin/devops role
   const isAdminUser = useMemo(() => {
     const roles = user?.roles || [];
-    return roles.includes('cpi-admin') || roles.includes('tenant-admin') || roles.includes('devops');
+    return (
+      roles.includes('cpi-admin') || roles.includes('tenant-admin') || roles.includes('devops')
+    );
   }, [user?.roles]);
 
   // Load servers
@@ -105,17 +113,17 @@ export function MCPServersPage() {
 
     // Filter by category
     if (selectedCategory !== 'all') {
-      result = result.filter(s => s.category === selectedCategory);
+      result = result.filter((s) => s.category === selectedCategory);
     }
 
     // Filter by search
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
-        s =>
+        (s) =>
           s.displayName.toLowerCase().includes(query) ||
           s.description.toLowerCase().includes(query) ||
-          s.tools.some(t => t.displayName.toLowerCase().includes(query))
+          s.tools.some((t) => t.displayName.toLowerCase().includes(query))
       );
     }
 
@@ -124,7 +132,7 @@ export function MCPServersPage() {
 
   // Get subscription status for a server
   const getSubscriptionStatus = (serverId: string) => {
-    return subscriptions.find(s => s.server_id === serverId);
+    return subscriptions.find((s) => s.server_id === serverId);
   };
 
   // Available categories based on user's roles
@@ -188,7 +196,8 @@ export function MCPServersPage() {
             <div>
               <h3 className="font-medium text-blue-800 dark:text-blue-300">Admin Access</h3>
               <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-                You have access to Platform Tools (STOA administration) which are not visible to standard users.
+                You have access to Platform Tools (STOA administration) which are not visible to
+                standard users.
               </p>
             </div>
           </div>
@@ -214,9 +223,8 @@ export function MCPServersPage() {
         {availableCategories.map((cat) => {
           const config = categoryConfig[cat];
           const Icon = config.icon;
-          const count = cat === 'all'
-            ? servers.length
-            : servers.filter(s => s.category === cat).length;
+          const count =
+            cat === 'all' ? servers.length : servers.filter((s) => s.category === cat).length;
 
           return (
             <button
@@ -230,9 +238,13 @@ export function MCPServersPage() {
             >
               <Icon className="h-4 w-4" />
               {config.label}
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                selectedCategory === cat ? 'bg-primary-200 dark:bg-primary-800' : 'bg-gray-200 dark:bg-neutral-700'
-              }`}>
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs ${
+                  selectedCategory === cat
+                    ? 'bg-primary-200 dark:bg-primary-800'
+                    : 'bg-gray-200 dark:bg-neutral-700'
+                }`}
+              >
                 {count}
               </span>
             </button>
@@ -283,19 +295,27 @@ export function MCPServersPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {subscription && (
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded ${
-                        subscription.status === 'active'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded ${
+                          subscription.status === 'active'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
                         {subscription.status === 'active' ? (
-                          <><CheckCircle className="h-3 w-3" /> Subscribed</>
+                          <>
+                            <CheckCircle className="h-3 w-3" /> Subscribed
+                          </>
                         ) : (
-                          <><Clock className="h-3 w-3" /> Pending</>
+                          <>
+                            <Clock className="h-3 w-3" /> Pending
+                          </>
                         )}
                       </span>
                     )}
-                    <span className={`px-2 py-1 text-xs font-medium rounded ${statusStyle.bg} ${statusStyle.text}`}>
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded ${statusStyle.bg} ${statusStyle.text}`}
+                    >
                       {server.status}
                     </span>
                   </div>
@@ -359,7 +379,9 @@ export function MCPServersPage() {
           <div className="inline-flex p-4 bg-gray-100 dark:bg-neutral-700 rounded-full mb-4">
             <Wrench className="h-8 w-8 text-gray-400 dark:text-neutral-500" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No AI Tools Found</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            No AI Tools Found
+          </h2>
           <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
             {searchQuery || selectedCategory !== 'all'
               ? 'No tools match your current filters. Try adjusting your search or category.'

@@ -57,9 +57,10 @@ export async function getGatewayStatus(): Promise<GatewayStatusResponse> {
     ]);
 
     return {
-      health: healthResult.status === 'fulfilled'
-        ? healthResult.value
-        : { ...fallbackHealth, error: String((healthResult as PromiseRejectedResult).reason) },
+      health:
+        healthResult.status === 'fulfilled'
+          ? healthResult.value
+          : { ...fallbackHealth, error: String((healthResult as PromiseRejectedResult).reason) },
       apis: apisResult.status === 'fulfilled' ? apisResult.value : [],
       applications: appsResult.status === 'fulfilled' ? appsResult.value : [],
       fetchedAt: new Date().toISOString(),
@@ -67,6 +68,11 @@ export async function getGatewayStatus(): Promise<GatewayStatusResponse> {
   } catch {
     // Defensive: should never reach here with Promise.allSettled,
     // but guarantees the dashboard always renders.
-    return { health: fallbackHealth, apis: [], applications: [], fetchedAt: new Date().toISOString() };
+    return {
+      health: fallbackHealth,
+      apis: [],
+      applications: [],
+      fetchedAt: new Date().toISOString(),
+    };
   }
 }

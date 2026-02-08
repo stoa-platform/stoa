@@ -31,9 +31,7 @@ export function WelcomeHeader({ user }: WelcomeHeaderProps) {
       <div className="relative">
         <div className="flex items-center gap-2 mb-2">
           <Sparkles className="h-5 w-5 text-amber-300" />
-          <span className="text-primary-100 text-sm font-medium">
-            STOA Developer Portal
-          </span>
+          <span className="text-primary-100 text-sm font-medium">STOA Developer Portal</span>
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">

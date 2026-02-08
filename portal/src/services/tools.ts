@@ -13,9 +13,9 @@ import type { MCPTool, MCPToolInvocation, MCPServerInfo } from '../types';
 
 export interface ListToolsParams {
   tag?: string;
-  tags?: string;  // Comma-separated list of tags
-  category?: string;  // Filter by category (Sales, Finance, Operations, Communications)
-  search?: string;  // Search in name and description
+  tags?: string; // Comma-separated list of tags
+  category?: string; // Filter by category (Sales, Finance, Operations, Communications)
+  search?: string; // Search in name and description
   tenant_id?: string;
   cursor?: string;
   limit?: number;

@@ -40,9 +40,7 @@ vi.mock('../hooks/useDashboard', () => ({
 
 // Mock dashboard components
 vi.mock('../components/dashboard', () => ({
-  WelcomeHeader: ({ user }: { user: any }) => (
-    <div data-testid="welcome-header">{user?.name}</div>
-  ),
+  WelcomeHeader: ({ user }: { user: any }) => <div data-testid="welcome-header">{user?.name}</div>,
   DashboardStats: ({ isLoading }: { stats: any; isLoading: boolean }) => (
     <div data-testid="dashboard-stats">{isLoading ? 'Loading' : 'Stats loaded'}</div>
   ),

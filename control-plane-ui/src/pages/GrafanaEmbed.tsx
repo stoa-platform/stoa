@@ -54,9 +54,7 @@ export function GrafanaEmbed() {
         className={`flex items-center justify-between ${isFullscreen ? 'p-4 border-b border-gray-200 dark:border-neutral-700' : ''}`}
       >
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            STOA Observability
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">STOA Observability</h1>
           <p className="text-gray-500 dark:text-neutral-400 mt-1">
             Platform metrics, dashboards, and monitoring
           </p>
@@ -75,11 +73,7 @@ export function GrafanaEmbed() {
             className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
             title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
           >
-            {isFullscreen ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             <span className="hidden sm:inline">{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
           </button>
           <button

@@ -4,7 +4,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 // Mock AuthContext
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
-    user: { id: 'user-admin', email: 'parzival@oasis.gg', name: 'Parzival', roles: ['cpi-admin'], tenant_id: 'oasis-gunters', permissions: ['tenants:read'] },
+    user: {
+      id: 'user-admin',
+      email: 'parzival@oasis.gg',
+      name: 'Parzival',
+      roles: ['cpi-admin'],
+      tenant_id: 'oasis-gunters',
+      permissions: ['tenants:read'],
+    },
     isAuthenticated: true,
     isLoading: false,
     isReady: true,
@@ -17,7 +24,9 @@ vi.mock('../../contexts/AuthContext', () => ({
 
 // Mock shared components
 vi.mock('@stoa/shared/components/Skeleton', () => ({
-  CardSkeleton: ({ className }: { className?: string }) => <div data-testid="card-skeleton" className={className} />,
+  CardSkeleton: ({ className }: { className?: string }) => (
+    <div data-testid="card-skeleton" className={className} />
+  ),
 }));
 
 import { TenantDashboard } from './TenantDashboard';
@@ -100,7 +109,14 @@ describe('TenantDashboard', () => {
   it('shows no tenant message when tenant_id is missing', async () => {
     const { useAuth } = await import('../../contexts/AuthContext');
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'user-no-tenant', email: 'no@tenant.com', name: 'NoTenant', roles: ['viewer'], tenant_id: undefined, permissions: [] },
+      user: {
+        id: 'user-no-tenant',
+        email: 'no@tenant.com',
+        name: 'NoTenant',
+        roles: ['viewer'],
+        tenant_id: undefined,
+        permissions: [],
+      },
       isAuthenticated: true,
       isLoading: false,
       isReady: true,

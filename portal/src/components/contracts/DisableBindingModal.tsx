@@ -66,10 +66,7 @@ export const DisableBindingModal: React.FC<DisableBindingModalProps> = ({
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <h3
-                  id="disable-modal-title"
-                  className="text-lg font-medium text-gray-900"
-                >
+                <h3 id="disable-modal-title" className="text-lg font-medium text-gray-900">
                   Disable {protocolLabel} binding?
                 </h3>
               </div>
@@ -93,8 +90,8 @@ export const DisableBindingModal: React.FC<DisableBindingModalProps> = ({
               in the last 24 hours.
             </p>
             <p className="mt-2 text-sm text-gray-600">
-              Disabling it may affect active integrations that depend on this endpoint.
-              The binding can be re-enabled at any time.
+              Disabling it may affect active integrations that depend on this endpoint. The binding
+              can be re-enabled at any time.
             </p>
 
             {/* Endpoint info */}

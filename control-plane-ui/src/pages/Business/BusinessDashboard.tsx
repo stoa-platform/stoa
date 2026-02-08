@@ -57,16 +57,16 @@ function formatNumber(num: number): string {
 function getApdexColor(score: number): string {
   if (score >= 0.94) return 'text-green-600';
   if (score >= 0.85) return 'text-green-500';
-  if (score >= 0.70) return 'text-yellow-600';
-  if (score >= 0.50) return 'text-orange-600';
+  if (score >= 0.7) return 'text-yellow-600';
+  if (score >= 0.5) return 'text-orange-600';
   return 'text-red-600';
 }
 
 function getApdexLabel(score: number): string {
   if (score >= 0.94) return 'Excellent';
   if (score >= 0.85) return 'Good';
-  if (score >= 0.70) return 'Fair';
-  if (score >= 0.50) return 'Poor';
+  if (score >= 0.7) return 'Fair';
+  if (score >= 0.5) return 'Poor';
   return 'Unacceptable';
 }
 
@@ -114,24 +114,28 @@ function KPICard({
 }
 
 function ApdexGauge({ score }: { score: number }) {
-  const rotation = (score * 180) - 90; // -90 to 90 degrees
+  const rotation = score * 180 - 90; // -90 to 90 degrees
   const color = getApdexColor(score);
 
   return (
     <div className="flex flex-col items-center">
       <div className="relative w-40 h-20 overflow-hidden">
         {/* Background arc */}
-        <div className="absolute w-40 h-40 rounded-full border-8 border-gray-200 dark:border-neutral-700"
-             style={{ clipPath: 'polygon(0 0, 100% 0, 100% 50%, 0 50%)' }} />
+        <div
+          className="absolute w-40 h-40 rounded-full border-8 border-gray-200 dark:border-neutral-700"
+          style={{ clipPath: 'polygon(0 0, 100% 0, 100% 50%, 0 50%)' }}
+        />
         {/* Colored arc */}
-        <div className="absolute w-40 h-40 rounded-full border-8 border-transparent"
-             style={{
-               borderTopColor: score >= 0.85 ? '#10b981' : score >= 0.70 ? '#f59e0b' : '#ef4444',
-               borderRightColor: score >= 0.50 ? (score >= 0.85 ? '#10b981' : '#f59e0b') : '#ef4444',
-               transform: `rotate(${rotation}deg)`,
-               transformOrigin: 'center center',
-               clipPath: 'polygon(0 0, 100% 0, 100% 50%, 0 50%)'
-             }} />
+        <div
+          className="absolute w-40 h-40 rounded-full border-8 border-transparent"
+          style={{
+            borderTopColor: score >= 0.85 ? '#10b981' : score >= 0.7 ? '#f59e0b' : '#ef4444',
+            borderRightColor: score >= 0.5 ? (score >= 0.85 ? '#10b981' : '#f59e0b') : '#ef4444',
+            transform: `rotate(${rotation}deg)`,
+            transformOrigin: 'center center',
+            clipPath: 'polygon(0 0, 100% 0, 100% 50%, 0 50%)',
+          }}
+        />
         {/* Center */}
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-center">
           <p className={`text-3xl font-bold ${color}`}>{score.toFixed(2)}</p>
@@ -146,9 +150,9 @@ function ApdexGauge({ score }: { score: number }) {
 function ModeAdoptionBar({ modes }: { modes: GatewayModeAdoption[] }) {
   const colors = {
     'edge-mcp': 'bg-blue-500',
-    'sidecar': 'bg-green-500',
-    'proxy': 'bg-purple-500',
-    'shadow': 'bg-gray-500',
+    sidecar: 'bg-green-500',
+    proxy: 'bg-purple-500',
+    shadow: 'bg-gray-500',
   };
 
   return (
@@ -166,7 +170,9 @@ function ModeAdoptionBar({ modes }: { modes: GatewayModeAdoption[] }) {
       <div className="flex flex-wrap gap-4 mt-3">
         {modes.map((mode) => (
           <div key={mode.mode} className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${colors[mode.mode as keyof typeof colors] || 'bg-gray-400'}`} />
+            <div
+              className={`w-3 h-3 rounded-full ${colors[mode.mode as keyof typeof colors] || 'bg-gray-400'}`}
+            />
             <span className="text-sm text-gray-600 dark:text-gray-300">
               {mode.displayName}: <span className="font-medium">{mode.percentage}%</span>
             </span>
@@ -193,8 +199,14 @@ function TopAPIItem({ api, rank, maxCalls }: { api: TopAPI; rank: number; maxCal
             <span className="text-sm text-gray-600 dark:text-gray-300">
               {formatNumber(api.calls)} calls
             </span>
-            <span className={`text-xs flex items-center gap-0.5 ${isGrowthPositive ? 'text-green-600' : 'text-red-600'}`}>
-              {isGrowthPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            <span
+              className={`text-xs flex items-center gap-0.5 ${isGrowthPositive ? 'text-green-600' : 'text-red-600'}`}
+            >
+              {isGrowthPositive ? (
+                <TrendingUp className="h-3 w-3" />
+              ) : (
+                <TrendingDown className="h-3 w-3" />
+              )}
               {Math.abs(api.growth).toFixed(0)}%
             </span>
           </div>
@@ -270,29 +282,36 @@ export function BusinessDashboard() {
       const modes = modeStats?.modes || [];
       if (modes.length > 0) {
         const total = modes.reduce((sum: number, m: any) => sum + m.total, 0);
-        setModeAdoption(modes.map((m: any) => ({
-          mode: m.mode,
-          displayName: m.mode === 'edge-mcp' ? 'Edge MCP' :
-                      m.mode === 'sidecar' ? 'Sidecar' :
-                      m.mode === 'proxy' ? 'Proxy' : 'Shadow',
-          count: m.total,
-          percentage: Math.round((m.total / total) * 100),
-        })));
+        setModeAdoption(
+          modes.map((m: any) => ({
+            mode: m.mode,
+            displayName:
+              m.mode === 'edge-mcp'
+                ? 'Edge MCP'
+                : m.mode === 'sidecar'
+                  ? 'Sidecar'
+                  : m.mode === 'proxy'
+                    ? 'Proxy'
+                    : 'Shadow',
+            count: m.total,
+            percentage: Math.round((m.total / total) * 100),
+          }))
+        );
       } else {
-        setModeAdoption([
-          { mode: 'edge-mcp', displayName: 'Edge MCP', count: 0, percentage: 100 },
-        ]);
+        setModeAdoption([{ mode: 'edge-mcp', displayName: 'Edge MCP', count: 0, percentage: 100 }]);
       }
 
       // Top APIs from real API data
       if (topAPIsData && topAPIsData.length > 0) {
-        setTopAPIs(topAPIsData.map((api) => ({
-          name: api.tool_name,
-          displayName: api.display_name,
-          calls: api.calls,
-          growth: 0, // Not yet provided by API
-          tenants: 0, // Not yet provided by API
-        })));
+        setTopAPIs(
+          topAPIsData.map((api) => ({
+            name: api.tool_name,
+            displayName: api.display_name,
+            calls: api.calls,
+            growth: 0, // Not yet provided by API
+            tenants: 0, // Not yet provided by API
+          }))
+        );
       } else {
         setTopAPIs([]);
       }
@@ -316,7 +335,7 @@ export function BusinessDashboard() {
     return () => clearInterval(interval);
   }, [isReady, loadData]);
 
-  const maxAPICalls = Math.max(...topAPIs.map(a => a.calls), 1);
+  const maxAPICalls = Math.max(...topAPIs.map((a) => a.calls), 1);
   const grafanaUrl = `${config.services.grafana.url}/d/stoa-business-analytics`;
 
   if (!isAdmin) {
@@ -512,10 +531,10 @@ export function BusinessDashboard() {
               <div>
                 <h3 className="font-semibold text-gray-900 dark:text-white">Growth Insights</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                  Platform usage is up <span className="font-semibold text-green-600">18.2%</span> this month.
-                  The <span className="font-semibold">Code Assistant</span> tool saw the highest growth at{' '}
-                  <span className="font-semibold text-green-600">156%</span>, indicating strong demand for
-                  AI-powered development tools.
+                  Platform usage is up <span className="font-semibold text-green-600">18.2%</span>{' '}
+                  this month. The <span className="font-semibold">Code Assistant</span> tool saw the
+                  highest growth at <span className="font-semibold text-green-600">156%</span>,
+                  indicating strong demand for AI-powered development tools.
                 </p>
                 <button
                   onClick={() => navigate(observabilityPath(grafanaUrl))}

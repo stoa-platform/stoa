@@ -38,10 +38,26 @@ import type { TenantWebhook, WebhookCreate, WebhookDelivery, WebhookEventType } 
 // Available webhook events
 const WEBHOOK_EVENTS: { value: WebhookEventType; label: string; description: string }[] = [
   { value: '*', label: 'All Events', description: 'Receive all subscription events' },
-  { value: 'subscription.created', label: 'Created', description: 'When a new subscription is requested' },
-  { value: 'subscription.approved', label: 'Approved', description: 'When a subscription is approved' },
-  { value: 'subscription.revoked', label: 'Revoked', description: 'When a subscription is revoked' },
-  { value: 'subscription.key_rotated', label: 'Key Rotated', description: 'When an API key is rotated' },
+  {
+    value: 'subscription.created',
+    label: 'Created',
+    description: 'When a new subscription is requested',
+  },
+  {
+    value: 'subscription.approved',
+    label: 'Approved',
+    description: 'When a subscription is approved',
+  },
+  {
+    value: 'subscription.revoked',
+    label: 'Revoked',
+    description: 'When a subscription is revoked',
+  },
+  {
+    value: 'subscription.key_rotated',
+    label: 'Key Rotated',
+    description: 'When an API key is rotated',
+  },
   { value: 'subscription.expired', label: 'Expired', description: 'When a subscription expires' },
 ];
 
@@ -80,7 +96,10 @@ export function WebhooksPage() {
       toast.success('Webhook created', 'Your webhook has been created successfully.');
       setShowCreateModal(false);
     } catch (error) {
-      toast.error('Failed to create webhook', error instanceof Error ? error.message : 'An error occurred');
+      toast.error(
+        'Failed to create webhook',
+        error instanceof Error ? error.message : 'An error occurred'
+      );
     }
   };
 
@@ -90,7 +109,10 @@ export function WebhooksPage() {
       toast.success('Webhook updated', 'Your changes have been saved.');
       setEditingWebhook(null);
     } catch (error) {
-      toast.error('Failed to update webhook', error instanceof Error ? error.message : 'An error occurred');
+      toast.error(
+        'Failed to update webhook',
+        error instanceof Error ? error.message : 'An error occurred'
+      );
     }
   };
 
@@ -104,7 +126,10 @@ export function WebhooksPage() {
       await deleteMutation.mutateAsync({ tenantId, webhookId: deleteWebhookId });
       toast.success('Webhook deleted', 'The webhook has been removed.');
     } catch (error) {
-      toast.error('Failed to delete webhook', error instanceof Error ? error.message : 'An error occurred');
+      toast.error(
+        'Failed to delete webhook',
+        error instanceof Error ? error.message : 'An error occurred'
+      );
     } finally {
       setDeleteWebhookId(null);
     }
@@ -122,7 +147,10 @@ export function WebhooksPage() {
         `The webhook is now ${webhook.enabled ? 'disabled' : 'active'}.`
       );
     } catch (error) {
-      toast.error('Failed to toggle webhook', error instanceof Error ? error.message : 'An error occurred');
+      toast.error(
+        'Failed to toggle webhook',
+        error instanceof Error ? error.message : 'An error occurred'
+      );
     }
   };
 
@@ -187,8 +215,8 @@ export function WebhooksPage() {
           <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-yellow-800">Tenant Required</h3>
           <p className="text-yellow-700 mt-2">
-            You need to be associated with a tenant to manage webhooks.
-            Contact your administrator to be assigned to a tenant.
+            You need to be associated with a tenant to manage webhooks. Contact your administrator
+            to be assigned to a tenant.
           </p>
         </div>
       </div>
@@ -374,9 +402,7 @@ function WebhookCard({
             <h3 className="text-lg font-semibold text-gray-900">{webhook.name}</h3>
             <span
               className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                webhook.enabled
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-gray-100 text-gray-600'
+                webhook.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
               }`}
             >
               {webhook.enabled ? 'Active' : 'Disabled'}
@@ -389,16 +415,11 @@ function WebhookCard({
           </div>
           <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
             <ExternalLink className="h-4 w-4" />
-            <code className="bg-gray-100 px-2 py-0.5 rounded text-xs break-all">
-              {webhook.url}
-            </code>
+            <code className="bg-gray-100 px-2 py-0.5 rounded text-xs break-all">{webhook.url}</code>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {webhook.events.map((event) => (
-              <span
-                key={event}
-                className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-md"
-              >
+              <span key={event} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-md">
                 {event === '*' ? 'All Events' : event}
               </span>
             ))}
@@ -542,7 +563,10 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
             )}
 
             <div>
-              <label htmlFor="webhook-name" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="webhook-name"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Name
               </label>
               <input
@@ -570,7 +594,10 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
             </div>
 
             <div>
-              <label htmlFor="webhook-secret" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="webhook-secret"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Secret (optional)
                 <span className="text-gray-400 font-normal ml-2">
                   For HMAC signature verification
@@ -581,15 +608,15 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
                 type="password"
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
-                placeholder={webhook?.has_secret ? '••••••••' : 'Enter a secret (min 16 characters)'}
+                placeholder={
+                  webhook?.has_secret ? '••••••••' : 'Enter a secret (min 16 characters)'
+                }
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-gray-700 mb-3">
-                Events
-              </span>
+              <span className="block text-sm font-medium text-gray-700 mb-3">Events</span>
               <div className="space-y-2" role="group" aria-label="Webhook events">
                 {WEBHOOK_EVENTS.map((eventType) => (
                   <label
@@ -698,9 +725,7 @@ function DeliveriesModal({ tenantId, webhookId, onClose }: DeliveriesModalProps)
                 <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
               </div>
             ) : data?.items.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                No deliveries yet
-              </div>
+              <div className="text-center py-12 text-gray-500">No deliveries yet</div>
             ) : (
               <div className="space-y-4">
                 {data?.items.map((delivery) => (
@@ -756,9 +781,7 @@ function DeliveryRow({ delivery, onRetry, isRetrying }: DeliveryRowProps) {
         </div>
         <div className="flex items-center gap-3">
           {delivery.response_status_code && (
-            <span className="text-sm text-gray-500">
-              HTTP {delivery.response_status_code}
-            </span>
+            <span className="text-sm text-gray-500">HTTP {delivery.response_status_code}</span>
           )}
           <span className="text-sm text-gray-500">
             {delivery.attempt_count}/{delivery.max_attempts} attempts

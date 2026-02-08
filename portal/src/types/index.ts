@@ -28,12 +28,12 @@ export interface UserPermissionsResponse {
 
 // MCP Tool types (aligned with MCP Gateway response format)
 export interface MCPTool {
-  name: string;              // Tool identifier (e.g., "tenant-acme__create-order")
-  displayName?: string;      // Human-friendly name
+  name: string; // Tool identifier (e.g., "tenant-acme__create-order")
+  displayName?: string; // Human-friendly name
   description: string;
-  tags?: string[];           // Categories/tags for filtering
-  tenant_id?: string;        // Owning tenant
-  inputSchema?: MCPInputSchema;  // JSON Schema for tool arguments
+  tags?: string[]; // Categories/tags for filtering
+  tenant_id?: string; // Owning tenant
+  inputSchema?: MCPInputSchema; // JSON Schema for tool arguments
   // Legacy fields for backward compatibility
   id?: string;
   version?: string;
@@ -75,8 +75,8 @@ export interface MCPPropertySchema {
   maxLength?: number;
   pattern?: string;
   items?: MCPPropertySchema;
-  properties?: Record<string, MCPPropertySchema>;  // For nested objects
-  required?: string[];                             // For nested object required fields
+  properties?: Record<string, MCPPropertySchema>; // For nested objects
+  required?: string[]; // For nested object required fields
 }
 
 // MCP Tool invocation result
@@ -119,25 +119,25 @@ export interface MCPSubscription {
   expires_at: string | null;
   last_used_at?: string;
   usage_count?: number;
-  api_key_prefix?: string;  // First 12 chars for display (e.g., "stoa_sk_XXXX")
-  totp_required?: boolean;  // Whether 2FA is required to reveal the API key
+  api_key_prefix?: string; // First 12 chars for display (e.g., "stoa_sk_XXXX")
+  totp_required?: boolean; // Whether 2FA is required to reveal the API key
   // Key rotation fields (CAB-314)
-  previous_key_expires_at?: string | null;  // Grace period expiry
-  last_rotated_at?: string | null;          // Last rotation timestamp
-  rotation_count?: number;                   // Number of rotations
-  has_active_grace_period?: boolean;        // True if grace period is active
+  previous_key_expires_at?: string | null; // Grace period expiry
+  last_rotated_at?: string | null; // Last rotation timestamp
+  rotation_count?: number; // Number of rotations
+  has_active_grace_period?: boolean; // True if grace period is active
 }
 
 // Key Rotation types (CAB-314)
 export interface KeyRotationRequest {
-  grace_period_hours?: number;  // Default: 24, range: 1-168
+  grace_period_hours?: number; // Default: 24, range: 1-168
 }
 
 export interface KeyRotationResponse {
   subscription_id: string;
-  new_api_key: string;           // Shown only ONCE!
+  new_api_key: string; // Shown only ONCE!
   new_api_key_prefix: string;
-  old_key_expires_at: string;    // ISO datetime
+  old_key_expires_at: string; // ISO datetime
   grace_period_hours: number;
   rotation_count: number;
 }
@@ -284,8 +284,8 @@ export interface APISubscriptionUsage {
 // Environment types
 export interface Environment {
   id: string;
-  name: string;           // dev, staging1, staging2, prod
-  displayName: string;    // Development, Staging 1, Production
+  name: string; // dev, staging1, staging2, prod
+  displayName: string; // Development, Staging 1, Production
   type: 'development' | 'staging' | 'production';
   baseUrl: string;
   isProduction: boolean;
@@ -486,7 +486,7 @@ export interface DashboardStats {
   active_subscriptions: number;
   api_calls_this_week: number;
   // Optional trends
-  tools_trend?: number;        // % change
+  tools_trend?: number; // % change
   subscriptions_trend?: number;
   calls_trend?: number;
 }
@@ -514,9 +514,9 @@ export interface DashboardData {
  * Controls which roles can see and subscribe to a server
  */
 export interface MCPServerVisibility {
-  roles?: string[];           // Required roles to see this server (e.g., ['cpi-admin', 'tenant-admin'])
-  excludeRoles?: string[];    // Roles that cannot see this server
-  public?: boolean;           // If true, visible to all authenticated users
+  roles?: string[]; // Required roles to see this server (e.g., ['cpi-admin', 'tenant-admin'])
+  excludeRoles?: string[]; // Roles that cannot see this server
+  public?: boolean; // If true, visible to all authenticated users
 }
 
 /**
@@ -525,14 +525,14 @@ export interface MCPServerVisibility {
  */
 export interface MCPServer {
   id: string;
-  name: string;                    // Unique identifier (e.g., "stoa-platform")
-  displayName: string;             // Human-friendly name
+  name: string; // Unique identifier (e.g., "stoa-platform")
+  displayName: string; // Human-friendly name
   description: string;
-  icon?: string;                   // Icon name or URL
-  category: 'platform' | 'tenant' | 'public';  // Server category
-  tenant_id?: string;              // Owning tenant (for tenant servers)
+  icon?: string; // Icon name or URL
+  category: 'platform' | 'tenant' | 'public'; // Server category
+  tenant_id?: string; // Owning tenant (for tenant servers)
   visibility: MCPServerVisibility;
-  tools: MCPServerTool[];          // Tools in this server
+  tools: MCPServerTool[]; // Tools in this server
   status: 'active' | 'maintenance' | 'deprecated';
   version?: string;
   documentation_url?: string;
@@ -549,8 +549,8 @@ export interface MCPServerTool {
   displayName: string;
   description: string;
   inputSchema?: MCPInputSchema;
-  enabled: boolean;                // Whether this tool is enabled in the server
-  requires_approval?: boolean;     // Admin approval needed for this tool
+  enabled: boolean; // Whether this tool is enabled in the server
+  requires_approval?: boolean; // Admin approval needed for this tool
 }
 
 /**
@@ -589,7 +589,7 @@ export interface MCPToolAccess {
   tool_name: string;
   status: 'enabled' | 'disabled' | 'pending_approval';
   granted_at?: string;
-  granted_by?: string;  // Admin who approved
+  granted_by?: string; // Admin who approved
 }
 
 /**
@@ -598,14 +598,14 @@ export interface MCPToolAccess {
 export interface MCPServerSubscriptionCreate {
   server_id: string;
   plan?: 'free' | 'basic' | 'premium';
-  requested_tools: string[];   // Tool IDs to request access to
+  requested_tools: string[]; // Tool IDs to request access to
 }
 
 /**
  * Server subscription with full API key (shown only on creation)
  */
 export interface MCPServerSubscriptionWithKey extends MCPServerSubscription {
-  api_key: string;  // Full key, shown only once!
+  api_key: string; // Full key, shown only once!
 }
 
 // ============ UAC Contract & Protocol Binding Types ============
@@ -629,11 +629,11 @@ export interface ProtocolBinding {
   enabled: boolean;
   endpoint?: string;
   playground_url?: string;
-  tool_name?: string;           // For MCP
-  operations?: string[];        // For GraphQL
-  proto_file_url?: string;      // For gRPC
-  topic_name?: string;          // For Kafka
-  traffic_24h?: number;         // Request count in last 24 hours
+  tool_name?: string; // For MCP
+  operations?: string[]; // For GraphQL
+  proto_file_url?: string; // For gRPC
+  topic_name?: string; // For Kafka
+  traffic_24h?: number; // Request count in last 24 hours
   generated_at?: string;
   generation_error?: string;
 }
@@ -730,9 +730,9 @@ export interface GeneratedBinding {
   status: BindingStatus;
   endpoint?: string;
   playground_url?: string;
-  tool_name?: string;           // For MCP
-  operations?: string[];        // For GraphQL
-  auto_generated?: boolean;     // True for auto-enabled bindings (e.g., MCP)
+  tool_name?: string; // For MCP
+  operations?: string[]; // For GraphQL
+  auto_generated?: boolean; // True for auto-enabled bindings (e.g., MCP)
 }
 
 /**

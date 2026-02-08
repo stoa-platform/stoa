@@ -53,7 +53,9 @@ export const subscriptionsService = {
    * List my MCP subscriptions
    * GET /mcp/v1/subscriptions
    */
-  listSubscriptions: async (params?: ListSubscriptionsParams): Promise<SubscriptionsListResponse> => {
+  listSubscriptions: async (
+    params?: ListSubscriptionsParams
+  ): Promise<SubscriptionsListResponse> => {
     const response = await mcpClient.get<SubscriptionsListResponse>('/mcp/v1/subscriptions', {
       params: {
         page: params?.page || 1,
@@ -80,7 +82,10 @@ export const subscriptionsService = {
    * ⚠️ The API key is returned only ONCE! Store/display immediately.
    */
   createSubscription: async (data: MCPSubscriptionCreate): Promise<CreateSubscriptionResponse> => {
-    const response = await mcpClient.post<CreateSubscriptionResponse>('/mcp/v1/subscriptions', data);
+    const response = await mcpClient.post<CreateSubscriptionResponse>(
+      '/mcp/v1/subscriptions',
+      data
+    );
     return response.data;
   },
 
@@ -99,7 +104,9 @@ export const subscriptionsService = {
    * ⚠️ Old key is immediately invalidated!
    */
   regenerateApiKey: async (id: string): Promise<{ api_key: string }> => {
-    const response = await mcpClient.post<{ api_key: string }>(`/mcp/v1/subscriptions/${id}/regenerate`);
+    const response = await mcpClient.post<{ api_key: string }>(
+      `/mcp/v1/subscriptions/${id}/regenerate`
+    );
     return response.data;
   },
 
@@ -108,7 +115,9 @@ export const subscriptionsService = {
    * GET /mcp/v1/subscriptions/{id}/config
    */
   getConfigExport: async (id: string): Promise<MCPSubscriptionConfig> => {
-    const response = await mcpClient.get<MCPSubscriptionConfig>(`/mcp/v1/subscriptions/${id}/config`);
+    const response = await mcpClient.get<MCPSubscriptionConfig>(
+      `/mcp/v1/subscriptions/${id}/config`
+    );
     return response.data;
   },
 
@@ -174,7 +183,9 @@ export const subscriptionsService = {
    * Returns subscription details with grace period status.
    */
   getRotationInfo: async (id: string): Promise<MCPSubscription> => {
-    const response = await mcpClient.get<MCPSubscription>(`/mcp/v1/subscriptions/${id}/rotation-info`);
+    const response = await mcpClient.get<MCPSubscription>(
+      `/mcp/v1/subscriptions/${id}/rotation-info`
+    );
     return response.data;
   },
 };

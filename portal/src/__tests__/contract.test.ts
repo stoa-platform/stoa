@@ -66,15 +66,7 @@ const PORTAL_TYPE_MAPPINGS: Record<string, string[]> = {
   ],
 
   // ContractResponse → Contract
-  ContractResponse: [
-    'id',
-    'tenant_id',
-    'name',
-    'version',
-    'status',
-    'created_at',
-    'updated_at',
-  ],
+  ContractResponse: ['id', 'tenant_id', 'name', 'version', 'status', 'created_at', 'updated_at'],
 
   // PortalAPIResponse → API (portal catalog)
   PortalAPIResponse: [
@@ -107,27 +99,24 @@ describe('OpenAPI Contract — Portal', () => {
     expect(Object.keys(typedSchema.components.schemas).length).toBeGreaterThan(50);
   });
 
-  describe.each(Object.entries(PORTAL_TYPE_MAPPINGS))(
-    'Schema %s',
-    (schemaName, tsProperties) => {
-      it(`should exist in OpenAPI snapshot`, () => {
-        const props = getSchemaProperties(schemaName);
-        expect(props.length).toBeGreaterThan(0);
-      });
+  describe.each(Object.entries(PORTAL_TYPE_MAPPINGS))('Schema %s', (schemaName, tsProperties) => {
+    it(`should exist in OpenAPI snapshot`, () => {
+      const props = getSchemaProperties(schemaName);
+      expect(props.length).toBeGreaterThan(0);
+    });
 
-      it(`should have all TS-declared properties in OpenAPI`, () => {
-        const apiProps = getSchemaProperties(schemaName);
-        const missing = tsProperties.filter((p) => !apiProps.includes(p));
-        expect(missing).toEqual([]);
-      });
+    it(`should have all TS-declared properties in OpenAPI`, () => {
+      const apiProps = getSchemaProperties(schemaName);
+      const missing = tsProperties.filter((p) => !apiProps.includes(p));
+      expect(missing).toEqual([]);
+    });
 
-      it(`should have required properties covered by TS type`, () => {
-        const required = getRequiredProperties(schemaName);
-        const covered = tsProperties.filter((p) => required.includes(p));
-        expect(covered.length).toBeGreaterThanOrEqual(Math.min(required.length, 3));
-      });
-    }
-  );
+    it(`should have required properties covered by TS type`, () => {
+      const required = getRequiredProperties(schemaName);
+      const covered = tsProperties.filter((p) => required.includes(p));
+      expect(covered.length).toBeGreaterThanOrEqual(Math.min(required.length, 3));
+    });
+  });
 
   it('should not have unexpected schema removals', () => {
     const expectedSchemas = [

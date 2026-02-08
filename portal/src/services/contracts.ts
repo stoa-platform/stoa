@@ -55,20 +55,17 @@ export const contractsService = {
    * what bindings were auto-generated (REST, MCP, GraphQL, etc.)
    */
   async publishContract(data: ContractCreate): Promise<PublishContractResponse> {
-    const response = await apiClient.post<PublishContractResponse>(
-      '/v1/contracts',
-      { ...data, status: 'published' }
-    );
+    const response = await apiClient.post<PublishContractResponse>('/v1/contracts', {
+      ...data,
+      status: 'published',
+    });
     return response.data;
   },
 
   /**
    * Update a contract
    */
-  async updateContract(
-    contractId: string,
-    data: Partial<ContractCreate>
-  ): Promise<Contract> {
+  async updateContract(contractId: string, data: Partial<ContractCreate>): Promise<Contract> {
     const response = await apiClient.patch<Contract>(`/v1/contracts/${contractId}`, data);
     return response.data;
   },
@@ -95,10 +92,7 @@ export const contractsService = {
    * Enable a protocol binding for a contract
    * This triggers the UAC engine to generate the binding (endpoint, tool, etc.)
    */
-  async enableBinding(
-    contractId: string,
-    protocol: ProtocolType
-  ): Promise<EnableBindingResponse> {
+  async enableBinding(contractId: string, protocol: ProtocolType): Promise<EnableBindingResponse> {
     const response = await apiClient.post<EnableBindingResponse>(
       `/v1/contracts/${contractId}/bindings`,
       { protocol }

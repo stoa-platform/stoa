@@ -52,11 +52,24 @@ export function UsageChart({ data, metric, title, height = 200 }: UsageChartProp
   };
 
   const TrendIcon = trend > 5 ? TrendingUp : trend < -5 ? TrendingDown : Minus;
-  const trendColor = metric === 'successRate'
-    ? (trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-500')
-    : metric === 'avgLatencyMs'
-    ? (trend < 0 ? 'text-green-600' : trend > 0 ? 'text-red-600' : 'text-gray-500')
-    : (trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-600' : 'text-gray-500');
+  const trendColor =
+    metric === 'successRate'
+      ? trend > 0
+        ? 'text-green-600'
+        : trend < 0
+          ? 'text-red-600'
+          : 'text-gray-500'
+      : metric === 'avgLatencyMs'
+        ? trend < 0
+          ? 'text-green-600'
+          : trend > 0
+            ? 'text-red-600'
+            : 'text-gray-500'
+        : trend > 0
+          ? 'text-green-600'
+          : trend < 0
+            ? 'text-red-600'
+            : 'text-gray-500';
 
   const barColor = {
     calls: 'bg-blue-500',
@@ -91,10 +104,7 @@ export function UsageChart({ data, metric, title, height = 200 }: UsageChartProp
       <div className="relative" style={{ height }}>
         <div className="absolute inset-0 flex items-end gap-1">
           {values.map((value, index) => (
-            <div
-              key={index}
-              className="flex-1 flex flex-col items-center group"
-            >
+            <div key={index} className="flex-1 flex flex-col items-center group">
               {/* Tooltip */}
               <div className="opacity-0 group-hover:opacity-100 absolute bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap transition-opacity z-10">
                 <div className="font-medium">{formattedValues[index]}</div>
@@ -112,8 +122,12 @@ export function UsageChart({ data, metric, title, height = 200 }: UsageChartProp
 
         {/* Y-axis labels */}
         <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-xs text-gray-400 -ml-8 w-8 text-right">
-          <span>{metric === 'successRate' ? `${(max * 100).toFixed(0)}%` : max.toLocaleString()}</span>
-          <span>{metric === 'successRate' ? `${(min * 100).toFixed(0)}%` : min.toLocaleString()}</span>
+          <span>
+            {metric === 'successRate' ? `${(max * 100).toFixed(0)}%` : max.toLocaleString()}
+          </span>
+          <span>
+            {metric === 'successRate' ? `${(min * 100).toFixed(0)}%` : min.toLocaleString()}
+          </span>
         </div>
       </div>
 
@@ -135,7 +149,14 @@ interface UsageStatsCardProps {
   color?: 'blue' | 'green' | 'orange' | 'purple' | 'red';
 }
 
-export function UsageStatsCard({ title, value, subtitle, trend, icon, color = 'blue' }: UsageStatsCardProps) {
+export function UsageStatsCard({
+  title,
+  value,
+  subtitle,
+  trend,
+  icon,
+  color = 'blue',
+}: UsageStatsCardProps) {
   const colorClasses = {
     blue: 'bg-blue-50 text-blue-600',
     green: 'bg-green-50 text-green-600',
@@ -148,17 +169,15 @@ export function UsageStatsCard({ title, value, subtitle, trend, icon, color = 'b
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm text-gray-500">{title}</span>
-        {icon && (
-          <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
-            {icon}
-          </div>
-        )}
+        {icon && <div className={`p-2 rounded-lg ${colorClasses[color]}`}>{icon}</div>}
       </div>
       <div className="text-2xl font-bold text-gray-900">{value}</div>
       <div className="flex items-center justify-between mt-1">
         {subtitle && <span className="text-xs text-gray-400">{subtitle}</span>}
         {trend !== undefined && (
-          <span className={`flex items-center gap-1 text-xs ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <span
+            className={`flex items-center gap-1 text-xs ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}
+          >
             {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
             {Math.abs(trend).toFixed(1)}%
           </span>

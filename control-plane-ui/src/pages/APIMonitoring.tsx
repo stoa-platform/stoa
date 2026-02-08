@@ -38,7 +38,10 @@ import { clsx } from 'clsx';
 // STATUS CONFIGURATIONS
 // =============================================================================
 
-const statusConfig: Record<TransactionStatus, { icon: typeof CheckCircle2; color: string; bg: string; label: string }> = {
+const statusConfig: Record<
+  TransactionStatus,
+  { icon: typeof CheckCircle2; color: string; bg: string; label: string }
+> = {
   success: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-100', label: 'Success' },
   error: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-100', label: 'Error' },
   timeout: { icon: AlertCircle, color: 'text-orange-500', bg: 'bg-orange-100', label: 'Timeout' },
@@ -66,7 +69,11 @@ function formatDuration(ms?: number): string {
 function formatTime(isoString?: string): string {
   if (!isoString) return '-';
   const date = new Date(isoString);
-  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return date.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 function getStatusCodeColor(code: number): string {
@@ -81,7 +88,14 @@ function getStatusCodeColor(code: number): string {
 // STATS CARD COMPONENT
 // =============================================================================
 
-function StatsCard({ title, value, subtitle, icon: Icon, color, trend }: {
+function StatsCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  color,
+  trend,
+}: {
   title: string;
   value: string | number;
   subtitle?: string;
@@ -103,10 +117,12 @@ function StatsCard({ title, value, subtitle, icon: Icon, color, trend }: {
           </div>
         </div>
         {trend && (
-          <div className={clsx(
-            'flex items-center gap-1 text-sm font-medium',
-            trend.positive ? 'text-green-600' : 'text-red-600'
-          )}>
+          <div
+            className={clsx(
+              'flex items-center gap-1 text-sm font-medium',
+              trend.positive ? 'text-green-600' : 'text-red-600'
+            )}
+          >
             <TrendingUp className={clsx('h-4 w-4', !trend.positive && 'rotate-180')} />
             {trend.value}%
           </div>
@@ -122,9 +138,7 @@ function StatsCard({ title, value, subtitle, icon: Icon, color, trend }: {
 
 function TransactionFlow({ spans }: { spans: TransactionSpan[] }) {
   if (!spans || spans.length === 0) {
-    return (
-      <div className="text-sm text-gray-500 italic">No span data available</div>
-    );
+    return <div className="text-sm text-gray-500 italic">No span data available</div>;
   }
 
   const serviceIcons: Record<string, typeof Server> = {
@@ -142,13 +156,18 @@ function TransactionFlow({ spans }: { spans: TransactionSpan[] }) {
 
         return (
           <div key={index} className="flex items-center">
-            <div className={clsx(
-              'flex items-center gap-2 px-3 py-2 rounded-lg border',
-              span.status === 'success' ? 'border-green-200 bg-green-50' :
-              span.status === 'error' ? 'border-red-200 bg-red-50' :
-              span.status === 'timeout' ? 'border-orange-200 bg-orange-50' :
-              'border-gray-200 bg-gray-50'
-            )}>
+            <div
+              className={clsx(
+                'flex items-center gap-2 px-3 py-2 rounded-lg border',
+                span.status === 'success'
+                  ? 'border-green-200 bg-green-50'
+                  : span.status === 'error'
+                    ? 'border-red-200 bg-red-50'
+                    : span.status === 'timeout'
+                      ? 'border-orange-200 bg-orange-50'
+                      : 'border-gray-200 bg-gray-50'
+              )}
+            >
               <Icon className={clsx('h-4 w-4', config.color)} />
               <div className="text-xs">
                 <div className="font-medium text-gray-900">{span.service}</div>
@@ -169,7 +188,11 @@ function TransactionFlow({ spans }: { spans: TransactionSpan[] }) {
 // TRANSACTION ROW COMPONENT
 // =============================================================================
 
-function TransactionRow({ transaction, isExpanded, onToggle }: {
+function TransactionRow({
+  transaction,
+  isExpanded,
+  onToggle,
+}: {
   transaction: APITransactionSummary;
   isExpanded: boolean;
   onToggle: () => void;
@@ -198,10 +221,12 @@ function TransactionRow({ transaction, isExpanded, onToggle }: {
         </div>
       </td>
       <td className="px-4 py-3">
-        <span className={clsx(
-          'px-2 py-1 rounded text-xs font-bold',
-          methodColors[transaction.method] || 'bg-gray-100 text-gray-700'
-        )}>
+        <span
+          className={clsx(
+            'px-2 py-1 rounded text-xs font-bold',
+            methodColors[transaction.method] || 'bg-gray-100 text-gray-700'
+          )}
+        >
           {transaction.method}
         </span>
       </td>
@@ -212,16 +237,20 @@ function TransactionRow({ transaction, isExpanded, onToggle }: {
         </div>
       </td>
       <td className="px-4 py-3">
-        <span className={clsx(
-          'px-2 py-1 rounded text-xs font-bold',
-          getStatusCodeColor(transaction.status_code)
-        )}>
+        <span
+          className={clsx(
+            'px-2 py-1 rounded text-xs font-bold',
+            getStatusCodeColor(transaction.status_code)
+          )}
+        >
           {transaction.status_code}
         </span>
       </td>
       <td className="px-4 py-3">
         <div className={clsx('flex items-center gap-1.5', config.color)}>
-          <StatusIcon className={clsx('h-4 w-4', transaction.status === 'pending' && 'animate-spin')} />
+          <StatusIcon
+            className={clsx('h-4 w-4', transaction.status === 'pending' && 'animate-spin')}
+          />
           <span className="text-sm font-medium">{config.label}</span>
         </div>
       </td>
@@ -231,9 +260,7 @@ function TransactionRow({ transaction, isExpanded, onToggle }: {
           {formatDuration(transaction.total_duration_ms)}
         </div>
       </td>
-      <td className="px-4 py-3 text-sm text-gray-500">
-        {formatTime(transaction.started_at)}
-      </td>
+      <td className="px-4 py-3 text-sm text-gray-500">{formatTime(transaction.started_at)}</td>
     </tr>
   );
 }
@@ -250,7 +277,9 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
     async function fetchDetail() {
       setLoading(true);
       try {
-        const response = await apiService.get<APITransaction>(`/v1/monitoring/transactions/${transactionId}`);
+        const response = await apiService.get<APITransaction>(
+          `/v1/monitoring/transactions/${transactionId}`
+        );
         setTransaction(response.data);
       } catch (err) {
         console.error('Failed to fetch transaction detail:', err);
@@ -309,10 +338,13 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
                     key={index}
                     className={clsx(
                       'p-3 rounded-lg border',
-                      span.status === 'success' ? 'border-green-200 bg-green-50' :
-                      span.status === 'error' ? 'border-red-200 bg-red-50' :
-                      span.status === 'timeout' ? 'border-orange-200 bg-orange-50' :
-                      'border-gray-200 bg-white'
+                      span.status === 'success'
+                        ? 'border-green-200 bg-green-50'
+                        : span.status === 'error'
+                          ? 'border-red-200 bg-red-50'
+                          : span.status === 'timeout'
+                            ? 'border-orange-200 bg-orange-50'
+                            : 'border-gray-200 bg-white'
                     )}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -333,9 +365,7 @@ function TransactionDetail({ transactionId }: { transactionId: string }) {
                         <span className="font-medium">{formatTime(span.started_at)}</span>
                       </div>
                       {span.error && (
-                        <div className="mt-2 p-2 bg-red-100 rounded text-red-700">
-                          {span.error}
-                        </div>
+                        <div className="mt-2 p-2 bg-red-100 rounded text-red-700">{span.error}</div>
                       )}
                     </div>
                   </div>
@@ -417,15 +447,23 @@ function generateDemoTransactions(): APITransactionSummary[] {
   const apis = ['weather-api', 'payment-api', 'user-api', 'inventory-api'];
   const methods = ['GET', 'POST', 'PUT', 'DELETE'];
   const paths = ['/v1/data', '/v1/users/123', '/v1/orders', '/v1/products', '/v1/health'];
-  const statuses: TransactionStatus[] = ['success', 'success', 'success', 'success', 'error', 'timeout'];
+  const statuses: TransactionStatus[] = [
+    'success',
+    'success',
+    'success',
+    'success',
+    'error',
+    'timeout',
+  ];
 
   return Array.from({ length: 20 }, (_, i) => {
     const status = statuses[Math.floor(Math.random() * statuses.length)];
-    const statusCode = status === 'success'
-      ? [200, 201][Math.floor(Math.random() * 2)]
-      : status === 'error'
-      ? [400, 404, 500][Math.floor(Math.random() * 3)]
-      : 504;
+    const statusCode =
+      status === 'success'
+        ? [200, 201][Math.floor(Math.random() * 2)]
+        : status === 'error'
+          ? [400, 404, 500][Math.floor(Math.random() * 3)]
+          : 504;
 
     return {
       id: `txn-${i + 1}`,
@@ -449,7 +487,8 @@ function generateDemoTransaction(id: string): APITransaction {
     id,
     tenant_id: 'tenant-acme',
     client_ip: '192.168.1.' + Math.floor(Math.random() * 255),
-    user_id: ['alice@example.com', 'bob@example.com', null][Math.floor(Math.random() * 3)] || undefined,
+    user_id:
+      ['alice@example.com', 'bob@example.com', null][Math.floor(Math.random() * 3)] || undefined,
     spans: [
       {
         name: 'Gateway Ingress',
@@ -478,7 +517,8 @@ function generateDemoTransaction(id: string): APITransaction {
         status: summary.status,
         started_at: summary.started_at,
         duration_ms: summary.total_duration_ms - 30,
-        error: summary.status === 'error' ? 'Backend returned 500: Internal Server Error' : undefined,
+        error:
+          summary.status === 'error' ? 'Backend returned 500: Internal Server Error' : undefined,
       },
       {
         name: 'Response Transform',
@@ -488,11 +528,12 @@ function generateDemoTransaction(id: string): APITransaction {
         duration_ms: 5,
       },
     ],
-    error_message: summary.status === 'error'
-      ? 'Backend service returned an error response'
-      : summary.status === 'timeout'
-      ? 'Request timed out waiting for backend response'
-      : undefined,
+    error_message:
+      summary.status === 'error'
+        ? 'Backend service returned an error response'
+        : summary.status === 'timeout'
+          ? 'Request timed out waiting for backend response'
+          : undefined,
   };
 }
 
@@ -541,7 +582,7 @@ export function APIMonitoring() {
   }, [autoRefresh, fetchData]);
 
   // Filter transactions
-  const filteredTransactions = transactions.filter(txn => {
+  const filteredTransactions = transactions.filter((txn) => {
     if (statusFilter !== 'all' && txn.status !== statusFilter) return false;
     if (apiFilter !== 'all' && txn.api_name !== apiFilter) return false;
     if (searchTerm) {
@@ -556,7 +597,7 @@ export function APIMonitoring() {
   });
 
   // Get unique APIs for filter
-  const uniqueApis = [...new Set(transactions.map(t => t.api_name))];
+  const uniqueApis = [...new Set(transactions.map((t) => t.api_name))];
 
   if (loading) {
     return (
@@ -578,7 +619,9 @@ export function APIMonitoring() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(observabilityPath(`${config.services.grafana.url}/d/stoa-incident-response`))}
+            onClick={() =>
+              navigate(observabilityPath(`${config.services.grafana.url}/d/stoa-incident-response`))
+            }
             className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
           >
             <ExternalLink className="h-4 w-4" />
@@ -684,8 +727,10 @@ export function APIMonitoring() {
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All APIs</option>
-            {uniqueApis.map(api => (
-              <option key={api} value={api}>{api}</option>
+            {uniqueApis.map((api) => (
+              <option key={api} value={api}>
+                {api}
+              </option>
             ))}
           </select>
         </div>
@@ -736,7 +781,9 @@ export function APIMonitoring() {
                       key={transaction.id}
                       transaction={transaction}
                       isExpanded={expandedId === transaction.id}
-                      onToggle={() => setExpandedId(expandedId === transaction.id ? null : transaction.id)}
+                      onToggle={() =>
+                        setExpandedId(expandedId === transaction.id ? null : transaction.id)
+                      }
                     />
                     {expandedId === transaction.id && (
                       <TransactionDetail transactionId={transaction.id} />
@@ -757,11 +804,12 @@ export function APIMonitoring() {
             <h4 className="text-sm font-semibold text-blue-800">E2E Transaction Monitoring</h4>
             <p className="text-sm text-blue-700 mt-1">
               This page shows the complete journey of API requests through your infrastructure:
-              Gateway ingress → Authentication → Rate limiting → Backend request → Response transformation.
-              Click on any transaction to see the detailed span breakdown.
+              Gateway ingress → Authentication → Rate limiting → Backend request → Response
+              transformation. Click on any transaction to see the detailed span breakdown.
             </p>
             <p className="text-xs text-blue-600 mt-2">
-              Note: Full distributed tracing with OpenTelemetry will provide even more detailed insights when enabled.
+              Note: Full distributed tracing with OpenTelemetry will provide even more detailed
+              insights when enabled.
             </p>
           </div>
         </div>

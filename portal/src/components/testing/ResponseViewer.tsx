@@ -97,9 +97,8 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
   const statusColor = getStatusColor(response.status);
   const StatusIcon = statusColor.icon;
 
-  const bodyString = typeof response.body === 'string'
-    ? response.body
-    : JSON.stringify(response.body, null, 2);
+  const bodyString =
+    typeof response.body === 'string' ? response.body : JSON.stringify(response.body, null, 2);
 
   const bodySize = new Blob([bodyString]).size;
 
@@ -129,26 +128,18 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
           {/* Status */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${statusColor.bg}`}>
             <StatusIcon className={`h-4 w-4 ${statusColor.text}`} />
-            <span className={`font-semibold ${statusColor.text}`}>
-              {response.status}
-            </span>
-            <span className={`text-sm ${statusColor.text}`}>
-              {response.statusText}
-            </span>
+            <span className={`font-semibold ${statusColor.text}`}>{response.status}</span>
+            <span className={`text-sm ${statusColor.text}`}>{response.statusText}</span>
           </div>
 
           {/* Timing */}
           <div className="flex items-center gap-1.5 text-gray-500">
             <Clock className="h-4 w-4" />
-            <span className="text-sm font-medium">
-              {formatTiming(response.timing.total)}
-            </span>
+            <span className="text-sm font-medium">{formatTiming(response.timing.total)}</span>
           </div>
 
           {/* Size */}
-          <div className="text-sm text-gray-500">
-            {formatBytes(bodySize)}
-          </div>
+          <div className="text-sm text-gray-500">{formatBytes(bodySize)}</div>
         </div>
 
         {/* Copy Button */}
@@ -190,9 +181,10 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
             onClick={() => setActiveTab('body')}
             className={`
               py-3 px-1 border-b-2 text-sm font-medium transition-colors
-              ${activeTab === 'body'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+              ${
+                activeTab === 'body'
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
               }
             `}
           >
@@ -202,9 +194,10 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
             onClick={() => setActiveTab('headers')}
             className={`
               py-3 px-1 border-b-2 text-sm font-medium transition-colors
-              ${activeTab === 'headers'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+              ${
+                activeTab === 'headers'
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
               }
             `}
           >
@@ -265,12 +258,8 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
                     key={key}
                     className="flex items-start py-1.5 px-2 hover:bg-gray-50 rounded text-sm"
                   >
-                    <span className="font-medium text-gray-700 w-48 flex-shrink-0">
-                      {key}:
-                    </span>
-                    <span className="text-gray-600 font-mono break-all">
-                      {value}
-                    </span>
+                    <span className="font-medium text-gray-700 w-48 flex-shrink-0">{key}:</span>
+                    <span className="text-gray-600 font-mono break-all">{value}</span>
                   </div>
                 ))}
               </div>

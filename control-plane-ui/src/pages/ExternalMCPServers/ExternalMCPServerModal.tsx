@@ -148,7 +148,9 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
               pattern="^[a-z][a-z0-9-_]*$"
               title="Lowercase letters, numbers, hyphens, and underscores. Must start with a letter."
             />
-            <p className="text-xs text-gray-500 mt-1">Unique identifier (slug). Used for tool prefixes.</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Unique identifier (slug). Used for tool prefixes.
+            </p>
           </div>
 
           {/* Display Name */}
@@ -198,7 +200,9 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
             <label className="block text-sm font-medium text-gray-700 mb-1">Transport</label>
             <select
               value={formData.transport}
-              onChange={(e) => setFormData({ ...formData, transport: e.target.value as ExternalMCPTransport })}
+              onChange={(e) =>
+                setFormData({ ...formData, transport: e.target.value as ExternalMCPTransport })
+              }
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {transportOptions.map((opt) => (
@@ -214,7 +218,9 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
             <label className="block text-sm font-medium text-gray-700 mb-1">Authentication</label>
             <select
               value={formData.auth_type}
-              onChange={(e) => setFormData({ ...formData, auth_type: e.target.value as ExternalMCPAuthType })}
+              onChange={(e) =>
+                setFormData({ ...formData, auth_type: e.target.value as ExternalMCPAuthType })
+              }
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {authTypeOptions.map((opt) => (
@@ -236,7 +242,9 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter API key"
               />
-              <p className="text-xs text-gray-500 mt-1">Stored securely in Vault. Leave empty to keep existing.</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Stored securely in Vault. Leave empty to keep existing.
+              </p>
             </div>
           )}
 
@@ -251,7 +259,9 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter bearer token"
               />
-              <p className="text-xs text-gray-500 mt-1">Stored securely in Vault. Leave empty to keep existing.</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Stored securely in Vault. Leave empty to keep existing.
+              </p>
             </div>
           )}
 
@@ -264,7 +274,9 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                 <input
                   type="text"
                   value={credentialOAuth2.client_id}
-                  onChange={(e) => setCredentialOAuth2({ ...credentialOAuth2, client_id: e.target.value })}
+                  onChange={(e) =>
+                    setCredentialOAuth2({ ...credentialOAuth2, client_id: e.target.value })
+                  }
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
                   placeholder="Client ID"
                 />
@@ -274,7 +286,9 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                 <input
                   type="password"
                   value={credentialOAuth2.client_secret}
-                  onChange={(e) => setCredentialOAuth2({ ...credentialOAuth2, client_secret: e.target.value })}
+                  onChange={(e) =>
+                    setCredentialOAuth2({ ...credentialOAuth2, client_secret: e.target.value })
+                  }
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
                   placeholder="Client Secret"
                 />
@@ -284,7 +298,9 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                 <input
                   type="url"
                   value={credentialOAuth2.token_url}
-                  onChange={(e) => setCredentialOAuth2({ ...credentialOAuth2, token_url: e.target.value })}
+                  onChange={(e) =>
+                    setCredentialOAuth2({ ...credentialOAuth2, token_url: e.target.value })
+                  }
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
                   placeholder="https://auth.example.com/oauth/token"
                 />
@@ -294,7 +310,9 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
                 <input
                   type="text"
                   value={credentialOAuth2.scope}
-                  onChange={(e) => setCredentialOAuth2({ ...credentialOAuth2, scope: e.target.value })}
+                  onChange={(e) =>
+                    setCredentialOAuth2({ ...credentialOAuth2, scope: e.target.value })
+                  }
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
                   placeholder="read write"
                 />
@@ -313,7 +331,10 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
               placeholder={formData.name || 'linear'}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Tools will be named: <code className="bg-gray-100 px-1 rounded">{formData.tool_prefix || formData.name || 'prefix'}__tool_name</code>
+              Tools will be named:{' '}
+              <code className="bg-gray-100 px-1 rounded">
+                {formData.tool_prefix || formData.name || 'prefix'}__tool_name
+              </code>
             </p>
           </div>
 
@@ -331,7 +352,9 @@ export function ExternalMCPServerModal({ server, onClose, onSubmit }: ExternalMC
 
           {/* Test Connection Result */}
           {testResult && (
-            <div className={`px-4 py-3 rounded-lg text-sm ${testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+            <div
+              className={`px-4 py-3 rounded-lg text-sm ${testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}
+            >
               {testResult.message}
             </div>
           )}

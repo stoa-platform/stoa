@@ -60,7 +60,7 @@ export function ServerDetailPage() {
         try {
           fetchedServer = await mcpServersService.getServer(serverId!);
         } catch {
-          fetchedServer = MOCK_SERVERS.find(s => s.id === serverId);
+          fetchedServer = MOCK_SERVERS.find((s) => s.id === serverId);
         }
 
         if (!fetchedServer) {
@@ -77,12 +77,12 @@ export function ServerDetailPage() {
         setServer(fetchedServer);
 
         // Select all tools by default for new subscriptions
-        setSelectedTools(new Set(fetchedServer.tools.map(t => t.id)));
+        setSelectedTools(new Set(fetchedServer.tools.map((t) => t.id)));
 
         // Try to fetch subscription
         try {
           const subs = await mcpServersService.getMyServerSubscriptions();
-          const existingSub = subs.find(s => s.server_id === serverId);
+          const existingSub = subs.find((s) => s.server_id === serverId);
           setSubscription(existingSub || null);
         } catch {
           setSubscription(null);
@@ -114,7 +114,7 @@ export function ServerDetailPage() {
     if (selectedTools.size === server.tools.length) {
       setSelectedTools(new Set());
     } else {
-      setSelectedTools(new Set(server.tools.map(t => t.id)));
+      setSelectedTools(new Set(server.tools.map((t) => t.id)));
     }
   };
 
@@ -165,7 +165,7 @@ export function ServerDetailPage() {
           url: `${mcpUrl}/mcp/sse`,
           transport: 'sse',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            Authorization: `Bearer ${apiKey}`,
           },
         },
       },
@@ -181,7 +181,7 @@ export function ServerDetailPage() {
           command: 'npx',
           args: ['-y', '@anthropic-ai/mcp-proxy', mcpUrl + '/mcp/sse'],
           env: {
-            'STOA_API_KEY': apiKey,
+            STOA_API_KEY: apiKey,
           },
         },
       },
@@ -205,7 +205,7 @@ export function ServerDetailPage() {
   // Get tool access status from subscription
   const getToolAccessStatus = (toolId: string) => {
     if (!subscription) return null;
-    return subscription.tool_access.find(ta => ta.tool_id === toolId);
+    return subscription.tool_access.find((ta) => ta.tool_id === toolId);
   };
 
   if (isLoading) {
@@ -262,12 +262,14 @@ export function ServerDetailPage() {
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">{server.displayName}</h1>
-              {server.version && (
-                <span className="text-sm text-gray-400">v{server.version}</span>
-              )}
-              <span className={`px-2 py-1 text-xs font-medium rounded ${
-                server.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-              }`}>
+              {server.version && <span className="text-sm text-gray-400">v{server.version}</span>}
+              <span
+                className={`px-2 py-1 text-xs font-medium rounded ${
+                  server.status === 'active'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-amber-100 text-amber-700'
+                }`}
+              >
                 {server.status}
               </span>
             </div>
@@ -277,9 +279,7 @@ export function ServerDetailPage() {
                 <Wrench className="h-4 w-4" />
                 {server.tools.length} tools
               </span>
-              <span className="capitalize bg-gray-100 px-2 py-1 rounded">
-                {server.category}
-              </span>
+              <span className="capitalize bg-gray-100 px-2 py-1 rounded">{server.category}</span>
               {server.documentation_url && (
                 <a
                   href={server.documentation_url}
@@ -296,20 +296,24 @@ export function ServerDetailPage() {
 
           {/* Subscription Status Badge */}
           {subscription && (
-            <div className={`px-4 py-2 rounded-lg ${
-              subscription.status === 'active'
-                ? 'bg-green-50 border border-green-200'
-                : 'bg-amber-50 border border-amber-200'
-            }`}>
+            <div
+              className={`px-4 py-2 rounded-lg ${
+                subscription.status === 'active'
+                  ? 'bg-green-50 border border-green-200'
+                  : 'bg-amber-50 border border-amber-200'
+              }`}
+            >
               <div className="flex items-center gap-2">
                 {subscription.status === 'active' ? (
                   <CheckCircle className="h-5 w-5 text-green-600" />
                 ) : (
                   <Clock className="h-5 w-5 text-amber-600" />
                 )}
-                <span className={`font-medium ${
-                  subscription.status === 'active' ? 'text-green-700' : 'text-amber-700'
-                }`}>
+                <span
+                  className={`font-medium ${
+                    subscription.status === 'active' ? 'text-green-700' : 'text-amber-700'
+                  }`}
+                >
                   {subscription.status === 'active' ? 'Subscribed' : 'Pending'}
                 </span>
               </div>
@@ -369,10 +373,19 @@ export function ServerDetailPage() {
                       Claude.ai (Web) - Recommended
                     </span>
                     <button
-                      onClick={() => copyConfig('claude', JSON.stringify(generateClaudeConfig(newApiKey), null, 2))}
+                      onClick={() =>
+                        copyConfig(
+                          'claude',
+                          JSON.stringify(generateClaudeConfig(newApiKey), null, 2)
+                        )
+                      }
                       className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
                     >
-                      {copiedConfig === 'claude' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      {copiedConfig === 'claude' ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
                       {copiedConfig === 'claude' ? 'Copied!' : 'Copy'}
                     </button>
                   </div>
@@ -380,7 +393,16 @@ export function ServerDetailPage() {
                     {JSON.stringify(generateClaudeConfig(newApiKey), null, 2)}
                   </pre>
                   <p className="text-xs text-gray-500 mt-2">
-                    Go to <a href="https://claude.ai/settings/mcp" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">claude.ai/settings/mcp</a> and add this configuration.
+                    Go to{' '}
+                    <a
+                      href="https://claude.ai/settings/mcp"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      claude.ai/settings/mcp
+                    </a>{' '}
+                    and add this configuration.
                   </p>
                 </div>
 
@@ -392,10 +414,19 @@ export function ServerDetailPage() {
                       Claude Desktop App
                     </span>
                     <button
-                      onClick={() => copyConfig('desktop', JSON.stringify(generateDesktopConfig(newApiKey), null, 2))}
+                      onClick={() =>
+                        copyConfig(
+                          'desktop',
+                          JSON.stringify(generateDesktopConfig(newApiKey), null, 2)
+                        )
+                      }
                       className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
                     >
-                      {copiedConfig === 'desktop' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      {copiedConfig === 'desktop' ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
                       {copiedConfig === 'desktop' ? 'Copied!' : 'Copy'}
                     </button>
                   </div>
@@ -403,7 +434,11 @@ export function ServerDetailPage() {
                     {JSON.stringify(generateDesktopConfig(newApiKey), null, 2)}
                   </pre>
                   <p className="text-xs text-gray-500 mt-2">
-                    Add to <code className="bg-gray-100 px-1 rounded">~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS)
+                    Add to{' '}
+                    <code className="bg-gray-100 px-1 rounded">
+                      ~/Library/Application Support/Claude/claude_desktop_config.json
+                    </code>{' '}
+                    (macOS)
                   </p>
                 </div>
               </div>
@@ -445,11 +480,11 @@ export function ServerDetailPage() {
               >
                 {/* Selection Checkbox (only when not subscribed) */}
                 {!subscription && (
-                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                    isSelected
-                      ? 'bg-primary-600 border-primary-600'
-                      : 'border-gray-300'
-                  }`}>
+                  <div
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      isSelected ? 'bg-primary-600 border-primary-600' : 'border-gray-300'
+                    }`}
+                  >
                     {isSelected && <Check className="h-3 w-3 text-white" />}
                   </div>
                 )}
@@ -470,19 +505,27 @@ export function ServerDetailPage() {
 
                 {/* Access Status (only when subscribed) */}
                 {subscription && accessStatus && (
-                  <div className={`flex items-center gap-1 text-sm ${
-                    accessStatus.status === 'enabled'
-                      ? 'text-green-600'
-                      : accessStatus.status === 'pending_approval'
-                        ? 'text-amber-600'
-                        : 'text-gray-400'
-                  }`}>
+                  <div
+                    className={`flex items-center gap-1 text-sm ${
+                      accessStatus.status === 'enabled'
+                        ? 'text-green-600'
+                        : accessStatus.status === 'pending_approval'
+                          ? 'text-amber-600'
+                          : 'text-gray-400'
+                    }`}
+                  >
                     {accessStatus.status === 'enabled' ? (
-                      <><CheckCircle className="h-4 w-4" /> Enabled</>
+                      <>
+                        <CheckCircle className="h-4 w-4" /> Enabled
+                      </>
                     ) : accessStatus.status === 'pending_approval' ? (
-                      <><Clock className="h-4 w-4" /> Pending</>
+                      <>
+                        <Clock className="h-4 w-4" /> Pending
+                      </>
                     ) : (
-                      <><XCircle className="h-4 w-4" /> Disabled</>
+                      <>
+                        <XCircle className="h-4 w-4" /> Disabled
+                      </>
                     )}
                   </div>
                 )}

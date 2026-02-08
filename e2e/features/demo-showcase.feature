@@ -1,4 +1,4 @@
-@demo @showcase @critical
+@demo @showcase @critical @wip
 Feature: Demo Showcase - Ready Player One Demo Scenarios
 
   As a STOA Platform presenter

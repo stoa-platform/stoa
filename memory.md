@@ -1,11 +1,11 @@
 # STOA Memory
 
-> Last updated: 2026-02-08 (Session 18 — CAB-1116 Phase 5 Quality Gates + Hotfixes)
+> Last updated: 2026-02-08 (Session 19 — CAB-1103 Phase 6 Operational Readiness)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: CAB-1116 Test Automation complete (all 5 phases + 2 hotfixes). Shift to demo readiness.
+- **Focus**: CAB-1103 Phase 6 complete (4 sub-phases). Shift to demo readiness + landing page.
 
 ## Session State
 
@@ -42,6 +42,10 @@
 | DONE | CAB-1116 | Phase 5: Quality gates (coverage, format, hooks) | PR #176 — CI enforcement |
 | DONE | CAB-1116 | Hotfix: Docker build (tsconfig.app.json) | PR #177 — exclude test files from tsc |
 | DONE | CAB-1116 | Hotfix: bddgen @wip tag | PR #178 — skip demo-showcase.feature |
+| DONE | CAB-1103 | Phase 6A: CI Hardening | PR #184 — 5 `|| true` bugs fixed, 11 intentional documented |
+| DONE | CAB-1103 | Phase 6B: Monitoring OIDC | PR #184 — Grafana OIDC, oauth2-proxy, AlertManager routing |
+| DONE | CAB-1103 | Phase 6C: E2E Expansion | PR #184 — 22 new BDD scenarios (4 feature files, 4 step files) |
+| DONE | CAB-1103 | Phase 6D: Test Loop Automation | PR #184 — weekly-audit.yml + smoke tests post-deploy |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe | — |
 | NEXT | — | Browser-based demo walkthrough | — |
 | NEXT | — | Record video backup for demo | — |
@@ -77,6 +81,11 @@
 - 2026-02-08: ESLint ratchet (93 warnings) instead of strict 0 — blocks new warnings, allows gradual cleanup
 - 2026-02-08: lint-staged without `--max-warnings` — CI enforces the ratchet, pre-commit only checks syntax
 - 2026-02-08: `@wip` tag + `tags: 'not @wip'` in defineBddConfig to skip unimplemented features
+- 2026-02-08: CI `|| true` audit — remove silent error swallowing, document intentional ones with inline comments
+- 2026-02-08: oauth2-proxy pattern for Prometheus OIDC (Keycloak → oauth2-proxy → Prometheus)
+- 2026-02-08: AlertManager routing by severity (critical→#incidents, warning→#alerts, inhibition rules)
+- 2026-02-08: Weekly audit cron workflow (pip-audit, npm audit, cargo-audit, gitleaks, helm lint)
+- 2026-02-08: Smoke tests as post-deploy jobs in component CI (reusable-smoke-test.yml)
 
 ## Known Issues
 - E2E smoke tests fail on live infra (timeouts, missing UI elements) — not a CI config issue

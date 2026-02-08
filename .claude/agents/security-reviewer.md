@@ -35,10 +35,18 @@ Ou pour une PR:
 gh pr diff {number} --name-only
 ```
 
-### Step 2: Scan secrets
+### Step 2: Scan secrets + Vault/ESO compliance
 Chercher dans les fichiers modifies:
 - Patterns: `AKIA`, `sk-`, `ghp_`, `Bearer `, `password=`, `secret=`
 - Fichiers sensibles: `.env`, `*.pem`, `*.key`, `credentials*`, `*.tfvars`
+
+Verifier la conformite Vault/ESO (voir `secrets-management.md`):
+- Les nouveaux secrets DOIVENT utiliser Vault + ESO (pas `kubectl create secret` manuel)
+- Vault paths autorises: `secret/apim/{env}/*`, `secret/stoa/data/*`, `secret/subscriptions/*`
+- `envFrom: secretRef` doit avoir `optional: true` pour les secrets non-critiques
+- **Anti-pattern**: secret dans un `ConfigMap` (pas chiffre au repos)
+- **Anti-pattern**: secret dans `Dockerfile ENV` (visible via `docker inspect`)
+- **Anti-pattern**: `kubectl create secret` sans ExternalSecret (pas de source of truth)
 
 ### Step 3: Validation RBAC
 Pour les endpoints FastAPI modifies:
@@ -83,4 +91,4 @@ Produire un rapport structure:
 - Un seul P0 suffit pour verdict "Fix"
 - Ne JAMAIS modifier le code — produire uniquement un rapport
 - Citer le fichier et la ligne pour chaque finding
-- Referer aux regles `.claude/rules/security.md` et `.claude/rules/k8s-deploy.md`
+- Referer aux regles `.claude/rules/security.md`, `.claude/rules/k8s-deploy.md`, et `.claude/rules/secrets-management.md`

@@ -7,12 +7,7 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
-import type {
-  GatewayInstance,
-  GatewayType,
-  GatewayInstanceStatus,
-  GatewayMode,
-} from '../../types';
+import type { GatewayInstance, GatewayType, GatewayInstanceStatus, GatewayMode } from '../../types';
 
 const statusColors: Record<GatewayInstanceStatus, string> = {
   online: 'bg-green-100 text-green-800',
@@ -94,9 +89,7 @@ export function GatewayList() {
     : null;
 
   // Filter gateways by mode
-  const filteredGateways = modeFilter
-    ? gateways.filter((gw) => gw.mode === modeFilter)
-    : gateways;
+  const filteredGateways = modeFilter ? gateways.filter((gw) => gw.mode === modeFilter) : gateways;
 
   // Count STOA gateways by mode for the filter dropdown
   const modeCounts = gateways.reduce(
@@ -106,7 +99,7 @@ export function GatewayList() {
       }
       return acc;
     },
-    {} as Record<string, number>,
+    {} as Record<string, number>
   );
 
   const refetchGateways = useCallback(() => {
@@ -144,7 +137,7 @@ export function GatewayList() {
         toast.error(err.response?.data?.detail || 'Failed to delete gateway');
       }
     },
-    [confirm, toast, refetchGateways, selectedGateway],
+    [confirm, toast, refetchGateways, selectedGateway]
   );
 
   const handleCreated = () => {
@@ -192,7 +185,7 @@ export function GatewayList() {
                   <option key={mode} value={mode}>
                     {modeLabels[mode]} ({modeCounts[mode]})
                   </option>
-                ) : null,
+                ) : null
               )}
             </select>
           )}
@@ -356,10 +349,7 @@ export function GatewayList() {
 
       {/* Gateway Detail Panel */}
       {selectedGateway && (
-        <GatewayDetailPanel
-          gateway={selectedGateway}
-          onClose={() => setSelectedGateway(null)}
-        />
+        <GatewayDetailPanel gateway={selectedGateway} onClose={() => setSelectedGateway(null)} />
       )}
 
       {ConfirmDialog}
@@ -417,7 +407,9 @@ function GatewayDetailPanel({
         <div className="px-6 py-5 space-y-6">
           {/* Status badges */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[gw.status]}`}>
+            <span
+              className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[gw.status]}`}
+            >
               {gw.status}
             </span>
             {isDegraded && (
@@ -426,7 +418,9 @@ function GatewayDetailPanel({
               </span>
             )}
             {gw.mode && (
-              <span className={`px-2 py-1 text-xs font-medium rounded-full border ${modeColors[gw.mode]}`}>
+              <span
+                className={`px-2 py-1 text-xs font-medium rounded-full border ${modeColors[gw.mode]}`}
+              >
                 {modeLabels[gw.mode]}
               </span>
             )}
@@ -439,9 +433,7 @@ function GatewayDetailPanel({
               <MetricItem
                 label="Uptime"
                 value={
-                  typeof hd.uptime_seconds === 'number'
-                    ? formatUptime(hd.uptime_seconds)
-                    : '--'
+                  typeof hd.uptime_seconds === 'number' ? formatUptime(hd.uptime_seconds) : '--'
                 }
               />
               <MetricItem
@@ -480,7 +472,9 @@ function GatewayDetailPanel({
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <dt className="text-gray-500">Name</dt>
-                <dd className="font-mono text-gray-900 text-xs truncate max-w-[220px]">{gw.name}</dd>
+                <dd className="font-mono text-gray-900 text-xs truncate max-w-[220px]">
+                  {gw.name}
+                </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-500">Type</dt>
@@ -492,7 +486,9 @@ function GatewayDetailPanel({
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-500">Base URL</dt>
-                <dd className="font-mono text-xs text-gray-700 truncate max-w-[220px]">{gw.base_url}</dd>
+                <dd className="font-mono text-xs text-gray-700 truncate max-w-[220px]">
+                  {gw.base_url}
+                </dd>
               </div>
               {gw.version && (
                 <div className="flex justify-between">
@@ -546,15 +542,7 @@ function GatewayDetailPanel({
   );
 }
 
-function MetricItem({
-  label,
-  value,
-  warn,
-}: {
-  label: string;
-  value: string;
-  warn?: boolean;
-}) {
+function MetricItem({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
     <div className="bg-gray-50 rounded-lg p-3">
       <dt className="text-xs text-gray-500">{label}</dt>

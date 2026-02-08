@@ -126,7 +126,7 @@ function renderGatewayList() {
       <MemoryRouter>
         <GatewayList />
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
 }
 

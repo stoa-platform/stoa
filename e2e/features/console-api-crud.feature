@@ -5,7 +5,7 @@ Feature: Console - API CRUD operations
   I want to create, edit, and delete APIs
   So that I can manage my organization's API catalog.
 
-  @critical @smoke
+  @critical
   Scenario: Tenant admin creates an API
     Given I am logged in to Console as "parzival" from team "high-five"
     And the STOA Console is accessible

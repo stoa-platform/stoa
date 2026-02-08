@@ -6,12 +6,7 @@ import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { CardSkeleton } from '@stoa/shared/components/Skeleton';
-import type {
-  GatewayInstance,
-  GatewayType,
-  GatewayInstanceStatus,
-  GatewayMode,
-} from '../../types';
+import type { GatewayInstance, GatewayType, GatewayInstanceStatus, GatewayMode } from '../../types';
 
 const statusColors: Record<GatewayInstanceStatus, string> = {
   online: 'bg-green-100 text-green-800',
@@ -58,9 +53,7 @@ export function GatewayList() {
   const [modeFilter, setModeFilter] = useState<GatewayMode | ''>('');
 
   // Filter gateways by mode
-  const filteredGateways = modeFilter
-    ? gateways.filter((gw) => gw.mode === modeFilter)
-    : gateways;
+  const filteredGateways = modeFilter ? gateways.filter((gw) => gw.mode === modeFilter) : gateways;
 
   // Count STOA gateways by mode for the filter dropdown
   const modeCounts = gateways.reduce(
@@ -70,7 +63,7 @@ export function GatewayList() {
       }
       return acc;
     },
-    {} as Record<string, number>,
+    {} as Record<string, number>
   );
 
   const loadGateways = useCallback(async () => {
@@ -122,7 +115,7 @@ export function GatewayList() {
         toast.error(err.response?.data?.detail || 'Failed to delete gateway');
       }
     },
-    [confirm, toast, loadGateways],
+    [confirm, toast, loadGateways]
   );
 
   const handleCreated = () => {
@@ -170,7 +163,7 @@ export function GatewayList() {
                   <option key={mode} value={mode}>
                     {modeLabels[mode]} ({modeCounts[mode]})
                   </option>
-                ) : null,
+                ) : null
               )}
             </select>
           )}
@@ -215,7 +208,10 @@ export function GatewayList() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredGateways.map((gw) => (
-            <div key={gw.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
+            <div
+              key={gw.id}
+              className="bg-white rounded-lg shadow hover:shadow-md transition-shadow"
+            >
               <div className="p-6">
                 {/* Header row */}
                 <div className="flex items-center justify-between mb-3">
@@ -270,7 +266,10 @@ export function GatewayList() {
                   {gw.capabilities.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {gw.capabilities.map((cap) => (
-                        <span key={cap} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                        <span
+                          key={cap}
+                          className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded"
+                        >
                           {cap}
                         </span>
                       ))}

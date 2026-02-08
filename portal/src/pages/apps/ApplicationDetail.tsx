@@ -143,11 +143,12 @@ export function ApplicationDetail() {
   const status = statusConfig[application.status] || statusConfig.active;
   const StatusIcon = status.icon;
 
-  const tabs: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'overview', label: 'Overview', icon: AppWindow },
-    { id: 'credentials', label: 'Credentials', icon: Settings },
-    { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
-  ];
+  const tabs: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }> }[] =
+    [
+      { id: 'overview', label: 'Overview', icon: AppWindow },
+      { id: 'credentials', label: 'Credentials', icon: Settings },
+      { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
+    ];
 
   return (
     <div className="space-y-6">
@@ -166,14 +167,14 @@ export function ApplicationDetail() {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold text-gray-900">{application.name}</h1>
-              <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}>
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}
+              >
                 <StatusIcon className={`h-3 w-3 ${status.color}`} />
                 {status.label}
               </span>
             </div>
-            <p className="text-gray-600">
-              {application.description || 'No description provided'}
-            </p>
+            <p className="text-gray-600">{application.description || 'No description provided'}</p>
           </div>
 
           {/* Actions */}
@@ -196,9 +197,7 @@ export function ApplicationDetail() {
             Created {formatDate(application.createdAt)}
           </div>
           {application.updatedAt !== application.createdAt && (
-            <div>
-              Updated {formatDate(application.updatedAt)}
-            </div>
+            <div>Updated {formatDate(application.updatedAt)}</div>
           )}
         </div>
       </div>
@@ -246,7 +245,9 @@ export function ApplicationDetail() {
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Status</dt>
                   <dd className="mt-1">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}
+                    >
                       <StatusIcon className={`h-3 w-3 ${status.color}`} />
                       {status.label}
                     </span>
@@ -307,9 +308,7 @@ export function ApplicationDetail() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">API Subscriptions</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  APIs this application is subscribed to
-                </p>
+                <p className="text-sm text-gray-600 mt-1">APIs this application is subscribed to</p>
               </div>
               <Link
                 to="/apis"
@@ -338,11 +337,15 @@ export function ApplicationDetail() {
                         Subscribed on {formatDate(sub.createdAt)}
                       </p>
                     </div>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      sub.status === 'active' ? 'bg-green-100 text-green-800' :
-                      sub.status === 'pending' ? 'bg-amber-100 text-amber-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        sub.status === 'active'
+                          ? 'bg-green-100 text-green-800'
+                          : sub.status === 'pending'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
                       {sub.status}
                     </span>
                   </div>

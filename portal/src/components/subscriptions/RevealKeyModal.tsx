@@ -85,7 +85,13 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
       setIsKeyVisible(true);
       setNeedsTotp(false);
     } catch (err: unknown) {
-      const error = err as { response?: { status?: number; data?: { detail?: string }; headers?: { get?: (key: string) => string | null } } };
+      const error = err as {
+        response?: {
+          status?: number;
+          data?: { detail?: string };
+          headers?: { get?: (key: string) => string | null };
+        };
+      };
       // Check if TOTP is required
       if (error?.response?.status === 403) {
         const stepUpHeader = error.response?.headers?.get?.('X-Step-Up-Auth');
@@ -161,8 +167,8 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
                 <div className="text-sm">
                   <p className="font-medium text-amber-800">Security Notice</p>
                   <p className="text-amber-700 mt-1">
-                    Your API key will be visible for 30 seconds after reveal.
-                    Make sure no one can see your screen.
+                    Your API key will be visible for 30 seconds after reveal. Make sure no one can
+                    see your screen.
                   </p>
                 </div>
               </div>
@@ -172,7 +178,10 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
           {/* TOTP input (if required) */}
           {(needsTotp || subscription.totp_required) && !apiKey && (
             <div className="space-y-2">
-              <label htmlFor="totp-input" className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <label
+                htmlFor="totp-input"
+                className="flex items-center gap-2 text-sm font-medium text-gray-700"
+              >
                 <Shield className="h-4 w-4 text-primary-500" aria-hidden="true" />
                 2FA Verification Required
               </label>
@@ -193,9 +202,7 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
               />
-              <p className="text-xs text-gray-500">
-                Enter the code from your authenticator app
-              </p>
+              <p className="text-xs text-gray-500">Enter the code from your authenticator app</p>
             </div>
           )}
 
@@ -220,9 +227,7 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
               {/* Key display */}
               <div className="relative">
                 <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm break-all">
-                  <code className="text-green-400">
-                    {isKeyVisible ? apiKey : maskKey(apiKey)}
-                  </code>
+                  <code className="text-green-400">{isKeyVisible ? apiKey : maskKey(apiKey)}</code>
                 </div>
 
                 {/* Action buttons */}
@@ -232,11 +237,7 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
                     className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
                     title={isKeyVisible ? 'Hide key' : 'Show key'}
                   >
-                    {isKeyVisible ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    {isKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                   <button
                     onClick={handleCopyKey}

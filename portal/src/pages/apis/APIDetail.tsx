@@ -141,7 +141,8 @@ export function APIDetail() {
             <div>
               <h3 className="font-medium text-red-800 dark:text-red-300">Failed to load API</h3>
               <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                {(error as Error)?.message || 'The API could not be found or you do not have access to it.'}
+                {(error as Error)?.message ||
+                  'The API could not be found or you do not have access to it.'}
               </p>
               <Link
                 to="/apis"
@@ -156,11 +157,12 @@ export function APIDetail() {
     );
   }
 
-  const tabs: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'overview', label: 'Overview', icon: BookOpen },
-    { id: 'endpoints', label: 'Endpoints', icon: Code2 },
-    { id: 'openapi', label: 'OpenAPI Spec', icon: FileJson },
-  ];
+  const tabs: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }> }[] =
+    [
+      { id: 'overview', label: 'Overview', icon: BookOpen },
+      { id: 'endpoints', label: 'Endpoints', icon: Code2 },
+      { id: 'openapi', label: 'OpenAPI Spec', icon: FileJson },
+    ];
 
   return (
     <div className="space-y-6">
@@ -179,12 +181,16 @@ export function APIDetail() {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{api.name}</h1>
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[api.status]}`}>
+              <span
+                className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[api.status]}`}
+              >
                 {api.status}
               </span>
             </div>
             <p className="text-gray-500 dark:text-neutral-400 mb-4">Version {api.version}</p>
-            <p className="text-gray-700 dark:text-neutral-300">{api.description || 'No description available'}</p>
+            <p className="text-gray-700 dark:text-neutral-300">
+              {api.description || 'No description available'}
+            </p>
 
             {/* Tags */}
             <div className="flex flex-wrap gap-2 mt-4">
@@ -247,12 +253,14 @@ export function APIDetail() {
           </div>
           {api.tenantName && (
             <div>
-              Provider: <span className="text-gray-700 dark:text-neutral-200">{api.tenantName}</span>
+              Provider:{' '}
+              <span className="text-gray-700 dark:text-neutral-200">{api.tenantName}</span>
             </div>
           )}
           {api.endpoints && (
             <div>
-              <span className="text-gray-700 dark:text-neutral-200">{api.endpoints.length}</span> endpoint{api.endpoints.length !== 1 ? 's' : ''}
+              <span className="text-gray-700 dark:text-neutral-200">{api.endpoints.length}</span>{' '}
+              endpoint{api.endpoints.length !== 1 ? 's' : ''}
             </div>
           )}
         </div>
@@ -286,14 +294,18 @@ export function APIDetail() {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">About this API</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              About this API
+            </h2>
             <div className="prose prose-gray max-w-none">
               <p>{api.description || 'No detailed description available for this API.'}</p>
             </div>
 
             {/* Quick Start */}
             <div className="mt-8">
-              <h3 className="text-md font-semibold text-gray-900 dark:text-white mb-3">Quick Start</h3>
+              <h3 className="text-md font-semibold text-gray-900 dark:text-white mb-3">
+                Quick Start
+              </h3>
               <div className="bg-gray-50 dark:bg-neutral-700 rounded-lg p-4">
                 <p className="text-sm text-gray-600 dark:text-neutral-300 mb-3">
                   To use this API, you'll need to:
@@ -331,13 +343,19 @@ export function APIDetail() {
                       className="w-full flex items-center justify-between text-left"
                     >
                       <div className="flex items-center gap-3">
-                        <span className={`px-2 py-1 text-xs font-mono font-semibold rounded ${methodColors[endpoint.method] || 'bg-gray-100 text-gray-800'}`}>
+                        <span
+                          className={`px-2 py-1 text-xs font-mono font-semibold rounded ${methodColors[endpoint.method] || 'bg-gray-100 text-gray-800'}`}
+                        >
                           {endpoint.method}
                         </span>
-                        <span className="font-mono text-sm text-gray-700 dark:text-neutral-200">{endpoint.path}</span>
+                        <span className="font-mono text-sm text-gray-700 dark:text-neutral-200">
+                          {endpoint.path}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-500 dark:text-neutral-400">{endpoint.summary}</span>
+                        <span className="text-sm text-gray-500 dark:text-neutral-400">
+                          {endpoint.summary}
+                        </span>
                         {isExpanded ? (
                           <ChevronDown className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
                         ) : (
@@ -349,35 +367,57 @@ export function APIDetail() {
                     {isExpanded && (
                       <div className="mt-4 pl-16 space-y-4">
                         {endpoint.summary && (
-                          <p className="text-sm text-gray-600 dark:text-neutral-300">{endpoint.summary}</p>
+                          <p className="text-sm text-gray-600 dark:text-neutral-300">
+                            {endpoint.summary}
+                          </p>
                         )}
 
                         {endpoint.parameters && endpoint.parameters.length > 0 && (
                           <div>
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Parameters</h4>
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                              Parameters
+                            </h4>
                             <div className="bg-gray-50 dark:bg-neutral-700 rounded-lg overflow-hidden">
                               <table className="min-w-full text-sm">
                                 <thead>
                                   <tr className="border-b border-gray-200 dark:border-neutral-600">
-                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-neutral-400">Name</th>
-                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-neutral-400">Type</th>
-                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-neutral-400">Required</th>
-                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-neutral-400">Description</th>
+                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-neutral-400">
+                                      Name
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-neutral-400">
+                                      Type
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-neutral-400">
+                                      Required
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-neutral-400">
+                                      Description
+                                    </th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 dark:divide-neutral-600">
                                   {endpoint.parameters.map((param, pIndex) => (
                                     <tr key={pIndex}>
-                                      <td className="px-3 py-2 font-mono text-gray-700 dark:text-neutral-200">{param.name}</td>
-                                      <td className="px-3 py-2 text-gray-500 dark:text-neutral-400">{param.in}</td>
+                                      <td className="px-3 py-2 font-mono text-gray-700 dark:text-neutral-200">
+                                        {param.name}
+                                      </td>
+                                      <td className="px-3 py-2 text-gray-500 dark:text-neutral-400">
+                                        {param.in}
+                                      </td>
                                       <td className="px-3 py-2">
                                         {param.required ? (
-                                          <span className="text-red-600 dark:text-red-400">Yes</span>
+                                          <span className="text-red-600 dark:text-red-400">
+                                            Yes
+                                          </span>
                                         ) : (
-                                          <span className="text-gray-400 dark:text-neutral-500">No</span>
+                                          <span className="text-gray-400 dark:text-neutral-500">
+                                            No
+                                          </span>
                                         )}
                                       </td>
-                                      <td className="px-3 py-2 text-gray-600 dark:text-neutral-300">{param.description || '-'}</td>
+                                      <td className="px-3 py-2 text-gray-600 dark:text-neutral-300">
+                                        {param.description || '-'}
+                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -388,19 +428,28 @@ export function APIDetail() {
 
                         {endpoint.responses && Object.keys(endpoint.responses).length > 0 && (
                           <div>
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Responses</h4>
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                              Responses
+                            </h4>
                             <div className="space-y-2">
                               {Object.entries(endpoint.responses).map(([code, response]) => (
                                 <div key={code} className="flex items-start gap-2 text-sm">
-                                  <span className={`px-2 py-0.5 rounded font-mono text-xs ${
-                                    code.startsWith('2') ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' :
-                                    code.startsWith('4') ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400' :
-                                    code.startsWith('5') ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' :
-                                    'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200'
-                                  }`}>
+                                  <span
+                                    className={`px-2 py-0.5 rounded font-mono text-xs ${
+                                      code.startsWith('2')
+                                        ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                                        : code.startsWith('4')
+                                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400'
+                                          : code.startsWith('5')
+                                            ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'
+                                            : 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200'
+                                    }`}
+                                  >
                                     {code}
                                   </span>
-                                  <span className="text-gray-600 dark:text-neutral-300">{response.description || 'No description'}</span>
+                                  <span className="text-gray-600 dark:text-neutral-300">
+                                    {response.description || 'No description'}
+                                  </span>
                                 </div>
                               ))}
                             </div>
@@ -414,8 +463,12 @@ export function APIDetail() {
             ) : (
               <div className="p-12 text-center">
                 <Code2 className="h-8 w-8 text-gray-300 dark:text-neutral-600 mx-auto mb-3" />
-                <p className="text-gray-500 dark:text-neutral-400">No endpoint information available</p>
-                <p className="text-sm text-gray-400 dark:text-neutral-500 mt-1">Check the OpenAPI spec tab for full API documentation</p>
+                <p className="text-gray-500 dark:text-neutral-400">
+                  No endpoint information available
+                </p>
+                <p className="text-sm text-gray-400 dark:text-neutral-500 mt-1">
+                  Check the OpenAPI spec tab for full API documentation
+                </p>
               </div>
             )}
           </div>
@@ -431,7 +484,9 @@ export function APIDetail() {
             ) : openApiSpec ? (
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">OpenAPI Specification</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    OpenAPI Specification
+                  </h3>
                   <button
                     onClick={copyOpenAPISpec}
                     className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
@@ -456,7 +511,9 @@ export function APIDetail() {
             ) : (
               <div className="text-center py-12">
                 <FileJson className="h-8 w-8 text-gray-300 dark:text-neutral-600 mx-auto mb-3" />
-                <p className="text-gray-500 dark:text-neutral-400">No OpenAPI specification available</p>
+                <p className="text-gray-500 dark:text-neutral-400">
+                  No OpenAPI specification available
+                </p>
               </div>
             )}
           </div>
@@ -501,7 +558,8 @@ export function APIDetail() {
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-amber-800 dark:text-amber-300">
-                    <strong>Important:</strong> Copy and save this API key now. For security reasons, it cannot be displayed again.
+                    <strong>Important:</strong> Copy and save this API key now. For security
+                    reasons, it cannot be displayed again.
                   </p>
                 </div>
               </div>
@@ -511,7 +569,10 @@ export function APIDetail() {
                   Your API Key
                 </span>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 px-3 py-2 bg-gray-100 dark:bg-neutral-700 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm font-mono break-all text-gray-900 dark:text-white" aria-label="API Key">
+                  <code
+                    className="flex-1 px-3 py-2 bg-gray-100 dark:bg-neutral-700 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm font-mono break-all text-gray-900 dark:text-white"
+                    aria-label="API Key"
+                  >
                     {subscriptionResult.apiKey}
                   </code>
                   <button

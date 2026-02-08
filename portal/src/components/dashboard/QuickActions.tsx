@@ -5,14 +5,7 @@
  */
 
 import { Link } from 'react-router-dom';
-import {
-  Wrench,
-  BarChart3,
-  CreditCard,
-  BookOpen,
-  ArrowRight,
-  ExternalLink,
-} from 'lucide-react';
+import { Wrench, BarChart3, CreditCard, BookOpen, ArrowRight, ExternalLink } from 'lucide-react';
 import { config } from '../../config';
 
 interface QuickAction {
@@ -61,7 +54,7 @@ const actions: QuickAction[] = [
 ];
 
 export function QuickActions() {
-  const enabledActions = actions.filter(a => a.enabled !== false);
+  const enabledActions = actions.filter((a) => a.enabled !== false);
 
   return (
     <div>
@@ -72,18 +65,20 @@ export function QuickActions() {
           const content = (
             <div className="group relative bg-white rounded-xl border border-gray-200 p-5 hover:border-gray-300 hover:shadow-md transition-all overflow-hidden">
               {/* Gradient accent */}
-              <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${action.color}`} />
+              <div
+                className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${action.color}`}
+              />
 
               <div className="flex items-start gap-4">
-                <div className={`p-2.5 rounded-lg bg-gradient-to-br ${action.color} text-white shadow-sm`}>
+                <div
+                  className={`p-2.5 rounded-lg bg-gradient-to-br ${action.color} text-white shadow-sm`}
+                >
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors flex items-center gap-1">
                     {action.title}
-                    {action.external && (
-                      <ExternalLink className="h-3 w-3 text-gray-400" />
-                    )}
+                    {action.external && <ExternalLink className="h-3 w-3 text-gray-400" />}
                   </h3>
                   <p className="text-sm text-gray-500 mt-0.5">{action.description}</p>
                 </div>
@@ -94,12 +89,7 @@ export function QuickActions() {
 
           if (action.external) {
             return (
-              <a
-                key={action.title}
-                href={action.href}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a key={action.title} href={action.href} target="_blank" rel="noopener noreferrer">
                 {content}
               </a>
             );

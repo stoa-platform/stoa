@@ -1,5 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { getGatewayStatus, getGatewayHealth, GatewayStatusResponse, GatewayHealthResponse } from '../services/gatewayApi';
+import {
+  getGatewayStatus,
+  getGatewayHealth,
+  GatewayStatusResponse,
+  GatewayHealthResponse,
+} from '../services/gatewayApi';
 import { usePlatformStatus } from './usePlatformStatus';
 
 export function useGatewayStatus() {
@@ -29,13 +34,19 @@ export function useGatewayPlatformInfo() {
   const { data, isLoading, error } = usePlatformStatus();
 
   if (!data) {
-    return { isLoading, error, gatewayComponent: null, healthSummary: null, externalLinks: null, events: [] };
+    return {
+      isLoading,
+      error,
+      gatewayComponent: null,
+      healthSummary: null,
+      externalLinks: null,
+      events: [],
+    };
   }
 
   const components = data.gitops.components;
-  const gatewayComponent = components.find(
-    (c) => c.name.includes('gateway') || c.name.includes('webmethods')
-  ) || null;
+  const gatewayComponent =
+    components.find((c) => c.name.includes('gateway') || c.name.includes('webmethods')) || null;
 
   const healthyCount = components.filter((c) => c.health_status === 'Healthy').length;
   const degradedCount = components.filter(

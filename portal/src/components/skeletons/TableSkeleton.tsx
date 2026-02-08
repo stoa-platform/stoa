@@ -22,13 +22,7 @@ export function TableRowSkeleton({ columns = 5 }: TableRowSkeletonProps) {
 /**
  * Table body with multiple skeleton rows.
  */
-export function TableSkeleton({
-  rows = 5,
-  columns = 5,
-}: {
-  rows?: number;
-  columns?: number;
-}) {
+export function TableSkeleton({ rows = 5, columns = 5 }: { rows?: number; columns?: number }) {
   return (
     <tbody className="divide-y divide-gray-200">
       {Array.from({ length: rows }).map((_, i) => (
@@ -60,9 +54,7 @@ export function FullTableSkeleton({
             {Array.from({ length: headerCount }).map((_, i) => (
               <th key={i} className="px-4 py-3 text-left">
                 {headers ? (
-                  <span className="text-xs font-medium text-gray-500 uppercase">
-                    {headers[i]}
-                  </span>
+                  <span className="text-xs font-medium text-gray-500 uppercase">{headers[i]}</span>
                 ) : (
                   <Skeleton className="h-4 w-20" />
                 )}
@@ -85,11 +77,21 @@ export function SubscriptionTableSkeleton({ rows = 5 }: { rows?: number }) {
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Server</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">API Key</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              Server
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              Status
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              API Key
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              Created
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">

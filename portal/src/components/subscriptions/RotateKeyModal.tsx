@@ -141,7 +141,9 @@ export function RotateKeyModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${step === 'success' ? 'bg-green-100' : 'bg-primary-100'}`}>
+              <div
+                className={`p-2 rounded-lg ${step === 'success' ? 'bg-green-100' : 'bg-primary-100'}`}
+              >
                 {step === 'success' ? (
                   <CheckCircle className="h-6 w-6 text-green-600" />
                 ) : (
@@ -152,9 +154,7 @@ export function RotateKeyModal({
                 <h2 className="text-xl font-semibold text-gray-900">
                   {step === 'success' ? 'Key Rotated Successfully' : 'Rotate API Key'}
                 </h2>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {subscription.tool_id}
-                </p>
+                <p className="text-sm text-gray-500 mt-0.5">{subscription.tool_id}</p>
               </div>
             </div>
             {(step === 'confirm' || acknowledged) && (
@@ -179,15 +179,18 @@ export function RotateKeyModal({
                       Grace Period for Seamless Transition
                     </h4>
                     <p className="text-sm text-blue-700 mt-1">
-                      During the grace period, <strong>both old and new keys</strong> will be accepted.
-                      This allows you to update your applications without downtime.
+                      During the grace period, <strong>both old and new keys</strong> will be
+                      accepted. This allows you to update your applications without downtime.
                     </p>
                   </div>
                 </div>
 
                 {/* Grace period selection */}
                 <div>
-                  <label htmlFor="grace-period-select" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="grace-period-select"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     Grace Period Duration
                   </label>
                   <div className="flex items-center gap-3">
@@ -219,12 +222,10 @@ export function RotateKeyModal({
                 <div className="flex items-start gap-3 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                   <Mail className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <h4 className="font-medium text-gray-800">
-                      Email Notification
-                    </h4>
+                    <h4 className="font-medium text-gray-800">Email Notification</h4>
                     <p className="text-sm text-gray-600 mt-1">
-                      A notification will be sent to your email with the new API key
-                      for your records.
+                      A notification will be sent to your email with the new API key for your
+                      records.
                     </p>
                   </div>
                 </div>
@@ -233,12 +234,11 @@ export function RotateKeyModal({
                 <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                   <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <h4 className="font-medium text-amber-800">
-                      Important
-                    </h4>
+                    <h4 className="font-medium text-amber-800">Important</h4>
                     <p className="text-sm text-amber-700 mt-1">
-                      After the grace period ends, the old key will be <strong>permanently invalidated</strong>.
-                      Make sure to update all your applications before then.
+                      After the grace period ends, the old key will be{' '}
+                      <strong>permanently invalidated</strong>. Make sure to update all your
+                      applications before then.
                     </p>
                   </div>
                 </div>
@@ -260,12 +260,10 @@ export function RotateKeyModal({
                 <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                   <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <h4 className="font-medium text-amber-800">
-                      Save Your New API Key Now
-                    </h4>
+                    <h4 className="font-medium text-amber-800">Save Your New API Key Now</h4>
                     <p className="text-sm text-amber-700 mt-1">
-                      This API key will only be shown <strong>once</strong>. Make sure to copy
-                      and store it securely before closing this modal.
+                      This API key will only be shown <strong>once</strong>. Make sure to copy and
+                      store it securely before closing this modal.
                     </p>
                   </div>
                 </div>
@@ -318,8 +316,9 @@ export function RotateKeyModal({
                     </div>
                     <p className="text-sm text-blue-700">
                       Your old key will remain valid until{' '}
-                      <strong>{formatExpiryDate(rotationResult.old_key_expires_at)}</strong>.
-                      You have <strong>{rotationResult.grace_period_hours} hours</strong> to update your applications.
+                      <strong>{formatExpiryDate(rotationResult.old_key_expires_at)}</strong>. You
+                      have <strong>{rotationResult.grace_period_hours} hours</strong> to update your
+                      applications.
                     </p>
                     <p className="text-sm text-blue-600 mt-2">
                       This is rotation #{rotationResult.rotation_count} for this subscription.
@@ -347,8 +346,8 @@ export function RotateKeyModal({
                     className="mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                   />
                   <span className="text-sm text-gray-700">
-                    I have copied and securely stored my new API key. I understand that
-                    I need to update my applications before the grace period ends.
+                    I have copied and securely stored my new API key. I understand that I need to
+                    update my applications before the grace period ends.
                   </span>
                 </label>
               </>

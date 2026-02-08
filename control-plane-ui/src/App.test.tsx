@@ -6,13 +6,27 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Module-level mock so we can override per-test
 const mockUseAuth = vi.fn(() => ({
   user: {
-    id: 'u1', email: 'parzival@oasis.gg', name: 'Parzival',
-    roles: ['cpi-admin'], tenant_id: 'oasis-gunters',
-    permissions: ['tenants:read', 'apis:read', 'apps:read', 'apis:deploy', 'audit:read', 'admin:servers'],
+    id: 'u1',
+    email: 'parzival@oasis.gg',
+    name: 'Parzival',
+    roles: ['cpi-admin'],
+    tenant_id: 'oasis-gunters',
+    permissions: [
+      'tenants:read',
+      'apis:read',
+      'apps:read',
+      'apis:deploy',
+      'audit:read',
+      'admin:servers',
+    ],
   },
-  isAuthenticated: true, isLoading: false, isReady: true,
-  login: vi.fn(), logout: vi.fn(),
-  hasPermission: vi.fn(() => true), hasRole: vi.fn(() => true),
+  isAuthenticated: true,
+  isLoading: false,
+  isReady: true,
+  login: vi.fn(),
+  logout: vi.fn(),
+  hasPermission: vi.fn(() => true),
+  hasRole: vi.fn(() => true),
 }));
 
 vi.mock('./contexts/AuthContext', () => ({
@@ -22,9 +36,15 @@ vi.mock('./contexts/AuthContext', () => ({
 
 vi.mock('./services/api', () => ({
   apiService: {
-    setAuthToken: vi.fn(), clearAuthToken: vi.fn(),
+    setAuthToken: vi.fn(),
+    clearAuthToken: vi.fn(),
     getTenants: vi.fn().mockResolvedValue([]),
-    getPlatformStatus: vi.fn().mockResolvedValue({ gitops: { status: 'healthy', components: [], checked_at: '' }, events: [], external_links: {}, timestamp: '' }),
+    getPlatformStatus: vi.fn().mockResolvedValue({
+      gitops: { status: 'healthy', components: [], checked_at: '' },
+      events: [],
+      external_links: {},
+      timestamp: '',
+    }),
     getPlatformComponents: vi.fn().mockResolvedValue([]),
     getPlatformEvents: vi.fn().mockResolvedValue([]),
   },
@@ -116,9 +136,14 @@ describe('App', () => {
 
   it('blocks protected route when not authenticated', () => {
     mockUseAuth.mockReturnValueOnce({
-      user: null as never, isAuthenticated: false, isLoading: false, isReady: false,
-      login: vi.fn(), logout: vi.fn(),
-      hasPermission: vi.fn(() => false), hasRole: vi.fn(() => false),
+      user: null as never,
+      isAuthenticated: false,
+      isLoading: false,
+      isReady: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      hasPermission: vi.fn(() => false),
+      hasRole: vi.fn(() => false),
     });
 
     renderApp('/apis');
@@ -127,9 +152,14 @@ describe('App', () => {
 
   it('shows loading state when auth is loading', () => {
     mockUseAuth.mockReturnValueOnce({
-      user: null as never, isAuthenticated: true, isLoading: true, isReady: false,
-      login: vi.fn(), logout: vi.fn(),
-      hasPermission: vi.fn(() => false), hasRole: vi.fn(() => false),
+      user: null as never,
+      isAuthenticated: true,
+      isLoading: true,
+      isReady: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      hasPermission: vi.fn(() => false),
+      hasRole: vi.fn(() => false),
     });
 
     renderApp('/');

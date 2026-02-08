@@ -96,8 +96,7 @@ export function useDeleteWebhook() {
   const queryClient = useQueryClient();
 
   return useMutation<void, Error, { tenantId: string; webhookId: string }>({
-    mutationFn: ({ tenantId, webhookId }) =>
-      webhooksService.deleteWebhook(tenantId, webhookId),
+    mutationFn: ({ tenantId, webhookId }) => webhooksService.deleteWebhook(tenantId, webhookId),
     onSuccess: (_, { tenantId }) => {
       queryClient.invalidateQueries({ queryKey: ['webhooks', tenantId] });
     },

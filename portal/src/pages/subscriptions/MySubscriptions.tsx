@@ -29,7 +29,11 @@ import {
 } from 'lucide-react';
 import { ConfirmDialog } from '@stoa/shared/components/ConfirmDialog';
 import { useToastActions } from '@stoa/shared/components/Toast';
-import { useSubscriptions, useRevokeSubscription, useRotateApiKey } from '../../hooks/useSubscriptions';
+import {
+  useSubscriptions,
+  useRevokeSubscription,
+  useRotateApiKey,
+} from '../../hooks/useSubscriptions';
 import { RevealKeyModal } from '../../components/subscriptions/RevealKeyModal';
 import { RotateKeyModal } from '../../components/subscriptions/RotateKeyModal';
 import { ExportConfigModal } from '../../components/subscriptions/ExportConfigModal';
@@ -41,17 +45,25 @@ import type { MCPSubscription } from '../../types';
 type StatusFilter = 'all' | 'active' | 'expired' | 'revoked' | 'pending' | 'suspended';
 type TabType = 'servers' | 'tools';
 
-const statusConfig: Record<string, {
-  label: string;
-  color: string;
-  bgColor: string;
-  icon: typeof CheckCircle;
-}> = {
+const statusConfig: Record<
+  string,
+  {
+    label: string;
+    color: string;
+    bgColor: string;
+    icon: typeof CheckCircle;
+  }
+> = {
   active: { label: 'Active', color: 'text-green-700', bgColor: 'bg-green-100', icon: CheckCircle },
   expired: { label: 'Expired', color: 'text-amber-700', bgColor: 'bg-amber-100', icon: Clock },
   revoked: { label: 'Revoked', color: 'text-red-700', bgColor: 'bg-red-100', icon: XCircle },
   pending: { label: 'Pending', color: 'text-blue-700', bgColor: 'bg-blue-100', icon: Clock },
-  suspended: { label: 'Suspended', color: 'text-orange-700', bgColor: 'bg-orange-100', icon: AlertCircle },
+  suspended: {
+    label: 'Suspended',
+    color: 'text-orange-700',
+    bgColor: 'bg-orange-100',
+    icon: AlertCircle,
+  },
 };
 
 type ModalState = {
@@ -74,7 +86,10 @@ export function MySubscriptions() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
-  const [revokeState, setRevokeState] = useState<RevokeState>({ confirmId: null, revokingId: null });
+  const [revokeState, setRevokeState] = useState<RevokeState>({
+    confirmId: null,
+    revokingId: null,
+  });
 
   const isReady = isAuthenticated && !!accessToken;
 
@@ -90,7 +105,9 @@ export function MySubscriptions() {
   });
 
   const serverSubsError = serverSubsErrorObj
-    ? (serverSubsErrorObj instanceof Error ? serverSubsErrorObj.message : 'Failed to load server subscriptions')
+    ? serverSubsErrorObj instanceof Error
+      ? serverSubsErrorObj.message
+      : 'Failed to load server subscriptions'
     : null;
 
   // Tool subscriptions (legacy) — already React Query
@@ -105,17 +122,20 @@ export function MySubscriptions() {
   const rotateKeyMutation = useRotateApiKey();
 
   const handleRevokeSubscription = (subscriptionId: string) => {
-    setRevokeState(prev => ({ ...prev, confirmId: subscriptionId }));
+    setRevokeState((prev) => ({ ...prev, confirmId: subscriptionId }));
   };
 
   const confirmRevoke = async () => {
     if (!revokeState.confirmId) return;
-    setRevokeState(prev => ({ ...prev, revokingId: prev.confirmId }));
+    setRevokeState((prev) => ({ ...prev, revokingId: prev.confirmId }));
     try {
       await revokeMutation.mutateAsync(revokeState.confirmId);
       toast.success('Subscription revoked', 'Your API key has been invalidated.');
     } catch (err) {
-      toast.error('Failed to revoke subscription', err instanceof Error ? err.message : 'An error occurred');
+      toast.error(
+        'Failed to revoke subscription',
+        err instanceof Error ? err.message : 'An error occurred'
+      );
     } finally {
       setRevokeState({ confirmId: null, revokingId: null });
     }
@@ -143,17 +163,24 @@ export function MySubscriptions() {
     if (statusFilter !== 'all' && sub.status !== statusFilter) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      return sub.server?.displayName?.toLowerCase().includes(query) ||
-             sub.server_id?.toLowerCase().includes(query);
+      return (
+        sub.server?.displayName?.toLowerCase().includes(query) ||
+        sub.server_id?.toLowerCase().includes(query)
+      );
     }
     return true;
   });
 
   // Calculate stats
-  const activeServerCount = serverSubscriptions.filter(s => s.status === 'active').length;
-  const activeToolCount = toolSubscriptions.filter((s: MCPSubscription) => s.status === 'active').length;
+  const activeServerCount = serverSubscriptions.filter((s) => s.status === 'active').length;
+  const activeToolCount = toolSubscriptions.filter(
+    (s: MCPSubscription) => s.status === 'active'
+  ).length;
   const totalActiveCount = activeServerCount + activeToolCount;
-  const totalUsage = toolSubscriptions.reduce((acc: number, s: MCPSubscription) => acc + (s.usage_count || 0), 0);
+  const totalUsage = toolSubscriptions.reduce(
+    (acc: number, s: MCPSubscription) => acc + (s.usage_count || 0),
+    0
+  );
 
   const isLoading = serverSubsLoading || toolSubsLoading;
 
@@ -163,9 +190,7 @@ export function MySubscriptions() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Subscriptions</h1>
-          <p className="text-gray-500 mt-1">
-            Manage your MCP Server and Tool subscriptions
-          </p>
+          <p className="text-gray-500 mt-1">Manage your MCP Server and Tool subscriptions</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -281,7 +306,9 @@ export function MySubscriptions() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder={activeTab === 'servers' ? 'Search by server name...' : 'Search by tool name...'}
+            placeholder={
+              activeTab === 'servers' ? 'Search by server name...' : 'Search by tool name...'
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -306,9 +333,7 @@ export function MySubscriptions() {
       {/* Server Subscriptions Tab */}
       {activeTab === 'servers' && (
         <>
-          {serverSubsLoading && (
-            <ServerCardSkeletonGrid count={4} columns={2} />
-          )}
+          {serverSubsLoading && <ServerCardSkeletonGrid count={4} columns={2} />}
 
           {serverSubsError && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-6">
@@ -346,7 +371,8 @@ export function MySubscriptions() {
               {filteredServerSubs.map((sub) => {
                 const status = statusConfig[sub.status] || statusConfig.pending;
                 const StatusIcon = status.icon;
-                const enabledTools = sub.tool_access?.filter(t => t.status === 'enabled').length || 0;
+                const enabledTools =
+                  sub.tool_access?.filter((t) => t.status === 'enabled').length || 0;
                 const totalTools = sub.tool_access?.length || 0;
 
                 return (
@@ -358,7 +384,9 @@ export function MySubscriptions() {
                       <div className="p-2 bg-blue-50 rounded-lg">
                         <Server className="h-5 w-5 text-blue-600" />
                       </div>
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded ${status.bgColor} ${status.color}`}>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded ${status.bgColor} ${status.color}`}
+                      >
                         <StatusIcon className="h-3 w-3" />
                         {status.label}
                       </span>
@@ -374,7 +402,9 @@ export function MySubscriptions() {
                     {/* Tools access summary */}
                     <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
                       <Wrench className="h-4 w-4" />
-                      <span>{enabledTools} / {totalTools} tools enabled</span>
+                      <span>
+                        {enabledTools} / {totalTools} tools enabled
+                      </span>
                     </div>
 
                     {/* API Key prefix */}
@@ -420,9 +450,7 @@ export function MySubscriptions() {
       {/* Tool Subscriptions Tab */}
       {activeTab === 'tools' && (
         <>
-          {toolSubsLoading && (
-            <ServerCardSkeletonGrid count={6} columns={3} />
-          )}
+          {toolSubsLoading && <ServerCardSkeletonGrid count={6} columns={3} />}
 
           {toolSubsError && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-6">
@@ -445,7 +473,8 @@ export function MySubscriptions() {
               </div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">No Tool Subscriptions</h2>
               <p className="text-gray-500 max-w-md mx-auto mb-6">
-                Individual tool subscriptions are legacy. We recommend using MCP Server subscriptions instead.
+                Individual tool subscriptions are legacy. We recommend using MCP Server
+                subscriptions instead.
               </p>
               <Link
                 to="/servers"
@@ -472,15 +501,15 @@ export function MySubscriptions() {
                       <div className="p-2 bg-primary-50 rounded-lg">
                         <Key className="h-5 w-5 text-primary-600" />
                       </div>
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded ${status.bgColor} ${status.color}`}>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded ${status.bgColor} ${status.color}`}
+                      >
                         <StatusIcon className="h-3 w-3" />
                         {status.label}
                       </span>
                     </div>
 
-                    <h3 className="font-semibold text-gray-900 mb-1">
-                      {subscription.tool_id}
-                    </h3>
+                    <h3 className="font-semibold text-gray-900 mb-1">{subscription.tool_id}</h3>
 
                     {subscription.api_key_prefix && (
                       <div className="mt-2 font-mono text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded inline-block">

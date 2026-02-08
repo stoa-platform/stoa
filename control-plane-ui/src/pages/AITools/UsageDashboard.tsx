@@ -88,9 +88,7 @@ export function UsageDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Usage Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Monitor your AI tool usage and costs
-          </p>
+          <p className="text-sm text-gray-500 mt-1">Monitor your AI tool usage and costs</p>
         </div>
         <div className="flex items-center gap-3">
           {/* Period Selector */}
@@ -156,30 +154,15 @@ export function UsageDashboard() {
           {/* Charts */}
           {history.length > 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <UsageChart
-                data={history}
-                metric="calls"
-                title="API Calls"
-                height={200}
-              />
-              <UsageChart
-                data={history}
-                metric="successRate"
-                title="Success Rate"
-                height={200}
-              />
+              <UsageChart data={history} metric="calls" title="API Calls" height={200} />
+              <UsageChart data={history} metric="successRate" title="Success Rate" height={200} />
               <UsageChart
                 data={history}
                 metric="avgLatencyMs"
                 title="Average Latency (ms)"
                 height={200}
               />
-              <UsageChart
-                data={history}
-                metric="costUnits"
-                title="Cost Units"
-                height={200}
-              />
+              <UsageChart data={history} metric="costUnits" title="Cost Units" height={200} />
             </div>
           )}
 

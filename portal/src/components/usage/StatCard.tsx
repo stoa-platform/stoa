@@ -74,21 +74,17 @@ export const StatCard = memo(function StatCard({
   }
 
   return (
-    <div className={`rounded-xl border ${colors.border} ${colors.bg} p-6 transition-shadow hover:shadow-md`}>
+    <div
+      className={`rounded-xl border ${colors.border} ${colors.bg} p-6 transition-shadow hover:shadow-md`}
+    >
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wide">
           {title}
         </span>
-        {icon && (
-          <span className={colors.icon}>
-            {icon}
-          </span>
-        )}
+        {icon && <span className={colors.icon}>{icon}</span>}
       </div>
 
-      <div className={`text-3xl font-bold ${colors.text} mb-1`}>
-        {value}
-      </div>
+      <div className={`text-3xl font-bold ${colors.text} mb-1`}>{value}</div>
 
       <div className="flex items-center gap-2">
         {subtitle && (
@@ -96,13 +92,16 @@ export const StatCard = memo(function StatCard({
         )}
 
         {trend && (
-          <span className={`
+          <span
+            className={`
             text-xs font-medium px-2 py-0.5 rounded-full
-            ${trend.isPositive
-              ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-              : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+            ${
+              trend.isPositive
+                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
             }
-          `}>
+          `}
+          >
             {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
           </span>
         )}

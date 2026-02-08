@@ -153,9 +153,7 @@ export function DeployAPIDialog({ onClose, onDeployed }: DeployAPIDialogProps) {
                           className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">
-                            {gw.display_name}
-                          </p>
+                          <p className="text-sm font-medium text-gray-900">{gw.display_name}</p>
                           <p className="text-xs text-gray-500">
                             {gw.gateway_type} &middot; {gw.environment}
                           </p>

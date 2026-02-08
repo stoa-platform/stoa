@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: '20'
+      run-coverage:
+        description: 'Run test:coverage instead of test'
+        required: false
+        type: boolean
+        default: false
       run-build:
         description: 'Run npm run build'
         required: false
@@ -53,12 +58,20 @@ jobs:
 
       - name: Check formatting
         working-directory: ${{ inputs.component }}
-        continue-on-error: true
-        run: npm run format:check
+        run: npm run format:check --if-present
 
       - name: Run tests
         working-directory: ${{ inputs.component }}
-        run: npm run test
+        run: npm run ${{ inputs.run-coverage && 'test:coverage' || 'test' }}
+
+      - name: Upload coverage
+        if: inputs.run-coverage && always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-${{ inputs.component }}
+          path: ${{ inputs.component }}/coverage
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Build
         if: inputs.run-build

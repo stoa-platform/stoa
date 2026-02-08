@@ -71,12 +71,10 @@ export const UACSpotlight: React.FC<UACSpotlightProps> = ({
 
         {/* Content */}
         <div className="mt-2 ml-7">
-          <p className="text-gray-800 font-medium">
-            STOA uses Universal API Contracts (UAC).
-          </p>
+          <p className="text-gray-800 font-medium">STOA uses Universal API Contracts (UAC).</p>
           <p className="text-gray-600 text-sm mt-1">
-            Define your API once, expose it everywhere — REST, MCP, GraphQL, and
-            more from a single definition.
+            Define your API once, expose it everywhere — REST, MCP, GraphQL, and more from a single
+            definition.
           </p>
         </div>
 

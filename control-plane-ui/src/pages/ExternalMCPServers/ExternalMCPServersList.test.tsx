@@ -5,7 +5,14 @@ import { MemoryRouter } from 'react-router-dom';
 // Mock AuthContext
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
-    user: { id: 'user-admin', email: 'parzival@oasis.gg', name: 'Parzival', roles: ['cpi-admin'], tenant_id: 'oasis-gunters', permissions: ['admin:servers'] },
+    user: {
+      id: 'user-admin',
+      email: 'parzival@oasis.gg',
+      name: 'Parzival',
+      roles: ['cpi-admin'],
+      tenant_id: 'oasis-gunters',
+      permissions: ['admin:servers'],
+    },
     isAuthenticated: true,
     isLoading: false,
     isReady: true,
@@ -54,7 +61,9 @@ vi.mock('../../services/externalMcpServersApi', () => ({
   externalMcpServersService: {
     listServers: (...args: unknown[]) => mockListServers(...args),
     createServer: vi.fn().mockResolvedValue({}),
-    testConnection: vi.fn().mockResolvedValue({ success: true, tools_discovered: 5, latency_ms: 120 }),
+    testConnection: vi
+      .fn()
+      .mockResolvedValue({ success: true, tools_discovered: 5, latency_ms: 120 }),
     syncTools: vi.fn().mockResolvedValue({ synced_count: 5, removed_count: 0 }),
     deleteServer: vi.fn().mockResolvedValue({}),
   },
@@ -99,7 +108,9 @@ describe('ExternalMCPServersList', () => {
 
   it('renders the heading', async () => {
     renderComponent();
-    expect(await screen.findByRole('heading', { name: 'External MCP Servers' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'External MCP Servers' })
+    ).toBeInTheDocument();
   });
 
   it('renders the subtitle', async () => {

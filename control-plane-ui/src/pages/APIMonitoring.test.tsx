@@ -92,9 +92,7 @@ describe('APIMonitoring', () => {
 
   it('renders the subtitle', async () => {
     renderAPIMonitoring();
-    expect(
-      await screen.findByText(/Real-time E2E transaction tracing/)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Real-time E2E transaction tracing/)).toBeInTheDocument();
   });
 
   it('renders the search input placeholder', async () => {

@@ -39,13 +39,33 @@ vi.mock('../../contexts/AuthContext', () => ({
 vi.mock('../../services/api', () => ({
   apiService: {
     getGatewayAggregatedMetrics: vi.fn().mockResolvedValue({
-      health: { total_gateways: 5, online: 3, offline: 1, degraded: 1, maintenance: 0, health_percentage: 80 },
-      sync: { total_deployments: 10, synced: 7, pending: 1, syncing: 1, drifted: 1, error: 0, deleting: 0, sync_percentage: 70 },
+      health: {
+        total_gateways: 5,
+        online: 3,
+        offline: 1,
+        degraded: 1,
+        maintenance: 0,
+        health_percentage: 80,
+      },
+      sync: {
+        total_deployments: 10,
+        synced: 7,
+        pending: 1,
+        syncing: 1,
+        drifted: 1,
+        error: 0,
+        deleting: 0,
+        sync_percentage: 70,
+      },
       overall_status: 'degraded',
     }),
     getBusinessMetrics: vi.fn().mockResolvedValue({
-      active_tenants: 12, new_tenants_30d: 3, tenant_growth: 33.3,
-      apdex_score: 0.92, total_tokens: 15000, total_calls: 5600,
+      active_tenants: 12,
+      new_tenants_30d: 3,
+      tenant_growth: 33.3,
+      apdex_score: 0.92,
+      total_tokens: 15000,
+      total_calls: 5600,
     }),
   },
 }));
@@ -83,7 +103,9 @@ vi.mock('@stoa/shared/hooks', () => ({
 }));
 
 vi.mock('@stoa/shared/components/Skeleton', () => ({
-  CardSkeleton: ({ className }: { className?: string }) => <div data-testid="card-skeleton" className={className} />,
+  CardSkeleton: ({ className }: { className?: string }) => (
+    <div data-testid="card-skeleton" className={className} />
+  ),
 }));
 
 import { GatewayObservabilityDashboard } from './GatewayObservabilityDashboard';
@@ -142,7 +164,9 @@ describe('GatewayObservabilityDashboard', () => {
 
   it('renders the Deployment Sync Status section', async () => {
     renderDashboard();
-    expect(await screen.findByText('Deployment Sync Status', {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText('Deployment Sync Status', {}, { timeout: 3000 })
+    ).toBeInTheDocument();
   });
 
   it('renders the APDEX Score gauge', async () => {

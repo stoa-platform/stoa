@@ -81,7 +81,9 @@ function MetricCard({
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-5">
       <div className="flex items-center justify-between">
-        <div className={`p-2 rounded-lg ${colorClass.replace('text-', 'bg-').replace('600', '100')} dark:bg-opacity-20`}>
+        <div
+          className={`p-2 rounded-lg ${colorClass.replace('text-', 'bg-').replace('600', '100')} dark:bg-opacity-20`}
+        >
           <Icon className={`h-5 w-5 ${colorClass}`} />
         </div>
         {trend !== undefined && (
@@ -113,9 +115,13 @@ function ToolUsageItem({ tool, maxCalls }: { tool: ToolUsage; maxCalls: number }
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <Cpu className="h-4 w-4 text-gray-400" />
-          <span className="text-sm font-medium text-gray-900 dark:text-white">{tool.displayName}</span>
+          <span className="text-sm font-medium text-gray-900 dark:text-white">
+            {tool.displayName}
+          </span>
         </div>
-        <span className="text-sm text-gray-600 dark:text-gray-300">{formatNumber(tool.calls)} calls</span>
+        <span className="text-sm text-gray-600 dark:text-gray-300">
+          {formatNumber(tool.calls)} calls
+        </span>
       </div>
       <div className="flex items-center gap-3">
         <div className="flex-1 bg-gray-200 dark:bg-neutral-700 rounded-full h-2">
@@ -133,7 +139,7 @@ function ToolUsageItem({ tool, maxCalls }: { tool: ToolUsage; maxCalls: number }
 }
 
 function UsageSparkline({ data }: { data: DailyUsage[] }) {
-  const maxCalls = Math.max(...data.map(d => d.calls), 1);
+  const maxCalls = Math.max(...data.map((d) => d.calls), 1);
 
   return (
     <div className="h-16 flex items-end gap-1">
@@ -174,7 +180,7 @@ export function TenantDashboard() {
         tokensConsumed: 1_234_567,
         tokensTrend: 8.3,
         slaCompliance: 99.95,
-        estimatedCost: 42.50,
+        estimatedCost: 42.5,
         costTrend: 5.2,
         avgLatency: 145,
         errorRate: 0.02,
@@ -182,11 +188,41 @@ export function TenantDashboard() {
 
       // Simulated top tools
       setTopTools([
-        { name: 'weather-api', displayName: 'Weather API', calls: 12450, percentage: 27.5, avgLatency: 120 },
-        { name: 'translate-api', displayName: 'Translate API', calls: 8230, percentage: 18.2, avgLatency: 180 },
-        { name: 'sentiment-analysis', displayName: 'Sentiment Analysis', calls: 6780, percentage: 15.0, avgLatency: 95 },
-        { name: 'image-recognition', displayName: 'Image Recognition', calls: 5420, percentage: 12.0, avgLatency: 450 },
-        { name: 'text-summarizer', displayName: 'Text Summarizer', calls: 4350, percentage: 9.6, avgLatency: 280 },
+        {
+          name: 'weather-api',
+          displayName: 'Weather API',
+          calls: 12450,
+          percentage: 27.5,
+          avgLatency: 120,
+        },
+        {
+          name: 'translate-api',
+          displayName: 'Translate API',
+          calls: 8230,
+          percentage: 18.2,
+          avgLatency: 180,
+        },
+        {
+          name: 'sentiment-analysis',
+          displayName: 'Sentiment Analysis',
+          calls: 6780,
+          percentage: 15.0,
+          avgLatency: 95,
+        },
+        {
+          name: 'image-recognition',
+          displayName: 'Image Recognition',
+          calls: 5420,
+          percentage: 12.0,
+          avgLatency: 450,
+        },
+        {
+          name: 'text-summarizer',
+          displayName: 'Text Summarizer',
+          calls: 4350,
+          percentage: 9.6,
+          avgLatency: 280,
+        },
       ]);
 
       // Simulated daily usage (last 7 days)
@@ -222,7 +258,7 @@ export function TenantDashboard() {
     return () => clearInterval(interval);
   }, [isReady, tenantId, loadData]);
 
-  const maxToolCalls = Math.max(...topTools.map(t => t.calls), 1);
+  const maxToolCalls = Math.max(...topTools.map((t) => t.calls), 1);
 
   if (!tenantId) {
     return (
@@ -337,7 +373,9 @@ export function TenantDashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Avg Latency</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  Avg Latency
+                </p>
                 <Clock className="h-4 w-4 text-gray-400" />
               </div>
               <p className="text-xl font-bold text-gray-900 dark:text-white mt-2">
@@ -346,10 +384,14 @@ export function TenantDashboard() {
             </div>
             <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Error Rate</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  Error Rate
+                </p>
                 <BarChart2 className="h-4 w-4 text-gray-400" />
               </div>
-              <p className={`text-xl font-bold mt-2 ${metrics.errorRate < 0.1 ? 'text-green-600' : 'text-red-600'}`}>
+              <p
+                className={`text-xl font-bold mt-2 ${metrics.errorRate < 0.1 ? 'text-green-600' : 'text-red-600'}`}
+              >
                 {metrics.errorRate.toFixed(2)} <span className="text-sm font-normal">%</span>
               </p>
             </div>
@@ -392,7 +434,9 @@ export function TenantDashboard() {
               </div>
               <div className="mt-4 pt-4 border-t border-gray-100 dark:border-neutral-700">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Total calls this period</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Total calls this period
+                  </span>
                   <span className="text-sm font-semibold text-gray-900 dark:text-white">
                     {formatNumber(dailyUsage.reduce((sum, d) => sum + d.calls, 0))}
                   </span>

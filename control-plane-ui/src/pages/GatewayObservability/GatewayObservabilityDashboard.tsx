@@ -17,15 +17,7 @@ const overallStatusConfig: Record<string, { label: string; color: string; bg: st
   unknown: { label: 'UNKNOWN', color: 'text-gray-700', bg: 'bg-gray-100' },
 };
 
-function StatCard({
-  label,
-  count,
-  color,
-}: {
-  label: string;
-  count: number;
-  color: string;
-}) {
+function StatCard({ label, count, color }: { label: string; count: number; color: string }) {
   return (
     <div className="bg-white rounded-lg shadow px-4 py-3">
       <p className="text-xs font-medium text-gray-500 uppercase">{label}</p>
@@ -59,7 +51,7 @@ function APDEXGauge({ score }: { score: number }) {
   const getColor = (value: number) => {
     if (value >= 0.94) return { bg: 'bg-green-500', text: 'text-green-700', label: 'Excellent' };
     if (value >= 0.85) return { bg: 'bg-blue-500', text: 'text-blue-700', label: 'Good' };
-    if (value >= 0.70) return { bg: 'bg-yellow-500', text: 'text-yellow-700', label: 'Fair' };
+    if (value >= 0.7) return { bg: 'bg-yellow-500', text: 'text-yellow-700', label: 'Fair' };
     return { bg: 'bg-red-500', text: 'text-red-700', label: 'Poor' };
   };
 
@@ -73,10 +65,10 @@ function APDEXGauge({ score }: { score: number }) {
         <p className="text-sm font-medium text-gray-700">APDEX Score</p>
       </div>
       <div className="flex items-end gap-3">
-        <span className={`text-3xl font-bold ${colorConfig.text}`}>
-          {score.toFixed(2)}
-        </span>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colorConfig.bg} text-white`}>
+        <span className={`text-3xl font-bold ${colorConfig.text}`}>{score.toFixed(2)}</span>
+        <span
+          className={`text-xs font-medium px-2 py-0.5 rounded-full ${colorConfig.bg} text-white`}
+        >
           {colorConfig.label}
         </span>
       </div>
@@ -86,14 +78,10 @@ function APDEXGauge({ score }: { score: number }) {
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <p className="text-xs text-gray-500 mt-2">
-        Target: 0.94 (Excellent) | T=500ms
-      </p>
+      <p className="text-xs text-gray-500 mt-2">Target: 0.94 (Excellent) | T=500ms</p>
     </div>
   );
 }
-
-
 
 export function GatewayObservabilityDashboard() {
   const navigate = useNavigate();
@@ -151,7 +139,9 @@ export function GatewayObservabilityDashboard() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate(observabilityPath(`${config.services.grafana.url}/d/stoa-gateway-overview`))}
+            onClick={() =>
+              navigate(observabilityPath(`${config.services.grafana.url}/d/stoa-gateway-overview`))
+            }
             className="flex items-center gap-2 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition-colors"
           >
             <ExternalLink className="h-4 w-4" />
@@ -212,11 +202,7 @@ export function GatewayObservabilityDashboard() {
           <div>
             <h2 className="text-sm font-semibold text-gray-700 uppercase mb-3">Gateway Health</h2>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <StatCard
-                label="Total"
-                count={metrics.health.total_gateways}
-                color="text-gray-900"
-              />
+              <StatCard label="Total" count={metrics.health.total_gateways} color="text-gray-900" />
               <StatCard label="Online" count={metrics.health.online} color="text-green-600" />
               <StatCard label="Degraded" count={metrics.health.degraded} color="text-yellow-600" />
               <StatCard label="Offline" count={metrics.health.offline} color="text-red-600" />

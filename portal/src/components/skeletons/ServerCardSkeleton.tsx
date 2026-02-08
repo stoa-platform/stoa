@@ -28,10 +28,17 @@ export function ServerCardSkeleton() {
 /**
  * Grid of server card skeletons.
  */
-export function ServerCardSkeletonGrid({ count = 6, columns = 3 }: { count?: number; columns?: 2 | 3 }) {
-  const gridClass = columns === 2
-    ? 'grid grid-cols-1 md:grid-cols-2 gap-6'
-    : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
+export function ServerCardSkeletonGrid({
+  count = 6,
+  columns = 3,
+}: {
+  count?: number;
+  columns?: 2 | 3;
+}) {
+  const gridClass =
+    columns === 2
+      ? 'grid grid-cols-1 md:grid-cols-2 gap-6'
+      : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
 
   return (
     <div className={gridClass}>

@@ -136,10 +136,7 @@ const ErrorState: React.FC<{ message: string }> = ({ message }) => (
     <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
     <h2 className="text-lg font-medium text-gray-900 mb-2">Failed to load contract</h2>
     <p className="text-gray-500 mb-6">{message}</p>
-    <Link
-      to="/contracts"
-      className="text-blue-600 hover:text-blue-800 font-medium"
-    >
+    <Link to="/contracts" className="text-blue-600 hover:text-blue-800 font-medium">
       Back to Contracts
     </Link>
   </div>
@@ -153,10 +150,7 @@ const NotFoundState: React.FC = () => (
     <p className="text-gray-500 mb-6">
       The contract you're looking for doesn't exist or you don't have access to it.
     </p>
-    <Link
-      to="/contracts"
-      className="text-blue-600 hover:text-blue-800 font-medium"
-    >
+    <Link to="/contracts" className="text-blue-600 hover:text-blue-800 font-medium">
       Back to Contracts
     </Link>
   </div>
@@ -212,11 +206,7 @@ export const ContractDetailPage: React.FC = () => {
             </h1>
 
             {/* UAC Badge */}
-            <UACBadge
-              contractName={contract.name}
-              bindings={badgeBindings}
-              variant="with-count"
-            />
+            <UACBadge contractName={contract.name} bindings={badgeBindings} variant="with-count" />
           </div>
 
           {/* Actions */}
@@ -243,11 +233,13 @@ export const ContractDetailPage: React.FC = () => {
           <span
             className={`
               px-2 py-0.5 rounded-full font-medium
-              ${contract.status === 'published'
-                ? 'bg-green-100 text-green-700'
-                : contract.status === 'draft'
-                  ? 'bg-yellow-100 text-yellow-700'
-                  : 'bg-gray-100 text-gray-600'}
+              ${
+                contract.status === 'published'
+                  ? 'bg-green-100 text-green-700'
+                  : contract.status === 'draft'
+                    ? 'bg-yellow-100 text-yellow-700'
+                    : 'bg-gray-100 text-gray-600'
+              }
             `}
           >
             {contract.status}
@@ -257,18 +249,14 @@ export const ContractDetailPage: React.FC = () => {
         </div>
 
         {/* Description */}
-        {contract.description && (
-          <p className="text-gray-600">{contract.description}</p>
-        )}
+        {contract.description && <p className="text-gray-600">{contract.description}</p>}
       </div>
 
       {/* Main content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Protocol Switcher - Main feature */}
         <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Protocol Bindings
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Protocol Bindings</h2>
           <ProtocolSwitcher
             contractId={contract.id}
             onBindingEnabled={(protocol) => {

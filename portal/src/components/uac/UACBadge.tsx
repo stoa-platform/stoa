@@ -126,9 +126,7 @@ export const UACBadge: React.FC<UACBadgeProps> = ({
       >
         {getBadgeContent()}
         {variant !== 'compact' && (
-          <ChevronDown
-            className={`h-3 w-3 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          />
+          <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         )}
       </button>
 
@@ -163,11 +161,7 @@ export const UACBadge: React.FC<UACBadgeProps> = ({
 
           {/* Content */}
           <div className="relative p-4">
-            <UACTooltip
-              contractName={contractName}
-              bindings={bindings}
-              docsUrl={docsUrl}
-            />
+            <UACTooltip contractName={contractName} bindings={bindings} docsUrl={docsUrl} />
           </div>
         </div>
       )}

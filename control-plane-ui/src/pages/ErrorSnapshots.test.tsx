@@ -4,7 +4,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 // Mock AuthContext
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
-    user: { id: 'user-admin', email: 'parzival@oasis.gg', name: 'Parzival', roles: ['cpi-admin'], tenant_id: 'oasis-gunters', permissions: ['tenants:read'] },
+    user: {
+      id: 'user-admin',
+      email: 'parzival@oasis.gg',
+      name: 'Parzival',
+      roles: ['cpi-admin'],
+      tenant_id: 'oasis-gunters',
+      permissions: ['tenants:read'],
+    },
     isAuthenticated: true,
     isLoading: false,
     isReady: true,
@@ -85,7 +92,9 @@ describe('ErrorSnapshots', () => {
 
   it('renders the subtitle', async () => {
     renderComponent();
-    expect(await screen.findByText('Time-travel debugging for MCP Gateway errors')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Time-travel debugging for MCP Gateway errors')
+    ).toBeInTheDocument();
   });
 
   it('shows stats cards after loading', async () => {

@@ -524,12 +524,15 @@ export interface APITransactionStats {
   p95_latency_ms: number;
   p99_latency_ms: number;
   requests_per_minute: number;
-  by_api: Record<string, {
-    total: number;
-    success: number;
-    errors: number;
-    avg_latency_ms: number;
-  }>;
+  by_api: Record<
+    string,
+    {
+      total: number;
+      success: number;
+      errors: number;
+      avg_latency_ms: number;
+    }
+  >;
   by_status_code: Record<number, number>;
 }
 
@@ -539,7 +542,13 @@ export interface APITransactionStats {
 
 export type ComponentHealth = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 export type GitOpsSyncStatus = 'Synced' | 'OutOfSync' | 'Unknown' | 'NotFound' | 'Error';
-export type GitOpsHealthStatus = 'Healthy' | 'Degraded' | 'Progressing' | 'Suspended' | 'Missing' | 'Unknown';
+export type GitOpsHealthStatus =
+  | 'Healthy'
+  | 'Degraded'
+  | 'Progressing'
+  | 'Suspended'
+  | 'Missing'
+  | 'Unknown';
 export type PlatformEventSeverity = 'info' | 'warning' | 'error';
 
 export interface ComponentStatus {
@@ -837,7 +846,13 @@ export type GatewayType =
   | 'stoa_shadow';
 export type GatewayMode = 'edge-mcp' | 'sidecar' | 'proxy' | 'shadow';
 export type GatewayInstanceStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
-export type DeploymentSyncStatus = 'pending' | 'syncing' | 'synced' | 'drifted' | 'error' | 'deleting';
+export type DeploymentSyncStatus =
+  | 'pending'
+  | 'syncing'
+  | 'synced'
+  | 'drifted'
+  | 'error'
+  | 'deleting';
 
 export interface GatewayInstance {
   id: string;
@@ -926,7 +941,14 @@ export interface DeploymentStatusSummary {
 // Gateway Policy Types (Phase 3 — Policy Engine)
 // =============================================================================
 
-export type PolicyType = 'cors' | 'rate_limit' | 'jwt_validation' | 'ip_filter' | 'logging' | 'caching' | 'transform';
+export type PolicyType =
+  | 'cors'
+  | 'rate_limit'
+  | 'jwt_validation'
+  | 'ip_filter'
+  | 'logging'
+  | 'caching'
+  | 'transform';
 export type PolicyScope = 'api' | 'gateway' | 'tenant';
 
 export interface GatewayPolicy {

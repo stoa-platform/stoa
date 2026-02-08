@@ -294,10 +294,8 @@ impl CrdWatcher {
         let mut removed = 0;
 
         for tool_name in &names {
-            if tool_name.starts_with(&tool_prefix) {
-                if self.tool_registry.unregister(tool_name) {
-                    removed += 1;
-                }
+            if tool_name.starts_with(&tool_prefix) && self.tool_registry.unregister(tool_name) {
+                removed += 1;
             }
         }
 

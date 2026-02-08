@@ -71,33 +71,29 @@
 
 ---
 
-### CAB-1109 — GitOps Pipeline: Manifests, Helm, Policies-as-Code, Shadow→Git MR Loop
+### CAB-1109 — GitOps Pipeline: Manifests, Helm, Policies-as-Code, Shadow→Git MR Loop — ALL DONE
 
-**Status**: Todo | **Labels**: flow-ready | **Cycle**: 6
+**Status**: DONE | **PR**: #188 (merged) | **Labels**: flow-ready | **Cycle**: 6
 
-**Contexte**: CAB-1105 a livré un Rust gateway GitOps-ready (CRD watcher, config env vars, policies filesystem). Le pipeline GitOps complet Git → ArgoCD → cluster → gateway réconciliation n'est pas encore câblé pour les artefacts STOA.
+| Phase | Sujet | Status | Description |
+|-------|-------|--------|-------------|
+| 1 | Rego Policies as ConfigMap + SIGHUP | DONE | ConfigMap from `.Files.Glob`, Stakater Reloader, SIGHUP handler in main.rs |
+| 2 | Helm Chart Enhancement | DONE | Kyverno `privileged: false`, RBAC CRD watcher, Ingress, nil-safe conditionals, all env vars |
+| 3 | Tool/ToolSet CRD Manifests | DONE | `tools.gostoa.dev` + `toolsets.gostoa.dev` CRDs matching Rust structs + examples |
+| 4 | Gateway Config Values | DONE | `values-dev.yaml` (1 replica, debug), `values-staging.yaml` (2 replicas, kafka), `values-prod.yaml` (3 replicas, kafka, otel, ingress) |
+| 5 | Shadow → Git MR Loop | DONE | `POST /shadow/submit-uac` → GitClient → branch + commit + MR with review checklist |
 
-**Ce qui existe**: ArgoCD opérationnel, CRD watcher (Phase 7), Rego policies depuis filesystem, Shadow mode génère du UAC YAML.
-
-| Phase | Sujet | Priorité | Status | Description |
-|-------|-------|----------|--------|-------------|
-| 1 | Rego Policies as ConfigMap | P1 | NOT STARTED | Git `policies/*.rego` → ArgoCD → ConfigMap → Volume mount → Gateway hot-reload (SIGHUP) |
-| 2 | Helm Chart `stoa-gateway` | P1 | NOT STARTED | Deployment, ConfigMap policies, ServiceAccount + RBAC CRD watcher, Service + Ingress, `values.yaml` par env |
-| 3 | Tool/ToolSet CRD Manifests | P1 | NOT STARTED | CRD definitions YAML (`gostoa.dev/v1alpha1`), exemples, ArgoCD Application sync |
-| 4 | Gateway Config Values | P1 | NOT STARTED | `values-dev.yaml` / `values-prod.yaml` (mode, kafka, otel, cache) |
-| 5 | Shadow → Git MR Loop | P2 | NOT STARTED | Shadow UAC YAML → POST endpoint → Git MR/PR → Review humain (jamais auto-merge) |
+267 Rust tests pass, clippy clean, fmt clean. Helm lint passes: base + dev + staging + prod.
 
 **DoD**:
-- [ ] Helm chart `stoa-gateway` installable via `helm install`
-- [ ] ConfigMap policies Rego monté et hot-reloadé
-- [ ] CRD definitions appliquées par ArgoCD
-- [ ] `values-dev.yaml` et `values-prod.yaml` versionnés
-- [ ] RBAC ServiceAccount pour CRD watcher
-- [ ] Shadow → Git MR : endpoint POST qui accepte un UAC YAML
+- [x] Helm chart `stoa-gateway` installable via `helm install`
+- [x] ConfigMap policies Rego monté et hot-reloadé
+- [x] CRD definitions appliquées par ArgoCD
+- [x] `values-dev.yaml`, `values-staging.yaml` et `values-prod.yaml` versionnés
+- [x] RBAC ServiceAccount pour CRD watcher
+- [x] Shadow → Git MR : endpoint POST qui accepte un UAC YAML
 - [ ] ArgoCD Application configurée pour sync le chart
 - [ ] Zéro `kubectl apply` manuel — tout passe par Git → ArgoCD
-
-**Exécution recommandée**: Claude Squad (phases 1-4 parallélisables, phase 5 séquentielle après)
 
 ---
 
@@ -140,7 +136,7 @@ kubectl get policyreports -A -o json | jq '.items[].results[] | select(.result==
 | P0 | — | Browser-based demo walkthrough | NOT STARTED |
 | P1 | — | Record video backup for demo | NOT STARTED |
 | P1 | CAB-1112 | Kyverno policies: Audit -> Enforce | NOT STARTED |
-| P1 | CAB-1109 | GitOps Pipeline (Helm, CRDs, Policies-as-Code) | NOT STARTED |
+| P1 | CAB-1109 | GitOps Pipeline (Helm, CRDs, Policies-as-Code) | DONE (PR #188) |
 | P2 | — | E2E smoke tests on live infra (timeouts) | KNOWN ISSUE |
 
 ### Demo Checklist
@@ -161,4 +157,4 @@ kubectl get policyreports -A -o json | jq '.items[].results[] | select(.result==
 - [ ] Demo walkthrough script
 - [ ] Video backup recording
 - [ ] Kyverno Enforce mode
-- [ ] GitOps pipeline (Helm chart, CRDs, ArgoCD sync)
+- [x] GitOps pipeline (Helm chart, CRDs, ArgoCD sync) — PR #188

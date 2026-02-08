@@ -56,41 +56,8 @@ Then('the monitoring dashboard loads successfully', async ({ page }) => {
   expect.soft(pageLoaded || page.url().includes('/monitoring')).toBe(true);
 });
 
-// ============================================================================
-// DIRECT URL ACCESS STEPS
-// ============================================================================
-
-When('I navigate directly to {string}', async ({ page }, path: string) => {
-  await page.goto(`${URLS.console}${path}`);
-  await page.waitForLoadState('networkidle');
-});
-
-Then('I receive an access denied error or redirect', async ({ page }) => {
-  const accessDenied = page.locator(
-    'text=/access denied|forbidden|unauthorized|403|not authorized|permission/i',
-  );
-  const redirected = !page.url().includes('/admin') && !page.url().includes('/tenants');
-  const hasDenied = await accessDenied.first().isVisible({ timeout: 5000 }).catch(() => false);
-  expect.soft(hasDenied || redirected).toBe(true);
-});
-
-// ============================================================================
-// WRITE ACTION STEPS
-// ============================================================================
-
-Then('write actions are hidden or disabled', async ({ page }) => {
-  const writeButtons = page.locator(
-    'button:has-text("Create"), button:has-text("Delete"), button:has-text("Edit"), button:has-text("Nouveau"), button:has-text("Supprimer")',
-  );
-  const count = await writeButtons.count();
-  for (let i = 0; i < count; i++) {
-    const btn = writeButtons.nth(i);
-    const isVisible = await btn.isVisible().catch(() => false);
-    if (isVisible) {
-      await expect.soft(btn).toBeDisabled();
-    }
-  }
-});
+// Note: 'I navigate directly to {string}', 'I receive an access denied error or redirect',
+// and 'write actions are hidden or disabled' steps are defined in console.steps.ts
 
 // ============================================================================
 // TENANT ISOLATION STEPS

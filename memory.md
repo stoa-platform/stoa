@@ -1,11 +1,11 @@
 # STOA Memory
 
-> Last updated: 2026-02-08 (Session 19 — CAB-1103 Phase 6 Operational Readiness)
+> Last updated: 2026-02-08 (Session 19 — CAB-1103 Phase 6 Operational Readiness — MERGED)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: CAB-1103 Phase 6 complete (4 sub-phases). Shift to demo readiness + landing page.
+- **Focus**: CAB-1103 Phase 6 merged (PR #184 → commit cdc3299d). All ops readiness done. Next: landing page + demo prep.
 
 ## Session State
 
@@ -45,7 +45,8 @@
 | DONE | CAB-1103 | Phase 6A: CI Hardening | PR #184 — 5 `|| true` bugs fixed, 11 intentional documented |
 | DONE | CAB-1103 | Phase 6B: Monitoring OIDC | PR #184 — Grafana OIDC, oauth2-proxy, AlertManager routing |
 | DONE | CAB-1103 | Phase 6C: E2E Expansion | PR #184 — 22 new BDD scenarios (4 feature files, 4 step files) |
-| DONE | CAB-1103 | Phase 6D: Test Loop Automation | PR #184 — weekly-audit.yml + smoke tests post-deploy |
+| DONE | CAB-1103 | Phase 6D: Test Loop Automation | PR #184 → cdc3299d — weekly-audit.yml + smoke tests post-deploy |
+| DONE | CAB-1105 | Kill Python + Production-Grade MCP Gateway (9 phases) | PRs #180, #181 — 222 tests, clippy clean |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe | — |
 | NEXT | — | Browser-based demo walkthrough | — |
 | NEXT | — | Record video backup for demo | — |
@@ -92,6 +93,7 @@
 - Dependency Review fails: GitHub Advanced Security not enabled on stoa repo
 - Container Scan / CodeQL: intermittent failures, not blocking
 - DCO Check: fails on squash-merged commits (expected, non-blocking)
+- Clippy lint fails in PR CI (non-required check) — intermittent, passes on main
 
 ## Notes
 - Demo: mardi 24 fevrier 2026

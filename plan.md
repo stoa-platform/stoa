@@ -28,7 +28,15 @@
 
 ---
 
-## CAB-1103 — Phase 6: Operational Readiness (4 sub-phases) — ALL DONE
+## CAB-1103 — Control Plane Agnostique (Phases 1-7 DONE)
+
+| Phase | Sujet | Status | PR | Description |
+|-------|-------|--------|-----|-------------|
+| Phase 1-5 | Core implementation | DONE | — | Models, adapters, sync engine |
+| Phase 6 | Operational Readiness | DONE | #184 | CI hardening, monitoring OIDC, E2E expansion, test loop |
+| Phase 7 | Gateway Auto-Registration | DONE | #121, #122 | ADR-036 merged |
+
+### Phase 6 — Operational Readiness (4 sub-phases) — ALL DONE
 
 | Sub-phase | Sujet | Status | PR | Result |
 |-----------|-------|--------|-----|--------|
@@ -37,7 +45,7 @@
 | 6C | E2E Expansion | DONE | #184 | 22 new BDD scenarios (gateway CRUD, deployment lifecycle, admin RBAC, portal consumer) |
 | 6D | Test Loop Automation | DONE | #184 | weekly-audit.yml (6 jobs) + smoke tests in mcp-gateway-ci + stoa-gateway-ci |
 
-### Files Changed (23 files, +1659 lines)
+#### Files Changed (23 files, +1659 lines)
 - **6A**: 7 workflow files patched (security-scan, e2e-audit, platform-config-ci, e2e-tests, keycloak-theme, reusable-k8s-deploy, reusable-notify)
 - **6B**: docker-compose.yml, alertmanager.yml, setup-observability-oidc.sh, .env.example, values.yaml
 - **6C**: 4 feature files + 4 step definition files (all `@wip` tagged)
@@ -45,7 +53,25 @@
 
 ---
 
-## Next Up — Demo Readiness (Feb 24)
+## CAB-1105 — Kill Python + Production-Grade MCP Gateway (9 phases) — ALL DONE
+
+| Phase | Sujet | Status | PR | Result |
+|-------|-------|--------|----|--------|
+| Phase 1 | Native Tool Execution | DONE | #180 | JWT auth, native tools, real user context in ToolContext |
+| Phase 2 | OPA Policy Engine | DONE | #180 | OPA eval with real JWT claims, ADR-012 role-to-scope |
+| Phase 3 | Kafka Metering + Error Snapshots | DONE | #180 | Metering emission, ErrorSnapshot, timing breakdown |
+| Phase 4 | Token Optimization Pipeline | DONE | #180 | X-Token-Optimization header, 4-stage pipeline |
+| Phase 5 | MCP 2025-03-26 Spec Compliance | DONE | #181 | outputSchema on NativeTool, annotations wired |
+| Phase 6 | Circuit Breaker + Cache + Retry | DONE | #181 | Semantic cache in pipeline, CB + retry on CP discovery |
+| Phase 7 | K8s CRD + MCP Federation | DONE | #181 | DynamicTool from CRDs, FederatedTool from ToolSets, watcher wired |
+| Phase 8 | 4-Mode Architecture | DONE | #181 | Mode-specific router (EdgeMcp/Sidecar/Proxy/Shadow) |
+| Phase 9 | Gateway Mode Dashboard | DONE | #181 | Sidebar entry + g+m shortcut |
+
+222 tests pass, clippy clean, fmt clean.
+
+---
+
+## Demo Readiness (Feb 24)
 
 | Priority | Ticket | Description | Status |
 |----------|--------|-------------|--------|
@@ -64,6 +90,7 @@
 - [x] Prettier formatting (console-ui + portal)
 - [x] OpenSearch logs + RGPD + multi-tenant OIDC
 - [x] Grafana + Logs iframe embed in console
+- [x] Rust gateway production-grade (9 phases, 222 tests)
 - [x] CI hardening (`|| true` audit)
 - [x] Monitoring OIDC (Grafana + Prometheus + AlertManager)
 - [x] E2E expansion (22 new BDD scenarios)

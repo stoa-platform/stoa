@@ -28,34 +28,28 @@ from src.models.subscription import Subscription  # noqa: F401
 from src.models.tenant import Tenant  # noqa: F401
 
 
-@pytest.fixture(scope="session")
-def integration_engine():
-    """Create async engine for integration tests (session-scoped)."""
+@pytest.fixture
+async def integration_db():
+    """Provide a real AsyncSession with auto-created tables, rolls back after each test.
+
+    Function-scoped to avoid event loop conflicts between session-scoped async
+    fixtures and function-scoped tests (pytest-asyncio >= 0.23).
+    create_all is idempotent (IF NOT EXISTS), so the per-test overhead is minimal.
+    """
     url = os.environ.get("DATABASE_URL")
     if not url:
         pytest.skip("DATABASE_URL not set — skipping integration tests")
+
     engine = create_async_engine(url, echo=False)
-    yield engine
 
-
-@pytest.fixture(scope="session")
-async def _create_tables(integration_engine):
-    """Create all tables before integration tests, drop after."""
-    async with integration_engine.begin() as conn:
+    # Create schema + tables (idempotent — safe to call per test)
+    async with engine.begin() as conn:
         # Some models (Invite, ProspectEvent) use schema="stoa"
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS stoa"))
         await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with integration_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.execute(text("DROP SCHEMA IF EXISTS stoa CASCADE"))
 
-
-@pytest.fixture
-async def integration_db(_create_tables, integration_engine):
-    """Provide a real AsyncSession that rolls back after each test."""
     session_factory = async_sessionmaker(
-        integration_engine,
+        engine,
         class_=AsyncSession,
         expire_on_commit=False,
     )
@@ -64,3 +58,5 @@ async def integration_db(_create_tables, integration_engine):
             yield session
             # Rollback ensures test isolation — no data leaks between tests
             await session.rollback()
+
+    await engine.dispose()

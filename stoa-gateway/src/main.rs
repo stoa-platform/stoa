@@ -257,9 +257,56 @@ async fn health() -> &'static str {
     "OK"
 }
 
-async fn ready() -> &'static str {
-    // TODO: Check dependencies (DB, Control Plane, etc.)
-    "READY"
+async fn ready(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> axum::response::Response {
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+
+    // Check Control Plane connectivity (non-blocking, short timeout)
+    if let Some(cp_url) = &state.config.control_plane_url {
+        let health_url = format!("{}/health", cp_url);
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(3))
+            .build()
+            .unwrap_or_default();
+        match client.get(&health_url).send().await {
+            Ok(resp) if resp.status().is_success() => {}
+            Ok(resp) => {
+                warn!(status = %resp.status(), "Control Plane health check returned non-200");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "NOT READY: Control Plane unhealthy",
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                warn!(error = %e, "Control Plane unreachable");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "NOT READY: Control Plane unreachable",
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    // Check JWKS is reachable (if auth is enabled)
+    if let Some(ref jwt) = state.jwt_validator {
+        match jwt.oidc_provider().get_config().await {
+            Ok(_) => {}
+            Err(e) => {
+                warn!(error = %e, "OIDC provider unreachable");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "NOT READY: OIDC provider unreachable",
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    (StatusCode::OK, "READY").into_response()
 }
 
 async fn prometheus_metrics() -> String {

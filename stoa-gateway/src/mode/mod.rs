@@ -346,7 +346,7 @@ impl ModeConfig {
 }
 
 impl EdgeMcpSettings {
-    fn from_env() -> Self {
+    pub fn from_env() -> Self {
         Self {
             sse_keepalive: std::env::var("STOA_SSE_KEEPALIVE")
                 .map(|v| v.to_lowercase() != "false")
@@ -368,7 +368,7 @@ impl EdgeMcpSettings {
 }
 
 impl SidecarSettings {
-    fn from_env() -> Self {
+    pub fn from_env() -> Self {
         Self {
             upstream_type: std::env::var("STOA_UPSTREAM_TYPE")
                 .unwrap_or_else(|_| "generic".to_string()),
@@ -382,7 +382,7 @@ impl SidecarSettings {
 }
 
 impl ProxySettings {
-    fn from_env() -> Self {
+    pub fn from_env() -> Self {
         Self {
             transform_request: std::env::var("STOA_TRANSFORM_REQUEST")
                 .map(|v| v.to_lowercase() == "true")
@@ -405,7 +405,7 @@ impl ProxySettings {
 }
 
 impl ShadowSettings {
-    fn from_env() -> Self {
+    pub fn from_env() -> Self {
         Self {
             capture_method: CaptureMethod::default(),
             uac_output_dir: std::env::var("STOA_UAC_OUTPUT_DIR")

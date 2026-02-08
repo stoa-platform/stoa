@@ -81,7 +81,7 @@ export function GatewayList() {
     staleTime: 10_000,
   });
 
-  const gateways = gatewaysData?.items ?? [];
+  const gateways: GatewayInstance[] = gatewaysData?.items ?? [];
   const error = queryError
     ? (queryError as any).response?.data?.detail ||
       (queryError as Error).message ||

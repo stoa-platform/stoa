@@ -28,6 +28,23 @@
 
 ---
 
+## CAB-1103 — Phase 6: Operational Readiness (4 sub-phases) — ALL DONE
+
+| Sub-phase | Sujet | Status | PR | Result |
+|-----------|-------|--------|-----|--------|
+| 6A | CI Hardening | DONE | #184 | 5 `|| true` bugs fixed in 7 workflows, 11 intentional documented |
+| 6B | Monitoring OIDC | DONE | #184 | Grafana OIDC, oauth2-proxy, AlertManager routing, setup script |
+| 6C | E2E Expansion | DONE | #184 | 22 new BDD scenarios (gateway CRUD, deployment lifecycle, admin RBAC, portal consumer) |
+| 6D | Test Loop Automation | DONE | #184 | weekly-audit.yml (6 jobs) + smoke tests in mcp-gateway-ci + stoa-gateway-ci |
+
+### Files Changed (23 files, +1659 lines)
+- **6A**: 7 workflow files patched (security-scan, e2e-audit, platform-config-ci, e2e-tests, keycloak-theme, reusable-k8s-deploy, reusable-notify)
+- **6B**: docker-compose.yml, alertmanager.yml, setup-observability-oidc.sh, .env.example, values.yaml
+- **6C**: 4 feature files + 4 step definition files (all `@wip` tagged)
+- **6D**: weekly-audit.yml (new), mcp-gateway-ci.yml, stoa-gateway-ci.yml
+
+---
+
 ## Next Up — Demo Readiness (Feb 24)
 
 | Priority | Ticket | Description | Status |
@@ -47,6 +64,10 @@
 - [x] Prettier formatting (console-ui + portal)
 - [x] OpenSearch logs + RGPD + multi-tenant OIDC
 - [x] Grafana + Logs iframe embed in console
+- [x] CI hardening (`|| true` audit)
+- [x] Monitoring OIDC (Grafana + Prometheus + AlertManager)
+- [x] E2E expansion (22 new BDD scenarios)
+- [x] Weekly audit + smoke tests post-deploy
 - [ ] Landing page (gostoa.dev) with Stripe
 - [ ] Demo walkthrough script
 - [ ] Video backup recording

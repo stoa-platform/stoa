@@ -54,7 +54,7 @@ Feature: Console - Dashboards and Embeds
     When I navigate to the Observability embed page
     Then the Observability embed page loads successfully
 
-  @smoke @embed
+  @embed
   Scenario: Tenant admin views Logs embed
     Given I am logged in to Console as "parzival" from team "high-five"
     And the STOA Console is accessible

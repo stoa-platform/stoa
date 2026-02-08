@@ -12,6 +12,7 @@ use crate::config::Config;
 use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
+use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
 use crate::rate_limit::RateLimiter;
 use crate::resilience::{CircuitBreaker, CircuitBreakerConfig};
@@ -37,6 +38,9 @@ pub struct AppState {
     pub semantic_cache: Arc<SemanticCache>,
     /// Circuit breaker for Control Plane API calls (Phase 6)
     pub cp_circuit_breaker: Arc<CircuitBreaker>,
+    /// Kafka metering producer (Phase 3: CAB-1105)
+    /// None if Kafka metering is disabled or unavailable.
+    pub metering_producer: Option<Arc<MeteringProducer>>,
 }
 
 impl AppState {
@@ -138,6 +142,33 @@ impl AppState {
         let cp_circuit_breaker = CircuitBreaker::new("cp-api", CircuitBreakerConfig::default());
         tracing::info!("Circuit breaker initialized for CP API");
 
+        // Initialize Kafka metering producer (Phase 3: CAB-1105)
+        let metering_producer = if config.kafka_enabled {
+            let kafka_config = KafkaConfig {
+                brokers: config.kafka_brokers.clone(),
+                metering_topic: config.kafka_metering_topic.clone(),
+                errors_topic: config.kafka_errors_topic.clone(),
+                enabled: true,
+            };
+            let producer_config = MeteringProducerConfig::from(&kafka_config);
+            match MeteringProducer::new(producer_config) {
+                Ok(producer) => {
+                    tracing::info!(
+                        brokers = %config.kafka_brokers,
+                        "Kafka metering producer initialized"
+                    );
+                    Some(Arc::new(producer))
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Kafka metering initialization failed");
+                    None
+                }
+            }
+        } else {
+            tracing::info!("Kafka metering disabled (STOA_KAFKA_ENABLED=false)");
+            None
+        };
+
         Self {
             config,
             tool_registry,
@@ -151,6 +182,7 @@ impl AppState {
             jwt_validator,
             semantic_cache,
             cp_circuit_breaker,
+            metering_producer,
         }
     }
 

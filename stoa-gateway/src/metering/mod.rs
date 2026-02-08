@@ -25,7 +25,7 @@ mod events;
 mod producer;
 
 pub use events::{ErrorSnapshot, EventStatus, GatewaySnapshot, ToolCallEvent};
-pub use producer::{MeteringProducer, MeteringProducerConfig};
+pub use producer::{MeteringProducer, MeteringProducerConfig, MeteringProducerTrait};
 
 /// Kafka configuration for metering
 #[derive(Debug, Clone)]

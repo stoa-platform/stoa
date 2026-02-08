@@ -139,6 +139,45 @@ pub fn update_rate_limit_buckets(count: usize) {
     RATE_LIMIT_BUCKETS.set(count as f64);
 }
 
+/// Get the total number of MCP tool calls across all labels.
+pub fn get_requests_total() -> u64 {
+    use prometheus::core::Collector;
+    let families = MCP_TOOL_CALLS_TOTAL.collect();
+    let mut total = 0u64;
+    for family in &families {
+        for metric in family.get_metric() {
+            total += metric.get_counter().get_value() as u64;
+        }
+    }
+    total
+}
+
+/// Get the error rate (errors / total) across all MCP tool calls.
+/// Returns 0.0 if no requests have been processed yet.
+pub fn get_error_rate() -> f64 {
+    use prometheus::core::Collector;
+    let families = MCP_TOOL_CALLS_TOTAL.collect();
+    let mut total = 0.0_f64;
+    let mut errors = 0.0_f64;
+    for family in &families {
+        for metric in family.get_metric() {
+            let val = metric.get_counter().get_value();
+            total += val;
+            // Convention: status label "error" or "failure" counts as error
+            for label in metric.get_label() {
+                if label.get_name() == "status" && label.get_value() != "success" {
+                    errors += val;
+                }
+            }
+        }
+    }
+    if total == 0.0 {
+        0.0
+    } else {
+        errors / total
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,5 +192,36 @@ mod tests {
     fn test_sse_tracking() {
         track_sse_connect();
         track_sse_disconnect("tenant-1", 30.0);
+    }
+
+    #[test]
+    fn test_get_requests_total() {
+        // Record some calls and verify total is non-negative
+        record_tool_call("metric_test_tool", "metric-tenant", "success", 0.01);
+        let total = get_requests_total();
+        assert!(total >= 1, "Expected at least 1 request, got {}", total);
+    }
+
+    #[test]
+    fn test_get_error_rate_with_no_errors() {
+        // Record only success calls
+        record_tool_call("rate_test_tool", "rate-tenant", "success", 0.01);
+        let rate = get_error_rate();
+        // Rate should be between 0.0 and 1.0
+        assert!(
+            (0.0..=1.0).contains(&rate),
+            "Error rate out of range: {}",
+            rate
+        );
+    }
+
+    #[test]
+    fn test_get_error_rate_with_errors() {
+        // Record both success and error calls
+        record_tool_call("err_test_tool", "err-tenant", "success", 0.01);
+        record_tool_call("err_test_tool", "err-tenant", "error", 0.05);
+        let rate = get_error_rate();
+        assert!(rate > 0.0, "Expected non-zero error rate, got {}", rate);
+        assert!(rate <= 1.0, "Error rate out of range: {}", rate);
     }
 }

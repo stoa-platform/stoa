@@ -118,7 +118,7 @@ jobs:
           curl -s -X PUT "https://auth.gostoa.dev/admin/realms/stoa" \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"loginTheme": "stoa"}' || echo "Warning: Could not update theme automatically"
+            -d '{"loginTheme": "stoa"}' || echo "Warning: Could not update theme automatically"  # intentional: theme update is best-effort, Keycloak may not be ready
 
           echo "Theme update attempted. Verify at https://auth.gostoa.dev"
 

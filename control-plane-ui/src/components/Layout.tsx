@@ -42,74 +42,135 @@ interface LayoutProps {
   children: ReactNode;
 }
 
-const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard, shortcut: ['g', 'd'] },
+interface NavItem {
+  name: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  permission?: string;
+  shortcut?: string[];
+  badge?: string;
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+  accent?: boolean;
+}
+
+const navigationSections: NavSection[] = [
   {
-    name: 'Operations',
-    href: '/operations',
-    icon: Activity,
-    permission: 'tenants:read',
-    shortcut: ['g', 'o'],
-  },
-  { name: 'My Usage', href: '/my-usage', icon: PieChart, shortcut: ['g', 'u'] },
-  {
-    name: 'Business',
-    href: '/business',
-    icon: TrendingUp,
-    permission: 'tenants:read',
-    shortcut: ['g', 'b'],
-  },
-  // CAB-1108: Embedded platform services
-  { name: 'Observability', href: '/observability', icon: Gauge, shortcut: ['g', 'g'] },
-  { name: 'Identity', href: '/identity', icon: Shield, shortcut: ['g', 'i'] },
-  // CAB-1114: OpenSearch Dashboards for API trace logs
-  { name: 'Logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
-  {
-    name: 'Tenants',
-    href: '/tenants',
-    icon: Building2,
-    permission: 'tenants:read',
-    shortcut: ['g', 't'],
-  },
-  { name: 'APIs', href: '/apis', icon: Layers, permission: 'apis:read', shortcut: ['g', 'a'] },
-  {
-    name: 'AI Tools',
-    href: '/ai-tools',
-    icon: Wrench,
-    permission: 'apis:read',
-    shortcut: ['g', 'w'],
-  },
-  {
-    name: 'External MCP Servers',
-    href: '/external-mcp-servers',
-    icon: Server,
-    permission: 'admin:servers',
-  },
-  { name: 'Gateway', href: '/gateway', icon: Server, permission: 'apis:read' },
-  { name: 'Gateway Registry', href: '/gateways', icon: Network, permission: 'tenants:read' },
-  {
-    name: 'Gateway Modes',
-    href: '/gateways/modes',
-    icon: Gauge,
-    permission: 'tenants:read',
-    shortcut: ['g', 'm'],
+    title: 'Overview',
+    items: [
+      { name: 'Dashboard', href: '/', icon: LayoutDashboard, shortcut: ['g', 'd'] },
+      {
+        name: 'Operations',
+        href: '/operations',
+        icon: Activity,
+        permission: 'tenants:read',
+        shortcut: ['g', 'o'],
+      },
+      { name: 'My Usage', href: '/my-usage', icon: PieChart, shortcut: ['g', 'u'] },
+      {
+        name: 'Business',
+        href: '/business',
+        icon: TrendingUp,
+        permission: 'tenants:read',
+        shortcut: ['g', 'b'],
+      },
+    ],
   },
   {
-    name: 'Gateway Deployments',
-    href: '/gateway-deployments',
-    icon: ArrowUpDown,
-    permission: 'tenants:read',
+    title: 'Catalog',
+    items: [
+      {
+        name: 'Tenants',
+        href: '/tenants',
+        icon: Building2,
+        permission: 'tenants:read',
+        shortcut: ['g', 't'],
+      },
+      {
+        name: 'APIs',
+        href: '/apis',
+        icon: Layers,
+        permission: 'apis:read',
+        shortcut: ['g', 'a'],
+      },
+      {
+        name: 'AI Tools',
+        href: '/ai-tools',
+        icon: Wrench,
+        permission: 'apis:read',
+        shortcut: ['g', 'w'],
+        badge: 'STOA',
+      },
+      {
+        name: 'External MCP Servers',
+        href: '/external-mcp-servers',
+        icon: Server,
+        permission: 'admin:servers',
+      },
+      { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
+    ],
   },
   {
-    name: 'Gateway Metrics',
-    href: '/gateway-observability',
-    icon: BarChart3,
-    permission: 'tenants:read',
+    title: '\u26A1 Gateway',
+    accent: true,
+    items: [
+      { name: 'Status', href: '/gateway', icon: Server, permission: 'apis:read' },
+      {
+        name: 'Registry',
+        href: '/gateways',
+        icon: Network,
+        permission: 'tenants:read',
+      },
+      {
+        name: 'Modes',
+        href: '/gateways/modes',
+        icon: Gauge,
+        permission: 'tenants:read',
+        shortcut: ['g', 'm'],
+        badge: 'STOA',
+      },
+      {
+        name: 'Deployments',
+        href: '/gateway-deployments',
+        icon: ArrowUpDown,
+        permission: 'tenants:read',
+      },
+      {
+        name: 'Metrics',
+        href: '/gateway-observability',
+        icon: BarChart3,
+        permission: 'tenants:read',
+      },
+    ],
   },
-  { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
-  { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
-  { name: 'API Monitoring', href: '/monitoring', icon: Activity, permission: 'apis:read' },
-  { name: 'Error Snapshots', href: '/mcp/errors', icon: AlertTriangle, permission: 'apis:read' },
+  {
+    title: 'Insights',
+    items: [
+      { name: 'Observability', href: '/observability', icon: Gauge, shortcut: ['g', 'g'] },
+      { name: 'Identity', href: '/identity', icon: Shield, shortcut: ['g', 'i'] },
+      { name: 'Logs', href: '/logs', icon: ScrollText, shortcut: ['g', 'l'] },
+      {
+        name: 'API Monitoring',
+        href: '/monitoring',
+        icon: Activity,
+        permission: 'apis:read',
+      },
+      {
+        name: 'Error Snapshots',
+        href: '/mcp/errors',
+        icon: AlertTriangle,
+        permission: 'apis:read',
+        badge: 'STOA',
+      },
+    ],
+  },
+  {
+    title: 'Governance',
+    items: [{ name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' }],
+  },
 ];
 
 // Prefetch route chunks on hover — loads JS before click for instant navigation
@@ -131,9 +192,20 @@ export function Layout({ children }: LayoutProps) {
   const { resolvedTheme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const filteredNavigation = useMemo(
-    () => navigation.filter((item) => !item.permission || hasPermission(item.permission)),
+  const filteredSections = useMemo(
+    () =>
+      navigationSections
+        .map((section) => ({
+          ...section,
+          items: section.items.filter((item) => !item.permission || hasPermission(item.permission)),
+        }))
+        .filter((section) => section.items.length > 0),
     [hasPermission]
+  );
+
+  const filteredNavigation = useMemo(
+    () => filteredSections.flatMap((s) => s.items),
+    [filteredSections]
   );
 
   // Close sidebar when route changes (mobile)
@@ -238,59 +310,87 @@ export function Layout({ children }: LayoutProps) {
       {/* Sidebar */}
       <div
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 dark:bg-neutral-950 transition-transform duration-300 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-gray-100 dark:bg-neutral-950 border-r border-gray-200 dark:border-neutral-800 transition-transform duration-300 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         {/* Sidebar header */}
-        <div className="flex h-16 items-center justify-between border-b border-gray-800 dark:border-neutral-800 px-4">
+        <div className="flex h-16 items-center justify-between border-b border-gray-200 dark:border-neutral-800 px-4">
           <div className="flex items-center gap-2">
             <StoaLogo size="sm" />
-            <h1 className="text-lg font-bold text-white">STOA</h1>
+            <div>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
+                STOA
+              </h1>
+              <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 tracking-wider uppercase">
+                Control Plane
+              </p>
+            </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-800 dark:hover:bg-neutral-800 hover:text-white lg:hidden"
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <nav className="mt-6 px-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
-          <ul className="space-y-1">
-            {filteredNavigation.map((item) => {
-              const isActive =
-                location.pathname === item.href ||
-                (item.href !== '/' && location.pathname.startsWith(item.href));
+        <nav className="mt-4 px-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+          <div className="space-y-5">
+            {filteredSections.map((section) => (
+              <div key={section.title}>
+                <h3
+                  className={clsx(
+                    'px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider',
+                    section.accent
+                      ? 'text-primary-600 dark:text-primary-400'
+                      : 'text-gray-500 dark:text-gray-500'
+                  )}
+                >
+                  {section.title}
+                </h3>
+                <ul className="space-y-0.5">
+                  {section.items.map((item) => {
+                    const isActive =
+                      location.pathname === item.href ||
+                      (item.href !== '/' && location.pathname.startsWith(item.href));
 
-              return (
-                <li key={item.name}>
-                  <Link
-                    to={item.href}
-                    onMouseEnter={() => routePrefetchMap[item.href]?.()}
-                    className={clsx(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'bg-primary-600 text-white'
-                        : 'text-gray-300 hover:bg-gray-800 dark:hover:bg-neutral-800 hover:text-white'
-                    )}
-                  >
-                    <item.icon className="h-5 w-5 flex-shrink-0" />
-                    <span className="truncate">{item.name}</span>
-                    {item.shortcut && (
-                      <span className="ml-auto text-xs text-gray-500 hidden xl:block">
-                        g{item.shortcut[1]}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          to={item.href}
+                          onMouseEnter={() => routePrefetchMap[item.href]?.()}
+                          className={clsx(
+                            'flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                            isActive
+                              ? 'bg-primary-600 text-white'
+                              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white'
+                          )}
+                        >
+                          <item.icon className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">{item.name}</span>
+                          {item.badge && (
+                            <span className="ml-auto rounded-full bg-accent-500/20 px-1.5 py-0.5 text-[10px] font-bold text-accent-600 dark:text-accent-400">
+                              {item.badge}
+                            </span>
+                          )}
+                          {!item.badge && item.shortcut && (
+                            <span className="ml-auto text-xs text-gray-500 hidden xl:block">
+                              g{item.shortcut[1]}
+                            </span>
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
         </nav>
 
         {/* User section */}
-        <div className="absolute bottom-0 left-0 right-0 border-t border-gray-800 dark:border-neutral-800 p-4">
+        <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 dark:border-neutral-800 p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600 flex-shrink-0">
               <User className="h-5 w-5 text-white" />
@@ -298,20 +398,24 @@ export function Layout({ children }: LayoutProps) {
             <div className="flex-1 min-w-0">
               {user ? (
                 <>
-                  <p className="truncate text-sm font-medium text-white">{user.name}</p>
-                  <p className="truncate text-xs text-gray-400">{user.roles.join(', ')}</p>
+                  <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                    {user.name}
+                  </p>
+                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                    {user.roles.join(', ')}
+                  </p>
                 </>
               ) : (
                 <>
-                  <div className="h-4 w-24 bg-gray-700 rounded animate-pulse" />
-                  <div className="h-3 w-16 bg-gray-700 rounded animate-pulse mt-1" />
+                  <div className="h-4 w-24 bg-gray-300 dark:bg-gray-700 rounded animate-pulse" />
+                  <div className="h-3 w-16 bg-gray-300 dark:bg-gray-700 rounded animate-pulse mt-1" />
                 </>
               )}
             </div>
             {user && (
               <button
                 onClick={logout}
-                className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 dark:hover:bg-neutral-800 hover:text-white flex-shrink-0"
+                className="rounded-lg p-2 text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white flex-shrink-0"
                 title="Logout"
               >
                 <LogOut className="h-5 w-5" />

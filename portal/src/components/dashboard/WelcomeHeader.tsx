@@ -23,7 +23,7 @@ export function WelcomeHeader({ user }: WelcomeHeaderProps) {
   const greeting = getGreeting();
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-r from-primary-600 via-primary-500 to-accent-500 rounded-2xl p-8">
+    <div className="relative overflow-hidden bg-gradient-to-r from-primary-700 via-primary-600 to-accent-600 dark:from-primary-800 dark:via-primary-700 dark:to-accent-700 rounded-2xl p-8">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 -mt-4 -mr-4 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
       <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-32 h-32 bg-accent-400/20 rounded-full blur-2xl" />

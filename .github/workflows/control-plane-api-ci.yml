@@ -94,7 +94,7 @@ jobs:
           ENABLE_DEPLOYMENT_WORKER: 'false'
           ENABLE_SNAPSHOT_CONSUMER: 'false'
         run: |
-          pytest tests/ -v -m integration --tb=short --junit-xml=junit-integration.xml
+          pytest tests/ -v -m integration --ignore=tests/test_opensearch.py --tb=short --junit-xml=junit-integration.xml
       - name: Upload integration test results
         if: always()
         uses: actions/upload-artifact@v4

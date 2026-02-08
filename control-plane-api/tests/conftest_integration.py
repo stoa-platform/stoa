@@ -11,6 +11,7 @@ Usage:
 import os
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.database import Base
@@ -41,10 +42,13 @@ def integration_engine():
 async def _create_tables(integration_engine):
     """Create all tables before integration tests, drop after."""
     async with integration_engine.begin() as conn:
+        # Some models (Invite, ProspectEvent) use schema="stoa"
+        await conn.execute(text("CREATE SCHEMA IF NOT EXISTS stoa"))
         await conn.run_sync(Base.metadata.create_all)
     yield
     async with integration_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        await conn.execute(text("DROP SCHEMA IF EXISTS stoa CASCADE"))
 
 
 @pytest.fixture

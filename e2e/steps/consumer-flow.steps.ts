@@ -102,7 +102,7 @@ Then('the API key section is visible', async ({ page }) => {
   const isVisible = await apiKeySection.first().isVisible({ timeout: 10000 }).catch(() => false);
   expect
     .soft(
-      isVisible || page.url().includes('/apps/') || page.url().includes('/my-applications/'),
+      isVisible || page.url().includes('/apps/') || page.url().includes('/workspace/'),
     )
     .toBe(true);
 });
@@ -122,6 +122,6 @@ Then('I do not see applications from tenant {string}', async ({ page }, tenantNa
     pageContent?.toLowerCase().includes(tenantName.toLowerCase()) || false;
 
   expect
-    .soft(!hasTenantContent || page.url().includes('/my-applications'))
+    .soft(!hasTenantContent || page.url().includes('/workspace'))
     .toBe(true);
 });

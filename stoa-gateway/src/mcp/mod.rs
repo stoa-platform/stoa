@@ -10,6 +10,7 @@
 pub mod discovery;
 pub mod elicitation;
 pub mod handlers;
+pub mod protocol;
 pub mod session;
 pub mod sse;
 pub mod tools;

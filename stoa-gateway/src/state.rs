@@ -210,6 +210,11 @@ impl UacEnforcer {
         Self { policy_engine }
     }
 
+    /// Get a reference to the policy engine (for SIGHUP reload)
+    pub fn policy_engine(&self) -> &Arc<PolicyEngine> {
+        &self.policy_engine
+    }
+
     /// Check if a tool invocation is allowed (legacy signature for compatibility)
     #[allow(dead_code)]
     pub async fn check(&self, tenant_id: &str, action: Action) -> Result<(), String> {

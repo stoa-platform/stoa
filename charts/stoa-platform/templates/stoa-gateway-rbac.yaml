@@ -1,0 +1,59 @@
+{{- if .Values.stoaGateway.enabled }}
+{{- if and .Values.stoaGateway.k8s .Values.stoaGateway.k8s.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stoa-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: stoa-gateway
+    app.kubernetes.io/component: gateway
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: stoa-gateway-crd-watcher
+  labels:
+    app.kubernetes.io/name: stoa-gateway
+    app.kubernetes.io/component: gateway
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - gostoa.dev
+    resources:
+      - tools
+      - toolsets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - gostoa.dev
+    resources:
+      - tools/status
+      - toolsets/status
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: stoa-gateway-crd-watcher
+  labels:
+    app.kubernetes.io/name: stoa-gateway
+    app.kubernetes.io/component: gateway
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: stoa-gateway-crd-watcher
+subjects:
+  - kind: ServiceAccount
+    name: stoa-gateway
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

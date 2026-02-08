@@ -1,0 +1,15 @@
+apiVersion: gostoa.dev/v1alpha1
+kind: ToolSet
+metadata:
+  name: openai-tools
+  namespace: tenant-acme
+spec:
+  upstream:
+    url: https://mcp.openai.com
+    transport: sse
+    auth:
+      type: bearer
+      secretRef: openai-api-key
+    timeoutSeconds: 30
+  tools: []  # Empty = discover and expose all tools
+  prefix: "openai_"

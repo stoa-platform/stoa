@@ -160,9 +160,18 @@ Given('the active tenant is {string}', async ({ page }, tenantName: string) => {
 });
 
 When('I create an API named {string}', async ({ page }, apiName: string) => {
-  await page.click(
+  // The "Create API" button requires tenant data to load (disabled={!selectedTenant}).
+  // If the control-plane-api is unreachable, the button stays disabled → timeout.
+  const createBtn = page.locator(
     'button:has-text("Create API"), button:has-text("New API"), button:has-text("Nouvelle API")',
   );
+  const btnVisible = await createBtn.first().isVisible({ timeout: 15000 }).catch(() => false);
+  if (!btnVisible) {
+    // API likely unreachable — button not rendered or page didn't load
+    expect.soft(btnVisible, 'Create API button not found — API may be unreachable').toBe(true);
+    return;
+  }
+  await createBtn.first().click();
 
   await page.fill('input[placeholder*="name"], input[name="name"], input[id="name"]', apiName);
 

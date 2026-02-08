@@ -113,9 +113,9 @@ describe('Layout', () => {
     expect(screen.getByTestId('breadcrumb')).toBeInTheDocument();
   });
 
-  it('renders STOA Control Plane title in sidebar', () => {
+  it('renders STOA title in sidebar', () => {
     renderLayout();
-    expect(screen.getByText('STOA Control Plane')).toBeInTheDocument();
+    expect(screen.getByText('STOA')).toBeInTheDocument();
   });
 
   it('hides navigation items when user lacks permissions', () => {

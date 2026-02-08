@@ -1,17 +1,13 @@
 import { NavLink } from 'react-router-dom';
 import {
-  Home,
-  CreditCard,
   BookOpen,
   User,
   X,
-  AppWindow,
   Webhook,
   BarChart3,
-  Shield,
   Wrench,
   ExternalLink,
-  FileCode2,
+  Briefcase,
   LucideIcon,
 } from 'lucide-react';
 import { config } from '../../config';
@@ -27,103 +23,98 @@ interface NavItem {
   href: string;
   icon: LucideIcon;
   enabled?: boolean;
-  /** Permission required to see this item (granular permission like 'apis:read') */
   permission?: string;
-  /** OAuth2 scope required to see this item (like 'stoa:catalog:read') */
   scope?: string;
-  /** Keycloak role required to see this item */
   role?: string;
+  external?: boolean;
 }
 
-const navigation: NavItem[] = [
-  // Public routes (no permission required)
-  { name: 'Home', href: '/', icon: Home },
-  { name: 'Profile', href: '/profile', icon: User },
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
 
-  // Consumer Catalogs - Main features (requires catalog:read)
+const sections: NavSection[] = [
   {
-    name: 'API Catalog',
-    href: '/apis',
-    icon: BookOpen,
-    enabled: config.features.enableAPICatalog,
-    scope: 'stoa:catalog:read',
+    title: 'Discover',
+    items: [
+      {
+        name: 'API Catalog',
+        href: '/apis',
+        icon: BookOpen,
+        enabled: config.features.enableAPICatalog,
+        scope: 'stoa:catalog:read',
+      },
+      {
+        name: 'AI Tools',
+        href: '/servers',
+        icon: Wrench,
+        enabled: config.features.enableMCPTools,
+        scope: 'stoa:catalog:read',
+      },
+    ],
   },
   {
-    name: 'AI Tools',
-    href: '/servers',
-    icon: Wrench,
-    enabled: config.features.enableMCPTools,
-    scope: 'stoa:catalog:read',
+    title: 'My Workspace',
+    items: [
+      {
+        name: 'My Apps & Credentials',
+        href: '/workspace',
+        icon: Briefcase,
+        permission: 'apps:read',
+      },
+      {
+        name: 'Usage',
+        href: '/usage',
+        icon: BarChart3,
+        enabled: config.features.enableSubscriptions,
+        scope: 'stoa:metrics:read',
+      },
+      {
+        name: 'Webhooks',
+        href: '/webhooks',
+        icon: Webhook,
+        enabled: config.features.enableSubscriptions,
+        scope: 'stoa:subscriptions:write',
+      },
+    ],
   },
-
-  // Universal API Contracts (UAC) (requires catalog:read)
-  { name: 'Contracts', href: '/contracts', icon: FileCode2, scope: 'stoa:catalog:read' },
-
-  // Consumer Resources (requires apps:read or subscriptions:read)
   {
-    name: 'My Apps',
-    href: '/apps',
-    icon: AppWindow,
-    enabled: config.features.enableAPICatalog,
-    permission: 'apps:read',
-  },
-  {
-    name: 'My Subscriptions',
-    href: '/subscriptions',
-    icon: CreditCard,
-    enabled: config.features.enableSubscriptions,
-    scope: 'stoa:subscriptions:read',
-  },
-
-  // Service Accounts - tenant-admin+ (requires subscriptions:write)
-  {
-    name: 'Service Accounts',
-    href: '/service-accounts',
-    icon: Shield,
-    enabled: config.features.enableMCPTools,
-    scope: 'stoa:subscriptions:write',
-  },
-
-  // Analytics - requires metrics:read
-  {
-    name: 'Usage',
-    href: '/usage',
-    icon: BarChart3,
-    enabled: config.features.enableSubscriptions,
-    scope: 'stoa:metrics:read',
-  },
-
-  // Tenant Admin - requires subscriptions:write
-  {
-    name: 'Webhooks',
-    href: '/webhooks',
-    icon: Webhook,
-    enabled: config.features.enableSubscriptions,
-    scope: 'stoa:subscriptions:write',
+    title: 'Account',
+    items: [
+      { name: 'Profile', href: '/profile', icon: User },
+      {
+        name: 'Console',
+        href: config.services.console.url,
+        icon: ExternalLink,
+        external: true,
+      },
+    ],
   },
 ];
+
+function isItemVisible(
+  item: NavItem,
+  hasPermission: (p: string) => boolean,
+  hasScope: (s: string) => boolean,
+  hasRole: (r: string) => boolean
+): boolean {
+  if (item.enabled === false) return false;
+  if (item.permission && !hasPermission(item.permission)) return false;
+  if (item.scope && !hasScope(item.scope)) return false;
+  if (item.role && !hasRole(item.role)) return false;
+  return true;
+}
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { hasPermission, hasScope, hasRole, user } = useAuth();
 
-  // Filter navigation items based on:
-  // 1. Feature flags (enabled)
-  // 2. Permissions/scopes/roles
-  const filteredNavigation = navigation.filter((item) => {
-    // Check feature flag
-    if (item.enabled === false) return false;
-
-    // Check permission if specified
-    if (item.permission && !hasPermission(item.permission)) return false;
-
-    // Check scope if specified
-    if (item.scope && !hasScope(item.scope)) return false;
-
-    // Check role if specified
-    if (item.role && !hasRole(item.role)) return false;
-
-    return true;
-  });
+  const filteredSections = sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => isItemVisible(item, hasPermission, hasScope, hasRole)),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <>
@@ -158,24 +149,48 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* Navigation - flex-1 to push footer down, pb for footer spacing */}
-        <nav className="flex-1 p-4 pb-20 space-y-1 overflow-y-auto">
-          {filteredNavigation.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.href}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
-                  isActive
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                    : 'text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800'
-                }`
-              }
-            >
-              <item.icon className="h-5 w-5" aria-hidden="true" />
-              {item.name}
-            </NavLink>
+        {/* Navigation - sectioned */}
+        <nav className="flex-1 p-4 pb-20 space-y-6 overflow-y-auto">
+          {filteredSections.map((section) => (
+            <div key={section.title}>
+              <h3 className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">
+                {section.title}
+              </h3>
+              <div className="space-y-1">
+                {section.items.map((item) =>
+                  item.external ? (
+                    <a
+                      key={item.name}
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={onClose}
+                      className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+                    >
+                      <item.icon className="h-5 w-5" aria-hidden="true" />
+                      {item.name}
+                      <ExternalLink className="h-3 w-3 ml-auto text-gray-400" aria-hidden="true" />
+                    </a>
+                  ) : (
+                    <NavLink
+                      key={item.name}
+                      to={item.href}
+                      onClick={onClose}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                            : 'text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800'
+                        }`
+                      }
+                    >
+                      <item.icon className="h-5 w-5" aria-hidden="true" />
+                      {item.name}
+                    </NavLink>
+                  )
+                )}
+              </div>
+            </div>
           ))}
         </nav>
 

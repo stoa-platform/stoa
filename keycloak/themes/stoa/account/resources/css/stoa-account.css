@@ -13,13 +13,13 @@
 
     /* Borders */
     --stoa-border: #3f3f46;
-    --stoa-border-focus: #a855f7;
+    --stoa-border-focus: #10b981;
 
     /* Colors */
-    --stoa-gradient: linear-gradient(135deg, #a855f7 0%, #6366f1 50%, #8b5cf6 100%);
-    --stoa-purple: #a855f7;
-    --stoa-purple-hover: #9333ea;
-    --stoa-indigo: #6366f1;
+    --stoa-gradient: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+    --stoa-emerald: #10b981;
+    --stoa-emerald-hover: #047857;
+    --stoa-emerald-dark: #059669;
 
     /* Text */
     --stoa-text-primary: #fafafa;
@@ -31,11 +31,11 @@
     --stoa-radius-lg: 12px;
 
     /* PatternFly 4 overrides */
-    --pf-global--primary-color--100: #a855f7;
-    --pf-global--primary-color--200: #9333ea;
-    --pf-global--link--Color: #a855f7;
-    --pf-global--link--Color--hover: #9333ea;
-    --pf-global--link--Color--visited: #a855f7;
+    --pf-global--primary-color--100: #10b981;
+    --pf-global--primary-color--200: #047857;
+    --pf-global--link--Color: #10b981;
+    --pf-global--link--Color--hover: #047857;
+    --pf-global--link--Color--visited: #10b981;
     --pf-global--BackgroundColor--dark-100: #0a0a0a;
     --pf-global--BackgroundColor--dark-200: #111111;
     --pf-global--BackgroundColor--100: #18181b;
@@ -44,8 +44,8 @@
     --pf-global--Color--200: #a1a1aa;
     --pf-global--BorderColor--100: #3f3f46;
     --pf-global--BorderColor--200: #27272a;
-    --pf-global--active-color--100: #a855f7;
-    --pf-global--active-color--200: #9333ea;
+    --pf-global--active-color--100: #10b981;
+    --pf-global--active-color--200: #047857;
 }
 
 /* Dark mode background for entire page */
@@ -59,8 +59,8 @@ html, body {
 .pf-c-page {
     background-color: var(--stoa-bg-primary);
     background-image:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(168, 85, 247, 0.1), transparent),
-        radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.05), transparent);
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(5, 150, 105, 0.1), transparent),
+        radial-gradient(circle at 20% 80%, rgba(5, 150, 105, 0.05), transparent);
 }
 
 /* Header styling - gradient like login */
@@ -115,9 +115,9 @@ html, body {
 }
 
 .pf-c-nav__link.pf-m-current {
-    color: var(--stoa-purple) !important;
-    background-color: rgba(168, 85, 247, 0.1) !important;
-    border-left: 3px solid var(--stoa-purple);
+    color: var(--stoa-emerald) !important;
+    background-color: rgba(5, 150, 105, 0.1) !important;
+    border-left: 3px solid var(--stoa-emerald);
 }
 
 /* Main content area */
@@ -152,8 +152,8 @@ html, body {
 }
 
 .pf-c-form-control:focus {
-    border-color: var(--stoa-purple) !important;
-    box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2) !important;
+    border-color: var(--stoa-emerald) !important;
+    box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2) !important;
 }
 
 .pf-c-form-control::placeholder {
@@ -189,16 +189,16 @@ html, body {
 
 .pf-c-button.pf-m-secondary:hover {
     background-color: var(--stoa-bg-input) !important;
-    border-color: var(--stoa-purple) !important;
+    border-color: var(--stoa-emerald) !important;
 }
 
 /* Buttons - Link */
 .pf-c-button.pf-m-link {
-    color: var(--stoa-purple) !important;
+    color: var(--stoa-emerald) !important;
 }
 
 .pf-c-button.pf-m-link:hover {
-    color: var(--stoa-purple-hover) !important;
+    color: var(--stoa-emerald-hover) !important;
 }
 
 /* Titles and headings */
@@ -251,7 +251,7 @@ html, body {
 
 /* Badges */
 .pf-c-badge {
-    background-color: var(--stoa-purple) !important;
+    background-color: var(--stoa-emerald) !important;
     color: white !important;
     border-radius: 9999px !important;
 }

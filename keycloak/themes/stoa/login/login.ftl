@@ -126,7 +126,7 @@ function togglePassword() {
 <style>
 /* Additional inline styles specific to login.ftl */
 .stoa-header {
-    background: linear-gradient(135deg, #a855f7 0%, #6366f1 50%, #8b5cf6 100%);
+    background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
     padding: 40px 32px;
     text-align: center;
     border-radius: 16px 16px 0 0;

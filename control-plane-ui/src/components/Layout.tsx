@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useBreadcrumbs } from '../hooks/useBreadcrumbs';
 import { Breadcrumb } from '@stoa/shared/components/Breadcrumb';
 import { useCommandPalette, type CommandItem } from '@stoa/shared/components/CommandPalette';
+import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { useSequenceShortcuts } from '@stoa/shared/hooks';
 import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useTheme } from '@stoa/shared/contexts';
@@ -243,7 +244,10 @@ export function Layout({ children }: LayoutProps) {
       >
         {/* Sidebar header */}
         <div className="flex h-16 items-center justify-between border-b border-gray-800 dark:border-neutral-800 px-4">
-          <h1 className="text-lg font-bold text-white">STOA Control Plane</h1>
+          <div className="flex items-center gap-2">
+            <StoaLogo size="sm" />
+            <h1 className="text-lg font-bold text-white">STOA</h1>
+          </div>
           <button
             onClick={() => setSidebarOpen(false)}
             className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-800 dark:hover:bg-neutral-800 hover:text-white lg:hidden"

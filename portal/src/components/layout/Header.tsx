@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Menu, Bell, User, LogOut, ExternalLink } from 'lucide-react';
+import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useAuth } from '../../contexts/AuthContext';
 import { config } from '../../config';
@@ -25,9 +26,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           </button>
 
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">SP</span>
-            </div>
+            <StoaLogo size="sm" />
             <div className="hidden sm:block">
               <h1 className="text-lg font-semibold text-gray-900 dark:text-white">STOA</h1>
               <p className="text-xs text-gray-500 dark:text-neutral-400 -mt-1">Developer Portal</p>

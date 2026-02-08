@@ -4,6 +4,66 @@ description: CI quality gates — exact thresholds per component. Consult BEFORE
 
 # CI Quality Gates
 
+## Full Deployment Lifecycle
+
+A change is NOT done until the pod is updated on EKS. The complete lifecycle:
+
+```
+1. PR created          → CI (lint, test, coverage) + security-scan.yml
+2. CI Green            → 3 required checks pass (License Compliance, SBOM Generation, Verify Signed Commits)
+3. Merge to main       → CI re-runs on main + Docker build + ECR push
+4. CI Green on main    → apply-manifest (if applicable) + deploy (rollout restart)
+5. CD Green            → smoke-test (@smoke E2E) + notify
+6. Pod updated         → verify: kubectl get pods -n stoa-system (new image running)
+```
+
+### What runs when
+
+| Event | CI | Docker | Apply Manifest | Deploy | Smoke Test |
+|-------|-----|--------|---------------|--------|------------|
+| PR to main | Yes | No | No | No | No |
+| Push to main (merge) | Yes | Yes | Yes (UI/portal) | Yes | Yes |
+| workflow_dispatch | Yes | Yes | Yes (UI/portal) | Yes | Yes |
+
+### Pipeline per component
+
+| Component | Pipeline on merge | Deploy method |
+|-----------|-------------------|---------------|
+| control-plane-api | ci → integration → docker → deploy | `kubectl set image` |
+| control-plane-ui | ci → docker → apply-manifest → deploy | `kubectl apply` + `set image` |
+| portal | ci → docker → apply-manifest → deploy | `kubectl apply` + `set image` |
+| stoa-gateway | ci → docker → deploy | `kubectl rollout restart` (ArgoCD-managed) |
+| mcp-gateway | ci → docker → deploy | `kubectl set image` |
+
+### Path triggers
+
+Each workflow only triggers on its own component paths:
+- `control-plane-api/**`, `control-plane-ui/**` + `shared/**`, `portal/**` + `shared/**`, `stoa-gateway/**`, `mcp-gateway/**`
+- `security-scan.yml` runs on **ALL** PRs (no path filter)
+- Docs-only changes (`*.md`, `.claude/**`) trigger security-scan but NOT component CI
+
+### Required checks (branch protection)
+
+3 required checks from `security-scan.yml` (runs on all PRs):
+1. **License Compliance** — Trivy SPDX scan
+2. **SBOM Generation** — CycloneDX + SPDX
+3. **Verify Signed Commits** — signature check
+
+### Post-merge verification
+
+After merge, verify the full pipeline completed:
+```bash
+# Check CI + deploy status on main
+gh run list --branch main --limit 5
+
+# Verify pod is running new image
+kubectl get pods -n stoa-system -o wide
+kubectl describe deployment/<name> -n stoa-system | grep Image
+
+# For ArgoCD-managed (stoa-gateway)
+kubectl get applications -n argocd
+```
+
 ## Python Thresholds
 
 | Component | Coverage | Line Length | Ruff Rules | Notes |

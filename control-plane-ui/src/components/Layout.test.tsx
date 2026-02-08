@@ -100,12 +100,12 @@ describe('Layout', () => {
     expect(screen.getByText('Identity')).toBeInTheDocument();
   });
 
-  it('renders gateway-related navigation items', () => {
+  it('renders gateway section with items', () => {
     renderLayout();
-    expect(screen.getByText('Gateway')).toBeInTheDocument();
-    expect(screen.getByText('Gateway Registry')).toBeInTheDocument();
-    expect(screen.getByText('Gateway Deployments')).toBeInTheDocument();
-    expect(screen.getByText('Gateway Metrics')).toBeInTheDocument();
+    expect(screen.getByText('\u26A1 Gateway')).toBeInTheDocument();
+    expect(screen.getByText('Registry')).toBeInTheDocument();
+    expect(screen.getByText('Modes')).toBeInTheDocument();
+    expect(screen.getByText('Metrics')).toBeInTheDocument();
   });
 
   it('renders breadcrumb component', () => {
@@ -113,9 +113,24 @@ describe('Layout', () => {
     expect(screen.getByTestId('breadcrumb')).toBeInTheDocument();
   });
 
-  it('renders STOA title in sidebar', () => {
+  it('renders STOA title and subtitle in sidebar', () => {
     renderLayout();
-    expect(screen.getByText('STOA')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'STOA' })).toBeInTheDocument();
+    expect(screen.getByText('Control Plane')).toBeInTheDocument();
+  });
+
+  it('renders section headers', () => {
+    renderLayout();
+    expect(screen.getByText('Overview')).toBeInTheDocument();
+    expect(screen.getByText('Catalog')).toBeInTheDocument();
+    expect(screen.getByText('Insights')).toBeInTheDocument();
+    expect(screen.getByText('Governance')).toBeInTheDocument();
+  });
+
+  it('renders STOA badges on unique features', () => {
+    renderLayout();
+    const badges = screen.getAllByText('STOA');
+    expect(badges.length).toBeGreaterThanOrEqual(3);
   });
 
   it('hides navigation items when user lacks permissions', () => {

@@ -31,28 +31,28 @@ const activityConfig: Record<
 > = {
   'subscription.created': {
     icon: CreditCard,
-    color: 'text-primary-600',
-    bgColor: 'bg-primary-100',
+    color: 'text-primary-600 dark:text-primary-400',
+    bgColor: 'bg-primary-100 dark:bg-primary-900/50',
   },
   'subscription.approved': {
     icon: CheckCircle,
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-100',
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bgColor: 'bg-emerald-100 dark:bg-emerald-900/50',
   },
   'subscription.revoked': {
     icon: XCircle,
-    color: 'text-red-600',
-    bgColor: 'bg-red-100',
+    color: 'text-red-600 dark:text-red-400',
+    bgColor: 'bg-red-100 dark:bg-red-900/50',
   },
   'api.call': {
     icon: Activity,
-    color: 'text-cyan-600',
-    bgColor: 'bg-cyan-100',
+    color: 'text-cyan-600 dark:text-cyan-400',
+    bgColor: 'bg-cyan-100 dark:bg-cyan-900/50',
   },
   'key.rotated': {
     icon: RefreshCw,
-    color: 'text-amber-600',
-    bgColor: 'bg-amber-100',
+    color: 'text-amber-600 dark:text-amber-400',
+    bgColor: 'bg-amber-100 dark:bg-amber-900/50',
   },
 };
 
@@ -74,10 +74,10 @@ function formatRelativeTime(timestamp: string): string {
 function ActivitySkeleton() {
   return (
     <div className="flex items-start gap-3 p-3 animate-pulse">
-      <div className="w-8 h-8 bg-gray-200 rounded-lg" />
+      <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg" />
       <div className="flex-1">
-        <div className="h-4 w-48 bg-gray-200 rounded mb-2" />
-        <div className="h-3 w-24 bg-gray-200 rounded" />
+        <div className="h-4 w-48 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
+        <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
       </div>
     </div>
   );
@@ -85,9 +85,9 @@ function ActivitySkeleton() {
 
 export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200">
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h2 className="font-semibold text-gray-900">Recent Activity</h2>
+    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700">
+      <div className="px-5 py-4 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
+        <h2 className="font-semibold text-gray-900 dark:text-white">Recent Activity</h2>
         <Link
           to="/usage"
           className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
@@ -97,7 +97,7 @@ export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
         </Link>
       </div>
 
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-gray-100 dark:divide-neutral-800">
         {isLoading ? (
           <>
             <ActivitySkeleton />
@@ -106,9 +106,9 @@ export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
           </>
         ) : activity.length === 0 ? (
           <div className="px-5 py-8 text-center">
-            <Clock className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-            <p className="text-gray-500 text-sm">No recent activity</p>
-            <p className="text-gray-400 text-xs mt-1">
+            <Clock className="h-8 w-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+            <p className="text-gray-500 dark:text-gray-400 text-sm">No recent activity</p>
+            <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">
               Subscribe to tools and start making API calls
             </p>
           </div>
@@ -120,13 +120,15 @@ export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
             return (
               <div
                 key={item.id}
-                className="flex items-start gap-3 px-5 py-3 hover:bg-gray-50 transition-colors"
+                className="flex items-start gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
               >
                 <div className={`p-2 rounded-lg ${config.bgColor}`}>
                   <Icon className={`h-4 w-4 ${config.color}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {item.title}
+                  </p>
                   {item.description && (
                     <p className="text-xs text-gray-500 truncate">{item.description}</p>
                   )}

@@ -24,25 +24,25 @@ interface StatCardProps {
 
 const colorConfig = {
   primary: {
-    bg: 'bg-primary-50',
-    border: 'border-primary-200',
-    iconBg: 'bg-primary-100',
-    iconColor: 'text-primary-600',
-    valueColor: 'text-primary-700',
+    bg: 'bg-primary-50 dark:bg-primary-950/30',
+    border: 'border-primary-200 dark:border-primary-800',
+    iconBg: 'bg-primary-100 dark:bg-primary-900/50',
+    iconColor: 'text-primary-600 dark:text-primary-400',
+    valueColor: 'text-primary-700 dark:text-primary-300',
   },
   emerald: {
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    iconBg: 'bg-emerald-100',
-    iconColor: 'text-emerald-600',
-    valueColor: 'text-emerald-700',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/30',
+    border: 'border-emerald-200 dark:border-emerald-800',
+    iconBg: 'bg-emerald-100 dark:bg-emerald-900/50',
+    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    valueColor: 'text-emerald-700 dark:text-emerald-300',
   },
   cyan: {
-    bg: 'bg-cyan-50',
-    border: 'border-cyan-200',
-    iconBg: 'bg-cyan-100',
-    iconColor: 'text-cyan-600',
-    valueColor: 'text-cyan-700',
+    bg: 'bg-cyan-50 dark:bg-cyan-950/30',
+    border: 'border-cyan-200 dark:border-cyan-800',
+    iconBg: 'bg-cyan-100 dark:bg-cyan-900/50',
+    iconColor: 'text-cyan-600 dark:text-cyan-400',
+    valueColor: 'text-cyan-700 dark:text-cyan-300',
   },
 };
 
@@ -54,12 +54,12 @@ function StatCard({ title, value, subtitle, icon, color, trend, isLoading }: Sta
       <div className={`rounded-xl border ${colors.border} ${colors.bg} p-6 animate-pulse`}>
         <div className="flex items-start justify-between">
           <div className={`p-3 rounded-xl ${colors.iconBg}`}>
-            <div className="h-6 w-6 bg-gray-200 rounded" />
+            <div className="h-6 w-6 bg-gray-200 dark:bg-gray-700 rounded" />
           </div>
         </div>
         <div className="mt-4">
-          <div className="h-10 w-20 bg-gray-200 rounded mb-2" />
-          <div className="h-4 w-24 bg-gray-200 rounded" />
+          <div className="h-10 w-20 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
+          <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
         </div>
       </div>
     );
@@ -89,8 +89,8 @@ function StatCard({ title, value, subtitle, icon, color, trend, isLoading }: Sta
         <p className={`text-4xl font-bold ${colors.valueColor}`}>
           {typeof value === 'number' ? value.toLocaleString() : value}
         </p>
-        <p className="text-sm font-medium text-gray-600 mt-1">{title}</p>
-        <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
+        <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mt-1">{title}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">{subtitle}</p>
       </div>
     </div>
   );

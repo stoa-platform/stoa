@@ -10,18 +10,18 @@
     --stoa-bg-card: #18181b;
     --stoa-bg-input: #27272a;
     --stoa-border: #3f3f46;
-    --stoa-border-focus: #a855f7;
-    --stoa-gradient: linear-gradient(135deg, #a855f7 0%, #6366f1 50%, #8b5cf6 100%);
-    --stoa-purple: #a855f7;
-    --stoa-purple-hover: #9333ea;
-    --stoa-indigo: #6366f1;
+    --stoa-border-focus: #10b981;
+    --stoa-gradient: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+    --stoa-emerald: #10b981;
+    --stoa-emerald-hover: #047857;
+    --stoa-emerald-dark: #059669;
     --stoa-text-primary: #fafafa;
     --stoa-text-secondary: #a1a1aa;
     --stoa-text-muted: #71717a;
     --stoa-radius: 12px;
     --stoa-radius-lg: 16px;
     --stoa-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    --stoa-glow: 0 0 60px rgba(168, 85, 247, 0.15);
+    --stoa-glow: 0 0 60px rgba(5, 150, 105, 0.15);
 }
 
 /* Reset & Base */
@@ -43,8 +43,8 @@ html, body {
 /* Body with flex centering and gradient background */
 body {
     background-image:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(168, 85, 247, 0.15), transparent),
-        radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.08), transparent),
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(5, 150, 105, 0.15), transparent),
+        radial-gradient(circle at 20% 80%, rgba(5, 150, 105, 0.08), transparent),
         linear-gradient(to bottom, var(--stoa-bg-primary), var(--stoa-bg-secondary));
     background-attachment: fixed;
     min-height: 100vh;
@@ -182,8 +182,8 @@ input[type="email"] {
 input[type="text"]:focus,
 input[type="password"]:focus,
 input[type="email"]:focus {
-    border-color: var(--stoa-purple);
-    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+    border-color: var(--stoa-emerald);
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
 }
 
 input::placeholder {
@@ -240,13 +240,13 @@ input::placeholder {
 input[type="checkbox"] {
     width: 16px;
     height: 16px;
-    accent-color: var(--stoa-purple);
+    accent-color: var(--stoa-emerald);
     cursor: pointer;
 }
 
 .forgot-password,
 #kc-form-options a {
-    color: var(--stoa-purple);
+    color: var(--stoa-emerald);
     text-decoration: none;
     font-weight: 500;
     transition: color 0.2s;
@@ -254,7 +254,7 @@ input[type="checkbox"] {
 
 .forgot-password:hover,
 #kc-form-options a:hover {
-    color: var(--stoa-purple-hover);
+    color: var(--stoa-emerald-hover);
     text-decoration: underline;
 }
 
@@ -279,7 +279,7 @@ button[type="submit"] {
 input[type="submit"]:hover,
 button[type="submit"]:hover {
     transform: translateY(-1px);
-    box-shadow: 0 10px 30px -10px rgba(168, 85, 247, 0.5);
+    box-shadow: 0 10px 30px -10px rgba(5, 150, 105, 0.5);
 }
 
 #kc-login:active,
@@ -364,7 +364,7 @@ button[type="submit"]:active {
 }
 
 #kc-registration a {
-    color: var(--stoa-purple);
+    color: var(--stoa-emerald);
     text-decoration: none;
     font-weight: 500;
     margin-left: 4px;
@@ -439,7 +439,7 @@ button[type="submit"]:active {
 }
 
 .stoa-footer a:hover {
-    color: var(--stoa-purple);
+    color: var(--stoa-emerald);
 }
 
 .footer-links {

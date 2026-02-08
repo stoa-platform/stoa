@@ -3,6 +3,7 @@ import { Suspense, lazy } from 'react';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ErrorBoundary, SkipLink } from './components/common';
+import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { config } from './config';
 
 // Lazy load pages for code splitting - reduces initial bundle by ~60%
@@ -13,22 +14,13 @@ const MCPServersPage = lazy(() =>
 const ServerDetailPage = lazy(() =>
   import('./pages/servers').then((m) => ({ default: m.ServerDetailPage }))
 );
-const MySubscriptions = lazy(() =>
-  import('./pages/subscriptions/MySubscriptions').then((m) => ({ default: m.MySubscriptions }))
-);
 const APICatalog = lazy(() => import('./pages/apis').then((m) => ({ default: m.APICatalog })));
 const APIDetail = lazy(() => import('./pages/apis').then((m) => ({ default: m.APIDetail })));
 const APITestingSandbox = lazy(() =>
   import('./pages/apis').then((m) => ({ default: m.APITestingSandbox }))
 );
-const MyApplications = lazy(() =>
-  import('./pages/apps').then((m) => ({ default: m.MyApplications }))
-);
 const ApplicationDetail = lazy(() =>
   import('./pages/apps').then((m) => ({ default: m.ApplicationDetail }))
-);
-const ContractListPage = lazy(() =>
-  import('./pages/contracts').then((m) => ({ default: m.ContractListPage }))
 );
 const ContractDetailPage = lazy(() =>
   import('./pages/contracts').then((m) => ({ default: m.ContractDetailPage }))
@@ -48,6 +40,9 @@ const ServiceAccountsPage = lazy(() =>
     default: m.ServiceAccountsPage,
   }))
 );
+const WorkspacePage = lazy(() =>
+  import('./pages/workspace').then((m) => ({ default: m.WorkspacePage }))
+);
 const UnauthorizedPage = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.UnauthorizedPage }))
 );
@@ -57,8 +52,8 @@ function PageLoader() {
   return (
     <div className="flex items-center justify-center min-h-[400px]">
       <div className="text-center">
-        <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center mx-auto mb-3 animate-pulse">
-          <span className="text-white font-bold text-sm">SP</span>
+        <div className="mx-auto mb-3 animate-pulse">
+          <StoaLogo size="md" />
         </div>
         <p className="text-gray-500 dark:text-neutral-400 text-sm">Loading...</p>
       </div>
@@ -71,8 +66,8 @@ function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 flex items-center justify-center transition-colors">
       <div className="text-center">
-        <div className="w-16 h-16 bg-primary-600 rounded-xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-          <span className="text-white font-bold text-xl">SP</span>
+        <div className="mx-auto mb-4 animate-pulse">
+          <StoaLogo size="lg" />
         </div>
         <p className="text-gray-500 dark:text-neutral-400">Loading...</p>
       </div>
@@ -88,8 +83,8 @@ function LoginScreen() {
     <div className="min-h-screen bg-gradient-to-br from-primary-600 to-accent-600 dark:from-primary-900 dark:to-accent-900 flex items-center justify-center p-4 transition-colors">
       <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-2xl p-8 max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-primary-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-xl">SP</span>
+          <div className="mx-auto mb-4">
+            <StoaLogo size="lg" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             STOA Developer Portal
@@ -207,6 +202,16 @@ function AppContent() {
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/profile" element={<ProfilePage />} />
 
+            {/* Workspace - tabbed view for apps, subscriptions, contracts */}
+            <Route
+              path="/workspace"
+              element={
+                <ProtectedRoute permission="apps:read">
+                  <WorkspacePage />
+                </ProtectedRoute>
+              }
+            />
+
             {/* MCP Servers - requires catalog read */}
             <Route
               path="/servers"
@@ -229,14 +234,10 @@ function AppContent() {
             <Route path="/tools" element={<Navigate to="/servers" replace />} />
             <Route path="/tools/:id" element={<Navigate to="/servers" replace />} />
 
-            {/* Subscriptions - requires subscriptions read */}
+            {/* Redirect legacy /subscriptions to workspace */}
             <Route
               path="/subscriptions"
-              element={
-                <ProtectedRoute scope="stoa:subscriptions:read">
-                  <MySubscriptions />
-                </ProtectedRoute>
-              }
+              element={<Navigate to="/workspace?tab=subscriptions" replace />}
             />
 
             {/* API Consumer Routes - requires catalog read */}
@@ -265,15 +266,8 @@ function AppContent() {
               }
             />
 
-            {/* Consumer Applications - requires apps read */}
-            <Route
-              path="/apps"
-              element={
-                <ProtectedRoute permission="apps:read">
-                  <MyApplications />
-                </ProtectedRoute>
-              }
-            />
+            {/* Redirect legacy /apps to workspace */}
+            <Route path="/apps" element={<Navigate to="/workspace?tab=apps" replace />} />
             <Route
               path="/apps/:id"
               element={
@@ -283,15 +277,8 @@ function AppContent() {
               }
             />
 
-            {/* Universal API Contracts (UAC) - requires catalog read/write */}
-            <Route
-              path="/contracts"
-              element={
-                <ProtectedRoute scope="stoa:catalog:read">
-                  <ContractListPage />
-                </ProtectedRoute>
-              }
-            />
+            {/* Redirect legacy /contracts to workspace */}
+            <Route path="/contracts" element={<Navigate to="/workspace?tab=contracts" replace />} />
             <Route
               path="/contracts/new"
               element={
@@ -319,7 +306,7 @@ function AppContent() {
               }
             />
 
-            {/* Service Accounts for MCP - requires subscriptions write (tenant-admin+) */}
+            {/* Service Accounts — kept for backward compat */}
             <Route
               path="/service-accounts"
               element={

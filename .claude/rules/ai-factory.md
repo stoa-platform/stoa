@@ -63,6 +63,16 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
 Usage: refactoring multi-composants, migration majeure, debugging avec hypotheses concurrentes.
 
+### Pattern 5: CI-first development
+```
+1. [Inline] Implementer la feature
+2. [Inline] Executer le pre-commit checklist (voir ci-quality-gates.md)
+3. [test-writer] Generer les tests + verifier coverage seuil
+4. [security-reviewer] Review securite + secrets
+5. [Inline] Commit + push → CI green first try
+```
+Usage: tout changement de code. Objectif: zero surprise en CI.
+
 ## Contraintes
 
 - **Maximum 3-4 subagents actifs simultanement** (au-dela, le cout explose et le temps de review aussi)
@@ -70,3 +80,5 @@ Usage: refactoring multi-composants, migration majeure, debugging avec hypothese
 - **test-writer et docs-writer** modifient le code — verifier leurs outputs
 - Chaque subagent qui review donne un **verdict binaire**: Go / Fix / Refaire
 - Un seul P0 (critique) de n'importe quel subagent → verdict global **Fix**
+- **Toujours consulter `ci-quality-gates.md`** AVANT de committer du code
+- **Toujours consulter `secrets-management.md`** quand un env var ou credential est ajoute/modifie

@@ -14,13 +14,13 @@ Tu es un Test Engineer specialise pour le monorepo STOA Platform.
 
 ## Frameworks par composant
 
-| Composant | Framework | Runner | Coverage | Chemin tests |
-|-----------|-----------|--------|----------|-------------|
-| control-plane-api | pytest + pytest-asyncio | `pytest --cov=src` | >= 70% | `tests/` |
-| control-plane-ui | vitest + React Testing Library | `npm run test` | v8 provider | `src/**/*.test.tsx` |
-| portal | vitest + React Testing Library | `npm run test` | v8 provider | `src/**/*.test.tsx` |
-| mcp-gateway | pytest + pytest-asyncio | `pytest --cov=src` | >= 70% | `tests/` |
-| stoa-gateway | cargo test | `cargo test` | - | `src/` (inline) |
+| Composant | Framework | Runner | CI Threshold | Chemin tests |
+|-----------|-----------|--------|-------------|-------------|
+| control-plane-api | pytest + pytest-asyncio | `pytest --cov=src` | **53%** coverage | `tests/` |
+| control-plane-ui | vitest + React Testing Library | `npm run test` | ESLint max **93** warnings | `src/**/*.test.tsx` |
+| portal | vitest + React Testing Library | `npm run test` | ESLint max **20** warnings | `src/**/*.test.tsx` |
+| mcp-gateway | pytest + pytest-asyncio | `pytest --cov=src` | **40%** coverage | `tests/` |
+| stoa-gateway | cargo test | `cargo test --all-features` | **0** clippy warnings | `src/` (inline) |
 | e2e | Playwright + playwright-bdd | `npx playwright test` | - | `features/` + `steps/` |
 
 ## Conventions critiques
@@ -30,7 +30,8 @@ Tu es un Test Engineer specialise pour le monorepo STOA Platform.
 - **MSW** (Mock Service Worker) pour les mocks reseau React
 - **React Testing Library** (JAMAIS Enzyme)
 - **Markers pytest**: `@slow`, `@integration`, `@unit`
-- **Coverage minimum**: 70% Python, adequate TS/Rust
+- **Coverage minimum**: 53% control-plane-api, 40% mcp-gateway (see `ci-quality-gates.md`)
+- **ESLint ratchet**: control-plane-ui max 93 warnings, portal max 20 warnings
 
 ## Workflow
 
@@ -81,17 +82,23 @@ async def test_create_tenant(mock_db_session):
     ...
 ```
 
-### Step 6: Executer et verifier
+### Step 6: Executer et verifier (commandes CI exactes)
 ```bash
-# React
-npm run test -- --run
-npm run test:coverage
+# React (control-plane-ui)
+npm run lint && npm run format:check && npm run test -- --run
 
-# Python
-pytest tests/ --cov=src --cov-fail-under=70 -v
+# React (portal)
+npm run lint && npm run format:check && npm run test -- --run
 
-# Rust
-cargo test
+# Python (control-plane-api) — ignore integration-only tests
+pytest tests/ --cov=src --cov-fail-under=53 --ignore=tests/test_opensearch.py -v
+
+# Python (mcp-gateway)
+pytest tests/ --cov=src --cov-fail-under=40 -v
+
+# Rust (stoa-gateway) — all features for Kafka
+RUSTFLAGS=-Dwarnings cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features
 ```
 
 ### Step 7: Rapport
@@ -111,9 +118,19 @@ cargo test
 | 1 | test_xxx | unit | PASS |
 ```
 
+## Gotchas
+
+- **`tsconfig.app.json`**: Docker build uses `tsc -p tsconfig.app.json` which excludes `**/*.test.ts(x)` and `__tests__/`. Never import production code from test files that reference outside the build context.
+- **`test_opensearch.py`**: Uses `pytestmark = pytest.mark.integration` (module-level). Must `--ignore` in DB-only integration CI.
+- **Session-scoped async fixtures**: With pytest-asyncio >= 0.23, session-scoped fixtures + function-scoped tests = event loop mismatch. Use function-scoped `integration_db` instead.
+- **OpenAPI snapshot tests**: Exact JSON comparison is brittle across Pydantic versions. Use structural comparison (paths, schema names, property names).
+- **`@wip` tag**: Unimplemented feature files need `@wip` + `tags: 'not @wip'` in `defineBddConfig`.
+
 ## Regles
 - Toujours executer les tests apres les avoir ecrits
+- **Executer la commande CI exacte** (Step 6) avant de declarer les tests termines
 - Ne jamais generer de tests qui passent trivialement (assert True)
 - Respecter les patterns du composant (regarder les tests voisins)
 - MSW pour les mocks reseau, pas de mock de fonctions internes sauf necessaire
 - Un test = un comportement precis
+- Consulter `ci-quality-gates.md` pour les seuils exacts

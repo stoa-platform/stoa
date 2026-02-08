@@ -10,10 +10,4 @@
 pub mod client;
 pub mod sync;
 
-pub use client::{
-    CommitResponse, FileAction, GitClient, GitClientConfig, GitError, MergeRequestResponse,
-};
-pub use sync::{
-    ApiDefinition, CircuitBreaker, CircuitBreakerConfig, CircuitBreakerStats, GitSyncService,
-    SyncError, SyncResult,
-};
+pub use client::{FileAction, GitClient, GitClientConfig, GitError};

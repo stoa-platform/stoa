@@ -58,7 +58,9 @@ stoaGateway:
   keycloakRealm: stoa
   keycloakClientId: stoa-mcp-gateway
 
-  # Secret containing JWT_SECRET, KEYCLOAK_CLIENT_SECRET, ADMIN_API_TOKEN
+  # Secret containing CONTROL_PLANE_API_KEY, JWT_SECRET, KEYCLOAK_CLIENT_SECRET, ADMIN_API_TOKEN
+  # CONTROL_PLANE_API_KEY is REQUIRED for auto-registration (ADR-028).
+  # Without it, the gateway skips registration and runs in standalone mode.
   secretName: stoa-gateway-secrets
 
   # ExternalSecret (Vault-backed)

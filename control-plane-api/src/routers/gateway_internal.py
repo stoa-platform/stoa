@@ -18,7 +18,9 @@ from src.models.gateway_instance import (
     GatewayInstanceStatus,
     GatewayType,
 )
+from src.repositories.gateway_deployment import GatewayDeploymentRepository
 from src.repositories.gateway_instance import GatewayInstanceRepository
+from src.repositories.gateway_policy import GatewayPolicyRepository
 from src.schemas.gateway import GatewayInstanceResponse
 
 logger = logging.getLogger(__name__)
@@ -257,12 +259,42 @@ async def get_gateway_config(
     if not instance:
         raise HTTPException(status_code=404, detail="Gateway instance not found")
 
-    # TODO: Query pending deployments and policies for this gateway
+    # Query pending deployments for this gateway
+    deployment_repo = GatewayDeploymentRepository(db)
+    pending_deployments = await deployment_repo.list_by_gateway(
+        gateway_instance_id=instance.id,
+        sync_status=None,  # Return all statuses so gateway knows full picture
+    )
+
+    # Query applicable policies for this gateway
+    policy_repo = GatewayPolicyRepository(db)
+    tenant_id = instance.tenant_id or ""
+    policies = await policy_repo.list_all(tenant_id=tenant_id if tenant_id else None)
+
     return {
         "gateway_id": str(instance.id),
         "name": instance.name,
         "environment": instance.environment,
         "tenant_id": instance.tenant_id,
-        "pending_deployments": [],  # Future: from GatewayDeployment table
-        "pending_policies": [],  # Future: from GatewayPolicy table
+        "pending_deployments": [
+            {
+                "id": str(d.id),
+                "api_catalog_id": str(d.api_catalog_id),
+                "sync_status": d.sync_status.value,
+                "desired_state": d.desired_state,
+                "sync_attempts": d.sync_attempts,
+            }
+            for d in pending_deployments
+        ],
+        "pending_policies": [
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "policy_type": p.policy_type.value,
+                "config": p.config,
+                "priority": p.priority,
+                "enabled": p.enabled,
+            }
+            for p in policies
+        ],
     }

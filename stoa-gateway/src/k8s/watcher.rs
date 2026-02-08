@@ -14,8 +14,11 @@ use kube::{
 };
 use tracing::{debug, error, info, warn};
 
-use super::crds::{Tool, ToolSet};
-use crate::mcp::tools::ToolRegistry;
+use super::crds::{Tool, ToolAnnotationsCrd, ToolSet};
+use crate::federation::upstream::{TransportType, UpstreamMcpClient, UpstreamMcpConfig};
+use crate::federation::FederatedTool;
+use crate::mcp::tools::dynamic_tool::{schema_from_value, DynamicTool};
+use crate::mcp::tools::{ToolAnnotations, ToolRegistry};
 
 /// CRD Watcher for dynamic tool registration
 pub struct CrdWatcher {
@@ -140,19 +143,37 @@ impl CrdWatcher {
             "Registering tool from CRD"
         );
 
-        // TODO: Create actual tool implementation (NativeTool or ProxyTool)
-        // For now, just log the registration
-        // The actual implementation would:
-        // 1. Create a DynamicTool that calls the endpoint
-        // 2. Register it with the tool registry
-        // 3. Apply rate limiting if specified
-        // 4. Apply annotations
+        // Build input schema from CRD spec
+        let input_schema = schema_from_value(&tool.spec.input_schema);
 
-        debug!(
+        // Create DynamicTool from CRD
+        let mut dynamic = DynamicTool::new(
+            tool_name.clone(),
+            &tool.spec.description,
+            &tool.spec.endpoint,
+            &tool.spec.method,
+            input_schema,
+            namespace,
+        );
+
+        // Apply output schema if present
+        if let Some(ref output) = tool.spec.output_schema {
+            dynamic = dynamic.with_output_schema(output.clone());
+        }
+
+        // Apply annotations from CRD
+        if let Some(ref crd_ann) = tool.spec.annotations {
+            dynamic = dynamic.with_annotations(crd_annotations_to_mcp(crd_ann));
+        }
+
+        // Register (overwrites if already exists)
+        self.tool_registry.register(Arc::new(dynamic));
+
+        info!(
             tool = %tool_name,
             display_name = %tool.spec.display_name,
             method = %tool.spec.method,
-            "Tool CRD processed"
+            "Tool registered from CRD"
         );
     }
 
@@ -176,10 +197,11 @@ impl CrdWatcher {
         }
     }
 
-    /// Handle ToolSet CRD apply
+    /// Handle ToolSet CRD apply — connect to upstream MCP server and register federated tools
     async fn handle_toolset_apply(&self, toolset: &ToolSet) {
         let namespace = toolset.metadata.namespace.as_deref().unwrap_or("default");
         let name = toolset.metadata.name.as_deref().unwrap_or("unknown");
+        let prefix = toolset.spec.prefix.as_deref().unwrap_or("");
 
         info!(
             toolset = %name,
@@ -188,22 +210,77 @@ impl CrdWatcher {
             "Processing ToolSet CRD"
         );
 
-        // TODO: Connect to upstream MCP server and discover tools
-        // This will be implemented in the federation module
-        // For now, just log the event
+        // Create upstream MCP client
+        let config = UpstreamMcpConfig {
+            url: toolset.spec.upstream.url.clone(),
+            transport: TransportType::from_str(&toolset.spec.upstream.transport),
+            auth_token: None, // TODO: read from K8s Secret via secretRef
+            timeout: std::time::Duration::from_secs(
+                toolset.spec.upstream.timeout_seconds.unwrap_or(30) as u64,
+            ),
+        };
 
-        debug!(
+        let mut client = UpstreamMcpClient::new(config);
+
+        // Initialize connection (MCP handshake)
+        if let Err(e) = client.initialize().await {
+            warn!(
+                toolset = %name,
+                error = %e,
+                "Failed to connect to upstream MCP server"
+            );
+            return;
+        }
+
+        // Discover tools from upstream
+        let tools = match client.discover_tools().await {
+            Ok(t) => t,
+            Err(e) => {
+                warn!(toolset = %name, error = %e, "Failed to discover upstream tools");
+                return;
+            }
+        };
+
+        let upstream = Arc::new(client);
+        let filter = &toolset.spec.tools;
+        let mut registered = 0;
+
+        for tool_def in &tools {
+            // Apply tool filter (empty = all tools)
+            if !filter.is_empty() && !filter.contains(&tool_def.name) {
+                debug!(tool = %tool_def.name, "Skipping tool (not in filter list)");
+                continue;
+            }
+
+            let federated_name =
+                format!("{}{}_{}", prefix, namespace, to_snake_case(&tool_def.name));
+
+            let federated = FederatedTool::new(
+                federated_name.clone(),
+                tool_def.clone(),
+                upstream.clone(),
+                tool_def.name.clone(),
+                namespace.to_string(),
+            );
+
+            self.tool_registry.register(Arc::new(federated));
+            registered += 1;
+        }
+
+        info!(
             toolset = %name,
-            transport = %toolset.spec.upstream.transport,
-            tools_filter = ?toolset.spec.tools,
-            "ToolSet CRD processed"
+            tenant = %namespace,
+            registered,
+            total_discovered = tools.len(),
+            "ToolSet tools registered from upstream"
         );
     }
 
-    /// Handle ToolSet CRD delete
+    /// Handle ToolSet CRD delete — unregister all tools with matching prefix
     fn handle_toolset_delete(&self, toolset: &ToolSet) {
         let namespace = toolset.metadata.namespace.as_deref().unwrap_or("default");
         let name = toolset.metadata.name.as_deref().unwrap_or("unknown");
+        let prefix = toolset.spec.prefix.as_deref().unwrap_or("");
 
         info!(
             toolset = %name,
@@ -211,8 +288,31 @@ impl CrdWatcher {
             "Removing ToolSet tools (CRD deleted)"
         );
 
-        // TODO: Unregister all tools from this toolset
-        // Would need to track which tools came from which toolset
+        // Unregister tools that match the prefix+namespace pattern
+        let tool_prefix = format!("{}{}_", prefix, namespace);
+        let names = self.tool_registry.names();
+        let mut removed = 0;
+
+        for tool_name in &names {
+            if tool_name.starts_with(&tool_prefix) {
+                if self.tool_registry.unregister(tool_name) {
+                    removed += 1;
+                }
+            }
+        }
+
+        info!(toolset = %name, removed, "ToolSet tools removed");
+    }
+}
+
+/// Convert CRD annotations to MCP ToolAnnotations
+fn crd_annotations_to_mcp(crd: &ToolAnnotationsCrd) -> ToolAnnotations {
+    ToolAnnotations {
+        title: None,
+        read_only_hint: crd.read_only,
+        destructive_hint: crd.destructive,
+        idempotent_hint: crd.idempotent,
+        open_world_hint: crd.open_world,
     }
 }
 

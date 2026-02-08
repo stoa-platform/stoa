@@ -75,6 +75,7 @@ Gateway: 4 modes (ADR-024) — edge-mcp (current, Python), sidecar (Q2), proxy (
 | `test-writer` | vitest, pytest, Playwright BDD | Full access |
 | `k8s-ops` | K8s debug, Helm, nginx, rollout | Read-only (plan) |
 | `docs-writer` | ADRs, guides, runbooks, memory | No Bash |
+| `content-reviewer` | Contenu public, concurrents, compliance | Read-only (plan) |
 
 ### Skills (`.claude/skills/`)
 - 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`

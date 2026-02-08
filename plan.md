@@ -1,27 +1,11 @@
 # STOA Platform — Plan
 
-> Last updated: 2026-02-08 22:05 CET
+> Last updated: 2026-02-08 22:30 CET
 > Sprint goal: Revenue-ready demo by Feb 24, 2026
 
 ---
 
 ## Active — In Progress
-
-### CAB-1119 — Brand Unification: Logo S Émeraude + Design Tokens + Portal Menu Cleanup ✅
-
-**Status**: DONE | **PR**: #194 (merged) + PR pending (phases 4-5) | **Points**: 13 | **Cycle**: 6
-
-| Phase | Sujet | Status | Result |
-|-------|-------|--------|--------|
-| Phase 1 | Design Tokens + Favicon Recolor | DONE | Emerald palette, 14 SVG recolors, 3 Keycloak theme files, CSS cleanup |
-| Phase 2 | StoaLogo Component + UI Integration | DONE | Inline SVG component, Console sidebar + Portal header/loading/login |
-| Phase 3 | Portal Menu Restructure | DONE | 3 sections (Discover/Workspace/Account), tabbed WorkspacePage, redirects |
-| Phase 4 | Console Sidebar Restructuration | DONE | 5 sections (Overview/Catalog/⚡Gateway/Insights/Governance), STOA badges, "Control Plane" subtitle |
-| Phase 5 | Dark/Light Mode Complet | DONE | Console sidebar light mode, Portal dashboard dark mode (6 components) |
-
-All tests pass (257 console, 236 portal). Both apps build clean. Prettier + ESLint green.
-
----
 
 ### CAB-1112 — Kyverno: Switch Audit → Enforce (5 ClusterPolicies)
 
@@ -50,9 +34,37 @@ All tests pass (257 console, 236 portal). Both apps build clean. Prettier + ESLi
 
 ## Completed — Cycle 6
 
+### CAB-1119 — Brand Unification: Logo S Émeraude + Design Tokens + Portal Menu Cleanup ✅
+
+**Status**: DONE | **PR**: #194 (phases 1-3) + #198 (phases 4-5) | **Points**: 13 | **Cycle**: 6
+
+| Phase | Sujet | Status | Result |
+|-------|-------|--------|--------|
+| Phase 1 | Design Tokens + Favicon Recolor | DONE | Emerald palette, 14 SVG recolors, 3 Keycloak theme files, CSS cleanup |
+| Phase 2 | StoaLogo Component + UI Integration | DONE | Inline SVG component, Console sidebar + Portal header/loading/login |
+| Phase 3 | Portal Menu Restructure | DONE | 3 sections (Discover/Workspace/Account), tabbed WorkspacePage, redirects |
+| Phase 4 | Console Sidebar Restructuration | DONE | 5 sections (Overview/Catalog/⚡Gateway/Insights/Governance), STOA badges, "Control Plane" subtitle |
+| Phase 5 | Dark/Light Mode Complet | DONE | Console sidebar light mode, Portal dashboard dark mode (6 components) |
+
+All tests pass (257 console, 236 portal). Both apps build clean. Prettier + ESLint green.
+
+---
+
+### BDD Steps + Clippy Fixes ✅
+
+**Status**: DONE | **PRs**: #191, #192, #196 | **Cycle**: 6
+
+- **PR #191**: Removed 6 duplicate steps from `console-admin.steps.ts` + clippy errors + helm-lint notify
+- **PR #192**: Fix clippy `collapsible_if` in `watcher.rs` (clippy 1.93)
+- **PR #196**: Removed 12 more duplicate steps from `admin-rbac.steps.ts` (3) + `consumer-flow.steps.ts` (9)
+
+Root cause: PR #184 (CAB-1103) added new step files duplicating existing step definitions. `bddgen` now clean.
+
+---
+
 ### AI Factory Enhancement — CI-awareness, Secrets, Rust Gotchas ✅
 
-**Status**: DONE | **PR**: #195 (merged) | **Cycle**: 6
+**Status**: DONE | **PRs**: #195 + #199 (merged) | **Cycle**: 6
 
 | Action | File | Description |
 |--------|------|-------------|
@@ -170,8 +182,10 @@ All tests pass (257 console, 236 portal). Both apps build clean. Prettier + ESLi
 | P0 | — | Browser-based demo walkthrough | NOT STARTED |
 | P1 | — | Record video backup for demo | NOT STARTED |
 | P1 | CAB-1112 | Kyverno policies: Audit → Enforce | NOT STARTED |
-| P1 | CAB-1119 | Brand Unification phases 4-5 (Console sidebar + dark/light) | ✅ DONE |
-| P1 | CAB-1109 | GitOps Pipeline (Helm, CRDs, ArgoCD) | ✅ DONE |
+| P1 | CAB-1119 | Brand Unification (all 5 phases) | ✅ DONE (#194 + #198) |
+| P1 | CAB-1109 | GitOps Pipeline (Helm, CRDs, ArgoCD) | ✅ DONE (#188 + #193) |
+| P2 | — | AI Factory CI-awareness + deployment lifecycle | ✅ DONE (#195 + #199) |
+| P2 | — | BDD steps + Clippy fixes | ✅ DONE (#191 + #192 + #196) |
 
 ### Demo Checklist
 
@@ -190,7 +204,9 @@ All tests pass (257 console, 236 portal). Both apps build clean. Prettier + ESLi
 - [x] Brand Unification phases 1-3 (emerald palette, StoaLogo, Portal menu) — PR #194
 - [x] GitOps pipeline (Helm chart, CRDs, ArgoCD sync, CI migration) — PR #188 + stoa-infra
 - [x] AI Factory: CI quality gates, secrets mgmt rules, agent enhancements — PR #195
-- [x] Brand Unification phases 4-5 (Console sidebar restructure, dark/light mode complet)
+- [x] Brand Unification phases 4-5 (Console sidebar restructure, dark/light mode complet) — PR #198
+- [x] Deployment lifecycle rule (PR→CI→Merge→CI→CD→Pod) — PR #199
+- [x] BDD duplicate steps + clippy fixes — PRs #191, #192, #196
 - [ ] Landing page (gostoa.dev) with Stripe
 - [ ] Demo walkthrough script
 - [ ] Video backup recording

@@ -6,7 +6,7 @@
   "description": "STOA Developer Portal - Self-service portal for API consumers",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc -p tsconfig.app.json && vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 20",
     "lint:fix": "eslint src --ext ts,tsx --fix",

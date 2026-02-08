@@ -13,7 +13,8 @@ const { When, Then } = createBdd(test);
 // ============================================================================
 
 When('I navigate to my applications page', async ({ page }) => {
-  await page.goto(`${URLS.portal}/my-applications`);
+  // CAB-1119 Phase 3 moved /apps to /workspace?tab=apps (no /my-applications route)
+  await page.goto(`${URLS.portal}/workspace?tab=apps`);
   await page.waitForLoadState('networkidle');
   await expect(page.locator('text=Loading').first())
     .not.toBeVisible({ timeout: 15000 })
@@ -21,16 +22,16 @@ When('I navigate to my applications page', async ({ page }) => {
 });
 
 Then('the applications page loads successfully', async ({ page }) => {
-  const heading = page.locator('h1, h2').filter({ hasText: /application/i });
+  const heading = page.locator('h1, h2').filter({ hasText: /application|workspace/i });
   const content = page.locator(
-    '[class*="card"], [class*="list"], table, text=/no application|create/i',
+    '[class*="card"], [class*="list"], table, [role="tabpanel"], text=/no application|create/i',
   );
 
   const loaded =
     (await heading.isVisible({ timeout: 10000 }).catch(() => false)) ||
     (await content.first().isVisible({ timeout: 5000 }).catch(() => false));
 
-  expect(loaded || page.url().includes('/my-applications')).toBe(true);
+  expect(loaded || page.url().includes('/workspace')).toBe(true);
 });
 
 When('I create an application named {string}', async ({ page }, appName: string) => {

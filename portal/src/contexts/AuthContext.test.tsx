@@ -1,17 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Tests for AuthContext — RBAC provider
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { ReactNode } from 'react';
 import { AuthProvider, useAuth, usePermission, useRole, useScope } from './AuthContext';
 
 // Mock react-oidc-context
-const mockSigninRedirect = vi.fn();
-const mockSignoutRedirect = vi.fn();
-
 let mockOidcState: {
   user: any;
   isAuthenticated: boolean;

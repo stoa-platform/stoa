@@ -92,8 +92,8 @@
 - [x] `values-dev.yaml`, `values-staging.yaml` et `values-prod.yaml` versionnés
 - [x] RBAC ServiceAccount pour CRD watcher
 - [x] Shadow → Git MR : endpoint POST qui accepte un UAC YAML
-- [ ] ArgoCD Application configurée pour sync le chart
-- [ ] Zéro `kubectl apply` manuel — tout passe par Git → ArgoCD
+- [x] ArgoCD Application configurée pour sync le chart (stoa-infra)
+- [x] Zéro `kubectl apply` manuel — CI migré vers `rollout restart` + ArgoCD auto-sync
 
 ---
 

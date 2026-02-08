@@ -7,6 +7,8 @@
 //! - ForceReview: Allow but require human review (balanced)
 //! - AllowCached: Allow if we have valid cached policies (risk of stale)
 
+#![allow(dead_code)] // Infrastructure for UAC enforcement, wired incrementally
+
 use serde::{Deserialize, Serialize};
 
 // =============================================================================
@@ -198,10 +200,7 @@ impl SafeModeTrigger {
 
     /// Whether this trigger is retriable.
     pub fn is_retriable(&self) -> bool {
-        match self {
-            SafeModeTrigger::ManualOverride { .. } => false,
-            _ => true,
-        }
+        !matches!(self, SafeModeTrigger::ManualOverride { .. })
     }
 }
 

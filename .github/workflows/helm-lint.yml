@@ -57,11 +57,13 @@ jobs:
         run: helm template stoa-observability charts/stoa-observability > /dev/null
 
   # Notify stoa-infra when Helm charts change on main
+  # Requires STOA_INFRA_DISPATCH_TOKEN secret (PAT with repo scope on PotoMitan/stoa-infra)
   notify-infra:
     name: Notify stoa-infra
     runs-on: ubuntu-latest
     needs: lint
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    continue-on-error: true
     permissions:
       contents: read
     steps:

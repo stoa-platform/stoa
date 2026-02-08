@@ -7,6 +7,8 @@
 //! 2. Invalidating cache when Git version changes
 //! 3. TTL-based expiration for automatic refresh
 
+#![allow(dead_code)] // Infrastructure for UAC enforcement, wired incrementally
+
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

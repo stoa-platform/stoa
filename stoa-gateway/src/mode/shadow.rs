@@ -722,11 +722,7 @@ impl ShadowService {
         };
 
         let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-        let api_slug = request
-            .api_name
-            .to_lowercase()
-            .replace(' ', "-")
-            .replace('/', "-");
+        let api_slug = request.api_name.to_lowercase().replace([' ', '/'], "-");
         let branch_name = format!(
             "shadow/uac/{}/{}-{}",
             request.tenant_id, api_slug, timestamp

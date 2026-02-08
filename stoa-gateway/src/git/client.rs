@@ -7,6 +7,8 @@
 //! - Create file commits (for API definitions)
 //! - Create merge requests (for VH/VVH APIs)
 
+#![allow(dead_code)] // Git client infrastructure, wired incrementally
+
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

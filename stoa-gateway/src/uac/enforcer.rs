@@ -8,6 +8,8 @@
 //! 3. Policy version is logged for audit trail
 //! 4. Safe mode fallback when policies unavailable
 
+#![allow(dead_code)] // Infrastructure for UAC enforcement, wired incrementally
+
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -393,7 +395,7 @@ mod tests {
             "geo-restriction".to_string(),
         ];
 
-        let decision = enforcer.enforce(Classification::VVH, &policies, &ctx);
+        let decision = enforcer.enforce(Classification::Vvh, &policies, &ctx);
 
         assert!(decision.is_allowed());
         match decision {

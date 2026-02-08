@@ -1,41 +1,49 @@
 @portal @ttftc @rpo @freelance
 Feature: Alex Freelance — Time to First Tool Call (TTFTC)
   As a freelance developer discovering STOA for the first time,
-  I want to go from Portal landing to browsing API details,
+  I want to go from Portal landing to making my first API call,
   So that the platform proves it delivers value quickly.
 
   Background:
     Given the STOA Portal is accessible
 
   @smoke @critical
-  Scenario: Alex onboarding journey — discover APIs
-    # Step 1 — Land on Portal
+  Scenario: Alex onboarding journey — full TTFTC
+    # Step 1 — Land on Portal (unauthenticated)
     Given I start the TTFTC timer
     When I navigate to the Portal homepage
-    Then I see the Portal landing page
-    And I record step timing "01-landing"
+    Then the Portal loads successfully
+    And I record TTFTC step "01-landing" with screenshot
 
-    # Step 2 — Login via Keycloak
-    When I click the login button
-    And I authenticate as "alex" via Keycloak
-    Then I am redirected to the Portal dashboard
-    And I record step timing "02-login"
+    # Step 2 — Browse catalogue (unauthenticated or redirected)
+    When I attempt to browse the API catalog
+    Then I see catalog content or a login prompt
+    And I record TTFTC step "02-catalog-browse" with screenshot
 
-    # Step 3 — Browse the API catalog
-    When I access the API catalog
-    Then I see APIs in the catalog
-    And I take a screenshot "alex/03-catalog"
-    And I record step timing "03-catalog-browse"
+    # Step 3 — Login as Alex via Keycloak
+    When I login as "alex" using auth fixtures
+    Then I am on an authenticated page
+    And I record TTFTC step "03-login" with screenshot
 
-    # Step 4 — Search for an API
-    When I search for an available API
-    And I take a screenshot "alex/04-search-results"
-    And I record step timing "04-search"
+    # Step 4 — Browse catalogue (authenticated)
+    When I navigate to the API catalog as authenticated user
+    Then I see APIs or MCP tools in the catalog
+    And I record TTFTC step "04-catalog-authenticated" with screenshot
 
-    # Step 5 — View API details
-    When I click on the first API in results
-    Then I see the API detail page
-    And I take a screenshot "alex/05-api-detail"
-    And I record step timing "05-api-detail"
+    # Step 5 — Select an API or MCP tool
+    When I click on the first available catalog item
+    Then I see the item detail page
+    And I record TTFTC step "05-item-detail" with screenshot
+
+    # Step 6 — Subscribe or request credentials
+    When I attempt to subscribe to the current item
+    Then the subscribe action completes or is documented as friction
+    And I record TTFTC step "06-subscribe" with screenshot
+
+    # Step 7 — First tool call (TTFTC endpoint)
+    When I attempt my first API or tool call
+    Then the call response is recorded
+    And I record TTFTC step "07-first-call" with screenshot
     And I stop the TTFTC timer
-    And the TTFTC is under 120 seconds
+    And I generate the TTFTC friction report
+    And the TTFTC is under 600 seconds

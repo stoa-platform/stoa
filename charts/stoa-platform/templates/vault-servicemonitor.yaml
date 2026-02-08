@@ -1,0 +1,33 @@
+{{- if (default false .Values.vault.monitoring.serviceMonitor.enabled) }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vault
+  namespace: {{ .Values.vault.namespace | default "vault" }}
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/component: secrets
+    {{- include "stoa-platform.labels" . | nindent 4 }}
+    prometheus: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+  endpoints:
+    - port: http
+      path: /v1/sys/metrics
+      params:
+        format: ["prometheus"]
+      interval: {{ .Values.vault.monitoring.serviceMonitor.interval | default "30s" }}
+      scrapeTimeout: {{ .Values.vault.monitoring.serviceMonitor.scrapeTimeout | default "10s" }}
+      {{- if .Values.vault.monitoring.serviceMonitor.bearerTokenSecret }}
+      bearerTokenSecret:
+        name: {{ .Values.vault.monitoring.serviceMonitor.bearerTokenSecret.name }}
+        key: {{ .Values.vault.monitoring.serviceMonitor.bearerTokenSecret.key | default "token" }}
+      {{- end }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.vault.namespace | default "vault" }}
+{{- end }}

@@ -41,7 +41,7 @@ body {
 @layer base {
   /* Ensure focus-visible ring is visible on all interactive elements */
   :focus-visible {
-    outline: 2px solid #0d9488; /* primary-600 */
+    outline: 2px solid #059669; /* primary-600 */
     outline-offset: 2px;
   }
 
@@ -54,7 +54,7 @@ body {
   a:focus-visible,
   button:focus-visible,
   [role='button']:focus-visible {
-    outline: 2px solid #0d9488;
+    outline: 2px solid #059669;
     outline-offset: 2px;
     border-radius: 4px;
   }

@@ -47,8 +47,8 @@ interface Particle {
 }
 
 const COLORS = [
-  '#14b8a6', // primary (teal)
-  '#06b6d4', // accent (cyan)
+  '#059669', // primary (emerald)
+  '#8b5cf6', // accent (violet)
   '#22c55e', // success (green)
   '#f59e0b', // warning (amber)
   '#8b5cf6', // purple

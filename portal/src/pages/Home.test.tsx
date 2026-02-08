@@ -43,7 +43,7 @@ vi.mock('../components/dashboard', () => ({
   WelcomeHeader: ({ user }: { user: any }) => (
     <div data-testid="welcome-header">{user?.name}</div>
   ),
-  DashboardStats: ({ stats, isLoading }: { stats: any; isLoading: boolean }) => (
+  DashboardStats: ({ isLoading }: { stats: any; isLoading: boolean }) => (
     <div data-testid="dashboard-stats">{isLoading ? 'Loading' : 'Stats loaded'}</div>
   ),
   QuickActions: () => <div data-testid="quick-actions">Quick Actions</div>,

@@ -47,14 +47,17 @@ class TestOpenAPIContract:
 
         live = self._get_live_schema()
 
-        # Normalize both for comparison (sort keys already done)
-        snapshot_str = json.dumps(snapshot, sort_keys=True)
-        live_str = json.dumps(live, sort_keys=True)
+        # Normalize both to handle Pydantic version differences
+        # (e.g., allOf[{$ref}] vs direct $ref for enum fields)
+        snapshot_norm = _normalize_schema(snapshot)
+        live_norm = _normalize_schema(live)
+
+        snapshot_str = json.dumps(snapshot_norm, sort_keys=True)
+        live_str = json.dumps(live_norm, sort_keys=True)
 
         if snapshot_str != live_str:
-            # Find first difference for helpful error message
-            snapshot_paths = set(_flatten_keys(snapshot))
-            live_paths = set(_flatten_keys(live))
+            snapshot_paths = set(_flatten_keys(snapshot_norm))
+            live_paths = set(_flatten_keys(live_norm))
             added = live_paths - snapshot_paths
             removed = snapshot_paths - live_paths
             msg = "OpenAPI schema has changed. Update the snapshot.\n"
@@ -94,6 +97,25 @@ class TestOpenAPIContract:
 
         for schema_name in core_schemas:
             assert schema_name in schemas, f"Core schema '{schema_name}' not found in OpenAPI"
+
+
+def _normalize_schema(obj: dict | list | str | int | float | bool | None) -> dict | list | str | int | float | bool | None:
+    """Normalize OpenAPI schema for cross-version Pydantic compatibility.
+
+    Flattens allOf: [{$ref: "..."}] to $ref: "..." (Pydantic v2 minor version difference).
+    """
+    if isinstance(obj, dict):
+        # allOf with a single $ref item → flatten to direct $ref
+        if "allOf" in obj and isinstance(obj["allOf"], list) and len(obj["allOf"]) == 1:
+            inner = obj["allOf"][0]
+            if isinstance(inner, dict) and list(inner.keys()) == ["$ref"]:
+                result = {k: v for k, v in obj.items() if k != "allOf"}
+                result["$ref"] = inner["$ref"]
+                return {k: _normalize_schema(v) for k, v in sorted(result.items())}
+        return {k: _normalize_schema(v) for k, v in sorted(obj.items())}
+    elif isinstance(obj, list):
+        return [_normalize_schema(item) for item in obj]
+    return obj
 
 
 def _flatten_keys(obj: dict | list, prefix: str = "") -> list[str]:

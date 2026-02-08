@@ -2024,11 +2024,7 @@
         },
         "properties": {
           "protocol": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ProtocolType"
-              }
-            ],
+            "$ref": "#/components/schemas/ProtocolType",
             "description": "Protocol to enable"
           }
         },
@@ -2270,11 +2266,7 @@
             "title": "Trace Id"
           },
           "trigger": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SnapshotTrigger"
-              }
-            ],
+            "$ref": "#/components/schemas/SnapshotTrigger",
             "default": "5xx"
           }
         },
@@ -2372,11 +2364,7 @@
         },
         "properties": {
           "auth_type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AuthTypeEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/AuthTypeEnum",
             "default": "none",
             "description": "Authentication type"
           },
@@ -2462,11 +2450,7 @@
             "title": "Tool Prefix"
           },
           "transport": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TransportTypeEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/TransportTypeEnum",
             "default": "sse",
             "description": "Transport protocol"
           }
@@ -2526,11 +2510,7 @@
             "type": "boolean"
           },
           "health_status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/HealthStatusEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/HealthStatusEnum",
             "default": "unknown"
           },
           "icon": {
@@ -2798,11 +2778,7 @@
             "type": "boolean"
           },
           "health_status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/HealthStatusEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/HealthStatusEnum",
             "default": "unknown"
           },
           "icon": {
@@ -4941,11 +4917,7 @@
             "title": "Auto Approve Roles"
           },
           "category": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MCPServerCategoryEnum"
-              }
-            ],
+            "$ref": "#/components/schemas/MCPServerCategoryEnum",
             "default": "public"
           },
           "description": {
@@ -5019,11 +4991,7 @@
             "title": "Version"
           },
           "visibility": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MCPServerVisibility"
-              }
-            ],
+            "$ref": "#/components/schemas/MCPServerVisibility",
             "default": {
               "public": true
             }
@@ -7857,11 +7825,7 @@
             "title": "Tool Name"
           },
           "type": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ActivityType"
-              }
-            ],
+            "$ref": "#/components/schemas/ActivityType",
             "description": "Type of activity"
           }
         },
@@ -9678,11 +9642,7 @@
             "type": "integer"
           },
           "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/CallStatus"
-              }
-            ],
+            "$ref": "#/components/schemas/CallStatus",
             "description": "Call status"
           },
           "timestamp": {
@@ -9881,27 +9841,15 @@
             "type": "string"
           },
           "this_month": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UsagePeriodStats"
-              }
-            ],
+            "$ref": "#/components/schemas/UsagePeriodStats",
             "description": "This month's statistics"
           },
           "this_week": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UsagePeriodStats"
-              }
-            ],
+            "$ref": "#/components/schemas/UsagePeriodStats",
             "description": "This week's statistics"
           },
           "today": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UsagePeriodStats"
-              }
-            ],
+            "$ref": "#/components/schemas/UsagePeriodStats",
             "description": "Today's statistics"
           },
           "top_tools": {
@@ -13692,11 +13640,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/MCPSubscriptionApprove"
-                  }
-                ],
+                "$ref": "#/components/schemas/MCPSubscriptionApprove",
                 "default": {},
                 "title": "Request"
               }
@@ -16666,11 +16610,7 @@
             "name": "status",
             "required": false,
             "schema": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/LogStatus"
-                }
-              ],
+              "$ref": "#/components/schemas/LogStatus",
               "default": "all",
               "description": "Filter by status",
               "title": "Status"
@@ -16833,11 +16773,7 @@
             "name": "status",
             "required": false,
             "schema": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/LogStatus"
-                }
-              ],
+              "$ref": "#/components/schemas/LogStatus",
               "default": "all",
               "description": "Filter by status",
               "title": "Status"
@@ -17659,11 +17595,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/MCPKeyRotationRequest"
-                  }
-                ],
+                "$ref": "#/components/schemas/MCPKeyRotationRequest",
                 "default": {
                   "grace_period_hours": 24
                 },
@@ -19194,11 +19126,7 @@
             "name": "sort",
             "required": false,
             "schema": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/SortOrder"
-                }
-              ],
+              "$ref": "#/components/schemas/SortOrder",
               "default": "relevance",
               "description": "Sort order",
               "title": "Sort"
@@ -20493,11 +20421,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/KeyRotationRequest"
-                  }
-                ],
+                "$ref": "#/components/schemas/KeyRotationRequest",
                 "default": {
                   "grace_period_hours": 24
                 },

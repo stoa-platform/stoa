@@ -22,23 +22,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create enum types (create_type=False prevents double-creation in create_table)
     policy_type_enum = sa.Enum(
         'cors', 'rate_limit', 'jwt_validation', 'ip_filter',
         'logging', 'caching', 'transform',
         name='policy_type_enum',
-        create_type=False,
     )
-    policy_type_enum.create(op.get_bind(), checkfirst=True)
-
     policy_scope_enum = sa.Enum(
         'api', 'gateway', 'tenant',
         name='policy_scope_enum',
-        create_type=False,
     )
-    policy_scope_enum.create(op.get_bind(), checkfirst=True)
 
-    # Create gateway_policies table
     op.create_table(
         'gateway_policies',
         sa.Column('id', sa.dialects.postgresql.UUID(as_uuid=True), primary_key=True),

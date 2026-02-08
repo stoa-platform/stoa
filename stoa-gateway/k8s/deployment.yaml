@@ -54,6 +54,13 @@ spec:
               value: "stoa"
             - name: STOA_KEYCLOAK_CLIENT_ID
               value: "stoa-mcp-gateway"
+          # REQUIRED for auto-registration (ADR-028):
+          # The Secret `stoa-gateway-secrets` MUST contain:
+          #   STOA_CONTROL_PLANE_API_KEY - API key matching one entry in
+          #     Control Plane's GATEWAY_API_KEYS env var.
+          # Without this key, the gateway will skip registration and run
+          # in standalone mode (no heartbeat, invisible in Console UI).
+          # See: docs/runbooks/high/gateway-registration-failed.md
           envFrom:
             - secretRef:
                 name: stoa-gateway-secrets

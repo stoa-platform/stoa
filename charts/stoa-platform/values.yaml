@@ -92,6 +92,42 @@ stoaGateway:
       cpu: 500m
       memory: 256Mi
 
+  # Gateway mode (ADR-024): edge-mcp | sidecar | proxy | shadow
+  mode: edge-mcp
+  # Auto-register with Control Plane (ADR-028)
+  autoRegister: true
+  # Environment identifier
+  environment: dev
+
+  # OPA Policy Engine (Phase 1: CAB-1109)
+  policies:
+    enabled: true
+    path: "/etc/stoa/policies/default.rego"
+
+  # K8s CRD watcher for dynamic tool registration (Phase 7: CAB-1105)
+  k8s:
+    enabled: false
+
+  # Kafka metering (Phase 3: CAB-1105)
+  kafka:
+    enabled: false
+    brokers: "redpanda.stoa-system.svc.cluster.local:9092"
+    meteringTopic: "stoa.metering"
+    errorsTopic: "stoa.errors"
+
+  # Shadow mode settings
+  shadow:
+    captureSource: inline
+    minSamples: 10
+
+  # Ingress (Phase 2: CAB-1109)
+  ingress:
+    enabled: false
+    className: nginx
+    host: mcp.gostoa.dev
+    annotations: {}
+    tls: []
+
   nodeSelector: {}
   tolerations: []
   extraEnv: []

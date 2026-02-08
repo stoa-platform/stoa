@@ -3,6 +3,8 @@
 //! Model Context Protocol (MCP) types for tools/list and tools/call endpoints.
 //! CAB-912: Complete MCP Gateway implementation.
 
+#![allow(dead_code)] // MCP protocol types, wired incrementally
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

@@ -7,6 +7,8 @@
 //! - VH (Very High): Sensitive APIs, requires review, 10 requests/hour
 //! - VVH (Very Very High): Critical APIs, requires review, 2 requests/hour
 
+#![allow(dead_code)] // Infrastructure for UAC enforcement, wired incrementally
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -15,15 +17,16 @@ use std::collections::HashSet;
 // =============================================================================
 
 /// API classification level determining approval workflow and rate limits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Classification {
     /// High - Standard APIs
+    #[default]
     H,
     /// Very High - Sensitive APIs
     VH,
     /// Very Very High - Critical APIs
-    VVH,
+    Vvh,
 }
 
 impl Classification {
@@ -32,7 +35,7 @@ impl Classification {
         match s.to_uppercase().as_str() {
             "H" => Some(Classification::H),
             "VH" => Some(Classification::VH),
-            "VVH" => Some(Classification::VVH),
+            "VVH" => Some(Classification::Vvh),
             _ => None,
         }
     }
@@ -42,7 +45,7 @@ impl Classification {
         match self {
             Classification::H => true,
             Classification::VH => false,
-            Classification::VVH => false,
+            Classification::Vvh => false,
         }
     }
 
@@ -51,7 +54,7 @@ impl Classification {
         match self {
             Classification::H => 50,
             Classification::VH => 10,
-            Classification::VVH => 2,
+            Classification::Vvh => 2,
         }
     }
 
@@ -70,7 +73,7 @@ impl Classification {
                 policies.insert("mtls");
                 policies.insert("audit-logging");
             }
-            Classification::VVH => {
+            Classification::Vvh => {
                 // VVH includes VH policies plus encryption and geo-restriction
                 policies.insert("mtls");
                 policies.insert("audit-logging");
@@ -107,7 +110,7 @@ impl Classification {
         match self {
             Classification::H => "High - Standard APIs with basic security",
             Classification::VH => "Very High - Sensitive APIs requiring mTLS and audit logging",
-            Classification::VVH => {
+            Classification::Vvh => {
                 "Very Very High - Critical APIs with encryption and geo-restriction"
             }
         }
@@ -119,14 +122,8 @@ impl std::fmt::Display for Classification {
         match self {
             Classification::H => write!(f, "H"),
             Classification::VH => write!(f, "VH"),
-            Classification::VVH => write!(f, "VVH"),
+            Classification::Vvh => write!(f, "VVH"),
         }
-    }
-}
-
-impl Default for Classification {
-    fn default() -> Self {
-        Classification::H
     }
 }
 
@@ -164,7 +161,7 @@ impl ClassificationConfig {
         match classification {
             Classification::H => self.h_rate_limit,
             Classification::VH => self.vh_rate_limit,
-            Classification::VVH => self.vvh_rate_limit,
+            Classification::Vvh => self.vvh_rate_limit,
         }
     }
 }
@@ -183,8 +180,8 @@ mod tests {
         assert_eq!(Classification::from_str("h"), Some(Classification::H));
         assert_eq!(Classification::from_str("VH"), Some(Classification::VH));
         assert_eq!(Classification::from_str("vh"), Some(Classification::VH));
-        assert_eq!(Classification::from_str("VVH"), Some(Classification::VVH));
-        assert_eq!(Classification::from_str("vvh"), Some(Classification::VVH));
+        assert_eq!(Classification::from_str("VVH"), Some(Classification::Vvh));
+        assert_eq!(Classification::from_str("vvh"), Some(Classification::Vvh));
         assert_eq!(Classification::from_str("invalid"), None);
     }
 
@@ -192,14 +189,14 @@ mod tests {
     fn test_auto_approve() {
         assert!(Classification::H.auto_approve());
         assert!(!Classification::VH.auto_approve());
-        assert!(!Classification::VVH.auto_approve());
+        assert!(!Classification::Vvh.auto_approve());
     }
 
     #[test]
     fn test_rate_limits() {
         assert_eq!(Classification::H.rate_limit_per_hour(), 50);
         assert_eq!(Classification::VH.rate_limit_per_hour(), 10);
-        assert_eq!(Classification::VVH.rate_limit_per_hour(), 2);
+        assert_eq!(Classification::Vvh.rate_limit_per_hour(), 2);
     }
 
     #[test]
@@ -222,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_required_policies_vvh() {
-        let policies = Classification::VVH.required_policies();
+        let policies = Classification::Vvh.required_policies();
         assert!(policies.contains("rate-limit"));
         assert!(policies.contains("auth-jwt"));
         assert!(policies.contains("mtls"));
@@ -257,14 +254,14 @@ mod tests {
             "data-encryption".to_string(),
             "geo-restriction".to_string(),
         ];
-        assert!(Classification::VVH.validate_policies(&provided).is_ok());
+        assert!(Classification::Vvh.validate_policies(&provided).is_ok());
     }
 
     #[test]
     fn test_classification_display() {
         assert_eq!(format!("{}", Classification::H), "H");
         assert_eq!(format!("{}", Classification::VH), "VH");
-        assert_eq!(format!("{}", Classification::VVH), "VVH");
+        assert_eq!(format!("{}", Classification::Vvh), "VVH");
     }
 
     #[test]
@@ -272,6 +269,6 @@ mod tests {
         let config = ClassificationConfig::default();
         assert_eq!(config.rate_limit_for(Classification::H), 50);
         assert_eq!(config.rate_limit_for(Classification::VH), 10);
-        assert_eq!(config.rate_limit_for(Classification::VVH), 2);
+        assert_eq!(config.rate_limit_for(Classification::Vvh), 2);
     }
 }

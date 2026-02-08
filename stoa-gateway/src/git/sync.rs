@@ -10,6 +10,8 @@
 //!
 //! Circuit breaker: 3 failures → 30s cooldown
 
+#![allow(dead_code)] // Git sync infrastructure, wired incrementally
+
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -17,7 +19,7 @@ use std::sync::RwLock;
 use thiserror::Error;
 use tracing::{error, info, warn};
 
-use super::client::{CommitResponse, FileAction, GitClient, GitError, MergeRequestResponse};
+use super::client::{GitClient, GitError};
 use crate::mcp::protocol::ApiState;
 use crate::uac::Classification;
 

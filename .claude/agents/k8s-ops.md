@@ -100,9 +100,47 @@ Lire `.claude/rules/k8s-deploy.md` et verifier chaque point de la checklist.
 ### Verdict: Go / Fix / Refaire
 ```
 
+## ArgoCD
+
+`stoa-gateway` is **ArgoCD-managed**. All other components use standalone manifests (`kubectl apply`).
+
+```bash
+# ArgoCD status
+kubectl get applications -n argocd
+argocd app get stoa-gateway
+argocd app sync stoa-gateway
+
+# Gotcha: ArgoCD does NOT detect new images with the same tag
+# After pushing a new image with same tag, force restart:
+kubectl rollout restart deployment/stoa-gateway -n stoa-system
+```
+
+**Helm nil pointer gotcha**: Nested values like `.Values.stoaGateway.externalSecret.enabled` require guard:
+```yaml
+{{- if and .Values.stoaGateway.externalSecret .Values.stoaGateway.externalSecret.enabled }}
+```
+
+## External Secrets Operator (ESO)
+
+```bash
+# Check ESO sync status
+kubectl get externalsecrets -n stoa-system
+kubectl describe externalsecret <name> -n stoa-system  # look for "SecretSynced"
+
+# Force re-sync from Vault
+kubectl annotate externalsecret <name> -n stoa-system force-sync=$(date +%s) --overwrite
+
+# Check ClusterSecretStore health
+kubectl get clustersecretstore vault-backend
+```
+
+ESO sync interval: default 1h (configurable in Helm values `externalSecret.refreshInterval`).
+Vault paths: see `.claude/rules/secrets-management.md`.
+
 ## Regles
 - Ne JAMAIS appliquer de changements (`kubectl apply`, `helm upgrade`) — rapport uniquement
 - Ne JAMAIS supprimer de resources (`kubectl delete`)
 - Toujours verifier le nom de service reel avant de referencer
 - Citer les regles k8s-deploy.md quand un point est viole
+- Pour stoa-gateway, verifier ArgoCD sync status, pas juste `kubectl rollout status`
 - Verdict binaire: Go / Fix / Refaire

@@ -1,4 +1,5 @@
 """Keycloak service for authentication and client management"""
+
 import logging
 
 from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
@@ -6,6 +7,7 @@ from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
 
 class KeycloakService:
     """Service for Keycloak operations"""
@@ -43,10 +45,7 @@ class KeycloakService:
 
         if tenant_id:
             # Filter by tenant_id attribute
-            users = [
-                u for u in users
-                if u.get("attributes", {}).get("tenant_id", [None])[0] == tenant_id
-            ]
+            users = [u for u in users if u.get("attributes", {}).get("tenant_id", [None])[0] == tenant_id]
 
         return users
 
@@ -68,7 +67,7 @@ class KeycloakService:
         last_name: str,
         tenant_id: str,
         roles: list[str],
-        temporary_password: str | None = None
+        temporary_password: str | None = None,
     ) -> str:
         """Create a new user in Keycloak"""
         if not self._admin:
@@ -87,11 +86,13 @@ class KeycloakService:
         }
 
         if temporary_password:
-            user_data["credentials"] = [{
-                "type": "password",
-                "value": temporary_password,
-                "temporary": True,
-            }]
+            user_data["credentials"] = [
+                {
+                    "type": "password",
+                    "value": temporary_password,
+                    "temporary": True,
+                }
+            ]
 
         user_id = self._admin.create_user(user_data)
 
@@ -156,7 +157,8 @@ class KeycloakService:
         if tenant_id:
             # Filter by client attribute or naming convention
             clients = [
-                c for c in clients
+                c
+                for c in clients
                 if c.get("attributes", {}).get("tenant_id", [None])[0] == tenant_id
                 or c.get("clientId", "").startswith(f"{tenant_id}-")
             ]
@@ -175,12 +177,7 @@ class KeycloakService:
         return None
 
     async def create_client(
-        self,
-        tenant_id: str,
-        name: str,
-        display_name: str,
-        redirect_uris: list[str],
-        description: str = ""
+        self, tenant_id: str, name: str, display_name: str, redirect_uris: list[str], description: str = ""
     ) -> dict:
         """
         Create a new OAuth2 client for an application.
@@ -255,6 +252,155 @@ class KeycloakService:
         secret_data = self._admin.generate_client_secrets(client_uuid)
         return secret_data.get("value")
 
+    # Consumer client operations (CAB-1121 Phase 2)
+    async def create_consumer_client(
+        self,
+        tenant_slug: str,
+        consumer_external_id: str,
+        consumer_id: str,
+        plan_slug: str | None = None,
+        rate_limit: int | None = None,
+    ) -> dict:
+        """
+        Create an OAuth2 client for a consumer (client_credentials grant).
+
+        Called when a consumer is activated. Creates a Keycloak client with
+        protocol mappers that embed tenant_id, consumer_id, plan_slug, and
+        rate_limit as token claims.
+
+        Args:
+            tenant_slug: Tenant identifier (used in client_id naming)
+            consumer_external_id: Consumer's external ID
+            consumer_id: Consumer UUID (string)
+            plan_slug: Optional plan slug for token claim
+            rate_limit: Optional rate limit for token claim
+
+        Returns:
+            dict with client_id, client_secret, and id (Keycloak UUID)
+        """
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        client_id = f"{tenant_slug}-{consumer_external_id}"
+
+        # Build protocol mappers for token enrichment
+        protocol_mappers = [
+            {
+                "name": "tenant_id",
+                "protocol": "openid-connect",
+                "protocolMapper": "oidc-hardcoded-claim-mapper",
+                "config": {
+                    "claim.name": "tenant_id",
+                    "claim.value": tenant_slug,
+                    "jsonType.label": "String",
+                    "id.token.claim": "false",
+                    "access.token.claim": "true",
+                    "userinfo.token.claim": "false",
+                },
+            },
+            {
+                "name": "consumer_id",
+                "protocol": "openid-connect",
+                "protocolMapper": "oidc-hardcoded-claim-mapper",
+                "config": {
+                    "claim.name": "consumer_id",
+                    "claim.value": consumer_id,
+                    "jsonType.label": "String",
+                    "id.token.claim": "false",
+                    "access.token.claim": "true",
+                    "userinfo.token.claim": "false",
+                },
+            },
+        ]
+
+        if plan_slug:
+            protocol_mappers.append(
+                {
+                    "name": "plan_slug",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-hardcoded-claim-mapper",
+                    "config": {
+                        "claim.name": "plan_slug",
+                        "claim.value": plan_slug,
+                        "jsonType.label": "String",
+                        "id.token.claim": "false",
+                        "access.token.claim": "true",
+                        "userinfo.token.claim": "false",
+                    },
+                }
+            )
+
+        if rate_limit is not None:
+            protocol_mappers.append(
+                {
+                    "name": "rate_limit",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-hardcoded-claim-mapper",
+                    "config": {
+                        "claim.name": "rate_limit",
+                        "claim.value": str(rate_limit),
+                        "jsonType.label": "int",
+                        "id.token.claim": "false",
+                        "access.token.claim": "true",
+                        "userinfo.token.claim": "false",
+                    },
+                }
+            )
+
+        client_data = {
+            "clientId": client_id,
+            "name": f"Consumer: {consumer_external_id}",
+            "description": f"OAuth2 client for consumer {consumer_external_id} in tenant {tenant_slug}",
+            "enabled": True,
+            "protocol": "openid-connect",
+            "publicClient": False,
+            "serviceAccountsEnabled": True,
+            "authorizationServicesEnabled": False,
+            "standardFlowEnabled": False,
+            "directAccessGrantsEnabled": False,
+            "implicitFlowEnabled": False,
+            "redirectUris": [],
+            "webOrigins": [],
+            "attributes": {
+                "tenant_id": tenant_slug,
+                "consumer_id": consumer_id,
+                "consumer_external_id": consumer_external_id,
+            },
+            "protocolMappers": protocol_mappers,
+        }
+
+        self._admin.create_client(client_data)
+
+        # Retrieve the created client to get the Keycloak UUID
+        client = await self.get_client(client_id)
+        if not client:
+            raise RuntimeError(f"Failed to create consumer client {client_id}")
+
+        client_uuid = client["id"]
+        secret_data = self._admin.get_client_secrets(client_uuid)
+
+        logger.info(f"Created consumer client {client_id} for tenant {tenant_slug}")
+
+        return {
+            "client_id": client_id,
+            "client_secret": secret_data.get("value"),
+            "id": client_uuid,
+        }
+
+    async def delete_consumer_client(self, client_id: str) -> bool:
+        """Delete a consumer's Keycloak client by client_id."""
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        client = await self.get_client(client_id)
+        if not client:
+            logger.warning(f"Consumer client {client_id} not found in Keycloak")
+            return False
+
+        self._admin.delete_client(client["id"])
+        logger.info(f"Deleted consumer client {client_id}")
+        return True
+
     # Service Account operations (for MCP access)
     async def create_service_account(
         self,
@@ -294,6 +440,7 @@ class KeycloakService:
         existing = await self.get_client(client_id)
         if existing:
             import uuid
+
             client_id = f"{client_id}-{uuid.uuid4().hex[:6]}"
 
         client_data = {
@@ -352,12 +499,15 @@ class KeycloakService:
                             logger.warning(f"Failed to copy role {role['name']}: {e}")
 
         # Set tenant_id attribute on service account user
-        self._admin.update_user(sa_user_id, {
-            "attributes": {
-                "tenant_id": [tenant_id],
-                "owner_user_id": [user_id],
-            }
-        })
+        self._admin.update_user(
+            sa_user_id,
+            {
+                "attributes": {
+                    "tenant_id": [tenant_id],
+                    "owner_user_id": [user_id],
+                }
+            },
+        )
 
         # Get client secret
         secret_data = self._admin.get_client_secrets(client_uuid)
@@ -382,14 +532,16 @@ class KeycloakService:
         for client in clients:
             attrs = client.get("attributes", {})
             if attrs.get("owner_user_id") == user_id and attrs.get("service_account_type") == "mcp":
-                user_accounts.append({
-                    "id": client["id"],
-                    "client_id": client["clientId"],
-                    "name": client.get("name", "").replace("Service Account: ", ""),
-                    "description": client.get("description", ""),
-                    "enabled": client.get("enabled", False),
-                    "created": client.get("attributes", {}).get("created_at"),
-                })
+                user_accounts.append(
+                    {
+                        "id": client["id"],
+                        "client_id": client["clientId"],
+                        "name": client.get("name", "").replace("Service Account: ", ""),
+                        "description": client.get("description", ""),
+                        "enabled": client.get("enabled", False),
+                        "created": client.get("attributes", {}).get("created_at"),
+                    }
+                )
 
         return user_accounts
 
@@ -441,11 +593,10 @@ class KeycloakService:
             self._admin.group_user_add(user_id, tenant_group["id"])
 
         # Update user attribute
-        await self.update_user(user_id, {
-            "attributes": {"tenant_id": [tenant_id]}
-        })
+        await self.update_user(user_id, {"attributes": {"tenant_id": [tenant_id]}})
 
         return True
+
 
 # Global instance
 keycloak_service = KeycloakService()

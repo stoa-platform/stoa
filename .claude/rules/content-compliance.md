@@ -1,3 +1,7 @@
+---
+description: Content compliance rules for public-facing docs — competitor mentions, client names, pricing, certifications
+---
+
 # Content Compliance
 
 ## Scope

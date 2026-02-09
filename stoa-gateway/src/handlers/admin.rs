@@ -294,6 +294,26 @@ pub async fn circuit_breaker_reset_by_name(
 }
 
 // =============================================================================
+// mTLS Admin (CAB-864)
+// =============================================================================
+
+/// GET /admin/mtls/config — current mTLS configuration (trusted_proxies redacted)
+pub async fn mtls_config(
+    State(state): State<AppState>,
+) -> Json<crate::auth::mtls::MtlsConfigResponse> {
+    Json(crate::auth::mtls::MtlsConfigResponse::from(
+        &state.config.mtls,
+    ))
+}
+
+/// GET /admin/mtls/stats — mTLS validation stats
+pub async fn mtls_stats(
+    State(state): State<AppState>,
+) -> Json<crate::auth::mtls::MtlsStatsSnapshot> {
+    Json(state.mtls_stats.snapshot())
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

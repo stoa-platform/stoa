@@ -147,7 +147,7 @@ describe('App', () => {
 
       renderApp('/');
 
-      expect(screen.getByText('Loading...')).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Loading' })).toBeInTheDocument();
     });
   });
 
@@ -235,7 +235,7 @@ describe('App', () => {
 
       renderApp('/servers');
 
-      expect(screen.getByText('Loading...')).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Loading' })).toBeInTheDocument();
     });
   });
 });

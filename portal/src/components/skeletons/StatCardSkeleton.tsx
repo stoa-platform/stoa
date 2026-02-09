@@ -5,7 +5,7 @@ import { Skeleton } from '../common/Skeleton';
  */
 export function StatCardSkeleton() {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
       <Skeleton className="h-4 w-24 mb-2" />
       <Skeleton className="h-8 w-16 mb-1" />
       <Skeleton className="h-3 w-20" />
@@ -31,7 +31,7 @@ export function StatCardSkeletonRow({ count = 3 }: { count?: number }) {
  */
 export function StatCardWithIconSkeleton() {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
       <div className="flex items-center justify-between mb-4">
         <Skeleton className="h-4 w-24" />
         <Skeleton className="h-10 w-10 rounded-lg" />
@@ -47,7 +47,7 @@ export function StatCardWithIconSkeleton() {
  */
 export function UsageStatSkeleton() {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
       <div className="flex items-center gap-3 mb-4">
         <Skeleton className="h-12 w-12 rounded-lg" />
         <div>

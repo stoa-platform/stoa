@@ -24,7 +24,7 @@ export function TableRowSkeleton({ columns = 5 }: TableRowSkeletonProps) {
  */
 export function TableSkeleton({ rows = 5, columns = 5 }: { rows?: number; columns?: number }) {
   return (
-    <tbody className="divide-y divide-gray-200">
+    <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
       {Array.from({ length: rows }).map((_, i) => (
         <TableRowSkeleton key={i} columns={columns} />
       ))}
@@ -47,14 +47,16 @@ export function FullTableSkeleton({
   const headerCount = headers?.length || columns;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 overflow-hidden">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
+        <thead className="bg-gray-50 dark:bg-neutral-800">
           <tr>
             {Array.from({ length: headerCount }).map((_, i) => (
               <th key={i} className="px-4 py-3 text-left">
                 {headers ? (
-                  <span className="text-xs font-medium text-gray-500 uppercase">{headers[i]}</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                    {headers[i]}
+                  </span>
                 ) : (
                   <Skeleton className="h-4 w-20" />
                 )}
@@ -73,28 +75,28 @@ export function FullTableSkeleton({
  */
 export function SubscriptionTableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 overflow-hidden">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
+        <thead className="bg-gray-50 dark:bg-neutral-800">
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
               Server
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
               Status
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
               API Key
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
               Created
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200">
+        <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
           {Array.from({ length: rows }).map((_, i) => (
             <tr key={i}>
               <td className="px-4 py-3">

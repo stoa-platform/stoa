@@ -5,7 +5,7 @@ import { Skeleton } from '../common/Skeleton';
  */
 export function ServerCardSkeleton() {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
       {/* Icon */}
       <Skeleton className="h-12 w-12 rounded-lg mb-4" />
 
@@ -74,7 +74,10 @@ export function ServerDetailSkeleton() {
         <Skeleton className="h-6 w-32 mb-4" />
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-lg border border-gray-200 p-4">
+            <div
+              key={i}
+              className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-4"
+            >
               <div className="flex items-center gap-3">
                 <Skeleton className="h-8 w-8 rounded" />
                 <div className="flex-1">

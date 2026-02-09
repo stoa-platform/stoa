@@ -27,14 +27,16 @@
 | 14 | AI Factory Modernization + State Files | **—** | — | ✅ Session 21 |
 | | | | | |
 | | **DONE LUNDI** | **171** | **13 PRs + 1 chore** | ✅ |
+| | **DONE DIMANCHE SOIR** | **+18** | **PR #224** | ✅ |
 | | | | | |
-| 15 | CAB-864 P2-P3 — mTLS Implementation | **26** | — | pending |
+| 15 | CAB-864 P2 — mTLS Gateway Module | **18** | #224 | ✅ PR created |
+| 15b | CAB-864 P3 — Bulk Onboarding + Registry | **8** | — | pending |
 | 16 | CAB-1121 P4 — Quota Enforcement | **15** | — | pending |
 | 17 | CAB-1121 P6 — E2E Tests full flow | **13** | — | pending |
 | 18 | CAB-1035 — Persona Alex Test | **2** | — | pending (manuel) |
 | 19 | CAB-1066 — Landing + Pricing | **34** | — | pending (stoa-web) |
 | | | | | |
-| | **REMAINING** | **90** | | |
+| | **REMAINING** | **72** | | |
 | | **TOTAL CYCLE 7** | **261** | | |
 
 ---
@@ -56,14 +58,21 @@ All sessions completed. PRs #203-#222 merged. Session 21: AI Factory modernizati
 
 ### REMAINING — Next Sessions
 
-#### CAB-864 P2-P3 — mTLS Implementation (26 pts)
+#### CAB-864 P2 — mTLS Gateway Module (18 pts) ✅ PR #224
 ```
-- [ ] P2: X.509 header extraction middleware (Rust gateway)
-- [ ] P2: RFC 8705 cert-bound token validation (cnf.x5t#S256)
-- [ ] P2: Config extensions (mtls_enabled, trusted_proxies, required_routes)
-- [ ] P2: Admin endpoints (/admin/mtls/config, /admin/mtls/stats)
-- [ ] P3: Certificate registry model in control-plane-api
-- [ ] P3: Bulk onboarding endpoint (POST /certificates/bulk, max 100)
+- [x] P2: X.509 header extraction middleware (Rust gateway) — auth/mtls.rs
+- [x] P2: RFC 8705 cert-bound token validation (cnf.x5t#S256) — verify_binding()
+- [x] P2: Config extensions (MtlsConfig, STOA_MTLS_* env vars)
+- [x] P2: Admin endpoints (GET /admin/mtls/config, GET /admin/mtls/stats)
+- [x] P2: Fingerprint normalization (hex, hex_colons, base64url) + timing-safe compare
+- [x] P2: Trusted proxy CIDR matching, per-route mTLS requirement
+- [x] P2: 299 tests pass (32 new), clippy clean
+```
+
+#### CAB-864 P3 — Bulk Onboarding + Registry (8 pts) — pending
+```
+- [ ] P3: Certificate registry model in control-plane-api (Alembic migration 019)
+- [ ] P3: Bulk onboarding endpoint (POST /v1/consumers/{tenant_id}/bulk, max 100)
 - [ ] P3: Certificate revocation + gateway allowlist sync
 ```
 
@@ -109,7 +118,7 @@ All sessions completed. PRs #203-#222 merged. Session 21: AI Factory modernizati
 ### Remaining breakdown
 | Ticket | Pts | Blocker? |
 |--------|-----|----------|
-| CAB-864 P2-P3 mTLS impl | 26 | Design doc ready (PR #221) |
+| CAB-864 P3 Bulk Onboarding | 8 | P2 done (PR #224) |
 | CAB-1121 P4 Quota | 15 | P1-P3 done, ready to go |
 | CAB-1121 P6 E2E | 13 | Needs P4 first |
 | CAB-1035 Persona Alex | 2 | Manual test |

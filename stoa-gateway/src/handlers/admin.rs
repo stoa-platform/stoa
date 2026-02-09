@@ -34,7 +34,7 @@ use crate::state::AppState;
 ///
 /// Validates the `Authorization: Bearer <token>` header against
 /// `config.admin_api_token`. If no token is configured, returns 503
-/// (admin API disabled \u2014 no token configured).
+/// (admin API disabled -- no token configured).
 pub async fn admin_auth(
     State(state): State<AppState>,
     request: Request<Body>,
@@ -44,10 +44,11 @@ pub async fn admin_auth(
         Some(token) if !token.is_empty() => token,
         _ => {
             warn!("Admin API request rejected: no admin_api_token configured");
-            return Err(
-                (StatusCode::SERVICE_UNAVAILABLE, "Admin API disabled \u2014 no admin_api_token configured")
-                    .into_response(),
-            );
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Admin API disabled - no admin_api_token configured",
+            )
+                .into_response());
         }
     };
 

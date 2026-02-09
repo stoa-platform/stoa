@@ -334,6 +334,65 @@ def sample_tenant_data():
     }
 
 
+# ============== Consumer & Plan Fixtures (CAB-1121) ==============
+
+
+@pytest.fixture
+def sample_consumer_id():
+    """Generate a consistent consumer ID for tests."""
+    return uuid4()
+
+
+@pytest.fixture
+def sample_consumer_data(sample_consumer_id):
+    """Sample consumer data for testing."""
+    return {
+        "id": sample_consumer_id,
+        "external_id": "partner-acme-001",
+        "name": "ACME Corp",
+        "email": "api@acme.com",
+        "company": "ACME Corporation",
+        "description": "Strategic API partner",
+        "tenant_id": "acme",
+        "keycloak_user_id": None,
+        "status": "active",
+        "consumer_metadata": None,
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+        "created_by": "tenant-admin-user-id",
+    }
+
+
+@pytest.fixture
+def sample_plan_id():
+    """Generate a consistent plan ID for tests."""
+    return uuid4()
+
+
+@pytest.fixture
+def sample_plan_data(sample_plan_id):
+    """Sample plan data for testing."""
+    return {
+        "id": sample_plan_id,
+        "slug": "gold",
+        "name": "Gold Plan",
+        "description": "High-volume plan for production",
+        "tenant_id": "acme",
+        "rate_limit_per_second": 100,
+        "rate_limit_per_minute": 5000,
+        "daily_request_limit": 1000000,
+        "monthly_request_limit": 30000000,
+        "burst_limit": 200,
+        "requires_approval": True,
+        "auto_approve_roles": None,
+        "status": "active",
+        "pricing_metadata": None,
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+        "created_by": "tenant-admin-user-id",
+    }
+
+
 # ============== App & Client Fixtures ==============
 
 @pytest.fixture

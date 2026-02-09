@@ -20,6 +20,8 @@ from src.database import Base
 from src.models.subscription import Subscription
 from src.models.mcp_subscription import MCPServer, MCPServerTool, MCPServerSubscription, MCPToolAccess
 from src.models.catalog import APICatalog, MCPToolsCatalog, CatalogSyncStatus
+from src.models.consumer import Consumer
+from src.models.plan import Plan
 
 # this is the Alembic Config object
 config = context.config

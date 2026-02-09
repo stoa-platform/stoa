@@ -5,6 +5,7 @@ from .catalog import (
     SyncStatus,
     SyncType,
 )
+from .consumer import Consumer, ConsumerStatus
 from .external_mcp_server import (
     ExternalMCPAuthType,
     ExternalMCPHealthStatus,
@@ -38,6 +39,7 @@ from .mcp_subscription import (
     MCPToolAccess,
     MCPToolAccessStatus,
 )
+from .plan import Plan, PlanStatus
 from .prospect_event import EventType, ProspectEvent
 from .prospect_feedback import ProspectFeedback
 from .subscription import Subscription, SubscriptionStatus

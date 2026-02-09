@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './Layout';
 
 const mockUseAuth = vi.fn(() => ({
@@ -57,10 +58,15 @@ vi.mock('@stoa/shared/hooks', () => ({
 }));
 
 function renderLayout(children = <div>Page Content</div>) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <MemoryRouter initialEntries={['/']}>
-      <Layout>{children}</Layout>
-    </MemoryRouter>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/']}>
+        <Layout>{children}</Layout>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 

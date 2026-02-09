@@ -11,9 +11,15 @@ vi.mock('../config', () => ({
   },
 }));
 
+const mockRetry = vi.fn();
+vi.mock('../hooks/useServiceHealth', () => ({
+  useServiceHealth: () => ({ status: 'available', retry: mockRetry }),
+}));
+
 describe('IdentityEmbed', () => {
   beforeEach(() => {
     vi.spyOn(window, 'open').mockImplementation(() => null);
+    mockRetry.mockClear();
   });
 
   it('renders title heading', () => {

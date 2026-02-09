@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { config } from '../config';
 import { ExternalLink, RefreshCw, Maximize2, Minimize2, Shield } from 'lucide-react';
+import { useServiceHealth } from '../hooks/useServiceHealth';
+import { ServiceUnavailable } from '../components/ServiceUnavailable';
 
 /**
  * IdentityEmbed - Embedded Keycloak account console view
@@ -12,31 +14,36 @@ import { ExternalLink, RefreshCw, Maximize2, Minimize2, Shield } from 'lucide-re
 export function IdentityEmbed() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [key, setKey] = useState(0); // For forcing iframe reload
+  const [key, setKey] = useState(0);
 
-  // Keycloak account console URL (via proxy or direct)
   const keycloakAccountUrl = `${config.keycloak.url}/realms/${config.keycloak.realm}/account`;
+  const { status: serviceStatus, retry: retryHealth } = useServiceHealth(keycloakAccountUrl);
 
   const handleIframeLoad = () => {
     setIsLoading(false);
-    setError(null);
-  };
-
-  const handleIframeError = () => {
-    setIsLoading(false);
-    setError('Failed to load Identity Management. Please check your connection.');
   };
 
   const handleRefresh = () => {
     setIsLoading(true);
-    setError(null);
     setKey((prev) => prev + 1);
   };
 
   const handleOpenExternal = () => {
     window.open(keycloakAccountUrl, '_blank', 'noopener,noreferrer');
   };
+
+  if (serviceStatus === 'unavailable') {
+    return (
+      <ServiceUnavailable
+        serviceName="Keycloak"
+        description="The identity provider is not reachable. It may not be deployed or is temporarily unavailable."
+        icon={Shield}
+        externalUrl={keycloakAccountUrl}
+        configHint="Deploy Keycloak and ensure the realm is accessible at the configured URL"
+        onRetry={retryHealth}
+      />
+    );
+  }
 
   return (
     <div
@@ -95,7 +102,7 @@ export function IdentityEmbed() {
         style={{ height: isFullscreen ? 'calc(100vh - 120px)' : 'calc(100vh - 220px)' }}
       >
         {/* Loading State */}
-        {isLoading && (
+        {(isLoading || serviceStatus === 'checking') && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-neutral-900 z-10">
             <div className="text-center">
               <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -104,46 +111,18 @@ export function IdentityEmbed() {
           </div>
         )}
 
-        {/* Error State */}
-        {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-neutral-900 z-10">
-            <div className="text-center max-w-md px-4">
-              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="h-8 w-8 text-red-600 dark:text-red-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Unable to Load Identity Management
-              </h3>
-              <p className="text-gray-500 dark:text-neutral-400 mb-4">{error}</p>
-              <div className="flex gap-2 justify-center">
-                <button
-                  onClick={handleRefresh}
-                  className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
-                >
-                  Try Again
-                </button>
-                <button
-                  onClick={handleOpenExternal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700"
-                >
-                  Open in New Tab
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Keycloak Account Console Iframe */}
-        <iframe
-          key={key}
-          src={keycloakAccountUrl}
-          title="STOA Identity Management - Keycloak"
-          className="w-full h-full border-0"
-          onLoad={handleIframeLoad}
-          onError={handleIframeError}
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
+        {serviceStatus === 'available' && (
+          <iframe
+            key={key}
+            src={keycloakAccountUrl}
+            title="STOA Identity Management - Keycloak"
+            className="w-full h-full border-0"
+            onLoad={handleIframeLoad}
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        )}
       </div>
     </div>
   );

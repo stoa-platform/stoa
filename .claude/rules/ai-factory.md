@@ -187,12 +187,64 @@ Usage: PR review rapide, validation pre-merge.
 ```
 Usage: implementation complete d'un ticket CAB-XXXX. Voir `git-workflow.md` pour Ship/Show/Ask + CD verification map.
 
-### Pattern 4: Agent Teams (experimental)
-```bash
-# Prerequis: tmux installe
-export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+### Pattern 4: Agent Teams (opt-in, experimental)
+
+**Activation**: `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` dans `.claude/settings.json` (auto, pas de .zshrc).
+**Prerequis runtime**: `brew install tmux`
+
+**IMPORTANT**: Le flag rend la feature disponible. Il ne l'active PAS automatiquement.
+Claude ne spawne des teammates que si les criteres ci-dessous sont remplis.
+
+#### Gate de decision — Quand utiliser Agent Teams
+
 ```
-Usage: refactoring multi-composants, migration majeure, debugging avec hypotheses concurrentes.
+Tache a realiser ?
+│
+├── Mono-composant (api, ui, portal, gateway, mcp, e2e)
+│   └── ❌ Single session — Agent Teams interdit (overhead inutile)
+│
+├── Multi-composants MAIS sequentiels (couplage fort)
+│   └── ❌ Single session — micro-PRs Stripe (Pattern 5/7)
+│
+├── Multi-composants ET independants (aucune dependance entre eux)
+│   │   Exemples:
+│   │   - API endpoints + UI components + tests E2E (3 scopes isoles)
+│   │   - Refactoring gateway + refactoring portal (zero couplage)
+│   │   - Debug concurrent: 3 hypotheses a tester en parallele
+│   │
+│   ├── LOC total < 300 ?
+│   │   └── ❌ Single session — pas assez de travail pour justifier N contextes
+│   │
+│   └── LOC total >= 300, 2-3 scopes independants ?
+│       └── ✅ Agent Teams (max 3 teammates)
+│           Lead: Opus (coordination) | Teammates: Sonnet (implementation)
+│
+└── User demande explicitement "use teams" / "parallelize"
+    └── ✅ Agent Teams — user override, pas de gate
+```
+
+#### Regles d'usage
+
+| Regle | Detail |
+|-------|--------|
+| Max teammates | **3** (au-dela, cout explose sans gain proportionnel) |
+| Lead model | Opus (coordination strategique) |
+| Teammate model | Sonnet (implementation, cout maitrise) |
+| Chaque teammate | 1 scope, 1 branche, 1 micro-PR independante |
+| Jamais pour | Docs-only, single-file fix, config changes, memory updates |
+| Cost awareness | ~3-4x tokens pour 3 teammates, ~7x avec overhead plan mode |
+
+#### Workflow Agent Teams
+```
+1. [Lead/Opus] Analyser la tache, identifier N scopes independants
+2. [Lead/Opus] Creer le plan: quel teammate fait quoi
+3. [Teammate 1/Sonnet] Scope A: branch → code → tests → quality gate
+4. [Teammate 2/Sonnet] Scope B: branch → code → tests → quality gate
+5. [Teammate 3/Sonnet] Scope C: branch → code → tests → quality gate
+6. [Lead/Opus] Synthetiser: verifier coherence, pas de conflit
+7. [Inline] Push + PRs + CI green + merge (sequentiel)
+8. [Inline] Update state files
+```
 
 ### Pattern 5: CI-first development (always-green main)
 ```

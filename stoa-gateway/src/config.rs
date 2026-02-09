@@ -200,6 +200,22 @@ pub struct Config {
     /// Env: STOA_K8S_ENABLED (default: false — explicit opt-in)
     #[serde(default)]
     pub k8s_enabled: bool,
+
+    // === Per-Upstream Circuit Breaker (CAB-362) ===
+    /// Failure threshold before opening circuit (default: 5)
+    /// Env: STOA_CB_FAILURE_THRESHOLD
+    #[serde(default = "default_cb_failure_threshold")]
+    pub cb_failure_threshold: u32,
+
+    /// Reset timeout in seconds before trying half-open (default: 30)
+    /// Env: STOA_CB_RESET_TIMEOUT_SECS
+    #[serde(default = "default_cb_reset_timeout_secs")]
+    pub cb_reset_timeout_secs: u64,
+
+    /// Successes needed in half-open to close circuit (default: 2)
+    /// Env: STOA_CB_SUCCESS_THRESHOLD
+    #[serde(default = "default_cb_success_threshold")]
+    pub cb_success_threshold: u32,
 }
 
 fn default_port() -> u16 {
@@ -266,6 +282,18 @@ fn default_kafka_errors_topic() -> String {
     "stoa.errors".to_string()
 }
 
+fn default_cb_failure_threshold() -> u32 {
+    5
+}
+
+fn default_cb_reset_timeout_secs() -> u64 {
+    30
+}
+
+fn default_cb_success_threshold() -> u32 {
+    2
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -310,6 +338,9 @@ impl Default for Config {
             kafka_metering_topic: default_kafka_metering_topic(),
             kafka_errors_topic: default_kafka_errors_topic(),
             k8s_enabled: false,
+            cb_failure_threshold: default_cb_failure_threshold(),
+            cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
+            cb_success_threshold: default_cb_success_threshold(),
         }
     }
 }

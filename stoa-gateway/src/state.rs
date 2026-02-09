@@ -10,12 +10,13 @@ use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
 use crate::cache::{SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
 use crate::control_plane::{OidcConfig, ToolProxyClient};
+use crate::governance::zombie::{ZombieConfig, ZombieDetector};
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
 use crate::rate_limit::RateLimiter;
-use crate::resilience::{CircuitBreaker, CircuitBreakerConfig};
+use crate::resilience::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry};
 use crate::routes::{PolicyRegistry, RouteRegistry};
 use crate::uac::Action;
 
@@ -41,6 +42,11 @@ pub struct AppState {
     /// Kafka metering producer (Phase 3: CAB-1105)
     /// None if Kafka metering is disabled or unavailable.
     pub metering_producer: Option<Arc<MeteringProducer>>,
+    /// Zombie session detector (CAB-362)
+    /// None if zombie detection is disabled.
+    pub zombie_detector: Option<Arc<ZombieDetector>>,
+    /// Per-upstream circuit breaker registry (CAB-362)
+    pub circuit_breakers: Arc<CircuitBreakerRegistry>,
 }
 
 impl AppState {
@@ -142,6 +148,30 @@ impl AppState {
         let cp_circuit_breaker = CircuitBreaker::new("cp-api", CircuitBreakerConfig::default());
         tracing::info!("Circuit breaker initialized for CP API");
 
+        // Initialize zombie detector (CAB-362)
+        let zombie_detector = if config.zombie_detection_enabled {
+            let zd = Arc::new(ZombieDetector::new(ZombieConfig {
+                session_ttl_secs: config.agent_session_ttl_secs,
+                attestation_interval: config.attestation_interval,
+                ..ZombieConfig::default()
+            }));
+            tracing::info!("Zombie session detector initialized");
+            Some(zd)
+        } else {
+            tracing::info!("Zombie detection disabled");
+            None
+        };
+
+        // Initialize per-upstream circuit breaker registry (CAB-362)
+        let cb_config = CircuitBreakerConfig {
+            failure_threshold: config.cb_failure_threshold,
+            reset_timeout: std::time::Duration::from_secs(config.cb_reset_timeout_secs),
+            success_threshold: config.cb_success_threshold,
+            ..CircuitBreakerConfig::default()
+        };
+        let circuit_breakers = Arc::new(CircuitBreakerRegistry::new(cb_config));
+        tracing::info!("Per-upstream circuit breaker registry initialized");
+
         // Initialize Kafka metering producer (Phase 3: CAB-1105)
         let metering_producer = if config.kafka_enabled {
             let kafka_config = KafkaConfig {
@@ -183,6 +213,8 @@ impl AppState {
             semantic_cache,
             cp_circuit_breaker,
             metering_producer,
+            zombie_detector,
+            circuit_breakers,
         }
     }
 
@@ -193,6 +225,26 @@ impl AppState {
 
         // Start rate limiter cleanup
         self.rate_limiter.clone().start_cleanup_task();
+
+        // Start zombie reaper (CAB-362)
+        if let Some(ref zd) = self.zombie_detector {
+            let zombie_detector = zd.clone();
+            let session_manager = self.session_manager.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+                loop {
+                    interval.tick().await;
+                    // Mark zombies first
+                    zombie_detector.check_zombies().await;
+                    // Reap dead sessions and cross-remove from SessionManager
+                    let reaped = zombie_detector.reap_dead_sessions().await;
+                    for id in &reaped {
+                        session_manager.remove(id).await;
+                    }
+                }
+            });
+            tracing::info!("Zombie reaper background task started (60s interval)");
+        }
     }
 }
 

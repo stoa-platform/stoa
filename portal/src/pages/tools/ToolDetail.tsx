@@ -332,7 +332,8 @@ ${
   }
 });
 
-console.log(response);`}
+// Handle the response
+// response.content contains the tool result`}
                   </pre>
                 </div>
               </div>

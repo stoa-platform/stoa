@@ -17,11 +17,31 @@ import type { Contract, ProtocolType, ProtocolBinding } from '../../types';
 
 // Protocol badge colors
 const protocolConfig: Record<ProtocolType, { label: string; className: string }> = {
-  rest: { label: 'REST', className: 'bg-green-50 text-green-700 border-green-200' },
-  mcp: { label: 'MCP', className: 'bg-purple-50 text-purple-700 border-purple-200' },
-  graphql: { label: 'GraphQL', className: 'bg-pink-50 text-pink-700 border-pink-200' },
-  grpc: { label: 'gRPC', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-  kafka: { label: 'Kafka', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+  rest: {
+    label: 'REST',
+    className:
+      'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800',
+  },
+  mcp: {
+    label: 'MCP',
+    className:
+      'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800',
+  },
+  graphql: {
+    label: 'GraphQL',
+    className:
+      'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-900/20 dark:text-pink-400 dark:border-pink-800',
+  },
+  grpc: {
+    label: 'gRPC',
+    className:
+      'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800',
+  },
+  kafka: {
+    label: 'Kafka',
+    className:
+      'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800',
+  },
 };
 
 // Small protocol badge for the card
@@ -55,8 +75,8 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
     <Link
       to={`/contracts/${contract.id}`}
       className="
-        block bg-white rounded-lg border border-gray-200
-        hover:border-blue-300 hover:shadow-md
+        block bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700
+        hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md
         transition-all duration-200
         overflow-hidden
       "
@@ -65,10 +85,10 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-2 min-w-0">
-            <h3 className="font-semibold text-gray-900 truncate">
+            <h3 className="font-semibold text-gray-900 dark:text-white truncate">
               {contract.display_name || contract.name}
             </h3>
-            <span className="flex-shrink-0 text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+            <span className="flex-shrink-0 text-xs text-gray-500 dark:text-neutral-400 bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded">
               v{contract.version}
             </span>
           </div>
@@ -81,7 +101,9 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
 
         {/* Description */}
         {contract.description && (
-          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{contract.description}</p>
+          <p className="text-sm text-gray-600 dark:text-neutral-400 mb-3 line-clamp-2">
+            {contract.description}
+          </p>
         )}
 
         {/* Protocol badges */}
@@ -92,14 +114,14 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
 
           {/* Show count of disabled bindings */}
           {badgeBindings.length > enabledBindings.length && (
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-400 dark:text-neutral-500">
               +{badgeBindings.length - enabledBindings.length} available
             </span>
           )}
         </div>
 
         {/* Stats footer */}
-        <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-100">
+        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-neutral-400 pt-3 border-t border-gray-100 dark:border-neutral-700">
           <span>Updated {formatRelativeTime(contract.updated_at)}</span>
           <span
             className={`
@@ -123,10 +145,10 @@ const ContractCard = memo<ContractCardProps>(function ContractCard({ contract })
 
 // Empty state component
 const EmptyState: React.FC = () => (
-  <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-    <FileCode2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-    <h3 className="text-lg font-medium text-gray-900 mb-2">No contracts yet</h3>
-    <p className="text-gray-500 mb-6 max-w-md mx-auto">
+  <div className="text-center py-12 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
+    <FileCode2 className="h-12 w-12 text-gray-300 dark:text-neutral-600 mx-auto mb-4" />
+    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No contracts yet</h3>
+    <p className="text-gray-500 dark:text-neutral-400 mb-6 max-w-md mx-auto">
       Create your first Universal API Contract to expose your API via multiple protocols
       automatically.
     </p>
@@ -156,10 +178,12 @@ const LoadingState: React.FC = () => (
 
 // Error state component
 const ErrorState: React.FC<{ message: string }> = ({ message }) => (
-  <div className="text-center py-12 bg-white rounded-lg border border-red-200">
+  <div className="text-center py-12 bg-white dark:bg-neutral-800 rounded-lg border border-red-200 dark:border-red-800">
     <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-    <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to load contracts</h3>
-    <p className="text-gray-500">{message}</p>
+    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+      Failed to load contracts
+    </h3>
+    <p className="text-gray-500 dark:text-neutral-400">{message}</p>
   </div>
 );
 
@@ -173,8 +197,8 @@ export const ContractListPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Contracts</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Contracts</h1>
+          <p className="text-gray-500 dark:text-neutral-400 mt-1">
             Manage your Universal API Contracts and protocol bindings
           </p>
         </div>

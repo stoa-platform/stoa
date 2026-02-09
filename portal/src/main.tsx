@@ -6,17 +6,12 @@ import { AuthProvider as OidcProvider } from 'react-oidc-context';
 import { WebStorageStateStore } from 'oidc-client-ts';
 import { ThemeProvider } from '@stoa/shared/contexts';
 import { ToastProvider } from '@stoa/shared/components/Toast';
-import { onCLS, onLCP, onINP } from 'web-vitals';
 import App from './App';
 import { config } from './config';
 import './index.css';
 
-// Log Core Web Vitals in dev mode
-if (config.app.isDev) {
-  onLCP(({ value }) => console.log('[WebVitals] LCP:', value, 'ms'));
-  onINP(({ value }) => console.log('[WebVitals] INP:', value, 'ms'));
-  onCLS(({ value }) => console.log('[WebVitals] CLS:', value));
-}
+// Core Web Vitals monitoring can be added here if needed
+// Example: send metrics to analytics service
 
 // React Query client configuration
 const queryClient = new QueryClient({

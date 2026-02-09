@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { config } from '../config';
 import { isAllowedEmbedUrl } from '../utils/navigation';
-import { ExternalLink, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
+import { ExternalLink, RefreshCw, Maximize2, Minimize2, Gauge } from 'lucide-react';
+import { useServiceHealth } from '../hooks/useServiceHealth';
+import { ServiceUnavailable } from '../components/ServiceUnavailable';
 
 /**
  * GrafanaEmbed - Embedded Grafana / Prometheus dashboard view
@@ -15,7 +17,6 @@ export function GrafanaEmbed() {
   const [searchParams] = useSearchParams();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [key, setKey] = useState(0);
 
   const targetUrl = searchParams.get('url');
@@ -25,25 +26,33 @@ export function GrafanaEmbed() {
   const isPrometheus = iframeUrl.includes('prometheus');
   const serviceLabel = isPrometheus ? 'Prometheus' : 'Grafana';
 
+  const { status: serviceStatus, retry: retryHealth } = useServiceHealth(iframeUrl);
+
   const handleIframeLoad = () => {
     setIsLoading(false);
-    setError(null);
-  };
-
-  const handleIframeError = () => {
-    setIsLoading(false);
-    setError(`Failed to load ${serviceLabel}. Please check your connection.`);
   };
 
   const handleRefresh = () => {
     setIsLoading(true);
-    setError(null);
     setKey((prev) => prev + 1);
   };
 
   const handleOpenExternal = () => {
     window.open(iframeUrl, '_blank', 'noopener,noreferrer');
   };
+
+  if (serviceStatus === 'unavailable') {
+    return (
+      <ServiceUnavailable
+        serviceName={serviceLabel}
+        description={`${serviceLabel} is not reachable. It may not be deployed or the proxy is not configured.`}
+        icon={Gauge}
+        externalUrl={iframeUrl}
+        configHint="Deploy Grafana with Keycloak OIDC and set GF_SERVER_SERVE_FROM_SUB_PATH=true"
+        onRetry={retryHealth}
+      />
+    );
+  }
 
   return (
     <div
@@ -95,7 +104,7 @@ export function GrafanaEmbed() {
         style={{ height: isFullscreen ? 'calc(100vh - 120px)' : 'calc(100vh - 220px)' }}
       >
         {/* Loading State */}
-        {isLoading && (
+        {(isLoading || serviceStatus === 'checking') && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-neutral-900 z-10">
             <div className="text-center">
               <div className="w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -104,46 +113,18 @@ export function GrafanaEmbed() {
           </div>
         )}
 
-        {/* Error State */}
-        {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-neutral-900 z-10">
-            <div className="text-center max-w-md px-4">
-              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">⚠️</span>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Unable to Load {serviceLabel}
-              </h3>
-              <p className="text-gray-500 dark:text-neutral-400 mb-4">{error}</p>
-              <div className="flex gap-2 justify-center">
-                <button
-                  onClick={handleRefresh}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700"
-                >
-                  Try Again
-                </button>
-                <button
-                  onClick={handleOpenExternal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700"
-                >
-                  Open in New Tab
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Iframe */}
-        <iframe
-          key={key}
-          src={iframeUrl}
-          title={`STOA Observability - ${serviceLabel}`}
-          className="w-full h-full border-0"
-          onLoad={handleIframeLoad}
-          onError={handleIframeError}
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
+        {serviceStatus === 'available' && (
+          <iframe
+            key={key}
+            src={iframeUrl}
+            title={`STOA Observability - ${serviceLabel}`}
+            className="w-full h-full border-0"
+            onLoad={handleIframeLoad}
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        )}
       </div>
     </div>
   );

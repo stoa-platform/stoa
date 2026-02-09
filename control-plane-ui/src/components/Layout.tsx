@@ -44,6 +44,7 @@ import {
   Check,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useApiConnectivity } from '../hooks/useApiConnectivity';
 
 interface LayoutProps {
   children: ReactNode;
@@ -221,6 +222,7 @@ export function Layout({ children }: LayoutProps) {
   const breadcrumbItems = useBreadcrumbs();
   const { setOpen: setCommandPaletteOpen, setItems: setCommandItems } = useCommandPalette();
   const { resolvedTheme, toggleTheme } = useTheme();
+  const { isConnected, isChecking } = useApiConnectivity();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Collapsible section state — persisted to localStorage
@@ -654,6 +656,14 @@ export function Layout({ children }: LayoutProps) {
             </div>
           )}
         </header>
+
+        {/* API connectivity banner */}
+        {!isConnected && !isChecking && (
+          <div className="bg-red-600 text-white px-4 py-2 text-sm text-center">
+            <AlertTriangle className="inline h-4 w-4 mr-2 -mt-0.5" />
+            Cannot connect to the STOA API. Some features may be unavailable.
+          </div>
+        )}
 
         {/* Page content */}
         <main className="p-4 sm:p-6">{children}</main>

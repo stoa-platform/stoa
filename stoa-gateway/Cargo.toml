@@ -43,6 +43,11 @@ moka = { version = "0.12", features = ["sync", "future"] }  # API key + JWKS cac
 # === NEW - Phase 4: Config ===
 figment = { version = "0.10", features = ["yaml", "env"] }  # Layered config
 
+# === Phase 2: mTLS Certificate Binding (CAB-864) ===
+subtle = "2"                                 # Timing-safe comparison for fingerprints
+base64 = "0.22"                              # Base64url decode for RFC 8705 thumbprints
+ipnet = "2"                                  # CIDR matching for trusted proxies
+
 # === Phase 2 OPA: Embedded Policy Engine (CAB-1094) ===
 regorus = "0.2"                              # Pure Rust OPA evaluator (no sidecar)
 

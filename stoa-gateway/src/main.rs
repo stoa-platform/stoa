@@ -209,6 +209,9 @@ fn build_router(state: AppState) -> Router {
             "/circuit-breakers/:name/reset",
             post(admin::circuit_breaker_reset_by_name),
         )
+        // CAB-864: mTLS admin
+        .route("/mtls/config", get(admin::mtls_config))
+        .route("/mtls/stats", get(admin::mtls_stats))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
@@ -220,6 +223,16 @@ fn build_router(state: AppState) -> Router {
         .route("/ready", get(ready))
         .route("/metrics", get(prometheus_metrics))
         .nest("/admin", admin_router);
+
+    // Build mTLS extraction layer (CAB-864)
+    // Stage 1: runs BEFORE JWT auth — extracts cert info from headers
+    let mtls_config = state.config.mtls.clone();
+    let mtls_stats = state.mtls_stats.clone();
+    let mtls_layer = axum::middleware::from_fn(move |request, next| {
+        let config = mtls_config.clone();
+        let stats = mtls_stats.clone();
+        auth::mtls::mtls_extraction_middleware(config, stats, request, next)
+    });
 
     match state.config.gateway_mode {
         GatewayMode::EdgeMcp => {
@@ -256,6 +269,8 @@ fn build_router(state: AppState) -> Router {
                 )
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
+                // mTLS extraction: Stage 1 runs before JWT auth (CAB-864)
+                .layer(mtls_layer)
                 .with_state(state)
         }
         GatewayMode::Sidecar => {

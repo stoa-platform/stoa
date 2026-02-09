@@ -6,10 +6,12 @@ import asyncio
 import os
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import FastAPI
+import httpx
+import sqlalchemy.exc
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
@@ -25,7 +27,7 @@ from .opensearch import search_router, setup_opensearch
 from .routers import (
     admin_prospects,
     apis,
-    applications,
+    applications,  # noqa: F401
     business,
     catalog_admin,
     certificates,
@@ -354,6 +356,37 @@ configure_tracing(app, settings)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
+
+# === CAB-1122: Global exception handlers — structured error taxonomy ===
+@app.exception_handler(sqlalchemy.exc.IntegrityError)
+async def integrity_error_handler(request: Request, exc: sqlalchemy.exc.IntegrityError) -> JSONResponse:
+    detail = str(exc.orig) if exc.orig else str(exc)
+    logger.warning("Database integrity error", path=str(request.url.path), detail=detail)
+    return JSONResponse(
+        status_code=409, content={"detail": "Conflict: a resource with this identifier already exists."}
+    )
+
+
+@app.exception_handler(sqlalchemy.exc.OperationalError)
+async def operational_error_handler(request: Request, exc: sqlalchemy.exc.OperationalError) -> JSONResponse:
+    logger.error("Database operational error", path=str(request.url.path), error=str(exc))
+    return JSONResponse(status_code=503, content={"detail": "Database service unavailable. Please retry later."})
+
+
+@app.exception_handler(httpx.HTTPError)
+async def httpx_error_handler(request: Request, exc: httpx.HTTPError) -> JSONResponse:
+    logger.error("External service error", path=str(request.url.path), error=str(exc))
+    return JSONResponse(status_code=502, content={"detail": "An upstream service is unavailable."})
+
+
+@app.exception_handler(Exception)
+async def catch_all_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error(
+        "Unhandled exception", path=str(request.url.path), error_type=type(exc).__name__, error=str(exc)
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error."})
+
+
 # GZip compression for responses > 1KB (reduces JSON payload size by ~70%)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
@@ -383,7 +416,8 @@ add_error_snapshot_middleware(app)
 # Routers
 app.include_router(tenants.router)
 app.include_router(apis.router)
-app.include_router(applications.router)
+# CAB-1122: Applications router disabled — requires Keycloak service implementation
+# app.include_router(applications.router)
 app.include_router(deployments.router)
 app.include_router(git.router)
 app.include_router(events.router)

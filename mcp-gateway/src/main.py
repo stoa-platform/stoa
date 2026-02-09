@@ -1032,10 +1032,11 @@ def register_routes(app: FastAPI) -> None:
                 )
 
                 if admin_token_response.status_code != 200:
-                    logger.warning(
+                    logger.error(
                         "Failed to get admin token, client will be confidential",
                         status_code=admin_token_response.status_code,
                     )
+                    response_data["warning"] = "client_type is confidential, PKCE not enabled"
                     return JSONResponse(content=response_data, status_code=201)
 
                 admin_token = admin_token_response.json().get("access_token")

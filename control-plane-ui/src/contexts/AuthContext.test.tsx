@@ -12,6 +12,7 @@ let mockOidcState = {
   user: null as any,
   signinRedirect: mockSigninRedirect,
   signoutRedirect: mockSignoutRedirect,
+  signinSilent: vi.fn().mockResolvedValue(null),
 };
 
 vi.mock('react-oidc-context', () => ({
@@ -23,6 +24,7 @@ vi.mock('../services/api', () => ({
   apiService: {
     setAuthToken: vi.fn(),
     clearAuthToken: vi.fn(),
+    setTokenRefresher: vi.fn(),
     getTenants: vi.fn().mockResolvedValue([]),
   },
 }));

@@ -57,11 +57,11 @@ class ApiService {
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config;
+        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
         if (
           error.response?.status === 401 &&
           originalRequest &&
-          !(originalRequest as any)._retry &&
+          !originalRequest._retry &&
           this.tokenRefresher
         ) {
           if (this.isRefreshing) {
@@ -75,7 +75,7 @@ class ApiService {
             });
           }
 
-          (originalRequest as any)._retry = true;
+          originalRequest._retry = true;
           this.isRefreshing = true;
 
           try {

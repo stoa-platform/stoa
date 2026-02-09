@@ -5,19 +5,23 @@ import math
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..config import settings
 from ..database import get_db
 from ..models.consumer import Consumer, ConsumerStatus
 from ..repositories.consumer import ConsumerRepository
 from ..schemas.consumer import (
     ConsumerCreate,
+    ConsumerCredentialsResponse,
     ConsumerListResponse,
     ConsumerResponse,
     ConsumerStatusEnum,
     ConsumerUpdate,
 )
+from ..services.keycloak_service import keycloak_service
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +80,25 @@ async def create_consumer(
     except Exception as e:
         logger.error(f"Failed to create consumer: {e}")
         raise HTTPException(status_code=500, detail="Failed to create consumer")
+
+    # Consumer is active by default — create Keycloak OAuth2 client
+    try:
+        kc_result = await keycloak_service.create_consumer_client(
+            tenant_slug=tenant_id,
+            consumer_external_id=request.external_id,
+            consumer_id=str(consumer.id),
+        )
+        consumer.keycloak_client_id = kc_result["client_id"]
+        consumer = await repo.update(consumer)
+    except RuntimeError as e:
+        logger.error(f"Keycloak unavailable during consumer creation: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Authentication service unavailable, retry later"},
+            headers={"Retry-After": "5"},
+        )
+    except Exception as e:
+        logger.warning(f"Failed to create Keycloak client for consumer {consumer.id}: {e}")
 
     return ConsumerResponse.model_validate(consumer)
 
@@ -259,6 +282,26 @@ async def activate_consumer(
     consumer = await repo.update_status(consumer, ConsumerStatus.ACTIVE)
     logger.info(f"Consumer {consumer_id} activated by {user.email}")
 
+    # Create Keycloak client if not already present
+    if not consumer.keycloak_client_id:
+        try:
+            kc_result = await keycloak_service.create_consumer_client(
+                tenant_slug=tenant_id,
+                consumer_external_id=consumer.external_id,
+                consumer_id=str(consumer.id),
+            )
+            consumer.keycloak_client_id = kc_result["client_id"]
+            consumer = await repo.update(consumer)
+        except RuntimeError as e:
+            logger.error(f"Keycloak unavailable during consumer activation: {e}")
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Authentication service unavailable, retry later"},
+                headers={"Retry-After": "5"},
+            )
+        except Exception as e:
+            logger.warning(f"Failed to create Keycloak client for consumer {consumer_id}: {e}")
+
     return ConsumerResponse.model_validate(consumer)
 
 
@@ -289,3 +332,73 @@ async def block_consumer(
     logger.info(f"Consumer {consumer_id} blocked by {user.email}")
 
     return ConsumerResponse.model_validate(consumer)
+
+
+# ============== Credentials Endpoint ==============
+
+
+@router.get("/{tenant_id}/{consumer_id}/credentials", response_model=ConsumerCredentialsResponse)
+async def get_consumer_credentials(
+    tenant_id: str,
+    consumer_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get consumer OAuth2 credentials (one-time secret display).
+
+    Regenerates the client secret each time it is called so the secret
+    is only visible once per request.  The caller must store it securely.
+    """
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    repo = ConsumerRepository(db)
+    consumer = await repo.get_by_id(consumer_id)
+
+    if not consumer:
+        raise HTTPException(status_code=404, detail="Consumer not found")
+
+    if consumer.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Consumer not found")
+
+    if consumer.status != ConsumerStatus.ACTIVE:
+        raise HTTPException(status_code=400, detail="Consumer must be active to retrieve credentials")
+
+    if not consumer.keycloak_client_id:
+        raise HTTPException(status_code=404, detail="No Keycloak client configured for this consumer")
+
+    try:
+        client = await keycloak_service.get_client(consumer.keycloak_client_id)
+        if not client:
+            raise HTTPException(status_code=404, detail="Keycloak client not found")
+
+        client_uuid = client["id"]
+        secret_data = keycloak_service._admin.generate_client_secrets(client_uuid)
+
+        token_endpoint = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/token"
+
+        logger.info(f"Credentials retrieved for consumer {consumer_id} by {user.email}")
+
+        return ConsumerCredentialsResponse(
+            consumer_id=consumer.id,
+            client_id=consumer.keycloak_client_id,
+            client_secret=secret_data.get("value", ""),
+            token_endpoint=token_endpoint,
+        )
+    except RuntimeError as e:
+        logger.error(f"Keycloak unavailable for credentials retrieval: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Authentication service unavailable, retry later"},
+            headers={"Retry-After": "5"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to retrieve credentials for consumer {consumer_id}: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Authentication service unavailable, retry later"},
+            headers={"Retry-After": "5"},
+        )

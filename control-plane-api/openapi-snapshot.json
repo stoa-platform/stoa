@@ -773,6 +773,20 @@
         "title": "BindingsListResponse",
         "type": "object"
       },
+      "Body_bulk_create_consumers_v1_consumers__tenant_id__bulk_post": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_bulk_create_consumers_v1_consumers__tenant_id__bulk_post",
+        "type": "object"
+      },
       "Body_upload_certificate_v1_certificates_upload_post": {
         "properties": {
           "file": {
@@ -785,6 +799,113 @@
           "file"
         ],
         "title": "Body_upload_certificate_v1_certificates_upload_post",
+        "type": "object"
+      },
+      "BulkResultItem": {
+        "description": "Result of a single row in bulk onboarding.",
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "consumer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "status"
+        ],
+        "title": "BulkResultItem",
+        "type": "object"
+      },
+      "BulkResultResponse": {
+        "description": "Response for bulk onboarding endpoint.",
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/BulkResultItem"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "success": {
+            "title": "Success",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "success",
+          "failed",
+          "results"
+        ],
+        "title": "BulkResultResponse",
         "type": "object"
       },
       "BusinessMetrics": {
@@ -1067,6 +1188,30 @@
           "signature_algorithm"
         ],
         "title": "CertificateInfo",
+        "type": "object"
+      },
+      "CertificateRotateRequest": {
+        "description": "Schema for certificate rotation request (CAB-864).",
+        "properties": {
+          "certificate_pem": {
+            "description": "New PEM-encoded X.509 certificate",
+            "minLength": 1,
+            "title": "Certificate Pem",
+            "type": "string"
+          },
+          "grace_period_hours": {
+            "default": 24,
+            "description": "Hours during which both certs are valid",
+            "maximum": 720.0,
+            "minimum": 1.0,
+            "title": "Grace Period Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "certificate_pem"
+        ],
+        "title": "CertificateRotateRequest",
         "type": "object"
       },
       "CertificateValidationRequest": {
@@ -1392,6 +1537,63 @@
       "ConsumerResponse": {
         "description": "Schema for consumer response.",
         "properties": {
+          "certificate_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Fingerprint"
+          },
+          "certificate_not_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Not After"
+          },
+          "certificate_not_before": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Not Before"
+          },
+          "certificate_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Status"
+          },
+          "certificate_subject_dn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Subject Dn"
+          },
           "company": {
             "anyOf": [
               {
@@ -1476,9 +1678,32 @@
             ],
             "title": "Keycloak User Id"
           },
+          "last_rotated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rotated At"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "rotation_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotation Count"
           },
           "status": {
             "$ref": "#/components/schemas/ConsumerStatusEnum"
@@ -6654,6 +6879,36 @@
         "title": "NPSDistribution",
         "type": "object"
       },
+      "NearLimitConsumer": {
+        "description": "Consumer approaching their quota limit.",
+        "properties": {
+          "consumer_id": {
+            "format": "uuid",
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "monthly_limit": {
+            "title": "Monthly Limit",
+            "type": "integer"
+          },
+          "request_count_monthly": {
+            "title": "Request Count Monthly",
+            "type": "integer"
+          },
+          "usage_percent": {
+            "title": "Usage Percent",
+            "type": "number"
+          }
+        },
+        "required": [
+          "consumer_id",
+          "request_count_monthly",
+          "monthly_limit",
+          "usage_percent"
+        ],
+        "title": "NearLimitConsumer",
+        "type": "object"
+      },
       "OAuth2Credentials": {
         "description": "OAuth2 credential configuration.",
         "properties": {
@@ -8638,6 +8893,310 @@
         "title": "ProvisioningStatusEnum",
         "type": "string"
       },
+      "QuotaCounters": {
+        "description": "Current usage counters.",
+        "properties": {
+          "daily": {
+            "title": "Daily",
+            "type": "integer"
+          },
+          "monthly": {
+            "title": "Monthly",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "daily",
+          "monthly"
+        ],
+        "title": "QuotaCounters",
+        "type": "object"
+      },
+      "QuotaLimits": {
+        "description": "Plan limits sub-object.",
+        "properties": {
+          "daily_request_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Request Limit"
+          },
+          "monthly_request_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Request Limit"
+          }
+        },
+        "required": [
+          "daily_request_limit",
+          "monthly_request_limit"
+        ],
+        "title": "QuotaLimits",
+        "type": "object"
+      },
+      "QuotaListResponse": {
+        "description": "Paginated list of quota usage for admin.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QuotaUsageResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "QuotaListResponse",
+        "type": "object"
+      },
+      "QuotaRemaining": {
+        "description": "Remaining quota before hitting limits.",
+        "properties": {
+          "daily": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily"
+          },
+          "monthly": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly"
+          }
+        },
+        "required": [
+          "daily",
+          "monthly"
+        ],
+        "title": "QuotaRemaining",
+        "type": "object"
+      },
+      "QuotaResets": {
+        "description": "Timestamps when counters reset.",
+        "properties": {
+          "daily": {
+            "format": "date-time",
+            "title": "Daily",
+            "type": "string"
+          },
+          "monthly": {
+            "format": "date-time",
+            "title": "Monthly",
+            "type": "string"
+          }
+        },
+        "required": [
+          "daily",
+          "monthly"
+        ],
+        "title": "QuotaResets",
+        "type": "object"
+      },
+      "QuotaStatsResponse": {
+        "description": "Aggregate quota stats for admin.",
+        "properties": {
+          "near_limit": {
+            "items": {
+              "$ref": "#/components/schemas/NearLimitConsumer"
+            },
+            "title": "Near Limit",
+            "type": "array"
+          },
+          "top_consumers": {
+            "items": {
+              "$ref": "#/components/schemas/TopConsumer"
+            },
+            "title": "Top Consumers",
+            "type": "array"
+          },
+          "total_requests_month": {
+            "title": "Total Requests Month",
+            "type": "integer"
+          },
+          "total_requests_today": {
+            "title": "Total Requests Today",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_requests_today",
+          "total_requests_month",
+          "top_consumers",
+          "near_limit"
+        ],
+        "title": "QuotaStatsResponse",
+        "type": "object"
+      },
+      "QuotaStatusResponse": {
+        "description": "Consumer-facing quota status.",
+        "properties": {
+          "consumer_id": {
+            "format": "uuid",
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/QuotaLimits"
+          },
+          "remaining": {
+            "$ref": "#/components/schemas/QuotaRemaining"
+          },
+          "resets_at": {
+            "$ref": "#/components/schemas/QuotaResets"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/QuotaCounters"
+          }
+        },
+        "required": [
+          "consumer_id",
+          "tenant_id",
+          "plan",
+          "usage",
+          "remaining",
+          "resets_at"
+        ],
+        "title": "QuotaStatusResponse",
+        "type": "object"
+      },
+      "QuotaUsageResponse": {
+        "description": "Full quota usage row.",
+        "properties": {
+          "bandwidth_bytes_daily": {
+            "title": "Bandwidth Bytes Daily",
+            "type": "integer"
+          },
+          "bandwidth_bytes_monthly": {
+            "title": "Bandwidth Bytes Monthly",
+            "type": "integer"
+          },
+          "consumer_id": {
+            "format": "uuid",
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_reset_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reset At"
+          },
+          "period_start_daily": {
+            "format": "date",
+            "title": "Period Start Daily",
+            "type": "string"
+          },
+          "period_start_monthly": {
+            "format": "date",
+            "title": "Period Start Monthly",
+            "type": "string"
+          },
+          "request_count_daily": {
+            "title": "Request Count Daily",
+            "type": "integer"
+          },
+          "request_count_monthly": {
+            "title": "Request Count Monthly",
+            "type": "integer"
+          },
+          "subscription_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscription Id"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "consumer_id",
+          "subscription_id",
+          "tenant_id",
+          "request_count_daily",
+          "request_count_monthly",
+          "bandwidth_bytes_daily",
+          "bandwidth_bytes_monthly",
+          "period_start_daily",
+          "period_start_monthly",
+          "last_reset_at",
+          "updated_at"
+        ],
+        "title": "QuotaUsageResponse",
+        "type": "object"
+      },
       "RecentActivityItem": {
         "description": "A recent activity item for the dashboard",
         "example": {
@@ -10458,6 +11017,26 @@
           "calls"
         ],
         "title": "TopAPI",
+        "type": "object"
+      },
+      "TopConsumer": {
+        "description": "Top consumer by request count.",
+        "properties": {
+          "consumer_id": {
+            "format": "uuid",
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "request_count_monthly": {
+            "title": "Request Count Monthly",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "consumer_id",
+          "request_count_monthly"
+        ],
+        "title": "TopConsumer",
         "type": "object"
       },
       "TransportTypeEnum": {
@@ -15372,6 +15951,241 @@
         ]
       }
     },
+    "/v1/admin/quotas/{tenant_id}": {
+      "get": {
+        "description": "List all consumers' quota usage for a tenant.",
+        "operationId": "list_quota_usage_v1_admin_quotas__tenant_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Quota Usage",
+        "tags": [
+          "Quotas"
+        ]
+      }
+    },
+    "/v1/admin/quotas/{tenant_id}/stats": {
+      "get": {
+        "description": "Get aggregate quota stats for a tenant.",
+        "operationId": "get_quota_stats_v1_admin_quotas__tenant_id__stats_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaStatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Quota Stats",
+        "tags": [
+          "Quotas"
+        ]
+      }
+    },
+    "/v1/admin/quotas/{tenant_id}/{consumer_id}": {
+      "get": {
+        "description": "Get specific consumer's quota usage.",
+        "operationId": "get_consumer_quota_v1_admin_quotas__tenant_id___consumer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaUsageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Consumer Quota",
+        "tags": [
+          "Quotas"
+        ]
+      }
+    },
+    "/v1/admin/quotas/{tenant_id}/{consumer_id}/reset": {
+      "post": {
+        "description": "Manually reset a consumer's quota counters.",
+        "operationId": "reset_consumer_quota_v1_admin_quotas__tenant_id___consumer_id__reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaUsageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reset Consumer Quota",
+        "tags": [
+          "Quotas"
+        ]
+      }
+    },
     "/v1/applications": {
       "get": {
         "description": "List user's applications.\n\nReturns all applications owned by the current user across all tenants\nthey have access to.",
@@ -16042,6 +16856,64 @@
         ]
       }
     },
+    "/v1/consumers/{tenant_id}/bulk": {
+      "post": {
+        "description": "Bulk onboard consumers from a CSV file (CAB-864).\n\nCSV columns: external_id, name, email, company (optional), certificate_pem (optional).\nMax 100 rows per request. Each row is processed independently.",
+        "operationId": "bulk_create_consumers_v1_consumers__tenant_id__bulk_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_bulk_create_consumers_v1_consumers__tenant_id__bulk_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResultResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Create Consumers",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
     "/v1/consumers/{tenant_id}/{consumer_id}": {
       "delete": {
         "description": "Delete a consumer.",
@@ -16331,6 +17203,132 @@
         ]
       }
     },
+    "/v1/consumers/{tenant_id}/{consumer_id}/certificate/revoke": {
+      "post": {
+        "description": "Revoke a consumer's mTLS certificate (CAB-864).\n\nSets certificate_status to 'revoked' and disables the Keycloak client.\nIdempotent \u2014 revoking an already-revoked certificate is a no-op.",
+        "operationId": "revoke_certificate_v1_consumers__tenant_id___consumer_id__certificate_revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Certificate",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/{consumer_id}/certificate/rotate": {
+      "post": {
+        "description": "Rotate a consumer's mTLS certificate (CAB-864).\n\nAccepts a new PEM certificate, moves the current fingerprint to\ncertificate_fingerprint_previous, and sets a grace period.",
+        "operationId": "rotate_certificate_v1_consumers__tenant_id___consumer_id__certificate_rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificateRotateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Certificate",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
     "/v1/consumers/{tenant_id}/{consumer_id}/credentials": {
       "get": {
         "description": "Get consumer OAuth2 credentials (one-time secret display).\n\nRegenerates the client secret each time it is called so the secret\nis only visible once per request.  The caller must store it securely.",
@@ -16384,6 +17382,64 @@
           }
         ],
         "summary": "Get Consumer Credentials",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/{consumer_id}/quota": {
+      "get": {
+        "description": "Get a consumer's current quota status (usage + remaining + resets).",
+        "operationId": "get_consumer_quota_status_v1_consumers__tenant_id___consumer_id__quota_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Consumer Quota Status",
         "tags": [
           "Consumers"
         ]
@@ -24626,6 +25682,10 @@
     {
       "description": "Subscription plan management with quotas (CAB-1121)",
       "name": "Plans"
+    },
+    {
+      "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)",
+      "name": "Quotas"
     }
   ]
 }

@@ -1,213 +1,260 @@
-# STOA Platform — Plan
+# 🚀 CYCLE 7 — Plan Claude Code (9-15 fév 2026)
 
-> Last updated: 2026-02-08 22:30 CET
-> Sprint goal: Revenue-ready demo by Feb 24, 2026
-
----
-
-## Active — In Progress
-
-### CAB-1112 — Kyverno: Switch Audit → Enforce (5 ClusterPolicies)
-
-**Status**: TODO | **Points**: 2 | **Labels**: mvp-critical | **Cycle**: 6
-**Parent**: CAB-1106
-
-**Prérequis**:
-- [x] CAB-1106 déployé
-- [ ] Minimum 3-5 jours en mode Audit sans faux positifs dans les PolicyReports
-
-**5 ClusterPolicies à basculer**:
-1. `disallow-latest-tag`
-2. `require-requests-limits`
-3. `disallow-privilege-escalation`
-4. `require-non-root`
-5. `restrict-image-registries`
-
-**DoD**:
-- [ ] 5/5 ClusterPolicies en mode `Enforce`
-- [ ] Aucun pod légitime bloqué
-- [ ] PolicyReports propres (0 FAIL sur resources STOA)
-
-**Exécution recommandée**: Claude CLI (ops sensible, feedback live kubectl)
+**Target: 300 pts** | Vélocité réelle: **~1 pt / 2 min** (5 pts SEO = 8 min) | Mode: FULL SEND
 
 ---
 
-## Completed — Cycle 6
+## 📊 SCOREBOARD (révisé — audit Claude Code + vélocité réelle)
 
-### CAB-1119 — Brand Unification: Logo S Émeraude + Design Tokens + Portal Menu Cleanup ✅
+> **Audit réalité:** 6 tickets avaient 70-100% du code déjà écrit (Cycle 6).
+> **Vélocité réelle:** Session 1 (5 pts) = 8 min. Ratio: ~1 pt / 2 min.
 
-**Status**: DONE | **PR**: #194 (phases 1-3) + #198 (phases 4-5) | **Points**: 13 | **Cycle**: 6
-
-| Phase | Sujet | Status | Result |
-|-------|-------|--------|--------|
-| Phase 1 | Design Tokens + Favicon Recolor | DONE | Emerald palette, 14 SVG recolors, 3 Keycloak theme files, CSS cleanup |
-| Phase 2 | StoaLogo Component + UI Integration | DONE | Inline SVG component, Console sidebar + Portal header/loading/login |
-| Phase 3 | Portal Menu Restructure | DONE | 3 sections (Discover/Workspace/Account), tabbed WorkspacePage, redirects |
-| Phase 4 | Console Sidebar Restructuration | DONE | 5 sections (Overview/Catalog/⚡Gateway/Insights/Governance), STOA badges, "Control Plane" subtitle |
-| Phase 5 | Dark/Light Mode Complet | DONE | Console sidebar light mode, Portal dashboard dark mode (6 components) |
-
-All tests pass (257 console, 236 portal). Both apps build clean. Prettier + ESLint green.
-
----
-
-### BDD Steps + Clippy Fixes ✅
-
-**Status**: DONE | **PRs**: #191, #192, #196 | **Cycle**: 6
-
-- **PR #191**: Removed 6 duplicate steps from `console-admin.steps.ts` + clippy errors + helm-lint notify
-- **PR #192**: Fix clippy `collapsible_if` in `watcher.rs` (clippy 1.93)
-- **PR #196**: Removed 12 more duplicate steps from `admin-rbac.steps.ts` (3) + `consumer-flow.steps.ts` (9)
-
-Root cause: PR #184 (CAB-1103) added new step files duplicating existing step definitions. `bddgen` now clean.
-
----
-
-### AI Factory Enhancement — CI-awareness, Secrets, Rust Gotchas ✅
-
-**Status**: DONE | **PRs**: #195 + #199 (merged) | **Cycle**: 6
-
-| Action | File | Description |
-|--------|------|-------------|
-| CREATE | `.claude/rules/ci-quality-gates.md` | Exact CI thresholds (Python 53%/40%, ESLint 93/20, Rust zero), 10 failure patterns, pre-commit checklists |
-| CREATE | `.claude/rules/secrets-management.md` | Vault/ESO/AWS SM architecture, paths, agent checklist, 6 anti-patterns, rotation |
-| UPDATE | `.claude/rules/code-style-rust.md` | 31→128 lines: CI commands, system deps, 7 clippy gotchas, SAST rules |
-| UPDATE | `.claude/agents/test-writer.md` | Real CI thresholds, ESLint ratchet, CI exact commands, 5 gotchas |
-| UPDATE | `.claude/agents/security-reviewer.md` | Vault/ESO compliance checks, authorized paths, anti-patterns |
-| UPDATE | `.claude/agents/k8s-ops.md` | ArgoCD section, ESO diagnostics, Helm nil pointer gotcha |
-| UPDATE | `.claude/rules/ai-factory.md` | Pattern 5 (CI-first development), cross-refs to new rules |
-
-13 rules total (11 original + 2 new). Goal: CI-green at first push for all agents.
+| # | Ticket | Pts | Durée réelle | Jour prévu |
+|---|--------|-----|-------------|------------|
+| 1 | CAB-1121 — Consumer Onboarding P1 (Data Model) | **55** | ✅ PR #204 merged | ✅ Lun |
+| 1b | CAB-1121 — Consumer Onboarding P2 (Keycloak) | **20** | ✅ PR #208 merged | ✅ Lun |
+| 1c | CAB-1121 — Consumer Onboarding P3 (Gateway) | **15** | ✅ Code done, PR pending | ✅ Lun |
+| 2 | CAB-1118 — Sidebar Redesign | **8** | ✅ PR #207 + #209 merged | ✅ Lun |
+| 3 | CAB-1117 — Sidecar Docker Compose | **8** | ✅ PR #206 merged | ✅ Lun |
+| 4 | CAB-1030 — Admin Guide + Onboarding | **13** | ~25 min | Mar |
+| 5 | CAB-1068 — AI Factory Setup | **3** | ~6 min | Mar |
+| 6 | CAB-1120 — SEO + Compliance | **5** | ✅ 8 min (done) | ✅ Lun |
+| 7 | CAB-550 — Error Snapshot Demo | **3** | ~6 min | Mar |
+| 8 | CAB-802 — Demo Dry Run Script | **3** | ~6 min | Mar |
+| 9 | CAB-1112 — Kyverno Enforce | **2** | ✅ PR #205 merged | ✅ Lun |
+| 10 | CAB-1035 — Persona Alex Test | **2** | ~15 min (manuel) | Mar |
+| 11 | CAB-1097 — ADR fix | **2** | ✅ PR #205 merged | ✅ Lun |
+| 12 | CAB-362 — Circuit Breaker + Session | **5** | ~10 min | Mar |
+| 13 | Content Compliance apply | **5** | ✅ PR #203 merged | ✅ Lun |
+| | | | | |
+| | **SUBTOTAL BASE** | **94** | **~3h** | **Lun-Mar** |
+| | **DONE Lun (P1+P2+P3+Sidebar+Sidecar+Kyverno+ADR+SEO+Compliance)** | **120** | | ✅ |
+| | | | | |
+| 14 | CAB-864 — mTLS Epic | **34** | ~70 min | Mar-Mer |
+| 15 | CAB-1121 P4 — Quota Enforcement | **15** | ~30 min | Mar |
+| 16 | CAB-1121 P5 — Portal Consumer UI | **21** | ~40 min | Mer |
+| 17 | CAB-1121 P6 — E2E Tests full flow | **13** | ~25 min | Mer |
+| 18 | CAB-1066 — Landing + Pricing | **34** | ~70 min | Mer-Jeu |
+| | | | | |
+| | **TOTAL PLANIFIÉ** | **196** | **~6h** | **Lun→Mer** |
+| | **AVEC mTLS + P4-P6** | **279** | **~9h** | **Lun→Mer** |
+| | **AVEC Landing** | **313** | **~11h** | **Lun→Jeu** |
 
 ---
 
-### CAB-1109 — GitOps Pipeline: Manifests, Helm, Policies-as-Code, Shadow→Git MR Loop ✅
+## 📅 PLANNING JOUR PAR JOUR
 
-**Status**: DONE | **PR**: #188 (merged) + stoa-infra | **Cycle**: 6 | **DoD**: 8/8
+### LUNDI 9 FÉV — "Sprint Day" (~130 pts, ~4h30)
 
-| Phase | Sujet | Status | Description |
-|-------|-------|--------|-------------|
-| 1 | Rego Policies as ConfigMap + SIGHUP | DONE | ConfigMap from `.Files.Glob`, Stakater Reloader, SIGHUP handler in main.rs |
-| 2 | Helm Chart Enhancement | DONE | Kyverno `privileged: false`, RBAC CRD watcher, Ingress, nil-safe conditionals, all env vars |
-| 3 | Tool/ToolSet CRD Manifests | DONE | `tools.gostoa.dev` + `toolsets.gostoa.dev` CRDs matching Rust structs + examples |
-| 4 | Gateway Config Values | DONE | `values-dev.yaml` (1 replica, debug), `values-staging.yaml` (2 replicas, kafka), `values-prod.yaml` (3 replicas, kafka, otel, ingress) |
-| 5 | Shadow → Git MR Loop | DONE | `POST /shadow/submit-uac` → GitClient → branch + commit + MR with review checklist |
+#### Session 1: CAB-1120 SEO + Compliance (5 pts) — ✅ DONE (8 min)
 
-**stoa-infra — 9 fichiers (7 créés, 2 modifiés):**
-- `values.yaml` + `deployment.yaml` modifiés (securityContext, probes, env vars, volumes)
-- Créés : `policy-configmap.yaml`, `default.rego`, `rbac.yaml`, `servicemonitor.yaml`, `externalsecret.yaml`, `argocd-application.yaml`, `argocd-crds-application.yaml`
+#### Session 1b: Content Compliance Agent (5 pts) — ✅ DONE (PR #203 merged)
 
-**stoa — 1 fichier modifié:**
-- `.github/workflows/stoa-gateway-ci.yml` → supprimé `apply-manifest`, remplacé par `rollout restart`
+#### Session 1c: CAB-1121 P1 — Data Model + CRUD APIs (55 pts) — ✅ DONE (PR #204 merged)
+- Consumer model + Plan model + Alembic migration 018
+- 14 REST endpoints (8 consumer + 6 plan) with tenant isolation
+- 23 tests, full suite 452 passed, coverage 54%
+- Full CI/CD green through deploy + smoke test
 
-267 Rust tests pass, clippy clean, fmt clean. Helm lint: 4 variantes pass.
+#### Session 2: CAB-1121 P2 — Keycloak + OAuth2 (20 pts) — ✅ DONE (PR #208 merged)
+- Consumer registration → auto-create OAuth2 client in Keycloak
+- client_id = `{tenant}-{consumer_external_id}`, client_secret auto-generated
+- Service account enabled for client_credentials grant
+- Failure mode: 503 + logged warning, non-blocking
+- 10 tests added, 485 total pass, coverage 54%
 
-**Prochaine étape opérationnelle (hors ticket):**
-1. `kubectl delete deployment stoa-gateway -n stoa-system` (selectors immutables)
-2. `kubectl apply -f charts/stoa-gateway/argocd-application.yaml`
-3. `kubectl apply -f charts/stoa-platform/argocd-crds-application.yaml`
+#### Session 3: CAB-1121 P3 — Gateway Propagation (15 pts) — ✅ DONE (code ready, PR pending)
+- Enriched app_spec with consumer + plan context on provision
+- STOA adapter: provision_application → sync_api + upsert_policy
+- webMethods adapter: idempotent provision (check existing by name)
+- Rate-limit policy push on approval, cleanup on deprovision
+- 22 new tests (485 total pass, coverage 54.22%)
 
----
+#### Session 4: CAB-1118 Sidebar finitions (8 pts) — ✅ DONE (PR #207 + #209 merged)
+- Collapsible sidebar sections, tenant dropdown, skeleton pages
+- Function coverage boost above 35%
 
-## Completed — Earlier Cycles
+#### Session 5: CAB-1117 Sidecar Docker Compose (8 pts) — ✅ DONE (PR #206 merged)
+- docker-compose.sidecar.yml demo scenario
 
-### CAB-1116 — Test Automation Strategy (21 SP, 5 phases) ✅
-
-| Phase | Sujet | Status | PR | Result |
-|-------|-------|--------|-----|--------|
-| Phase 1 | Console UI unit tests (MSW) | DONE | #168 | 25 files, 249 tests, 50.98% coverage |
-| Phase 2A | Portal unit tests | DONE | #169 | 20 files, 219 tests, 70% coverage |
-| Phase 2B | API unit tests | DONE | #171 | 6 routers, 103 tests, 48%->53% coverage |
-| Phase 3A | OpenAPI contract tests | DONE | #172 | 40 tests (6 pytest + 17 console-ui + 17 portal) |
-| Phase 3B | Integration tests | DONE | #173 | 20 tests with PostgreSQL 16 in CI |
-| Phase 4 | E2E completeness | DONE | #175 | 52->81 scenarios, 100% route coverage |
-| Phase 5 | Quality gates | DONE | #176 | CI coverage, pre-commit hooks, formatting |
-| Hotfix | Docker build (tsconfig.app.json) | DONE | #177 | Exclude test files from tsc build |
-| Hotfix | bddgen @wip tag | DONE | #178 | Skip unimplemented demo-showcase.feature |
-
-#### CI Pipeline Status (2026-02-08)
-
-| Component | CI | Docker | Deploy | Notes |
-|-----------|-----|--------|--------|-------|
-| control-plane-ui | GREEN | GREEN | GREEN | Coverage + formatting enforced |
-| portal | GREEN | GREEN | GREEN | Coverage + formatting enforced |
-| control-plane-api | GREEN | — | — | Coverage 53%, ruff lint |
-| stoa-gateway | GREEN | — | — | Rust cargo test |
+#### Session 6: CAB-1112 Kyverno (2 pts) + CAB-1097 ADR fix (2 pts) — ✅ DONE (PR #205 merged)
+- Kyverno: 5 ClusterPolicies Audit → Enforce
+- ADR-027→035, ADR-028→036, ADR-033→037 renumbered
 
 ---
 
-### CAB-1103 — Control Plane Agnostique (Phases 1-7) ✅
+### MARDI 10 FÉV — "Docs + Polish Day" (~80 pts, ~3h)
 
-| Phase | Sujet | Status | PR | Description |
-|-------|-------|--------|-----|-------------|
-| Phase 1-5 | Core implementation | DONE | — | Models, adapters, sync engine |
-| Phase 6 | Operational Readiness | DONE | #184 | CI hardening, monitoring OIDC, E2E expansion, test loop |
-| Phase 7 | Gateway Auto-Registration | DONE | #121, #122 | ADR-036 merged |
+#### Session 7: CAB-1030 Admin Guide (13 pts) — ~25 min
+```
+- [ ] /docs/admin/ 12 pages (overview→upgrade)
+- [ ] OpenShift delta (SCC, Routes, registry, non-root)
+- [ ] Onboarding Kit Cédric (privé)
+- [ ] Content Compliance scan: zéro client name
+```
 
-#### Phase 6 — Operational Readiness (4 sub-phases)
+#### Session 8: CAB-1068 AI Factory (3 pts) — ~6 min
+```
+- [ ] Templates: MEGA-TICKET.md, PHASE-PLAN.md
+- [ ] Scripts: run-phase.sh, slack-notify.sh
+```
 
-| Sub-phase | Sujet | Status | PR | Result |
-|-----------|-------|--------|-----|--------|
-| 6A | CI Hardening | DONE | #184 | 5 `|| true` bugs fixed in 7 workflows, 11 intentional documented |
-| 6B | Monitoring OIDC | DONE | #184 | Grafana OIDC, oauth2-proxy, AlertManager routing, setup script |
-| 6C | E2E Expansion | DONE | #184 | 22 new BDD scenarios (gateway CRUD, deployment lifecycle, admin RBAC, portal consumer) |
-| 6D | Test Loop Automation | DONE | #184 | weekly-audit.yml (6 jobs) + smoke tests in mcp-gateway-ci + stoa-gateway-ci |
+#### Session 9: CAB-550 Error Snapshot Demo (3 pts) — ~6 min
+```
+- [ ] Script démo 2 min + seed data generator
+```
 
-23 files changed, +1659 lines.
+#### Session 10: CAB-802 Demo Dry Run Script (3 pts) — ~6 min
+```
+- [ ] Script markdown avec timing par étape (aligné one-pager flow)
+- [ ] Checklist pré-démo + Plan B
+```
+
+#### Session 11: CAB-362 Circuit Breaker (5 pts) — ~10 min
+```
+- [ ] Session management: zombie detection + reaper
+- [ ] Per-upstream config (actuellement générique)
+```
+
+#### Session 12: CAB-1035 Persona Alex (2 pts) — ~15 min
+```
+- [ ] Parcours complet chronométré: signup → discover → first MCP call
+- [ ] Frictions documentées en tickets
+```
+
+#### Session 13: CAB-864 mTLS P1 — Design + ADR (8 pts) — ~15 min
+```
+- [ ] ADR: F5 mTLS termination → STOA → webMethods flow
+- [ ] RFC 8705 cert-bound tokens spec
+- [ ] Architecture diagram
+```
 
 ---
 
-### CAB-1105 — Kill Python + Production-Grade MCP Gateway (9 phases) ✅
+### MERCREDI 11 FÉV — "Stretch Day" (~90 pts, ~3h)
 
-| Phase | Sujet | Status | PR | Result |
-|-------|-------|--------|----|--------|
-| Phase 1 | Native Tool Execution | DONE | #180 | JWT auth, native tools, real user context in ToolContext |
-| Phase 2 | OPA Policy Engine | DONE | #180 | OPA eval with real JWT claims, ADR-012 role-to-scope |
-| Phase 3 | Kafka Metering + Error Snapshots | DONE | #180 | Metering emission, ErrorSnapshot, timing breakdown |
-| Phase 4 | Token Optimization Pipeline | DONE | #180 | X-Token-Optimization header, 4-stage pipeline |
-| Phase 5 | MCP 2025-03-26 Spec Compliance | DONE | #181 | outputSchema on NativeTool, annotations wired |
-| Phase 6 | Circuit Breaker + Cache + Retry | DONE | #181 | Semantic cache in pipeline, CB + retry on CP discovery |
-| Phase 7 | K8s CRD + MCP Federation | DONE | #181 | DynamicTool from CRDs, FederatedTool from ToolSets, watcher wired |
-| Phase 8 | 4-Mode Architecture | DONE | #181 | Mode-specific router (EdgeMcp/Sidecar/Proxy/Shadow) |
-| Phase 9 | Gateway Mode Dashboard | DONE | #181 | Sidebar entry + g+m shortcut |
+#### Session 14: CAB-864 mTLS P2-P3 — Implémentation (26 pts) — ~50 min
+```
+- [ ] F5 X.509 header extraction
+- [ ] Certificate-bound tokens implementation
+- [ ] 100-client bulk onboarding flow
+```
 
-222 tests pass, clippy clean, fmt clean.
+#### Session 15: CAB-1121 P5 — Portal Consumer UI (21 pts) — ~40 min
+```
+- [ ] Portal UI: consumer registration form
+- [ ] Subscription workflow UI: browse catalogue → select plan → request access
+- [ ] Owner approval UI: notification + approve/reject
+- [ ] Credentials display (one-time)
+```
+
+#### Session 16: CAB-1121 P6 — E2E Tests (13 pts) — ~25 min
+```
+- [ ] Full flow test: register → subscribe → approve → token exchange → API call
+- [ ] Contract tests JWT claims schema
+- [ ] Multi-tenant isolation tests
+```
 
 ---
 
-## Demo Readiness (Feb 24)
+### JEUDI 12 FÉV — "Bonus Day" (si avance, ~34 pts)
 
-| Priority | Ticket | Description | Status |
-|----------|--------|-------------|--------|
-| P0 | CAB-1066 | Landing page gostoa.dev + Stripe | NOT STARTED |
-| P0 | — | Browser-based demo walkthrough | NOT STARTED |
-| P1 | — | Record video backup for demo | NOT STARTED |
-| P1 | CAB-1112 | Kyverno policies: Audit → Enforce | NOT STARTED |
-| P1 | CAB-1119 | Brand Unification (all 5 phases) | ✅ DONE (#194 + #198) |
-| P1 | CAB-1109 | GitOps Pipeline (Helm, CRDs, ArgoCD) | ✅ DONE (#188 + #193) |
-| P2 | — | AI Factory CI-awareness + deployment lifecycle | ✅ DONE (#195 + #199) |
-| P2 | — | BDD steps + Clippy fixes | ✅ DONE (#191 + #192 + #196) |
+#### Session 17: CAB-1066 Landing + Pricing (34 pts) — ~70 min
+```
+- [ ] Repo stoa-web (Astro)
+- [ ] Landing page redesign avec comparison table révisée
+- [ ] Pricing page + Stripe integration
+- [ ] Content Compliance applied
+```
 
-### Demo Checklist
+---
 
-- [x] All 4 components deployed on EKS
-- [x] CI/CD pipeline green through deploy
-- [x] Test coverage enforced in CI
-- [x] Pre-commit hooks (lint-staged)
-- [x] Prettier formatting (console-ui + portal)
-- [x] OpenSearch logs + RGPD + multi-tenant OIDC
-- [x] Grafana + Logs iframe embed in console
-- [x] Rust gateway production-grade (9 phases, 222 tests)
-- [x] CI hardening (`|| true` audit)
-- [x] Monitoring OIDC (Grafana + Prometheus + AlertManager)
-- [x] E2E expansion (22 new BDD scenarios)
-- [x] Weekly audit + smoke tests post-deploy
-- [x] Brand Unification phases 1-3 (emerald palette, StoaLogo, Portal menu) — PR #194
-- [x] GitOps pipeline (Helm chart, CRDs, ArgoCD sync, CI migration) — PR #188 + stoa-infra
-- [x] AI Factory: CI quality gates, secrets mgmt rules, agent enhancements — PR #195
-- [x] Brand Unification phases 4-5 (Console sidebar restructure, dark/light mode complet) — PR #198
-- [x] Deployment lifecycle rule (PR→CI→Merge→CI→CD→Pod) — PR #199
-- [x] BDD duplicate steps + clippy fixes — PRs #191, #192, #196
-- [ ] Landing page (gostoa.dev) with Stripe
-- [ ] Demo walkthrough script
-- [ ] Video backup recording
-- [ ] Kyverno Enforce mode
+## 📊 RÉCAP SCORING (révisé — vélocité 1pt/2min)
+
+| Jour | Tickets | Points | Durée |
+|------|---------|--------|-------|
+| **Lundi** ✅ | S1 SEO ✅ + S1b Compliance ✅ + S1c P1 ✅ + S2 Keycloak ✅ + S3 Gateway ✅ + S4 Sidebar ✅ + S5 Sidecar ✅ + S6 Kyverno+ADR ✅ | **120** | done |
+| **Mardi** | S7 Admin Guide (13) + S8 Factory (3) + S9 Demo (3) + S10 Script (3) + S11 CB (5) + S12 Alex (2) + S13 mTLS design (8) + P4 Quota (15) | **52** | ~2h |
+| **Mercredi** | S14 mTLS impl (26) + S15 Portal UI (21) + S16 E2E (13) | **60** | ~2h |
+| **Jeudi** | S17 Landing (34) | **34** | ~1h10 |
+| | | | |
+| **DONE (Lundi)** | | **120** | |
+| **+ Mardi** | | **172** | |
+| **+ Mercredi** | | **232** | |
+| **+ Jeudi** | | **266** | |
+
+### Blockers identifiés
+1. **Keycloak Token Exchange SPI** — si config realm non-triviale, Session 2 peut glisser
+2. **Vault root token** — pas bloquant Cycle 7 (workaround K8s secrets)
+3. **CAB-1066** — context switch repo stoa-web, à ne prendre que si avance réelle
+
+---
+
+## ✅ DEFINITION OF DONE — Standard Marchemalo (tricouche)
+
+Chaque livrable de chaque session doit passer les 3 couches. Pas de "Done" si une couche manque.
+
+### Couche 1 — Local testé
+```
+- [ ] Code compile sans erreur
+- [ ] Tests unitaires passent (jest/vitest/go test)
+- [ ] Lint + format OK (eslint, prettier, golangci-lint)
+- [ ] Pas de regression sur tests existants
+- [ ] Review code: pas de secret, pas de TODO non-tracké
+```
+
+### Couche 2 — Live validé
+```
+- [ ] Déployé sur env dev/staging (ou docker-compose local pour sidecar)
+- [ ] Flow E2E testé manuellement: l'humain voit le résultat attendu
+- [ ] Pas d'erreur dans les logs (Loki/stdout)
+- [ ] Métriques Prometheus exposées et visibles dans Grafana
+- [ ] RBAC vérifié: chaque rôle voit/ne voit pas ce qu'il doit
+```
+
+### Couche 3 — Automatisé
+```
+- [ ] Tests d'intégration (testcontainers ou API tests)
+- [ ] CI pipeline vert (GitHub Actions / ArgoCD sync)
+- [ ] Si API: OpenAPI spec à jour + tests contract
+- [ ] Si UI: screenshot/snapshot tests ou test Cypress/Playwright minimal
+- [ ] Si infra: manifests K8s/Helm validés (helm template + kubeval)
+```
+
+### Matrice DoD par ticket
+
+| Ticket | Couche 1 (local) | Couche 2 (live) | Couche 3 (auto) |
+|--------|-------------------|-----------------|-----------------|
+| **CAB-1121** Consumer Onboarding | Unit tests API + DB migrations | Token Exchange flow E2E sur Keycloak dev | Integration tests + contract tests JWT claims |
+| **CAB-1118** Sidebar Redesign | Jest components + lint | Console dev: navigation par rôle testée manuellement | Snapshot tests composants sidebar + RBAC matrix |
+| **CAB-1117** Sidecar VM | docker-compose up OK | Traffic proxy → upstream, metrics dans Prometheus | CI: docker-compose build + healthcheck + traffic test |
+| **CAB-1030** Admin Guide | Build Docusaurus sans erreur | Pages rendues, navigation OK, liens valides | Linkcheck CI (broken links), grep zéro client name |
+| **CAB-1068** AI Factory | Scripts exécutables | Premier run-phase.sh réussi | Slack webhook test automatisé |
+| **CAB-550** Error Snapshot Demo | Script valide, seed data OK | Flow démo joué 1x complet chrono | Script génération erreurs idempotent |
+| **CAB-1112** Kyverno | Policies YAML valides | Pod non-conforme rejeté en live | PolicyReport clean (zéro FAIL légitime) |
+| **CAB-362** Circuit Breaker | Unit tests states machine | Simuler pool exhaustion → recovery auto | Integration test: failure injection + recovery |
+| **CAB-1120** SEO | Articles build OK | Pages indexables (GSC fetch) | Content Compliance grep (zéro P0 violation) |
+| **CAB-802** Demo Script | Markdown valide | Dry run 1x complet < 5min | Checklist pré-démo scriptée |
+| **CAB-1035** Persona Alex | N/A (test manuel) | Parcours complet chronométré | Frictions documentées en tickets |
+| **CAB-1097** ADR fix | Fichier migré, build OK | Page rendue dans Docusaurus | CI build pass |
+
+---
+
+## ⚡ RÈGLES CLAUDE CODE
+
+1. **Un MEGA par session** — `/clear` entre sessions
+2. **Audit avant code** — lire le code existant, conventions, ORM
+3. **Council 8/10** — MEGA-tickets seulement si Council GO
+4. **Content Compliance** — zéro nom client, zéro prix concurrent, disclaimers
+5. **DoD tricouche** — chaque livrable passe local + live + auto AVANT de marquer Done
+6. **State files** — memory.md update avant chaque `/clear`
+7. **Test "40-year architect"** — un architecte de 40 ans d'expérience comprend le ticket en 30 secondes
+
+---
+
+## 🔗 RÉFÉRENCES
+
+- One-pager: STOA-OnePager-Hybrid-v2 (démo 5 min = flow CAB-1121)
+- Content Compliance: document project (P0/P1/P2 rules)
+- Linear Cycle 7: 483a7848-51bb-4b7c-a4f6-dbad7a769d08
+- Démo target: 24 février 2026

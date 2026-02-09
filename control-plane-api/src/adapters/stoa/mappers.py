@@ -34,3 +34,50 @@ def map_policy_to_stoa(policy_spec: dict) -> dict:
         "priority": policy_spec.get("priority", 100),
         "api_id": policy_spec.get("api_id", ""),
     }
+
+
+def map_app_spec_to_route(app_spec: dict) -> dict:
+    """Convert enriched app_spec to stoa-gateway sync_api format (CAB-1121 Phase 3).
+
+    Used by provision_application to register the API route on the gateway
+    before pushing the rate-limit policy.
+    """
+    api_id = app_spec.get("api_id", "")
+    tenant_id = app_spec.get("tenant_id", "")
+    app_name = app_spec.get("application_name", "unknown")
+    return {
+        "api_catalog_id": api_id,
+        "api_name": app_name,
+        "backend_url": app_spec.get("backend_url", ""),
+        "methods": app_spec.get("methods", ["GET", "POST", "PUT", "DELETE"]),
+        "spec_hash": "",
+        "activated": True,
+        "tenant_id": tenant_id,
+    }
+
+
+def map_quota_to_policy(app_spec: dict, subscription_id: str) -> dict | None:
+    """Convert plan quota fields from enriched app_spec to rate-limit policy (CAB-1121 Phase 3).
+
+    Returns None if no rate-limit quotas are defined.
+    """
+    rate_per_minute = app_spec.get("rate_limit_per_minute")
+    rate_per_second = app_spec.get("rate_limit_per_second")
+
+    if not rate_per_minute and not rate_per_second:
+        return None
+
+    consumer_ext_id = app_spec.get("consumer_external_id", "unknown")
+    plan_slug = app_spec.get("plan_slug", "default")
+
+    return {
+        "id": f"quota-{subscription_id}",
+        "name": f"rate-limit-{consumer_ext_id}-{plan_slug}",
+        "type": "rate_limit",
+        "api_id": app_spec.get("api_id", ""),
+        "config": {
+            "maxRequests": rate_per_minute or (rate_per_second * 60 if rate_per_second else 100),
+            "intervalSeconds": 60,
+        },
+        "priority": 50,
+    }

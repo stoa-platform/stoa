@@ -9,6 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.consumer import Consumer, ConsumerStatus
 
 
+def escape_like(value: str) -> str:
+    """Escape special SQL LIKE characters: %, _, \\"""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class ConsumerRepository:
     """Repository for consumer database operations."""
 
@@ -71,14 +76,15 @@ class ConsumerRepository:
         if status:
             query = query.where(Consumer.status == status)
 
-        if search:
-            search_pattern = f"%{search}%"
+        if search and search.strip():
+            search_term = escape_like(search.strip())
+            search_pattern = f"%{search_term}%"
             query = query.where(
                 or_(
-                    Consumer.name.ilike(search_pattern),
-                    Consumer.email.ilike(search_pattern),
-                    Consumer.external_id.ilike(search_pattern),
-                    Consumer.company.ilike(search_pattern),
+                    Consumer.name.ilike(search_pattern, escape="\\"),
+                    Consumer.email.ilike(search_pattern, escape="\\"),
+                    Consumer.external_id.ilike(search_pattern, escape="\\"),
+                    Consumer.company.ilike(search_pattern, escape="\\"),
                 )
             )
 
@@ -127,9 +133,7 @@ class ConsumerRepository:
             base_query = base_query.where(Consumer.tenant_id == tenant_id)
 
         # Total count
-        total_result = await self.session.execute(
-            select(func.count()).select_from(base_query.subquery())
-        )
+        total_result = await self.session.execute(select(func.count()).select_from(base_query.subquery()))
         total = total_result.scalar_one()
 
         # Count by status

@@ -68,6 +68,16 @@ const IdentityEmbed = lazy(() => import('./pages/IdentityEmbed'));
 // CAB-1114: OpenSearch Dashboards for API trace logs
 const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 
+// CAB-1118: Skeleton pages for upcoming features
+const ShadowDiscovery = lazy(() =>
+  import('./pages/ShadowDiscovery').then((m) => ({ default: m.ShadowDiscovery }))
+);
+const TokenOptimizer = lazy(() =>
+  import('./pages/TokenOptimizer').then((m) => ({ default: m.TokenOptimizer }))
+);
+const Policies = lazy(() => import('./pages/Policies').then((m) => ({ default: m.Policies })));
+const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })));
+
 // Loading spinner for lazy-loaded pages and auth init skeleton
 function PageLoader() {
   return (
@@ -345,6 +355,11 @@ function ProtectedRoutes() {
               <Route path="/identity" element={<IdentityEmbed />} />
               {/* CAB-1114: OpenSearch Dashboards for API trace logs */}
               <Route path="/logs" element={<LogsEmbed />} />
+              {/* CAB-1118: Skeleton pages for upcoming features */}
+              <Route path="/shadow-discovery" element={<ShadowDiscovery />} />
+              <Route path="/token-optimizer" element={<TokenOptimizer />} />
+              <Route path="/policies" element={<Policies />} />
+              <Route path="/audit-log" element={<AuditLog />} />
             </Routes>
           </Suspense>
         )}

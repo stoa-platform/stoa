@@ -1,3 +1,7 @@
+---
+description: Documentation strategy — two-repo split (stoa vs stoa-docs), ADR numbering rules, workflows
+---
+
 # Documentation Strategy
 
 ## Two-Repo Split

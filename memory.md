@@ -1,11 +1,11 @@
 # STOA Memory
 
-> Last updated: 2026-02-08 (Session 20 — PR cleanup + dependency updates)
+> Last updated: 2026-02-09 (Session 21 — AI Factory modernization + state files refresh)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: All PRs cleaned up (0 open). Dependencies updated. Next: CAB-1066 landing page + demo prep.
+- **Focus**: AI Factory modernization. Next: CAB-864 P2-P3 mTLS impl, CAB-1121 P4 quota, CAB-1066 landing page.
 
 ## Session State
 
@@ -23,85 +23,75 @@
 | DONE | ADR-030 | AI context management architecture | Session 7 |
 | DONE | — | Context refactor: CLAUDE.md 11KB→3KB + 8 rules + 8 component docs + 8 skills + hooks | Session 7 |
 | DONE | CAB-CD-001 | Enterprise CD Architecture deployed on EKS | Session 8, commit 46401a3b |
-| DONE | CAB-1113 | Performance Phase 5: SQL filtering + DTOs (portal.py) | Session 9 |
-| DONE | CAB-1113 | Performance Phase 6: Cache + Keycloak Boot + Web Vitals | PR #139, Session 10 |
-| DONE | CAB-1114 | OpenSearch Phase 1: Deploy + Dashboards + Ingestion | commit 03665d57, e6e72a52 |
-| DONE | CAB-1114 | OpenSearch Phase 2: RGPD redaction pipeline (7 PII patterns) | commit 35fa3943, Session 11 |
-| DONE | CAB-1114 | OpenSearch Phase 3: Multi-Tenant OIDC Security | Session 12+13, 6/6 tests |
-| DONE | CAB-1114 | OpenSearch Phase 4: Console Integration (SSO iframe) | Session 14, LogsEmbed.tsx |
+| DONE | CAB-1113 | Performance Phase 5+6: SQL filtering + DTOs + Cache + Keycloak Boot + Web Vitals | PRs #139, Session 9-10 |
+| DONE | CAB-1114 | OpenSearch all 4 phases: Deploy + RGPD + Multi-Tenant OIDC + Console Integration | Sessions 11-14 |
 | DONE | CAB-1115 | Console UI Performance Optimization | PR #148, Hotfix PR #150 |
 | DONE | CAB-1108 | Iframe Embed Fix — Logs + Grafana (nginx reverse proxy) | PRs #153, #155, #164-167 |
 | DONE | — | EKS Deploy Fixes — All 4 components running | PRs #149, #152, #154, #157 |
-| DONE | — | AI Factory Setup (4 agents, 2 skills, 1 rule) | Session 16 |
-| DONE | CAB-1116 | Phase 1: Console UI unit tests (MSW) | PR #168 — 25 files, 232 tests, 50.98% coverage |
-| DONE | CAB-1116 | Phase 2A: Portal unit tests | PR #169 — 20 files, 219 tests, 70% coverage |
-| DONE | CAB-1116 | Phase 2B: API unit tests | PR #171 — 6 routers, 103 tests, 48%→53% coverage |
-| DONE | CAB-1116 | Phase 3A: OpenAPI contract tests | PR #172 — 40 tests (6 pytest + 17 console-ui + 17 portal) |
-| DONE | CAB-1116 | Phase 3B: Integration tests (PostgreSQL 16 in CI) | PR #173 — 20 tests |
-| DONE | CAB-1116 | Phase 4: E2E completeness 52→81 scenarios | PR #175 — 100% route coverage |
-| DONE | CAB-1116 | Phase 5: Quality gates (coverage, format, hooks) | PR #176 — CI enforcement |
-| DONE | CAB-1116 | Hotfix: Docker build (tsconfig.app.json) | PR #177 — exclude test files from tsc |
-| DONE | CAB-1116 | Hotfix: bddgen @wip tag | PR #178 — skip demo-showcase.feature |
-| DONE | CAB-1103 | Phase 6A: CI Hardening | PR #184 — 5 `|| true` bugs fixed, 11 intentional documented |
-| DONE | CAB-1103 | Phase 6B: Monitoring OIDC | PR #184 — Grafana OIDC, oauth2-proxy, AlertManager routing |
-| DONE | CAB-1103 | Phase 6C: E2E Expansion | PR #184 — 22 new BDD scenarios (4 feature files, 4 step files) |
-| DONE | CAB-1103 | Phase 6D: Test Loop Automation | PR #184 → cdc3299d — weekly-audit.yml + smoke tests post-deploy |
-| DONE | CAB-1105 | Kill Python + Production-Grade MCP Gateway (9 phases) | PRs #180, #181 — 222 tests, clippy clean |
-| DONE | — | PR cleanup: 39 PRs → 0 open (11 stale closed, 16 major deps closed, 12 safe merged) | Session 20 |
-| NEXT | CAB-1066 | Landing gostoa.dev + Stripe | — |
-| NEXT | — | Browser-based demo walkthrough | — |
-| NEXT | — | Record video backup for demo | — |
-| NEXT | — | Kyverno policies: Audit → Enforce | — |
+| DONE | — | AI Factory Setup (5 agents, 2 skills, 14 rules) | Session 16 |
+| DONE | CAB-1116 | Test Automation — all 5 phases (Console 257, Portal 236, API 103, E2E 81) | PRs #168-178 |
+| DONE | CAB-1103 | Control Plane Agnostique — all 7 phases | PR #184 |
+| DONE | CAB-1105 | Kill Python — all 9 phases (222 tests, clippy clean) | PRs #180, #181 |
+| DONE | CAB-1109 | GitOps Pipeline — Helm + ArgoCD + CI migration | PRs #188, #193, stoa-infra PR #7 |
+| DONE | CAB-1119 | Brand Unification — all 5 phases (493 tests) | PRs #194, #198 |
+| DONE | — | PR cleanup: 39 PRs → 0 open | Session 20 |
+| DONE | CAB-1120 | Content Compliance (content-reviewer agent + rule) | PR #203 |
+| DONE | CAB-1121 | P1 Data Model + CRUD APIs (17 files, 23 tests) | PR #204 |
+| DONE | CAB-1121 | P2 Keycloak Integration | PR #208 |
+| DONE | CAB-1121 | P3 Gateway Propagation | PR #211 |
+| DONE | CAB-1121 | P5 Portal Consumer UI (16 files, 267 tests) | PR #220 |
+| DONE | CAB-1122 | Zero Errors — all 6 phases across all components | PR #215 |
+| DONE | CAB-362 | Circuit Breaker + Session Management (8 files) | PR #218 |
+| DONE | CAB-864 | P1 mTLS Design Doc + ADR-039 | PR #221 |
+| DONE | — | Ship/Show/Ask Git Workflow for AI Factory | PR #222 |
+| DONE | — | AI Factory modernization + state files refresh | Session 21 |
+| NEXT | CAB-864 | P2-P3 mTLS Implementation (Rust gateway + API) | Design ready (PR #221) |
+| NEXT | CAB-1121 | P4 Quota Enforcement | P1-P3 done |
+| NEXT | CAB-1121 | P6 E2E Tests full flow | Needs P4 |
+| NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
+| NEXT | CAB-1035 | Persona Alex Test (manual) | — |
+| NEXT | CAB-1112 | Kyverno policies: Audit → Enforce | Prereq: 3-5 days clean audit |
 
-## CI Pipeline Status (2026-02-08) — ALL GREEN THROUGH DEPLOY
+## CI Pipeline Status (2026-02-09) — ALL GREEN THROUGH DEPLOY
 
 | Component | CI | Docker | Apply | Deploy | Notes |
 |-----------|-----|--------|-------|--------|-------|
 | control-plane-ui | GREEN | GREEN | GREEN | GREEN | Coverage + formatting enforced |
 | portal | GREEN | GREEN | GREEN | GREEN | Coverage + formatting enforced |
-| control-plane-api | GREEN | — | — | — | Coverage 53%, ruff lint |
-| stoa-gateway | GREEN | — | — | — | Rust cargo test |
+| control-plane-api | GREEN | GREEN | — | GREEN | Coverage 53%, ruff lint |
+| stoa-gateway | GREEN | GREEN | GREEN | GREEN | ArgoCD-managed, 267 tests |
 
 ## Quality Gates (CAB-1116 Phase 5)
 - **Coverage enforced in CI** via `run-coverage: true` in reusable workflow
 - **Pre-commit hooks**: lint-staged (eslint + prettier + ruff) via husky
-- **Prettier**: installed on console-ui (was missing), blocking in CI via `--if-present`
+- **Prettier**: blocking in CI via `--if-present`
 - **ESLint ratchet**: console-ui max-warnings=93 (down from 100)
-- **Python fail_under**: aligned to 53 in pyproject.toml (was 70, CI was 53)
+- **Python fail_under**: aligned to 53 in pyproject.toml
 - **commitlint**: added `e2e` scope
 
 ## Decisions This Sprint
 - 2026-02-04: Use column refs in SQLAlchemy upsert (not string keys)
 - 2026-02-04: E2E auth requires dual OIDC client tokens (portal + console)
 - 2026-02-05: ADRs live in stoa-docs, not stoa (ADR-030)
-- 2026-02-05: Retire .stoa-ai/ — migrate to native Claude Code features
 - 2026-02-05: CLAUDE.md hierarchy: root (compact) + .claude/rules/ (modular)
 - 2026-02-06: Kyverno policies in Audit mode first, Enforce after validation
 - 2026-02-06: ArgoCD ApplicationSet uses goTemplate mode for multi-env
-- 2026-02-07: Custom nginx envsubst script (not built-in) — see `.claude/rules/k8s-deploy.md`
+- 2026-02-07: Custom nginx envsubst script — see `.claude/rules/k8s-deploy.md`
 - 2026-02-07: `tsconfig.app.json` pattern to exclude test files from Docker builds
-- 2026-02-08: ESLint ratchet (93 warnings) instead of strict 0 — blocks new warnings, allows gradual cleanup
-- 2026-02-08: lint-staged without `--max-warnings` — CI enforces the ratchet, pre-commit only checks syntax
-- 2026-02-08: `@wip` tag + `tags: 'not @wip'` in defineBddConfig to skip unimplemented features
-- 2026-02-08: CI `|| true` audit — remove silent error swallowing, document intentional ones with inline comments
-- 2026-02-08: oauth2-proxy pattern for Prometheus OIDC (Keycloak → oauth2-proxy → Prometheus)
-- 2026-02-08: AlertManager routing by severity (critical→#incidents, warning→#alerts, inhibition rules)
-- 2026-02-08: Weekly audit cron workflow (pip-audit, npm audit, cargo-audit, gitleaks, helm lint)
-- 2026-02-08: Smoke tests as post-deploy jobs in component CI (reusable-smoke-test.yml)
-
-## PR Cleanup (2026-02-08 Session 20)
-- **0 open PRs** (was 39)
-- Closed 11 stale feature PRs (#9, #25, #26, #43, #45, #55, #60, #61, #64, #65, #81)
-- Closed 16 major version dependabot PRs (axum 0.8, react-router 7, oidc-client-ts 3, etc.)
-- Merged 12 safe deps: pyyaml, psycopg2, prometheus-client, pydantic 2.12, python-multipart, autoprefixer, playwright, + 5 CI actions (checkout v6, setup-node v6, build-push v6, slack v2.1, aws-creds v6)
-- **Gotcha**: `enforce_admins: true` + `strict: true` = infinite merge loop (each merge invalidates other branches). Fix: temporarily disable `enforce_admins` via API, batch merge, re-enable.
+- 2026-02-08: ESLint ratchet (93 warnings) — blocks new warnings, allows gradual cleanup
+- 2026-02-08: `@wip` tag + `tags: 'not @wip'` for BDD features without steps
+- 2026-02-08: Weekly audit cron + smoke tests as post-deploy jobs
+- 2026-02-09: Ship/Show/Ask model for AI Factory (PR #222) — Claude determines review level
+- 2026-02-09: AI Factory modernization — state files auto-update protocol in ai-workflow.md
 
 ## Known Issues
-- E2E smoke tests fail on live infra (timeouts, missing UI elements) — not a CI config issue
-- Dependency Review fails: GitHub Advanced Security not enabled on stoa repo
-- Container Scan / CodeQL: intermittent failures, not blocking
+- E2E smoke tests fail on live infra (timeouts, missing UI elements)
+- Dependency Review fails: GitHub Advanced Security not enabled
+- Container Scan / CodeQL: intermittent failures, non-blocking
 - DCO Check: fails on squash-merged commits (expected, non-blocking)
-- Clippy lint fails in PR CI (non-required check) — intermittent, passes on main
+- `strict: true` branch protection: PR must be up-to-date before merge (see MEMORY.md for workaround)
+- control-plane-api still OutOfSync in ArgoCD (drift)
+- mcp-gateway Degraded in ArgoCD (residual from selector fix)
 
 ## Notes
 - Demo: mardi 24 fevrier 2026
@@ -112,3 +102,4 @@
 - Portal OIDC client: stoa-portal; Console OIDC client: control-plane-ui
 - Demo seed: `make seed-demo` or `ANORAK_PASSWORD=xxx python3 scripts/seed-demo-data.py`
 - Docs site: stoa-docs/ (Docusaurus 3.9), 20 pages
+- Vault v1.20.4 running, unsealed. ESO not yet deployed.

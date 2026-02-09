@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { config } from '../config';
 import type {
   Tenant,
@@ -22,9 +22,17 @@ import type {
 
 const API_BASE_URL = config.api.baseUrl;
 
+type TokenRefresher = () => Promise<string | null>;
+
 class ApiService {
   private client: AxiosInstance;
   private authToken: string | null = null;
+  private tokenRefresher: TokenRefresher | null = null;
+  private isRefreshing = false;
+  private refreshQueue: Array<{
+    resolve: (token: string | null) => void;
+    reject: (error: unknown) => void;
+  }> = [];
 
   constructor() {
     this.client = axios.create({
@@ -44,6 +52,58 @@ class ApiService {
       },
       (error) => Promise.reject(error)
     );
+
+    // CAB-1122: Response interceptor for 401 token refresh
+    this.client.interceptors.response.use(
+      (response) => response,
+      async (error: AxiosError) => {
+        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+        if (
+          error.response?.status === 401 &&
+          originalRequest &&
+          !originalRequest._retry &&
+          this.tokenRefresher
+        ) {
+          if (this.isRefreshing) {
+            return new Promise((resolve, reject) => {
+              this.refreshQueue.push({ resolve, reject });
+            }).then((token) => {
+              if (token && originalRequest.headers) {
+                originalRequest.headers.Authorization = `Bearer ${token}`;
+              }
+              return this.client(originalRequest);
+            });
+          }
+
+          originalRequest._retry = true;
+          this.isRefreshing = true;
+
+          try {
+            const newToken = await this.tokenRefresher();
+            if (newToken) {
+              this.setAuthToken(newToken);
+              this.refreshQueue.forEach(({ resolve }) => resolve(newToken));
+              this.refreshQueue = [];
+              if (originalRequest.headers) {
+                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              }
+              return this.client(originalRequest);
+            }
+          } catch (refreshError) {
+            this.refreshQueue.forEach(({ reject }) => reject(refreshError));
+            this.refreshQueue = [];
+            return Promise.reject(refreshError);
+          } finally {
+            this.isRefreshing = false;
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+  }
+
+  setTokenRefresher(refresher: TokenRefresher) {
+    this.tokenRefresher = refresher;
   }
 
   setAuthToken(token: string) {

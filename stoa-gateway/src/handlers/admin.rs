@@ -33,18 +33,21 @@ use crate::state::AppState;
 /// Bearer token authentication for admin API.
 ///
 /// Validates the `Authorization: Bearer <token>` header against
-/// `config.admin_api_token`. If no token is configured, returns 403
-/// (admin API disabled).
+/// `config.admin_api_token`. If no token is configured, returns 503
+/// (admin API disabled \u2014 no token configured).
 pub async fn admin_auth(
     State(state): State<AppState>,
     request: Request<Body>,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, Response> {
     let expected = match state.config.admin_api_token.as_deref() {
         Some(token) if !token.is_empty() => token,
         _ => {
             warn!("Admin API request rejected: no admin_api_token configured");
-            return Err(StatusCode::FORBIDDEN);
+            return Err(
+                (StatusCode::SERVICE_UNAVAILABLE, "Admin API disabled \u2014 no admin_api_token configured")
+                    .into_response(),
+            );
         }
     };
 
@@ -59,7 +62,7 @@ pub async fn admin_auth(
         Ok(next.run(request).await)
     } else {
         warn!("Admin API request rejected: invalid bearer token");
-        Err(StatusCode::UNAUTHORIZED)
+        Err(StatusCode::UNAUTHORIZED.into_response())
     }
 }
 
@@ -317,7 +320,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     #[tokio::test]

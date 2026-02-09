@@ -144,6 +144,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [oidc.user, queryClient]);
 
+  // CAB-1122: Register token refresher for 401 auto-retry
+  useEffect(() => {
+    apiService.setTokenRefresher(async () => {
+      try {
+        const renewed = await oidc.signinSilent();
+        return renewed?.access_token ?? null;
+      } catch {
+        oidc.signinRedirect();
+        return null;
+      }
+    });
+  }, [oidc]);
+
   // Auto-login if we have auth params in URL (callback from Keycloak)
   useEffect(() => {
     if (!oidc.isAuthenticated && !oidc.isLoading && hasAuthParams()) {

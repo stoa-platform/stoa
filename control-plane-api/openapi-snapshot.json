@@ -418,45 +418,6 @@
         "title": "ActivityType",
         "type": "string"
       },
-      "ApplicationCreate": {
-        "properties": {
-          "api_subscriptions": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Api Subscriptions",
-            "type": "array"
-          },
-          "description": {
-            "default": "",
-            "title": "Description",
-            "type": "string"
-          },
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "redirect_uris": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Redirect Uris",
-            "type": "array"
-          }
-        },
-        "required": [
-          "name",
-          "display_name"
-        ],
-        "title": "ApplicationCreate",
-        "type": "object"
-      },
       "ApplicationCreateRequest": {
         "description": "Request to create an application.",
         "properties": {
@@ -500,24 +461,6 @@
         "title": "ApplicationCreateRequest",
         "type": "object"
       },
-      "ApplicationCredentials": {
-        "properties": {
-          "client_id": {
-            "title": "Client Id",
-            "type": "string"
-          },
-          "client_secret": {
-            "title": "Client Secret",
-            "type": "string"
-          }
-        },
-        "required": [
-          "client_id",
-          "client_secret"
-        ],
-        "title": "ApplicationCredentials",
-        "type": "object"
-      },
       "ApplicationDiffResponse": {
         "description": "Diff response for an application.",
         "properties": {
@@ -548,6 +491,93 @@
           "resources"
         ],
         "title": "ApplicationDiffResponse",
+        "type": "object"
+      },
+      "ApplicationResponse": {
+        "description": "Application response for Portal.",
+        "properties": {
+          "api_subscriptions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Api Subscriptions",
+            "type": "array"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "redirect_uris": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Redirect Uris",
+            "type": "array"
+          },
+          "status": {
+            "default": "active",
+            "title": "Status",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "display_name",
+          "description",
+          "client_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ApplicationResponse",
         "type": "object"
       },
       "ApplicationUpdateRequest": {
@@ -598,7 +628,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/src__routers__portal_applications__ApplicationResponse"
+              "$ref": "#/components/schemas/ApplicationResponse"
             },
             "title": "Items",
             "type": "array"
@@ -6883,37 +6913,6 @@
         "title": "PaginatedResponse[APIResponse]",
         "type": "object"
       },
-      "PaginatedResponse_ApplicationResponse_": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/src__routers__applications__ApplicationResponse"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "page": {
-            "title": "Page",
-            "type": "integer"
-          },
-          "page_size": {
-            "title": "Page Size",
-            "type": "integer"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "page",
-          "page_size"
-        ],
-        "title": "PaginatedResponse[ApplicationResponse]",
-        "type": "object"
-      },
       "PaginatedResponse_GatewayAPIResponse_": {
         "properties": {
           "items": {
@@ -11421,67 +11420,6 @@
         "title": "WebhookUpdate",
         "type": "object"
       },
-      "src__routers__applications__ApplicationResponse": {
-        "properties": {
-          "api_subscriptions": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Api Subscriptions",
-            "type": "array"
-          },
-          "client_id": {
-            "title": "Client Id",
-            "type": "string"
-          },
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "status": {
-            "default": "pending",
-            "title": "Status",
-            "type": "string"
-          },
-          "tenant_id": {
-            "title": "Tenant Id",
-            "type": "string"
-          },
-          "updated_at": {
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "tenant_id",
-          "name",
-          "display_name",
-          "description",
-          "client_id",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "ApplicationResponse",
-        "type": "object"
-      },
       "src__routers__mcp_gitops__SyncStatusResponse": {
         "description": "Response for sync status.",
         "properties": {
@@ -11536,93 +11474,6 @@
           "untracked"
         ],
         "title": "SyncStatusResponse",
-        "type": "object"
-      },
-      "src__routers__portal_applications__ApplicationResponse": {
-        "description": "Application response for Portal.",
-        "properties": {
-          "api_subscriptions": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Api Subscriptions",
-            "type": "array"
-          },
-          "client_id": {
-            "title": "Client Id",
-            "type": "string"
-          },
-          "client_secret": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Client Secret"
-          },
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "redirect_uris": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Redirect Uris",
-            "type": "array"
-          },
-          "status": {
-            "default": "active",
-            "title": "Status",
-            "type": "string"
-          },
-          "tenant_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tenant Id"
-          },
-          "updated_at": {
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "display_name",
-          "description",
-          "client_id",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "ApplicationResponse",
         "type": "object"
       },
       "src__schemas__catalog__SyncStatusResponse": {
@@ -15616,7 +15467,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__portal_applications__ApplicationResponse"
+                  "$ref": "#/components/schemas/ApplicationResponse"
                 }
               }
             },
@@ -15708,7 +15559,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__portal_applications__ApplicationResponse"
+                  "$ref": "#/components/schemas/ApplicationResponse"
                 }
               }
             },
@@ -15764,7 +15615,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__portal_applications__ApplicationResponse"
+                  "$ref": "#/components/schemas/ApplicationResponse"
                 }
               }
             },
@@ -22949,495 +22800,6 @@
         "summary": "Update Api",
         "tags": [
           "APIs"
-        ]
-      }
-    },
-    "/v1/tenants/{tenant_id}/applications": {
-      "get": {
-        "description": "List all applications for a tenant (paginated).",
-        "operationId": "list_applications_v1_tenants__tenant_id__applications_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Page number",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "Page number",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Items per page",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "description": "Items per page",
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaginatedResponse_ApplicationResponse_"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Applications",
-        "tags": [
-          "Applications"
-        ]
-      },
-      "post": {
-        "description": "Create a new application (Keycloak client)",
-        "operationId": "create_application_v1_tenants__tenant_id__applications_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApplicationCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/src__routers__applications__ApplicationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Application",
-        "tags": [
-          "Applications"
-        ]
-      }
-    },
-    "/v1/tenants/{tenant_id}/applications/{app_id}": {
-      "delete": {
-        "description": "Delete application",
-        "operationId": "delete_application_v1_tenants__tenant_id__applications__app_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "app_id",
-            "required": true,
-            "schema": {
-              "title": "App Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Application",
-        "tags": [
-          "Applications"
-        ]
-      },
-      "get": {
-        "description": "Get application by ID",
-        "operationId": "get_application_v1_tenants__tenant_id__applications__app_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "app_id",
-            "required": true,
-            "schema": {
-              "title": "App Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/src__routers__applications__ApplicationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Application",
-        "tags": [
-          "Applications"
-        ]
-      },
-      "put": {
-        "description": "Update application",
-        "operationId": "update_application_v1_tenants__tenant_id__applications__app_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "app_id",
-            "required": true,
-            "schema": {
-              "title": "App Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApplicationCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/src__routers__applications__ApplicationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Update Application",
-        "tags": [
-          "Applications"
-        ]
-      }
-    },
-    "/v1/tenants/{tenant_id}/applications/{app_id}/regenerate-secret": {
-      "post": {
-        "description": "Regenerate application client secret",
-        "operationId": "regenerate_secret_v1_tenants__tenant_id__applications__app_id__regenerate_secret_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "app_id",
-            "required": true,
-            "schema": {
-              "title": "App Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApplicationCredentials"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Regenerate Secret",
-        "tags": [
-          "Applications"
-        ]
-      }
-    },
-    "/v1/tenants/{tenant_id}/applications/{app_id}/subscribe/{api_id}": {
-      "delete": {
-        "description": "Unsubscribe application from an API",
-        "operationId": "unsubscribe_from_api_v1_tenants__tenant_id__applications__app_id__subscribe__api_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "app_id",
-            "required": true,
-            "schema": {
-              "title": "App Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "api_id",
-            "required": true,
-            "schema": {
-              "title": "Api Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Unsubscribe From Api",
-        "tags": [
-          "Applications"
-        ]
-      },
-      "post": {
-        "description": "Subscribe application to an API",
-        "operationId": "subscribe_to_api_v1_tenants__tenant_id__applications__app_id__subscribe__api_id__post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "app_id",
-            "required": true,
-            "schema": {
-              "title": "App Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "api_id",
-            "required": true,
-            "schema": {
-              "title": "Api Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Subscribe To Api",
-        "tags": [
-          "Applications"
         ]
       }
     },

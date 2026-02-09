@@ -408,7 +408,7 @@ async def update_tool_access(
     # Get server for tool validation
     server = next((s for s in MOCK_SERVERS if s.id == subscription.server_id), None)
     if not server:
-        raise HTTPException(status_code=500, detail="Server not found")
+        raise HTTPException(status_code=404, detail="Server not found")
 
     # Validate tool IDs
     server_tool_ids = {t.id for t in server.tools}

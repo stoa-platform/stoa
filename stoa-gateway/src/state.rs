@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use crate::auth::api_key::ApiKeyValidator;
 use crate::auth::jwt::{JwtValidator, JwtValidatorConfig};
-use crate::quota::{ConsumerRateLimiter, QuotaManager, QuotaManagerConfig, RateLimiterConfig};
 use crate::auth::mtls::MtlsStats;
 use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
 use crate::cache::{SemanticCache, SemanticCacheConfig};
@@ -17,6 +16,7 @@ use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
+use crate::quota::{ConsumerRateLimiter, QuotaManager, QuotaManagerConfig, RateLimiterConfig};
 use crate::rate_limit::RateLimiter;
 use crate::resilience::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry};
 use crate::routes::{PolicyRegistry, RouteRegistry};

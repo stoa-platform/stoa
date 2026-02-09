@@ -21,6 +21,10 @@ vi.mock('../utils/navigation', () => ({
   isAllowedEmbedUrl: vi.fn().mockReturnValue(true),
 }));
 
+vi.mock('../hooks/useServiceHealth', () => ({
+  useServiceHealth: () => ({ status: 'available', retry: vi.fn() }),
+}));
+
 describe('GrafanaEmbed', () => {
   beforeEach(() => {
     vi.spyOn(window, 'open').mockImplementation(() => null);

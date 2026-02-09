@@ -12,6 +12,10 @@ vi.mock('../config', () => ({
   },
 }));
 
+vi.mock('../hooks/useServiceHealth', () => ({
+  useServiceHealth: () => ({ status: 'available', retry: vi.fn() }),
+}));
+
 describe('LogsEmbed', () => {
   beforeEach(() => {
     vi.spyOn(window, 'open').mockImplementation(() => null);

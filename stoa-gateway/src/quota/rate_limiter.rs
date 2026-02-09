@@ -309,6 +309,7 @@ impl ConsumerRateLimiter {
     }
 
     /// Get rate limit info without consuming a token (for headers on already-checked requests).
+    #[allow(dead_code)]
     pub fn get_rate_limit_info(&self, consumer_id: &str) -> RateLimitInfo {
         let quotas = self.plan_quotas.read();
         let default_quota = PlanQuota {
@@ -374,6 +375,7 @@ impl ConsumerRateLimiter {
     }
 
     /// Get current bucket count (for metrics/admin).
+    #[allow(dead_code)]
     pub fn bucket_count(&self) -> usize {
         self.buckets.read().len()
     }
@@ -386,6 +388,7 @@ impl ConsumerRateLimiter {
 }
 
 /// Helper to compute effective limit from a quota without a bucket.
+#[allow(dead_code)]
 fn bucket_effective_limit_from_quota(quota: &PlanQuota) -> u32 {
     if quota.rate_limit_per_second > 0 {
         let burst = if quota.burst_limit > 0 {

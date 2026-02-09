@@ -27,16 +27,16 @@
 | 14 | AI Factory Modernization + State Files | **—** | — | ✅ Session 21 |
 | | | | | |
 | | **DONE LUNDI** | **171** | **13 PRs + 1 chore** | ✅ |
-| | **DONE DIMANCHE SOIR** | **+18** | **PR #224** | ✅ |
+| | **DONE DIMANCHE SOIR** | **+41** | **PRs #224-#230** | ✅ |
 | | | | | |
-| 15 | CAB-864 P2 — mTLS Gateway Module | **18** | #224 | ✅ PR created |
-| 15b | CAB-864 P3 — Bulk Onboarding + Registry | **8** | — | pending |
-| 16 | CAB-1121 P4 — Quota Enforcement | **15** | — | pending |
+| 15 | CAB-864 P2 — mTLS Gateway Module | **18** | #224 | ✅ merged |
+| 15b | CAB-864 P3 — Bulk Onboarding + Registry | **8** | #230 | ✅ merged |
+| 16 | CAB-1121 P4 — Quota Enforcement | **15** | #229 | ✅ merged |
 | 17 | CAB-1121 P6 — E2E Tests full flow | **13** | — | pending |
 | 18 | CAB-1035 — Persona Alex Test | **2** | — | pending (manuel) |
 | 19 | CAB-1066 — Landing + Pricing | **34** | — | pending (stoa-web) |
 | | | | | |
-| | **REMAINING** | **72** | | |
+| | **REMAINING** | **49** | | |
 | | **TOTAL CYCLE 7** | **261** | | |
 
 ---
@@ -69,19 +69,21 @@ All sessions completed. PRs #203-#222 merged. Session 21: AI Factory modernizati
 - [x] P2: 299 tests pass (32 new), clippy clean
 ```
 
-#### CAB-864 P3 — Bulk Onboarding + Registry (8 pts) — pending
+#### CAB-864 P3 — Bulk Onboarding + Registry (8 pts) ✅ PR #230
 ```
-- [ ] P3: Certificate registry model in control-plane-api (Alembic migration 019)
-- [ ] P3: Bulk onboarding endpoint (POST /v1/consumers/{tenant_id}/bulk, max 100)
-- [ ] P3: Certificate revocation + gateway allowlist sync
+- [x] P3: Alembic 020 — 12 certificate columns + 2 fingerprint indexes
+- [x] P3: Bulk onboarding (POST /v1/consumers/{tenant_id}/bulk, max 100, CSV)
+- [x] P3: Certificate revocation + rotation + Keycloak cnf sync
+- [x] P3: 20 new tests, 505 total pass, 54% coverage
 ```
 
-#### CAB-1121 P4 — Quota Enforcement (15 pts)
+#### CAB-1121 P4 — Quota Enforcement (15 pts) ✅ PR #229
 ```
-- [ ] Rate limiting middleware (per-consumer, per-plan)
-- [ ] Quota tracking (request counts, bandwidth)
-- [ ] 429 responses with Retry-After header
-- [ ] Admin endpoints for quota stats
+- [x] Rate limiting middleware (per-consumer, per-plan)
+- [x] Quota tracking (request counts, bandwidth)
+- [x] 429 responses with Retry-After header
+- [x] Admin endpoints for quota stats
+- [x] 27 new tests, 325 total gateway tests
 ```
 
 #### CAB-1121 P6 — E2E Tests full flow (13 pts)
@@ -112,15 +114,14 @@ All sessions completed. PRs #203-#222 merged. Session 21: AI Factory modernizati
 | Status | Points | PRs |
 |--------|--------|-----|
 | **DONE (Lundi)** | **171** | 13 PRs (#203-#222) + 1 chore |
-| **Remaining** | **90** | |
+| **DONE (Dim soir)** | **+41** | PRs #224, #226-#230 + stoa-docs #16 |
+| **Remaining** | **49** | |
 | **Total Cycle 7** | **261** | |
 
 ### Remaining breakdown
 | Ticket | Pts | Blocker? |
 |--------|-----|----------|
-| CAB-864 P3 Bulk Onboarding | 8 | P2 done (PR #224) |
-| CAB-1121 P4 Quota | 15 | P1-P3 done, ready to go |
-| CAB-1121 P6 E2E | 13 | Needs P4 first |
+| CAB-1121 P6 E2E | 13 | P4 done, ready to go |
 | CAB-1035 Persona Alex | 2 | Manual test |
 | CAB-1066 Landing | 34 | stoa-web repo, stretch goal |
 

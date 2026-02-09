@@ -5,8 +5,11 @@ CAB-1061: Seed demo data for STOA Platform presentation.
 
 Creates:
   1. 3 APIs: petstore, account-management, payments (portal-published)
-  2. 2 Applications: 1 active, 1 pending approval
-  3. Sample API calls to generate Grafana metrics
+  2. 2 Plans: standard (10 rps), premium (50 rps, approval required)
+  3. 2 Consumers: OASIS Mobile, Gunter Analytics (with Keycloak clients)
+  4. 2 Applications: 1 active, 1 pending approval
+  5. 2 Subscriptions: 1 active (approved), 1 pending
+  6. Sample API calls to generate Grafana metrics
 
 Idempotent: Safe to re-run. 409 = already exists = OK.
 
@@ -33,7 +36,6 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
 
 try:
     import httpx
@@ -58,443 +60,419 @@ DEMO_TENANT = os.getenv("SEED_TENANT", "high-five")
 # OpenAPI Specifications (embedded, minimal but renderable)
 # =============================================================================
 
-PETSTORE_SPEC = json.dumps({
-    "openapi": "3.0.0",
-    "info": {
-        "title": "Petstore API",
-        "version": "1.0.0",
-        "description": "Classic pet management API — browse, add, and manage pets in the store.",
-    },
-    "servers": [{"url": "https://httpbin.org/anything"}],
-    "paths": {
-        "/pets": {
-            "get": {
-                "summary": "List all pets",
-                "operationId": "listPets",
-                "tags": ["pets"],
-                "parameters": [
-                    {
-                        "name": "limit",
-                        "in": "query",
-                        "required": False,
-                        "schema": {"type": "integer", "maximum": 100},
-                    },
-                    {
-                        "name": "status",
-                        "in": "query",
-                        "required": False,
-                        "schema": {
-                            "type": "string",
-                            "enum": ["available", "pending", "sold"],
+PETSTORE_SPEC = json.dumps(
+    {
+        "openapi": "3.0.0",
+        "info": {
+            "title": "Petstore API",
+            "version": "1.0.0",
+            "description": "Classic pet management API — browse, add, and manage pets in the store.",
+        },
+        "servers": [{"url": "https://httpbin.org/anything"}],
+        "paths": {
+            "/pets": {
+                "get": {
+                    "summary": "List all pets",
+                    "operationId": "listPets",
+                    "tags": ["pets"],
+                    "parameters": [
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "maximum": 100},
                         },
-                    },
-                ],
-                "responses": {
-                    "200": {
-                        "description": "A list of pets",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {"$ref": "#/components/schemas/Pet"},
+                        {
+                            "name": "status",
+                            "in": "query",
+                            "required": False,
+                            "schema": {
+                                "type": "string",
+                                "enum": ["available", "pending", "sold"],
+                            },
+                        },
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "A list of pets",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "array",
+                                        "items": {"$ref": "#/components/schemas/Pet"},
+                                    }
                                 }
-                            }
-                        },
-                    }
-                },
-            },
-            "post": {
-                "summary": "Create a pet",
-                "operationId": "createPet",
-                "tags": ["pets"],
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/Pet"}
+                            },
                         }
                     },
                 },
-                "responses": {"201": {"description": "Pet created"}},
+                "post": {
+                    "summary": "Create a pet",
+                    "operationId": "createPet",
+                    "tags": ["pets"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Pet"}}},
+                    },
+                    "responses": {"201": {"description": "Pet created"}},
+                },
+            },
+            "/pets/{petId}": {
+                "get": {
+                    "summary": "Get pet by ID",
+                    "operationId": "getPetById",
+                    "tags": ["pets"],
+                    "parameters": [
+                        {
+                            "name": "petId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"},
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "A pet",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Pet"}}},
+                        },
+                        "404": {"description": "Pet not found"},
+                    },
+                }
             },
         },
-        "/pets/{petId}": {
-            "get": {
-                "summary": "Get pet by ID",
-                "operationId": "getPetById",
-                "tags": ["pets"],
-                "parameters": [
-                    {
-                        "name": "petId",
-                        "in": "path",
-                        "required": True,
-                        "schema": {"type": "string"},
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "A pet",
-                        "content": {
-                            "application/json": {
-                                "schema": {"$ref": "#/components/schemas/Pet"}
-                            }
+        "components": {
+            "schemas": {
+                "Pet": {
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {
+                        "id": {"type": "integer", "format": "int64"},
+                        "name": {"type": "string", "example": "Buddy"},
+                        "status": {
+                            "type": "string",
+                            "enum": ["available", "pending", "sold"],
                         },
+                        "category": {"type": "string", "example": "dog"},
                     },
-                    "404": {"description": "Pet not found"},
-                },
+                }
             }
         },
-    },
-    "components": {
-        "schemas": {
-            "Pet": {
-                "type": "object",
-                "required": ["name"],
-                "properties": {
-                    "id": {"type": "integer", "format": "int64"},
-                    "name": {"type": "string", "example": "Buddy"},
-                    "status": {
-                        "type": "string",
-                        "enum": ["available", "pending", "sold"],
-                    },
-                    "category": {"type": "string", "example": "dog"},
-                },
-            }
-        }
-    },
-})
+    }
+)
 
-ACCOUNTS_SPEC = json.dumps({
-    "openapi": "3.0.0",
-    "info": {
-        "title": "Account Management API",
-        "version": "2.1.0",
-        "description": (
-            "Manage user accounts, profiles, and preferences. "
-            "Supports CRUD operations with full audit trail."
-        ),
-    },
-    "servers": [{"url": "https://api.gostoa.dev/mock/accounts"}],
-    "paths": {
-        "/accounts": {
-            "get": {
-                "summary": "List accounts",
-                "operationId": "listAccounts",
-                "tags": ["accounts"],
-                "parameters": [
-                    {
-                        "name": "page",
-                        "in": "query",
-                        "schema": {"type": "integer", "default": 1},
+ACCOUNTS_SPEC = json.dumps(
+    {
+        "openapi": "3.0.0",
+        "info": {
+            "title": "Account Management API",
+            "version": "2.1.0",
+            "description": (
+                "Manage user accounts, profiles, and preferences. " "Supports CRUD operations with full audit trail."
+            ),
+        },
+        "servers": [{"url": "https://api.gostoa.dev/mock/accounts"}],
+        "paths": {
+            "/accounts": {
+                "get": {
+                    "summary": "List accounts",
+                    "operationId": "listAccounts",
+                    "tags": ["accounts"],
+                    "parameters": [
+                        {
+                            "name": "page",
+                            "in": "query",
+                            "schema": {"type": "integer", "default": 1},
+                        },
+                        {
+                            "name": "status",
+                            "in": "query",
+                            "schema": {
+                                "type": "string",
+                                "enum": ["active", "suspended", "closed"],
+                            },
+                        },
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Paginated list of accounts",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "items": {
+                                                "type": "array",
+                                                "items": {"$ref": "#/components/schemas/Account"},
+                                            },
+                                            "total": {"type": "integer"},
+                                        },
+                                    }
+                                }
+                            },
+                        }
                     },
-                    {
-                        "name": "status",
-                        "in": "query",
-                        "schema": {
+                },
+                "post": {
+                    "summary": "Create account",
+                    "operationId": "createAccount",
+                    "tags": ["accounts"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AccountCreate"}}},
+                    },
+                    "responses": {"201": {"description": "Account created"}},
+                },
+            },
+            "/accounts/{accountId}": {
+                "get": {
+                    "summary": "Get account details",
+                    "operationId": "getAccount",
+                    "tags": ["accounts"],
+                    "parameters": [
+                        {
+                            "name": "accountId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string", "format": "uuid"},
+                        }
+                    ],
+                    "responses": {
+                        "200": {"description": "Account details"},
+                        "404": {"description": "Account not found"},
+                    },
+                },
+                "put": {
+                    "summary": "Update account",
+                    "operationId": "updateAccount",
+                    "tags": ["accounts"],
+                    "parameters": [
+                        {
+                            "name": "accountId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string", "format": "uuid"},
+                        }
+                    ],
+                    "requestBody": {
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AccountUpdate"}}}
+                    },
+                    "responses": {"200": {"description": "Account updated"}},
+                },
+                "delete": {
+                    "summary": "Close account",
+                    "operationId": "deleteAccount",
+                    "tags": ["accounts"],
+                    "parameters": [
+                        {
+                            "name": "accountId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string", "format": "uuid"},
+                        }
+                    ],
+                    "responses": {"204": {"description": "Account closed"}},
+                },
+            },
+        },
+        "components": {
+            "schemas": {
+                "Account": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "format": "uuid"},
+                        "email": {"type": "string", "format": "email"},
+                        "display_name": {"type": "string"},
+                        "status": {
                             "type": "string",
                             "enum": ["active", "suspended", "closed"],
                         },
+                        "created_at": {"type": "string", "format": "date-time"},
                     },
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Paginated list of accounts",
+                },
+                "AccountCreate": {
+                    "type": "object",
+                    "required": ["email", "display_name"],
+                    "properties": {
+                        "email": {
+                            "type": "string",
+                            "format": "email",
+                            "example": "user@example.com",
+                        },
+                        "display_name": {
+                            "type": "string",
+                            "example": "Jane Doe",
+                        },
+                    },
+                },
+                "AccountUpdate": {
+                    "type": "object",
+                    "properties": {
+                        "display_name": {"type": "string"},
+                        "status": {
+                            "type": "string",
+                            "enum": ["active", "suspended"],
+                        },
+                    },
+                },
+            }
+        },
+    }
+)
+
+PAYMENTS_SPEC = json.dumps(
+    {
+        "openapi": "3.0.0",
+        "info": {
+            "title": "Payments API",
+            "version": "3.0.0",
+            "description": ("Process payments, refunds, and manage payment methods. " "PCI-DSS Level 1 compliant."),
+        },
+        "servers": [{"url": "https://api.gostoa.dev/mock/payments"}],
+        "paths": {
+            "/payments": {
+                "post": {
+                    "summary": "Create a payment",
+                    "operationId": "createPayment",
+                    "tags": ["payments"],
+                    "requestBody": {
+                        "required": True,
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PaymentCreate"}}},
+                    },
+                    "responses": {
+                        "201": {
+                            "description": "Payment initiated",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Payment"}}},
+                        },
+                        "422": {"description": "Invalid payment data"},
+                    },
+                },
+                "get": {
+                    "summary": "List payments",
+                    "operationId": "listPayments",
+                    "tags": ["payments"],
+                    "parameters": [
+                        {
+                            "name": "status",
+                            "in": "query",
+                            "schema": {
+                                "type": "string",
+                                "enum": ["pending", "completed", "failed", "refunded"],
+                            },
+                        },
+                        {
+                            "name": "from",
+                            "in": "query",
+                            "schema": {"type": "string", "format": "date"},
+                        },
+                        {
+                            "name": "to",
+                            "in": "query",
+                            "schema": {"type": "string", "format": "date"},
+                        },
+                    ],
+                    "responses": {"200": {"description": "List of payments"}},
+                },
+            },
+            "/payments/{paymentId}": {
+                "get": {
+                    "summary": "Get payment details",
+                    "operationId": "getPayment",
+                    "tags": ["payments"],
+                    "parameters": [
+                        {
+                            "name": "paymentId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string", "format": "uuid"},
+                        }
+                    ],
+                    "responses": {
+                        "200": {"description": "Payment details"},
+                        "404": {"description": "Payment not found"},
+                    },
+                }
+            },
+            "/payments/{paymentId}/refund": {
+                "post": {
+                    "summary": "Refund a payment",
+                    "operationId": "refundPayment",
+                    "tags": ["refunds"],
+                    "parameters": [
+                        {
+                            "name": "paymentId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string", "format": "uuid"},
+                        }
+                    ],
+                    "requestBody": {
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "type": "object",
                                     "properties": {
-                                        "items": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/components/schemas/Account"
-                                            },
+                                        "amount": {
+                                            "type": "number",
+                                            "format": "double",
+                                            "description": "Partial refund amount (omit for full)",
                                         },
-                                        "total": {"type": "integer"},
+                                        "reason": {"type": "string"},
                                     },
                                 }
                             }
-                        },
-                    }
-                },
-            },
-            "post": {
-                "summary": "Create account",
-                "operationId": "createAccount",
-                "tags": ["accounts"],
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/AccountCreate"}
                         }
                     },
+                    "responses": {
+                        "200": {"description": "Refund processed"},
+                        "409": {"description": "Payment already refunded"},
+                    },
                 },
-                "responses": {"201": {"description": "Account created"}},
             },
         },
-        "/accounts/{accountId}": {
-            "get": {
-                "summary": "Get account details",
-                "operationId": "getAccount",
-                "tags": ["accounts"],
-                "parameters": [
-                    {
-                        "name": "accountId",
-                        "in": "path",
-                        "required": True,
-                        "schema": {"type": "string", "format": "uuid"},
-                    }
-                ],
-                "responses": {
-                    "200": {"description": "Account details"},
-                    "404": {"description": "Account not found"},
-                },
-            },
-            "put": {
-                "summary": "Update account",
-                "operationId": "updateAccount",
-                "tags": ["accounts"],
-                "parameters": [
-                    {
-                        "name": "accountId",
-                        "in": "path",
-                        "required": True,
-                        "schema": {"type": "string", "format": "uuid"},
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/AccountUpdate"}
-                        }
-                    }
-                },
-                "responses": {"200": {"description": "Account updated"}},
-            },
-            "delete": {
-                "summary": "Close account",
-                "operationId": "deleteAccount",
-                "tags": ["accounts"],
-                "parameters": [
-                    {
-                        "name": "accountId",
-                        "in": "path",
-                        "required": True,
-                        "schema": {"type": "string", "format": "uuid"},
-                    }
-                ],
-                "responses": {"204": {"description": "Account closed"}},
-            },
-        },
-    },
-    "components": {
-        "schemas": {
-            "Account": {
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string", "format": "uuid"},
-                    "email": {"type": "string", "format": "email"},
-                    "display_name": {"type": "string"},
-                    "status": {
-                        "type": "string",
-                        "enum": ["active", "suspended", "closed"],
-                    },
-                    "created_at": {"type": "string", "format": "date-time"},
-                },
-            },
-            "AccountCreate": {
-                "type": "object",
-                "required": ["email", "display_name"],
-                "properties": {
-                    "email": {
-                        "type": "string",
-                        "format": "email",
-                        "example": "user@example.com",
-                    },
-                    "display_name": {
-                        "type": "string",
-                        "example": "Jane Doe",
-                    },
-                },
-            },
-            "AccountUpdate": {
-                "type": "object",
-                "properties": {
-                    "display_name": {"type": "string"},
-                    "status": {
-                        "type": "string",
-                        "enum": ["active", "suspended"],
-                    },
-                },
-            },
-        }
-    },
-})
-
-PAYMENTS_SPEC = json.dumps({
-    "openapi": "3.0.0",
-    "info": {
-        "title": "Payments API",
-        "version": "3.0.0",
-        "description": (
-            "Process payments, refunds, and manage payment methods. "
-            "PCI-DSS Level 1 compliant."
-        ),
-    },
-    "servers": [{"url": "https://api.gostoa.dev/mock/payments"}],
-    "paths": {
-        "/payments": {
-            "post": {
-                "summary": "Create a payment",
-                "operationId": "createPayment",
-                "tags": ["payments"],
-                "requestBody": {
-                    "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/PaymentCreate"}
-                        }
-                    },
-                },
-                "responses": {
-                    "201": {
-                        "description": "Payment initiated",
-                        "content": {
-                            "application/json": {
-                                "schema": {"$ref": "#/components/schemas/Payment"}
-                            }
-                        },
-                    },
-                    "422": {"description": "Invalid payment data"},
-                },
-            },
-            "get": {
-                "summary": "List payments",
-                "operationId": "listPayments",
-                "tags": ["payments"],
-                "parameters": [
-                    {
-                        "name": "status",
-                        "in": "query",
-                        "schema": {
+        "components": {
+            "schemas": {
+                "Payment": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "format": "uuid"},
+                        "amount": {"type": "number", "format": "double"},
+                        "currency": {"type": "string", "example": "EUR"},
+                        "status": {
                             "type": "string",
                             "enum": ["pending", "completed", "failed", "refunded"],
                         },
+                        "created_at": {"type": "string", "format": "date-time"},
                     },
-                    {
-                        "name": "from",
-                        "in": "query",
-                        "schema": {"type": "string", "format": "date"},
+                },
+                "PaymentCreate": {
+                    "type": "object",
+                    "required": ["amount", "currency"],
+                    "properties": {
+                        "amount": {
+                            "type": "number",
+                            "format": "double",
+                            "minimum": 0.01,
+                            "example": 49.99,
+                        },
+                        "currency": {
+                            "type": "string",
+                            "enum": ["EUR", "USD", "GBP"],
+                            "example": "EUR",
+                        },
+                        "description": {
+                            "type": "string",
+                            "example": "Monthly subscription",
+                        },
+                        "metadata": {
+                            "type": "object",
+                            "additionalProperties": {"type": "string"},
+                        },
                     },
-                    {
-                        "name": "to",
-                        "in": "query",
-                        "schema": {"type": "string", "format": "date"},
-                    },
-                ],
-                "responses": {"200": {"description": "List of payments"}},
-            },
-        },
-        "/payments/{paymentId}": {
-            "get": {
-                "summary": "Get payment details",
-                "operationId": "getPayment",
-                "tags": ["payments"],
-                "parameters": [
-                    {
-                        "name": "paymentId",
-                        "in": "path",
-                        "required": True,
-                        "schema": {"type": "string", "format": "uuid"},
-                    }
-                ],
-                "responses": {
-                    "200": {"description": "Payment details"},
-                    "404": {"description": "Payment not found"},
                 },
             }
         },
-        "/payments/{paymentId}/refund": {
-            "post": {
-                "summary": "Refund a payment",
-                "operationId": "refundPayment",
-                "tags": ["refunds"],
-                "parameters": [
-                    {
-                        "name": "paymentId",
-                        "in": "path",
-                        "required": True,
-                        "schema": {"type": "string", "format": "uuid"},
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "amount": {
-                                        "type": "number",
-                                        "format": "double",
-                                        "description": "Partial refund amount (omit for full)",
-                                    },
-                                    "reason": {"type": "string"},
-                                },
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {"description": "Refund processed"},
-                    "409": {"description": "Payment already refunded"},
-                },
-            },
-        },
-    },
-    "components": {
-        "schemas": {
-            "Payment": {
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string", "format": "uuid"},
-                    "amount": {"type": "number", "format": "double"},
-                    "currency": {"type": "string", "example": "EUR"},
-                    "status": {
-                        "type": "string",
-                        "enum": ["pending", "completed", "failed", "refunded"],
-                    },
-                    "created_at": {"type": "string", "format": "date-time"},
-                },
-            },
-            "PaymentCreate": {
-                "type": "object",
-                "required": ["amount", "currency"],
-                "properties": {
-                    "amount": {
-                        "type": "number",
-                        "format": "double",
-                        "minimum": 0.01,
-                        "example": 49.99,
-                    },
-                    "currency": {
-                        "type": "string",
-                        "enum": ["EUR", "USD", "GBP"],
-                        "example": "EUR",
-                    },
-                    "description": {
-                        "type": "string",
-                        "example": "Monthly subscription",
-                    },
-                    "metadata": {
-                        "type": "object",
-                        "additionalProperties": {"type": "string"},
-                    },
-                },
-            },
-        }
-    },
-})
+    }
+)
 
 
 # =============================================================================
@@ -519,8 +497,7 @@ DEMO_APIS = [
         "display_name": "Account Management API",
         "version": "2.1.0",
         "description": (
-            "Manage user accounts, profiles, and preferences. "
-            "Full CRUD with audit trail and role-based access."
+            "Manage user accounts, profiles, and preferences. " "Full CRUD with audit trail and role-based access."
         ),
         "backend_url": "https://api.gostoa.dev/mock/accounts",
         "tags": ["portal:published", "rest", "demo", "enterprise"],
@@ -537,6 +514,48 @@ DEMO_APIS = [
         "backend_url": "https://api.gostoa.dev/mock/payments",
         "tags": ["portal:published", "rest", "demo", "enterprise", "pci"],
         "openapi_spec": PAYMENTS_SPEC,
+    },
+]
+
+DEMO_PLANS = [
+    {
+        "slug": "standard",
+        "name": "Standard Plan",
+        "description": "Standard API access \u2014 10 req/s, 600 req/min, 100k daily.",
+        "rate_limit_per_second": 10,
+        "rate_limit_per_minute": 600,
+        "daily_request_limit": 100000,
+        "monthly_request_limit": 3000000,
+        "burst_limit": 20,
+        "requires_approval": False,
+    },
+    {
+        "slug": "premium",
+        "name": "Premium Plan",
+        "description": "Premium API access \u2014 50 req/s, 3k req/min, 1M daily. Requires approval.",
+        "rate_limit_per_second": 50,
+        "rate_limit_per_minute": 3000,
+        "daily_request_limit": 1000000,
+        "monthly_request_limit": 30000000,
+        "burst_limit": 100,
+        "requires_approval": True,
+    },
+]
+
+DEMO_CONSUMERS = [
+    {
+        "external_id": "oasis-mobile-app",
+        "name": "OASIS Mobile App",
+        "email": "api@oasis.high-five.dev",
+        "company": "High Five Inc",
+        "description": "Mobile application consuming Petstore API",
+    },
+    {
+        "external_id": "gunter-analytics",
+        "name": "Gunter Analytics Dashboard",
+        "email": "api@gunter.high-five.dev",
+        "company": "High Five Inc",
+        "description": "Analytics dashboard consuming Payments API",
     },
 ]
 
@@ -561,6 +580,7 @@ DEMO_APPS = [
 # =============================================================================
 # Auth
 # =============================================================================
+
 
 def get_access_token() -> str | None:
     """Get access token from Keycloak via password grant."""
@@ -601,6 +621,7 @@ def create_client(token: str | None) -> httpx.Client:
 # =============================================================================
 # Phase 1: Seed APIs (GitOps first, offline fallback to catalog/seed)
 # =============================================================================
+
 
 def seed_apis_via_gitops(client: httpx.Client) -> dict[str, bool]:
     """Try creating APIs via GitOps endpoint. Returns {name: success}."""
@@ -745,14 +766,91 @@ def verify_portal_apis(client: httpx.Client) -> int:
 
 
 # =============================================================================
-# Phase 3: Seed Applications
+# Phase 3: Seed Plans (CAB-1121 P4)
 # =============================================================================
+
+
+def seed_plans(client: httpx.Client) -> dict[str, str | None]:
+    """Create subscription plans. Returns {slug: plan_id}."""
+    results: dict[str, str | None] = {}
+
+    print(f"\n=== Phase 3: Creating Plans in tenant '{DEMO_TENANT}' ===")
+    for plan_def in DEMO_PLANS:
+        slug = plan_def["slug"]
+        try:
+            resp = client.post(f"/v1/plans/{DEMO_TENANT}", json=plan_def)
+            if resp.status_code in (200, 201):
+                data = resp.json()
+                plan_id = data.get("id")
+                print(f"  [+] Plan '{slug}' created (id: {str(plan_id)[:8]}...)")
+                results[slug] = str(plan_id) if plan_id else None
+            elif resp.status_code == 409:
+                print(f"  [=] Plan '{slug}' already exists")
+                # Try to fetch it by slug to get the ID
+                try:
+                    get_resp = client.get(f"/v1/plans/{DEMO_TENANT}/by-slug/{slug}")
+                    if get_resp.status_code == 200:
+                        results[slug] = str(get_resp.json().get("id"))
+                    else:
+                        results[slug] = None
+                except Exception:
+                    results[slug] = None
+            else:
+                print(f"  [-] Plan '{slug}' failed: {resp.status_code} \u2014 {resp.text[:120]}")
+                results[slug] = None
+        except Exception as e:
+            print(f"  [-] Plan '{slug}' error: {e}")
+            results[slug] = None
+
+    return results
+
+
+# =============================================================================
+# Phase 4: Seed Consumers (CAB-1121 P1)
+# =============================================================================
+
+
+def seed_consumers(client: httpx.Client) -> dict[str, str | None]:
+    """Create demo consumers with Keycloak OAuth2 clients. Returns {external_id: consumer_id}."""
+    results: dict[str, str | None] = {}
+
+    print(f"\n=== Phase 4: Creating Consumers in tenant '{DEMO_TENANT}' ===")
+    for consumer_def in DEMO_CONSUMERS:
+        ext_id = consumer_def["external_id"]
+        try:
+            resp = client.post(f"/v1/consumers/{DEMO_TENANT}", json=consumer_def)
+            if resp.status_code in (200, 201):
+                data = resp.json()
+                consumer_id = data.get("id")
+                kc_client = data.get("keycloak_client_id", "pending")
+                print(f"  [+] Consumer '{ext_id}' created (id: {str(consumer_id)[:8]}..., kc: {kc_client})")
+                results[ext_id] = str(consumer_id) if consumer_id else None
+            elif resp.status_code == 409:
+                print(f"  [=] Consumer '{ext_id}' already exists")
+                results[ext_id] = None
+            elif resp.status_code == 503:
+                print(f"  [~] Consumer '{ext_id}' created but Keycloak unavailable (retry later)")
+                results[ext_id] = None
+            else:
+                print(f"  [-] Consumer '{ext_id}' failed: {resp.status_code} \u2014 {resp.text[:120]}")
+                results[ext_id] = None
+        except Exception as e:
+            print(f"  [-] Consumer '{ext_id}' error: {e}")
+            results[ext_id] = None
+
+    return results
+
+
+# =============================================================================
+# Phase 5: Seed Applications
+# =============================================================================
+
 
 def seed_applications(client: httpx.Client) -> dict[str, str | None]:
     """Create 2 demo applications. Returns {name: app_id}."""
     results = {}
 
-    print(f"\n=== Phase 3: Creating Applications ===")
+    print("\n=== Phase 5: Creating Applications ===")
     for app_def in DEMO_APPS:
         name = app_def["name"]
         payload = {
@@ -783,22 +881,27 @@ def seed_applications(client: httpx.Client) -> dict[str, str | None]:
 
 
 # =============================================================================
-# Phase 4: Seed Subscriptions (1 active, 1 pending)
+# Phase 6: Seed Subscriptions (1 active, 1 pending)
 # =============================================================================
+
 
 def seed_subscriptions(
     client: httpx.Client,
     app_ids: dict[str, str | None],
+    consumer_ids: dict[str, str | None] | None = None,
+    plan_ids: dict[str, str | None] | None = None,
 ) -> dict[str, str]:
     """Create subscriptions: oasis-mobile=active, gunter-dashboard=pending."""
     results = {}
+    consumer_ids = consumer_ids or {}
+    plan_ids = plan_ids or {}
 
-    print("\n=== Phase 4: Creating Subscriptions ===")
+    print("\n=== Phase 6: Creating Subscriptions ===")
 
     # Active subscription: oasis-mobile -> petstore (approved)
     active_app_id = app_ids.get("oasis-mobile")
     if active_app_id:
-        sub_payload = {
+        sub_payload: dict[str, str | None] = {
             "application_id": active_app_id,
             "application_name": "OASIS Mobile App",
             "api_id": "petstore",
@@ -808,6 +911,10 @@ def seed_subscriptions(
             "plan_id": "standard",
             "plan_name": "Standard Plan",
         }
+        if consumer_ids.get("oasis-mobile-app"):
+            sub_payload["consumer_id"] = consumer_ids["oasis-mobile-app"]
+        if plan_ids.get("standard"):
+            sub_payload["plan_id"] = plan_ids["standard"]
         try:
             resp = client.post("/v1/subscriptions", json=sub_payload)
             if resp.status_code in (200, 201):
@@ -840,7 +947,7 @@ def seed_subscriptions(
     # Pending subscription: gunter-dashboard -> payments (left pending)
     pending_app_id = app_ids.get("gunter-dashboard")
     if pending_app_id:
-        sub_payload = {
+        sub_payload_pending: dict[str, str | None] = {
             "application_id": pending_app_id,
             "application_name": "Gunter Analytics Dashboard",
             "api_id": "payments",
@@ -850,8 +957,12 @@ def seed_subscriptions(
             "plan_id": "premium",
             "plan_name": "Premium Plan",
         }
+        if consumer_ids.get("gunter-analytics"):
+            sub_payload_pending["consumer_id"] = consumer_ids["gunter-analytics"]
+        if plan_ids.get("premium"):
+            sub_payload_pending["plan_id"] = plan_ids["premium"]
         try:
-            resp = client.post("/v1/subscriptions", json=sub_payload)
+            resp = client.post("/v1/subscriptions", json=sub_payload_pending)
             if resp.status_code in (200, 201):
                 data = resp.json()
                 sub_id = data.get("subscription_id") or data.get("id")
@@ -872,14 +983,15 @@ def seed_subscriptions(
 
 
 # =============================================================================
-# Phase 5: Generate Metrics (sample API traffic for Grafana)
+# Phase 7: Generate Metrics (sample API traffic for Grafana)
 # =============================================================================
+
 
 def generate_metrics(client: httpx.Client) -> dict[str, int]:
     """Make sample API calls to generate traffic metrics for Grafana dashboards."""
     results: dict[str, int] = {}
 
-    print("\n=== Phase 5: Generating Metrics (sample API traffic) ===")
+    print("\n=== Phase 7: Generating Metrics (sample API traffic) ===")
 
     calls = [
         ("GET", "/health/ready", None),
@@ -925,9 +1037,12 @@ def generate_metrics(client: httpx.Client) -> dict[str, int]:
 # Summary
 # =============================================================================
 
+
 def print_summary(
     apis: dict[str, bool],
     portal_count: int,
+    plans: dict[str, str | None],
+    consumers: dict[str, str | None],
     apps: dict[str, str | None],
     subs: dict[str, str],
     metrics: dict[str, int],
@@ -945,6 +1060,22 @@ def print_summary(
         print(f"  {status} {name} v{version}")
 
     print(f"\nPortal catalog: {portal_count} APIs visible")
+
+    print("\nPlans:")
+    for slug, plan_id in plans.items():
+        plan_def = next((p for p in DEMO_PLANS if p["slug"] == slug), {})
+        rps = plan_def.get("rate_limit_per_second", "?")
+        if plan_id:
+            print(f"  [OK] {slug} ({rps} req/s, id: {plan_id[:8]}...)")
+        else:
+            print(f"  [--] {slug} ({rps} req/s)")
+
+    print("\nConsumers:")
+    for ext_id, consumer_id in consumers.items():
+        if consumer_id:
+            print(f"  [OK] {ext_id} (id: {consumer_id[:8]}...)")
+        else:
+            print(f"  [--] {ext_id}")
 
     print("\nApplications:")
     for name, app_id in apps.items():
@@ -973,14 +1104,17 @@ def print_summary(
 | anorak   | * (all)      | cpi-admin     | Console: platform-wide admin       |
 
 Portal APIs: petstore, account-management, payments
-Active App:  oasis-mobile (subscribed to petstore)
-Pending App: gunter-dashboard (awaiting approval for payments)
+Plans:       standard (10 rps), premium (50 rps, approval required)
+Consumers:   oasis-mobile-app (Petstore), gunter-analytics (Payments)
+Active App:  oasis-mobile (subscribed to petstore, standard plan)
+Pending App: gunter-dashboard (awaiting approval for payments, premium plan)
 """)
 
 
 # =============================================================================
 # Main
 # =============================================================================
+
 
 def main() -> int:
     """Main entry point."""
@@ -1028,17 +1162,23 @@ def main() -> int:
         else:
             print("\n  [!] Could not verify portal catalog")
 
-        # Phase 3: Applications
+        # Phase 3: Plans
+        plans = seed_plans(client)
+
+        # Phase 4: Consumers
+        consumers = seed_consumers(client)
+
+        # Phase 5: Applications
         apps = seed_applications(client)
 
-        # Phase 4: Subscriptions
-        subs = seed_subscriptions(client, apps)
+        # Phase 6: Subscriptions
+        subs = seed_subscriptions(client, apps, consumers, plans)
 
-        # Phase 5: Metrics
+        # Phase 7: Metrics
         metrics = generate_metrics(client)
 
         # Summary
-        print_summary(apis, portal_count, apps, subs, metrics)
+        print_summary(apis, portal_count, plans, consumers, apps, subs, metrics)
 
         # Exit code
         all_apis_ok = all(apis.values())

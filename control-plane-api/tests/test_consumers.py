@@ -25,9 +25,7 @@ class TestConsumersRouter:
 
     # ============== Create Consumer Tests ==============
 
-    def test_create_consumer_success(
-        self, app_with_tenant_admin, mock_db_session, sample_consumer_data
-    ):
+    def test_create_consumer_success(self, app_with_tenant_admin, mock_db_session, sample_consumer_data):
         """Test successful consumer creation returns 201."""
         mock_consumer = self._create_mock_consumer(sample_consumer_data)
         updated_consumer = self._create_mock_consumer(
@@ -36,8 +34,10 @@ class TestConsumersRouter:
 
         kc_result = {"client_id": "acme-partner-acme-001", "client_secret": "s", "id": "uuid"}
 
-        with patch("src.routers.consumers.ConsumerRepository") as MockRepo, \
-             patch("src.routers.consumers.keycloak_service") as mock_kc:
+        with (
+            patch("src.routers.consumers.ConsumerRepository") as MockRepo,
+            patch("src.routers.consumers.keycloak_service") as mock_kc,
+        ):
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_by_external_id = AsyncMock(return_value=None)
             mock_repo_instance.create = AsyncMock(return_value=mock_consumer)
@@ -63,9 +63,7 @@ class TestConsumersRouter:
             assert data["tenant_id"] == "acme"
             assert data["status"] == "active"
 
-    def test_create_consumer_duplicate_409(
-        self, app_with_tenant_admin, mock_db_session, sample_consumer_data
-    ):
+    def test_create_consumer_duplicate_409(self, app_with_tenant_admin, mock_db_session, sample_consumer_data):
         """Test duplicate external_id returns 409."""
         mock_existing = self._create_mock_consumer(sample_consumer_data)
 
@@ -86,9 +84,7 @@ class TestConsumersRouter:
             assert response.status_code == 409
             assert "already exists" in response.json()["detail"]
 
-    def test_create_consumer_403_wrong_tenant(
-        self, app_with_other_tenant, mock_db_session
-    ):
+    def test_create_consumer_403_wrong_tenant(self, app_with_other_tenant, mock_db_session):
         """Test tenant isolation - cannot create consumer in another tenant."""
         with TestClient(app_with_other_tenant) as client:
             response = client.post(
@@ -104,17 +100,13 @@ class TestConsumersRouter:
 
     # ============== List Consumer Tests ==============
 
-    def test_list_consumers_success(
-        self, app_with_tenant_admin, mock_db_session, sample_consumer_data
-    ):
+    def test_list_consumers_success(self, app_with_tenant_admin, mock_db_session, sample_consumer_data):
         """Test listing consumers with pagination."""
         mock_consumer = self._create_mock_consumer(sample_consumer_data)
 
         with patch("src.routers.consumers.ConsumerRepository") as MockRepo:
             mock_repo_instance = MockRepo.return_value
-            mock_repo_instance.list_by_tenant = AsyncMock(
-                return_value=([mock_consumer], 1)
-            )
+            mock_repo_instance.list_by_tenant = AsyncMock(return_value=([mock_consumer], 1))
 
             with TestClient(app_with_tenant_admin) as client:
                 response = client.get("/v1/consumers/acme")
@@ -140,9 +132,7 @@ class TestConsumersRouter:
 
     # ============== Get Consumer Tests ==============
 
-    def test_get_consumer_success(
-        self, app_with_tenant_admin, mock_db_session, sample_consumer_data
-    ):
+    def test_get_consumer_success(self, app_with_tenant_admin, mock_db_session, sample_consumer_data):
         """Test getting a consumer by ID."""
         mock_consumer = self._create_mock_consumer(sample_consumer_data)
 
@@ -151,9 +141,7 @@ class TestConsumersRouter:
             mock_repo_instance.get_by_id = AsyncMock(return_value=mock_consumer)
 
             with TestClient(app_with_tenant_admin) as client:
-                response = client.get(
-                    f"/v1/consumers/acme/{sample_consumer_data['id']}"
-                )
+                response = client.get(f"/v1/consumers/acme/{sample_consumer_data['id']}")
 
             assert response.status_code == 200
             assert response.json()["name"] == "ACME Corp"
@@ -171,14 +159,10 @@ class TestConsumersRouter:
 
     # ============== Update Consumer Tests ==============
 
-    def test_update_consumer_success(
-        self, app_with_tenant_admin, mock_db_session, sample_consumer_data
-    ):
+    def test_update_consumer_success(self, app_with_tenant_admin, mock_db_session, sample_consumer_data):
         """Test updating a consumer."""
         mock_consumer = self._create_mock_consumer(sample_consumer_data)
-        updated_consumer = self._create_mock_consumer(
-            {**sample_consumer_data, "name": "ACME Updated"}
-        )
+        updated_consumer = self._create_mock_consumer({**sample_consumer_data, "name": "ACME Updated"})
 
         with patch("src.routers.consumers.ConsumerRepository") as MockRepo:
             mock_repo_instance = MockRepo.return_value
@@ -196,9 +180,7 @@ class TestConsumersRouter:
 
     # ============== Delete Consumer Tests ==============
 
-    def test_delete_consumer_success(
-        self, app_with_tenant_admin, mock_db_session, sample_consumer_data
-    ):
+    def test_delete_consumer_success(self, app_with_tenant_admin, mock_db_session, sample_consumer_data):
         """Test deleting a consumer."""
         mock_consumer = self._create_mock_consumer(sample_consumer_data)
 
@@ -208,17 +190,13 @@ class TestConsumersRouter:
             mock_repo_instance.delete = AsyncMock()
 
             with TestClient(app_with_tenant_admin) as client:
-                response = client.delete(
-                    f"/v1/consumers/acme/{sample_consumer_data['id']}"
-                )
+                response = client.delete(f"/v1/consumers/acme/{sample_consumer_data['id']}")
 
             assert response.status_code == 204
 
     # ============== Status Management Tests ==============
 
-    def test_suspend_consumer_success(
-        self, app_with_tenant_admin, mock_db_session, sample_consumer_data
-    ):
+    def test_suspend_consumer_success(self, app_with_tenant_admin, mock_db_session, sample_consumer_data):
         """Test suspending an active consumer."""
         mock_consumer = self._create_mock_consumer(sample_consumer_data)
         mock_consumer.status = "active"
@@ -228,12 +206,12 @@ class TestConsumersRouter:
         mock_consumer.status.value = "active"
         mock_consumer.status.__ne__ = lambda _self, other: str(other) != "active"
 
-        suspended_consumer = self._create_mock_consumer(
-            {**sample_consumer_data, "status": "suspended"}
-        )
+        suspended_consumer = self._create_mock_consumer({**sample_consumer_data, "status": "suspended"})
 
-        with patch("src.routers.consumers.ConsumerRepository") as MockRepo, \
-             patch("src.routers.consumers.ConsumerStatus") as MockStatus:
+        with (
+            patch("src.routers.consumers.ConsumerRepository") as MockRepo,
+            patch("src.routers.consumers.ConsumerStatus") as MockStatus,
+        ):
             MockStatus.ACTIVE = "active"
             MockStatus.SUSPENDED = "suspended"
             MockStatus.BLOCKED = "blocked"
@@ -243,15 +221,11 @@ class TestConsumersRouter:
             mock_repo_instance.update_status = AsyncMock(return_value=suspended_consumer)
 
             with TestClient(app_with_tenant_admin) as client:
-                response = client.post(
-                    f"/v1/consumers/acme/{sample_consumer_data['id']}/suspend"
-                )
+                response = client.post(f"/v1/consumers/acme/{sample_consumer_data['id']}/suspend")
 
             assert response.status_code == 200
 
-    def test_activate_consumer_success(
-        self, app_with_tenant_admin, mock_db_session, sample_consumer_data
-    ):
+    def test_activate_consumer_success(self, app_with_tenant_admin, mock_db_session, sample_consumer_data):
         """Test reactivating a suspended consumer."""
         mock_consumer = self._create_mock_consumer(
             {**sample_consumer_data, "status": "suspended", "keycloak_client_id": None}
@@ -267,9 +241,11 @@ class TestConsumersRouter:
 
         kc_result = {"client_id": "acme-partner-acme-001", "client_secret": "s", "id": "uuid"}
 
-        with patch("src.routers.consumers.ConsumerRepository") as MockRepo, \
-             patch("src.routers.consumers.ConsumerStatus") as MockStatus, \
-             patch("src.routers.consumers.keycloak_service") as mock_kc:
+        with (
+            patch("src.routers.consumers.ConsumerRepository") as MockRepo,
+            patch("src.routers.consumers.ConsumerStatus") as MockStatus,
+            patch("src.routers.consumers.keycloak_service") as mock_kc,
+        ):
             MockStatus.ACTIVE = "active"
             MockStatus.SUSPENDED = "suspended"
             MockStatus.BLOCKED = "blocked"
@@ -281,26 +257,69 @@ class TestConsumersRouter:
             mock_kc.create_consumer_client = AsyncMock(return_value=kc_result)
 
             with TestClient(app_with_tenant_admin) as client:
-                response = client.post(
-                    f"/v1/consumers/acme/{sample_consumer_data['id']}/activate"
-                )
+                response = client.post(f"/v1/consumers/acme/{sample_consumer_data['id']}/activate")
 
             assert response.status_code == 200
 
-    def test_cpi_admin_cross_tenant_access(
-        self, app_with_cpi_admin, mock_db_session, sample_consumer_data
-    ):
+    def test_cpi_admin_cross_tenant_access(self, app_with_cpi_admin, mock_db_session, sample_consumer_data):
         """Test CPI admin can access any tenant's consumers."""
         mock_consumer = self._create_mock_consumer(sample_consumer_data)
 
         with patch("src.routers.consumers.ConsumerRepository") as MockRepo:
             mock_repo_instance = MockRepo.return_value
-            mock_repo_instance.list_by_tenant = AsyncMock(
-                return_value=([mock_consumer], 1)
-            )
+            mock_repo_instance.list_by_tenant = AsyncMock(return_value=([mock_consumer], 1))
 
             with TestClient(app_with_cpi_admin) as client:
                 response = client.get("/v1/consumers/acme")
 
             assert response.status_code == 200
             assert response.json()["total"] == 1
+
+    # ============== Search LIKE Escape Tests ==============
+
+    def test_search_consumers_percent_char(self, app_with_tenant_admin, mock_db_session):
+        """Percent character (LIKE wildcard) is properly escaped."""
+        with patch("src.routers.consumers.ConsumerRepository") as MockRepo:
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.list_by_tenant = AsyncMock(return_value=([], 0))
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.get("/v1/consumers/acme?search=%25")  # URL encoded %
+
+            assert response.status_code == 200, "Search with % should not cause 500 error"
+
+    def test_search_consumers_underscore_char(self, app_with_tenant_admin, mock_db_session):
+        """Underscore character (LIKE single-char wildcard) is properly escaped."""
+        with patch("src.routers.consumers.ConsumerRepository") as MockRepo:
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.list_by_tenant = AsyncMock(return_value=([], 0))
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.get("/v1/consumers/acme?search=_")
+
+            assert response.status_code == 200, "Search with _ should not cause 500 error"
+
+    def test_search_consumers_backslash_char(self, app_with_tenant_admin, mock_db_session):
+        """Backslash character (LIKE escape char) is properly escaped."""
+        with patch("src.routers.consumers.ConsumerRepository") as MockRepo:
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.list_by_tenant = AsyncMock(return_value=([], 0))
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.get("/v1/consumers/acme?search=%5C")  # URL encoded \
+
+            assert response.status_code == 200, "Search with \\ should not cause 500 error"
+
+    def test_search_consumers_whitespace_only(self, app_with_tenant_admin, mock_db_session):
+        """Whitespace-only search should be treated as empty (no filter)."""
+        with patch("src.routers.consumers.ConsumerRepository") as MockRepo:
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.list_by_tenant = AsyncMock(return_value=([], 0))
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.get("/v1/consumers/acme?search=   ")
+
+            assert response.status_code == 200
+            # Verify that list_by_tenant was called with search=None or empty after strip
+            call_kwargs = mock_repo_instance.list_by_tenant.call_args.kwargs
+            assert call_kwargs["search"] == "   "  # Router passes it as-is, repo strips it

@@ -13,7 +13,7 @@
 |---|--------|-----|-------------|------------|
 | 1 | CAB-1121 — Consumer Onboarding P1 (Data Model) | **55** | ✅ PR #204 merged | ✅ Lun |
 | 1b | CAB-1121 — Consumer Onboarding P2 (Keycloak) | **20** | ✅ PR #208 merged | ✅ Lun |
-| 1c | CAB-1121 — Consumer Onboarding P3 (Gateway) | **15** | ✅ Code done, PR pending | ✅ Lun |
+| 1c | CAB-1121 — Consumer Onboarding P3 (Gateway) | **15** | ✅ PR #211 merged + deployed | ✅ Lun |
 | 2 | CAB-1118 — Sidebar Redesign | **8** | ✅ PR #207 + #209 merged | ✅ Lun |
 | 3 | CAB-1117 — Sidecar Docker Compose | **8** | ✅ PR #206 merged | ✅ Lun |
 | 4 | CAB-1030 — Admin Guide + Onboarding | **13** | ~25 min | Mar |

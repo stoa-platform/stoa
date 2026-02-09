@@ -13,7 +13,7 @@ interface SkeletonProps {
 export function Skeleton({ className = '' }: SkeletonProps) {
   return (
     <div
-      className={`animate-pulse rounded bg-neutral-200 ${className}`}
+      className={`animate-pulse rounded bg-neutral-200 dark:bg-neutral-700 ${className}`}
       aria-hidden="true"
     />
   );
@@ -84,7 +84,7 @@ export function ButtonSkeleton({
 
 export function CardSkeleton({ className = '' }: { className?: string }) {
   return (
-    <div className={`bg-white rounded-lg border border-neutral-200 p-6 ${className}`}>
+    <div className={`bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6 ${className}`}>
       <div className="flex items-center gap-3 mb-4">
         <Skeleton className="h-10 w-10 rounded-lg" />
         <div className="flex-1">
@@ -125,7 +125,7 @@ export function TableBodySkeleton({
   columns?: number;
 }) {
   return (
-    <tbody className="divide-y divide-neutral-200">
+    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
       {Array.from({ length: rows }).map((_, i) => (
         <TableRowSkeleton key={i} columns={columns} />
       ))}
@@ -145,14 +145,14 @@ export function TableSkeleton({
   const headerCount = headers?.length || columns;
 
   return (
-    <div className="bg-white rounded-lg border border-neutral-200 overflow-hidden">
-      <table className="min-w-full divide-y divide-neutral-200">
-        <thead className="bg-neutral-50">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+      <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-700">
+        <thead className="bg-neutral-50 dark:bg-neutral-800">
           <tr>
             {Array.from({ length: headerCount }).map((_, i) => (
               <th key={i} className="px-4 py-3 text-left">
                 {headers ? (
-                  <span className="text-xs font-medium text-neutral-500 uppercase">
+                  <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase">
                     {headers[i]}
                   </span>
                 ) : (
@@ -174,7 +174,7 @@ export function TableSkeleton({
 
 export function StatCardSkeleton() {
   return (
-    <div className="bg-white rounded-lg border border-neutral-200 p-6">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
       <Skeleton className="h-4 w-24 mb-2" />
       <Skeleton className="h-8 w-16 mb-1" />
       <Skeleton className="h-3 w-20" />

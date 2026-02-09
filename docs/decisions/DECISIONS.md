@@ -17,6 +17,6 @@ Chronological log of notable technical decisions. For major architectural decisi
 
 | Date | Decision | Context |
 |------|----------|---------|
-| 2026-01-30 | Gateway Adapter Pattern (ADR-027) | Declarative reconciliation for multi-vendor gateways |
+| 2026-01-30 | Gateway Adapter Pattern (ADR-035) | Declarative reconciliation for multi-vendor gateways |
 | 2026-01-24 | Stack = Python everywhere backend | No Node.js on server side, consistency |
 | 2026-01-24 | AI Factory model: architect supervises Claude Code | Autonomous execution with human checkpoints |

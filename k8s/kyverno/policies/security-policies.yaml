@@ -10,7 +10,7 @@ metadata:
     policies.kyverno.io/title: Require Labels
     policies.kyverno.io/category: Best Practices
 spec:
-  validationFailureAction: Audit
+  validationFailureAction: Enforce
   background: true
   rules:
     - name: require-tenant-label
@@ -38,7 +38,7 @@ metadata:
     policies.kyverno.io/title: Require Health Probes
     policies.kyverno.io/category: Best Practices
 spec:
-  validationFailureAction: Audit
+  validationFailureAction: Enforce
   background: true
   rules:
     - name: require-liveness-probe
@@ -88,7 +88,7 @@ metadata:
     policies.kyverno.io/title: Require External Secrets
     policies.kyverno.io/category: Security
 spec:
-  validationFailureAction: Audit
+  validationFailureAction: Enforce
   background: true
   rules:
     - name: block-raw-secrets

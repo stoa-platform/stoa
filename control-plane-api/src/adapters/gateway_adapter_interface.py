@@ -8,7 +8,7 @@ configuration, and backup/archive.
 First implementation: webMethods API Gateway (see adapters/webmethods/).
 Planned: Kong, Apigee, AWS API Gateway.
 
-See ADR-027 for the architectural decision and CIR research context.
+See ADR-035 for the architectural decision and CIR research context.
 """
 
 from abc import ABC, abstractmethod

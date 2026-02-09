@@ -1,7 +1,7 @@
 """Gateway Instance SQLAlchemy models for multi-gateway orchestration.
 
 Represents a registered gateway (webMethods, Kong, Apigee, STOA, etc.)
-that the Control Plane can pilot via the Adapter Pattern (ADR-027).
+that the Control Plane can pilot via the Adapter Pattern (ADR-035).
 """
 import enum
 import uuid

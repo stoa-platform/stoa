@@ -1,4 +1,5 @@
 """Tests for STOA Gateway Adapter — Python side (Sub-phase 4a)."""
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,10 +14,12 @@ class TestStoaAdapterLifecycle:
     @pytest.mark.asyncio
     async def test_connect_creates_client(self):
         """connect() initializes an httpx.AsyncClient."""
-        adapter = StoaGatewayAdapter(config={
-            "base_url": "http://localhost:8080",
-            "auth_config": {"admin_token": "test-token"},
-        })
+        adapter = StoaGatewayAdapter(
+            config={
+                "base_url": "http://localhost:8080",
+                "auth_config": {"admin_token": "test-token"},
+            }
+        )
         assert adapter._client is None
 
         with patch("src.adapters.stoa.adapter.httpx.AsyncClient") as mock_cls:
@@ -53,10 +56,12 @@ class TestStoaAdapterAPIs:
     """Tests for API sync/delete/list operations."""
 
     def _make_adapter(self):
-        adapter = StoaGatewayAdapter(config={
-            "base_url": "http://gw.test:8080",
-            "auth_config": {"admin_token": "secret"},
-        })
+        adapter = StoaGatewayAdapter(
+            config={
+                "base_url": "http://gw.test:8080",
+                "auth_config": {"admin_token": "secret"},
+            }
+        )
         mock_client = AsyncMock()
         adapter._client = mock_client
         return adapter, mock_client
@@ -150,10 +155,12 @@ class TestStoaAdapterPolicies:
     """Tests for policy upsert/delete/list operations."""
 
     def _make_adapter(self):
-        adapter = StoaGatewayAdapter(config={
-            "base_url": "http://gw.test:8080",
-            "auth_config": {"admin_token": "secret"},
-        })
+        adapter = StoaGatewayAdapter(
+            config={
+                "base_url": "http://gw.test:8080",
+                "auth_config": {"admin_token": "secret"},
+            }
+        )
         mock_client = AsyncMock()
         adapter._client = mock_client
         return adapter, mock_client
@@ -167,13 +174,15 @@ class TestStoaAdapterPolicies:
         mock_resp.json.return_value = {"id": "pol-1", "status": "ok"}
         client.post = AsyncMock(return_value=mock_resp)
 
-        result = await adapter.upsert_policy({
-            "name": "rate-limit-100",
-            "type": "rate_limit",
-            "config": {"rate": 100},
-            "priority": 50,
-            "api_id": "api-123",
-        })
+        result = await adapter.upsert_policy(
+            {
+                "name": "rate-limit-100",
+                "type": "rate_limit",
+                "config": {"rate": 100},
+                "priority": 50,
+                "api_id": "api-123",
+            }
+        )
 
         assert result.success is True
         assert result.resource_id == "pol-1"
@@ -187,13 +196,14 @@ class TestStoaAdapterUnsupported:
         """Methods not supported by stoa-gateway return failure."""
         adapter = StoaGatewayAdapter()
 
-        # Applications
-        result = await adapter.provision_application({"app": "test"})
-        assert result.success is False
-        assert "Not supported" in result.error
+        # Applications — provision_application now implemented (CAB-1121 Phase 3)
+        # Without a connected client, sync_api fails gracefully
+        result = await adapter.provision_application({"app": "test", "tenant_id": "t"})
+        assert result.success is False  # Fails because no client connected
 
+        # deprovision_application now returns success (route kept for other subs)
         result = await adapter.deprovision_application("app-1")
-        assert result.success is False
+        assert result.success is True
 
         apps = await adapter.list_applications()
         assert apps == []
@@ -256,14 +266,16 @@ class TestStoaMappers:
 
     def test_map_policy_to_stoa(self):
         """map_policy_to_stoa produces correct structure."""
-        result = map_policy_to_stoa({
-            "id": "pol-1",
-            "name": "rate-limit-100",
-            "type": "rate_limit",
-            "config": {"rate": 100, "window": "1m"},
-            "priority": 50,
-            "api_id": "api-123",
-        })
+        result = map_policy_to_stoa(
+            {
+                "id": "pol-1",
+                "name": "rate-limit-100",
+                "type": "rate_limit",
+                "config": {"rate": 100, "window": "1m"},
+                "priority": 50,
+                "api_id": "api-123",
+            }
+        )
 
         assert result["id"] == "pol-1"
         assert result["name"] == "rate-limit-100"
@@ -279,11 +291,13 @@ class TestStoaAdapterRegistry:
     def test_registry_has_stoa(self):
         """STOA adapter is registered in AdapterRegistry."""
         from src.adapters.registry import AdapterRegistry
+
         assert AdapterRegistry.has_type("stoa") is True
 
     def test_registry_create_stoa(self):
         """AdapterRegistry.create('stoa') returns StoaGatewayAdapter instance."""
         from src.adapters.registry import AdapterRegistry
+
         adapter = AdapterRegistry.create("stoa", config={"base_url": "http://test:8080"})
         assert isinstance(adapter, StoaGatewayAdapter)
         assert adapter._base_url == "http://test:8080"

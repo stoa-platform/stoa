@@ -60,6 +60,21 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
             .into_response();
     }
 
+    // Per-upstream circuit breaker (CAB-362)
+    let cb = state.circuit_breakers.get_or_create(&route.id);
+    if !cb.allow_request() {
+        warn!(
+            route_id = %route.id,
+            route_name = %route.name,
+            "Circuit breaker open for upstream"
+        );
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            format!("Circuit breaker open for upstream: {}", route.name),
+        )
+            .into_response();
+    }
+
     // Build target URL: replace path_prefix with backend_url
     let remaining_path = path.strip_prefix(&route.path_prefix).unwrap_or("");
     let target_url = format!(
@@ -82,7 +97,16 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         "Dynamic proxy: forwarding request"
     );
 
-    forward_request(request, &method, &target_url).await
+    let response = forward_request(request, &method, &target_url).await;
+
+    // Record success/failure for circuit breaker
+    if response.status().is_server_error() {
+        cb.record_failure();
+    } else {
+        cb.record_success();
+    }
+
+    response
 }
 
 /// Forward request to the backend, reusing the webMethods proxy pattern.

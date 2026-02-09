@@ -370,6 +370,27 @@ impl ZombieDetector {
         }
     }
 
+    /// Reap dead sessions (Revoked + Zombie) from the tracked map.
+    /// Returns the IDs of reaped sessions for cross-removal from SessionManager.
+    pub async fn reap_dead_sessions(&self) -> Vec<String> {
+        let mut sessions = self.sessions.write().await;
+        let reaped: Vec<String> = sessions
+            .iter()
+            .filter(|(_, s)| matches!(s.health, SessionHealth::Revoked | SessionHealth::Zombie))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in &reaped {
+            sessions.remove(id);
+        }
+        if !reaped.is_empty() {
+            info!(
+                count = reaped.len(),
+                "Reaped dead sessions (zombie/revoked)"
+            );
+        }
+        reaped
+    }
+
     /// End a session (normal termination)
     pub async fn end_session(&self, session_id: &str) {
         let mut sessions = self.sessions.write().await;

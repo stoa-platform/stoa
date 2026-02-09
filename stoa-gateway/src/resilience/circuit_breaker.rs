@@ -10,6 +10,8 @@
 #![allow(dead_code)]
 
 use parking_lot::RwLock;
+use serde::Serialize;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -304,6 +306,95 @@ impl CircuitBreaker {
     pub fn name(&self) -> &str {
         &self.name
     }
+}
+
+// =============================================================================
+// Circuit Breaker Registry (CAB-362)
+// =============================================================================
+
+/// Thread-safe registry of per-upstream circuit breakers.
+///
+/// Each upstream backend gets its own circuit breaker, created lazily on first
+/// request. This prevents a single unhealthy upstream from cascading failures
+/// to all other upstreams routed through the dynamic proxy.
+pub struct CircuitBreakerRegistry {
+    breakers: RwLock<HashMap<String, Arc<CircuitBreaker>>>,
+    default_config: CircuitBreakerConfig,
+}
+
+impl CircuitBreakerRegistry {
+    /// Create a new registry with the given default config for new circuit breakers.
+    pub fn new(default_config: CircuitBreakerConfig) -> Self {
+        Self {
+            breakers: RwLock::new(HashMap::new()),
+            default_config,
+        }
+    }
+
+    /// Get an existing circuit breaker or create a new one for the given upstream name.
+    pub fn get_or_create(&self, name: &str) -> Arc<CircuitBreaker> {
+        // Fast path: read lock
+        {
+            let breakers = self.breakers.read();
+            if let Some(cb) = breakers.get(name) {
+                return cb.clone();
+            }
+        }
+
+        // Slow path: write lock to insert
+        let mut breakers = self.breakers.write();
+        // Double-check after acquiring write lock
+        if let Some(cb) = breakers.get(name) {
+            return cb.clone();
+        }
+
+        let cb = CircuitBreaker::new(name, self.default_config.clone());
+        breakers.insert(name.to_string(), cb.clone());
+        cb
+    }
+
+    /// Get stats for all circuit breakers.
+    pub fn stats_all(&self) -> Vec<CircuitBreakerStatsEntry> {
+        let breakers = self.breakers.read();
+        breakers
+            .iter()
+            .map(|(name, cb)| {
+                let stats = cb.stats();
+                CircuitBreakerStatsEntry {
+                    name: name.clone(),
+                    state: stats.state.to_string(),
+                    success_count: stats.success_count,
+                    failure_count: stats.failure_count,
+                    consecutive_failures: stats.consecutive_failures,
+                    open_count: stats.open_count,
+                    rejected_count: stats.rejected_count,
+                }
+            })
+            .collect()
+    }
+
+    /// Reset a specific circuit breaker by name.
+    pub fn reset(&self, name: &str) -> bool {
+        let breakers = self.breakers.read();
+        if let Some(cb) = breakers.get(name) {
+            cb.reset();
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Stats entry for a single circuit breaker in the registry.
+#[derive(Debug, Clone, Serialize)]
+pub struct CircuitBreakerStatsEntry {
+    pub name: String,
+    pub state: String,
+    pub success_count: u64,
+    pub failure_count: u64,
+    pub consecutive_failures: u32,
+    pub open_count: u64,
+    pub rejected_count: u64,
 }
 
 /// Circuit breaker error

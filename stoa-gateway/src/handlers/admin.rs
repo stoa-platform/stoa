@@ -231,6 +231,68 @@ pub async fn cache_clear(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 // =============================================================================
+// Session Stats (CAB-362)
+// =============================================================================
+
+#[derive(Serialize)]
+pub struct SessionStatsResponse {
+    pub active_sessions: usize,
+    pub zombie_count: usize,
+    pub tracked_sessions: usize,
+}
+
+/// GET /admin/sessions/stats
+pub async fn session_stats(State(state): State<AppState>) -> Json<SessionStatsResponse> {
+    if let Some(ref zd) = state.zombie_detector {
+        let stats = zd.stats().await;
+        Json(SessionStatsResponse {
+            active_sessions: stats.healthy + stats.warning,
+            zombie_count: stats.zombie,
+            tracked_sessions: stats.total_sessions,
+        })
+    } else {
+        Json(SessionStatsResponse {
+            active_sessions: state.session_manager.count(),
+            zombie_count: 0,
+            tracked_sessions: 0,
+        })
+    }
+}
+
+// =============================================================================
+// Per-Upstream Circuit Breakers (CAB-362)
+// =============================================================================
+
+/// GET /admin/circuit-breakers
+pub async fn circuit_breakers_list(
+    State(state): State<AppState>,
+) -> Json<Vec<crate::resilience::CircuitBreakerStatsEntry>> {
+    Json(state.circuit_breakers.stats_all())
+}
+
+/// POST /admin/circuit-breakers/:name/reset
+pub async fn circuit_breaker_reset_by_name(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    if state.circuit_breakers.reset(&name) {
+        (
+            StatusCode::OK,
+            Json(
+                serde_json::json!({"status": "ok", "message": format!("Circuit breaker '{}' reset", name)}),
+            ),
+        )
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(
+                serde_json::json!({"status": "error", "message": format!("Circuit breaker '{}' not found", name)}),
+            ),
+        )
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -29,6 +29,7 @@ from .routers import (
     business,
     catalog_admin,
     certificates,
+    consumers,
     contracts,
     deployments,
     events,
@@ -45,6 +46,7 @@ from .routers import (
     mcp_proxy,
     monitoring,
     operations,
+    plans,
     platform,
     portal,
     portal_applications,
@@ -328,6 +330,8 @@ app = FastAPI(
         {"name": "Gateway Policies", "description": "Gateway-agnostic policy management"},
         {"name": "Gateway Observability", "description": "Multi-gateway health and sync metrics"},
         {"name": "Gateway Internal", "description": "Internal gateway auto-registration (ADR-028)"},
+        {"name": "Consumers", "description": "Consumer onboarding and lifecycle management (CAB-1121)"},
+        {"name": "Plans", "description": "Subscription plan management with quotas (CAB-1121)"},
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -450,6 +454,10 @@ app.include_router(gateway_deployments.router)
 app.include_router(gateway_policies.router)
 # Internal gateway registration API (ADR-028 auto-registration)
 app.include_router(gateway_internal.router)
+
+# Consumer Onboarding (CAB-1121)
+app.include_router(consumers.router)
+app.include_router(plans.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

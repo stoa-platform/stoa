@@ -1204,6 +1204,326 @@
         "title": "ComponentStatus",
         "type": "object"
       },
+      "ConsumerCreate": {
+        "description": "Schema for creating a new consumer.",
+        "example": {
+          "company": "ACME Corporation",
+          "description": "Strategic API partner",
+          "email": "api@acme.com",
+          "external_id": "partner-acme-001",
+          "name": "ACME Corp"
+        },
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "consumer_metadata": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Metadata"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "email": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Email",
+            "type": "string"
+          },
+          "external_id": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "External Id",
+            "type": "string"
+          },
+          "keycloak_user_id": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keycloak User Id"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "external_id",
+          "name",
+          "email"
+        ],
+        "title": "ConsumerCreate",
+        "type": "object"
+      },
+      "ConsumerListResponse": {
+        "description": "Schema for paginated consumer list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConsumerResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "ConsumerListResponse",
+        "type": "object"
+      },
+      "ConsumerResponse": {
+        "description": "Schema for consumer response.",
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "consumer_metadata": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Metadata"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "keycloak_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keycloak User Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConsumerStatusEnum"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "external_id",
+          "name",
+          "email",
+          "company",
+          "description",
+          "tenant_id",
+          "keycloak_user_id",
+          "status",
+          "consumer_metadata",
+          "created_at",
+          "updated_at",
+          "created_by"
+        ],
+        "title": "ConsumerResponse",
+        "type": "object"
+      },
+      "ConsumerStatusEnum": {
+        "description": "Consumer status enum for API responses.",
+        "enum": [
+          "active",
+          "suspended",
+          "blocked"
+        ],
+        "title": "ConsumerStatusEnum",
+        "type": "string"
+      },
+      "ConsumerUpdate": {
+        "description": "Schema for updating an existing consumer.",
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "consumer_metadata": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Metadata"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "keycloak_user_id": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keycloak User Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "ConsumerUpdate",
+        "type": "object"
+      },
       "ContractCreate": {
         "description": "Request to create a new contract.",
         "example": {
@@ -2024,7 +2344,11 @@
         },
         "properties": {
           "protocol": {
-            "$ref": "#/components/schemas/ProtocolType",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProtocolType"
+              }
+            ],
             "description": "Protocol to enable"
           }
         },
@@ -2266,7 +2590,11 @@
             "title": "Trace Id"
           },
           "trigger": {
-            "$ref": "#/components/schemas/SnapshotTrigger",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SnapshotTrigger"
+              }
+            ],
             "default": "5xx"
           }
         },
@@ -2364,7 +2692,11 @@
         },
         "properties": {
           "auth_type": {
-            "$ref": "#/components/schemas/AuthTypeEnum",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthTypeEnum"
+              }
+            ],
             "default": "none",
             "description": "Authentication type"
           },
@@ -2450,7 +2782,11 @@
             "title": "Tool Prefix"
           },
           "transport": {
-            "$ref": "#/components/schemas/TransportTypeEnum",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TransportTypeEnum"
+              }
+            ],
             "default": "sse",
             "description": "Transport protocol"
           }
@@ -2510,7 +2846,11 @@
             "type": "boolean"
           },
           "health_status": {
-            "$ref": "#/components/schemas/HealthStatusEnum",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HealthStatusEnum"
+              }
+            ],
             "default": "unknown"
           },
           "icon": {
@@ -2778,7 +3118,11 @@
             "type": "boolean"
           },
           "health_status": {
-            "$ref": "#/components/schemas/HealthStatusEnum",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HealthStatusEnum"
+              }
+            ],
             "default": "unknown"
           },
           "icon": {
@@ -4917,7 +5261,11 @@
             "title": "Auto Approve Roles"
           },
           "category": {
-            "$ref": "#/components/schemas/MCPServerCategoryEnum",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MCPServerCategoryEnum"
+              }
+            ],
             "default": "public"
           },
           "description": {
@@ -4991,7 +5339,11 @@
             "title": "Version"
           },
           "visibility": {
-            "$ref": "#/components/schemas/MCPServerVisibility",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MCPServerVisibility"
+              }
+            ],
             "default": {
               "public": true
             }
@@ -6578,6 +6930,487 @@
         "title": "PaginatedResponse[GatewayApplicationResponse]",
         "type": "object"
       },
+      "PlanCreate": {
+        "description": "Schema for creating a new subscription plan.",
+        "example": {
+          "daily_request_limit": 1000000,
+          "description": "High-volume plan for production workloads",
+          "monthly_request_limit": 30000000,
+          "name": "Gold Plan",
+          "rate_limit_per_minute": 5000,
+          "rate_limit_per_second": 100,
+          "requires_approval": true,
+          "slug": "gold"
+        },
+        "properties": {
+          "auto_approve_roles": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Approve Roles"
+          },
+          "burst_limit": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Burst Limit"
+          },
+          "daily_request_limit": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Request Limit"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "monthly_request_limit": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Request Limit"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "pricing_metadata": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pricing Metadata"
+          },
+          "rate_limit_per_minute": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Per Minute"
+          },
+          "rate_limit_per_second": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Per Second"
+          },
+          "requires_approval": {
+            "default": false,
+            "title": "Requires Approval",
+            "type": "boolean"
+          },
+          "slug": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z0-9-]+$",
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name"
+        ],
+        "title": "PlanCreate",
+        "type": "object"
+      },
+      "PlanListResponse": {
+        "description": "Schema for paginated plan list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlanResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "title": "PlanListResponse",
+        "type": "object"
+      },
+      "PlanResponse": {
+        "description": "Schema for plan response.",
+        "properties": {
+          "auto_approve_roles": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Approve Roles"
+          },
+          "burst_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Burst Limit"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "daily_request_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Request Limit"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "monthly_request_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Request Limit"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pricing_metadata": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pricing Metadata"
+          },
+          "rate_limit_per_minute": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Per Minute"
+          },
+          "rate_limit_per_second": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Per Second"
+          },
+          "requires_approval": {
+            "title": "Requires Approval",
+            "type": "boolean"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlanStatusEnum"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "description",
+          "tenant_id",
+          "rate_limit_per_second",
+          "rate_limit_per_minute",
+          "daily_request_limit",
+          "monthly_request_limit",
+          "burst_limit",
+          "requires_approval",
+          "auto_approve_roles",
+          "status",
+          "pricing_metadata",
+          "created_at",
+          "updated_at",
+          "created_by"
+        ],
+        "title": "PlanResponse",
+        "type": "object"
+      },
+      "PlanStatusEnum": {
+        "description": "Plan status enum for API responses.",
+        "enum": [
+          "active",
+          "deprecated",
+          "archived"
+        ],
+        "title": "PlanStatusEnum",
+        "type": "string"
+      },
+      "PlanUpdate": {
+        "description": "Schema for updating an existing plan.",
+        "properties": {
+          "auto_approve_roles": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Approve Roles"
+          },
+          "burst_limit": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Burst Limit"
+          },
+          "daily_request_limit": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Request Limit"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "monthly_request_limit": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Request Limit"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "pricing_metadata": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pricing Metadata"
+          },
+          "rate_limit_per_minute": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Per Minute"
+          },
+          "rate_limit_per_second": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Per Second"
+          },
+          "requires_approval": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Approval"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanStatusEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PlanUpdate",
+        "type": "object"
+      },
       "PlatformEvent": {
         "description": "Platform deployment event.",
         "properties": {
@@ -7825,7 +8658,11 @@
             "title": "Tool Name"
           },
           "type": {
-            "$ref": "#/components/schemas/ActivityType",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ActivityType"
+              }
+            ],
             "description": "Type of activity"
           }
         },
@@ -9642,7 +10479,11 @@
             "type": "integer"
           },
           "status": {
-            "$ref": "#/components/schemas/CallStatus",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CallStatus"
+              }
+            ],
             "description": "Call status"
           },
           "timestamp": {
@@ -9841,15 +10682,27 @@
             "type": "string"
           },
           "this_month": {
-            "$ref": "#/components/schemas/UsagePeriodStats",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsagePeriodStats"
+              }
+            ],
             "description": "This month's statistics"
           },
           "this_week": {
-            "$ref": "#/components/schemas/UsagePeriodStats",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsagePeriodStats"
+              }
+            ],
             "description": "This week's statistics"
           },
           "today": {
-            "$ref": "#/components/schemas/UsagePeriodStats",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsagePeriodStats"
+              }
+            ],
             "description": "Today's statistics"
           },
           "top_tools": {
@@ -13640,7 +14493,11 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MCPSubscriptionApprove",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MCPSubscriptionApprove"
+                  }
+                ],
                 "default": {},
                 "title": "Request"
               }
@@ -15128,6 +15985,513 @@
         ]
       }
     },
+    "/v1/consumers/{tenant_id}": {
+      "get": {
+        "description": "List consumers for a tenant with optional filtering.",
+        "operationId": "list_consumers_v1_consumers__tenant_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ConsumerStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Consumers",
+        "tags": [
+          "Consumers"
+        ]
+      },
+      "post": {
+        "description": "Create a new consumer for a tenant.",
+        "operationId": "create_consumer_v1_consumers__tenant_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumerCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Consumer",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/{consumer_id}": {
+      "delete": {
+        "description": "Delete a consumer.",
+        "operationId": "delete_consumer_v1_consumers__tenant_id___consumer_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Consumer",
+        "tags": [
+          "Consumers"
+        ]
+      },
+      "get": {
+        "description": "Get consumer details by ID.",
+        "operationId": "get_consumer_v1_consumers__tenant_id___consumer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Consumer",
+        "tags": [
+          "Consumers"
+        ]
+      },
+      "put": {
+        "description": "Update consumer details.",
+        "operationId": "update_consumer_v1_consumers__tenant_id___consumer_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumerUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Consumer",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/{consumer_id}/activate": {
+      "post": {
+        "description": "Reactivate a suspended consumer.",
+        "operationId": "activate_consumer_v1_consumers__tenant_id___consumer_id__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Activate Consumer",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/{consumer_id}/block": {
+      "post": {
+        "description": "Block a consumer (permanent until unblocked).",
+        "operationId": "block_consumer_v1_consumers__tenant_id___consumer_id__block_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Block Consumer",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/{consumer_id}/suspend": {
+      "post": {
+        "description": "Suspend an active consumer.",
+        "operationId": "suspend_consumer_v1_consumers__tenant_id___consumer_id__suspend_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Suspend Consumer",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
     "/v1/contracts": {
       "get": {
         "description": "List contracts for the user's tenant (cached, TTL 60s).",
@@ -16610,7 +17974,11 @@
             "name": "status",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/LogStatus",
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/LogStatus"
+                }
+              ],
               "default": "all",
               "description": "Filter by status",
               "title": "Status"
@@ -16773,7 +18141,11 @@
             "name": "status",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/LogStatus",
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/LogStatus"
+                }
+              ],
               "default": "all",
               "description": "Filter by status",
               "title": "Status"
@@ -17595,7 +18967,11 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MCPKeyRotationRequest",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MCPKeyRotationRequest"
+                  }
+                ],
                 "default": {
                   "grace_period_hours": 24
                 },
@@ -18256,6 +19632,379 @@
         "summary": "Get Operations Metrics",
         "tags": [
           "Operations"
+        ]
+      }
+    },
+    "/v1/plans/{tenant_id}": {
+      "get": {
+        "description": "List subscription plans for a tenant.",
+        "operationId": "list_plans_v1_plans__tenant_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PlanStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Plans",
+        "tags": [
+          "Plans"
+        ]
+      },
+      "post": {
+        "description": "Create a new subscription plan for a tenant.",
+        "operationId": "create_plan_v1_plans__tenant_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Plan",
+        "tags": [
+          "Plans"
+        ]
+      }
+    },
+    "/v1/plans/{tenant_id}/by-slug/{slug}": {
+      "get": {
+        "description": "Get plan by slug within a tenant.",
+        "operationId": "get_plan_by_slug_v1_plans__tenant_id__by_slug__slug__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Plan By Slug",
+        "tags": [
+          "Plans"
+        ]
+      }
+    },
+    "/v1/plans/{tenant_id}/{plan_id}": {
+      "delete": {
+        "description": "Delete a plan.",
+        "operationId": "delete_plan_v1_plans__tenant_id___plan_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Plan",
+        "tags": [
+          "Plans"
+        ]
+      },
+      "get": {
+        "description": "Get plan details by ID.",
+        "operationId": "get_plan_v1_plans__tenant_id___plan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Plan",
+        "tags": [
+          "Plans"
+        ]
+      },
+      "put": {
+        "description": "Update plan details.",
+        "operationId": "update_plan_v1_plans__tenant_id___plan_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Plan",
+        "tags": [
+          "Plans"
         ]
       }
     },
@@ -19126,7 +20875,11 @@
             "name": "sort",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/SortOrder",
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SortOrder"
+                }
+              ],
               "default": "relevance",
               "description": "Sort order",
               "title": "Sort"
@@ -20421,7 +22174,11 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/KeyRotationRequest",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/KeyRotationRequest"
+                  }
+                ],
                 "default": {
                   "grace_period_hours": 24
                 },
@@ -23395,6 +25152,14 @@
     {
       "description": "Internal gateway auto-registration (ADR-028)",
       "name": "Gateway Internal"
+    },
+    {
+      "description": "Consumer onboarding and lifecycle management (CAB-1121)",
+      "name": "Consumers"
+    },
+    {
+      "description": "Subscription plan management with quotas (CAB-1121)",
+      "name": "Plans"
     }
   ]
 }

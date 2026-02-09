@@ -48,6 +48,9 @@ class Subscription(Base):
     api_version = Column(String(50), nullable=False)
     tenant_id = Column(String(255), nullable=False, index=True)
 
+    # Consumer reference (nullable for backward compatibility — CAB-1121)
+    consumer_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+
     # Subscription plan
     plan_id = Column(String(255), nullable=True)
     plan_name = Column(String(255), nullable=True, default="default")

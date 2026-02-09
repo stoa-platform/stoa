@@ -52,6 +52,7 @@ from .routers import (
     platform,
     portal,
     portal_applications,
+    quotas,
     self_service_logs,
     service_accounts,
     subscriptions,
@@ -334,6 +335,7 @@ app = FastAPI(
         {"name": "Gateway Internal", "description": "Internal gateway auto-registration (ADR-028)"},
         {"name": "Consumers", "description": "Consumer onboarding and lifecycle management (CAB-1121)"},
         {"name": "Plans", "description": "Subscription plan management with quotas (CAB-1121)"},
+        {"name": "Quotas", "description": "Quota enforcement and usage monitoring (CAB-1121 Phase 4)"},
     ],
     contact={
         "name": "CAB Ingénierie",
@@ -492,6 +494,9 @@ app.include_router(gateway_internal.router)
 # Consumer Onboarding (CAB-1121)
 app.include_router(consumers.router)
 app.include_router(plans.router)
+
+# Quota Enforcement (CAB-1121 Phase 4)
+app.include_router(quotas.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

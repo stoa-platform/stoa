@@ -67,7 +67,7 @@ Claude stops after PR creation. User reviews, then says "merge" or "fix X".
     │                                                                     │
     ◄─────────────────────────────────────────────────────────────────────┘
     │
-    ▼ CI + CD + pod update (automatic)
+    ▼ CI on main → Docker build → ArgoCD sync → Pod update → CD verified ✅
 ```
 
 ### 1. Branch
@@ -143,11 +143,63 @@ gh pr merge <number> --squash --delete-branch
   gh pr merge <number> --squash --delete-branch
   ```
 
-### 7. Verify
+### 7. Verify CD (post-merge — MANDATORY for code changes)
+
+After merge to main, Claude MUST verify the full CI + CD pipeline completed. Skip only for docs-only changes (`.md`, `.claude/**`).
+
+**Step 7a — CI on main**
 ```bash
-gh run list --branch main --limit 3
+gh run list --branch main --limit 5 --json status,conclusion,name,headSha
 ```
-For k8s components, verify pod update per `ci-quality-gates.md`.
+Wait until the component workflow shows `conclusion: success`. If it fails, investigate immediately.
+
+**Step 7b — ArgoCD sync status** (for ArgoCD-managed components)
+```bash
+kubectl get applications -n argocd -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status'
+```
+
+**Step 7c — Pod health**
+```bash
+kubectl get pods -n stoa-system -l app=<component> -o wide
+kubectl describe deployment/<component> -n stoa-system | grep -E 'Image:|Replicas:|Conditions:'
+```
+
+**Step 7d — Report** — summarize to the user:
+```
+CD Status:
+- CI on main: ✅ passed (run #XXXX)
+- ArgoCD: ✅ Synced + Healthy (or N/A)
+- Pod: ✅ running (image: <tag>)
+```
+If any step fails, report the error and propose a fix.
+
+#### Component → CD verification map
+
+| Component | CI Workflow | ArgoCD App | Deploy Method | AWX? |
+|-----------|-----------|------------|---------------|------|
+| control-plane-api | `control-plane-api-ci` | `control-plane-api` | `kubectl set image` | No |
+| control-plane-ui | `control-plane-ui-ci` | `control-plane-ui` | `kubectl apply` + `set image` | No |
+| portal | `stoa-portal-ci` | `stoa-portal` | `kubectl apply` + `set image` | No |
+| stoa-gateway | `stoa-gateway-ci` | `stoa-gateway` | `kubectl rollout restart` | No |
+| mcp-gateway | `mcp-gateway-ci` | `mcp-gateway` | `kubectl set image` | No |
+| keycloak | N/A | N/A | AWX job template | Yes |
+| apigateway (wM) | N/A | N/A | AWX job template | Yes |
+
+#### AWX verification (when applicable)
+```bash
+# Check AWX job status (keycloak, apigateway changes)
+kubectl exec -n stoa-system deploy/awx-web -- awx-manage list_instances
+# Or via AWX API:
+curl -s -u admin:$AWX_PASS https://awx.gostoa.dev/api/v2/jobs/?order_by=-finished&page_size=3
+```
+
+#### Known ArgoCD issues to watch for
+| Symptom | Cause | Quick fix |
+|---------|-------|-----------|
+| `OutOfSync` + `spec.selector: immutable` | Helm chart selector != live deployment | Delete deployment, let ArgoCD recreate |
+| `Degraded` + ingress conflict | Two apps claim same host | Disable ingress on the wrong app |
+| `OutOfSync` + Kyverno blocked | Missing `privileged: false` | Add to values.yaml securityContext |
+| `Unknown` + Healthy | App source unreachable or auto-sync off | Check repo access, manual sync |
 
 ### 8. Cleanup
 ```bash

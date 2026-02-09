@@ -58,9 +58,11 @@ Usage: PR review rapide, validation pre-merge.
 8. [Inline] Push + PR (gh pr create)
 9. [Inline] CI green (gh pr checks --watch)
 10. [Inline] Ship/Show → merge auto | Ask → attendre "merge"
-11. [Inline] Verify CI/CD on main + cleanup branch
+11. [Inline] Verify CD: CI main ✅ → ArgoCD sync ✅ → Pod healthy ✅
+12. [k8s-ops] Si ArgoCD OutOfSync ou pod CrashLoop → diagnostiquer
+13. [Inline] Cleanup branch + update memory.md
 ```
-Usage: implementation complete d'un ticket CAB-XXXX. Voir `git-workflow.md` pour le modele Ship/Show/Ask.
+Usage: implementation complete d'un ticket CAB-XXXX. Voir `git-workflow.md` pour Ship/Show/Ask + CD verification map.
 
 ### Pattern 4: Agent Teams (experimental)
 ```bash
@@ -75,7 +77,9 @@ Usage: refactoring multi-composants, migration majeure, debugging avec hypothese
 2. [Inline] Executer le pre-commit checklist (voir ci-quality-gates.md)
 3. [test-writer] Generer les tests + verifier coverage seuil
 4. [security-reviewer] Review securite + secrets
-5. [Inline] Push + PR + CI green + merge + verify (voir git-workflow.md)
+5. [Inline] Push + PR + CI green + merge (voir git-workflow.md)
+6. [Inline] Verify CD: CI main + ArgoCD + Pod (voir git-workflow.md step 7)
+7. [k8s-ops] Si probleme CD → diagnostiquer et proposer fix
 ```
 Usage: tout changement de code. Objectif: zero surprise en CI, always-green main.
 

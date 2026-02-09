@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::auth::api_key::ApiKeyValidator;
 use crate::auth::jwt::{JwtValidator, JwtValidatorConfig};
+use crate::auth::mtls::MtlsStats;
 use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
 use crate::cache::{SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
@@ -47,6 +48,8 @@ pub struct AppState {
     pub zombie_detector: Option<Arc<ZombieDetector>>,
     /// Per-upstream circuit breaker registry (CAB-362)
     pub circuit_breakers: Arc<CircuitBreakerRegistry>,
+    /// mTLS validation stats (CAB-864)
+    pub mtls_stats: Arc<MtlsStats>,
 }
 
 impl AppState {
@@ -199,6 +202,19 @@ impl AppState {
             None
         };
 
+        // Initialize mTLS stats (CAB-864)
+        let mtls_stats = Arc::new(MtlsStats::new());
+        if config.mtls.enabled {
+            tracing::info!(
+                require_binding = config.mtls.require_binding,
+                trusted_proxies = config.mtls.trusted_proxies.len(),
+                allowed_issuers = config.mtls.allowed_issuers.len(),
+                "mTLS certificate validation enabled"
+            );
+        } else {
+            tracing::info!("mTLS disabled (STOA_MTLS_ENABLED=false)");
+        }
+
         Self {
             config,
             tool_registry,
@@ -215,6 +231,7 @@ impl AppState {
             metering_producer,
             zombie_detector,
             circuit_breakers,
+            mtls_stats,
         }
     }
 

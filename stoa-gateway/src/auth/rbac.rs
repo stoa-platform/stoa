@@ -403,6 +403,7 @@ mod tests {
             sid: None,
             typ: None,
             scope: Some(scopes.to_string()),
+            cnf: None,
         };
 
         let token = ValidatedToken::new("token".to_string(), claims);

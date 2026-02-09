@@ -88,6 +88,19 @@ pub struct Claims {
     /// Scope
     #[serde(default)]
     pub scope: Option<String>,
+
+    /// RFC 8705 Confirmation claim (certificate-bound tokens)
+    /// Contains x5t#S256 (base64url-encoded SHA-256 thumbprint)
+    #[serde(default)]
+    pub cnf: Option<CnfClaim>,
+}
+
+/// RFC 8705 Confirmation claim for certificate-bound tokens.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CnfClaim {
+    /// Base64url-encoded SHA-256 certificate thumbprint
+    #[serde(rename = "x5t#S256")]
+    pub x5t_s256: String,
 }
 
 /// Audience can be a single string or array of strings.
@@ -343,6 +356,7 @@ mod tests {
             sid: Some("session-456".to_string()),
             typ: Some("Bearer".to_string()),
             scope: Some("openid profile email stoa:write".to_string()),
+            cnf: None,
         }
     }
 
@@ -428,6 +442,37 @@ mod tests {
     fn test_stoa_role_from_claims() {
         let claims = sample_claims();
         assert_eq!(claims.stoa_role(), Some(StoaRole::TenantAdmin));
+    }
+
+    #[test]
+    fn test_cnf_claim_deserialization() {
+        let json = r#"{
+            "sub": "user-1",
+            "exp": 9999999999,
+            "iat": 1000000000,
+            "iss": "https://auth.gostoa.dev/realms/stoa",
+            "cnf": {
+                "x5t#S256": "obsz1234567890abcdefghijklmnopqrstuvwxyz_-A"
+            }
+        }"#;
+        let claims: Claims = serde_json::from_str(json).unwrap();
+        assert!(claims.cnf.is_some());
+        assert_eq!(
+            claims.cnf.unwrap().x5t_s256,
+            "obsz1234567890abcdefghijklmnopqrstuvwxyz_-A"
+        );
+    }
+
+    #[test]
+    fn test_cnf_claim_absent() {
+        let json = r#"{
+            "sub": "user-1",
+            "exp": 9999999999,
+            "iat": 1000000000,
+            "iss": "https://auth.gostoa.dev/realms/stoa"
+        }"#;
+        let claims: Claims = serde_json::from_str(json).unwrap();
+        assert!(claims.cnf.is_none());
     }
 
     #[test]

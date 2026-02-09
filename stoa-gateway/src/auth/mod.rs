@@ -10,5 +10,6 @@ pub mod api_key;
 pub mod claims;
 pub mod jwt;
 pub mod middleware;
+pub mod mtls;
 pub mod oidc;
 pub mod rbac;

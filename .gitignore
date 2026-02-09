@@ -58,6 +58,7 @@ control-plane-api/venv/
 
 # Test artifacts
 junit.xml
+coverage/
 
 # Temporary files
 tmp/

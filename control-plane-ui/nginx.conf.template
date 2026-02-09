@@ -71,8 +71,11 @@ server {
     }
 
     # SPA routing - serve index.html for all unmatched routes
+    # no-cache ensures browser revalidates index.html on every load
+    # (hashed JS/CSS assets still cached 1y via location block below)
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache" always;
     }
 
     # API proxy (Swagger UI requires unsafe-eval + unsafe-inline for JS rendering)

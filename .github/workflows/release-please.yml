@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  packages: write       # needed by docker-publish (GHCR push)
+  id-token: write       # needed by docker-publish (cosign keyless)
+  attestations: write   # needed by docker-publish (SLSA provenance)
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -42,5 +45,6 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created }}
     uses: ./.github/workflows/docker-publish.yml
+    secrets: inherit
     with:
       version: ${{ needs.release-please.outputs.tag_name }}

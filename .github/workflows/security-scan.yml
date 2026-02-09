@@ -465,7 +465,12 @@ jobs:
       - name: Build image for scanning
         if: steps.check.outputs.exists == 'true'
         run: |
-          docker build -t stoa/${{ matrix.image.name }}:scan ${{ matrix.image.path }}/
+          # portal and control-plane-ui need repo root context for shared/ deps
+          if [ "${{ matrix.image.name }}" = "portal" ] || [ "${{ matrix.image.name }}" = "control-plane-ui" ]; then
+            docker build -t stoa/${{ matrix.image.name }}:scan -f ${{ matrix.image.path }}/Dockerfile .
+          else
+            docker build -t stoa/${{ matrix.image.name }}:scan ${{ matrix.image.path }}/
+          fi
 
       - name: Run Trivy (SARIF)
         if: steps.check.outputs.exists == 'true'
@@ -480,6 +485,7 @@ jobs:
 
       - name: Upload to GitHub Security
         if: steps.check.outputs.exists == 'true'
+        continue-on-error: true  # Requires GitHub Advanced Security (private repos)
         uses: github/codeql-action/upload-sarif@2d3fe93d4896727350828f23e48f5391e6d3f022 # v3
         with:
           sarif_file: 'trivy-${{ matrix.image.name }}.sarif'

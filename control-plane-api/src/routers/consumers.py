@@ -15,7 +15,10 @@ from ..auth import User, get_current_user
 from ..config import settings
 from ..database import get_db
 from ..models.consumer import CertificateStatus, Consumer, ConsumerStatus
+from ..models.plan import Plan
+from ..models.subscription import Subscription
 from ..repositories.consumer import ConsumerRepository
+from ..repositories.quota_usage import QuotaUsageRepository
 from ..schemas.consumer import (
     BulkResultItem,
     BulkResultResponse,
@@ -27,6 +30,7 @@ from ..schemas.consumer import (
     ConsumerStatusEnum,
     ConsumerUpdate,
 )
+from ..schemas.quota import QuotaCounters, QuotaLimits, QuotaRemaining, QuotaResets, QuotaStatusResponse
 from ..services.certificate_utils import parse_pem_certificate, validate_certificate_not_expired
 from ..services.keycloak_service import keycloak_service
 
@@ -706,3 +710,79 @@ async def rotate_certificate(
     )
 
     return ConsumerResponse.model_validate(consumer)
+
+
+# ============== Quota Status (CAB-1121 Phase 4) ==============
+
+
+@router.get("/{tenant_id}/{consumer_id}/quota", response_model=QuotaStatusResponse)
+async def get_consumer_quota_status(
+    tenant_id: str,
+    consumer_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a consumer's current quota status (usage + remaining + resets)."""
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    repo = ConsumerRepository(db)
+    consumer = await repo.get_by_id(consumer_id)
+    if not consumer or consumer.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Consumer not found")
+
+    # Look up plan limits via subscription
+    from sqlalchemy import select as sa_select
+
+    sub_result = await db.execute(
+        sa_select(Subscription.plan_id).where(
+            Subscription.consumer_id == consumer_id,
+            Subscription.tenant_id == tenant_id,
+            Subscription.status == "active",
+        ).limit(1)
+    )
+    sub_row = sub_result.first()
+
+    daily_limit = None
+    monthly_limit = None
+    if sub_row and sub_row.plan_id:
+        plan_result = await db.execute(sa_select(Plan).where(Plan.id == sub_row.plan_id))
+        plan = plan_result.scalar_one_or_none()
+        if plan:
+            daily_limit = plan.daily_request_limit
+            monthly_limit = plan.monthly_request_limit
+
+    # Get current usage
+    quota_repo = QuotaUsageRepository(db)
+    usage = await quota_repo.get_current(consumer_id, tenant_id)
+
+    daily_used = usage.request_count_daily if usage else 0
+    monthly_used = usage.request_count_monthly if usage else 0
+
+    # Compute remaining
+    daily_remaining = (daily_limit - daily_used) if daily_limit is not None else None
+    monthly_remaining = (monthly_limit - monthly_used) if monthly_limit is not None else None
+
+    # Compute reset timestamps
+    now = datetime.utcnow()
+    daily_reset = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    if now.month == 12:
+        monthly_reset = now.replace(
+            year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+    else:
+        monthly_reset = now.replace(
+            month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+
+    return QuotaStatusResponse(
+        consumer_id=consumer_id,
+        tenant_id=tenant_id,
+        plan=QuotaLimits(
+            daily_request_limit=daily_limit,
+            monthly_request_limit=monthly_limit,
+        ),
+        usage=QuotaCounters(daily=daily_used, monthly=monthly_used),
+        remaining=QuotaRemaining(daily=daily_remaining, monthly=monthly_remaining),
+        resets_at=QuotaResets(daily=daily_reset, monthly=monthly_reset),
+    )

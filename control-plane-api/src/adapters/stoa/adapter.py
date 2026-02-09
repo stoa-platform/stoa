@@ -187,6 +187,18 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
         except Exception as e:
             return AdapterResult(success=False, error=str(e))
 
+    async def update_quota_policy(
+        self, app_spec: dict, subscription_id: str, auth_token: str | None = None
+    ) -> AdapterResult:
+        """Push updated quota/rate-limit policy after plan change or manual reset (CAB-1121 Phase 4)."""
+        try:
+            policy_spec = mappers.map_quota_to_policy(app_spec, subscription_id)
+            if not policy_spec:
+                return AdapterResult(success=True, data={"detail": "No quota policy needed"})
+            return await self.upsert_policy(policy_spec, auth_token=auth_token)
+        except Exception as e:
+            return AdapterResult(success=False, error=str(e))
+
     async def deprovision_application(self, app_id: str, auth_token: str | None = None) -> AdapterResult:
         """Deprovision a consumer application from stoa-gateway.
 

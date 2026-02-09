@@ -1,14 +1,11 @@
 """Alembic environment configuration"""
+import os
+import sys
 from logging.config import fileConfig
-
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from pathlib import Path
 
 from alembic import context
-
-import sys
-import os
-from pathlib import Path
+from sqlalchemy import engine_from_config, pool
 
 # Add the parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -17,11 +14,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.database import Base
 
 # Import all models to register them with Base.metadata
-from src.models.subscription import Subscription
-from src.models.mcp_subscription import MCPServer, MCPServerTool, MCPServerSubscription, MCPToolAccess
-from src.models.catalog import APICatalog, MCPToolsCatalog, CatalogSyncStatus
+from src.models.catalog import APICatalog, CatalogSyncStatus, MCPToolsCatalog
 from src.models.consumer import Consumer
+from src.models.mcp_subscription import MCPServer, MCPServerSubscription, MCPServerTool, MCPToolAccess
 from src.models.plan import Plan
+from src.models.quota_usage import QuotaUsage
+from src.models.subscription import Subscription
 
 # this is the Alembic Config object
 config = context.config

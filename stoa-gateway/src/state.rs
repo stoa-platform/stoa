@@ -16,6 +16,7 @@ use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
+use crate::quota::{ConsumerRateLimiter, QuotaManager, QuotaManagerConfig, RateLimiterConfig};
 use crate::rate_limit::RateLimiter;
 use crate::resilience::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry};
 use crate::routes::{PolicyRegistry, RouteRegistry};
@@ -50,6 +51,10 @@ pub struct AppState {
     pub circuit_breakers: Arc<CircuitBreakerRegistry>,
     /// mTLS validation stats (CAB-864)
     pub mtls_stats: Arc<MtlsStats>,
+    /// Per-consumer rate limiter (CAB-1121 P4)
+    pub consumer_rate_limiter: Arc<ConsumerRateLimiter>,
+    /// Daily/monthly quota manager (CAB-1121 P4)
+    pub quota_manager: Arc<QuotaManager>,
 }
 
 impl AppState {
@@ -202,6 +207,29 @@ impl AppState {
             None
         };
 
+        // Initialize per-consumer rate limiter (CAB-1121 P4)
+        let consumer_rate_limiter = Arc::new(ConsumerRateLimiter::new(RateLimiterConfig {
+            default_rate_per_minute: config.quota_default_rate_per_minute,
+            ..RateLimiterConfig::default()
+        }));
+        if config.quota_enforcement_enabled {
+            tracing::info!(
+                rate_per_minute = config.quota_default_rate_per_minute,
+                daily_limit = config.quota_default_daily_limit,
+                "Consumer quota enforcement enabled"
+            );
+        } else {
+            tracing::info!(
+                "Consumer quota enforcement disabled (STOA_QUOTA_ENFORCEMENT_ENABLED=false)"
+            );
+        }
+
+        // Initialize daily/monthly quota manager (CAB-1121 P4)
+        let quota_manager = Arc::new(QuotaManager::new(QuotaManagerConfig {
+            default_daily_limit: config.quota_default_daily_limit,
+            reset_check_interval_secs: config.quota_sync_interval_secs,
+        }));
+
         // Initialize mTLS stats (CAB-864)
         let mtls_stats = Arc::new(MtlsStats::new());
         if config.mtls.enabled {
@@ -232,6 +260,8 @@ impl AppState {
             zombie_detector,
             circuit_breakers,
             mtls_stats,
+            consumer_rate_limiter,
+            quota_manager,
         }
     }
 
@@ -242,6 +272,12 @@ impl AppState {
 
         // Start rate limiter cleanup
         self.rate_limiter.clone().start_cleanup_task();
+
+        // Start consumer rate limiter cleanup (CAB-1121 P4)
+        if self.config.quota_enforcement_enabled {
+            self.consumer_rate_limiter.clone().start_cleanup_task();
+            self.quota_manager.clone().start_reset_task();
+        }
 
         // Start zombie reaper (CAB-362)
         if let Some(ref zd) = self.zombie_detector {

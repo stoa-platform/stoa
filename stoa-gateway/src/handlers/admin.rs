@@ -314,6 +314,48 @@ pub async fn mtls_stats(
 }
 
 // =============================================================================
+// Quota Enforcement (CAB-1121 P4)
+// =============================================================================
+
+/// GET /admin/quotas — list all consumer quota stats
+pub async fn list_quotas(State(state): State<AppState>) -> Json<Vec<crate::quota::QuotaStats>> {
+    Json(state.quota_manager.list_all_stats())
+}
+
+/// GET /admin/quotas/:consumer_id — get quota stats for a specific consumer
+pub async fn get_consumer_quota(
+    State(state): State<AppState>,
+    Path(consumer_id): Path<String>,
+) -> impl IntoResponse {
+    match state.quota_manager.get_stats(&consumer_id) {
+        Some(stats) => Json(serde_json::json!(stats)).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// POST /admin/quotas/:consumer_id/reset — reset quota counters for a consumer
+pub async fn reset_consumer_quota(
+    State(state): State<AppState>,
+    Path(consumer_id): Path<String>,
+) -> impl IntoResponse {
+    if state.quota_manager.reset_consumer(&consumer_id) {
+        (
+            StatusCode::OK,
+            Json(
+                serde_json::json!({"status": "ok", "message": format!("Quota reset for consumer '{}'", consumer_id)}),
+            ),
+        )
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(
+                serde_json::json!({"status": "error", "message": format!("Consumer '{}' not found", consumer_id)}),
+            ),
+        )
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

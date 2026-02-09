@@ -28,6 +28,7 @@ mod oauth;
 mod optimization;
 mod policy;
 mod proxy;
+mod quota;
 mod rate_limit;
 mod resilience;
 mod routes;
@@ -212,6 +213,13 @@ fn build_router(state: AppState) -> Router {
         // CAB-864: mTLS admin
         .route("/mtls/config", get(admin::mtls_config))
         .route("/mtls/stats", get(admin::mtls_stats))
+        // CAB-1121 P4: Quota enforcement admin
+        .route("/quotas", get(admin::list_quotas))
+        .route("/quotas/:consumer_id", get(admin::get_consumer_quota))
+        .route(
+            "/quotas/:consumer_id/reset",
+            post(admin::reset_consumer_quota),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,
@@ -269,6 +277,11 @@ fn build_router(state: AppState) -> Router {
                 )
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
+                // Quota enforcement: runs after auth, before handlers (CAB-1121 P4)
+                .layer(axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    quota::quota_middleware,
+                ))
                 // mTLS extraction: Stage 1 runs before JWT auth (CAB-864)
                 .layer(mtls_layer)
                 .with_state(state)

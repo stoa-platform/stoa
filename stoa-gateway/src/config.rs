@@ -207,6 +207,27 @@ pub struct Config {
     #[serde(default)]
     pub mtls: MtlsConfig,
 
+    // === Quota Enforcement (Phase 4: CAB-1121) ===
+    /// Enable per-consumer quota enforcement
+    /// Env: STOA_QUOTA_ENFORCEMENT_ENABLED
+    #[serde(default)]
+    pub quota_enforcement_enabled: bool,
+
+    /// Quota sync interval in seconds (for background reset check)
+    /// Env: STOA_QUOTA_SYNC_INTERVAL_SECS
+    #[serde(default = "default_quota_sync_interval")]
+    pub quota_sync_interval_secs: u64,
+
+    /// Default rate limit per minute for consumers without explicit plan quota
+    /// Env: STOA_QUOTA_DEFAULT_RATE_PER_MINUTE
+    #[serde(default = "default_quota_rate_per_minute")]
+    pub quota_default_rate_per_minute: u32,
+
+    /// Default daily request limit for consumers without explicit plan quota
+    /// Env: STOA_QUOTA_DEFAULT_DAILY_LIMIT
+    #[serde(default = "default_quota_daily_limit")]
+    pub quota_default_daily_limit: u32,
+
     // === Per-Upstream Circuit Breaker (CAB-362) ===
     /// Failure threshold before opening circuit (default: 5)
     /// Env: STOA_CB_FAILURE_THRESHOLD
@@ -413,6 +434,18 @@ impl Default for MtlsConfig {
     }
 }
 
+fn default_quota_sync_interval() -> u64 {
+    60
+}
+
+fn default_quota_rate_per_minute() -> u32 {
+    60
+}
+
+fn default_quota_daily_limit() -> u32 {
+    10_000
+}
+
 fn default_cb_failure_threshold() -> u32 {
     5
 }
@@ -470,6 +503,10 @@ impl Default for Config {
             kafka_errors_topic: default_kafka_errors_topic(),
             k8s_enabled: false,
             mtls: MtlsConfig::default(),
+            quota_enforcement_enabled: false,
+            quota_sync_interval_secs: default_quota_sync_interval(),
+            quota_default_rate_per_minute: default_quota_rate_per_minute(),
+            quota_default_daily_limit: default_quota_daily_limit(),
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),

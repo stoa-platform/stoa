@@ -46,16 +46,23 @@ Produire un verdict global Go / Fix / Refaire
 ```
 Usage: PR review rapide, validation pre-merge.
 
-### Pattern 3: Feature development
+### Pattern 3: Feature development (Ship/Show/Ask)
 ```
 1. [Inline] Explorer + planifier (Plan mode)
-2. [Inline] Implementer le code
-3. [test-writer] Generer les tests
-4. [security-reviewer] Review securite
-5. [docs-writer] Documenter si ADR ou guide necessaire
-6. [Inline] Commit + PR
+2. [Inline] Branch: git checkout -b feat/CAB-XXXX-description
+3. [Inline] Implementer le code + micro-commits (<150 LOC chacun)
+4. [test-writer] Generer les tests
+5. [security-reviewer] Review securite
+6. [docs-writer] Documenter si ADR ou guide necessaire
+7. [Inline] Local quality gate (ci-quality-gates.md)
+8. [Inline] Push + PR (gh pr create)
+9. [Inline] CI green (gh pr checks --watch)
+10. [Inline] Ship/Show → merge auto | Ask → attendre "merge"
+11. [Inline] Verify CD: CI main ✅ → ArgoCD sync ✅ → Pod healthy ✅
+12. [k8s-ops] Si ArgoCD OutOfSync ou pod CrashLoop → diagnostiquer
+13. [Inline] Cleanup branch + update memory.md
 ```
-Usage: implementation complete d'un ticket CAB-XXXX.
+Usage: implementation complete d'un ticket CAB-XXXX. Voir `git-workflow.md` pour Ship/Show/Ask + CD verification map.
 
 ### Pattern 4: Agent Teams (experimental)
 ```bash
@@ -64,15 +71,17 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
 Usage: refactoring multi-composants, migration majeure, debugging avec hypotheses concurrentes.
 
-### Pattern 5: CI-first development
+### Pattern 5: CI-first development (always-green main)
 ```
-1. [Inline] Implementer la feature
+1. [Inline] Branch + implementer la feature + micro-commits
 2. [Inline] Executer le pre-commit checklist (voir ci-quality-gates.md)
 3. [test-writer] Generer les tests + verifier coverage seuil
 4. [security-reviewer] Review securite + secrets
-5. [Inline] Commit + push → CI green first try
+5. [Inline] Push + PR + CI green + merge (voir git-workflow.md)
+6. [Inline] Verify CD: CI main + ArgoCD + Pod (voir git-workflow.md step 7)
+7. [k8s-ops] Si probleme CD → diagnostiquer et proposer fix
 ```
-Usage: tout changement de code. Objectif: zero surprise en CI.
+Usage: tout changement de code. Objectif: zero surprise en CI, always-green main.
 
 ### Pattern 6: Content compliance review
 ```

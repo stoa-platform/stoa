@@ -61,6 +61,7 @@ class ConsumerResponse(BaseModel):
     description: str | None
     tenant_id: str
     keycloak_user_id: str | None
+    keycloak_client_id: str | None = None
     status: ConsumerStatusEnum
     consumer_metadata: dict | None
     created_at: datetime
@@ -68,6 +69,16 @@ class ConsumerResponse(BaseModel):
     created_by: str | None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ConsumerCredentialsResponse(BaseModel):
+    """Schema for one-time credential display after consumer activation."""
+
+    consumer_id: UUID
+    client_id: str
+    client_secret: str
+    token_endpoint: str
+    grant_type: str = "client_credentials"
 
 
 class ConsumerListResponse(BaseModel):

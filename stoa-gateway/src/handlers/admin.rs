@@ -33,18 +33,22 @@ use crate::state::AppState;
 /// Bearer token authentication for admin API.
 ///
 /// Validates the `Authorization: Bearer <token>` header against
-/// `config.admin_api_token`. If no token is configured, returns 403
-/// (admin API disabled).
+/// `config.admin_api_token`. If no token is configured, returns 503
+/// (admin API disabled — no token configured).
 pub async fn admin_auth(
     State(state): State<AppState>,
     request: Request<Body>,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, Response> {
     let expected = match state.config.admin_api_token.as_deref() {
         Some(token) if !token.is_empty() => token,
         _ => {
             warn!("Admin API request rejected: no admin_api_token configured");
-            return Err(StatusCode::FORBIDDEN);
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Admin API disabled — no admin_api_token configured",
+            )
+                .into_response());
         }
     };
 
@@ -59,7 +63,7 @@ pub async fn admin_auth(
         Ok(next.run(request).await)
     } else {
         warn!("Admin API request rejected: invalid bearer token");
-        Err(StatusCode::UNAUTHORIZED)
+        Err(StatusCode::UNAUTHORIZED.into_response())
     }
 }
 
@@ -156,7 +160,7 @@ pub async fn delete_policy(
 }
 
 // =============================================================================
-// Circuit Breaker (Phase 6)
+// Circuit Breaker (Phase 6 + CAB-362 per-upstream)
 // =============================================================================
 
 #[derive(Serialize)]
@@ -170,13 +174,14 @@ pub struct CircuitBreakerStatsResponse {
     pub rejected_count: u64,
 }
 
-/// GET /admin/circuit-breaker/stats
+/// GET /admin/circuit-breaker/stats — backward compat (returns "cp-api" CB stats)
 pub async fn circuit_breaker_stats(
     State(state): State<AppState>,
 ) -> Json<CircuitBreakerStatsResponse> {
-    let stats = state.cp_circuit_breaker.stats();
+    let cb = state.get_or_create_cb("cp-api");
+    let stats = cb.stats();
     Json(CircuitBreakerStatsResponse {
-        name: state.cp_circuit_breaker.name().to_string(),
+        name: cb.name().to_string(),
         state: stats.state.to_string(),
         success_count: stats.success_count,
         failure_count: stats.failure_count,
@@ -186,13 +191,101 @@ pub async fn circuit_breaker_stats(
     })
 }
 
-/// POST /admin/circuit-breaker/reset
+/// POST /admin/circuit-breaker/reset — backward compat (resets "cp-api" CB)
 pub async fn circuit_breaker_reset(State(state): State<AppState>) -> impl IntoResponse {
-    state.cp_circuit_breaker.reset();
+    let cb = state.get_or_create_cb("cp-api");
+    cb.reset();
     (
         StatusCode::OK,
         Json(serde_json::json!({"status": "ok", "message": "Circuit breaker reset to closed"})),
     )
+}
+
+/// GET /admin/circuit-breakers — list all per-upstream circuit breakers
+pub async fn list_circuit_breakers(
+    State(state): State<AppState>,
+) -> Json<Vec<CircuitBreakerStatsResponse>> {
+    let breakers = state.circuit_breakers.read();
+    let mut results: Vec<CircuitBreakerStatsResponse> = breakers
+        .values()
+        .map(|cb| {
+            let stats = cb.stats();
+            CircuitBreakerStatsResponse {
+                name: cb.name().to_string(),
+                state: stats.state.to_string(),
+                success_count: stats.success_count,
+                failure_count: stats.failure_count,
+                consecutive_failures: stats.consecutive_failures,
+                open_count: stats.open_count,
+                rejected_count: stats.rejected_count,
+            }
+        })
+        .collect();
+    // Sort by name for deterministic output
+    results.sort_by(|a, b| a.name.cmp(&b.name));
+    Json(results)
+}
+
+/// POST /admin/circuit-breakers/:upstream_id/reset — reset a specific upstream CB
+pub async fn reset_upstream_circuit_breaker(
+    State(state): State<AppState>,
+    Path(upstream_id): Path<String>,
+) -> impl IntoResponse {
+    let breakers = state.circuit_breakers.read();
+    if let Some(cb) = breakers.get(&upstream_id) {
+        cb.reset();
+        (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": "ok",
+                "message": format!("Circuit breaker '{}' reset to closed", upstream_id)
+            })),
+        )
+            .into_response()
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": format!("Circuit breaker '{}' not found", upstream_id)
+            })),
+        )
+            .into_response()
+    }
+}
+
+// =============================================================================
+// Zombie Detector (CAB-362, ADR-012)
+// =============================================================================
+
+/// GET /admin/zombies/stats
+pub async fn zombie_stats(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let stats = state.zombie_detector.stats().await;
+    Json(serde_json::json!({
+        "total_sessions": stats.total_sessions,
+        "healthy": stats.healthy,
+        "warning": stats.warning,
+        "expired": stats.expired,
+        "zombie": stats.zombie,
+        "revoked": stats.revoked,
+        "alerts_total": stats.alerts_total,
+    }))
+}
+
+/// GET /admin/zombies/alerts
+pub async fn zombie_alerts(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    let limit: usize = params
+        .get("limit")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(50);
+    let alerts = state.zombie_detector.recent_alerts(limit).await;
+    Json(serde_json::json!({
+        "count": alerts.len(),
+        "alerts": alerts,
+    }))
 }
 
 // =============================================================================
@@ -228,6 +321,76 @@ pub async fn cache_clear(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 // =============================================================================
+// Quota Admin (Phase 4: CAB-1121)
+// =============================================================================
+
+/// GET /admin/quotas — list all consumer quota states
+pub async fn list_quotas(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let stats = state.quota_manager.list_all_stats();
+    Json(serde_json::json!({
+        "count": stats.len(),
+        "consumers": stats,
+        "rate_limiter_buckets": state.consumer_rate_limiter.bucket_count(),
+        "quota_enforcement_enabled": state.config.quota_enforcement_enabled,
+    }))
+}
+
+/// GET /admin/quotas/:consumer_id — specific consumer quota stats
+pub async fn get_consumer_quota(
+    State(state): State<AppState>,
+    Path(consumer_id): Path<String>,
+) -> impl IntoResponse {
+    match state.quota_manager.get_stats(&consumer_id) {
+        Some(stats) => {
+            let rate_info = state
+                .consumer_rate_limiter
+                .get_rate_limit_info(&consumer_id);
+            Json(serde_json::json!({
+                "consumer_id": consumer_id,
+                "quota": stats,
+                "rate_limit": {
+                    "limit": rate_info.limit,
+                    "remaining": rate_info.remaining,
+                    "reset_epoch": rate_info.reset_epoch,
+                },
+            }))
+            .into_response()
+        }
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Consumer not found"})),
+        )
+            .into_response(),
+    }
+}
+
+/// POST /admin/quotas/:consumer_id/reset — reset quota counters
+pub async fn reset_consumer_quota(
+    State(state): State<AppState>,
+    Path(consumer_id): Path<String>,
+) -> impl IntoResponse {
+    if state.quota_manager.reset_consumer(&consumer_id) {
+        (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": "ok",
+                "message": format!("Quota counters reset for consumer '{}'", consumer_id),
+            })),
+        )
+            .into_response()
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": format!("Consumer '{}' not found", consumer_id),
+            })),
+        )
+            .into_response()
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -253,12 +416,25 @@ mod tests {
     }
 
     fn build_admin_router(state: AppState) -> Router {
+        use axum::routing::post;
+
         Router::new()
             .route("/health", get(admin_health))
             .route("/apis", get(list_apis).post(upsert_api))
             .route("/apis/:id", get(get_api).delete(delete_api))
             .route("/policies", get(list_policies).post(upsert_policy))
             .route("/policies/:id", delete(delete_policy))
+            // Circuit breaker endpoints (backward compat + per-upstream)
+            .route("/circuit-breaker/stats", get(circuit_breaker_stats))
+            .route("/circuit-breaker/reset", post(circuit_breaker_reset))
+            .route("/circuit-breakers", get(list_circuit_breakers))
+            .route(
+                "/circuit-breakers/:upstream_id/reset",
+                post(reset_upstream_circuit_breaker),
+            )
+            // Zombie endpoints
+            .route("/zombies/stats", get(zombie_stats))
+            .route("/zombies/alerts", get(zombie_alerts))
             .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
             .with_state(state)
     }
@@ -317,7 +493,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     #[tokio::test]
@@ -465,5 +641,182 @@ mod tests {
             .unwrap();
         let data: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(data.len(), 0);
+    }
+
+    // =========================================================================
+    // Circuit Breaker Admin Tests (CAB-362)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_circuit_breaker_stats_backward_compat() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/circuit-breaker/stats")
+                    .header("Authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["name"], "cp-api");
+        assert_eq!(data["state"], "closed");
+    }
+
+    #[tokio::test]
+    async fn test_list_circuit_breakers() {
+        let state = create_test_state(Some("secret"));
+
+        // Create a second CB for upstream-payments
+        state.get_or_create_cb("upstream-payments");
+
+        let app = build_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/circuit-breakers")
+                    .header("Authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert!(data.len() >= 2); // cp-api + upstream-payments
+
+        // Sorted by name — cp-api first
+        assert_eq!(data[0]["name"], "cp-api");
+        assert_eq!(data[1]["name"], "upstream-payments");
+    }
+
+    #[tokio::test]
+    async fn test_reset_upstream_circuit_breaker() {
+        let state = create_test_state(Some("secret"));
+
+        // Create and trip a CB
+        let cb = state.get_or_create_cb("test-upstream");
+        for _ in 0..5 {
+            cb.record_failure();
+        }
+        assert_eq!(cb.stats().state.to_string(), "open");
+
+        let app = build_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/circuit-breakers/test-upstream/reset")
+                    .header("Authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Verify it's now closed
+        assert_eq!(cb.stats().state.to_string(), "closed");
+    }
+
+    #[tokio::test]
+    async fn test_reset_upstream_circuit_breaker_not_found() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/circuit-breakers/nonexistent/reset")
+                    .header("Authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    // =========================================================================
+    // Zombie Admin Tests (CAB-362)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_zombie_stats_endpoint() {
+        let state = create_test_state(Some("secret"));
+
+        // Start some sessions via zombie detector
+        state
+            .zombie_detector
+            .start_session("sess-1", Some("user-1".to_string()), None)
+            .await;
+        state
+            .zombie_detector
+            .start_session("sess-2", Some("user-2".to_string()), None)
+            .await;
+
+        let app = build_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/zombies/stats")
+                    .header("Authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["total_sessions"], 2);
+        assert_eq!(data["healthy"], 2);
+    }
+
+    #[tokio::test]
+    async fn test_zombie_alerts_endpoint() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/zombies/alerts?limit=10")
+                    .header("Authorization", "Bearer secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["count"], 0); // No alerts initially
+        assert!(data["alerts"].is_array());
     }
 }

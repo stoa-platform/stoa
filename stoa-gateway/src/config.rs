@@ -119,6 +119,27 @@ pub struct Config {
     #[serde(default)]
     pub gateway_mode: GatewayMode,
 
+    // === Circuit Breaker (CAB-362) ===
+    /// Failure count before opening circuit breaker
+    /// Env: STOA_CIRCUIT_BREAKER_FAILURE_THRESHOLD (default: 5)
+    #[serde(default = "default_cb_failure_threshold")]
+    pub circuit_breaker_failure_threshold: u32,
+
+    /// Seconds to wait before transitioning from open to half-open
+    /// Env: STOA_CIRCUIT_BREAKER_RESET_TIMEOUT_SECS (default: 30)
+    #[serde(default = "default_cb_reset_timeout_secs")]
+    pub circuit_breaker_reset_timeout_secs: u64,
+
+    /// Successes needed in half-open to close the circuit
+    /// Env: STOA_CIRCUIT_BREAKER_SUCCESS_THRESHOLD (default: 3)
+    #[serde(default = "default_cb_success_threshold")]
+    pub circuit_breaker_success_threshold: u32,
+
+    /// Enable per-upstream circuit breakers (vs single global)
+    /// Env: STOA_CIRCUIT_BREAKER_PER_UPSTREAM (default: true)
+    #[serde(default = "default_cb_per_upstream")]
+    pub circuit_breaker_per_upstream: bool,
+
     // === Governance (ADR-012) ===
     /// Enable anti-zombie agent detection
     /// Env: STOA_ZOMBIE_DETECTION_ENABLED (default: true)
@@ -134,6 +155,16 @@ pub struct Config {
     /// Env: STOA_ATTESTATION_INTERVAL
     #[serde(default = "default_attestation_interval")]
     pub attestation_interval: u64,
+
+    /// Zombie reaper sweep interval in seconds
+    /// Env: STOA_ZOMBIE_REAPER_INTERVAL_SECS (default: 60)
+    #[serde(default = "default_zombie_reaper_interval")]
+    pub zombie_reaper_interval_secs: u64,
+
+    /// Enable automatic session revocation for zombie sessions
+    /// Env: STOA_ZOMBIE_AUTO_REVOKE (default: false)
+    #[serde(default)]
+    pub zombie_auto_revoke: bool,
 
     // === Shadow Mode ===
     /// Traffic capture source for shadow mode
@@ -200,6 +231,27 @@ pub struct Config {
     /// Env: STOA_K8S_ENABLED (default: false — explicit opt-in)
     #[serde(default)]
     pub k8s_enabled: bool,
+
+    // === Quota Enforcement (Phase 4: CAB-1121) ===
+    /// Enable per-consumer quota enforcement (default: false — feature flag)
+    /// Env: STOA_QUOTA_ENFORCEMENT_ENABLED
+    #[serde(default)]
+    pub quota_enforcement_enabled: bool,
+
+    /// Interval in seconds for syncing quota state (default: 300)
+    /// Env: STOA_QUOTA_SYNC_INTERVAL_SECS
+    #[serde(default = "default_quota_sync_interval")]
+    pub quota_sync_interval_secs: u64,
+
+    /// Default rate per minute for consumers without a plan (default: 60)
+    /// Env: STOA_QUOTA_DEFAULT_RATE_PER_MINUTE
+    #[serde(default = "default_quota_rate_per_minute")]
+    pub quota_default_rate_per_minute: u32,
+
+    /// Default daily request limit for consumers without a plan (default: 10000)
+    /// Env: STOA_QUOTA_DEFAULT_DAILY_LIMIT
+    #[serde(default = "default_quota_daily_limit")]
+    pub quota_default_daily_limit: u32,
 }
 
 fn default_port() -> u16 {
@@ -222,8 +274,28 @@ fn default_policy_enabled() -> bool {
     true
 }
 
+fn default_cb_failure_threshold() -> u32 {
+    5
+}
+
+fn default_cb_reset_timeout_secs() -> u64 {
+    30
+}
+
+fn default_cb_success_threshold() -> u32 {
+    3
+}
+
+fn default_cb_per_upstream() -> bool {
+    true
+}
+
 fn default_zombie_detection() -> bool {
     true
+}
+
+fn default_zombie_reaper_interval() -> u64 {
+    60
 }
 
 fn default_agent_session_ttl() -> u64 {
@@ -266,6 +338,18 @@ fn default_kafka_errors_topic() -> String {
     "stoa.errors".to_string()
 }
 
+fn default_quota_sync_interval() -> u64 {
+    300 // 5 minutes
+}
+
+fn default_quota_rate_per_minute() -> u32 {
+    60
+}
+
+fn default_quota_daily_limit() -> u32 {
+    10_000
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -295,9 +379,15 @@ impl Default for Config {
             log_format: Some("json".to_string()),
             otel_endpoint: None,
             gateway_mode: GatewayMode::default(),
+            circuit_breaker_failure_threshold: default_cb_failure_threshold(),
+            circuit_breaker_reset_timeout_secs: default_cb_reset_timeout_secs(),
+            circuit_breaker_success_threshold: default_cb_success_threshold(),
+            circuit_breaker_per_upstream: default_cb_per_upstream(),
             zombie_detection_enabled: default_zombie_detection(),
             agent_session_ttl_secs: default_agent_session_ttl(),
             attestation_interval: default_attestation_interval(),
+            zombie_reaper_interval_secs: default_zombie_reaper_interval(),
+            zombie_auto_revoke: false,
             shadow_capture_source: None,
             shadow_min_samples: default_shadow_min_samples(),
             shadow_gitlab_project: None,
@@ -310,6 +400,10 @@ impl Default for Config {
             kafka_metering_topic: default_kafka_metering_topic(),
             kafka_errors_topic: default_kafka_errors_topic(),
             k8s_enabled: false,
+            quota_enforcement_enabled: false,
+            quota_sync_interval_secs: default_quota_sync_interval(),
+            quota_default_rate_per_minute: default_quota_rate_per_minute(),
+            quota_default_daily_limit: default_quota_daily_limit(),
         }
     }
 }

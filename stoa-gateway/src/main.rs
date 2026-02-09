@@ -28,6 +28,7 @@ mod oauth;
 mod optimization;
 mod policy;
 mod proxy;
+mod quota;
 mod rate_limit;
 mod resilience;
 mod routes;
@@ -196,9 +197,25 @@ fn build_router(state: AppState) -> Router {
             get(admin::list_policies).post(admin::upsert_policy),
         )
         .route("/policies/:id", delete(admin::delete_policy))
-        // Phase 6: Circuit Breaker admin
+        // Phase 6: Circuit Breaker admin (backward compat)
         .route("/circuit-breaker/stats", get(admin::circuit_breaker_stats))
         .route("/circuit-breaker/reset", post(admin::circuit_breaker_reset))
+        // CAB-362: Per-upstream circuit breakers
+        .route("/circuit-breakers", get(admin::list_circuit_breakers))
+        .route(
+            "/circuit-breakers/:upstream_id/reset",
+            post(admin::reset_upstream_circuit_breaker),
+        )
+        // CAB-362: Zombie detector
+        .route("/zombies/stats", get(admin::zombie_stats))
+        .route("/zombies/alerts", get(admin::zombie_alerts))
+        // Phase 4 CAB-1121: Quota admin
+        .route("/quotas", get(admin::list_quotas))
+        .route("/quotas/:consumer_id", get(admin::get_consumer_quota))
+        .route(
+            "/quotas/:consumer_id/reset",
+            post(admin::reset_consumer_quota),
+        )
         // Phase 6: Cache admin
         .route("/cache/stats", get(admin::cache_stats))
         .route("/cache/clear", post(admin::cache_clear))
@@ -249,6 +266,12 @@ fn build_router(state: AppState) -> Router {
                 )
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
+                // Quota enforcement middleware (Phase 4: CAB-1121)
+                // Runs after auth, checks per-consumer rate limits + daily/monthly quotas
+                .layer(axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    quota::quota_middleware,
+                ))
                 .with_state(state)
         }
         GatewayMode::Sidecar => {
@@ -406,7 +429,7 @@ async fn register_tools(state: &AppState) {
         match stoa_tools::discover_and_register(
             state.tool_registry.clone(),
             &state.control_plane,
-            state.cp_circuit_breaker.clone(),
+            state.get_or_create_cb("cp-api"),
         )
         .await
         {
@@ -426,7 +449,7 @@ async fn register_tools(state: &AppState) {
     stoa_tools::start_tool_refresh_task(
         state.tool_registry.clone(),
         state.control_plane.clone(),
-        state.cp_circuit_breaker.clone(),
+        state.get_or_create_cb("cp-api"),
     );
 }
 

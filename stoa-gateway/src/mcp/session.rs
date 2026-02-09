@@ -1,13 +1,16 @@
 //! MCP Session Manager
 //!
 //! Manages stateful SSE sessions with automatic TTL expiration.
+//! CAB-362: Integrates with ZombieDetector for session governance.
 
 use chrono::{DateTime, Duration, Utc};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::{interval, Duration as TokioDuration};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
+
+use crate::governance::zombie::{SessionHealth, ZombieDetector};
 
 /// MCP Session
 #[derive(Debug, Clone)]
@@ -47,6 +50,8 @@ impl Session {
 pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<String, Session>>>,
     ttl: Duration,
+    /// Optional zombie detector for session governance (CAB-362)
+    zombie_detector: Option<Arc<ZombieDetector>>,
 }
 
 impl SessionManager {
@@ -54,18 +59,55 @@ impl SessionManager {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             ttl: Duration::minutes(ttl_minutes),
+            zombie_detector: None,
         }
     }
 
-    /// Create a new session
+    /// Set the zombie detector for session governance (CAB-362)
+    pub fn set_zombie_detector(&mut self, detector: Arc<ZombieDetector>) {
+        self.zombie_detector = Some(detector);
+    }
+
+    /// Create a new session (CAB-362: also starts zombie tracking)
     pub async fn create(&self, session: Session) {
         let id = session.id.clone();
+        let tenant_id = session.tenant_id.clone();
         self.sessions.write().insert(id.clone(), session);
         debug!(session_id = %id, "Session created");
+
+        // Register with zombie detector for tracking
+        if let Some(ref detector) = self.zombie_detector {
+            detector.start_session(&id, None, Some(tenant_id)).await;
+        }
     }
 
     /// Get session by ID (and touch it)
+    /// CAB-362: Also records activity with zombie detector.
+    /// Returns None if session is zombie/revoked.
     pub async fn get(&self, id: &str) -> Option<Session> {
+        // Check zombie health first
+        if let Some(ref detector) = self.zombie_detector {
+            match detector.record_activity(id).await {
+                Ok(SessionHealth::Zombie) => {
+                    warn!(session_id = %id, "Session is zombie — removing");
+                    self.sessions.write().remove(id);
+                    return None;
+                }
+                Ok(SessionHealth::Revoked) => {
+                    warn!(session_id = %id, "Session is revoked — removing");
+                    self.sessions.write().remove(id);
+                    return None;
+                }
+                Err(crate::governance::zombie::ZombieError::SessionRevoked) => {
+                    warn!(session_id = %id, "Session revoked by zombie detector");
+                    self.sessions.write().remove(id);
+                    return None;
+                }
+                // AttestationRequired and SessionNotFound are non-fatal for get()
+                _ => {}
+            }
+        }
+
         let mut sessions = self.sessions.write();
         if let Some(session) = sessions.get_mut(id) {
             session.touch();
@@ -75,9 +117,15 @@ impl SessionManager {
         }
     }
 
-    /// Remove session
+    /// Remove session (CAB-362: also ends zombie tracking)
     pub async fn remove(&self, id: &str) -> bool {
-        self.sessions.write().remove(id).is_some()
+        let removed = self.sessions.write().remove(id).is_some();
+        if removed {
+            if let Some(ref detector) = self.zombie_detector {
+                detector.end_session(id).await;
+            }
+        }
+        removed
     }
 
     /// Update session metadata
@@ -155,6 +203,7 @@ impl Clone for SessionManager {
         Self {
             sessions: self.sessions.clone(),
             ttl: self.ttl,
+            zombie_detector: self.zombie_detector.clone(),
         }
     }
 }
@@ -195,5 +244,75 @@ mod tests {
         // Simulate old activity
         session.last_activity = Utc::now() - Duration::seconds(10);
         assert!(session.is_expired(short_ttl));
+    }
+
+    // =========================================================================
+    // Zombie Integration Tests (CAB-362)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_session_create_registers_with_zombie_detector() {
+        use crate::governance::zombie::{ZombieConfig, ZombieDetector};
+
+        let detector = Arc::new(ZombieDetector::new(ZombieConfig::default()));
+        let mut manager = SessionManager::new(30);
+        manager.set_zombie_detector(detector.clone());
+
+        let session = Session::new("test-z1".into(), "tenant-1".into());
+        manager.create(session).await;
+
+        // Zombie detector should track the session
+        let stats = detector.stats().await;
+        assert_eq!(stats.total_sessions, 1);
+    }
+
+    #[tokio::test]
+    async fn test_session_remove_ends_zombie_tracking() {
+        use crate::governance::zombie::{ZombieConfig, ZombieDetector};
+
+        let detector = Arc::new(ZombieDetector::new(ZombieConfig::default()));
+        let mut manager = SessionManager::new(30);
+        manager.set_zombie_detector(detector.clone());
+
+        let session = Session::new("test-z2".into(), "tenant-1".into());
+        manager.create(session).await;
+
+        assert!(manager.remove("test-z2").await);
+
+        // Zombie detector should no longer track the session
+        let session_info = detector.get_session("test-z2").await;
+        assert!(session_info.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_session_get_checks_zombie_health() {
+        use crate::governance::zombie::{ZombieConfig, ZombieDetector};
+
+        let detector = Arc::new(ZombieDetector::new(ZombieConfig {
+            session_ttl_secs: 1,
+            zombie_factor: 1.0,
+            auto_revoke: true,
+            ..ZombieConfig::default()
+        }));
+        let mut manager = SessionManager::new(30);
+        manager.set_zombie_detector(detector.clone());
+
+        let session = Session::new("test-z3".into(), "tenant-1".into());
+        manager.create(session).await;
+
+        // Wait for zombie threshold (1s * 1.0 = 1s), then run check + revoke
+        // (simulates the background reaper task)
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        let alerts = detector.check_zombies().await;
+        assert!(!alerts.is_empty());
+
+        // Explicitly revoke (as the background sweep would do for Critical + auto_revoke)
+        for alert in &alerts {
+            let _ = detector.revoke_session(&alert.session_id).await;
+        }
+
+        // Now get() should detect the revoked session and remove it
+        let result = manager.get("test-z3").await;
+        assert!(result.is_none());
     }
 }

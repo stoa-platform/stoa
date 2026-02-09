@@ -773,6 +773,20 @@
         "title": "BindingsListResponse",
         "type": "object"
       },
+      "Body_bulk_create_consumers_v1_consumers__tenant_id__bulk_post": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_bulk_create_consumers_v1_consumers__tenant_id__bulk_post",
+        "type": "object"
+      },
       "Body_upload_certificate_v1_certificates_upload_post": {
         "properties": {
           "file": {
@@ -785,6 +799,113 @@
           "file"
         ],
         "title": "Body_upload_certificate_v1_certificates_upload_post",
+        "type": "object"
+      },
+      "BulkResultItem": {
+        "description": "Result of a single row in bulk onboarding.",
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "consumer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumer Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "status"
+        ],
+        "title": "BulkResultItem",
+        "type": "object"
+      },
+      "BulkResultResponse": {
+        "description": "Response for bulk onboarding endpoint.",
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/BulkResultItem"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "success": {
+            "title": "Success",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "success",
+          "failed",
+          "results"
+        ],
+        "title": "BulkResultResponse",
         "type": "object"
       },
       "BusinessMetrics": {
@@ -1067,6 +1188,30 @@
           "signature_algorithm"
         ],
         "title": "CertificateInfo",
+        "type": "object"
+      },
+      "CertificateRotateRequest": {
+        "description": "Schema for certificate rotation request (CAB-864).",
+        "properties": {
+          "certificate_pem": {
+            "description": "New PEM-encoded X.509 certificate",
+            "minLength": 1,
+            "title": "Certificate Pem",
+            "type": "string"
+          },
+          "grace_period_hours": {
+            "default": 24,
+            "description": "Hours during which both certs are valid",
+            "maximum": 720.0,
+            "minimum": 1.0,
+            "title": "Grace Period Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "certificate_pem"
+        ],
+        "title": "CertificateRotateRequest",
         "type": "object"
       },
       "CertificateValidationRequest": {
@@ -1392,6 +1537,63 @@
       "ConsumerResponse": {
         "description": "Schema for consumer response.",
         "properties": {
+          "certificate_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Fingerprint"
+          },
+          "certificate_not_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Not After"
+          },
+          "certificate_not_before": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Not Before"
+          },
+          "certificate_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Status"
+          },
+          "certificate_subject_dn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Subject Dn"
+          },
           "company": {
             "anyOf": [
               {
@@ -1476,9 +1678,32 @@
             ],
             "title": "Keycloak User Id"
           },
+          "last_rotated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rotated At"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "rotation_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotation Count"
           },
           "status": {
             "$ref": "#/components/schemas/ConsumerStatusEnum"
@@ -16042,6 +16267,64 @@
         ]
       }
     },
+    "/v1/consumers/{tenant_id}/bulk": {
+      "post": {
+        "description": "Bulk onboard consumers from a CSV file (CAB-864).\n\nCSV columns: external_id, name, email, company (optional), certificate_pem (optional).\nMax 100 rows per request. Each row is processed independently.",
+        "operationId": "bulk_create_consumers_v1_consumers__tenant_id__bulk_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_bulk_create_consumers_v1_consumers__tenant_id__bulk_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResultResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Create Consumers",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
     "/v1/consumers/{tenant_id}/{consumer_id}": {
       "delete": {
         "description": "Delete a consumer.",
@@ -16326,6 +16609,132 @@
           }
         ],
         "summary": "Block Consumer",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/{consumer_id}/certificate/revoke": {
+      "post": {
+        "description": "Revoke a consumer's mTLS certificate (CAB-864).\n\nSets certificate_status to 'revoked' and disables the Keycloak client.\nIdempotent \u2014 revoking an already-revoked certificate is a no-op.",
+        "operationId": "revoke_certificate_v1_consumers__tenant_id___consumer_id__certificate_revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Certificate",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/{consumer_id}/certificate/rotate": {
+      "post": {
+        "description": "Rotate a consumer's mTLS certificate (CAB-864).\n\nAccepts a new PEM certificate, moves the current fingerprint to\ncertificate_fingerprint_previous, and sets a grace period.",
+        "operationId": "rotate_certificate_v1_consumers__tenant_id___consumer_id__certificate_rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificateRotateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate Certificate",
         "tags": [
           "Consumers"
         ]

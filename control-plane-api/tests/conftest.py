@@ -358,6 +358,18 @@ def sample_consumer_data(sample_consumer_id):
         "keycloak_client_id": None,
         "status": "active",
         "consumer_metadata": None,
+        "certificate_fingerprint": None,
+        "certificate_fingerprint_previous": None,
+        "certificate_subject_dn": None,
+        "certificate_issuer_dn": None,
+        "certificate_serial": None,
+        "certificate_not_before": None,
+        "certificate_not_after": None,
+        "certificate_pem": None,
+        "certificate_status": None,
+        "previous_cert_expires_at": None,
+        "last_rotated_at": None,
+        "rotation_count": 0,
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow(),
         "created_by": "tenant-admin-user-id",
@@ -391,6 +403,53 @@ def sample_plan_data(sample_plan_id):
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow(),
         "created_by": "tenant-admin-user-id",
+    }
+
+
+# ============== Quota Usage Fixtures (CAB-1121 Phase 4) ==============
+
+
+@pytest.fixture
+def sample_quota_usage_id():
+    """Generate a consistent quota usage ID for tests."""
+    return uuid4()
+
+
+@pytest.fixture
+def sample_quota_usage_data(sample_quota_usage_id, sample_consumer_id):
+    """Sample quota usage data for testing."""
+    from datetime import date
+    today = date.today()
+    return {
+        "id": sample_quota_usage_id,
+        "consumer_id": sample_consumer_id,
+        "subscription_id": None,
+        "tenant_id": "acme",
+        "request_count_daily": 500,
+        "request_count_monthly": 15000,
+        "bandwidth_bytes_daily": 1048576,
+        "bandwidth_bytes_monthly": 31457280,
+        "period_start_daily": today,
+        "period_start_monthly": today.replace(day=1),
+        "last_reset_at": None,
+        "updated_at": datetime.utcnow(),
+    }
+
+
+@pytest.fixture
+def sample_quota_plan_data(sample_plan_id):
+    """Sample plan data with quota limits for testing."""
+    return {
+        "id": sample_plan_id,
+        "slug": "gold",
+        "name": "Gold Plan",
+        "tenant_id": "acme",
+        "daily_request_limit": 1000,
+        "monthly_request_limit": 30000,
+        "rate_limit_per_second": 100,
+        "rate_limit_per_minute": 5000,
+        "burst_limit": 200,
+        "status": "active",
     }
 
 

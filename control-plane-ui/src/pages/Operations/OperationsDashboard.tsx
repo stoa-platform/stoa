@@ -263,11 +263,23 @@ export function OperationsDashboard() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex items-center justify-between">
-          <span className="text-sm">{error}</span>
-          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
-            &times;
-          </button>
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 rounded-lg flex items-center justify-between">
+          <span className="text-sm text-red-700 dark:text-red-400">{error}</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadData}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 bg-white dark:bg-neutral-800 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-500 hover:text-red-700 dark:hover:text-red-300 text-lg leading-none"
+            >
+              &times;
+            </button>
+          </div>
         </div>
       )}
 

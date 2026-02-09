@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Tests for Plans Service (CAB-1121 P5)
  */

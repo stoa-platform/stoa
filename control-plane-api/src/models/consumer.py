@@ -38,6 +38,7 @@ class Consumer(Base):
 
     # Optional Keycloak link
     keycloak_user_id = Column(String(255), nullable=True, index=True)
+    keycloak_client_id = Column(String(255), nullable=True, index=True)
 
     # Status
     status = Column(

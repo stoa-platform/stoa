@@ -355,6 +355,7 @@ def sample_consumer_data(sample_consumer_id):
         "description": "Strategic API partner",
         "tenant_id": "acme",
         "keycloak_user_id": None,
+        "keycloak_client_id": None,
         "status": "active",
         "consumer_metadata": None,
         "created_at": datetime.utcnow(),

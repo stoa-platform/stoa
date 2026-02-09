@@ -30,11 +30,19 @@ class TestConsumersRouter:
     ):
         """Test successful consumer creation returns 201."""
         mock_consumer = self._create_mock_consumer(sample_consumer_data)
+        updated_consumer = self._create_mock_consumer(
+            {**sample_consumer_data, "keycloak_client_id": "acme-partner-acme-001"}
+        )
 
-        with patch("src.routers.consumers.ConsumerRepository") as MockRepo:
+        kc_result = {"client_id": "acme-partner-acme-001", "client_secret": "s", "id": "uuid"}
+
+        with patch("src.routers.consumers.ConsumerRepository") as MockRepo, \
+             patch("src.routers.consumers.keycloak_service") as mock_kc:
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_by_external_id = AsyncMock(return_value=None)
             mock_repo_instance.create = AsyncMock(return_value=mock_consumer)
+            mock_repo_instance.update = AsyncMock(return_value=updated_consumer)
+            mock_kc.create_consumer_client = AsyncMock(return_value=kc_result)
 
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(
@@ -246,7 +254,7 @@ class TestConsumersRouter:
     ):
         """Test reactivating a suspended consumer."""
         mock_consumer = self._create_mock_consumer(
-            {**sample_consumer_data, "status": "suspended"}
+            {**sample_consumer_data, "status": "suspended", "keycloak_client_id": None}
         )
         mock_consumer.status = MagicMock()
         mock_consumer.status.__eq__ = lambda _self, other: str(other) == "suspended"
@@ -254,18 +262,23 @@ class TestConsumersRouter:
         mock_consumer.status.__ne__ = lambda _self, other: str(other) != "suspended"
 
         activated_consumer = self._create_mock_consumer(
-            {**sample_consumer_data, "status": "active"}
+            {**sample_consumer_data, "status": "active", "keycloak_client_id": "acme-partner-acme-001"}
         )
 
+        kc_result = {"client_id": "acme-partner-acme-001", "client_secret": "s", "id": "uuid"}
+
         with patch("src.routers.consumers.ConsumerRepository") as MockRepo, \
-             patch("src.routers.consumers.ConsumerStatus") as MockStatus:
+             patch("src.routers.consumers.ConsumerStatus") as MockStatus, \
+             patch("src.routers.consumers.keycloak_service") as mock_kc:
             MockStatus.ACTIVE = "active"
             MockStatus.SUSPENDED = "suspended"
             MockStatus.BLOCKED = "blocked"
 
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_by_id = AsyncMock(return_value=mock_consumer)
-            mock_repo_instance.update_status = AsyncMock(return_value=activated_consumer)
+            mock_repo_instance.update_status = AsyncMock(return_value=mock_consumer)
+            mock_repo_instance.update = AsyncMock(return_value=activated_consumer)
+            mock_kc.create_consumer_client = AsyncMock(return_value=kc_result)
 
             with TestClient(app_with_tenant_admin) as client:
                 response = client.post(

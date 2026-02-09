@@ -1287,6 +1287,41 @@
         "title": "ConsumerCreate",
         "type": "object"
       },
+      "ConsumerCredentialsResponse": {
+        "description": "Schema for one-time credential display after consumer activation.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret": {
+            "title": "Client Secret",
+            "type": "string"
+          },
+          "consumer_id": {
+            "format": "uuid",
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "grant_type": {
+            "default": "client_credentials",
+            "title": "Grant Type",
+            "type": "string"
+          },
+          "token_endpoint": {
+            "title": "Token Endpoint",
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumer_id",
+          "client_id",
+          "client_secret",
+          "token_endpoint"
+        ],
+        "title": "ConsumerCredentialsResponse",
+        "type": "object"
+      },
       "ConsumerListResponse": {
         "description": "Schema for paginated consumer list.",
         "properties": {
@@ -1388,6 +1423,17 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "keycloak_client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keycloak Client Id"
           },
           "keycloak_user_id": {
             "anyOf": [
@@ -16429,6 +16475,64 @@
           }
         ],
         "summary": "Block Consumer",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/{consumer_id}/credentials": {
+      "get": {
+        "description": "Get consumer OAuth2 credentials (one-time secret display).\n\nRegenerates the client secret each time it is called so the secret\nis only visible once per request.  The caller must store it securely.",
+        "operationId": "get_consumer_credentials_v1_consumers__tenant_id___consumer_id__credentials_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerCredentialsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Consumer Credentials",
         "tags": [
           "Consumers"
         ]

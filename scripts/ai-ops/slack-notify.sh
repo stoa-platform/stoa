@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # slack-notify.sh — Envoie une notification Slack structurée
 # Usage: ./slack-notify.sh <type> <ticket> <message> [url]
 # Types: done, blocked, failed, info
 
-set -e
+set -euo pipefail
 
 TYPE="${1:-info}"
 TICKET="${2:-UNKNOWN}"
@@ -13,9 +13,14 @@ URL="${4:-}"
 SLACK_WEBHOOK="${SLACK_WEBHOOK:-}"
 
 if [ -z "$SLACK_WEBHOOK" ]; then
-    echo "⚠️  SLACK_WEBHOOK not set. Message:"
+    echo "SLACK_WEBHOOK not set. Message:"
     echo "[$TYPE] $TICKET: $MESSAGE"
     exit 0
+fi
+
+if ! command -v curl &> /dev/null; then
+    echo "Error: curl is required but not installed." >&2
+    exit 1
 fi
 
 # Emoji et couleur selon le type
@@ -79,8 +84,13 @@ EOF
 )
 
 # Send to Slack
-curl -s -X POST "$SLACK_WEBHOOK" \
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$SLACK_WEBHOOK" \
     -H 'Content-Type: application/json' \
-    -d "$PAYLOAD" > /dev/null
+    -d "$PAYLOAD")
 
-echo "✅ Notification sent: [$TYPE] $TICKET"
+if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+    echo "Notification sent: [$TYPE] $TICKET"
+else
+    echo "Error: Slack returned HTTP $HTTP_STATUS" >&2
+    exit 1
+fi

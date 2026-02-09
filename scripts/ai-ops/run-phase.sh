@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # run-phase.sh — Lance une phase Claude Code en background
 # Usage: ./run-phase.sh CAB-XXXX
 
-set -e
+set -euo pipefail
 
 TICKET_ID="${1:-}"
 SLACK_WEBHOOK="${SLACK_WEBHOOK:-}"

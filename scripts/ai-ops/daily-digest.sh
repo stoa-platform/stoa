@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # daily-digest.sh — Génère et envoie un résumé quotidien d'activité
 # Usage: ./daily-digest.sh [date]
 # Peut être lancé via cron: 0 9 * * * /path/to/daily-digest.sh
 
-set -e
+set -euo pipefail
 
 DATE="${1:-$(date +%Y-%m-%d)}"
 SLACK_WEBHOOK="${SLACK_WEBHOOK:-}"

@@ -43,6 +43,9 @@ const ServiceAccountsPage = lazy(() =>
 const WorkspacePage = lazy(() =>
   import('./pages/workspace').then((m) => ({ default: m.WorkspacePage }))
 );
+const ConsumerRegistrationPage = lazy(() =>
+  import('./pages/consumers').then((m) => ({ default: m.ConsumerRegistrationPage }))
+);
 const UnauthorizedPage = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.UnauthorizedPage }))
 );
@@ -302,6 +305,16 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:metrics:read">
                   <UsagePage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Consumer Registration (CAB-1121) */}
+            <Route
+              path="/consumers/register"
+              element={
+                <ProtectedRoute scope="stoa:subscriptions:write">
+                  <ConsumerRegistrationPage />
                 </ProtectedRoute>
               }
             />

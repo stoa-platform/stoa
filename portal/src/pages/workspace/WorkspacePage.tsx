@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
-import { AppWindow, CreditCard, FileCode2 } from 'lucide-react';
+import { AppWindow, CreditCard, FileCode2, ShieldCheck } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const MyApplications = lazy(() => import('../apps').then((m) => ({ default: m.MyApplications })));
 const MySubscriptions = lazy(() =>
@@ -9,14 +10,18 @@ const MySubscriptions = lazy(() =>
 const ContractListPage = lazy(() =>
   import('../contracts').then((m) => ({ default: m.ContractListPage }))
 );
+const ApprovalQueue = lazy(() =>
+  import('../../components/consumers/ApprovalQueue').then((m) => ({ default: m.ApprovalQueue }))
+);
 
-const tabs = [
-  { id: 'apps', label: 'Apps', icon: AppWindow },
-  { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
-  { id: 'contracts', label: 'Contracts', icon: FileCode2 },
+const allTabs = [
+  { id: 'apps', label: 'Apps', icon: AppWindow, adminOnly: false },
+  { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard, adminOnly: false },
+  { id: 'contracts', label: 'Contracts', icon: FileCode2, adminOnly: false },
+  { id: 'approvals', label: 'Approvals', icon: ShieldCheck, adminOnly: true },
 ] as const;
 
-type TabId = (typeof tabs)[number]['id'];
+type TabId = (typeof allTabs)[number]['id'];
 
 function TabSkeleton() {
   return (
@@ -30,7 +35,11 @@ function TabSkeleton() {
 
 export function WorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { hasRole } = useAuth();
   const activeTab = (searchParams.get('tab') as TabId) || 'apps';
+
+  const isAdmin = hasRole('tenant-admin') || hasRole('cpi-admin');
+  const tabs = allTabs.filter((tab) => !tab.adminOnly || isAdmin);
 
   const setTab = (tab: TabId) => {
     setSearchParams({ tab }, { replace: true });
@@ -73,6 +82,7 @@ export function WorkspacePage() {
         {activeTab === 'apps' && <MyApplications />}
         {activeTab === 'subscriptions' && <MySubscriptions />}
         {activeTab === 'contracts' && <ContractListPage />}
+        {activeTab === 'approvals' && <ApprovalQueue />}
       </Suspense>
     </div>
   );

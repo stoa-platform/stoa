@@ -202,6 +202,13 @@ fn build_router(state: AppState) -> Router {
         // Phase 6: Cache admin
         .route("/cache/stats", get(admin::cache_stats))
         .route("/cache/clear", post(admin::cache_clear))
+        // CAB-362: Session stats + per-upstream circuit breakers
+        .route("/sessions/stats", get(admin::session_stats))
+        .route("/circuit-breakers", get(admin::circuit_breakers_list))
+        .route(
+            "/circuit-breakers/:name/reset",
+            post(admin::circuit_breaker_reset_by_name),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

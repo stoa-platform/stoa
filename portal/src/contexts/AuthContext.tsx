@@ -211,12 +211,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           : null
       );
-
-      console.log('[AuthContext] Permissions loaded from /v1/me', {
-        roles: data.roles,
-        permissionsCount: data.permissions.length,
-        scopesCount: data.effective_scopes.length,
-      });
     } catch (error) {
       console.warn('[AuthContext] Failed to fetch /v1/me, using fallback', error);
       // Fallback: derive permissions from roles locally

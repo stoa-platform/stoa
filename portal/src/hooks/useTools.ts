@@ -184,13 +184,8 @@ export function useMCPServerInfo() {
 export function useInvokeTool() {
   return useMutation<MCPToolInvocation, Error, { name: string; args: Record<string, unknown> }>({
     mutationFn: ({ name, args }) => toolsService.invokeTool(name, args),
-    onSuccess: (result) => {
-      // Log successful invocation for audit
-      console.log('Tool invoked successfully:', result.toolName);
+    onSuccess: () => {
       // Optionally invalidate related queries based on the tool that was invoked
-    },
-    onError: (error) => {
-      console.error('Tool invocation failed:', error);
     },
   });
 }

@@ -10,7 +10,7 @@ Reusable architectural patterns used across the codebase.
 - Each model gets a repository with CRUD operations
 - Async SQLAlchemy sessions injected via FastAPI `Depends()`
 
-### Adapter Pattern (ADR-027)
+### Adapter Pattern (ADR-035)
 **Used in**: `control-plane-api/src/adapters/`
 - Abstract gateway integrations behind a common interface
 - Implementations: webMethods, STOA native, template

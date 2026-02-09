@@ -70,14 +70,24 @@ def map_quota_to_policy(app_spec: dict, subscription_id: str) -> dict | None:
     consumer_ext_id = app_spec.get("consumer_external_id", "unknown")
     plan_slug = app_spec.get("plan_slug", "default")
 
+    config = {
+        "maxRequests": rate_per_minute or (rate_per_second * 60 if rate_per_second else 100),
+        "intervalSeconds": 60,
+    }
+
+    # Include daily/monthly limits when present (CAB-1121 Phase 4)
+    daily_limit = app_spec.get("daily_request_limit")
+    monthly_limit = app_spec.get("monthly_request_limit")
+    if daily_limit:
+        config["dailyLimit"] = daily_limit
+    if monthly_limit:
+        config["monthlyLimit"] = monthly_limit
+
     return {
         "id": f"quota-{subscription_id}",
         "name": f"rate-limit-{consumer_ext_id}-{plan_slug}",
         "type": "rate_limit",
         "api_id": app_spec.get("api_id", ""),
-        "config": {
-            "maxRequests": rate_per_minute or (rate_per_second * 60 if rate_per_second else 100),
-            "intervalSeconds": 60,
-        },
+        "config": config,
         "priority": 50,
     }

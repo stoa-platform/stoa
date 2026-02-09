@@ -111,6 +111,7 @@ class TTLCache:
 api_key_cache = TTLCache(default_ttl_seconds=10, max_size=10000)
 tenant_cache = TTLCache(default_ttl_seconds=30, max_size=1000)
 contract_cache = TTLCache(default_ttl_seconds=60, max_size=5000)
+quota_plan_cache = TTLCache(default_ttl_seconds=30, max_size=5000)
 
 
 def cached(cache: TTLCache, key_prefix: str, ttl_seconds: int | None = None):

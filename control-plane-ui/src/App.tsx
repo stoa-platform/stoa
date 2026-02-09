@@ -7,6 +7,7 @@ import { quickLinks } from './config';
 import { ToastProvider } from '@stoa/shared/components/Toast';
 import { CommandPaletteProvider } from '@stoa/shared/components/CommandPalette';
 import { ThemeProvider } from '@stoa/shared/contexts';
+import { StoaLoader } from '@stoa/shared/components/StoaLoader';
 
 // Lazy load pages for code splitting
 // Consolidated imports — single module loader per multi-export file
@@ -78,18 +79,9 @@ const TokenOptimizer = lazy(() =>
 const Policies = lazy(() => import('./pages/Policies').then((m) => ({ default: m.Policies })));
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })));
 
-// Loading spinner for lazy-loaded pages and auth init skeleton
+// Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
-  return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <div className="text-center">
-        <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-3 animate-pulse">
-          <span className="text-white font-bold text-sm">SC</span>
-        </div>
-        <p className="text-gray-500 dark:text-neutral-400 text-sm">Loading...</p>
-      </div>
-    </div>
-  );
+  return <StoaLoader variant="inline" />;
 }
 
 function Dashboard() {

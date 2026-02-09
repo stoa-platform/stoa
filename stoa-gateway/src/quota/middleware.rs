@@ -342,6 +342,7 @@ mod tests {
             sid: None,
             typ: None,
             scope: Some("openid stoa:read".to_string()),
+            cnf: None,
         }
     }
 

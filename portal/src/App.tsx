@@ -4,6 +4,7 @@ import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ErrorBoundary, SkipLink } from './components/common';
 import { StoaLogo } from '@stoa/shared/components/StoaLogo';
+import { StoaLoader } from '@stoa/shared/components/StoaLoader';
 import { config } from './config';
 
 // Lazy load pages for code splitting - reduces initial bundle by ~60%
@@ -50,32 +51,14 @@ const UnauthorizedPage = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.UnauthorizedPage }))
 );
 
-// Page loader skeleton for lazy-loaded pages
+// Loading indicator for lazy-loaded pages
 function PageLoader() {
-  return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <div className="text-center">
-        <div className="mx-auto mb-3 animate-pulse">
-          <StoaLogo size="md" />
-        </div>
-        <p className="text-gray-500 dark:text-neutral-400 text-sm">Loading...</p>
-      </div>
-    </div>
-  );
+  return <StoaLoader variant="inline" />;
 }
 
-// Loading screen
+// Full-screen loading during auth initialization
 function LoadingScreen() {
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 flex items-center justify-center transition-colors">
-      <div className="text-center">
-        <div className="mx-auto mb-4 animate-pulse">
-          <StoaLogo size="lg" />
-        </div>
-        <p className="text-gray-500 dark:text-neutral-400">Loading...</p>
-      </div>
-    </div>
-  );
+  return <StoaLoader variant="fullscreen" />;
 }
 
 // Login screen

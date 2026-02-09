@@ -1,19 +1,25 @@
-"""Consumers router - External API consumer management (CAB-1121)."""
+"""Consumers router - External API consumer management (CAB-1121 + CAB-864)."""
 
+import csv
+import io
 import logging
 import math
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
 from ..config import settings
 from ..database import get_db
-from ..models.consumer import Consumer, ConsumerStatus
+from ..models.consumer import CertificateStatus, Consumer, ConsumerStatus
 from ..repositories.consumer import ConsumerRepository
 from ..schemas.consumer import (
+    BulkResultItem,
+    BulkResultResponse,
+    CertificateRotateRequest,
     ConsumerCreate,
     ConsumerCredentialsResponse,
     ConsumerListResponse,
@@ -21,6 +27,7 @@ from ..schemas.consumer import (
     ConsumerStatusEnum,
     ConsumerUpdate,
 )
+from ..services.certificate_utils import parse_pem_certificate, validate_certificate_not_expired
 from ..services.keycloak_service import keycloak_service
 
 logger = logging.getLogger(__name__)
@@ -402,3 +409,300 @@ async def get_consumer_credentials(
             content={"detail": "Authentication service unavailable, retry later"},
             headers={"Retry-After": "5"},
         )
+
+
+# ============== Bulk Onboarding (CAB-864 Phase 3) ==============
+
+MAX_BULK_ROWS = 100
+REQUIRED_CSV_FIELDS = {"external_id", "name", "email"}
+
+
+@router.post("/{tenant_id}/bulk", response_model=BulkResultResponse)
+async def bulk_create_consumers(
+    tenant_id: str,
+    file: UploadFile,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Bulk onboard consumers from a CSV file (CAB-864).
+
+    CSV columns: external_id, name, email, company (optional), certificate_pem (optional).
+    Max 100 rows per request. Each row is processed independently.
+    """
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    # Read and validate CSV
+    try:
+        content = await file.read()
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="CSV file must be UTF-8 encoded")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="Empty or invalid CSV file")
+
+    missing_fields = REQUIRED_CSV_FIELDS - set(reader.fieldnames)
+    if missing_fields:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required CSV columns: {', '.join(sorted(missing_fields))}",
+        )
+
+    rows = list(reader)
+    if len(rows) > MAX_BULK_ROWS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {MAX_BULK_ROWS} rows per request, got {len(rows)}",
+        )
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="CSV file contains no data rows")
+
+    repo = ConsumerRepository(db)
+    results: list[BulkResultItem] = []
+    success_count = 0
+    failed_count = 0
+
+    for row_num, row in enumerate(rows, start=1):
+        result = await _process_bulk_row(
+            row_num=row_num, row=row, tenant_id=tenant_id, user=user, repo=repo, db=db,
+        )
+        results.append(result)
+        if result.status == "created":
+            success_count += 1
+        else:
+            failed_count += 1
+
+    await db.commit()
+
+    logger.info(
+        f"Bulk onboarding for tenant {tenant_id}: {success_count}/{len(rows)} created, "
+        f"{failed_count} failed, by {user.email}"
+    )
+
+    return BulkResultResponse(
+        total=len(rows), success=success_count, failed=failed_count, results=results,
+    )
+
+
+async def _process_bulk_row(
+    row_num: int, row: dict, tenant_id: str, user: User,
+    repo: ConsumerRepository, db: AsyncSession,
+) -> BulkResultItem:
+    """Process a single row from bulk CSV upload."""
+    external_id = row.get("external_id", "").strip()
+    name = row.get("name", "").strip()
+    email = row.get("email", "").strip()
+    company = row.get("company", "").strip() or None
+    certificate_pem = row.get("certificate_pem", "").strip() or None
+
+    if not external_id:
+        return BulkResultItem(row=row_num, status="error", error="Missing required field: external_id")
+    if not name:
+        return BulkResultItem(
+            row=row_num, status="error", external_id=external_id, error="Missing required field: name"
+        )
+    if not email:
+        return BulkResultItem(
+            row=row_num, status="error", external_id=external_id, error="Missing required field: email"
+        )
+
+    existing = await repo.get_by_external_id(tenant_id, external_id)
+    if existing:
+        return BulkResultItem(
+            row=row_num, status="error", external_id=external_id,
+            error="Consumer with external_id already exists",
+        )
+
+    cert_info = None
+    if certificate_pem:
+        try:
+            cert_info = parse_pem_certificate(certificate_pem)
+            validate_certificate_not_expired(cert_info)
+        except ValueError as e:
+            return BulkResultItem(
+                row=row_num, status="error", external_id=external_id, error=str(e)
+            )
+
+        dup = await repo.get_by_fingerprint(tenant_id, cert_info.fingerprint_hex)
+        if dup:
+            return BulkResultItem(
+                row=row_num, status="error", external_id=external_id,
+                error="Certificate fingerprint already registered",
+            )
+
+    consumer = Consumer(
+        external_id=external_id, name=name, email=email, company=company,
+        tenant_id=tenant_id, status=ConsumerStatus.ACTIVE, created_by=user.id,
+    )
+
+    if cert_info:
+        consumer.certificate_fingerprint = cert_info.fingerprint_hex
+        consumer.certificate_subject_dn = cert_info.subject_dn
+        consumer.certificate_issuer_dn = cert_info.issuer_dn
+        consumer.certificate_serial = cert_info.serial
+        consumer.certificate_not_before = cert_info.not_before
+        consumer.certificate_not_after = cert_info.not_after
+        consumer.certificate_pem = cert_info.pem
+        consumer.certificate_status = CertificateStatus.ACTIVE
+
+    try:
+        consumer = await repo.create(consumer)
+    except Exception as e:
+        logger.error(f"Bulk row {row_num}: failed to create consumer: {e}")
+        return BulkResultItem(
+            row=row_num, status="error", external_id=external_id, error="Database error"
+        )
+
+    client_id = None
+    client_secret = None
+    try:
+        if cert_info:
+            kc_result = await keycloak_service.create_consumer_client_with_cert(
+                tenant_slug=tenant_id, consumer_external_id=external_id,
+                consumer_id=str(consumer.id), fingerprint_b64url=cert_info.fingerprint_b64url,
+            )
+        else:
+            kc_result = await keycloak_service.create_consumer_client(
+                tenant_slug=tenant_id, consumer_external_id=external_id,
+                consumer_id=str(consumer.id),
+            )
+        client_id = kc_result["client_id"]
+        client_secret = kc_result["client_secret"]
+        consumer.keycloak_client_id = client_id
+        await repo.update(consumer)
+    except Exception as e:
+        logger.warning(f"Bulk row {row_num}: Keycloak client creation failed: {e}")
+
+    return BulkResultItem(
+        row=row_num, status="created", external_id=external_id,
+        consumer_id=consumer.id, client_id=client_id, client_secret=client_secret,
+    )
+
+
+# ============== Certificate Revocation (CAB-864) ==============
+
+
+@router.post("/{tenant_id}/{consumer_id}/certificate/revoke", response_model=ConsumerResponse)
+async def revoke_certificate(
+    tenant_id: str,
+    consumer_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Revoke a consumer's mTLS certificate (CAB-864).
+
+    Sets certificate_status to 'revoked' and disables the Keycloak client.
+    Idempotent — revoking an already-revoked certificate is a no-op.
+    """
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    repo = ConsumerRepository(db)
+    consumer = await repo.get_by_id(consumer_id)
+
+    if not consumer:
+        raise HTTPException(status_code=404, detail="Consumer not found")
+    if consumer.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Consumer not found")
+    if not consumer.certificate_fingerprint:
+        raise HTTPException(status_code=400, detail="Consumer has no certificate to revoke")
+
+    if consumer.certificate_status == CertificateStatus.REVOKED:
+        return ConsumerResponse.model_validate(consumer)
+
+    consumer.certificate_status = CertificateStatus.REVOKED
+    consumer.certificate_fingerprint_previous = None
+    consumer.previous_cert_expires_at = None
+    consumer = await repo.update(consumer)
+
+    if consumer.keycloak_client_id:
+        try:
+            await keycloak_service.disable_consumer_client(consumer.keycloak_client_id)
+        except Exception as e:
+            logger.warning(f"Failed to disable Keycloak client for consumer {consumer_id}: {e}")
+
+    await db.commit()
+    logger.info(f"Certificate revoked for consumer {consumer_id} by {user.email}")
+
+    return ConsumerResponse.model_validate(consumer)
+
+
+# ============== Certificate Rotation (CAB-864) ==============
+
+
+@router.post("/{tenant_id}/{consumer_id}/certificate/rotate", response_model=ConsumerResponse)
+async def rotate_certificate(
+    tenant_id: str,
+    consumer_id: UUID,
+    request: CertificateRotateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Rotate a consumer's mTLS certificate (CAB-864).
+
+    Accepts a new PEM certificate, moves the current fingerprint to
+    certificate_fingerprint_previous, and sets a grace period.
+    """
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    repo = ConsumerRepository(db)
+    consumer = await repo.get_by_id(consumer_id)
+
+    if not consumer:
+        raise HTTPException(status_code=404, detail="Consumer not found")
+    if consumer.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Consumer not found")
+    if not consumer.certificate_fingerprint:
+        raise HTTPException(status_code=400, detail="Consumer has no certificate to rotate")
+    if consumer.certificate_status == CertificateStatus.REVOKED:
+        raise HTTPException(status_code=400, detail="Cannot rotate a revoked certificate")
+
+    try:
+        cert_info = parse_pem_certificate(request.certificate_pem)
+        validate_certificate_not_expired(cert_info)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    dup = await repo.get_by_fingerprint(tenant_id, cert_info.fingerprint_hex)
+    if dup and dup.id != consumer.id:
+        raise HTTPException(status_code=409, detail="Certificate fingerprint already registered")
+
+    consumer.certificate_fingerprint_previous = consumer.certificate_fingerprint
+    consumer.certificate_fingerprint = cert_info.fingerprint_hex
+    consumer.certificate_subject_dn = cert_info.subject_dn
+    consumer.certificate_issuer_dn = cert_info.issuer_dn
+    consumer.certificate_serial = cert_info.serial
+    consumer.certificate_not_before = cert_info.not_before
+    consumer.certificate_not_after = cert_info.not_after
+    consumer.certificate_pem = cert_info.pem
+    consumer.certificate_status = CertificateStatus.ROTATING
+    consumer.previous_cert_expires_at = datetime.now(UTC) + timedelta(
+        hours=request.grace_period_hours
+    )
+    consumer.last_rotated_at = datetime.now(UTC)
+    consumer.rotation_count = (consumer.rotation_count or 0) + 1
+
+    consumer = await repo.update(consumer)
+
+    if consumer.keycloak_client_id:
+        try:
+            await keycloak_service.update_consumer_client_cnf(
+                consumer.keycloak_client_id, cert_info.fingerprint_b64url,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update Keycloak cnf for consumer {consumer_id}: {e}")
+
+    await db.commit()
+    logger.info(
+        f"Certificate rotated for consumer {consumer_id} by {user.email}, "
+        f"grace period {request.grace_period_hours}h"
+    )
+
+    return ConsumerResponse.model_validate(consumer)

@@ -387,6 +387,179 @@ class KeycloakService:
             "id": client_uuid,
         }
 
+
+    async def create_consumer_client_with_cert(
+        self,
+        tenant_slug: str,
+        consumer_external_id: str,
+        consumer_id: str,
+        fingerprint_b64url: str,
+    ) -> dict:
+        """
+        Create an OAuth2 client for a consumer with mTLS cnf binding (CAB-864).
+
+        Adds a protocol mapper that embeds the certificate thumbprint
+        as cnf.x5t#S256 in the access token (RFC 8705).
+        """
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        client_id = f"{tenant_slug}-{consumer_external_id}"
+
+        protocol_mappers = [
+            {
+                "name": "tenant_id",
+                "protocol": "openid-connect",
+                "protocolMapper": "oidc-hardcoded-claim-mapper",
+                "config": {
+                    "claim.name": "tenant_id",
+                    "claim.value": tenant_slug,
+                    "jsonType.label": "String",
+                    "id.token.claim": "false",
+                    "access.token.claim": "true",
+                    "userinfo.token.claim": "false",
+                },
+            },
+            {
+                "name": "consumer_id",
+                "protocol": "openid-connect",
+                "protocolMapper": "oidc-hardcoded-claim-mapper",
+                "config": {
+                    "claim.name": "consumer_id",
+                    "claim.value": consumer_id,
+                    "jsonType.label": "String",
+                    "id.token.claim": "false",
+                    "access.token.claim": "true",
+                    "userinfo.token.claim": "false",
+                },
+            },
+            {
+                "name": "cnf-x5t-s256",
+                "protocol": "openid-connect",
+                "protocolMapper": "oidc-hardcoded-claim-mapper",
+                "config": {
+                    "claim.name": "cnf.x5t#S256",
+                    "claim.value": fingerprint_b64url,
+                    "jsonType.label": "String",
+                    "id.token.claim": "false",
+                    "access.token.claim": "true",
+                    "userinfo.token.claim": "false",
+                },
+            },
+        ]
+
+        client_data = {
+            "clientId": client_id,
+            "name": f"Consumer: {consumer_external_id}",
+            "description": (
+                f"mTLS-bound OAuth2 client for consumer {consumer_external_id} "
+                f"in tenant {tenant_slug}"
+            ),
+            "enabled": True,
+            "protocol": "openid-connect",
+            "publicClient": False,
+            "serviceAccountsEnabled": True,
+            "authorizationServicesEnabled": False,
+            "standardFlowEnabled": False,
+            "directAccessGrantsEnabled": False,
+            "implicitFlowEnabled": False,
+            "redirectUris": [],
+            "webOrigins": [],
+            "attributes": {
+                "tenant_id": tenant_slug,
+                "consumer_id": consumer_id,
+                "consumer_external_id": consumer_external_id,
+                "mtls_enabled": "true",
+            },
+            "protocolMappers": protocol_mappers,
+        }
+
+        self._admin.create_client(client_data)
+
+        client = await self.get_client(client_id)
+        if not client:
+            raise RuntimeError(f"Failed to create consumer client {client_id}")
+
+        client_uuid = client["id"]
+        secret_data = self._admin.get_client_secrets(client_uuid)
+
+        logger.info(
+            f"Created mTLS consumer client {client_id} for tenant {tenant_slug}"
+        )
+
+        return {
+            "client_id": client_id,
+            "client_secret": secret_data.get("value"),
+            "id": client_uuid,
+        }
+
+    async def update_consumer_client_cnf(
+        self,
+        client_id: str,
+        fingerprint_b64url: str,
+    ) -> bool:
+        """
+        Update the cnf.x5t#S256 protocol mapper on a consumer client (CAB-864).
+
+        Used during certificate rotation to update the thumbprint.
+        """
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        client = await self.get_client(client_id)
+        if not client:
+            raise RuntimeError(f"Consumer client {client_id} not found")
+
+        client_uuid = client["id"]
+
+        # Find existing cnf mapper or create new one
+        mappers = client.get("protocolMappers", [])
+        cnf_mapper = next(
+            (m for m in mappers if m.get("name") == "cnf-x5t-s256"), None
+        )
+
+        if cnf_mapper:
+            cnf_mapper["config"]["claim.value"] = fingerprint_b64url
+            self._admin.update_client(client_uuid, {"protocolMappers": mappers})
+        else:
+            new_mapper = {
+                "name": "cnf-x5t-s256",
+                "protocol": "openid-connect",
+                "protocolMapper": "oidc-hardcoded-claim-mapper",
+                "config": {
+                    "claim.name": "cnf.x5t#S256",
+                    "claim.value": fingerprint_b64url,
+                    "jsonType.label": "String",
+                    "id.token.claim": "false",
+                    "access.token.claim": "true",
+                    "userinfo.token.claim": "false",
+                },
+            }
+            mappers.append(new_mapper)
+            self._admin.update_client(client_uuid, {"protocolMappers": mappers})
+
+        logger.info(f"Updated cnf mapper for client {client_id}")
+        return True
+
+    async def disable_consumer_client(self, client_id: str) -> bool:
+        """
+        Disable a consumer's Keycloak client (CAB-864).
+
+        Used during certificate revocation to prevent new token issuance.
+        """
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        client = await self.get_client(client_id)
+        if not client:
+            logger.warning(f"Consumer client {client_id} not found for disable")
+            return False
+
+        self._admin.update_client(client["id"], {"enabled": False})
+        logger.info(f"Disabled consumer client {client_id}")
+        return True
+
+
     async def delete_consumer_client(self, client_id: str) -> bool:
         """Delete a consumer's Keycloak client by client_id."""
         if not self._admin:

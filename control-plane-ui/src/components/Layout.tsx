@@ -1,5 +1,6 @@
-import { ReactNode, useState, useEffect, useMemo } from 'react';
+import { ReactNode, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { useBreadcrumbs } from '../hooks/useBreadcrumbs';
 import { Breadcrumb } from '@stoa/shared/components/Breadcrumb';
@@ -8,6 +9,7 @@ import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { useSequenceShortcuts } from '@stoa/shared/hooks';
 import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useTheme } from '@stoa/shared/contexts';
+import { apiService } from '../services/api';
 import {
   LayoutDashboard,
   Building2,
@@ -35,6 +37,11 @@ import {
   Shield,
   Gauge,
   ScrollText,
+  Eye,
+  Coins,
+  FileCheck,
+  ClipboardList,
+  Check,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -165,13 +172,37 @@ const navigationSections: NavSection[] = [
         permission: 'apis:read',
         badge: 'STOA',
       },
+      {
+        name: 'Shadow Discovery',
+        href: '/shadow-discovery',
+        icon: Eye,
+        permission: 'apis:read',
+      },
+      {
+        name: 'Token Optimizer',
+        href: '/token-optimizer',
+        icon: Coins,
+        permission: 'apis:read',
+      },
     ],
   },
   {
     title: 'Governance',
-    items: [{ name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' }],
+    items: [
+      { name: 'Deployments', href: '/deployments', icon: Rocket, permission: 'apis:deploy' },
+      { name: 'Policies', href: '/policies', icon: FileCheck, permission: 'apis:read' },
+      {
+        name: 'Audit Log',
+        href: '/audit-log',
+        icon: ClipboardList,
+        permission: 'audit:read',
+      },
+    ],
   },
 ];
+
+const SIDEBAR_SECTIONS_KEY = 'stoa-sidebar-sections';
+const ACTIVE_TENANT_KEY = 'stoa-active-tenant';
 
 // Prefetch route chunks on hover — loads JS before click for instant navigation
 const routePrefetchMap: Record<string, () => Promise<unknown>> = {
@@ -191,6 +222,75 @@ export function Layout({ children }: LayoutProps) {
   const { setOpen: setCommandPaletteOpen, setItems: setCommandItems } = useCommandPalette();
   const { resolvedTheme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Collapsible section state — persisted to localStorage
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    try {
+      const stored = localStorage.getItem(SIDEBAR_SECTIONS_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch {
+      /* ignore corrupt data */
+    }
+    // Default: Gateway open, others closed
+    return {
+      Overview: true,
+      Catalog: true,
+      '\u26A1 Gateway': false,
+      Insights: true,
+      Governance: true,
+    };
+  });
+
+  const toggleSection = useCallback((title: string) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [title]: !prev[title] };
+      localStorage.setItem(SIDEBAR_SECTIONS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // Tenant selector state
+  const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false);
+  const tenantDropdownRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const { data: tenants } = useQuery({
+    queryKey: ['tenants'],
+    queryFn: () => apiService.getTenants(),
+    enabled: hasPermission('tenants:read'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const [activeTenantId, setActiveTenantId] = useState<string>(
+    () => localStorage.getItem(ACTIVE_TENANT_KEY) || ''
+  );
+
+  const activeTenant = useMemo(() => {
+    const id = activeTenantId || user?.tenant_id;
+    return tenants?.find((t) => t.id === id || t.name === id);
+  }, [activeTenantId, user?.tenant_id, tenants]);
+
+  const handleTenantSwitch = useCallback(
+    (tenantId: string) => {
+      setActiveTenantId(tenantId);
+      localStorage.setItem(ACTIVE_TENANT_KEY, tenantId);
+      setTenantDropdownOpen(false);
+      queryClient.invalidateQueries();
+    },
+    [queryClient]
+  );
+
+  // Close tenant dropdown on outside click
+  useEffect(() => {
+    if (!tenantDropdownOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (tenantDropdownRef.current && !tenantDropdownRef.current.contains(event.target as Node)) {
+        setTenantDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [tenantDropdownOpen]);
 
   const filteredSections = useMemo(
     () =>
@@ -335,57 +435,83 @@ export function Layout({ children }: LayoutProps) {
           </button>
         </div>
 
-        <nav className="mt-4 px-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
-          <div className="space-y-5">
-            {filteredSections.map((section) => (
-              <div key={section.title}>
-                <h3
+        <nav className="mt-2 px-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+          <div className="space-y-1">
+            {filteredSections.map((section) => {
+              const isCollapsed = !!collapsedSections[section.title];
+              return (
+                <div
+                  key={section.title}
                   className={clsx(
-                    'px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider',
-                    section.accent
-                      ? 'text-primary-600 dark:text-primary-400'
-                      : 'text-gray-500 dark:text-gray-500'
+                    'rounded-lg',
+                    section.accent &&
+                      'border-l-2 border-primary-500 bg-primary-50/30 dark:bg-primary-950/20'
                   )}
                 >
-                  {section.title}
-                </h3>
-                <ul className="space-y-0.5">
-                  {section.items.map((item) => {
-                    const isActive =
-                      location.pathname === item.href ||
-                      (item.href !== '/' && location.pathname.startsWith(item.href));
+                  <button
+                    onClick={() => toggleSection(section.title)}
+                    className={clsx(
+                      'flex items-center w-full px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors rounded hover:bg-gray-200/50 dark:hover:bg-neutral-800/50',
+                      section.accent
+                        ? 'text-primary-600 dark:text-primary-400'
+                        : 'text-gray-500 dark:text-gray-500'
+                    )}
+                  >
+                    <ChevronDown
+                      className={clsx(
+                        'h-3 w-3 mr-1.5 transition-transform duration-200',
+                        isCollapsed && '-rotate-90'
+                      )}
+                    />
+                    {section.title}
+                  </button>
+                  <div
+                    className={clsx(
+                      'grid transition-[grid-template-rows] duration-200 ease-in-out',
+                      isCollapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
+                    )}
+                  >
+                    <div className="overflow-hidden">
+                      <ul className="space-y-0.5 pb-1">
+                        {section.items.map((item) => {
+                          const isActive =
+                            location.pathname === item.href ||
+                            (item.href !== '/' && location.pathname.startsWith(item.href));
 
-                    return (
-                      <li key={item.href}>
-                        <Link
-                          to={item.href}
-                          onMouseEnter={() => routePrefetchMap[item.href]?.()}
-                          className={clsx(
-                            'flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-                            isActive
-                              ? 'bg-primary-600 text-white'
-                              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white'
-                          )}
-                        >
-                          <item.icon className="h-4 w-4 flex-shrink-0" />
-                          <span className="truncate">{item.name}</span>
-                          {item.badge && (
-                            <span className="ml-auto rounded-full bg-accent-500/20 px-1.5 py-0.5 text-[10px] font-bold text-accent-600 dark:text-accent-400">
-                              {item.badge}
-                            </span>
-                          )}
-                          {!item.badge && item.shortcut && (
-                            <span className="ml-auto text-xs text-gray-500 hidden xl:block">
-                              g{item.shortcut[1]}
-                            </span>
-                          )}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
+                          return (
+                            <li key={item.href}>
+                              <Link
+                                to={item.href}
+                                onMouseEnter={() => routePrefetchMap[item.href]?.()}
+                                className={clsx(
+                                  'flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                                  isActive
+                                    ? 'bg-primary-600 text-white'
+                                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-white'
+                                )}
+                              >
+                                <item.icon className="h-4 w-4 flex-shrink-0" />
+                                <span className="truncate">{item.name}</span>
+                                {item.badge && (
+                                  <span className="ml-auto rounded-full bg-accent-500/20 px-1.5 py-0.5 text-[10px] font-bold text-accent-600 dark:text-accent-400">
+                                    {item.badge}
+                                  </span>
+                                )}
+                                {!item.badge && item.shortcut && (
+                                  <span className="ml-auto text-xs text-gray-500 hidden xl:block">
+                                    g{item.shortcut[1]}
+                                  </span>
+                                )}
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </nav>
 
@@ -474,13 +600,57 @@ export function Layout({ children }: LayoutProps) {
           <ThemeToggle size="md" />
 
           {/* Tenant selector */}
-          {user?.tenant_id && (
-            <div className="hidden sm:flex items-center gap-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 px-3 py-1.5">
-              <Building2 className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
-              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 max-w-[120px] truncate">
-                {user.tenant_id}
-              </span>
-              <ChevronDown className="h-4 w-4 text-neutral-400" />
+          {(user?.tenant_id || (tenants && tenants.length > 0)) && (
+            <div className="hidden sm:block relative" ref={tenantDropdownRef}>
+              <button
+                onClick={() => setTenantDropdownOpen(!tenantDropdownOpen)}
+                className="flex items-center gap-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 px-3 py-1.5 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+              >
+                <Building2 className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
+                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 max-w-[120px] truncate">
+                  {activeTenant?.display_name ||
+                    activeTenant?.name ||
+                    user?.tenant_id ||
+                    'Select tenant'}
+                </span>
+                <ChevronDown
+                  className={clsx(
+                    'h-4 w-4 text-neutral-400 transition-transform duration-200',
+                    tenantDropdownOpen && 'rotate-180'
+                  )}
+                />
+              </button>
+              {tenantDropdownOpen && tenants && tenants.length > 0 && (
+                <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-lg z-50 py-1 max-h-64 overflow-y-auto">
+                  {tenants.map((tenant) => {
+                    const selectedId = activeTenantId || user?.tenant_id;
+                    const isSelected = selectedId === tenant.id || selectedId === tenant.name;
+                    return (
+                      <button
+                        key={tenant.id}
+                        onClick={() => handleTenantSwitch(tenant.id)}
+                        className={clsx(
+                          'w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
+                          isSelected
+                            ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                            : 'text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                        )}
+                      >
+                        <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate font-medium">
+                            {tenant.display_name || tenant.name}
+                          </p>
+                          <p className="truncate text-xs text-gray-500 dark:text-neutral-400">
+                            {tenant.name}
+                          </p>
+                        </div>
+                        {isSelected && <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </header>

@@ -1,5 +1,7 @@
 //! Quota Enforcement Module (Phase 4: CAB-1121)
 //!
+//! Per-consumer rate limiting and daily/monthly quota tracking.
+//!
 //! Per-consumer rate limiting and quota tracking for plan-based API access.
 //!
 //! # Architecture

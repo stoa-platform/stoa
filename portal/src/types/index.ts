@@ -748,3 +748,65 @@ export interface PublishContractResponse {
   created_at: string;
   updated_at: string;
 }
+
+// ============ Consumer Types (CAB-1121) ============
+
+export interface Consumer {
+  id: string;
+  external_id: string;
+  name: string;
+  email: string;
+  company?: string | null;
+  description?: string | null;
+  tenant_id: string;
+  keycloak_user_id?: string | null;
+  keycloak_client_id?: string | null;
+  status: 'active' | 'suspended' | 'blocked';
+  consumer_metadata?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  created_by?: string | null;
+}
+
+export interface ConsumerCreateRequest {
+  external_id: string;
+  name: string;
+  email: string;
+  company?: string;
+  description?: string;
+}
+
+export interface ConsumerUpdateRequest {
+  name?: string;
+  email?: string;
+  company?: string;
+  description?: string;
+}
+
+export interface ConsumerCredentials {
+  consumer_id: string;
+  client_id: string;
+  client_secret: string;
+  token_endpoint: string;
+  grant_type: string;
+}
+
+export interface Plan {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  tenant_id: string;
+  rate_limit_per_second?: number | null;
+  rate_limit_per_minute?: number | null;
+  daily_request_limit?: number | null;
+  monthly_request_limit?: number | null;
+  burst_limit?: number | null;
+  requires_approval: boolean;
+  auto_approve_roles?: string[] | null;
+  status: 'active' | 'deprecated' | 'archived';
+  pricing_metadata?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  created_by?: string | null;
+}

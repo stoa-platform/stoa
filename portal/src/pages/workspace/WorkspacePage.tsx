@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
-import { AppWindow, CreditCard, FileCode2 } from 'lucide-react';
+import { AppWindow, CreditCard, FileCode2, Users } from 'lucide-react';
 
 const MyApplications = lazy(() => import('../apps').then((m) => ({ default: m.MyApplications })));
 const MySubscriptions = lazy(() =>
@@ -9,11 +9,15 @@ const MySubscriptions = lazy(() =>
 const ContractListPage = lazy(() =>
   import('../contracts').then((m) => ({ default: m.ContractListPage }))
 );
+const ConsumersPage = lazy(() =>
+  import('../consumers').then((m) => ({ default: m.ConsumersPage }))
+);
 
 const tabs = [
   { id: 'apps', label: 'Apps', icon: AppWindow },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
   { id: 'contracts', label: 'Contracts', icon: FileCode2 },
+  { id: 'consumers', label: 'Consumers', icon: Users },
 ] as const;
 
 type TabId = (typeof tabs)[number]['id'];
@@ -41,7 +45,7 @@ export function WorkspacePage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Workspace</h1>
         <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-          Manage your apps, subscriptions, and contracts
+          Manage your apps, subscriptions, contracts, and consumers
         </p>
       </div>
 
@@ -73,6 +77,7 @@ export function WorkspacePage() {
         {activeTab === 'apps' && <MyApplications />}
         {activeTab === 'subscriptions' && <MySubscriptions />}
         {activeTab === 'contracts' && <ContractListPage />}
+        {activeTab === 'consumers' && <ConsumersPage />}
       </Suspense>
     </div>
   );

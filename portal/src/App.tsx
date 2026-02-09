@@ -43,6 +43,12 @@ const ServiceAccountsPage = lazy(() =>
 const WorkspacePage = lazy(() =>
   import('./pages/workspace').then((m) => ({ default: m.WorkspacePage }))
 );
+const ConsumerDetailPage = lazy(() =>
+  import('./pages/consumers').then((m) => ({ default: m.ConsumerDetailPage }))
+);
+const ConsumerRegistrationPage = lazy(() =>
+  import('./pages/consumers').then((m) => ({ default: m.ConsumerRegistrationPage }))
+);
 const UnauthorizedPage = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.UnauthorizedPage }))
 );
@@ -292,6 +298,25 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:catalog:read">
                   <ContractDetailPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Consumer Management - requires tenant admin */}
+            <Route path="/consumers" element={<Navigate to="/workspace?tab=consumers" replace />} />
+            <Route
+              path="/consumers/register"
+              element={
+                <ProtectedRoute permission="apps:read">
+                  <ConsumerRegistrationPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/consumers/:id"
+              element={
+                <ProtectedRoute permission="apps:read">
+                  <ConsumerDetailPage />
                 </ProtectedRoute>
               }
             />

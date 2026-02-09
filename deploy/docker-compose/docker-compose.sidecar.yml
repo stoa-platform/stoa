@@ -1,0 +1,96 @@
+# =============================================================================
+# STOA Sidecar Mode — Docker Compose Demo
+# =============================================================================
+# Demonstrates the STOA Gateway in sidecar mode behind an NGINX reverse proxy.
+#
+# Architecture:
+#   Client → nginx-proxy (auth_request) → stoa-gateway /authz → allow/deny
+#                       ↓ (if allowed)
+#                 fake-webmethods (mock backend)
+#
+# Usage:
+#   cd deploy/docker-compose
+#   docker compose -f docker-compose.sidecar.yml up -d --build
+#   # or use the demo script:
+#   ./sidecar/demo.sh
+# =============================================================================
+
+services:
+  # ==========================================================================
+  # STOA Gateway — Sidecar Mode (policy enforcement)
+  # ==========================================================================
+  stoa-gateway:
+    build:
+      context: ../../stoa-gateway
+      dockerfile: Dockerfile
+    container_name: stoa-sidecar-gateway
+    environment:
+      STOA_GATEWAY_MODE: sidecar
+      STOA_PORT: "8081"
+      STOA_HOST: "0.0.0.0"
+      STOA_LOG_LEVEL: debug
+      STOA_UPSTREAM_TYPE: nginx
+      STOA_AUTO_REGISTER: "false"
+      STOA_K8S_ENABLED: "false"
+      STOA_KAFKA_ENABLED: "false"
+      STOA_POLICY_ENABLED: "false"
+      STOA_ZOMBIE_DETECTION_ENABLED: "false"
+    ports:
+      - "${PORT_GATEWAY:-8081}:8081"
+    networks:
+      - sidecar-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Fake webMethods — Mock backend with 3 JSON endpoints
+  # ==========================================================================
+  fake-webmethods:
+    image: nginx:1.25-alpine
+    container_name: stoa-sidecar-webmethods
+    volumes:
+      - ./sidecar/webmethods-mock/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - sidecar-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # NGINX Reverse Proxy — auth_request to STOA Gateway
+  # ==========================================================================
+  nginx-proxy:
+    image: nginx:1.25-alpine
+    container_name: stoa-sidecar-proxy
+    ports:
+      - "${PORT_PROXY:-8080}:8080"
+    volumes:
+      - ./sidecar/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      stoa-gateway:
+        condition: service_healthy
+      fake-webmethods:
+        condition: service_healthy
+    networks:
+      - sidecar-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  sidecar-network:
+    driver: bridge

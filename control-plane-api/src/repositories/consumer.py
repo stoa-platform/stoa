@@ -1,4 +1,4 @@
-"""Repository for consumer CRUD operations (CAB-1121)."""
+"""Repository for consumer CRUD operations (CAB-1121 + CAB-864)."""
 
 from datetime import datetime
 from uuid import UUID
@@ -34,6 +34,24 @@ class ConsumerRepository:
                 and_(
                     Consumer.tenant_id == tenant_id,
                     Consumer.external_id == external_id,
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_fingerprint(self, tenant_id: str, fingerprint: str) -> Consumer | None:
+        """Get consumer by certificate fingerprint within a tenant (CAB-864).
+
+        Checks both current and previous fingerprint columns.
+        """
+        result = await self.session.execute(
+            select(Consumer).where(
+                and_(
+                    Consumer.tenant_id == tenant_id,
+                    or_(
+                        Consumer.certificate_fingerprint == fingerprint,
+                        Consumer.certificate_fingerprint_previous == fingerprint,
+                    ),
                 )
             )
         )
@@ -109,7 +127,9 @@ class ConsumerRepository:
             base_query = base_query.where(Consumer.tenant_id == tenant_id)
 
         # Total count
-        total_result = await self.session.execute(select(func.count()).select_from(base_query.subquery()))
+        total_result = await self.session.execute(
+            select(func.count()).select_from(base_query.subquery())
+        )
         total = total_result.scalar_one()
 
         # Count by status

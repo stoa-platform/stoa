@@ -39,36 +39,36 @@ const quickAccessConfig: Record<
     label: 'REST API',
     icon: '🌐',
     actionLabel: 'View Docs',
-    bgColor: 'bg-green-50',
-    borderColor: 'border-green-200',
+    bgColor: 'bg-green-50 dark:bg-green-900/20',
+    borderColor: 'border-green-200 dark:border-green-800',
   },
   mcp: {
     label: 'MCP Tool',
     icon: '🤖',
     actionLabel: 'Test Tool',
-    bgColor: 'bg-purple-50',
-    borderColor: 'border-purple-200',
+    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+    borderColor: 'border-purple-200 dark:border-purple-800',
   },
   graphql: {
     label: 'GraphQL',
     icon: '◈',
     actionLabel: 'Open Playground',
-    bgColor: 'bg-pink-50',
-    borderColor: 'border-pink-200',
+    bgColor: 'bg-pink-50 dark:bg-pink-900/20',
+    borderColor: 'border-pink-200 dark:border-pink-800',
   },
   grpc: {
     label: 'gRPC',
     icon: '⚡',
     actionLabel: 'View Proto',
-    bgColor: 'bg-blue-50',
-    borderColor: 'border-blue-200',
+    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+    borderColor: 'border-blue-200 dark:border-blue-800',
   },
   kafka: {
     label: 'Kafka Events',
     icon: '📨',
     actionLabel: 'View Topics',
-    bgColor: 'bg-orange-50',
-    borderColor: 'border-orange-200',
+    bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+    borderColor: 'border-orange-200 dark:border-orange-800',
   },
 };
 
@@ -98,9 +98,11 @@ const QuickAccessCard: React.FC<QuickAccessCardProps> = ({ binding }) => {
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span>{config.icon}</span>
-            <span className="font-medium text-gray-900">{config.label}</span>
+            <span className="font-medium text-gray-900 dark:text-white">{config.label}</span>
           </div>
-          <p className="text-sm text-gray-600 font-mono truncate">{getDisplayValue()}</p>
+          <p className="text-sm text-gray-600 dark:text-neutral-400 font-mono truncate">
+            {getDisplayValue()}
+          </p>
         </div>
 
         {binding.playground_url && (
@@ -134,8 +136,10 @@ const LoadingState: React.FC = () => (
 const ErrorState: React.FC<{ message: string }> = ({ message }) => (
   <div className="text-center py-24">
     <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-    <h2 className="text-lg font-medium text-gray-900 mb-2">Failed to load contract</h2>
-    <p className="text-gray-500 mb-6">{message}</p>
+    <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+      Failed to load contract
+    </h2>
+    <p className="text-gray-500 dark:text-neutral-400 mb-6">{message}</p>
     <Link to="/contracts" className="text-blue-600 hover:text-blue-800 font-medium">
       Back to Contracts
     </Link>
@@ -146,8 +150,8 @@ const ErrorState: React.FC<{ message: string }> = ({ message }) => (
 const NotFoundState: React.FC = () => (
   <div className="text-center py-24">
     <FileCode2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-    <h2 className="text-lg font-medium text-gray-900 mb-2">Contract not found</h2>
-    <p className="text-gray-500 mb-6">
+    <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Contract not found</h2>
+    <p className="text-gray-500 dark:text-neutral-400 mb-6">
       The contract you're looking for doesn't exist or you don't have access to it.
     </p>
     <Link to="/contracts" className="text-blue-600 hover:text-blue-800 font-medium">
@@ -191,17 +195,17 @@ export const ContractDetailPage: React.FC = () => {
       {/* Back link */}
       <button
         onClick={() => navigate('/contracts')}
-        className="flex items-center gap-2 text-gray-500 hover:text-gray-700 transition-colors"
+        className="flex items-center gap-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Contracts
       </button>
 
       {/* Header */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <h1 className="text-2xl font-bold text-gray-900 truncate">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white truncate">
               {contract.display_name || contract.name}
             </h1>
 
@@ -212,7 +216,7 @@ export const ContractDetailPage: React.FC = () => {
           {/* Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
               title="Settings"
             >
               <Settings className="h-5 w-5" />
@@ -227,8 +231,10 @@ export const ContractDetailPage: React.FC = () => {
         </div>
 
         {/* Meta info */}
-        <div className="flex items-center gap-3 text-sm text-gray-500 mb-4">
-          <span className="bg-gray-100 px-2 py-0.5 rounded">v{contract.version}</span>
+        <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-neutral-400 mb-4">
+          <span className="bg-gray-100 dark:bg-neutral-700 px-2 py-0.5 rounded">
+            v{contract.version}
+          </span>
           <span>•</span>
           <span
             className={`
@@ -249,28 +255,28 @@ export const ContractDetailPage: React.FC = () => {
         </div>
 
         {/* Description */}
-        {contract.description && <p className="text-gray-600">{contract.description}</p>}
+        {contract.description && (
+          <p className="text-gray-600 dark:text-neutral-400">{contract.description}</p>
+        )}
       </div>
 
       {/* Main content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Protocol Switcher - Main feature */}
-        <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Protocol Bindings</h2>
+        <div className="lg:col-span-2 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Protocol Bindings
+          </h2>
           <ProtocolSwitcher
             contractId={contract.id}
-            onBindingEnabled={(protocol) => {
-              console.log(`${protocol} enabled`);
-            }}
-            onBindingDisabled={(protocol) => {
-              console.log(`${protocol} disabled`);
-            }}
+            onBindingEnabled={() => {}}
+            onBindingDisabled={() => {}}
           />
         </div>
 
         {/* Quick access to endpoints */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Access</h2>
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Access</h2>
           {enabledBindings.length > 0 ? (
             <div className="space-y-3">
               {enabledBindings.map((binding) => (
@@ -278,7 +284,7 @@ export const ContractDetailPage: React.FC = () => {
               ))}
             </div>
           ) : (
-            <p className="text-gray-500 text-sm">
+            <p className="text-gray-500 dark:text-neutral-400 text-sm">
               Enable protocol bindings to access your API endpoints.
             </p>
           )}
@@ -287,8 +293,8 @@ export const ContractDetailPage: React.FC = () => {
 
       {/* Contract source (optional) */}
       {contract.openapi_spec_url && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">OpenAPI Spec</h2>
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">OpenAPI Spec</h2>
           <a
             href={contract.openapi_spec_url}
             target="_blank"

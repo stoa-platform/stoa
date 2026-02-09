@@ -13,7 +13,12 @@ interface SkeletonProps {
  * ```
  */
 export function Skeleton({ className = '' }: SkeletonProps) {
-  return <div className={`animate-pulse rounded bg-gray-200 ${className}`} aria-hidden="true" />;
+  return (
+    <div
+      className={`animate-pulse rounded bg-gray-200 dark:bg-neutral-700 ${className}`}
+      aria-hidden="true"
+    />
+  );
 }
 
 /**

@@ -9,157 +9,95 @@
 > **Audit réalité:** 6 tickets avaient 70-100% du code déjà écrit (Cycle 6).
 > **Vélocité réelle:** Session 1 (5 pts) = 8 min. Ratio: ~1 pt / 2 min.
 
-| # | Ticket | Pts | Durée réelle | Jour prévu |
-|---|--------|-----|-------------|------------|
-| 1 | CAB-1121 — Consumer Onboarding P1 (Data Model) | **55** | ✅ PR #204 merged | ✅ Lun |
-| 1b | CAB-1121 — Consumer Onboarding P2 (Keycloak) | **20** | ✅ PR #208 merged | ✅ Lun |
-| 1c | CAB-1121 — Consumer Onboarding P3 (Gateway) | **15** | ✅ PR #211 merged + deployed | ✅ Lun |
-| 2 | CAB-1118 — Sidebar Redesign | **8** | ✅ PR #207 + #209 merged | ✅ Lun |
-| 3 | CAB-1117 — Sidecar Docker Compose | **8** | ✅ PR #206 merged | ✅ Lun |
-| 4 | CAB-1030 — Admin Guide + Onboarding | **13** | ~25 min | Mar |
-| 5 | CAB-1068 — AI Factory Setup | **3** | ~6 min | Mar |
-| 6 | CAB-1120 — SEO + Compliance | **5** | ✅ 8 min (done) | ✅ Lun |
-| 7 | CAB-550 — Error Snapshot Demo | **3** | ~6 min | Mar |
-| 8 | CAB-802 — Demo Dry Run Script | **3** | ~6 min | Mar |
-| 9 | CAB-1112 — Kyverno Enforce | **2** | ✅ PR #205 merged | ✅ Lun |
-| 10 | CAB-1035 — Persona Alex Test | **2** | ~15 min (manuel) | Mar |
-| 11 | CAB-1097 — ADR fix | **2** | ✅ PR #205 merged | ✅ Lun |
-| 12 | CAB-362 — Circuit Breaker + Session | **5** | ~10 min | Mar |
-| 13 | Content Compliance apply | **5** | ✅ PR #203 merged | ✅ Lun |
+| # | Ticket | Pts | PR | Status |
+|---|--------|-----|----|--------|
+| 1 | CAB-1120 — SEO + Content Compliance | **5** | #203 | ✅ merged |
+| 2 | CAB-1121 P1 — Data Model + CRUD APIs | **55** | #204 | ✅ merged |
+| 3 | CAB-1097 ADR fix + CAB-1112 Kyverno | **4** | #205 | ✅ merged |
+| 4 | CAB-1117 — Sidecar Docker Compose | **8** | #206 | ✅ merged |
+| 5 | CAB-1118 — Sidebar Redesign | **8** | #207 + #209 | ✅ merged |
+| 6 | CAB-1121 P2 — Keycloak Integration | **20** | #208 | ✅ merged |
+| 7 | CAB-1121 P3 — Gateway Propagation | **15** | #211 | ✅ merged + deployed |
+| 8 | CAB-1030 + 1068 + 550 + 802 — Docs batch | **22** | #213 | ✅ merged |
+| 9 | CAB-1122 — Zero Errors (6 phases) | **—** | #215 | ✅ merged |
+| 10 | CAB-362 — Circuit Breaker + Session | **5** | #218 | ✅ merged |
+| 11 | CAB-1121 P5 — Portal Consumer UI | **21** | #220 | ✅ merged |
+| 12 | CAB-864 P1 — mTLS ADR + Design | **8** | #221 + ADR-039 | ✅ merged |
+| 13 | Ship/Show/Ask Git Workflow | **—** | #222 | ✅ merged |
+| 14 | AI Factory Modernization + State Files | **—** | — | ✅ Session 21 |
 | | | | | |
-| | **SUBTOTAL BASE** | **94** | **~3h** | **Lun-Mar** |
-| | **DONE Lun (P1+P2+P3+Sidebar+Sidecar+Kyverno+ADR+SEO+Compliance)** | **120** | | ✅ |
+| | **DONE LUNDI** | **171** | **13 PRs + 1 chore** | ✅ |
+| | **DONE DIMANCHE SOIR** | **+18** | **PR #224** | ✅ |
 | | | | | |
-| 14 | CAB-864 — mTLS Epic | **34** | ~70 min | Mar-Mer |
-| 15 | CAB-1121 P4 — Quota Enforcement | **15** | ~30 min | Mar |
-| 16 | CAB-1121 P5 — Portal Consumer UI | **21** | ~40 min | Mer |
-| 17 | CAB-1121 P6 — E2E Tests full flow | **13** | ~25 min | Mer |
-| 18 | CAB-1066 — Landing + Pricing | **34** | ~70 min | Mer-Jeu |
+| 15 | CAB-864 P2 — mTLS Gateway Module | **18** | #224 | ✅ PR created |
+| 15b | CAB-864 P3 — Bulk Onboarding + Registry | **8** | — | pending |
+| 16 | CAB-1121 P4 — Quota Enforcement | **15** | — | pending |
+| 17 | CAB-1121 P6 — E2E Tests full flow | **13** | — | pending |
+| 18 | CAB-1035 — Persona Alex Test | **2** | — | pending (manuel) |
+| 19 | CAB-1066 — Landing + Pricing | **34** | — | pending (stoa-web) |
 | | | | | |
-| | **TOTAL PLANIFIÉ** | **196** | **~6h** | **Lun→Mer** |
-| | **AVEC mTLS + P4-P6** | **279** | **~9h** | **Lun→Mer** |
-| | **AVEC Landing** | **313** | **~11h** | **Lun→Jeu** |
+| | **REMAINING** | **72** | | |
+| | **TOTAL CYCLE 7** | **261** | | |
 
 ---
 
 ## 📅 PLANNING JOUR PAR JOUR
 
-### LUNDI 9 FÉV — "Sprint Day" (~130 pts, ~4h30)
+### LUNDI 9 FÉV — ✅ DONE (171 pts, 13 PRs merged)
 
-#### Session 1: CAB-1120 SEO + Compliance (5 pts) — ✅ DONE (8 min)
-
-#### Session 1b: Content Compliance Agent (5 pts) — ✅ DONE (PR #203 merged)
-
-#### Session 1c: CAB-1121 P1 — Data Model + CRUD APIs (55 pts) — ✅ DONE (PR #204 merged)
-- Consumer model + Plan model + Alembic migration 018
-- 14 REST endpoints (8 consumer + 6 plan) with tenant isolation
-- 23 tests, full suite 452 passed, coverage 54%
-- Full CI/CD green through deploy + smoke test
-
-#### Session 2: CAB-1121 P2 — Keycloak + OAuth2 (20 pts) — ✅ DONE (PR #208 merged)
-- Consumer registration → auto-create OAuth2 client in Keycloak
-- client_id = `{tenant}-{consumer_external_id}`, client_secret auto-generated
-- Service account enabled for client_credentials grant
-- Failure mode: 503 + logged warning, non-blocking
-- 10 tests added, 485 total pass, coverage 54%
-
-#### Session 3: CAB-1121 P3 — Gateway Propagation (15 pts) — ✅ DONE (code ready, PR pending)
-- Enriched app_spec with consumer + plan context on provision
-- STOA adapter: provision_application → sync_api + upsert_policy
-- webMethods adapter: idempotent provision (check existing by name)
-- Rate-limit policy push on approval, cleanup on deprovision
-- 22 new tests (485 total pass, coverage 54.22%)
-
-#### Session 4: CAB-1118 Sidebar finitions (8 pts) — ✅ DONE (PR #207 + #209 merged)
-- Collapsible sidebar sections, tenant dropdown, skeleton pages
-- Function coverage boost above 35%
-
-#### Session 5: CAB-1117 Sidecar Docker Compose (8 pts) — ✅ DONE (PR #206 merged)
-- docker-compose.sidecar.yml demo scenario
-
-#### Session 6: CAB-1112 Kyverno (2 pts) + CAB-1097 ADR fix (2 pts) — ✅ DONE (PR #205 merged)
-- Kyverno: 5 ClusterPolicies Audit → Enforce
-- ADR-027→035, ADR-028→036, ADR-033→037 renumbered
+All sessions completed. PRs #203-#222 merged. Session 21: AI Factory modernization. Highlights:
+- CAB-1121 P1-P3+P5: full consumer onboarding pipeline (data→keycloak→gateway→portal UI)
+- CAB-1122: zero unjustified errors across all components (6 phases)
+- CAB-362: circuit breaker + zombie session reaper
+- CAB-864 P1: mTLS design doc + ADR-039 in stoa-docs
+- Docs batch: admin guide, AI factory scripts, demo scenarios
+- Ship/Show/Ask git workflow for AI Factory
+- AI Factory modernization: state files auto-update, rules optimization, context management
 
 ---
 
-### MARDI 10 FÉV — "Docs + Polish Day" (~80 pts, ~3h)
+### REMAINING — Next Sessions
 
-#### Session 7: CAB-1030 Admin Guide (13 pts) — ~25 min
+#### CAB-864 P2 — mTLS Gateway Module (18 pts) ✅ PR #224
 ```
-- [ ] /docs/admin/ 12 pages (overview→upgrade)
-- [ ] OpenShift delta (SCC, Routes, registry, non-root)
-- [ ] Onboarding Kit Cédric (privé)
-- [ ] Content Compliance scan: zéro client name
-```
-
-#### Session 8: CAB-1068 AI Factory (3 pts) — ~6 min
-```
-- [ ] Templates: MEGA-TICKET.md, PHASE-PLAN.md
-- [ ] Scripts: run-phase.sh, slack-notify.sh
+- [x] P2: X.509 header extraction middleware (Rust gateway) — auth/mtls.rs
+- [x] P2: RFC 8705 cert-bound token validation (cnf.x5t#S256) — verify_binding()
+- [x] P2: Config extensions (MtlsConfig, STOA_MTLS_* env vars)
+- [x] P2: Admin endpoints (GET /admin/mtls/config, GET /admin/mtls/stats)
+- [x] P2: Fingerprint normalization (hex, hex_colons, base64url) + timing-safe compare
+- [x] P2: Trusted proxy CIDR matching, per-route mTLS requirement
+- [x] P2: 299 tests pass (32 new), clippy clean
 ```
 
-#### Session 9: CAB-550 Error Snapshot Demo (3 pts) — ~6 min
+#### CAB-864 P3 — Bulk Onboarding + Registry (8 pts) — pending
 ```
-- [ ] Script démo 2 min + seed data generator
-```
-
-#### Session 10: CAB-802 Demo Dry Run Script (3 pts) — ~6 min
-```
-- [ ] Script markdown avec timing par étape (aligné one-pager flow)
-- [ ] Checklist pré-démo + Plan B
+- [ ] P3: Certificate registry model in control-plane-api (Alembic migration 019)
+- [ ] P3: Bulk onboarding endpoint (POST /v1/consumers/{tenant_id}/bulk, max 100)
+- [ ] P3: Certificate revocation + gateway allowlist sync
 ```
 
-#### Session 11: CAB-362 Circuit Breaker (5 pts) — ~10 min
+#### CAB-1121 P4 — Quota Enforcement (15 pts)
 ```
-- [ ] Session management: zombie detection + reaper
-- [ ] Per-upstream config (actuellement générique)
+- [ ] Rate limiting middleware (per-consumer, per-plan)
+- [ ] Quota tracking (request counts, bandwidth)
+- [ ] 429 responses with Retry-After header
+- [ ] Admin endpoints for quota stats
 ```
 
-#### Session 12: CAB-1035 Persona Alex (2 pts) — ~15 min
+#### CAB-1121 P6 — E2E Tests full flow (13 pts)
+```
+- [ ] Full flow: register → subscribe → approve → token exchange → API call
+- [ ] Contract tests JWT claims schema
+- [ ] Multi-tenant isolation tests
+```
+
+#### CAB-1035 — Persona Alex Test (2 pts, manuel)
 ```
 - [ ] Parcours complet chronométré: signup → discover → first MCP call
 - [ ] Frictions documentées en tickets
 ```
 
-#### Session 13: CAB-864 mTLS P1 — Design + ADR (8 pts) — ~15 min
-```
-- [ ] ADR: F5 mTLS termination → STOA → webMethods flow
-- [ ] RFC 8705 cert-bound tokens spec
-- [ ] Architecture diagram
-```
-
----
-
-### MERCREDI 11 FÉV — "Stretch Day" (~90 pts, ~3h)
-
-#### Session 14: CAB-864 mTLS P2-P3 — Implémentation (26 pts) — ~50 min
-```
-- [ ] F5 X.509 header extraction
-- [ ] Certificate-bound tokens implementation
-- [ ] 100-client bulk onboarding flow
-```
-
-#### Session 15: CAB-1121 P5 — Portal Consumer UI (21 pts) — ~40 min
-```
-- [ ] Portal UI: consumer registration form
-- [ ] Subscription workflow UI: browse catalogue → select plan → request access
-- [ ] Owner approval UI: notification + approve/reject
-- [ ] Credentials display (one-time)
-```
-
-#### Session 16: CAB-1121 P6 — E2E Tests (13 pts) — ~25 min
-```
-- [ ] Full flow test: register → subscribe → approve → token exchange → API call
-- [ ] Contract tests JWT claims schema
-- [ ] Multi-tenant isolation tests
-```
-
----
-
-### JEUDI 12 FÉV — "Bonus Day" (si avance, ~34 pts)
-
-#### Session 17: CAB-1066 Landing + Pricing (34 pts) — ~70 min
+#### CAB-1066 — Landing + Pricing (34 pts, stoa-web)
 ```
 - [ ] Repo stoa-web (Astro)
 - [ ] Landing page redesign avec comparison table révisée
@@ -169,24 +107,22 @@
 
 ---
 
-## 📊 RÉCAP SCORING (révisé — vélocité 1pt/2min)
+## 📊 RÉCAP SCORING
 
-| Jour | Tickets | Points | Durée |
-|------|---------|--------|-------|
-| **Lundi** ✅ | S1 SEO ✅ + S1b Compliance ✅ + S1c P1 ✅ + S2 Keycloak ✅ + S3 Gateway ✅ + S4 Sidebar ✅ + S5 Sidecar ✅ + S6 Kyverno+ADR ✅ | **120** | done |
-| **Mardi** | S7 Admin Guide (13) + S8 Factory (3) + S9 Demo (3) + S10 Script (3) + S11 CB (5) + S12 Alex (2) + S13 mTLS design (8) + P4 Quota (15) | **52** | ~2h |
-| **Mercredi** | S14 mTLS impl (26) + S15 Portal UI (21) + S16 E2E (13) | **60** | ~2h |
-| **Jeudi** | S17 Landing (34) | **34** | ~1h10 |
-| | | | |
-| **DONE (Lundi)** | | **120** | |
-| **+ Mardi** | | **172** | |
-| **+ Mercredi** | | **232** | |
-| **+ Jeudi** | | **266** | |
+| Status | Points | PRs |
+|--------|--------|-----|
+| **DONE (Lundi)** | **171** | 13 PRs (#203-#222) + 1 chore |
+| **Remaining** | **90** | |
+| **Total Cycle 7** | **261** | |
 
-### Blockers identifiés
-1. **Keycloak Token Exchange SPI** — si config realm non-triviale, Session 2 peut glisser
-2. **Vault root token** — pas bloquant Cycle 7 (workaround K8s secrets)
-3. **CAB-1066** — context switch repo stoa-web, à ne prendre que si avance réelle
+### Remaining breakdown
+| Ticket | Pts | Blocker? |
+|--------|-----|----------|
+| CAB-864 P3 Bulk Onboarding | 8 | P2 done (PR #224) |
+| CAB-1121 P4 Quota | 15 | P1-P3 done, ready to go |
+| CAB-1121 P6 E2E | 13 | Needs P4 first |
+| CAB-1035 Persona Alex | 2 | Manual test |
+| CAB-1066 Landing | 34 | stoa-web repo, stretch goal |
 
 ---
 

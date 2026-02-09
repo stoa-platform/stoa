@@ -254,6 +254,15 @@ class OIDCAuthenticator:
             logger.info("JWKS fetched successfully", num_keys=len(jwks.get("keys", [])))
             return jwks
 
+        except httpx.TimeoutException as e:
+            logger.error("Keycloak JWKS fetch timeout", error=str(e))
+            if self._jwks_cache:
+                logger.warning("Using stale JWKS cache after timeout")
+                return self._jwks_cache.keys
+            raise HTTPException(
+                status_code=503,
+                detail="Authentication service timeout",
+            )
         except httpx.HTTPError as e:
             logger.error("Failed to fetch JWKS", error=str(e))
             # Return cached keys if available

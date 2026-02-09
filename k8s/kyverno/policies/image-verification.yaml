@@ -18,7 +18,7 @@ metadata:
       Verifies that container images are signed using Cosign keyless
       signing with GitHub Actions OIDC.
 spec:
-  validationFailureAction: Audit
+  validationFailureAction: Enforce
   background: true
   webhookTimeoutSeconds: 30
   rules:

@@ -187,6 +187,43 @@ export const apiSubscriptionsService = {
     return response.data;
   },
 
+  // ============ Tenant Admin: Approval Queue (CAB-1121) ============
+
+  /**
+   * List pending subscriptions for a tenant (tenant admin only)
+   * GET /v1/subscriptions/tenant/{tenant_id}/pending
+   */
+  listPendingForTenant: async (
+    tenantId: string,
+    params?: { page?: number; page_size?: number }
+  ): Promise<APISubscriptionListResponse> => {
+    const response = await apiClient.get<APISubscriptionListResponse>(
+      `/v1/subscriptions/tenant/${tenantId}/pending`,
+      {
+        params: {
+          page: params?.page || 1,
+          page_size: params?.page_size || 20,
+        },
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Approve a pending subscription (tenant admin only)
+   * POST /v1/subscriptions/{id}/approve
+   */
+  approveSubscription: async (
+    subscriptionId: string,
+    expiresAt?: string
+  ): Promise<APISubscriptionResponse> => {
+    const response = await apiClient.post<APISubscriptionResponse>(
+      `/v1/subscriptions/${subscriptionId}/approve`,
+      { expires_at: expiresAt || null }
+    );
+    return response.data;
+  },
+
   // ============ Helper Methods ============
 
   /**

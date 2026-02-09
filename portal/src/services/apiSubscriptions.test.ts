@@ -143,6 +143,54 @@ describe('apiSubscriptionsService', () => {
     });
   });
 
+  describe('listPendingForTenant', () => {
+    it('should call GET /v1/subscriptions/tenant/{tenantId}/pending with default params', async () => {
+      const mockData = { items: [], total: 0, page: 1, page_size: 20, total_pages: 0 };
+      mockGet.mockResolvedValueOnce({ data: mockData });
+
+      const result = await apiSubscriptionsService.listPendingForTenant('acme');
+
+      expect(mockGet).toHaveBeenCalledWith('/v1/subscriptions/tenant/acme/pending', {
+        params: { page: 1, page_size: 20 },
+      });
+      expect(result).toEqual(mockData);
+    });
+
+    it('should pass custom params', async () => {
+      mockGet.mockResolvedValueOnce({ data: { items: [], total: 0 } });
+
+      await apiSubscriptionsService.listPendingForTenant('acme', { page: 2, page_size: 10 });
+
+      expect(mockGet).toHaveBeenCalledWith('/v1/subscriptions/tenant/acme/pending', {
+        params: { page: 2, page_size: 10 },
+      });
+    });
+  });
+
+  describe('approveSubscription', () => {
+    it('should call POST /v1/subscriptions/{id}/approve', async () => {
+      const mockResponse = { id: 'sub-1', status: 'active' };
+      mockPost.mockResolvedValueOnce({ data: mockResponse });
+
+      const result = await apiSubscriptionsService.approveSubscription('sub-1');
+
+      expect(mockPost).toHaveBeenCalledWith('/v1/subscriptions/sub-1/approve', {
+        expires_at: null,
+      });
+      expect(result.status).toBe('active');
+    });
+
+    it('should pass expires_at when provided', async () => {
+      mockPost.mockResolvedValueOnce({ data: { id: 'sub-1', status: 'active' } });
+
+      await apiSubscriptionsService.approveSubscription('sub-1', '2026-12-31T23:59:59Z');
+
+      expect(mockPost).toHaveBeenCalledWith('/v1/subscriptions/sub-1/approve', {
+        expires_at: '2026-12-31T23:59:59Z',
+      });
+    });
+  });
+
   describe('getMySubscriptionsFormatted', () => {
     it('should return formatted subscriptions', async () => {
       const mockItems = [

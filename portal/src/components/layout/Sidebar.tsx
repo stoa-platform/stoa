@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   BookOpen,
   User,
+  UserPlus,
   X,
   Webhook,
   BarChart3,
@@ -62,6 +63,12 @@ const sections: NavSection[] = [
         href: '/workspace',
         icon: Briefcase,
         permission: 'apps:read',
+      },
+      {
+        name: 'Register Consumer',
+        href: '/consumers/register',
+        icon: UserPlus,
+        scope: 'stoa:subscriptions:write',
       },
       {
         name: 'Usage',

@@ -1,0 +1,1 @@
+export { ConsumerRegistrationPage } from './ConsumerRegistrationPage';

@@ -715,6 +715,92 @@ export interface ContractListResponse {
   page_size: number;
 }
 
+// ============ Consumer Types (CAB-1121) ============
+
+export type ConsumerStatus = 'active' | 'suspended' | 'blocked';
+
+export interface Consumer {
+  id: string;
+  external_id: string;
+  name: string;
+  email: string;
+  company?: string;
+  description?: string;
+  tenant_id: string;
+  keycloak_user_id?: string;
+  keycloak_client_id?: string;
+  status: ConsumerStatus;
+  consumer_metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface ConsumerCreate {
+  external_id: string;
+  name: string;
+  email: string;
+  company?: string;
+  description?: string;
+  consumer_metadata?: Record<string, unknown>;
+}
+
+export interface ConsumerUpdate {
+  name?: string;
+  email?: string;
+  company?: string;
+  description?: string;
+  consumer_metadata?: Record<string, unknown>;
+}
+
+export interface ConsumerCredentials {
+  consumer_id: string;
+  client_id: string;
+  client_secret: string;
+  token_endpoint: string;
+  grant_type: string;
+}
+
+export interface ConsumerListResponse {
+  items: Consumer[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+// ============ Plan Types (CAB-1121) ============
+
+export type PlanStatus = 'active' | 'deprecated' | 'archived';
+
+export interface Plan {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string;
+  tenant_id: string;
+  rate_limit_per_second?: number;
+  rate_limit_per_minute?: number;
+  daily_request_limit?: number;
+  monthly_request_limit?: number;
+  burst_limit?: number;
+  requires_approval: boolean;
+  auto_approve_roles?: string[];
+  status: PlanStatus;
+  pricing_metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface PlanListResponse {
+  items: Plan[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 // ============ Publish Contract Response Types (CAB-560) ============
 
 /**

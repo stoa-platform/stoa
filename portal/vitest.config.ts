@@ -39,6 +39,7 @@ export default defineConfig({
         'src/components/testing/**',
         'src/components/tools/**',
         'src/components/uac/**',
+        'src/components/consumers/**',
         'src/components/usage/**',
       ],
       thresholds: {

@@ -11,8 +11,42 @@
     <link rel="dns-prefetch" href="https://auth.gostoa.dev">
     <link rel="preconnect" href="https://api.gostoa.dev" crossorigin>
     <link rel="dns-prefetch" href="https://api.gostoa.dev">
+    <!-- Prevent flash of wrong theme — runs before first paint -->
+    <script>
+      (function(){var t=localStorage.getItem('stoa-theme');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark')})()
+    </script>
+    <style>
+      #stoa-splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#f9fafb;transition:opacity .5s cubic-bezier(.4,0,.2,1)}
+      .dark #stoa-splash{background:#171717}
+      #stoa-splash.hide{opacity:0;pointer-events:none}
+      .stoa-sp-wrap{animation:stoa-breathe 2.5s ease-in-out infinite}
+      .stoa-sp-svg{animation:stoa-glow 2.5s ease-in-out infinite}
+      .stoa-sp-ring{animation:stoa-ring 2.5s linear infinite;transform-origin:16px 16px}
+      .stoa-sp-d1{animation:stoa-dot 1.6s ease-in-out 0s infinite}
+      .stoa-sp-d2{animation:stoa-dot 1.6s ease-in-out .2s infinite}
+      .stoa-sp-d3{animation:stoa-dot 1.6s ease-in-out .4s infinite}
+      .stoa-sp-d4{animation:stoa-dot 1.6s ease-in-out .6s infinite}
+      @keyframes stoa-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+      @keyframes stoa-glow{0%,100%{filter:drop-shadow(0 0 10px rgba(5,150,105,.2))}50%{filter:drop-shadow(0 0 28px rgba(5,150,105,.5))}}
+      @keyframes stoa-ring{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+      @keyframes stoa-dot{0%,100%{opacity:.4}50%{opacity:1}}
+    </style>
   </head>
   <body>
+    <div id="stoa-splash" aria-live="polite" aria-label="Loading STOA Control Plane">
+      <div class="stoa-sp-wrap">
+        <svg viewBox="-2 -2 36 36" width="64" height="64" class="stoa-sp-svg" aria-hidden="true">
+          <circle cx="16" cy="16" r="17" fill="none" stroke="#059669" stroke-width="1.2" stroke-dasharray="27 80" stroke-linecap="round" class="stoa-sp-ring" opacity=".5"/>
+          <defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#047857"/><stop offset="100%" stop-color="#059669"/></linearGradient></defs>
+          <circle cx="16" cy="16" r="15" fill="url(#sg)"/>
+          <path d="M10 11 Q10 8,16 8 Q22 8,22 11 Q22 14,16 14 Q10 14,10 17 Q10 20,16 20 Q22 20,22 24 Q22 27,16 27" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          <circle cx="8" cy="14" r="1.5" fill="white" class="stoa-sp-d1"/>
+          <circle cx="24" cy="14" r="1.5" fill="white" class="stoa-sp-d2"/>
+          <circle cx="8" cy="20" r="1.5" fill="white" class="stoa-sp-d3"/>
+          <circle cx="24" cy="20" r="1.5" fill="white" class="stoa-sp-d4"/>
+        </svg>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

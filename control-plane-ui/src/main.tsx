@@ -59,3 +59,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>
 );
+
+// Smooth handoff: HTML splash → React app (double-rAF ensures React has painted)
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    const splash = document.getElementById('stoa-splash');
+    if (splash) {
+      splash.classList.add('hide');
+      splash.addEventListener('transitionend', () => splash.remove());
+    }
+  });
+});

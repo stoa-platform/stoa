@@ -168,7 +168,10 @@ services:
   # Console UI
   # ==========================================================================
   control-plane-ui:
-    image: ghcr.io/stoa-platform/control-plane-ui:1.0.0
+    build:
+      context: ../../
+      dockerfile: control-plane-ui/Dockerfile
+    image: stoa-console:local
     container_name: stoa-console
     ports:
       - "${PORT_CONSOLE:-3000}:8080"
@@ -432,6 +435,8 @@ services:
       GF_AUTH_GENERIC_OAUTH_API_URL: "http://keycloak:8080/realms/stoa/protocol/openid-connect/userinfo"
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'cpi-admin') && 'Admin' || 'Viewer'"
       GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
+      GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN: "true"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro

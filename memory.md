@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Last updated: 2026-02-10 (Demo Design Partner Phase 1-2 DONE)
+> Last updated: 2026-02-10 (Native Observability PRs #299, #300 merged)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
@@ -72,6 +72,8 @@
 | DONE | — | Fix /apis crash: CelebrationProvider missing in App.tsx | PR #293 |
 | DONE | — | Fix Grafana SSO: add stoa-observability Keycloak client + role mapping | PR #295 |
 | DONE | — | Demo Phase 1-2: Email + Script + Slides + Staging + MOU (5 livrables, français, Q1/Q2 resolved) | stoa-strategy 2bf8dbf |
+| DONE | — | Native Platform Metrics dashboard (replace Grafana iframe on /observability) | PR #299 |
+| DONE | — | Native Request Explorer dashboard (replace OpenSearch iframe on /logs) | PR #300 |
 | NEXT | CAB-1130 | Email Khalil (send 14 fev EOD, wait feedback 15-16 fev) | — |
 | NEXT | CAB-1131 | Dry-runs 3x (18-23 fev, chrono < 5min) | — |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |

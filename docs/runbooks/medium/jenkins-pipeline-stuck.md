@@ -135,21 +135,19 @@ kubectl create secret generic jenkins-credentials -n jenkins \
 #### Case 3: Docker registry timeout
 
 ```bash
-# Test registry connection
+# Test registry connection (GHCR)
 kubectl run docker-test --rm -it --restart=Never \
   --image=docker:dind -n jenkins -- \
-  docker pull 848853684735.dkr.ecr.eu-west-1.amazonaws.com/control-plane-api:latest
+  docker pull ghcr.io/stoa-platform/control-plane-api:latest
 
-# Check ECR credentials
-aws ecr get-login-password --region eu-west-1 | docker login \
-  --username AWS \
-  --password-stdin 848853684735.dkr.ecr.eu-west-1.amazonaws.com
+# Check GHCR credentials
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
-# Regenerate ECR token in Jenkins secret
-kubectl create secret docker-registry ecr-registry -n jenkins \
-  --docker-server=848853684735.dkr.ecr.eu-west-1.amazonaws.com \
-  --docker-username=AWS \
-  --docker-password=$(aws ecr get-login-password --region eu-west-1) \
+# Regenerate GHCR token in Jenkins secret
+kubectl create secret docker-registry ghcr-registry -n jenkins \
+  --docker-server=ghcr.io \
+  --docker-username=USERNAME \
+  --docker-password=$GITHUB_TOKEN \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 

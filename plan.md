@@ -1,7 +1,8 @@
 # Plan: Demo Design Partner (24 fev 2026)
 
-> **Last updated:** 2026-02-10
-> **Status:** Ready for Phase 1 execution
+> **Last updated:** 2026-02-10 (lundi soir)
+> **Status:** Phase 1+2 DONE — 5/5 livrables generated and pushed
+> **Next action:** Send email to Khalil (deadline 14 fev EOD) → collect feedback → dry-runs
 > **Full plan:** [stoa-strategy/execution/plan-demo-partner.md](private repo)
 
 ---
@@ -10,7 +11,7 @@
 
 **Mission:** Prepare 5-min "Design Partner" presentation for enterprise prospect (DSI + senior architects)
 **Deadline:** Vendredi 14 fev EOD (urgent track), 24 fev (demo day)
-**Livrables:** Email + Script verbal 5min + Slides presentation + Staging guide + MOU draft
+**Livrables:** Email + Script verbal 5min + Slides presentation + Staging guide + MOU draft — ALL DONE
 
 ---
 
@@ -29,13 +30,13 @@
 
 ## Execution Phases
 
-| Phase | Timeline | Deliverables | Method |
+| Phase | Timeline | Deliverables | Status |
 |-------|----------|--------------|--------|
-| Phase 1 | 10-11 fev | Email + Script + Slides | 3 parallel CLI instances |
-| Phase 2 | 11-13 fev | Staging + MOU | Sequential |
-| Phase 3 | 14-17 fev | Feedback loop | Human (send email, collect feedback) |
-| Phase 4 | 18-23 fev | Dry-runs 3x | Human + Claude adjustments |
-| Phase 5 | 24 fev | Demo Day | Human |
+| Phase 1 | 10 fev | Email + Script + Slides | DONE |
+| Phase 2 | 10 fev | Staging + MOU | DONE |
+| Phase 3 | 14-17 fev | Feedback loop (send email, collect feedback) | PENDING |
+| Phase 4 | 18-23 fev | Dry-runs 3x (Human + Claude adjustments) | PENDING |
+| Phase 5 | 24 fev | Demo Day | PENDING |
 
 ---
 

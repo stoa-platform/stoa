@@ -42,7 +42,7 @@ use control_plane::GatewayRegistrar;
 use handlers::admin;
 use mcp::{
     discovery::{mcp_capabilities, mcp_discovery, mcp_health},
-    handlers::{mcp_tools_call, mcp_tools_list},
+    handlers::{mcp_rest_tools_invoke, mcp_rest_tools_list, mcp_tools_call, mcp_tools_list},
     sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
 };
 use proxy::dynamic_proxy;
@@ -265,9 +265,12 @@ fn build_router(state: AppState) -> Router {
                 .route("/mcp", get(mcp_discovery))
                 .route("/mcp/capabilities", get(mcp_capabilities))
                 .route("/mcp/health", get(mcp_health))
-                // MCP Tools (REST-style for backward compat)
+                // MCP Tools (JSON-RPC style)
                 .route("/mcp/tools/list", post(mcp_tools_list))
                 .route("/mcp/tools/call", post(mcp_tools_call))
+                // MCP v1 REST API (demo + simple HTTP clients)
+                .route("/mcp/v1/tools", get(mcp_rest_tools_list))
+                .route("/mcp/v1/tools/invoke", post(mcp_rest_tools_invoke))
                 // MCP SSE Transport (Streamable HTTP)
                 .route(
                     "/mcp/sse",

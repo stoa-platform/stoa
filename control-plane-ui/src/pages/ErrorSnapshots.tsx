@@ -32,43 +32,99 @@ import { clsx } from 'clsx';
 
 // Error type display config
 const errorTypeConfig: Record<string, { label: string; color: string; bg: string }> = {
-  server_timeout: { label: 'Server Timeout', color: 'text-orange-600', bg: 'bg-orange-100' },
-  server_unavailable: { label: 'Server Unavailable', color: 'text-red-600', bg: 'bg-red-100' },
-  server_rate_limited: { label: 'Rate Limited', color: 'text-yellow-600', bg: 'bg-yellow-100' },
-  server_auth_failure: { label: 'Auth Failure', color: 'text-red-600', bg: 'bg-red-100' },
-  server_internal_error: { label: 'Internal Error', color: 'text-red-600', bg: 'bg-red-100' },
-  tool_not_found: { label: 'Tool Not Found', color: 'text-gray-600', bg: 'bg-gray-100' },
-  tool_execution_error: { label: 'Tool Error', color: 'text-red-600', bg: 'bg-red-100' },
+  server_timeout: {
+    label: 'Server Timeout',
+    color: 'text-orange-600',
+    bg: 'bg-orange-100 dark:bg-orange-900/30',
+  },
+  server_unavailable: {
+    label: 'Server Unavailable',
+    color: 'text-red-600',
+    bg: 'bg-red-100 dark:bg-red-900/30',
+  },
+  server_rate_limited: {
+    label: 'Rate Limited',
+    color: 'text-yellow-600',
+    bg: 'bg-yellow-100 dark:bg-yellow-900/30',
+  },
+  server_auth_failure: {
+    label: 'Auth Failure',
+    color: 'text-red-600',
+    bg: 'bg-red-100 dark:bg-red-900/30',
+  },
+  server_internal_error: {
+    label: 'Internal Error',
+    color: 'text-red-600',
+    bg: 'bg-red-100 dark:bg-red-900/30',
+  },
+  tool_not_found: {
+    label: 'Tool Not Found',
+    color: 'text-gray-600 dark:text-neutral-400',
+    bg: 'bg-gray-100 dark:bg-neutral-700',
+  },
+  tool_execution_error: {
+    label: 'Tool Error',
+    color: 'text-red-600',
+    bg: 'bg-red-100 dark:bg-red-900/30',
+  },
   tool_validation_error: {
     label: 'Validation Error',
     color: 'text-yellow-600',
-    bg: 'bg-yellow-100',
+    bg: 'bg-yellow-100 dark:bg-yellow-900/30',
   },
-  tool_timeout: { label: 'Tool Timeout', color: 'text-orange-600', bg: 'bg-orange-100' },
+  tool_timeout: {
+    label: 'Tool Timeout',
+    color: 'text-orange-600',
+    bg: 'bg-orange-100 dark:bg-orange-900/30',
+  },
   llm_context_exceeded: {
     label: 'Context Exceeded',
     color: 'text-purple-600',
-    bg: 'bg-purple-100',
+    bg: 'bg-purple-100 dark:bg-purple-900/30',
   },
   llm_content_filtered: {
     label: 'Content Filtered',
     color: 'text-purple-600',
-    bg: 'bg-purple-100',
+    bg: 'bg-purple-100 dark:bg-purple-900/30',
   },
-  llm_quota_exceeded: { label: 'Quota Exceeded', color: 'text-purple-600', bg: 'bg-purple-100' },
-  llm_rate_limited: { label: 'LLM Rate Limited', color: 'text-purple-600', bg: 'bg-purple-100' },
-  policy_denied: { label: 'Policy Denied', color: 'text-red-600', bg: 'bg-red-100' },
-  unknown: { label: 'Unknown', color: 'text-gray-600', bg: 'bg-gray-100' },
+  llm_quota_exceeded: {
+    label: 'Quota Exceeded',
+    color: 'text-purple-600',
+    bg: 'bg-purple-100 dark:bg-purple-900/30',
+  },
+  llm_rate_limited: {
+    label: 'LLM Rate Limited',
+    color: 'text-purple-600',
+    bg: 'bg-purple-100 dark:bg-purple-900/30',
+  },
+  policy_denied: {
+    label: 'Policy Denied',
+    color: 'text-red-600',
+    bg: 'bg-red-100 dark:bg-red-900/30',
+  },
+  unknown: {
+    label: 'Unknown',
+    color: 'text-gray-600 dark:text-neutral-400',
+    bg: 'bg-gray-100 dark:bg-neutral-700',
+  },
 };
 
 const resolutionConfig: Record<
   SnapshotResolutionStatus,
   { label: string; color: string; bg: string }
 > = {
-  unresolved: { label: 'Unresolved', color: 'text-red-600', bg: 'bg-red-100' },
-  investigating: { label: 'Investigating', color: 'text-yellow-600', bg: 'bg-yellow-100' },
-  resolved: { label: 'Resolved', color: 'text-green-600', bg: 'bg-green-100' },
-  ignored: { label: 'Ignored', color: 'text-gray-600', bg: 'bg-gray-100' },
+  unresolved: { label: 'Unresolved', color: 'text-red-600', bg: 'bg-red-100 dark:bg-red-900/30' },
+  investigating: {
+    label: 'Investigating',
+    color: 'text-yellow-600',
+    bg: 'bg-yellow-100 dark:bg-yellow-900/30',
+  },
+  resolved: { label: 'Resolved', color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/30' },
+  ignored: {
+    label: 'Ignored',
+    color: 'text-gray-600 dark:text-neutral-400',
+    bg: 'bg-gray-100 dark:bg-neutral-700',
+  },
 };
 
 function formatCost(cost: number): string {
@@ -103,15 +159,15 @@ function StatsCard({
   color: string;
 }) {
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm">
+    <div className="rounded-lg bg-white dark:bg-neutral-800 p-6 shadow-sm">
       <div className="flex items-center gap-4">
         <div className={clsx('rounded-lg p-3', color)}>
           <Icon className="h-6 w-6 text-white" />
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-          {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
+          <p className="text-sm font-medium text-gray-500 dark:text-neutral-400">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+          {subtitle && <p className="text-xs text-gray-400 dark:text-neutral-500">{subtitle}</p>}
         </div>
       </div>
     </div>
@@ -120,11 +176,11 @@ function StatsCard({
 
 // Cost Badge Component
 function CostBadge({ cost }: { cost: number }) {
-  let colorClass = 'bg-green-100 text-green-800';
+  let colorClass = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
   if (cost >= 0.1) {
-    colorClass = 'bg-red-100 text-red-800';
+    colorClass = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
   } else if (cost >= 0.01) {
-    colorClass = 'bg-yellow-100 text-yellow-800';
+    colorClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
   }
 
   return (
@@ -260,10 +316,10 @@ function SnapshotRow({
   }, [isExpanded, snapshot.id, details]);
 
   return (
-    <div className="border-b border-gray-100 last:border-0">
+    <div className="border-b border-gray-100 dark:border-neutral-700 last:border-0">
       {/* Summary row */}
       <div
-        className="flex items-center gap-4 p-4 hover:bg-gray-50 cursor-pointer"
+        className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-neutral-700 cursor-pointer"
         onClick={onToggle}
       >
         {/* Expand icon */}
@@ -287,8 +343,8 @@ function SnapshotRow({
           className={clsx(
             'px-2 py-0.5 rounded text-xs font-mono',
             snapshot.response_status >= 500
-              ? 'bg-red-100 text-red-800'
-              : 'bg-yellow-100 text-yellow-800'
+              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
           )}
         >
           {snapshot.response_status}
@@ -296,8 +352,8 @@ function SnapshotRow({
 
         {/* Error message */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-gray-900 truncate">{snapshot.error_message}</p>
-          <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+          <p className="text-sm text-gray-900 dark:text-white truncate">{snapshot.error_message}</p>
+          <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-neutral-400">
             {snapshot.mcp_server_name && (
               <span className="flex items-center gap-1">
                 <Server className="h-3 w-3" />
@@ -318,7 +374,7 @@ function SnapshotRow({
 
         {/* Tokens wasted */}
         {snapshot.tokens_wasted > 0 && (
-          <span className="flex items-center gap-1 text-xs text-gray-500">
+          <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-neutral-400">
             <Zap className="h-3 w-3" />
             {snapshot.tokens_wasted.toLocaleString()}
           </span>
@@ -333,14 +389,14 @@ function SnapshotRow({
         />
 
         {/* Timestamp */}
-        <span className="text-xs text-gray-400 w-24 text-right">
+        <span className="text-xs text-gray-400 dark:text-neutral-500 w-24 text-right">
           {formatDateTime(snapshot.timestamp)}
         </span>
       </div>
 
       {/* Expanded details */}
       {isExpanded && (
-        <div className="bg-gray-50 p-4 border-t border-gray-100">
+        <div className="bg-gray-50 dark:bg-neutral-900 p-4 border-t border-gray-100 dark:border-neutral-700">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
@@ -348,8 +404,8 @@ function SnapshotRow({
           ) : details ? (
             <div className="space-y-4">
               {/* Resolution actions */}
-              <div className="flex items-center gap-2 pb-4 border-b border-gray-200">
-                <span className="text-sm text-gray-600">Set status:</span>
+              <div className="flex items-center gap-2 pb-4 border-b border-gray-200 dark:border-neutral-700">
+                <span className="text-sm text-gray-600 dark:text-neutral-400">Set status:</span>
                 {(
                   [
                     'unresolved',
@@ -365,7 +421,7 @@ function SnapshotRow({
                       'px-3 py-1 rounded-full text-xs font-medium transition-colors',
                       details.resolution_status === status
                         ? `${resolutionConfig[status].bg} ${resolutionConfig[status].color}`
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-600'
                     )}
                   >
                     {resolutionConfig[status].label}
@@ -376,14 +432,14 @@ function SnapshotRow({
               <div className="grid grid-cols-3 gap-6">
                 {/* Left: Request Info */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Request</h4>
-                  <div className="bg-white rounded-lg p-4 space-y-2 text-sm">
+                  <h4 className="font-medium text-gray-900 dark:text-white">Request</h4>
+                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Method:</span>
+                      <span className="text-gray-500 dark:text-neutral-400">Method:</span>
                       <span className="font-mono">{details.request_method || '-'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Path:</span>
+                      <span className="text-gray-500 dark:text-neutral-400">Path:</span>
                       <span
                         className="font-mono text-xs truncate max-w-48"
                         title={details.request_path}
@@ -392,45 +448,49 @@ function SnapshotRow({
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Status:</span>
+                      <span className="text-gray-500 dark:text-neutral-400">Status:</span>
                       <span className="font-mono">{details.response_status}</span>
                     </div>
                     {details.trace_id && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Trace ID:</span>
+                        <span className="text-gray-500 dark:text-neutral-400">Trace ID:</span>
                         <span className="font-mono text-xs">{details.trace_id}</span>
                       </div>
                     )}
                   </div>
 
                   {/* Error details */}
-                  <div className="bg-red-50 rounded-lg p-4">
-                    <h5 className="font-medium text-red-800 mb-2">Error</h5>
-                    <p className="text-sm text-red-600">{details.error_message}</p>
+                  <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
+                    <h5 className="font-medium text-red-800 dark:text-red-400 mb-2">Error</h5>
+                    <p className="text-sm text-red-600 dark:text-red-400">
+                      {details.error_message}
+                    </p>
                     {details.error_code && (
-                      <p className="text-xs text-red-500 mt-1 font-mono">{details.error_code}</p>
+                      <p className="text-xs text-red-500 dark:text-red-500 mt-1 font-mono">
+                        {details.error_code}
+                      </p>
                     )}
                   </div>
                 </div>
 
                 {/* Middle: Tool/Server Context */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">MCP Context</h4>
-                  <div className="bg-white rounded-lg p-4 space-y-2 text-sm">
+                  <h4 className="font-medium text-gray-900 dark:text-white">MCP Context</h4>
+                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
                     {details.mcp_server_name && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Server:</span>
+                        <span className="text-gray-500 dark:text-neutral-400">Server:</span>
                         <span>{details.mcp_server_name}</span>
                       </div>
                     )}
                     {details.tool_name && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Tool:</span>
+                        <span className="text-gray-500 dark:text-neutral-400">Tool:</span>
                         <span>{details.tool_name}</span>
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Retries:</span>
+                      <span className="text-gray-500 dark:text-neutral-400">Retries:</span>
                       <span>
                         {details.retry_attempts}/{details.retry_max_attempts}
                       </span>
@@ -439,15 +499,17 @@ function SnapshotRow({
 
                   {/* Tool invocation details */}
                   {details.snapshot?.tool_invocation && (
-                    <div className="bg-white rounded-lg p-4">
-                      <h5 className="font-medium text-gray-700 mb-2 text-sm">Tool Invocation</h5>
-                      <div className="text-xs font-mono bg-gray-50 rounded p-2 max-h-32 overflow-auto">
+                    <div className="bg-white dark:bg-neutral-800 rounded-lg p-4">
+                      <h5 className="font-medium text-gray-700 dark:text-neutral-300 mb-2 text-sm">
+                        Tool Invocation
+                      </h5>
+                      <div className="text-xs font-mono bg-gray-50 dark:bg-neutral-900 dark:text-neutral-300 rounded p-2 max-h-32 overflow-auto">
                         <pre>
                           {JSON.stringify(details.snapshot.tool_invocation.input_params, null, 2)}
                         </pre>
                       </div>
                       {details.snapshot.tool_invocation.duration_ms && (
-                        <p className="text-xs text-gray-500 mt-2">
+                        <p className="text-xs text-gray-500 dark:text-neutral-400 mt-2">
                           Duration: {details.snapshot.tool_invocation.duration_ms}ms
                         </p>
                       )}
@@ -457,37 +519,37 @@ function SnapshotRow({
 
                 {/* Right: LLM/Cost Context */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Cost & Tokens</h4>
-                  <div className="bg-white rounded-lg p-4 space-y-2 text-sm">
+                  <h4 className="font-medium text-gray-900 dark:text-white">Cost & Tokens</h4>
+                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Total Cost:</span>
+                      <span className="text-gray-500 dark:text-neutral-400">Total Cost:</span>
                       <CostBadge cost={details.total_cost_usd} />
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Tokens Wasted:</span>
+                      <span className="text-gray-500 dark:text-neutral-400">Tokens Wasted:</span>
                       <span className="text-red-600">{details.tokens_wasted.toLocaleString()}</span>
                     </div>
                     {details.llm_provider && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">LLM Provider:</span>
+                        <span className="text-gray-500 dark:text-neutral-400">LLM Provider:</span>
                         <span>{details.llm_provider}</span>
                       </div>
                     )}
                     {details.llm_model && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Model:</span>
+                        <span className="text-gray-500 dark:text-neutral-400">Model:</span>
                         <span className="text-xs">{details.llm_model}</span>
                       </div>
                     )}
                     {details.llm_tokens_input !== undefined && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Input Tokens:</span>
+                        <span className="text-gray-500 dark:text-neutral-400">Input Tokens:</span>
                         <span>{details.llm_tokens_input?.toLocaleString()}</span>
                       </div>
                     )}
                     {details.llm_tokens_output !== undefined && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Output Tokens:</span>
+                        <span className="text-gray-500 dark:text-neutral-400">Output Tokens:</span>
                         <span>{details.llm_tokens_output?.toLocaleString()}</span>
                       </div>
                     )}
@@ -495,7 +557,7 @@ function SnapshotRow({
 
                   {/* Masked fields warning */}
                   {details.snapshot?.masked_fields && details.snapshot.masked_fields.length > 0 && (
-                    <div className="bg-yellow-50 rounded-lg p-3 text-xs text-yellow-700">
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 text-xs text-yellow-700 dark:text-yellow-400">
                       <p className="font-medium">PII Masked:</p>
                       <p className="mt-1">{details.snapshot.masked_fields.join(', ')}</p>
                     </div>
@@ -507,7 +569,9 @@ function SnapshotRow({
               <ReplayCommand snapshotId={snapshot.id} />
             </div>
           ) : (
-            <p className="text-center text-gray-500 py-4">Failed to load details</p>
+            <p className="text-center text-gray-500 dark:text-neutral-400 py-4">
+              Failed to load details
+            </p>
           )}
         </div>
       )}
@@ -597,11 +661,13 @@ export function ErrorSnapshots() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">MCP Error Snapshots</h1>
-          <p className="text-gray-500">Time-travel debugging for MCP Gateway errors</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">MCP Error Snapshots</h1>
+          <p className="text-gray-500 dark:text-neutral-400">
+            Time-travel debugging for MCP Gateway errors
+          </p>
         </div>
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-600">
+          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
             <input
               type="checkbox"
               checked={autoRefresh}
@@ -654,7 +720,7 @@ export function ErrorSnapshots() {
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
         <div className="flex flex-wrap gap-4">
           {/* Search */}
           <form onSubmit={handleSearch} className="relative flex-1 min-w-64">
@@ -664,7 +730,7 @@ export function ErrorSnapshots() {
               placeholder="Search errors..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </form>
 
@@ -677,7 +743,7 @@ export function ErrorSnapshots() {
                 error_types: e.target.value ? [e.target.value as MCPErrorType] : undefined,
               }))
             }
-            className="border border-gray-300 rounded-lg px-3 py-2"
+            className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
           >
             <option value="">All Error Types</option>
             {availableFilters?.error_types.map((type) => (
@@ -696,7 +762,7 @@ export function ErrorSnapshots() {
                 server_names: e.target.value ? [e.target.value] : undefined,
               }))
             }
-            className="border border-gray-300 rounded-lg px-3 py-2"
+            className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
           >
             <option value="">All Servers</option>
             {availableFilters?.servers.map((server) => (
@@ -717,7 +783,7 @@ export function ErrorSnapshots() {
                   : undefined,
               }))
             }
-            className="border border-gray-300 rounded-lg px-3 py-2"
+            className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
           >
             <option value="">All Statuses</option>
             {availableFilters?.resolution_statuses.map((status) => (
@@ -730,18 +796,18 @@ export function ErrorSnapshots() {
       </div>
 
       {/* Snapshots Table */}
-      <div className="rounded-lg bg-white shadow-sm">
-        <div className="border-b border-gray-100 px-4 py-3 flex justify-between items-center">
-          <h2 className="font-medium text-gray-900">Error Snapshots ({total})</h2>
+      <div className="rounded-lg bg-white dark:bg-neutral-800 shadow-sm">
+        <div className="border-b border-gray-100 dark:border-neutral-700 px-4 py-3 flex justify-between items-center">
+          <h2 className="font-medium text-gray-900 dark:text-white">Error Snapshots ({total})</h2>
           {/* Pagination info */}
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-gray-500 dark:text-neutral-400">
             Page {page} of {Math.ceil(total / pageSize)}
           </div>
         </div>
 
         {snapshots.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-            <AlertTriangle className="h-12 w-12 mb-4 text-gray-300" />
+          <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-neutral-400">
+            <AlertTriangle className="h-12 w-12 mb-4 text-gray-300 dark:text-neutral-600" />
             <p>No error snapshots found</p>
             <p className="text-sm">Errors will appear here when they occur</p>
           </div>
@@ -761,21 +827,21 @@ export function ErrorSnapshots() {
 
         {/* Pagination */}
         {total > pageSize && (
-          <div className="flex justify-between items-center px-4 py-3 border-t border-gray-100">
+          <div className="flex justify-between items-center px-4 py-3 border-t border-gray-100 dark:border-neutral-700">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-gray-500 dark:text-neutral-400">
               Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total}
             </span>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={!hasNext}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>

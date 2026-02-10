@@ -64,7 +64,11 @@ const BusinessDashboard = lazy(() =>
   import('./pages/Business').then((m) => ({ default: m.BusinessDashboard }))
 );
 
-// CAB-1108: Embedded iframe pages for unified STOA experience
+// Native observability dashboards (replace iframe embeds)
+const PlatformMetrics = lazy(() =>
+  import('./pages/PlatformMetrics').then((m) => ({ default: m.PlatformMetricsDashboard }))
+);
+// CAB-1108: Embedded iframe pages for unified STOA experience (retained for deep-link fallback)
 const GrafanaEmbed = lazy(() => import('./pages/GrafanaEmbed'));
 const IdentityEmbed = lazy(() => import('./pages/IdentityEmbed'));
 // CAB-1114: OpenSearch Dashboards for API trace logs
@@ -343,8 +347,9 @@ function ProtectedRoutes() {
               <Route path="/my-usage" element={<TenantDashboard />} />
               <Route path="/business" element={<BusinessDashboard />} />
               <Route path="/admin/prospects" element={<AdminProspects />} />
-              {/* CAB-1108: Embedded observability and identity management */}
-              <Route path="/observability" element={<GrafanaEmbed />} />
+              {/* Native observability dashboards (replace iframe embeds) */}
+              <Route path="/observability" element={<PlatformMetrics />} />
+              <Route path="/observability/grafana" element={<GrafanaEmbed />} />
               <Route path="/identity" element={<IdentityEmbed />} />
               {/* CAB-1114: OpenSearch Dashboards for API trace logs */}
               <Route path="/logs" element={<LogsEmbed />} />

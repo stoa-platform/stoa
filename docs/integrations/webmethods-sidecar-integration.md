@@ -57,7 +57,7 @@ stoaSidecar:
 
   # STOA Sidecar configuration
   image:
-    repository: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-gateway
+    repository: ghcr.io/stoa-platform/stoa-gateway
     tag: latest
 
   environment: prod

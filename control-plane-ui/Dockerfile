@@ -27,24 +27,24 @@ WORKDIR /app/control-plane-ui
 # Example: docker build --build-arg VITE_BASE_DOMAIN=staging.example.com .
 
 # Core Configuration
-ARG VITE_BASE_DOMAIN=stoa.cab-i.com
+ARG VITE_BASE_DOMAIN=gostoa.dev
 ARG VITE_ENVIRONMENT=production
 ARG VITE_APP_TITLE="STOA Control Plane"
 ARG VITE_APP_VERSION=2.0.0
 
 # API Configuration (direct connection to Control-Plane-API)
-ARG VITE_API_URL=https://api.stoa.cab-i.com
+ARG VITE_API_URL=https://api.gostoa.dev
 ARG VITE_API_TIMEOUT=30000
 
 # Keycloak Authentication
-ARG VITE_KEYCLOAK_URL=https://auth.stoa.cab-i.com
+ARG VITE_KEYCLOAK_URL=https://auth.gostoa.dev
 ARG VITE_KEYCLOAK_REALM=stoa
 ARG VITE_KEYCLOAK_CLIENT_ID=control-plane-ui
 
 # External Services
-ARG VITE_GATEWAY_URL=https://gateway.stoa.cab-i.com
-ARG VITE_AWX_URL=https://awx.stoa.cab-i.com
-ARG VITE_PORTAL_URL=https://portal.stoa.cab-i.com
+ARG VITE_GATEWAY_URL=https://gateway.gostoa.dev
+ARG VITE_AWX_URL=https://awx.gostoa.dev
+ARG VITE_PORTAL_URL=https://portal.gostoa.dev
 ARG VITE_GITLAB_URL=https://gitlab.com
 
 # Feature Flags
@@ -55,7 +55,7 @@ ARG VITE_ENABLE_APPLICATIONS=true
 ARG VITE_ENABLE_AI_TOOLS=true
 
 # MCP Gateway
-ARG VITE_MCP_GATEWAY_URL=https://mcp.stoa.cab-i.com
+ARG VITE_MCP_GATEWAY_URL=https://mcp.gostoa.dev
 
 # UI Settings
 ARG VITE_ITEMS_PER_PAGE=20

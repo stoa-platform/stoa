@@ -15,7 +15,7 @@ on:
       - 'stoa-gateway/**'
       - '.github/workflows/stoa-gateway-ci.yml'
       - '.github/workflows/reusable-rust-ci.yml'
-      - '.github/workflows/reusable-docker-ecr.yml'
+      - '.github/workflows/reusable-docker-ghcr.yml'
       - '.github/actions/**'
 
   pull_request:
@@ -59,14 +59,14 @@ jobs:
     permissions:
       contents: read
 
-  # === Docker: build + push ECR (AMD64 only — EKS target) ===
+  # === Docker: build + push GHCR (AMD64 only) ===
   docker:
     needs: ci
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/reusable-docker-ecr.yml
+    uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: stoa-gateway
-      ecr-repository: apim/stoa-gateway
+      image-name: stoa-gateway
       environment: ${{ github.event.inputs.environment || 'dev' }}
       platforms: linux/amd64
       build-args: |
@@ -74,6 +74,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: write
       attestations: write
     secrets: inherit
 

@@ -14,7 +14,7 @@ on:
       - 'mcp-gateway/**'
       - '.github/workflows/mcp-gateway-ci.yml'
       - '.github/workflows/reusable-python-ci.yml'
-      - '.github/workflows/reusable-docker-ecr.yml'
+      - '.github/workflows/reusable-docker-ghcr.yml'
       - '.github/workflows/reusable-k8s-deploy.yml'
       - '.github/actions/**'
 
@@ -61,19 +61,20 @@ jobs:
       contents: read
       checks: write
 
-  # === Docker: build + push ECR ===
+  # === Docker: build + push GHCR ===
   docker:
     needs: ci
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/reusable-docker-ecr.yml
+    uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: mcp-gateway
-      ecr-repository: apim/mcp-gateway
+      image-name: mcp-gateway
       environment: ${{ github.event.inputs.environment || 'dev' }}
       platforms: linux/amd64
     permissions:
       contents: read
       id-token: write
+      packages: write
       attestations: write
     secrets: inherit
 

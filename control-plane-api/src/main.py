@@ -76,6 +76,7 @@ from .routers.mcp_admin import (
     admin_servers_router as mcp_admin_servers_router,
     admin_subscriptions_router as mcp_admin_subscriptions_router,
 )
+from .routers.portal import internal_router as portal_internal_router
 from .services import argocd_service, awx_service, git_service, kafka_service, keycloak_service, metrics_service
 from .services.gateway_service import gateway_service
 from .tracing_config import configure_tracing, shutdown_tracing
@@ -451,6 +452,7 @@ app.include_router(external_mcp_servers_internal_router)
 
 # Portal and GitOps routers
 app.include_router(portal.router)
+app.include_router(portal_internal_router)
 app.include_router(portal_applications.router)
 app.include_router(mcp_gitops.router)
 

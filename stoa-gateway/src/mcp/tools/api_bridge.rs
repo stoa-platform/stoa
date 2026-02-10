@@ -21,9 +21,12 @@ use crate::uac::Action;
 /// Refresh interval for API tool discovery
 const API_TOOL_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 
-/// Minimal API representation from CP portal catalog
+/// API representation from CP internal catalog endpoint
 #[derive(Debug, Deserialize)]
-struct PortalApi {
+struct CatalogApi {
+    /// API slug (e.g., "payments", "petstore")
+    id: String,
+    /// Display name
     name: String,
     #[serde(default)]
     description: Option<String>,
@@ -34,9 +37,9 @@ struct PortalApi {
 }
 
 #[derive(Debug, Deserialize)]
-struct PortalApisResponse {
+struct CatalogApisResponse {
     #[serde(default)]
-    apis: Vec<PortalApi>,
+    apis: Vec<CatalogApi>,
 }
 
 /// Discover published APIs from the CP catalog and register as MCP tools.
@@ -50,12 +53,13 @@ pub async fn discover_api_tools(
     cp_base_url: &str,
     client: &Client,
 ) -> Result<usize, String> {
+    // Use internal endpoint (no JWT auth required, includes backend_url)
     let url = format!(
-        "{}/v1/portal/apis?page_size=100",
+        "{}/v1/internal/catalog/apis",
         cp_base_url.trim_end_matches('/')
     );
 
-    debug!(url = %url, "Discovering API tools from CP catalog");
+    debug!(url = %url, "Discovering API tools from CP internal catalog");
 
     let resp = client
         .get(&url)
@@ -70,7 +74,7 @@ pub async fn discover_api_tools(
         return Err(format!("CP catalog returned {}: {}", status, body));
     }
 
-    let catalog: PortalApisResponse = resp
+    let catalog: CatalogApisResponse = resp
         .json()
         .await
         .map_err(|e| format!("Failed to parse CP catalog response: {}", e))?;
@@ -80,14 +84,17 @@ pub async fn discover_api_tools(
         let backend_url = match &api.backend_url {
             Some(url) if !url.is_empty() => url.clone(),
             _ => {
-                debug!(api = %api.name, "Skipping API without backend_url");
+                debug!(api = %api.id, "Skipping API without backend_url");
                 continue;
             }
         };
 
+        // Use API slug (id) as tool name (e.g., "payments", not "Payments API")
+        let tool_name = &api.id;
+
         // Skip if already registered (native tools take precedence)
-        if registry.get(&api.name).is_some() {
-            debug!(api = %api.name, "API tool already registered, skipping");
+        if registry.get(tool_name).is_some() {
+            debug!(api = %tool_name, "API tool already registered, skipping");
             continue;
         }
 
@@ -126,7 +133,7 @@ pub async fn discover_api_tools(
         };
 
         let tool = DynamicTool::new(
-            &api.name,
+            tool_name,
             format!("{}{}", description, version_note),
             &backend_url,
             "POST",
@@ -143,7 +150,7 @@ pub async fn discover_api_tools(
 
         registry.register(Arc::new(tool));
         count += 1;
-        info!(api = %api.name, backend = %backend_url, "Registered API as MCP tool");
+        info!(api = %tool_name, backend = %backend_url, "Registered API as MCP tool");
     }
 
     Ok(count)

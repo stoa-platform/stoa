@@ -67,6 +67,7 @@
 | DONE | D10 | Dry-run #2 — 7/8 acts PASS, federation fixed, seed fixed | PR #284 |
 | DONE | D11 | From-scratch validation — LDAP auto-seed, Keycloak SSL, 7/7+9/9 | PRs #287, #288 |
 | DONE | R1 | MCP v1 REST endpoints + API-to-Tool bridge (Act 7) | PR #290 |
+| DONE | R1-fix | API bridge: internal endpoint + docker-compose local build | PR #291 |
 | DONE | — | OpSec: dual-repo setup (stoa-strategy private), .gitignore enhanced, plan.md sanitized | commit aa629732 |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
 | NEXT | CAB-1035 | Persona Alex Test (manual) | — |
@@ -127,8 +128,9 @@
 - Console tenants: "oasis", "oasis-gunters"
 - Portal OIDC client: stoa-portal; Console OIDC client: control-plane-ui
 - Demo seed: `./scripts/demo/seed-all.sh` (master orchestrator) or individual scripts
-- Demo sprint: D1-D11 COMPLETE (PRs #242-#288), R1: MCP REST endpoints (PR #290)
+- Demo sprint: D1-D11 COMPLETE (PRs #242-#288), R1: MCP REST endpoints (PRs #290, #291)
 - D11 from-scratch: `down -v` → `up -d` → `seed-all.sh` = 7/7 PASS + 9/9 federation
+- R1 validated: Act 7 works end-to-end (15 tools: 3 API + 12 native, invoke proxies to httpbin)
 - R1: GET /mcp/v1/tools + POST /mcp/v1/tools/invoke + api_bridge catalog discovery
 - Fixes: LDAP auto-seed (PR #287), Keycloak SSL auto-disable (PR #288), DEMO-SCRIPT.md updated
 - Act 7 MCP: KNOWN limitation (Rust GW, fallback in demo script)

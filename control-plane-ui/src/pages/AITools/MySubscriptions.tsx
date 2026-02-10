@@ -72,9 +72,9 @@ export function MySubscriptions() {
   };
 
   const statusColors: Record<string, string> = {
-    active: 'bg-green-100 text-green-800',
-    suspended: 'bg-yellow-100 text-yellow-800',
-    pending: 'bg-gray-100 text-gray-800',
+    active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    suspended: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+    pending: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
   };
 
   if (loading) {
@@ -98,8 +98,10 @@ export function MySubscriptions() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Subscriptions</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage your subscribed AI tools</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Subscriptions</h1>
+          <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+            Manage your subscribed AI tools
+          </p>
         </div>
         <Link
           to="/ai-tools"
@@ -112,7 +114,7 @@ export function MySubscriptions() {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="flex items-center gap-2 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
           <AlertCircle className="h-5 w-5 flex-shrink-0" />
           <span className="text-sm">{error}</span>
         </div>
@@ -120,35 +122,35 @@ export function MySubscriptions() {
 
       {/* Subscriptions List */}
       {subscriptions.length > 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 overflow-hidden">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                   Tool
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                   Usage
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                   Subscribed
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
               {subscriptions.map((sub) => {
                 const tool = tools.get(sub.toolName);
                 return (
-                  <tr key={sub.id} className="hover:bg-gray-50">
+                  <tr key={sub.id} className="hover:bg-gray-50 dark:hover:bg-neutral-700">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-50 rounded-lg">
+                        <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
                           <Wrench className="h-5 w-5 text-blue-600" />
                         </div>
                         <div>
@@ -156,12 +158,12 @@ export function MySubscriptions() {
                             onClick={() =>
                               navigate(`/ai-tools/${encodeURIComponent(sub.toolName)}`)
                             }
-                            className="font-medium text-gray-900 hover:text-blue-600"
+                            className="font-medium text-gray-900 dark:text-white hover:text-blue-600"
                           >
                             {sub.toolName}
                           </button>
                           {tool && (
-                            <p className="text-sm text-gray-500 line-clamp-1 max-w-xs">
+                            <p className="text-sm text-gray-500 dark:text-neutral-400 line-clamp-1 max-w-xs">
                               {tool.description}
                             </p>
                           )}
@@ -176,16 +178,18 @@ export function MySubscriptions() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Activity className="h-4 w-4 text-gray-400" />
+                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-300">
+                        <Activity className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
                         <span>{sub.usageCount} calls</span>
                         {sub.usageLimit && (
-                          <span className="text-gray-400">/ {sub.usageLimit} limit</span>
+                          <span className="text-gray-400 dark:text-neutral-500">
+                            / {sub.usageLimit} limit
+                          </span>
                         )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-neutral-400">
                         <Clock className="h-4 w-4" />
                         {new Date(sub.subscribedAt).toLocaleDateString()}
                       </div>
@@ -220,7 +224,7 @@ export function MySubscriptions() {
           </table>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
           <EmptyState
             variant="subscriptions"
             title="No subscriptions yet"
@@ -232,9 +236,11 @@ export function MySubscriptions() {
 
       {/* Help Section */}
       {subscriptions.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="font-medium text-blue-900 mb-2">Using Subscribed Tools</h4>
-          <p className="text-sm text-blue-700">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <h4 className="font-medium text-blue-900 dark:text-blue-400 mb-2">
+            Using Subscribed Tools
+          </h4>
+          <p className="text-sm text-blue-700 dark:text-blue-300">
             Subscribed tools are automatically available in your MCP client (Claude Desktop, Cursor,
             etc.). Configure your client to connect to the STOA MCP Gateway to start using these
             tools. Visit any tool's "Quick Start" tab for setup instructions.

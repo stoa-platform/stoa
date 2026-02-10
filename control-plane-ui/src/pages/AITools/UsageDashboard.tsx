@@ -87,8 +87,10 @@ export function UsageDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Usage Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">Monitor your AI tool usage and costs</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Usage Dashboard</h1>
+          <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+            Monitor your AI tool usage and costs
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {/* Period Selector */}
@@ -97,7 +99,7 @@ export function UsageDashboard() {
             <select
               value={period}
               onChange={(e) => setPeriod(e.target.value as PeriodType)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {periodOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -111,7 +113,7 @@ export function UsageDashboard() {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="flex items-center gap-2 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
           <AlertCircle className="h-5 w-5 flex-shrink-0" />
           <span className="text-sm">{error}</span>
         </div>
@@ -168,41 +170,44 @@ export function UsageDashboard() {
 
           {/* Tool Breakdown */}
           {usage.toolBreakdown && usage.toolBreakdown.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Usage by Tool</h3>
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-neutral-700">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Usage by Tool</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 dark:bg-neutral-700">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                         Tool
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                         Calls
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                         Success
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                         Errors
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                         Avg Latency
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                         Cost
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
                     {usage.toolBreakdown.map((tool) => (
-                      <tr key={tool.toolName} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      <tr
+                        key={tool.toolName}
+                        className="hover:bg-gray-50 dark:hover:bg-neutral-700"
+                      >
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
                           {tool.toolName}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 text-right">
+                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-neutral-300 text-right">
                           {tool.totalCalls.toLocaleString()}
                         </td>
                         <td className="px-6 py-4 text-sm text-green-600 text-right">
@@ -211,7 +216,7 @@ export function UsageDashboard() {
                         <td className="px-6 py-4 text-sm text-red-600 text-right">
                           {tool.errorCount.toLocaleString()}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 text-right">
+                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-neutral-300 text-right">
                           {tool.avgLatencyMs.toFixed(0)}ms
                         </td>
                         <td className="px-6 py-4 text-sm text-purple-600 text-right">
@@ -226,16 +231,18 @@ export function UsageDashboard() {
           )}
 
           {/* Period Info */}
-          <div className="text-sm text-gray-500 text-center">
+          <div className="text-sm text-gray-500 dark:text-neutral-400 text-center">
             Showing data from {new Date(usage.startDate).toLocaleDateString()} to{' '}
             {new Date(usage.endDate).toLocaleDateString()}
           </div>
         </>
       ) : (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <BarChart3 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No usage data yet</h3>
-          <p className="text-sm text-gray-500">
+        <div className="text-center py-12 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
+          <BarChart3 className="h-12 w-12 text-gray-300 dark:text-neutral-600 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            No usage data yet
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-neutral-400">
             Start using AI tools to see your usage metrics here
           </p>
         </div>

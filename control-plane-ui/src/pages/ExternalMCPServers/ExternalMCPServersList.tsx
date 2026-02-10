@@ -19,10 +19,26 @@ const healthStatusConfig: Record<
   ExternalMCPHealthStatus,
   { color: string; icon: typeof CheckCircle; label: string }
 > = {
-  unknown: { color: 'bg-gray-100 text-gray-800', icon: Clock, label: 'Unknown' },
-  healthy: { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Healthy' },
-  degraded: { color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle, label: 'Degraded' },
-  unhealthy: { color: 'bg-red-100 text-red-800', icon: XCircle, label: 'Unhealthy' },
+  unknown: {
+    color: 'bg-gray-100 text-gray-800 dark:bg-neutral-700 dark:text-neutral-300',
+    icon: Clock,
+    label: 'Unknown',
+  },
+  healthy: {
+    color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    icon: CheckCircle,
+    label: 'Healthy',
+  },
+  degraded: {
+    color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+    icon: AlertCircle,
+    label: 'Degraded',
+  },
+  unhealthy: {
+    color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    icon: XCircle,
+    label: 'Unhealthy',
+  },
 };
 
 const transportLabels: Record<string, string> = {
@@ -144,10 +160,10 @@ export function ExternalMCPServersList() {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <div className="h-8 w-64 bg-gray-200 rounded animate-pulse" />
+          <div className="h-8 w-64 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
           <div className="flex gap-3">
-            <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
-            <div className="h-10 w-28 bg-gray-200 rounded animate-pulse" />
+            <div className="h-10 w-24 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
+            <div className="h-10 w-28 bg-gray-200 dark:bg-neutral-700 rounded animate-pulse" />
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -164,8 +180,8 @@ export function ExternalMCPServersList() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">External MCP Servers</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">External MCP Servers</h1>
+          <p className="text-gray-500 dark:text-neutral-400 mt-1">
             Register external MCP servers (Linear, GitHub, etc.) to proxy through STOA with
             governance
           </p>
@@ -173,7 +189,7 @@ export function ExternalMCPServersList() {
         <div className="flex gap-3">
           <button
             onClick={loadServers}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-neutral-300"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -190,7 +206,7 @@ export function ExternalMCPServersList() {
 
       {/* Error Alert */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg">
           {error}
           <button onClick={() => setError(null)} className="float-right font-bold">
             &times;
@@ -201,7 +217,7 @@ export function ExternalMCPServersList() {
       {/* Servers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {servers.length === 0 ? (
-          <div className="col-span-full bg-white rounded-lg shadow">
+          <div className="col-span-full bg-white dark:bg-neutral-800 rounded-lg shadow">
             <EmptyState
               variant="servers"
               title="No external MCP servers registered"
@@ -217,7 +233,7 @@ export function ExternalMCPServersList() {
             return (
               <div
                 key={server.id}
-                className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
+                className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow"
               >
                 {/* Header */}
                 <div className="flex justify-between items-start mb-4">
@@ -225,13 +241,17 @@ export function ExternalMCPServersList() {
                     {server.icon ? (
                       <img src={server.icon} alt="" className="w-10 h-10 rounded" />
                     ) : (
-                      <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
-                        <Server className="h-5 w-5 text-gray-500" />
+                      <div className="w-10 h-10 bg-gray-100 dark:bg-neutral-700 rounded flex items-center justify-center">
+                        <Server className="h-5 w-5 text-gray-500 dark:text-neutral-400" />
                       </div>
                     )}
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{server.display_name}</h3>
-                      <p className="text-sm text-gray-500 font-mono">{server.name}</p>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {server.display_name}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono">
+                        {server.name}
+                      </p>
                     </div>
                   </div>
                   <span
@@ -243,31 +263,31 @@ export function ExternalMCPServersList() {
                 </div>
 
                 {/* Info */}
-                <div className="space-y-2 text-sm text-gray-600 mb-4">
+                <div className="space-y-2 text-sm text-gray-600 dark:text-neutral-300 mb-4">
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Transport:</span>
+                    <span className="text-gray-500 dark:text-neutral-400">Transport:</span>
                     <span className="font-mono">
                       {transportLabels[server.transport] || server.transport}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Auth:</span>
+                    <span className="text-gray-500 dark:text-neutral-400">Auth:</span>
                     <span>{server.auth_type.replace('_', ' ')}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Tools:</span>
+                    <span className="text-gray-500 dark:text-neutral-400">Tools:</span>
                     <span>{server.tools_count}</span>
                   </div>
                   {server.tool_prefix && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Prefix:</span>
+                      <span className="text-gray-500 dark:text-neutral-400">Prefix:</span>
                       <span className="font-mono">{server.tool_prefix}__</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Status:</span>
+                    <span className="text-gray-500 dark:text-neutral-400">Status:</span>
                     <span
-                      className={`px-2 py-0.5 text-xs rounded ${server.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}
+                      className={`px-2 py-0.5 text-xs rounded ${server.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-800 dark:bg-neutral-700 dark:text-neutral-300'}`}
                     >
                       {server.enabled ? 'Enabled' : 'Disabled'}
                     </span>
@@ -277,7 +297,7 @@ export function ExternalMCPServersList() {
                 {/* Sync Error */}
                 {server.sync_error && (
                   <div
-                    className="mb-4 p-2 bg-red-50 border border-red-100 rounded text-xs text-red-700 truncate"
+                    className="mb-4 p-2 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-400 truncate"
                     title={server.sync_error}
                   >
                     {server.sync_error}
@@ -285,18 +305,18 @@ export function ExternalMCPServersList() {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-2 pt-4 border-t">
+                <div className="flex gap-2 pt-4 border-t dark:border-neutral-700">
                   <button
                     onClick={() => handleTestConnection(server.id)}
                     disabled={testingServerId === server.id}
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-neutral-300 disabled:opacity-50"
                   >
                     {testingServerId === server.id ? 'Testing...' : 'Test'}
                   </button>
                   <button
                     onClick={() => handleSyncTools(server.id)}
                     disabled={syncingServerId === server.id}
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-neutral-300 disabled:opacity-50"
                   >
                     {syncingServerId === server.id ? 'Syncing...' : 'Sync'}
                   </button>

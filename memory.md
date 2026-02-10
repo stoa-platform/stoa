@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Last updated: 2026-02-10 (OpSec dual-repo setup + AI Factory update)
+> Last updated: 2026-02-10 (fix /apis crash PR #293)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
@@ -69,6 +69,7 @@
 | DONE | R1 | MCP v1 REST endpoints + API-to-Tool bridge (Act 7) | PR #290 |
 | DONE | R1-fix | API bridge: internal endpoint + docker-compose local build | PR #291 |
 | DONE | — | OpSec: dual-repo setup (stoa-strategy private), .gitignore enhanced, plan.md sanitized | commit aa629732 |
+| DONE | — | Fix /apis crash: CelebrationProvider missing in App.tsx | PR #293 |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
 | NEXT | CAB-1035 | Persona Alex Test (manual) | — |
 
@@ -133,6 +134,8 @@
 - R1 validated: Act 7 works end-to-end (15 tools: 3 API + 12 native, invoke proxies to httpbin)
 - R1: GET /mcp/v1/tools + POST /mcp/v1/tools/invoke + api_bridge catalog discovery
 - Fixes: LDAP auto-seed (PR #287), Keycloak SSL auto-disable (PR #288), DEMO-SCRIPT.md updated
+- Fix: /apis page crash — CelebrationProvider added to App.tsx (PR #293)
+- EKS Console status: /apis ✅ fixed, /logs ❌ needs OpenSearch or Grafana+Loki, /observability ❌ needs Grafana
 - Act 7 MCP: KNOWN limitation (Rust GW, fallback in demo script)
 - Console dark mode: 100% coverage (last 4 tools components fixed in PR #286)
 - Docs site: stoa-docs/ (Docusaurus 3.9), 20 pages

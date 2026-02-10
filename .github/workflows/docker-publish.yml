@@ -47,7 +47,7 @@ jobs:
         id: set-matrix
         run: |
           if [ "${{ github.event.inputs.services }}" = "all" ] || [ -z "${{ github.event.inputs.services }}" ]; then
-            echo 'matrix={"service":["control-plane-api","control-plane-ui","mcp-gateway","portal","stoa-gateway"]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"service":["control-plane-api","control-plane-ui","keycloak","mcp-gateway","portal","stoa-gateway"]}' >> $GITHUB_OUTPUT
           else
             # Convert comma-separated list to JSON array
             SERVICES=$(echo "${{ github.event.inputs.services }}" | tr ',' '\n' | jq -R . | jq -s -c '{service: .}')
@@ -177,6 +177,7 @@ jobs:
           echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| control-plane-api | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| control-plane-ui | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| keycloak | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| mcp-gateway | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| portal | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| stoa-gateway | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY

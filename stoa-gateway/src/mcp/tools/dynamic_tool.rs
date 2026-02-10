@@ -36,6 +36,8 @@ pub struct DynamicTool {
     action: Action,
     /// Tenant ID for isolation (from CRD namespace)
     tenant_id: String,
+    /// Skip tenant isolation check (for catalog API tools accessible to all)
+    public: bool,
     /// HTTP client
     client: Client,
 }
@@ -60,6 +62,7 @@ impl DynamicTool {
             annotations: None,
             action: Action::Read,
             tenant_id: tenant_id.into(),
+            public: false,
             client: Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
@@ -79,6 +82,12 @@ impl DynamicTool {
 
     pub fn with_action(mut self, action: Action) -> Self {
         self.action = action;
+        self
+    }
+
+    /// Mark tool as public (skip tenant isolation, for catalog API tools)
+    pub fn into_public(mut self) -> Self {
+        self.public = true;
         self
     }
 }
@@ -107,7 +116,8 @@ impl Tool for DynamicTool {
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         // Tenant isolation: CRD namespace must match caller tenant
-        if ctx.tenant_id != self.tenant_id {
+        // Public tools (catalog API bridge) skip this check
+        if !self.public && ctx.tenant_id != self.tenant_id {
             return Err(ToolError::PermissionDenied(format!(
                 "Tool {} not available for tenant {}",
                 self.name, ctx.tenant_id

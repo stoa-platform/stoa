@@ -18,11 +18,11 @@
 
 | # | Livrable | Deadline | Status |
 |---|----------|----------|--------|
-| 1 | Script verbal 5min | 14 fev | PENDING |
-| 2 | Slides presentation (6+4 backup) | 14 fev | PENDING |
-| 3 | Email design partner contact | 14 fev EOD | PENDING |
-| 4 | Staging preview guide | 16 fev | PENDING |
-| 5 | MOU draft 2 pages | 21 fev | PENDING |
+| 1 | Script verbal 5min | 14 fev | ✅ DONE |
+| 2 | Slides presentation (6+4 backup) | 14 fev | ✅ DONE |
+| 3 | Email design partner contact | 14 fev EOD | ✅ DONE (ready to send) |
+| 4 | Staging preview guide | 16 fev | ✅ DONE |
+| 5 | MOU draft 2 pages | 21 fev | ✅ DONE |
 | 6 | Dry-run 3x | 23 fev | PENDING |
 
 ---

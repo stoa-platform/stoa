@@ -25,8 +25,8 @@ const statusFilterOptions: { value: string; label: string }[] = [
 
 function StatCard({ label, count, color }: { label: string; count: number; color: string }) {
   return (
-    <div className="bg-white rounded-lg shadow px-4 py-3">
-      <p className="text-xs font-medium text-gray-500 uppercase">{label}</p>
+    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow px-4 py-3">
+      <p className="text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">{label}</p>
       <p className={`text-2xl font-bold ${color}`}>{count}</p>
     </div>
   );
@@ -144,15 +144,15 @@ export function GatewayDeploymentsDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gateway Deployments</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Gateway Deployments</h1>
+          <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
             Manage API deployments across gateway instances
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={loadData}
-            className="flex items-center gap-2 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50"
+            className="flex items-center gap-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-neutral-700"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -175,7 +175,7 @@ export function GatewayDeploymentsDashboard() {
           <StatCard label="Drifted" count={summary.drifted} color="text-orange-600" />
           <StatCard label="Error" count={summary.error} color="text-red-600" />
           <StatCard label="Syncing" count={summary.syncing} color="text-blue-600" />
-          <StatCard label="Total" count={summary.total} color="text-gray-900" />
+          <StatCard label="Total" count={summary.total} color="text-gray-900 dark:text-white" />
         </div>
       )}
 
@@ -184,7 +184,7 @@ export function GatewayDeploymentsDashboard() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500"
         >
           {statusFilterOptions.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -192,14 +192,14 @@ export function GatewayDeploymentsDashboard() {
             </option>
           ))}
         </select>
-        <span className="text-sm text-gray-500">
+        <span className="text-sm text-gray-500 dark:text-neutral-400">
           {total} deployment{total !== 1 ? 's' : ''}
         </span>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex items-center justify-between">
           <span className="text-sm">{error}</span>
           <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
             &times;
@@ -208,7 +208,7 @@ export function GatewayDeploymentsDashboard() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow overflow-hidden">
         {loading ? (
           <TableSkeleton rows={5} columns={6} />
         ) : deployments.length === 0 ? (
@@ -219,38 +219,38 @@ export function GatewayDeploymentsDashboard() {
             action={{ label: 'Deploy API', onClick: () => setShowDeployDialog(true) }}
           />
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
+            <thead className="bg-gray-50 dark:bg-neutral-700">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
                   API
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
                   Gateway Resource
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
                   Last Sync
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
                   Attempts
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
               {deployments.map((dep) => (
-                <tr key={dep.id} className="hover:bg-gray-50">
+                <tr key={dep.id} className="hover:bg-gray-50 dark:hover:bg-neutral-700">
                   <td className="px-6 py-4">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
                         {(dep.desired_state as any)?.api_name || dep.api_catalog_id.slice(0, 8)}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 dark:text-neutral-400">
                         {(dep.desired_state as any)?.tenant_id || '-'}
                       </p>
                     </div>
@@ -266,13 +266,15 @@ export function GatewayDeploymentsDashboard() {
                       </p>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500 font-mono">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-neutral-400 font-mono">
                     {dep.gateway_resource_id || '-'}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-neutral-400">
                     {formatTime(dep.last_sync_attempt)}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{dep.sync_attempts}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-neutral-400">
+                    {dep.sync_attempts}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
@@ -302,22 +304,22 @@ export function GatewayDeploymentsDashboard() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t px-6 py-3">
-            <p className="text-sm text-gray-500">
+          <div className="flex items-center justify-between border-t dark:border-neutral-700 px-6 py-3">
+            <p className="text-sm text-gray-500 dark:text-neutral-400">
               Page {currentPage} of {totalPages}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage <= 1}
-                className="border border-gray-300 text-gray-700 px-3 py-1 rounded text-sm disabled:opacity-50 hover:bg-gray-50"
+                className="border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 px-3 py-1 rounded text-sm disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-700"
               >
                 Previous
               </button>
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage >= totalPages}
-                className="border border-gray-300 text-gray-700 px-3 py-1 rounded text-sm disabled:opacity-50 hover:bg-gray-50"
+                className="border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 px-3 py-1 rounded text-sm disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-700"
               >
                 Next
               </button>

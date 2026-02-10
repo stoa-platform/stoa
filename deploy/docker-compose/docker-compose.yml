@@ -19,9 +19,9 @@
 #   - opensearch:     Search engine (port 9200)
 #   - dashboards:     STOA Logs UI (port 5601, via /logs)
 #
-# Federation services (--profile federation):
-#   - openldap:             LDAP backend for gamma org (port 1389)
-#   - federation-gateway:   JWT issuer/audience isolation validator (port 9000)
+# Optional profiles:
+#   --profile federation:      + openldap (1389) + federation-gateway (9000)
+#   --profile monitoring-oidc: + oauth2-proxy (4180) — requires OIDC setup
 #
 # Total RAM: ~3GB base (+ ~256MB with federation profile)
 # =============================================================================
@@ -386,6 +386,11 @@ services:
       - "--storage.tsdb.retention.time=7d"
     networks:
       - stoa-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   # ==========================================================================
@@ -433,14 +438,22 @@ services:
       - loki
     networks:
       - stoa-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   # ==========================================================================
   # oauth2-proxy for Prometheus — CAB-1103 Phase 6B
+  # Requires OIDC setup: deploy/scripts/setup-observability-oidc.sh
   # ==========================================================================
   oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     container_name: stoa-oauth2-proxy
+    profiles: ["monitoring-oidc"]
     ports:
       - "${PORT_OAUTH2_PROXY:-4180}:4180"
     environment:
@@ -534,6 +547,11 @@ services:
       - loki
     networks:
       - stoa-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9080/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   # ==========================================================================

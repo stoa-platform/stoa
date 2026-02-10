@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: stoa-control-plane-api
-          image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-control-plane-api:dev-latest
+          image: ghcr.io/stoa-platform/control-plane-api:dev-latest
           imagePullPolicy: Always
           ports:
             - name: http

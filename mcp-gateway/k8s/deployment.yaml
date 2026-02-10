@@ -24,7 +24,7 @@ spec:
       automountServiceAccountToken: true
       containers:
         - name: stoa-mcp-gateway
-          image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-mcp-gateway:dev-latest
+          image: ghcr.io/stoa-platform/mcp-gateway:dev-latest
           imagePullPolicy: Always
           ports:
             - name: http

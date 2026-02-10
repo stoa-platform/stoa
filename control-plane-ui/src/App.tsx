@@ -71,7 +71,10 @@ const PlatformMetrics = lazy(() =>
 // CAB-1108: Embedded iframe pages for unified STOA experience (retained for deep-link fallback)
 const GrafanaEmbed = lazy(() => import('./pages/GrafanaEmbed'));
 const IdentityEmbed = lazy(() => import('./pages/IdentityEmbed'));
-// CAB-1114: OpenSearch Dashboards for API trace logs
+const RequestExplorer = lazy(() =>
+  import('./pages/RequestExplorer').then((m) => ({ default: m.RequestExplorerDashboard }))
+);
+// CAB-1114: OpenSearch Dashboards for API trace logs (retained for deep-link fallback)
 const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 
 // CAB-1118: Skeleton pages for upcoming features
@@ -351,8 +354,9 @@ function ProtectedRoutes() {
               <Route path="/observability" element={<PlatformMetrics />} />
               <Route path="/observability/grafana" element={<GrafanaEmbed />} />
               <Route path="/identity" element={<IdentityEmbed />} />
-              {/* CAB-1114: OpenSearch Dashboards for API trace logs */}
-              <Route path="/logs" element={<LogsEmbed />} />
+              {/* Native request explorer (replace OpenSearch iframe) */}
+              <Route path="/logs" element={<RequestExplorer />} />
+              <Route path="/logs/opensearch" element={<LogsEmbed />} />
               {/* CAB-1118: Skeleton pages for upcoming features */}
               <Route path="/shadow-discovery" element={<ShadowDiscovery />} />
               <Route path="/token-optimizer" element={<TokenOptimizer />} />

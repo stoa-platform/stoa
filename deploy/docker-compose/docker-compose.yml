@@ -569,6 +569,7 @@ services:
       LDAP_DOMAIN: "demo.stoa"
       LDAP_ADMIN_PASSWORD: "${LDAP_ADMIN_PASSWORD:-admin-password}"
     volumes:
+      - ../demo-federation/openldap:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro
       - ../demo-federation/openldap:/ldif-seed:ro
       - ldap-data:/var/lib/ldap
       - ldap-config:/etc/ldap/slapd.d

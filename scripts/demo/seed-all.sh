@@ -31,7 +31,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONTROL_PLANE_URL="${CONTROL_PLANE_URL:-http://localhost:8000}"
 KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8080}"
 OPENSEARCH_URL="${OPENSEARCH_URL:-https://localhost:9200}"
-OPENSEARCH_AUTH="${OPENSEARCH_AUTH:-admin:admin}"
+OPENSEARCH_AUTH="${OPENSEARCH_AUTH:-admin:StOa_Admin_2026!}"
 SKIP_TRAFFIC="${SKIP_TRAFFIC:-false}"
 FEDERATION="${FEDERATION:-false}"
 OPENSEARCH_ONLY="${OPENSEARCH_ONLY:-false}"
@@ -96,7 +96,7 @@ run_step() {
 
 check_api() {
   info "Checking Control Plane API at $CONTROL_PLANE_URL..."
-  if curl -sf "$CONTROL_PLANE_URL/health/ready" > /dev/null 2>&1; then
+  if curl -sf "$CONTROL_PLANE_URL/health" > /dev/null 2>&1; then
     log "API is healthy"
     return 0
   else

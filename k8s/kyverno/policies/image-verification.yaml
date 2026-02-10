@@ -43,25 +43,3 @@ spec:
                     issuer: "https://token.actions.githubusercontent.com"
                     rekor:
                       url: https://rekor.sigstore.dev
-
-    - name: verify-ecr-signature
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              namespaces:
-                - stoa-system
-      verifyImages:
-        - imageReferences:
-            - "848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/*"
-          mutateDigest: false
-          verifyDigest: false
-          required: false
-          attestors:
-            - entries:
-                - keyless:
-                    subject: "https://github.com/stoa-platform/stoa/.github/workflows/*"
-                    issuer: "https://token.actions.githubusercontent.com"
-                    rekor:
-                      url: https://rekor.sigstore.dev

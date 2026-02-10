@@ -7,6 +7,7 @@ import { quickLinks } from './config';
 import { ToastProvider } from '@stoa/shared/components/Toast';
 import { CommandPaletteProvider } from '@stoa/shared/components/CommandPalette';
 import { ThemeProvider } from '@stoa/shared/contexts';
+import { CelebrationProvider } from '@stoa/shared/components/Celebration';
 import { StoaLoader } from '@stoa/shared/components/StoaLoader';
 
 // Lazy load pages for code splitting
@@ -63,10 +64,17 @@ const BusinessDashboard = lazy(() =>
   import('./pages/Business').then((m) => ({ default: m.BusinessDashboard }))
 );
 
-// CAB-1108: Embedded iframe pages for unified STOA experience
+// Native observability dashboards (replace iframe embeds)
+const PlatformMetrics = lazy(() =>
+  import('./pages/PlatformMetrics').then((m) => ({ default: m.PlatformMetricsDashboard }))
+);
+// CAB-1108: Embedded iframe pages for unified STOA experience (retained for deep-link fallback)
 const GrafanaEmbed = lazy(() => import('./pages/GrafanaEmbed'));
 const IdentityEmbed = lazy(() => import('./pages/IdentityEmbed'));
-// CAB-1114: OpenSearch Dashboards for API trace logs
+const RequestExplorer = lazy(() =>
+  import('./pages/RequestExplorer').then((m) => ({ default: m.RequestExplorerDashboard }))
+);
+// CAB-1114: OpenSearch Dashboards for API trace logs (retained for deep-link fallback)
 const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 
 // CAB-1118: Skeleton pages for upcoming features
@@ -342,11 +350,13 @@ function ProtectedRoutes() {
               <Route path="/my-usage" element={<TenantDashboard />} />
               <Route path="/business" element={<BusinessDashboard />} />
               <Route path="/admin/prospects" element={<AdminProspects />} />
-              {/* CAB-1108: Embedded observability and identity management */}
-              <Route path="/observability" element={<GrafanaEmbed />} />
+              {/* Native observability dashboards (replace iframe embeds) */}
+              <Route path="/observability" element={<PlatformMetrics />} />
+              <Route path="/observability/grafana" element={<GrafanaEmbed />} />
               <Route path="/identity" element={<IdentityEmbed />} />
-              {/* CAB-1114: OpenSearch Dashboards for API trace logs */}
-              <Route path="/logs" element={<LogsEmbed />} />
+              {/* Native request explorer (replace OpenSearch iframe) */}
+              <Route path="/logs" element={<RequestExplorer />} />
+              <Route path="/logs/opensearch" element={<LogsEmbed />} />
               {/* CAB-1118: Skeleton pages for upcoming features */}
               <Route path="/shadow-discovery" element={<ShadowDiscovery />} />
               <Route path="/token-optimizer" element={<TokenOptimizer />} />
@@ -418,12 +428,14 @@ function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/*" element={<ProtectedRoutes />} />
-          </Routes>
-        </AuthProvider>
+        <CelebrationProvider>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/*" element={<ProtectedRoutes />} />
+            </Routes>
+          </AuthProvider>
+        </CelebrationProvider>
       </ToastProvider>
     </ThemeProvider>
   );

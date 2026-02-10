@@ -86,11 +86,12 @@ Prerequis: `brew install tmux` + `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
 
 ## Repos
 
-| Repo | Stack | URL |
-|------|-------|-----|
-| stoa | Python + React + Rust | github.com/stoa-platform/stoa |
-| stoa-infra | Terraform + Ansible + Helm | github.com/PotoMitan/stoa-infra |
-| stoa-docs | Docusaurus | github.com/stoa-platform/stoa-docs |
-| stoa-web | Astro | github.com/stoa-platform/stoa-web |
-| stoa-quickstart | Docker Compose | github.com/stoa-platform/stoa-quickstart |
-| stoactl | Go + Cobra | github.com/stoa-platform/stoactl |
+| Repo | Stack | URL | Visibility |
+|------|-------|-----|------------|
+| stoa | Python + React + Rust | github.com/stoa-platform/stoa | Public |
+| stoa-strategy | Markdown + Prompts | github.com/PotoMitan/stoa-strategy | **Private** (client data, pricing, GTM) |
+| stoa-infra | Terraform + Ansible + Helm | github.com/PotoMitan/stoa-infra | Private |
+| stoa-docs | Docusaurus | github.com/stoa-platform/stoa-docs | Public |
+| stoa-web | Astro | github.com/stoa-platform/stoa-web | Public |
+| stoa-quickstart | Docker Compose | github.com/stoa-platform/stoa-quickstart | Public |
+| stoactl | Go + Cobra | github.com/stoa-platform/stoactl | Public |

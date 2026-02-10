@@ -1,11 +1,11 @@
 # STOA Memory
 
-> Last updated: 2026-02-09 (Session 21 — AI Factory modernization + state files refresh)
+> Last updated: 2026-02-10 (Console dark mode complete — all pages verified, PRs #234-#247)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: AI Factory modernization. Next: CAB-864 P2-P3 mTLS impl, CAB-1121 P4 quota, CAB-1066 landing page.
+- **Focus**: Demo Sprint "ESB is Dead" (24 fev 2026). D1-D5 complete, D6-D11 pending.
 
 ## Session State
 
@@ -45,12 +45,24 @@
 | DONE | CAB-864 | P1 mTLS Design Doc + ADR-039 | PR #221 |
 | DONE | — | Ship/Show/Ask Git Workflow for AI Factory | PR #222 |
 | DONE | — | AI Factory modernization + state files refresh | Session 21 |
-| NEXT | CAB-864 | P2-P3 mTLS Implementation (Rust gateway + API) | Design ready (PR #221) |
-| NEXT | CAB-1121 | P4 Quota Enforcement | P1-P3 done |
-| NEXT | CAB-1121 | P6 E2E Tests full flow | Needs P4 |
+| DONE | CAB-864 | P2 mTLS Gateway Module (Rust, 870 lines, 299 tests) | PR #224 |
+| DONE | CAB-864 | P3 Bulk Onboarding + Registry (Alembic 020) | PR #230 |
+| DONE | CAB-1121 | P4 Quota Enforcement (rate limiting, 27 tests) | PR #229 |
+| DONE | CAB-1121 | P6 E2E Tests full flow | PR #233 |
+| DONE | — | Console dark mode batch 1-4 | PRs #234, #235, #240, #241, #243 |
+| DONE | — | Console dark mode batch 5 (External MCP Servers) | PR #246 |
+| DONE | — | Console dark mode batch 6 (APIMonitoring + ErrorSnapshots) | PR #247 |
+| DONE | — | Console dark mode COMPLETE — all pages verified | All pages have dark: variants |
+| DONE | D1 | Rust GW basic mode (compile fix + docker-compose) | PRs #242, #244 |
+| DONE | D2 | Keycloak federation cross-tenant (5 realms, OpenLDAP) | PR #248 |
+| DONE | D3 | OpenSearch error snapshots dashboard + seed script | PR #249 |
+| DONE | D4 | Gateway metrics dashboard + 9 analytics dashboards | PR #249 |
+| DONE | D5 | Master seed orchestration script (seed-all.sh) | PR #249 |
+| NEXT | D6 | Docker-compose demo final (15 services, all healthy) | — |
+| NEXT | D7 | Demo script dry-run #1 + fix frictions | — |
+| NEXT | D8 | README public (English, screenshots, badges) | — |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
 | NEXT | CAB-1035 | Persona Alex Test (manual) | — |
-| NEXT | CAB-1112 | Kyverno policies: Audit → Enforce | Prereq: 3-5 days clean audit |
 
 ## CI Pipeline Status (2026-02-09) — ALL GREEN THROUGH DEPLOY
 
@@ -100,6 +112,7 @@
 - Stack = Python (not Node)
 - Console tenants: "oasis", "oasis-gunters"
 - Portal OIDC client: stoa-portal; Console OIDC client: control-plane-ui
-- Demo seed: `make seed-demo` or `ANORAK_PASSWORD=xxx python3 scripts/seed-demo-data.py`
+- Demo seed: `./scripts/demo/seed-all.sh` (master orchestrator) or individual scripts
+- Demo sprint: D1-D5 done (PRs #242-#249), D6-D11 pending (Semaine 2, 17-23 fev)
 - Docs site: stoa-docs/ (Docusaurus 3.9), 20 pages
 - Vault v1.20.4 running, unsealed. ESO not yet deployed.

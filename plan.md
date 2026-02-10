@@ -29,7 +29,7 @@
 | | **DONE LUNDI** | **171** | **13 PRs + 1 chore** | ✅ |
 | | **DONE DIMANCHE SOIR** | **+41** | **PRs #224-#230** | ✅ |
 | | **DONE MARDI** | **+13** | **PRs #233-#235** | ✅ |
-| | **DEMO SPRINT D1** | **—** | **PRs #242, #244** | ✅ |
+| | **DEMO SPRINT D1-D5** | **—** | **PRs #242, #244-#249** | ✅ |
 | | | | | |
 | 15 | CAB-864 P2 — mTLS Gateway Module | **18** | #224 | ✅ merged |
 | 15b | CAB-864 P3 — Bulk Onboarding + Registry | **8** | #230 | ✅ merged |
@@ -142,10 +142,10 @@ All sessions completed. PRs #203-#222 merged. Session 21: AI Factory modernizati
 |---|--------|---------------|------|--------|
 | S1 | Definir scope demo | `docs/MVP-SCOPE.md` approuve | 10 fev | ✅ |
 | D1 | Rust GW basic mode (JWT, proxy, health, rate limit) | Gateway repond 200 + valide JWT + proxy upstream | 11 fev | ✅ PR #242 (compile fix) + PR #244 (docker-compose) |
-| D2 | Keycloak federation cross-tenant | Login user realm A → acces ressource realm B | 12 fev | pending |
-| D3 | OpenSearch error snapshots polish | Errors indexees + STOA branding dashboards | 13 fev | pending |
-| D4 | Grafana dashboards (overview, per-tenant, gateway) | 3 dashboards fonctionnels + OIDC Keycloak | 14 fev | pending |
-| D5 | Integration test: full flow admin → consumer → GW → metrics | Script seed-demo + dry-run passe | 15 fev | pending |
+| D2 | Keycloak federation cross-tenant | Login user realm A → acces ressource realm B | 12 fev | ✅ PR #248 |
+| D3 | OpenSearch error snapshots polish | Errors indexees + STOA branding dashboards | 13 fev | ✅ PR #249 |
+| D4 | Grafana dashboards (overview, per-tenant, gateway) | 3 dashboards fonctionnels + OIDC Keycloak | 14 fev | ✅ PR #249 |
+| D5 | Integration test: full flow admin → consumer → GW → metrics | Script seed-demo + dry-run passe | 15 fev | ✅ PR #249 |
 
 ### Semaine 2 (17-23 fev) — Polish + Demo Prep
 
@@ -154,7 +154,7 @@ All sessions completed. PRs #203-#222 merged. Session 21: AI Factory modernizati
 | D6 | Docker-compose demo final (15 services, seed data) | `docker compose up` → tous services healthy | 17 fev | pending |
 | D7 | Demo script dry-run #1 + fix frictions | Script 7 actes chrono < 20 min | 18 fev | pending |
 | D8 | README public (anglais, screenshots, badges) | README.md pret pour repo public | 19 fev | pending |
-| D9 | Bug fixes, dark mode polish, UX consistency | Zero regression, console + portal coherents | 20 fev | pending |
+| D9 | Bug fixes, dark mode polish, UX consistency | Zero regression, console + portal coherents | 20 fev | ✅ dark mode complete (PRs #234-#247, 8 PRs) |
 | D10 | Demo script dry-run #2 (chrono < 15 min) | Dry-run filme, zero blocage | 21 fev | pending |
 | D11 | Buffer / derniers ajustements | Zero P0 ouvert | 22-23 fev | pending |
 

@@ -146,7 +146,6 @@ impl RateLimiter {
 
 /// Result of a rate limit check
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct RateLimitResult {
     pub allowed: bool,
     pub limit: usize,
@@ -156,7 +155,6 @@ pub struct RateLimitResult {
 
 impl RateLimitResult {
     /// Generate X-RateLimit-* headers
-    #[allow(dead_code)]
     pub fn headers(&self) -> Vec<(&'static str, String)> {
         let mut headers = vec![
             ("X-RateLimit-Limit", self.limit.to_string()),

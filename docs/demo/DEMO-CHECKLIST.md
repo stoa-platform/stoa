@@ -1,156 +1,219 @@
 # Demo Pre-Flight Checklist
 
-> **CAB-1061** | Run this checklist **30 minutes before** the presentation.
-> Target: 24 February 2026 | "ESB is Dead"
+> **Date**: 24 February 2026 | "ESB is Dead, AI Agents Are Here"
+> Run this checklist **30 minutes before** the presentation.
 
 ---
 
-## T-24h : Preparation
+## T-24h: Preparation
 
-- [ ] Dry-run complet fait (< 5 min)
-- [ ] Video backup enregistree et accessible offline
-- [ ] Slide deck export en PDF (backup si PowerPoint plante)
-- [ ] QR code genere et teste (pointe vers https://docs.gostoa.dev)
+- [ ] Full dry-run completed (< 20 min, all 8 acts)
+- [ ] Video backup recorded and accessible offline
+- [ ] Slide deck exported as PDF (backup)
+- [ ] QR code generated and tested (https://docs.gostoa.dev)
+- [ ] Terminal font size 18pt+ (readable from back of room)
 
-## T-30min : Infrastructure
+## T-30min: Infrastructure
+
+### Start Services
+
+```bash
+cd deploy/docker-compose
+
+# Start all services with federation
+docker compose --profile federation up -d
+
+# Wait for all healthy
+../../scripts/demo/check-health.sh --wait --federation
+
+# Seed demo data
+ANORAK_PASSWORD=readyplayerone ../../scripts/demo/seed-all.sh --federation
+```
+
+### Service Health
+
+```bash
+# Quick check all services
+../../scripts/demo/check-health.sh --federation
+```
+
+- [ ] All 16+ services: HEALTHY
+- [ ] One-shot services (db-migrate, opensearch-init): DONE (exited 0)
+
+### Individual Service Checks
+
+| Service | Check | Expected |
+|---------|-------|----------|
+| Console | `curl -s http://localhost` | 200 (HTML) |
+| Portal | `curl -s http://localhost:3002` | 200 (HTML) |
+| API | `curl -s http://localhost:8000/health` | 200 |
+| Gateway | `curl -s http://localhost:8081/health` | 200 JSON |
+| Keycloak | `curl -s http://localhost/auth/realms/stoa` | 200 JSON |
+| Grafana | `curl -s http://localhost/grafana/api/health` | 200 |
+| OpenSearch | `curl -sfk https://localhost:9200 -u admin:StOa_Admin_2026!` | 200 |
+| Federation GW | `curl -s http://localhost:9000/health` | 200 |
+
+- [ ] All services respond 200
 
 ### Connectivity
 
-- [ ] Wifi stable (tester avec speed test)
-- [ ] Hotspot mobile pret en backup
-- [ ] VPN deconnecte (eviter latence)
+- [ ] Wifi stable (speed test done)
+- [ ] Hotspot mobile ready as backup
+- [ ] VPN disconnected (avoid latency)
 
-### Services UP
+---
 
-Verifier que chaque service repond :
+## T-15min: Browser Setup
+
+### Open Tabs (Chrome, 125% zoom)
+
+| Tab | URL | Pre-condition |
+|-----|-----|---------------|
+| 1 | http://localhost | Logged in as **halliday** |
+| 2 | http://localhost/portal | NOT logged in (fresh) |
+| 3 | Terminal (full screen) | Font 18pt, dark background |
+| 4 | http://localhost/grafana | Logged in as **admin** |
+| 5 | http://localhost/logs | Logged in as **admin** |
+| 6 | http://localhost/auth | Logged in as **admin** |
+
+### Pre-Auth Sessions
+
+1. **Console (Tab 1)** — Login as halliday / readyplayerone
+   - [ ] Dashboard loads with stats
+   - [ ] Sidebar visible: APIs, Tenants, Consumers, Monitoring
+
+2. **Portal (Tab 2)** — Do NOT login (developer flow starts fresh)
+   - [ ] Landing page visible
+
+3. **Grafana (Tab 4)** — Login as admin / admin
+   - [ ] STOA Platform Overview dashboard loads
+   - [ ] Navigate to STOA Gateway Metrics — verify data exists
+
+4. **OpenSearch (Tab 5)** — Login as admin / StOa_Admin_2026!
+   - [ ] Discover page shows stoa-errors-* index
+
+5. **Keycloak (Tab 6)** — Login as admin / admin
+   - [ ] 6 realms visible (stoa + 5 federation)
+
+### Browser State
+
+- [ ] Notifications disabled
+- [ ] "Do Not Disturb" enabled (macOS)
+- [ ] History/favorites bar hidden
+- [ ] Zoom at 125%
+- [ ] Dark mode disabled (better for projector)
+- [ ] Personal tabs closed
+
+---
+
+## T-5min: Verify Each Act
+
+### Act 1 — Console
+
+- [ ] API Catalog page loads with APIs
+- [ ] Tenants page loads
+- [ ] Create Tenant form accessible
+
+### Act 2 — Portal
+
+- [ ] API Catalog loads with searchable APIs
+- [ ] "Payments" search returns results
+- [ ] Subscribe button visible on API detail page
+
+### Act 3 — Gateway
 
 ```bash
-# Health checks — tout doit retourner 200
-curl -s -o /dev/null -w "%{http_code}" https://portal.gostoa.dev     # Portal
-curl -s -o /dev/null -w "%{http_code}" https://console.gostoa.dev    # Console
-curl -s -o /dev/null -w "%{http_code}" https://api.gostoa.dev/health/ready  # API
-curl -s -o /dev/null -w "%{http_code}" https://auth.gostoa.dev       # Keycloak
+# Test gateway health
+curl -s http://localhost/gateway/health | python3 -m json.tool
 ```
+- [ ] Gateway health returns 200 with mode: "edge-mcp"
 
-- [ ] Portal : 200
-- [ ] Console : 200
-- [ ] API : 200
-- [ ] Keycloak : 200
+### Act 4 — Grafana
 
-### Seed Data
+- [ ] Gateway Metrics dashboard has data
+- [ ] Platform Overview dashboard has data
+
+### Act 5 — OpenSearch
+
+- [ ] Error Snapshots dashboard has data (from seed)
+- [ ] Recent Errors table shows entries
+
+### Act 6 — Federation
 
 ```bash
-# Obtenir un token (necessaire pour les endpoints portal)
-TOKEN=$(curl -s -X POST "https://auth.gostoa.dev/realms/stoa/protocol/openid-connect/token" \
-  -d "grant_type=password&client_id=control-plane-ui&username=anorak&password=demo" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
-
-# Verifier que les APIs demo sont dans le catalogue
-curl -s -H "Authorization: Bearer $TOKEN" \
-  "https://api.gostoa.dev/v1/portal/apis?search=petstore" | python3 -m json.tool | head -5
+# Test federation token (org-alpha)
+curl -s -X POST "http://localhost:8080/realms/demo-org-alpha/protocol/openid-connect/token" \
+  -d "grant_type=password&client_id=demo-client&username=alice&password=alice123" | python3 -c "import sys,json; t=json.load(sys.stdin); print('OK' if 'access_token' in t else 'FAIL: ' + str(t))"
 ```
+- [ ] Token issued for alice in demo-org-alpha
 
-- [ ] Petstore API visible dans le catalogue
-- [ ] Account Management API visible
-- [ ] Payments API visible
-
-Si les APIs manquent, re-executer le seed :
+### Act 7 — MCP Bridge
 
 ```bash
-ANORAK_PASSWORD=<password> python scripts/seed-demo-data.py
+# Test MCP tool discovery
+curl -s http://localhost:8081/mcp/v1/tools | python3 -m json.tool | head -5
+```
+- [ ] MCP tools endpoint responds
+
+### Act 8 — Git Stats
+
+```bash
+git log --oneline --since="2026-02-09" | wc -l
+```
+- [ ] Shows 20+ PRs
+
+---
+
+## Terminal Commands (Pre-Typed)
+
+Prepare these in a script or terminal history:
+
+```bash
+# Act 3.1 — Gateway health
+curl http://localhost/gateway/health | python3 -m json.tool
+
+# Act 3.2 — Authenticated call (replace TOKEN)
+export TOKEN="<paste from Act 2>"
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8081/v1/proxy/payments/status
+
+# Act 3.3 — Rate limit burst
+for i in $(seq 1 20); do curl -s -o /dev/null -w "%{http_code} " -H "Authorization: Bearer $TOKEN" http://localhost:8081/v1/proxy/payments/status; done; echo
+
+# Act 6.2 — Federation token
+TOKEN_A=$(curl -s -X POST "http://localhost:8080/realms/demo-org-alpha/protocol/openid-connect/token" -d "grant_type=password&client_id=demo-client&username=alice&password=alice123" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -H "Authorization: Bearer $TOKEN_A" http://localhost:9000/api/org-beta/resource
+
+# Act 7.1 — MCP tools
+curl http://localhost:8081/mcp/v1/tools | python3 -m json.tool
+
+# Act 7.2 — MCP invoke
+curl -X POST http://localhost:8081/mcp/v1/tools/invoke -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{"tool": "payments-api", "arguments": {"action": "get-status"}}'
+
+# Act 8 — Git stats
+git log --oneline --since="2026-02-09" | wc -l
 ```
 
 ---
 
-## T-15min : Navigateur
+## Plan B: If Something Breaks
 
-### Setup onglets
-
-Ouvrir dans cet ordre (Chrome recommande) :
-
-| Onglet | URL | Pre-condition |
-|--------|-----|---------------|
-| 1 | https://portal.gostoa.dev/apis | Logged in as **art3mis** |
-| 2 | https://console.gostoa.dev | Logged in as **parzival** |
-| 3 | Slide deck | Sur la slide titre |
-
-### Pre-auth sessions
-
-1. **Portal** — Se connecter en tant que art3mis
-   - Aller sur https://portal.gostoa.dev
-   - Login SSO avec credentials art3mis
-   - Verifier que le catalogue s'affiche
-   - **Ne pas fermer l'onglet** (la session Keycloak reste active)
-
-2. **Console** — Se connecter en tant que parzival
-   - Aller sur https://console.gostoa.dev
-   - Login Keycloak avec credentials parzival
-   - Verifier que le Dashboard s'affiche
-   - **Ne pas fermer l'onglet**
-
-### Etat du navigateur
-
-- [ ] Notifications navigateur desactivees
-- [ ] Mode "Ne pas deranger" active (macOS)
-- [ ] Historique/favoris barre masquee
-- [ ] Zoom navigateur a 125% (lisibilite salle)
-- [ ] Dark mode desactive (meilleure projection)
-- [ ] Onglets personnels fermes
-
----
-
-## T-5min : Verification scenario
-
-### Portal (onglet 1)
-
-- [ ] API Catalog charge avec les 3 APIs
-- [ ] Recherche "petstore" retourne un resultat
-- [ ] Page detail Petstore API s'ouvre
-- [ ] Onglets Endpoints et OpenAPI Spec fonctionnent
-- [ ] Bouton Subscribe visible
-
-### Console (onglet 2)
-
-- [ ] Dashboard affiche les stats
-- [ ] Page Applications montre "Gunter Analytics Dashboard" en Pending
-- [ ] API Monitoring accessible
-
-### Subscription test (optionnel)
-
-Si aucune souscription active n'existe pour la demo :
-
-1. Portal > Petstore API > Subscribe
-2. Selectionner "OASIS Mobile App" + "Standard Plan"
-3. Verifier que l'API Key est generee
-4. Tester dans le Sandbox : `GET /pets` → 200 OK
-
-> **Note** : Si la souscription existe deja (409), c'est normal et idempotent.
-> Aller dans My Subscriptions pour montrer la souscription existante.
-
----
-
-## Plan B : Si ca plante
-
-| Scenario | Action immediate |
+| Scenario | Immediate Action |
 |----------|-----------------|
-| Wifi down | Basculer sur hotspot mobile |
-| Portal down | Passer aux screenshots dans le slide deck |
-| Keycloak down | Mentionner "environnement en maintenance" et montrer la video backup |
-| Subscribe erreur | Montrer My Subscriptions (souscription existante) |
-| Test Sandbox 500 | Ouvrir terminal, faire un `curl` direct |
-| Tout down | Lancer la video backup (offline) |
-
-### Commande curl de secours
-
-```bash
-# Test direct via httpbin (toujours disponible, retourne 200)
-curl -s https://httpbin.org/anything/pets?status=available | python3 -m json.tool | head -20
-```
+| Wifi down | Switch to mobile hotspot |
+| Console down | Use Portal for admin demo |
+| Gateway 500 | Show pre-recorded terminal output |
+| Grafana empty | Show screenshot in slides |
+| OpenSearch down | "Indexing in progress" + show architecture slide |
+| Federation fails | Show Keycloak admin UI (6 realms visible) |
+| MCP endpoint missing | "Bridge is in development" + show architecture |
+| Everything down | Switch to video backup (offline) |
 
 ---
 
-## Post-demo
+## Post-Demo
 
-- [ ] Collecter contacts (cartes de visite / QR code LinkedIn)
-- [ ] Noter les questions posees
-- [ ] Screenshot du slide final avec QR code (partager sur LinkedIn)
+- [ ] Collect contacts (business cards / LinkedIn QR)
+- [ ] Note questions asked
+- [ ] Screenshot slide with QR code (share on LinkedIn)
+- [ ] Write down any bugs noticed during demo
+- [ ] Update DRY-RUN report with findings

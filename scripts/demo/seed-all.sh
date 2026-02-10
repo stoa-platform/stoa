@@ -159,6 +159,54 @@ seed_ldap() {
   fi
 }
 
+disable_keycloak_ssl() {
+  # Keycloak master realm defaults to sslRequired=external, blocking HTTP token requests.
+  # All tenant/federation realms already have sslRequired=none in their JSON,
+  # but master is not imported from JSON so must be patched at runtime.
+  local ADMIN_TOKEN
+  ADMIN_TOKEN=$(curl -sf -X POST "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
+    -d "grant_type=password&client_id=admin-cli&username=admin&password=admin" \
+    -H "Content-Type: application/x-www-form-urlencoded" 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || true)
+
+  if [ -z "$ADMIN_TOKEN" ]; then
+    # Try via nginx (master might already block direct HTTP)
+    ADMIN_TOKEN=$(curl -sf -X POST "http://localhost/auth/realms/master/protocol/openid-connect/token" \
+      -d "grant_type=password&client_id=admin-cli&username=admin&password=admin" \
+      -H "Content-Type: application/x-www-form-urlencoded" 2>/dev/null \
+      | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || true)
+    local KC_ADMIN_URL="http://localhost/auth"
+  else
+    local KC_ADMIN_URL="$KEYCLOAK_URL"
+  fi
+
+  if [ -z "$ADMIN_TOKEN" ]; then
+    warn "Could not get Keycloak admin token — SSL disable skipped"
+    return 1
+  fi
+
+  # Get all realms and disable SSL where needed
+  local REALMS
+  REALMS=$(curl -sf "${KC_ADMIN_URL}/admin/realms" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" 2>/dev/null)
+
+  echo "$REALMS" | python3 -c "
+import sys, json, urllib.request
+realms = json.load(sys.stdin)
+token = '$ADMIN_TOKEN'
+url = '${KC_ADMIN_URL}'
+fixed = 0
+for r in realms:
+    if r.get('sslRequired', 'external') != 'none':
+        body = json.dumps({'sslRequired': 'none'}).encode()
+        req = urllib.request.Request(f'{url}/admin/realms/{r[\"realm\"]}', data=body, method='PUT',
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+        urllib.request.urlopen(req)
+        fixed += 1
+print(f'{fixed} realm(s) fixed' if fixed else 'all realms OK')
+"
+}
+
 run_federation_tests() {
   if [ -x "$REPO_ROOT/scripts/demo-federation/04-test-isolation.sh" ]; then
     "$REPO_ROOT/scripts/demo-federation/04-test-isolation.sh"
@@ -186,6 +234,7 @@ if [ "$OPENSEARCH_ONLY" = true ]; then
   run_step "Seed Error Snapshots (OpenSearch)" seed_opensearch
 else
   # Full seed
+  run_step "Disable Keycloak SSL (HTTP dev mode)" disable_keycloak_ssl
   run_step "API Health Check" check_api
   run_step "OpenSearch Health Check" check_opensearch
   run_step "Seed Demo Data (APIs, Plans, Consumers)" seed_demo_data

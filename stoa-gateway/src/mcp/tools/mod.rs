@@ -10,6 +10,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+pub mod api_bridge;
 pub mod dynamic_tool;
 pub mod native_tool;
 pub mod proxy_tool;

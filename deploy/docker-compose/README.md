@@ -6,14 +6,13 @@ Launch the STOA Platform in under 5 minutes with Docker Compose.
 
 - **Docker Desktop 4.x+** with at least **8GB RAM** allocated
 - **docker compose v2.x+** (check with `docker compose version`)
-- **Free ports**: 3000, 3001, 5432, 8000, 8080, 9090
+- **Free ports**: 80, 3002, 5432, 8000, 8080, 8081, 9090, 9093, 9200, 5601
 
 ## Quick Start
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/gostoa/stoa-platform.git
-cd stoa-platform/deploy/docker-compose
+# 1. Navigate to docker-compose directory
+cd deploy/docker-compose
 
 # 2. Copy environment file
 cp .env.example .env
@@ -22,30 +21,81 @@ cp .env.example .env
 docker compose up -d
 
 # 4. Wait for services to be ready (~3-4 minutes)
-docker compose logs -f
+../../scripts/demo/check-health.sh --wait
+
+# 5. (Optional) Seed demo data
+../../scripts/demo/seed-all.sh --skip-traffic
 ```
-
-Once you see `stoa-api` reporting healthy, the platform is ready!
-
-## Performance
-
-| Metric | Result |
-|--------|--------|
-| **Startup time** | ~45 seconds |
-| **RAM usage** | ~1.5GB (fits on 8GB machines) |
-| **First API call** | < 1 minute from clone |
-| **Image pull** | ~500MB total (multi-arch) |
-
-*Tested with pre-built GHCR images on Docker Desktop 4.x*
 
 ## Access the Platform
 
+All services are accessible through the nginx reverse proxy on port 80:
+
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **Console** | http://localhost:3000 | halliday / readyplayerone |
-| **Keycloak** | http://localhost:8080 | admin / admin |
-| **Grafana** | http://localhost:3001 | admin / admin |
-| **API Docs** | http://localhost:8000/docs | - |
+| **Console** | http://localhost | halliday / readyplayerone |
+| **Portal** | http://localhost/portal | (self-registration) |
+| **API Docs** | http://localhost/api/docs | - |
+| **Keycloak** | http://localhost/auth | admin / admin |
+| **Grafana** | http://localhost/grafana | admin / admin |
+| **STOA Logs** | http://localhost/logs | admin / StOa_Admin_2026! |
+| **Prometheus** | http://localhost:9090 | - |
+| **AlertManager** | http://localhost:9093 | - |
+| **Rust Gateway** | http://localhost/gateway/health | - |
+
+Direct access (bypassing proxy):
+
+| Service | URL |
+|---------|-----|
+| Console | http://localhost:3000 |
+| Portal | http://localhost:3002 |
+| API | http://localhost:8000 |
+| Gateway | http://localhost:8081 |
+| Keycloak | http://localhost:8080 |
+| Grafana | http://localhost:3001 |
+| OpenSearch | https://localhost:9200 |
+| OpenSearch Dashboards | http://localhost:5601 |
+
+## Services (17 base)
+
+| # | Service | Image | Purpose |
+|---|---------|-------|---------|
+| 1 | PostgreSQL 15 | postgres:15-alpine | Database |
+| 2 | Keycloak 23.0 | quay.io/keycloak/keycloak:23.0 | Authentication + 5 federation realms |
+| 3 | DB Migrate | control-plane-api:1.0.0 | Alembic migrations (one-shot) |
+| 4 | Control Plane API | control-plane-api:1.0.0 | FastAPI backend |
+| 5 | Console UI | control-plane-ui:1.0.0 | React admin interface |
+| 6 | Portal | portal:1.0.0 | Developer portal |
+| 7 | Rust Gateway | stoa-gateway (local build) | API gateway (edge-mcp mode) |
+| 8 | Nginx | nginx:1.25-alpine | Reverse proxy |
+| 9 | Prometheus | prom/prometheus:v2.48.0 | Metrics |
+| 10 | Grafana | grafana/grafana:10.2.2 | Dashboards (12 pre-configured) |
+| 11 | Loki | grafana/loki:2.9.3 | Log aggregation |
+| 12 | Promtail | grafana/promtail:2.9.3 | Log shipping |
+| 13 | AlertManager | prom/alertmanager:v0.27.0 | Alert routing |
+| 14 | OpenSearch | opensearch:2.11.0 | Search + error snapshots |
+| 15 | OpenSearch Dashboards | opensearch-dashboards:2.11.0 | STOA Logs UI |
+| 16 | OpenSearch Init | opensearch:2.11.0 | Security setup (one-shot) |
+
+**RAM usage**: ~3GB (fits on 8GB machines)
+
+## Optional Profiles
+
+```bash
+# Add federation services (OpenLDAP + Federation Gateway)
+docker compose --profile federation up -d
+
+# Add OIDC-protected Prometheus (requires OIDC setup first)
+docker compose --profile monitoring-oidc up -d
+
+# All profiles
+docker compose --profile federation --profile monitoring-oidc up -d
+```
+
+| Profile | Services Added | Extra RAM |
+|---------|---------------|-----------|
+| `federation` | OpenLDAP, Federation Gateway | ~256MB |
+| `monitoring-oidc` | oauth2-proxy | ~64MB |
 
 ## Demo Users (OASIS Theme)
 
@@ -59,48 +109,39 @@ Once you see `stoa-api` reporting healthy, the platform is ready!
 | sorrento | ioi101 | Tenant Admin | IOI Sixers |
 | sixer42 | loyalty2045 | Viewer | IOI Sixers |
 
-## What's Included
+## Demo Data Seeding
 
-### Services (6 total, ~1.5GB RAM)
+```bash
+# Seed everything (APIs, consumers, OpenSearch errors, traffic)
+ANORAK_PASSWORD=readyplayerone ../../scripts/demo/seed-all.sh
 
-1. **PostgreSQL 15** - Database
-2. **Keycloak 23.0** - Authentication with OASIS-themed users
-3. **Control Plane API** - FastAPI backend with metrics
-4. **Console UI** - React admin interface
-5. **Prometheus** - Metrics collection
-6. **Grafana** - Pre-configured dashboards
+# Seed only OpenSearch error snapshots
+../../scripts/demo/seed-all.sh --opensearch-only
 
-### Demo Data
+# Skip traffic generator
+../../scripts/demo/seed-all.sh --skip-traffic
 
-- 3 tenants: Gregarious Games, OASIS Gunters, IOI Sixers
-- 7 users with different roles (admin, tenant-admin, devops, viewer)
-- Pre-configured Keycloak realm with OIDC clients
-
-## Verify It Works
-
-1. Open **Console**: http://localhost:3000
-2. Login with `halliday` / `readyplayerone`
-3. Explore the dashboard
-4. Open **Grafana**: http://localhost:3001 (admin/admin)
-5. Check the STOA Platform Overview dashboard
+# Include federation isolation tests
+../../scripts/demo/seed-all.sh --federation
+```
 
 ## Common Commands
 
 ```bash
+# Check health of all services
+../../scripts/demo/check-health.sh
+
+# Wait for all services to become healthy
+../../scripts/demo/check-health.sh --wait
+
 # View logs
 docker compose logs -f
 
 # View specific service logs
 docker compose logs -f control-plane-api
 
-# Check service status
-docker compose ps
-
 # Stop all services
 docker compose stop
-
-# Start all services
-docker compose start
 
 # Reset everything (destroy all data)
 docker compose down -v
@@ -111,102 +152,67 @@ docker compose up -d
 
 ### Port Conflicts
 
-If you have port conflicts, edit `.env` to change the ports:
+Edit `.env` to change ports:
 
 ```env
-PORT_CONSOLE=3002      # Change Console port
-PORT_KEYCLOAK=8081     # Change Keycloak port
+PORT_CONSOLE=3003      # Change Console port
+PORT_KEYCLOAK=8082     # Change Keycloak port
 ```
 
 ### Keycloak Takes Long to Start
 
-Keycloak needs 60-90 seconds to start and import the realm. This is normal.
+Keycloak needs 60-90 seconds to start and import 6 realms. This is normal.
 
 ```bash
-# Watch Keycloak startup
 docker compose logs -f keycloak
 ```
 
-### API Can't Connect to Keycloak
+### OpenSearch Won't Start
 
-Wait for Keycloak to be fully ready before accessing the API:
+OpenSearch requires `vm.max_map_count >= 262144`:
 
 ```bash
-# Check Keycloak health
-curl http://localhost:8080/health/ready
+# macOS: Docker Desktop handles this automatically
+# Linux:
+sudo sysctl -w vm.max_map_count=262144
 ```
 
-### Database Migration Errors
+### Rust Gateway Build Fails
 
-If migrations fail, reset the database:
-
-```bash
-docker compose down -v
-docker compose up -d
-```
-
-### Checking Service Health
+The gateway builds from source. Ensure Rust toolchain is available or use cached layers:
 
 ```bash
-# All services
-docker compose ps
-
-# API health
-curl http://localhost:8000/health
-
-# Keycloak health
-curl http://localhost:8080/health/ready
+# Rebuild gateway only
+docker compose build stoa-gateway
+docker compose up -d stoa-gateway
 ```
 
 ## Architecture
 
 ```
-                    +----------------+
-                    |   PostgreSQL   |
-                    |    (5432)      |
-                    +--------+-------+
-                             |
-            +----------------+----------------+
-            |                                 |
-    +-------v-------+                +--------v-------+
-    |   Keycloak    |                | Control Plane  |
-    |    (8080)     |                |     API        |
-    |               |                |    (8000)      |
-    +-------+-------+                +--------+-------+
-            |                                 |
-            |                         +-------v-------+
-            |                         |    Console    |
-            +------------------------>|     UI        |
-                                      |    (3000)     |
-                                      +---------------+
-
-    +---------------+                +---------------+
-    |  Prometheus   |--------------->|    Grafana    |
-    |    (9090)     |                |    (3001)     |
-    +---------------+                +---------------+
-```
-
-## Full Stack (Optional)
-
-For the full stack with Portal, MCP Gateway, and Loki (requires 16GB RAM):
-
-```bash
-docker compose --profile full up -d
+              ┌─────────────────────────────────────────────────────────┐
+              │                  nginx (port 80)                        │
+              │  /        /api   /auth  /portal /gateway /grafana /logs │
+              └──┬────────┬──────┬──────┬───────┬───────┬────────┬─────┘
+                 │        │      │      │       │       │        │
+         Console UI    API   Keycloak Portal  Gateway Grafana  OS Dashboards
+          (3000)     (8000)  (8080)  (3002)   (8081)  (3001)    (5601)
+                       │      │                 │       │          │
+                  PostgreSQL ──┘                 │  Prometheus   OpenSearch
+                   (5432)                        │   (9090)      (9200)
+                                                 │       │
+                                            Loki ┘  AlertManager
+                                           (3100)    (9093)
 ```
 
 ## Next Steps
 
 1. **Create a Tenant**: Login as `halliday` and create a new tenant
-2. **Add APIs**: Register APIs in the catalog
-3. **Invite Users**: Add users to your tenant
-4. **Explore Grafana**: Check metrics and dashboards
+2. **Seed Demo Data**: Run `seed-all.sh` for a fully populated platform
+3. **Explore Grafana**: Check the 12 pre-configured dashboards
+4. **Try the Gateway**: Send requests through `http://localhost/gateway/health`
 
 ## Support
 
 - **Documentation**: https://docs.gostoa.dev
-- **Issues**: https://github.com/gostoa/stoa-platform/issues
-- **Discussions**: https://github.com/gostoa/stoa-platform/discussions
-
----
-
-Built with the OASIS spirit - _Ready Player One_ theme data included!
+- **Issues**: https://github.com/stoa-platform/stoa/issues

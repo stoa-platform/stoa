@@ -1,11 +1,11 @@
 # STOA Memory
 
-> Last updated: 2026-02-10 (R1 MCP REST endpoints — PR #290)
+> Last updated: 2026-02-10 (OpSec dual-repo setup + AI Factory update)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: Demo Sprint "ESB is Dead" (24 fev 2026). D1-D11 complete. R1: MCP REST endpoints for Act 7.
+- **Focus**: Demo Sprint "ESB is Dead" (24 fev 2026). D1-D11 complete. R1 MCP endpoints. OpSec layers done.
 
 ## Session State
 
@@ -67,6 +67,7 @@
 | DONE | D10 | Dry-run #2 — 7/8 acts PASS, federation fixed, seed fixed | PR #284 |
 | DONE | D11 | From-scratch validation — LDAP auto-seed, Keycloak SSL, 7/7+9/9 | PRs #287, #288 |
 | DONE | R1 | MCP v1 REST endpoints + API-to-Tool bridge (Act 7) | PR #290 |
+| DONE | — | OpSec: dual-repo setup (stoa-strategy private), .gitignore enhanced, plan.md sanitized | commit aa629732 |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
 | NEXT | CAB-1035 | Persona Alex Test (manual) | — |
 
@@ -111,10 +112,17 @@
 - control-plane-api still OutOfSync in ArgoCD (drift)
 - mcp-gateway Degraded in ArgoCD (residual from selector fix)
 
+## Security / OpSec (2026-02-10)
+- **Dual-repo**: stoa (public) + PotoMitan/stoa-strategy (private, GitHub)
+- **Private repo**: client mapping, pricing, legal, demo scripts, sensitive prompts
+- **.gitignore**: 72 patterns added (strategy, clients, pricing, slides, legal, prompts/*.txt)
+- **plan.md**: sanitized (no client names), full version in stoa-strategy
+- **Sensitive prompts**: moved from .claude/prompts/*.txt to stoa-strategy
+- **Legal templates**: OK public (use [COMPANY_NAME] placeholders)
+
 ## Notes
 - Demo: mardi 24 fevrier 2026
 - Presentation "ESB is Dead" same day
-- 2 design partners to close
 - Stack = Python (not Node)
 - Console tenants: "oasis", "oasis-gunters"
 - Portal OIDC client: stoa-portal; Console OIDC client: control-plane-ui

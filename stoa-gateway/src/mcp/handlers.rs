@@ -10,8 +10,8 @@
 
 use axum::{
     extract::State,
-    http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    http::{HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -199,6 +199,24 @@ pub async fn mcp_tools_list(
     })
 }
 
+/// Helper to add rate limit headers to a response
+fn with_rate_limit_headers(
+    status: StatusCode,
+    body: Json<ToolsCallResponse>,
+    rate_result: &crate::rate_limit::RateLimitResult,
+) -> Response {
+    let mut response = (status, body).into_response();
+
+    // Add rate limit headers
+    for (key, value) in rate_result.headers() {
+        if let Ok(header_value) = HeaderValue::from_str(&value) {
+            response.headers_mut().insert(key, header_value);
+        }
+    }
+
+    response
+}
+
 /// POST /mcp/tools/call - Execute a tool
 ///
 /// Full execution pipeline (CAB-1105 Phases 1-4):
@@ -258,7 +276,8 @@ pub async fn mcp_tools_call(
                     }],
                     is_error: Some(true),
                 }),
-            );
+            )
+                .into_response();
         }
     };
 
@@ -286,7 +305,8 @@ pub async fn mcp_tools_call(
                 }],
                 is_error: Some(true),
             }),
-        );
+        )
+            .into_response();
     }
 
     // Build tool context with real JWT claims (Phase 1)
@@ -339,7 +359,8 @@ pub async fn mcp_tools_call(
                 }],
                 is_error: Some(true),
             }),
-        );
+        )
+            .into_response();
     }
     let t_policy = t_policy_start.elapsed();
 
@@ -382,7 +403,8 @@ pub async fn mcp_tools_call(
                     content: vec![ToolContent::Text { text }],
                     is_error: None,
                 }),
-            );
+            )
+                .into_response();
         }
     }
 
@@ -464,6 +486,7 @@ pub async fn mcp_tools_call(
                     is_error: result.is_error,
                 }),
             )
+                .into_response()
         }
         Err(e) => {
             let t_backend = t_backend_start.elapsed();
@@ -503,7 +526,7 @@ pub async fn mcp_tools_call(
                 t_backend_ms,
             );
 
-            (
+            with_rate_limit_headers(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ToolsCallResponse {
                     content: vec![ToolContent::Text {
@@ -511,6 +534,7 @@ pub async fn mcp_tools_call(
                     }],
                     is_error: Some(true),
                 }),
+                &rate_result,
             )
         }
     }

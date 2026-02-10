@@ -99,18 +99,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        with:
-          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
-          aws-region: eu-west-1
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name apim-dev-cluster --region eu-west-1
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
       - name: Apply k8s manifest
         run: |
           kubectl apply -f portal/k8s/deployment.yaml 2>&1 || {
@@ -119,7 +116,7 @@ jobs:
             kubectl apply -f portal/k8s/deployment.yaml
           }
 
-  # === Deploy: EKS rollout with auto-rollback ===
+  # === Deploy: K3s rollout with auto-rollback ===
   deploy:
     needs: [docker, apply-manifest]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -131,7 +128,6 @@ jobs:
       environment-url: https://portal.gostoa.dev
     permissions:
       contents: read
-      id-token: write
     secrets: inherit
 
   # === Smoke Test: E2E @smoke after deploy ===

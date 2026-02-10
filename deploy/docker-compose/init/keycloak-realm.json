@@ -248,6 +248,13 @@
       "webOrigins": [
         "http://localhost"
       ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
       "protocolMappers": [
         {
           "name": "realm-roles",

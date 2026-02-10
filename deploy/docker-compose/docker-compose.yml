@@ -9,7 +9,7 @@
 #
 # Services:
 #   - postgres:       Database (port 5432)
-#   - keycloak:       Authentication (port 8080)
+#   - keycloak:       Authentication (port 8080) + 5 federation realms
 #   - api:            Control Plane API (port 8000)
 #   - console:        Console UI (port 3000)
 #   - portal:         Developer Portal (port 3002)
@@ -19,7 +19,11 @@
 #   - opensearch:     Search engine (port 9200)
 #   - dashboards:     STOA Logs UI (port 5601, via /logs)
 #
-# Total RAM: ~3GB (works on 8GB machines)
+# Federation services (--profile federation):
+#   - openldap:             LDAP backend for gamma org (port 1389)
+#   - federation-gateway:   JWT issuer/audience isolation validator (port 9000)
+#
+# Total RAM: ~3GB base (+ ~256MB with federation profile)
 # =============================================================================
 
 services:
@@ -68,8 +72,18 @@ services:
       # Phase 2: Allow iframe embedding in Console (CAB-1108)
       KC_SPI_X_FRAME_OPTIONS: ""
       KC_SPI_CONTENT_SECURITY_POLICY: "frame-ancestors 'self' http://localhost:* https://console.gostoa.dev"
+      # Federation: token exchange + fine-grained authz (ADR-026)
+      KC_FEATURES: "token-exchange,admin-fine-grained-authz"
     volumes:
-      - ./init/keycloak-realm.json:/opt/keycloak/data/import/stoa-realm.json:ro
+      # Main STOA realm
+      - ./init/keycloak-realm.json:/opt/keycloak/data/import/01-stoa-realm.json:ro
+      # Federation realms (ADR-026): 2 IdP sources + 3 tenant orgs
+      - ../demo-federation/keycloak/idp-source-alpha.json:/opt/keycloak/data/import/02-idp-source-alpha.json:ro
+      - ../demo-federation/keycloak/idp-source-beta.json:/opt/keycloak/data/import/03-idp-source-beta.json:ro
+      - ../demo-federation/keycloak/demo-org-alpha.json:/opt/keycloak/data/import/04-demo-org-alpha.json:ro
+      - ../demo-federation/keycloak/demo-org-beta.json:/opt/keycloak/data/import/05-demo-org-beta.json:ro
+      - ../demo-federation/keycloak/demo-org-gamma.json:/opt/keycloak/data/import/06-demo-org-gamma.json:ro
+      # Theme
       - ../../keycloak/themes/stoa:/opt/keycloak/themes/stoa:ro
       - keycloak-data:/opt/keycloak/data
     networks:
@@ -521,6 +535,65 @@ services:
       - stoa-network
     restart: unless-stopped
 
+  # ==========================================================================
+  # OpenLDAP - Identity source for gamma org (ADR-026 Federation)
+  # ==========================================================================
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: stoa-federation-ldap
+    profiles: ["federation"]
+    ports:
+      - "${PORT_LDAP:-1389}:389"
+    command: ["--copy-service"]
+    environment:
+      LDAP_ORGANISATION: "Demo Org Gamma"
+      LDAP_DOMAIN: "demo.stoa"
+      LDAP_ADMIN_PASSWORD: "${LDAP_ADMIN_PASSWORD:-admin-password}"
+    volumes:
+      - ../demo-federation/openldap:/ldif-seed:ro
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost:389", "-b", "", "-s", "base", "namingContexts"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Federation Gateway - JWT issuer/audience isolation validator (ADR-026)
+  # Proves cross-realm token isolation: tokens from realm A are rejected
+  # when accessing resources in realm B.
+  # ==========================================================================
+  federation-gateway:
+    image: python:3.11-slim
+    container_name: stoa-federation-gateway
+    profiles: ["federation"]
+    ports:
+      - "${PORT_FEDERATION_GATEWAY:-9000}:9000"
+    environment:
+      KEYCLOAK_INTERNAL_URL: "http://keycloak:8080"
+      KEYCLOAK_URL: "http://localhost:${PORT_KEYCLOAK:-8080}"
+      KEYCLOAK_HOSTNAME_URL: "http://localhost/auth"
+    volumes:
+      - ../demo-federation/gateway/server.py:/app/server.py:ro
+    command: ["python", "/app/server.py"]
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
 # =============================================================================
 # Networks
 # =============================================================================
@@ -539,3 +612,5 @@ volumes:
   loki-data:
   opensearch-data:
   alertmanager-data:
+  ldap-data:
+  ldap-config:

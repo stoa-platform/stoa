@@ -13,18 +13,20 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 PORT = int(os.environ.get("GATEWAY_PORT", "9000"))
 KEYCLOAK_BASE = os.environ.get("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
 KEYCLOAK_EXTERNAL = os.environ.get("KEYCLOAK_URL", "http://localhost:8080")
+# Optional: accept tokens issued with KC_HOSTNAME_URL (e.g., http://localhost/auth)
+KEYCLOAK_HOSTNAME = os.environ.get("KEYCLOAK_HOSTNAME_URL", "")
 
-# Map tenant path prefix to expected issuer (accept both internal and external)
-TENANT_ISSUERS = {
-    "alpha": f"{KEYCLOAK_BASE}/realms/demo-org-alpha",
-    "beta": f"{KEYCLOAK_BASE}/realms/demo-org-beta",
-    "gamma": f"{KEYCLOAK_BASE}/realms/demo-org-gamma",
-}
-TENANT_ISSUERS_EXT = {
-    "alpha": f"{KEYCLOAK_EXTERNAL}/realms/demo-org-alpha",
-    "beta": f"{KEYCLOAK_EXTERNAL}/realms/demo-org-beta",
-    "gamma": f"{KEYCLOAK_EXTERNAL}/realms/demo-org-gamma",
-}
+# Map tenant path prefix to accepted issuers (internal + external + hostname)
+TENANT_ACCEPTED_ISSUERS = {}
+for _tenant_key in ("alpha", "beta", "gamma"):
+    _realm = f"demo-org-{_tenant_key}"
+    _issuers = {
+        f"{KEYCLOAK_BASE}/realms/{_realm}",
+        f"{KEYCLOAK_EXTERNAL}/realms/{_realm}",
+    }
+    if KEYCLOAK_HOSTNAME:
+        _issuers.add(f"{KEYCLOAK_HOSTNAME}/realms/{_realm}")
+    TENANT_ACCEPTED_ISSUERS[_tenant_key] = _issuers
 
 
 def decode_jwt_payload(token: str) -> dict:
@@ -64,8 +66,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
             return
 
         tenant = parts[1]
-        if tenant not in TENANT_ISSUERS:
-            self._send_json(404, {"error": f"Unknown tenant: {tenant}", "valid": list(TENANT_ISSUERS.keys())})
+        if tenant not in TENANT_ACCEPTED_ISSUERS:
+            self._send_json(404, {"error": f"Unknown tenant: {tenant}", "valid": list(TENANT_ACCEPTED_ISSUERS.keys())})
             return
 
         # Extract Bearer token
@@ -81,15 +83,14 @@ class GatewayHandler(BaseHTTPRequestHandler):
             return
 
         # Validate issuer
-        expected_internal = TENANT_ISSUERS[tenant]
-        expected_external = TENANT_ISSUERS_EXT[tenant]
+        accepted = TENANT_ACCEPTED_ISSUERS[tenant]
         actual_issuer = claims.get("iss", "")
 
-        if actual_issuer not in (expected_internal, expected_external):
+        if actual_issuer not in accepted:
             self._send_json(403, {
                 "error": "Issuer mismatch — cross-realm access denied",
                 "tenant": tenant,
-                "expected_issuer": expected_external,
+                "expected_issuers": sorted(accepted),
                 "actual_issuer": actual_issuer,
                 "stoa_realm": claims.get("stoa_realm", "unknown"),
             })
@@ -111,5 +112,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     server = HTTPServer(("0.0.0.0", PORT), GatewayHandler)
     print(f"[gateway] Federation mock gateway listening on :{PORT}")
-    print(f"[gateway] Tenants: {list(TENANT_ISSUERS.keys())}")
+    print(f"[gateway] Tenants: {list(TENANT_ACCEPTED_ISSUERS.keys())}")
+    if KEYCLOAK_HOSTNAME:
+        print(f"[gateway] KC_HOSTNAME_URL accepted: {KEYCLOAK_HOSTNAME}")
     server.serve_forever()

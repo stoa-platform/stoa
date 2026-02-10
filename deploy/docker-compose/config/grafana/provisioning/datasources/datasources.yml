@@ -31,3 +31,26 @@ datasources:
     jsonData:
       maxLines: 1000
       timeout: 60
+
+  # ---------------------------------------------------------------------------
+  # OpenSearch - Error Snapshots & Audit Logs
+  # ---------------------------------------------------------------------------
+  - name: OpenSearch
+    type: grafana-opensearch-datasource
+    uid: opensearch
+    access: proxy
+    url: https://opensearch:9200
+    editable: false
+    jsonData:
+      database: "stoa-errors-*"
+      flavor: opensearch
+      version: "2.11.0"
+      pplEnabled: true
+      timeField: "@timestamp"
+      tlsSkipVerify: true
+      logMessageField: error_message
+      logLevelField: severity
+    secureJsonData:
+      basicAuthPassword: "${OPENSEARCH_PASSWORD:-admin}"
+    basicAuth: true
+    basicAuthUser: "${OPENSEARCH_USER:-admin}"

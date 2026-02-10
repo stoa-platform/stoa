@@ -29,7 +29,7 @@
 | | **DONE LUNDI** | **171** | **13 PRs + 1 chore** | ✅ |
 | | **DONE DIMANCHE SOIR** | **+41** | **PRs #224-#230** | ✅ |
 | | **DONE MARDI** | **+13** | **PRs #233-#235** | ✅ |
-| | **DEMO SPRINT D1-D5** | **—** | **PRs #242, #244-#249** | ✅ |
+| | **DEMO SPRINT D1-D8** | **—** | **PRs #242-#280** | ✅ |
 | | | | | |
 | 15 | CAB-864 P2 — mTLS Gateway Module | **18** | #224 | ✅ merged |
 | 15b | CAB-864 P3 — Bulk Onboarding + Registry | **8** | #230 | ✅ merged |
@@ -151,9 +151,9 @@ All sessions completed. PRs #203-#222 merged. Session 21: AI Factory modernizati
 
 | # | Action | DoD (binaire) | Jour | Status |
 |---|--------|---------------|------|--------|
-| D6 | Docker-compose demo final (15 services, seed data) | `docker compose up` → tous services healthy | 17 fev | pending |
-| D7 | Demo script dry-run #1 + fix frictions | Script 7 actes chrono < 20 min | 18 fev | pending |
-| D8 | README public (anglais, screenshots, badges) | README.md pret pour repo public | 19 fev | pending |
+| D6 | Docker-compose demo final (health checks, nginx routes) | `docker compose up` → tous services healthy | 17 fev | ✅ PR #250 |
+| D7 | Demo script 8-act presentation + checklist | Script 8 actes chrono < 20 min | 18 fev | ✅ PR #257 |
+| D8 | README public (anglais, badges, quick start) | README.md 185 lines, pret pour repo public | 19 fev | ✅ PR #280 |
 | D9 | Bug fixes, dark mode polish, UX consistency | Zero regression, console + portal coherents | 20 fev | ✅ dark mode complete (PRs #234-#247, 8 PRs) |
 | D10 | Demo script dry-run #2 (chrono < 15 min) | Dry-run filme, zero blocage | 21 fev | pending |
 | D11 | Buffer / derniers ajustements | Zero P0 ouvert | 22-23 fev | pending |

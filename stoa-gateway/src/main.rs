@@ -42,7 +42,7 @@ use control_plane::GatewayRegistrar;
 use handlers::admin;
 use mcp::{
     discovery::{mcp_capabilities, mcp_discovery, mcp_health},
-    handlers::{mcp_tools_call, mcp_tools_list},
+    handlers::{mcp_rest_tools_invoke, mcp_rest_tools_list, mcp_tools_call, mcp_tools_list},
     sse::{handle_sse_delete, handle_sse_get, handle_sse_post},
 };
 use proxy::dynamic_proxy;
@@ -265,9 +265,12 @@ fn build_router(state: AppState) -> Router {
                 .route("/mcp", get(mcp_discovery))
                 .route("/mcp/capabilities", get(mcp_capabilities))
                 .route("/mcp/health", get(mcp_health))
-                // MCP Tools (REST-style for backward compat)
+                // MCP Tools (JSON-RPC style)
                 .route("/mcp/tools/list", post(mcp_tools_list))
                 .route("/mcp/tools/call", post(mcp_tools_call))
+                // MCP v1 REST API (demo + simple HTTP clients)
+                .route("/mcp/v1/tools", get(mcp_rest_tools_list))
+                .route("/mcp/v1/tools/invoke", post(mcp_rest_tools_invoke))
                 // MCP SSE Transport (Streamable HTTP)
                 .route(
                     "/mcp/sse",
@@ -434,7 +437,7 @@ fn build_router(state: AppState) -> Router {
 /// Phase 1: Native tools call CP API directly (STOA_NATIVE_TOOLS_ENABLED=true, default)
 /// Legacy: ProxyTool calls Python mcp-gateway (STOA_NATIVE_TOOLS_ENABLED=false)
 async fn register_tools(state: &AppState) {
-    use mcp::tools::stoa_tools;
+    use mcp::tools::{api_bridge, stoa_tools};
 
     if state.config.native_tools_enabled {
         info!("Native tools enabled (direct CP API calls)");
@@ -457,12 +460,29 @@ async fn register_tools(state: &AppState) {
         stoa_tools::register_static_tools(&state.tool_registry, state.control_plane.clone());
     }
 
+    // Discover published APIs from CP catalog and register as MCP tools
+    let cp_url = state.control_plane.base_url().to_string();
+    let http_client = mcp::tools::native_tool::create_http_client();
+    match api_bridge::discover_api_tools(&state.tool_registry, &cp_url, &http_client).await {
+        Ok(count) => {
+            if count > 0 {
+                info!(count, "API catalog tools registered");
+            }
+        }
+        Err(e) => {
+            warn!(error = %e, "API catalog discovery failed (will retry in background)");
+        }
+    }
+
     // Background refresh: sync tools from CP every 60s (Phase 6: with circuit breaker)
     stoa_tools::start_tool_refresh_task(
         state.tool_registry.clone(),
         state.control_plane.clone(),
         state.cp_circuit_breaker.clone(),
     );
+
+    // Background refresh: sync API catalog tools every 60s
+    api_bridge::start_api_tool_refresh_task(state.tool_registry.clone(), cp_url, http_client);
 }
 
 // === Health Endpoints ===

@@ -79,6 +79,64 @@ class PortalAPIsResponse(BaseModel):
     page_size: int
 
 
+# ============================================================================
+# Internal Router (for Rust Gateway API Bridge — no JWT auth required)
+# ============================================================================
+
+internal_router = APIRouter(
+    prefix="/v1/internal/catalog",
+    tags=["Internal - Gateway API Bridge"],
+)
+
+
+class InternalAPIItem(BaseModel):
+    """API item for gateway internal discovery — includes backend_url."""
+
+    id: str
+    name: str
+    description: str = ""
+    backend_url: str | None = None
+    version: str = "1.0.0"
+
+
+class InternalAPIsResponse(BaseModel):
+    """Response for internal API catalog endpoint."""
+
+    apis: list[InternalAPIItem]
+
+
+@internal_router.get("/apis", response_model=InternalAPIsResponse)
+async def internal_list_apis(
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    List published APIs with backend_url for gateway API-to-Tool bridge.
+
+    Internal endpoint — no JWT auth required (service-to-service on internal network).
+    Used by stoa-gateway to discover APIs and register them as MCP tools.
+    """
+    try:
+        repo = CatalogRepository(db)
+        apis, _total = await repo.get_portal_apis(page=1, page_size=100)
+
+        return InternalAPIsResponse(
+            apis=[
+                InternalAPIItem(
+                    id=api.api_id,
+                    name=api.api_name or api.api_id,
+                    description=(api.api_metadata or {}).get("description", ""),
+                    backend_url=(api.api_metadata or {}).get("backend_url"),
+                    version=api.version or "1.0.0",
+                )
+                for api in apis
+            ]
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to list internal APIs: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list APIs: {e!s}")
+
+
 class PortalMCPServerResponse(BaseModel):
     """MCP Server response for Portal catalog."""
 

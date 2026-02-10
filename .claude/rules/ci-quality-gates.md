@@ -123,9 +123,9 @@ cargo clippy --all-targets --all-features -- \
 
 | Setting | Value |
 |---------|-------|
-| Platform | `linux/amd64` (EKS target) |
+| Platform | `linux/amd64` (K3s Hetzner target) |
 | Monorepo context | `control-plane-ui`, `portal` (for `shared/` deps) |
-| Registry | `848853684735.dkr.ecr.eu-west-1.amazonaws.com` |
+| Registry | `ghcr.io/stoa-platform` |
 
 ## Security Pipeline (security-scan.yml)
 

@@ -1,15 +1,18 @@
 # STOA Memory
 
-> Last updated: 2026-02-10 (Console dark mode complete — all pages verified, PRs #234-#247)
+> Last updated: 2026-02-10 (PR #301 merged — Console local build + Grafana auto-login)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: Demo Sprint "ESB is Dead" (24 fev 2026). D1-D5 complete, D6-D11 pending.
+- **Focus**: Demo Design Partner (24 fev). Phase 1-2 DONE (5 livrables). Next: email Khalil (14 fev EOD).
+- **Latest**: Native observability dashboards live (PRs #299-#301), docker-compose Console builds from source
 
 ## Session State
 
 | Status | Ticket | Description | Evidence |
+|--------|--------|-------------|----------|
+| DONE | — | Plan restructure: binary DoD + AI Factory execution | commit c8e74a38 |
 |--------|--------|-------------|----------|
 | DONE | CAB-1044 | API Search HTTP 500 fix | commit 2c5672d8 |
 | DONE | CAB-1040 | Gateway Routes HTTP 404 fix | commit 0c33e21d |
@@ -53,14 +56,28 @@
 | DONE | — | Console dark mode batch 5 (External MCP Servers) | PR #246 |
 | DONE | — | Console dark mode batch 6 (APIMonitoring + ErrorSnapshots) | PR #247 |
 | DONE | — | Console dark mode COMPLETE — all pages verified | All pages have dark: variants |
+| DONE | — | Dark mode tools components (ToolCard, UsageChart, QuickStartGuide, ToolSchemaViewer) | PR #286 |
 | DONE | D1 | Rust GW basic mode (compile fix + docker-compose) | PRs #242, #244 |
-| DONE | D2 | Keycloak federation cross-tenant (5 realms, OpenLDAP) | PR #248 |
+| DONE | D2 | Keycloak federation cross-tenant (5 realms, OpenLDAP) | PR #248, #282 (live demo) |
 | DONE | D3 | OpenSearch error snapshots dashboard + seed script | PR #249 |
 | DONE | D4 | Gateway metrics dashboard + 9 analytics dashboards | PR #249 |
 | DONE | D5 | Master seed orchestration script (seed-all.sh) | PR #249 |
-| NEXT | D6 | Docker-compose demo final (15 services, all healthy) | — |
-| NEXT | D7 | Demo script dry-run #1 + fix frictions | — |
-| NEXT | D8 | README public (English, screenshots, badges) | — |
+| DONE | D6 | Docker-compose demo final (health checks, nginx routes, check-health.sh) | PR #250 |
+| DONE | D7 | Demo script 8-act presentation + pre-flight checklist | PR #257 |
+| DONE | D8 | README rewrite for public launch (4100→185 lines) | PR #280 |
+| DONE | D10 | Dry-run #2 — 7/8 acts PASS, federation fixed, seed fixed | PR #284 |
+| DONE | D11 | From-scratch validation — LDAP auto-seed, Keycloak SSL, 7/7+9/9 | PRs #287, #288 |
+| DONE | R1 | MCP v1 REST endpoints + API-to-Tool bridge (Act 7) | PR #290 |
+| DONE | R1-fix | API bridge: internal endpoint + docker-compose local build | PR #291 |
+| DONE | — | OpSec: dual-repo setup (stoa-strategy private), .gitignore enhanced, plan.md sanitized | commit aa629732 |
+| DONE | — | Fix /apis crash: CelebrationProvider missing in App.tsx | PR #293 |
+| DONE | — | Fix Grafana SSO: add stoa-observability Keycloak client + role mapping | PR #295 |
+| DONE | — | Demo Phase 1-2: Email + Script + Slides + Staging + MOU (5 livrables, français, Q1/Q2 resolved) | stoa-strategy 2bf8dbf |
+| DONE | — | Native Platform Metrics dashboard (replace Grafana iframe on /observability) | PR #299 |
+| DONE | — | Native Request Explorer dashboard (replace OpenSearch iframe on /logs) | PR #300 |
+| DONE | — | Docker-compose Console local build + Grafana auto-login + state files | PR #301 |
+| NEXT | CAB-1130 | Email Khalil (send 14 fev EOD, wait feedback 15-16 fev) | — |
+| NEXT | CAB-1131 | Dry-runs 3x (18-23 fev, chrono < 5min) | — |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
 | NEXT | CAB-1035 | Persona Alex Test (manual) | — |
 
@@ -95,6 +112,8 @@
 - 2026-02-08: Weekly audit cron + smoke tests as post-deploy jobs
 - 2026-02-09: Ship/Show/Ask model for AI Factory (PR #222) — Claude determines review level
 - 2026-02-09: AI Factory modernization — state files auto-update protocol in ai-workflow.md
+- 2026-02-10: Replace iframe embeds (Grafana, OpenSearch) with native React dashboards querying Prometheus
+- 2026-02-10: Docker-compose Console switched to local build (always latest code)
 
 ## Known Issues
 - E2E smoke tests fail on live infra (timeouts, missing UI elements)
@@ -105,14 +124,31 @@
 - control-plane-api still OutOfSync in ArgoCD (drift)
 - mcp-gateway Degraded in ArgoCD (residual from selector fix)
 
+## Security / OpSec (2026-02-10)
+- **Dual-repo**: stoa (public) + PotoMitan/stoa-strategy (private, GitHub)
+- **Private repo**: client mapping, pricing, legal, demo scripts, sensitive prompts
+- **.gitignore**: 72 patterns added (strategy, clients, pricing, slides, legal, prompts/*.txt)
+- **plan.md**: sanitized (no client names), full version in stoa-strategy
+- **Sensitive prompts**: moved from .claude/prompts/*.txt to stoa-strategy
+- **Legal templates**: OK public (use [COMPANY_NAME] placeholders)
+
 ## Notes
 - Demo: mardi 24 fevrier 2026
 - Presentation "ESB is Dead" same day
-- 2 design partners to close
 - Stack = Python (not Node)
 - Console tenants: "oasis", "oasis-gunters"
 - Portal OIDC client: stoa-portal; Console OIDC client: control-plane-ui
 - Demo seed: `./scripts/demo/seed-all.sh` (master orchestrator) or individual scripts
-- Demo sprint: D1-D5 done (PRs #242-#249), D6-D11 pending (Semaine 2, 17-23 fev)
+- Demo sprint: D1-D11 COMPLETE (PRs #242-#288), R1: MCP REST endpoints (PRs #290, #291)
+- D11 from-scratch: `down -v` → `up -d` → `seed-all.sh` = 7/7 PASS + 9/9 federation
+- R1 validated: Act 7 works end-to-end (15 tools: 3 API + 12 native, invoke proxies to httpbin)
+- R1: GET /mcp/v1/tools + POST /mcp/v1/tools/invoke + api_bridge catalog discovery
+- Fixes: LDAP auto-seed (PR #287), Keycloak SSL auto-disable (PR #288), DEMO-SCRIPT.md updated
+- Fix: /apis page crash — CelebrationProvider added to App.tsx (PR #293)
+- EKS Console status: /apis ✅, /observability ✅ native (PR #299), /logs ✅ native (PR #300) — no Grafana/OpenSearch needed
+- Docker-compose: Console builds from source (PR #301), Prometheus proxy at /prometheus/, Grafana OIDC auto-login
+- Prometheus scrape: gateway UP (only stoa_rate_limit_buckets metric), CP API DOWN (no /metrics). HTTP request counters not yet instrumented.
+- Act 7 MCP: KNOWN limitation (Rust GW, fallback in demo script)
+- Console dark mode: 100% coverage (last 4 tools components fixed in PR #286)
 - Docs site: stoa-docs/ (Docusaurus 3.9), 20 pages
 - Vault v1.20.4 running, unsealed. ESO not yet deployed.

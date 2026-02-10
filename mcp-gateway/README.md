@@ -125,10 +125,10 @@ docker-compose logs -f mcp-gateway
 # Build for amd64 (for Kubernetes deployment)
 docker build --platform linux/amd64 -t mcp-gateway:latest .
 
-# Push to ECR
-aws ecr get-login-password --region eu-west-1 | docker login --username AWS --password-stdin <account>.dkr.ecr.eu-west-1.amazonaws.com
-docker tag mcp-gateway:latest <account>.dkr.ecr.eu-west-1.amazonaws.com/apim/mcp-gateway:latest
-docker push <account>.dkr.ecr.eu-west-1.amazonaws.com/apim/mcp-gateway:latest
+# Push to GHCR
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+docker tag mcp-gateway:latest ghcr.io/stoa-platform/mcp-gateway:latest
+docker push ghcr.io/stoa-platform/mcp-gateway:latest
 ```
 
 **Note:** The Docker image includes `kubernetes-asyncio` for K8s CRD watching. The Dockerfile installs `.[k8s]` extras.

@@ -1,11 +1,11 @@
 # STOA Memory
 
-> Last updated: 2026-02-10 (fix /apis crash PR #293)
+> Last updated: 2026-02-10 (Demo Design Partner Phase 1-2 DONE)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: Demo Sprint "ESB is Dead" (24 fev 2026). D1-D11 complete. R1 MCP endpoints. OpSec layers done.
+- **Focus**: Demo Design Partner (24 fev). Phase 1-2 DONE (5 livrables). Next: email Khalil (14 fev EOD).
 
 ## Session State
 
@@ -70,6 +70,9 @@
 | DONE | R1-fix | API bridge: internal endpoint + docker-compose local build | PR #291 |
 | DONE | — | OpSec: dual-repo setup (stoa-strategy private), .gitignore enhanced, plan.md sanitized | commit aa629732 |
 | DONE | — | Fix /apis crash: CelebrationProvider missing in App.tsx | PR #293 |
+| DONE | — | Demo Phase 1-2: Email + Script + Slides + Staging + MOU (5 livrables, français, Q1/Q2 resolved) | stoa-strategy 2bf8dbf |
+| NEXT | CAB-1130 | Email Khalil (send 14 fev EOD, wait feedback 15-16 fev) | — |
+| NEXT | CAB-1131 | Dry-runs 3x (18-23 fev, chrono < 5min) | — |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
 | NEXT | CAB-1035 | Persona Alex Test (manual) | — |
 

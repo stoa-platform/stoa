@@ -430,7 +430,7 @@ services:
       GF_AUTH_GENERIC_OAUTH_AUTH_URL: "http://localhost/auth/realms/stoa/protocol/openid-connect/auth"
       GF_AUTH_GENERIC_OAUTH_TOKEN_URL: "http://keycloak:8080/realms/stoa/protocol/openid-connect/token"
       GF_AUTH_GENERIC_OAUTH_API_URL: "http://keycloak:8080/realms/stoa/protocol/openid-connect/userinfo"
-      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'stoa:admin') && 'Admin' || 'Viewer'"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'cpi-admin') && 'Admin' || 'Viewer'"
       GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro

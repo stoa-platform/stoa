@@ -8,16 +8,18 @@
 #   docker compose up -d
 #
 # Services:
-#   - postgres:    Database (port 5432)
-#   - keycloak:    Authentication (port 8080)
-#   - api:         Control Plane API (port 8000)
-#   - console:     Console UI (port 3000)
-#   - prometheus:  Metrics (port 9090)
-#   - grafana:     Dashboards (port 3001)
-#   - opensearch:  Search engine (port 9200)
-#   - dashboards:  STOA Logs UI (port 5601, via /logs)
+#   - postgres:       Database (port 5432)
+#   - keycloak:       Authentication (port 8080)
+#   - api:            Control Plane API (port 8000)
+#   - console:        Console UI (port 3000)
+#   - portal:         Developer Portal (port 3002)
+#   - stoa-gateway:   Rust Gateway (port 8081)
+#   - prometheus:     Metrics (port 9090)
+#   - grafana:        Dashboards (port 3001)
+#   - opensearch:     Search engine (port 9200)
+#   - dashboards:     STOA Logs UI (port 5601, via /logs)
 #
-# Total RAM: ~2.5GB (works on 8GB machines)
+# Total RAM: ~3GB (works on 8GB machines)
 # =============================================================================
 
 services:
@@ -167,6 +169,62 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
+  # Developer Portal
+  # ==========================================================================
+  portal:
+    image: ghcr.io/stoa-platform/portal:1.0.0
+    container_name: stoa-portal
+    ports:
+      - "${PORT_PORTAL:-3002}:8080"
+    depends_on:
+      control-plane-api:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Rust Gateway (basic mode)
+  # ==========================================================================
+  stoa-gateway:
+    build:
+      context: ../../stoa-gateway
+      dockerfile: Dockerfile
+    container_name: stoa-gateway
+    ports:
+      - "${PORT_GATEWAY:-8081}:8080"
+    environment:
+      STOA_PORT: "8080"
+      STOA_HOST: "0.0.0.0"
+      STOA_CONTROL_PLANE_URL: http://control-plane-api:8000
+      STOA_KEYCLOAK_URL: http://keycloak:8080
+      STOA_KEYCLOAK_REALM: stoa
+      STOA_KEYCLOAK_CLIENT_ID: stoa-mcp-gateway
+      STOA_LOG_LEVEL: ${LOG_LEVEL:-info}
+      STOA_LOG_FORMAT: json
+      STOA_GATEWAY_MODE: edge-mcp
+      STOA_AUTO_REGISTER: "false"
+    depends_on:
+      control-plane-api:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks:
+      - stoa-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # ==========================================================================
   # Reverse Proxy (nginx) - CAB-1108 Phase 3 + CAB-1114
   # ==========================================================================
   nginx:
@@ -179,6 +237,8 @@ services:
     depends_on:
       - control-plane-ui
       - control-plane-api
+      - portal
+      - stoa-gateway
       - grafana
       - keycloak
       - opensearch-dashboards

@@ -169,6 +169,71 @@ Raw Keycloak gives you federation. STOA gives you **API-lifecycle-aware federati
 4. **MCP-Native** — AI agents inherit the same federation model
 5. **GitOps Realms** — Realm configs as code, applied via CI/CD
 
+## Live Demo (2 min — Act 5)
+
+### Pre-Flight Checklist
+
+```bash
+# 1. Start the stack (allow ~60s for Keycloak cold start)
+make demo-federation-setup
+
+# 2. Verify isolation works before going on stage
+make demo-federation-test
+
+# 3. Run the presenter script
+make demo-federation-live
+
+# 4. Cleanup after demo
+make demo-federation-cleanup
+```
+
+### Timing
+
+| Phase | Duration | What happens |
+|-------|----------|-------------|
+| 1. Auth | ~15s | Silent login for 3 orgs (OIDC, SAML, LDAP) |
+| 2. Same-realm | ~20s | 3 green checkmarks (each org accesses its own API) |
+| 3. Cross-realm | ~45s | 6 red X with issuer mismatch reasons |
+| 4. Verdict | ~10s | ASCII art "ISOLATION VERIFIED" banner |
+
+### Presenter Notes
+
+- Run `make demo-federation-setup` **before** going on stage (Keycloak takes ~45s to start)
+- The live demo script (`06-live-demo.sh`) is self-contained: authenticates, tests, and shows verdict
+- If a test fails, the script exits with code 1 and shows "ISOLATION BROKEN" — fix before presenting
+- Key message: *"Un login, tous vos tenants — souverainete europeenne"*
+
+## Known Issues
+
+| Issue | Symptom | Workaround |
+|-------|---------|------------|
+| LDAP seed flakiness | `ldapadd` fails on first attempt | Script retries 5 times with 2s delay |
+| Token exchange not active | Keycloak preview feature disabled | Script falls back to user token — isolation demo still works |
+| Port 8080 conflict | Keycloak fails to start | Stop other services on 8080, or set `KEYCLOAK_URL=http://localhost:8081` |
+| OPA AMD64 only | OPA container fails on Apple Silicon | OPA is optional — isolation test works without it (gateway-level validation) |
+| Keycloak cold start | First startup imports 5 realms (~45-60s) | Subsequent starts are faster (~15s); just wait |
+
+## Troubleshooting
+
+```bash
+# Check all containers are running
+docker compose -f deploy/demo-federation/docker-compose.yml ps
+
+# Check Keycloak logs (realm import issues)
+docker logs stoa-federation-keycloak 2>&1 | tail -20
+
+# Check gateway logs (JWT validation issues)
+docker logs stoa-federation-gateway 2>&1 | tail -20
+
+# Check LDAP is seeded
+docker exec stoa-federation-ldap ldapsearch -x -H ldap://localhost:389 \
+  -D "cn=admin,dc=demo,dc=stoa" -w "admin-password" -b "ou=users,dc=demo,dc=stoa"
+
+# Manual token test
+TOKEN=$(cat scripts/demo-federation/.tokens/alpha.token)
+curl -H "Authorization: Bearer $TOKEN" http://localhost:9000/api/alpha/whoami
+```
+
 ## File Structure
 
 ```
@@ -195,6 +260,7 @@ scripts/demo-federation/
 ├── 03-call-api.sh               # Call API
 ├── 04-test-isolation.sh         # Prove isolation
 ├── 05-stoa-integration.sh       # STOA value-add
+├── 06-live-demo.sh              # 2-min presenter script
 ├── 99-cleanup.sh                # Tear down
 └── README.md                    # This file
 ```

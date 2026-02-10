@@ -31,7 +31,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: stoa-gateway
-          image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/stoa-gateway:dev-latest
+          image: ghcr.io/stoa-platform/stoa-gateway:dev-latest
           imagePullPolicy: Always
           ports:
             - name: http

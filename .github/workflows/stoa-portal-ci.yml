@@ -15,7 +15,7 @@ on:
       - 'shared/**'
       - '.github/workflows/stoa-portal-ci.yml'
       - '.github/workflows/reusable-node-ci.yml'
-      - '.github/workflows/reusable-docker-ecr.yml'
+      - '.github/workflows/reusable-docker-ghcr.yml'
       - '.github/workflows/reusable-k8s-deploy.yml'
       - '.github/actions/**'
 
@@ -65,14 +65,14 @@ jobs:
       contents: read
       checks: write
 
-  # === Docker: build + push ECR (with Vite env vars) ===
+  # === Docker: build + push GHCR (with Vite env vars) ===
   docker:
     needs: ci
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/reusable-docker-ecr.yml
+    uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: portal
-      ecr-repository: apim/stoa-portal
+      image-name: stoa-portal
       environment: ${{ github.event.inputs.environment || 'dev' }}
       platforms: linux/amd64
       use-monorepo-context: true
@@ -88,6 +88,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: write
       attestations: write
     secrets: inherit
 

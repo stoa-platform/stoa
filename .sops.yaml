@@ -1,0 +1,9 @@
+# SOPS configuration for STOA Platform
+# Secrets encrypted with age, stored in git, decrypted at deploy time.
+# Generate keypair: age-keygen -o ~/.config/sops/age/keys.txt
+# Store SOPS_AGE_KEY in GitHub Actions secrets for CI/CD.
+creation_rules:
+  - path_regex: deploy/secrets/.*\.enc\.yaml$
+    age: 'AGE_PUBLIC_KEY_PLACEHOLDER'
+  - path_regex: \.env\.encrypted$
+    age: 'AGE_PUBLIC_KEY_PLACEHOLDER'

@@ -27,7 +27,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: control-plane-ui
-          image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/control-plane-ui:latest
+          image: ghcr.io/stoa-platform/control-plane-ui:latest
           imagePullPolicy: Always
           ports:
             - name: http

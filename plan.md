@@ -1,7 +1,7 @@
 # Plan: Demo Design Partner (24 fev 2026)
 
-> **Last updated:** 2026-02-10 (lundi nuit)
-> **Status:** Phase 1+2 DONE — 5/5 livrables generated and pushed
+> **Last updated:** 2026-02-10 (fin de session)
+> **Status:** Phase 1+2 DONE — 5/5 livrables + native observability dashboards + docker-compose fixes
 > **Next action:** Send email to Khalil (deadline 14 fev EOD) → collect feedback → dry-runs
 > **Full plan:** [stoa-strategy/execution/plan-demo-partner.md](private repo)
 
@@ -59,4 +59,6 @@ private `stoa-strategy` repository. This file contains only the execution struct
 > Cycle 7 complete: 225 pts / 22 PRs (9-10 fev 2026)
 > Demo Sprint D1-D11 complete + R1 MCP endpoints
 > Native Observability: PRs #299 (Platform Metrics) + #300 (Request Explorer) — replaced iframe embeds with native React dashboards querying Prometheus. 68 tests, coverage >50%.
+> Docker-compose: PR #301 — Console local build + Grafana OIDC auto-login + nginx Prometheus proxy
+> Total PRs this session: #299, #300, #301 (3 PRs, ~700 LOC new code + 68 tests)
 > Remaining: CAB-1035 (2 pts manual), CAB-1066 (34 pts stoa-web, stretch)

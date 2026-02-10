@@ -1,11 +1,12 @@
 # STOA Memory
 
-> Last updated: 2026-02-10 (Native Observability PRs #299, #300 merged)
+> Last updated: 2026-02-10 (PR #301 merged — Console local build + Grafana auto-login)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
 - **Focus**: Demo Design Partner (24 fev). Phase 1-2 DONE (5 livrables). Next: email Khalil (14 fev EOD).
+- **Latest**: Native observability dashboards live (PRs #299-#301), docker-compose Console builds from source
 
 ## Session State
 
@@ -74,6 +75,7 @@
 | DONE | — | Demo Phase 1-2: Email + Script + Slides + Staging + MOU (5 livrables, français, Q1/Q2 resolved) | stoa-strategy 2bf8dbf |
 | DONE | — | Native Platform Metrics dashboard (replace Grafana iframe on /observability) | PR #299 |
 | DONE | — | Native Request Explorer dashboard (replace OpenSearch iframe on /logs) | PR #300 |
+| DONE | — | Docker-compose Console local build + Grafana auto-login + state files | PR #301 |
 | NEXT | CAB-1130 | Email Khalil (send 14 fev EOD, wait feedback 15-16 fev) | — |
 | NEXT | CAB-1131 | Dry-runs 3x (18-23 fev, chrono < 5min) | — |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
@@ -110,6 +112,8 @@
 - 2026-02-08: Weekly audit cron + smoke tests as post-deploy jobs
 - 2026-02-09: Ship/Show/Ask model for AI Factory (PR #222) — Claude determines review level
 - 2026-02-09: AI Factory modernization — state files auto-update protocol in ai-workflow.md
+- 2026-02-10: Replace iframe embeds (Grafana, OpenSearch) with native React dashboards querying Prometheus
+- 2026-02-10: Docker-compose Console switched to local build (always latest code)
 
 ## Known Issues
 - E2E smoke tests fail on live infra (timeouts, missing UI elements)
@@ -141,7 +145,9 @@
 - R1: GET /mcp/v1/tools + POST /mcp/v1/tools/invoke + api_bridge catalog discovery
 - Fixes: LDAP auto-seed (PR #287), Keycloak SSL auto-disable (PR #288), DEMO-SCRIPT.md updated
 - Fix: /apis page crash — CelebrationProvider added to App.tsx (PR #293)
-- EKS Console status: /apis ✅ fixed, /logs ❌ needs OpenSearch or Grafana+Loki, /observability ❌ needs Grafana
+- EKS Console status: /apis ✅, /observability ✅ native (PR #299), /logs ✅ native (PR #300) — no Grafana/OpenSearch needed
+- Docker-compose: Console builds from source (PR #301), Prometheus proxy at /prometheus/, Grafana OIDC auto-login
+- Prometheus scrape: gateway UP (only stoa_rate_limit_buckets metric), CP API DOWN (no /metrics). HTTP request counters not yet instrumented.
 - Act 7 MCP: KNOWN limitation (Rust GW, fallback in demo script)
 - Console dark mode: 100% coverage (last 4 tools components fixed in PR #286)
 - Docs site: stoa-docs/ (Docusaurus 3.9), 20 pages

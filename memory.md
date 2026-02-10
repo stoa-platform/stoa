@@ -70,6 +70,7 @@
 | DONE | R1-fix | API bridge: internal endpoint + docker-compose local build | PR #291 |
 | DONE | — | OpSec: dual-repo setup (stoa-strategy private), .gitignore enhanced, plan.md sanitized | commit aa629732 |
 | DONE | — | Fix /apis crash: CelebrationProvider missing in App.tsx | PR #293 |
+| DONE | — | Fix Grafana SSO: add stoa-observability Keycloak client + role mapping | PR #295 |
 | DONE | — | Demo Phase 1-2: Email + Script + Slides + Staging + MOU (5 livrables, français, Q1/Q2 resolved) | stoa-strategy 2bf8dbf |
 | NEXT | CAB-1130 | Email Khalil (send 14 fev EOD, wait feedback 15-16 fev) | — |
 | NEXT | CAB-1131 | Dry-runs 3x (18-23 fev, chrono < 5min) | — |

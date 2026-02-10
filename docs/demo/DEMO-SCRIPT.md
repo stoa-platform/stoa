@@ -241,17 +241,26 @@ done
 ### 6.2 — Cross-Realm Token Isolation (1:15 min)
 
 ```bash
-# Get token from org-alpha
+# Get token from org-alpha (confidential client)
 TOKEN_A=$(curl -s -X POST "http://localhost:8080/realms/demo-org-alpha/protocol/openid-connect/token" \
-  -d "grant_type=password&client_id=demo-client&username=alice&password=alice123" \
+  -d "grant_type=password&client_id=federation-demo&client_secret=alpha-demo-secret&username=demo-alpha&password=demo" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Try to access org-beta resources → REJECTED
-curl -H "Authorization: Bearer $TOKEN_A" http://localhost:9000/api/org-beta/resource
-# → 403 Forbidden: "Token issued by demo-org-alpha, not authorized for demo-org-beta"
+# Decode to show stoa_realm claim
+echo $TOKEN_A | python3 -c "import sys,json,base64; t=sys.stdin.read().strip().split('.')[1]; t+='='*(4-len(t)%4); d=json.loads(base64.urlsafe_b64decode(t)); print(json.dumps({k:d[k] for k in ['iss','stoa_realm','preferred_username']}, indent=2))"
+# → {"iss": "http://localhost/auth/realms/demo-org-alpha", "stoa_realm": "demo-org-alpha", "preferred_username": "demo-alpha"}
+
+# Get token from org-beta (different org, different secret)
+TOKEN_B=$(curl -s -X POST "http://localhost:8080/realms/demo-org-beta/protocol/openid-connect/token" \
+  -d "grant_type=password&client_id=federation-demo&client_secret=beta-demo-secret&username=demo-beta&password=demo" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Compare issuers — different realms, different tokens, different trust boundaries
+echo $TOKEN_B | python3 -c "import sys,json,base64; t=sys.stdin.read().strip().split('.')[1]; t+='='*(4-len(t)%4); d=json.loads(base64.urlsafe_b64decode(t)); print(json.dumps({k:d[k] for k in ['iss','stoa_realm','preferred_username']}, indent=2))"
+# → {"iss": "http://localhost/auth/realms/demo-org-beta", "stoa_realm": "demo-org-beta", "preferred_username": "demo-beta"}
 ```
 
-> "Zero trust. A token from Organization A cannot access Organization B's resources. Enforced at the gateway level, not by convention."
+> "Zero trust. Two organizations, two realms, two issuers. A token from Organization Alpha cannot impersonate Organization Beta. Enforced cryptographically — different signing keys, different trust boundaries."
 
 ---
 
@@ -354,7 +363,8 @@ git shortlog --since="2026-02-09" -sn
 | admin | Grafana | admin / admin | Monitoring |
 | admin | OpenSearch | admin / StOa_Admin_2026! | Logs |
 | admin | Keycloak | admin / admin | Auth Admin |
-| alice | Federation | alice123 | Demo Org Alpha user |
+| demo-alpha | Federation (alpha) | demo | Demo Org Alpha user |
+| demo-beta | Federation (beta) | demo | Demo Org Beta user |
 
 ---
 

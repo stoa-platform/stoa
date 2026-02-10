@@ -70,9 +70,9 @@ Routes to create:
 
 | Concept | Kubernetes (EKS) | OpenShift |
 |---------|-------------------|-----------|
-| Registry | AWS ECR | OpenShift Internal Registry |
-| Auth | IAM Role + ECR login | ServiceAccount tokens |
-| Image reference | `848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/<name>` | `image-registry.openshift-image-registry.svc:5000/stoa-system/<name>` |
+| Registry | GHCR (GitHub Container Registry) | OpenShift Internal Registry |
+| Auth | GITHUB_TOKEN | ServiceAccount tokens |
+| Image reference | `ghcr.io/stoa-platform/<name>` | `image-registry.openshift-image-registry.svc:5000/stoa-system/<name>` |
 
 ### Using the Internal Registry
 

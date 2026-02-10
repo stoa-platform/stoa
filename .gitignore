@@ -39,6 +39,7 @@ Thumbs.db
 *.pem
 *.key
 secrets/
+!deploy/secrets/
 credentials/
 
 # Logs

@@ -145,6 +145,20 @@ run_traffic() {
     --no-warmup
 }
 
+seed_ldap() {
+  # OpenLDAP auto-import doesn't load /ldif-seed — must seed manually
+  if docker exec stoa-federation-ldap ldapsearch -x -H ldap://localhost:389 \
+    -b "ou=users,dc=demo,dc=stoa" -D "cn=admin,dc=demo,dc=stoa" \
+    -w "admin-password" "(uid=eve-gamma)" uid 2>/dev/null | grep -q "uid: eve-gamma"; then
+    log "LDAP users already seeded"
+  else
+    docker exec stoa-federation-ldap ldapadd -x -H ldap://localhost:389 \
+      -D "cn=admin,dc=demo,dc=stoa" -w "admin-password" \
+      -f /ldif-seed/seed.ldif 2>&1
+    log "LDAP users seeded (eve-gamma, frank-gamma)"
+  fi
+}
+
 run_federation_tests() {
   if [ -x "$REPO_ROOT/scripts/demo-federation/04-test-isolation.sh" ]; then
     "$REPO_ROOT/scripts/demo-federation/04-test-isolation.sh"
@@ -184,6 +198,7 @@ else
   fi
 
   if [ "$FEDERATION" = true ]; then
+    run_step "Seed LDAP Users (OpenLDAP)" seed_ldap
     run_step "Federation Isolation Tests" run_federation_tests
   fi
 fi

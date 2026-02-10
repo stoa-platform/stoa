@@ -1,15 +1,17 @@
 # STOA Memory
 
-> Last updated: 2026-02-10 (D11 from-scratch validation — PRs #287, #288)
+> Last updated: 2026-02-10 (R1 MCP REST endpoints — PR #290)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: Demo Sprint "ESB is Dead" (24 fev 2026). D1-D11 complete. From-scratch validated: 7/7 seed + 9/9 federation.
+- **Focus**: Demo Sprint "ESB is Dead" (24 fev 2026). D1-D11 complete. R1: MCP REST endpoints for Act 7.
 
 ## Session State
 
 | Status | Ticket | Description | Evidence |
+|--------|--------|-------------|----------|
+| DONE | — | Plan restructure: binary DoD + AI Factory execution | commit c8e74a38 |
 |--------|--------|-------------|----------|
 | DONE | CAB-1044 | API Search HTTP 500 fix | commit 2c5672d8 |
 | DONE | CAB-1040 | Gateway Routes HTTP 404 fix | commit 0c33e21d |
@@ -64,6 +66,7 @@
 | DONE | D8 | README rewrite for public launch (4100→185 lines) | PR #280 |
 | DONE | D10 | Dry-run #2 — 7/8 acts PASS, federation fixed, seed fixed | PR #284 |
 | DONE | D11 | From-scratch validation — LDAP auto-seed, Keycloak SSL, 7/7+9/9 | PRs #287, #288 |
+| DONE | R1 | MCP v1 REST endpoints + API-to-Tool bridge (Act 7) | PR #290 |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
 | NEXT | CAB-1035 | Persona Alex Test (manual) | — |
 
@@ -116,8 +119,9 @@
 - Console tenants: "oasis", "oasis-gunters"
 - Portal OIDC client: stoa-portal; Console OIDC client: control-plane-ui
 - Demo seed: `./scripts/demo/seed-all.sh` (master orchestrator) or individual scripts
-- Demo sprint: D1-D11 COMPLETE (PRs #242-#288)
+- Demo sprint: D1-D11 COMPLETE (PRs #242-#288), R1: MCP REST endpoints (PR #290)
 - D11 from-scratch: `down -v` → `up -d` → `seed-all.sh` = 7/7 PASS + 9/9 federation
+- R1: GET /mcp/v1/tools + POST /mcp/v1/tools/invoke + api_bridge catalog discovery
 - Fixes: LDAP auto-seed (PR #287), Keycloak SSL auto-disable (PR #288), DEMO-SCRIPT.md updated
 - Act 7 MCP: KNOWN limitation (Rust GW, fallback in demo script)
 - Console dark mode: 100% coverage (last 4 tools components fixed in PR #286)

@@ -19,9 +19,9 @@ export function Tenants() {
   });
 
   const statusColors: Record<string, string> = {
-    active: 'bg-green-100 text-green-800',
-    suspended: 'bg-red-100 text-red-800',
-    pending: 'bg-yellow-100 text-yellow-800',
+    active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    suspended: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
   };
 
   if (loading) {
@@ -40,16 +40,16 @@ export function Tenants() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tenants</h1>
-          <p className="text-gray-500 mt-1">View tenant organizations</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tenants</h1>
+          <p className="text-gray-500 dark:text-neutral-400 mt-1">View tenant organizations</p>
         </div>
-        <div className="text-sm text-gray-500 bg-gray-100 px-3 py-2 rounded-lg">
+        <div className="text-sm text-gray-500 dark:text-neutral-400 bg-gray-100 dark:bg-neutral-700 px-3 py-2 rounded-lg">
           Tenant management via GitOps (Phase 2)
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg">
           {error.message || 'Failed to load tenants'}
         </div>
       )}
@@ -57,7 +57,7 @@ export function Tenants() {
       {/* Tenants Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {tenants.length === 0 ? (
-          <div className="col-span-full bg-white rounded-lg shadow">
+          <div className="col-span-full bg-white dark:bg-neutral-800 rounded-lg shadow">
             <EmptyState
               variant="users"
               title="No tenants found"
@@ -73,14 +73,16 @@ export function Tenants() {
           tenants.map((tenant) => (
             <div
               key={tenant.id}
-              className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
+              className="bg-white dark:bg-neutral-800 rounded-lg shadow p-6 hover:shadow-md transition-shadow"
             >
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     {tenant.display_name || tenant.name}
                   </h3>
-                  <p className="text-sm text-gray-500 font-mono">{tenant.name}</p>
+                  <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono">
+                    {tenant.name}
+                  </p>
                 </div>
                 <span
                   className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[tenant.status]}`}
@@ -89,17 +91,17 @@ export function Tenants() {
                 </span>
               </div>
 
-              <div className="space-y-2 text-sm text-gray-600">
+              <div className="space-y-2 text-sm text-gray-600 dark:text-neutral-300">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Tenant ID:</span>
+                  <span className="text-gray-500 dark:text-neutral-400">Tenant ID:</span>
                   <span className="font-mono text-xs">{tenant.id}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Created:</span>
+                  <span className="text-gray-500 dark:text-neutral-400">Created:</span>
                   <span>{new Date(tenant.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Last Updated:</span>
+                  <span className="text-gray-500 dark:text-neutral-400">Last Updated:</span>
                   <span>{new Date(tenant.updated_at).toLocaleDateString()}</span>
                 </div>
               </div>
@@ -109,7 +111,7 @@ export function Tenants() {
       </div>
 
       {/* Info Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
         <div className="flex gap-3">
           <svg
             className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
@@ -125,11 +127,13 @@ export function Tenants() {
             />
           </svg>
           <div>
-            <h4 className="text-sm font-medium text-blue-800">Tenant Management</h4>
-            <p className="text-sm text-blue-700 mt-1">
+            <h4 className="text-sm font-medium text-blue-800 dark:text-blue-400">
+              Tenant Management
+            </h4>
+            <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
               Tenant creation and IAM configuration is managed via the GitOps repository. See the{' '}
-              <code className="bg-blue-100 px-1 rounded">iam/tenants.yaml</code> file for tenant
-              definitions.
+              <code className="bg-blue-100 dark:bg-blue-900/30 px-1 rounded">iam/tenants.yaml</code>{' '}
+              file for tenant definitions.
             </p>
           </div>
         </div>

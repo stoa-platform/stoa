@@ -35,11 +35,27 @@ Proves that N organizations with N different IAMs can share APIs through STOA wi
 
 ## Quick Start
 
+### Option A: Integrated with main STOA stack (recommended for demo)
+
 ```bash
-# 1. Start the stack
+# 1. Start the full platform with federation
+cd deploy/docker-compose
+docker compose --profile federation up -d
+
+# 2. Seed LDAP + verify realms
+./scripts/demo-federation/00-setup-integrated.sh
+
+# 3. Run the isolation test (the money shot)
+./scripts/demo-federation/04-test-isolation.sh
+```
+
+### Option B: Standalone (for isolated testing)
+
+```bash
+# 1. Start the standalone federation stack
 ./scripts/demo-federation/00-setup.sh
 
-# 2. Run the isolation test (the money shot)
+# 2. Run the isolation test
 ./scripts/demo-federation/04-test-isolation.sh
 
 # 3. Clean up
@@ -172,7 +188,8 @@ deploy/demo-federation/
     └── policy.rego              # OPA isolation policy
 
 scripts/demo-federation/
-├── 00-setup.sh                  # Start stack
+├── 00-setup.sh                  # Start standalone stack
+├── 00-setup-integrated.sh       # Seed LDAP for integrated stack
 ├── 01-login.sh                  # Get token
 ├── 02-exchange.sh               # Token exchange
 ├── 03-call-api.sh               # Call API

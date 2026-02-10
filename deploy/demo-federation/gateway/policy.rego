@@ -5,30 +5,24 @@ import future.keywords.in
 
 default allow := false
 
-# Map tenant endpoints to expected token issuers
-expected_issuer := {
-    "alpha": "http://keycloak:8080/realms/demo-org-alpha",
-    "beta":  "http://keycloak:8080/realms/demo-org-beta",
-    "gamma": "http://keycloak:8080/realms/demo-org-gamma",
+# Map tenant endpoints to expected realm suffix
+expected_realm := {
+    "alpha": "demo-org-alpha",
+    "beta":  "demo-org-beta",
+    "gamma": "demo-org-gamma",
 }
 
-# Allow if the token issuer matches the tenant's expected issuer
+# Allow if the token issuer ends with the expected realm path
+# This handles any Keycloak base URL (direct, via proxy, docker-internal)
 allow if {
-    expected := expected_issuer[input.tenant]
-    input.token.iss == expected
-}
-
-# Allow if audience includes the federation API
-allow if {
-    expected := expected_issuer[input.tenant]
-    input.token.iss == expected
-    "stoa-federation-api" in input.token.aud
+    realm := expected_realm[input.tenant]
+    endswith(input.token.iss, concat("/", ["realms", realm]))
 }
 
 # Deny reason for debugging
 deny_reason := sprintf(
-    "Issuer '%s' not authorized for tenant '%s' (expected '%s')",
-    [input.token.iss, input.tenant, expected_issuer[input.tenant]]
+    "Issuer '%s' not authorized for tenant '%s' (expected realm '%s')",
+    [input.token.iss, input.tenant, expected_realm[input.tenant]]
 ) if {
     not allow
 }

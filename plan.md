@@ -154,9 +154,9 @@ All sessions completed. PRs #203-#222 merged. Session 21: AI Factory modernizati
 | D6 | Docker-compose demo final (health checks, nginx routes) | `docker compose up` → tous services healthy | 17 fev | ✅ PR #250 |
 | D7 | Demo script 8-act presentation + checklist | Script 8 actes chrono < 20 min | 18 fev | ✅ PR #257 |
 | D8 | README public (anglais, badges, quick start) | README.md 185 lines, pret pour repo public | 19 fev | ✅ PR #280 |
-| D9 | Bug fixes, dark mode polish, UX consistency | Zero regression, console + portal coherents | 20 fev | ✅ dark mode complete (PRs #234-#247, 8 PRs) |
+| D9 | Bug fixes, dark mode polish, UX consistency | Zero regression, console + portal coherents | 20 fev | ✅ dark mode 100% (PRs #234-#247 + #286) |
 | D10 | Demo script dry-run #2 (chrono < 15 min) | Dry-run filme, zero blocage | 21 fev | ✅ PR #284 (fixes) — 7/8 acts PASS, Act 7 known (MCP not in Rust GW) |
-| D11 | Buffer / derniers ajustements | Zero P0 ouvert | 22-23 fev | pending |
+| D11 | Buffer / derniers ajustements | Zero P0 ouvert | 22-23 fev | ✅ PRs #287, #288 — from-scratch 7/7 seed + 9/9 federation |
 
 ### Demo Day — 24 fev — "ESB is Dead, AI Agents Are Here"
 

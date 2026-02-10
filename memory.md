@@ -1,11 +1,11 @@
 # STOA Memory
 
-> Last updated: 2026-02-10 (D10 dry-run fixes — PR #284)
+> Last updated: 2026-02-10 (D11 from-scratch validation — PRs #287, #288)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: Demo Sprint "ESB is Dead" (24 fev 2026). D1-D10 complete, D10 dry-run 7/8 PASS (PR #284). D11 pending (buffer).
+- **Focus**: Demo Sprint "ESB is Dead" (24 fev 2026). D1-D11 complete. From-scratch validated: 7/7 seed + 9/9 federation.
 
 ## Session State
 
@@ -53,6 +53,7 @@
 | DONE | — | Console dark mode batch 5 (External MCP Servers) | PR #246 |
 | DONE | — | Console dark mode batch 6 (APIMonitoring + ErrorSnapshots) | PR #247 |
 | DONE | — | Console dark mode COMPLETE — all pages verified | All pages have dark: variants |
+| DONE | — | Dark mode tools components (ToolCard, UsageChart, QuickStartGuide, ToolSchemaViewer) | PR #286 |
 | DONE | D1 | Rust GW basic mode (compile fix + docker-compose) | PRs #242, #244 |
 | DONE | D2 | Keycloak federation cross-tenant (5 realms, OpenLDAP) | PR #248, #282 (live demo) |
 | DONE | D3 | OpenSearch error snapshots dashboard + seed script | PR #249 |
@@ -62,6 +63,7 @@
 | DONE | D7 | Demo script 8-act presentation + pre-flight checklist | PR #257 |
 | DONE | D8 | README rewrite for public launch (4100→185 lines) | PR #280 |
 | DONE | D10 | Dry-run #2 — 7/8 acts PASS, federation fixed, seed fixed | PR #284 |
+| DONE | D11 | From-scratch validation — LDAP auto-seed, Keycloak SSL, 7/7+9/9 | PRs #287, #288 |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
 | NEXT | CAB-1035 | Persona Alex Test (manual) | — |
 
@@ -114,8 +116,10 @@
 - Console tenants: "oasis", "oasis-gunters"
 - Portal OIDC client: stoa-portal; Console OIDC client: control-plane-ui
 - Demo seed: `./scripts/demo/seed-all.sh` (master orchestrator) or individual scripts
-- Demo sprint: D1-D10 done (PRs #242-#284), D11 pending (buffer/polish, 22-23 fev)
-- D10 dry-run results: Acts 1-6+8 PASS, Act 7 KNOWN (MCP not in Rust GW yet — fallback in demo script)
-- D10 fixes: seed-all.sh defaults, keycloak SSL, federation credentials in DEMO-SCRIPT.md
+- Demo sprint: D1-D11 COMPLETE (PRs #242-#288)
+- D11 from-scratch: `down -v` → `up -d` → `seed-all.sh` = 7/7 PASS + 9/9 federation
+- Fixes: LDAP auto-seed (PR #287), Keycloak SSL auto-disable (PR #288), DEMO-SCRIPT.md updated
+- Act 7 MCP: KNOWN limitation (Rust GW, fallback in demo script)
+- Console dark mode: 100% coverage (last 4 tools components fixed in PR #286)
 - Docs site: stoa-docs/ (Docusaurus 3.9), 20 pages
 - Vault v1.20.4 running, unsealed. ESO not yet deployed.

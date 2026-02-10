@@ -178,7 +178,50 @@ fn extract_optimization_level(headers: &HeaderMap) -> OptimizationLevel {
         .unwrap_or(OptimizationLevel::None)
 }
 
+// === REST v1 Request/Response Types ===
+
+#[derive(Debug, Deserialize)]
+pub struct RestToolInvokeRequest {
+    pub tool: String,
+    #[serde(default)]
+    pub arguments: Value,
+}
+
 // === Handlers ===
+
+/// GET /mcp/v1/tools — REST-style tool listing (no body required)
+///
+/// Returns a flat JSON array of tool definitions.
+/// Used by demo scripts and simple HTTP clients (non-SSE).
+#[instrument(name = "mcp.v1.tools.list", skip(state, headers), fields(otel.kind = "server"))]
+pub async fn mcp_rest_tools_list(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let auth = extract_auth_context(&state, &headers).await;
+    debug!(tenant_id = %auth.tenant_id, "REST v1: listing MCP tools");
+
+    let tools = state.tool_registry.list(Some(&auth.tenant_id));
+    Json(tools)
+}
+
+/// POST /mcp/v1/tools/invoke — REST-style tool invocation
+///
+/// Accepts `{"tool": "name", "arguments": {...}}` and delegates to the
+/// same execution pipeline as POST /mcp/tools/call (auth, OPA, metering).
+#[instrument(name = "mcp.v1.tools.invoke", skip(state, headers, request), fields(otel.kind = "server"))]
+pub async fn mcp_rest_tools_invoke(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<RestToolInvokeRequest>,
+) -> impl IntoResponse {
+    // Delegate to the existing mcp_tools_call pipeline via internal conversion
+    let call_request = ToolsCallRequest {
+        name: request.tool,
+        arguments: request.arguments,
+    };
+    mcp_tools_call(State(state), headers, Json(call_request)).await
+}
 
 /// POST /mcp/tools/list - List available tools
 #[instrument(name = "mcp.tools.list", skip(state, headers, _request), fields(otel.kind = "server"))]

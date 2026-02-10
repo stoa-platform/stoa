@@ -278,9 +278,13 @@ echo $TOKEN_B | python3 -c "import sys,json,base64; t=sys.stdin.read().strip().s
 ### 7.1 — MCP Tool Discovery (1 min)
 
 ```bash
-# List available MCP tools
-curl http://localhost:8081/mcp/v1/tools
-# → [{"name": "payments-api", "description": "Enterprise payment processing", ...}]
+# List available MCP tools (each published API = one MCP tool)
+curl -s http://localhost:8081/mcp/v1/tools | jq '.[].name'
+# → "petstore"
+# → "account-management"
+# → "payments"
+# → "stoa_catalog"
+# → ... (12 platform tools + 3 API tools)
 ```
 
 > "Every API in our catalog is automatically exposed as an MCP tool. Define Once, Expose Everywhere — that's our Universal API Contract."
@@ -288,12 +292,12 @@ curl http://localhost:8081/mcp/v1/tools
 ### 7.2 — AI Agent Call (2 min)
 
 ```bash
-# An AI agent invokes the tool
-curl -X POST http://localhost:8081/mcp/v1/tools/invoke \
+# An AI agent invokes the Payments API tool
+curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"tool": "payments-api", "arguments": {"action": "get-status"}}'
-# → {"result": {"status": "active", "last_transaction": "..."}}
+  -d '{"tool": "payments", "arguments": {"action": "get-status"}}'
+# → {"content": [{"type": "text", "text": "{...}"}]}
 ```
 
 > "A Claude agent, a GPT agent, any MCP-compatible agent — they can now call your enterprise APIs. With authentication, rate limiting, monitoring, and audit trail. All the governance you need, none of the friction."

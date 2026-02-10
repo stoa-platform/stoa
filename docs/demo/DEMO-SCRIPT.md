@@ -24,17 +24,22 @@
 ## Pre-Demo Setup
 
 ```bash
-# Start the platform
+# Start the platform (with federation for Act 6)
 cd deploy/docker-compose
-docker compose up -d
-# With federation for Act 6:
 docker compose --profile federation up -d
 
-# Wait for all services
+# Wait for all services to be healthy (~60s)
 ../../scripts/demo/check-health.sh --wait --federation
 
-# Seed demo data
-ANORAK_PASSWORD=readyplayerone ../../scripts/demo/seed-all.sh --federation
+# Seed demo data (auto-handles: Keycloak SSL, LDAP users, APIs, OpenSearch errors, federation tests)
+CONTROL_PLANE_URL=http://localhost:8000 \
+KEYCLOAK_URL=http://localhost:8080 \
+ANORAK_USER=halliday \
+ANORAK_PASSWORD=readyplayerone \
+SEED_TENANT=oasis \
+  ../../scripts/demo/seed-all.sh --federation
+
+# Expected: 7/7 steps PASS, 9/9 federation isolation tests PASS
 ```
 
 ### Browser Tabs (pre-authenticated)

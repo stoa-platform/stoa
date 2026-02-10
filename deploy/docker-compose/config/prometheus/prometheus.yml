@@ -25,6 +25,17 @@ scrape_configs:
     scrape_interval: 10s
 
   # -------------------------------------------------------------------------
+  # STOA Gateway (Rust)
+  # -------------------------------------------------------------------------
+  - job_name: 'stoa-gateway'
+    static_configs:
+      - targets: ['stoa-gateway:8080']
+        labels:
+          service: 'stoa-gateway'
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # -------------------------------------------------------------------------
   # Prometheus self-monitoring
   # -------------------------------------------------------------------------
   - job_name: 'prometheus'

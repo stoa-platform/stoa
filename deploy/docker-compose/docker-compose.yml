@@ -424,6 +424,7 @@ services:
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards-analytics:ro
       - ./config/grafana/img/stoa-logo-navbar.svg:/usr/share/grafana/public/img/grafana_icon.svg:ro
       - ./config/grafana/img/fav32.png:/usr/share/grafana/public/img/fav32.png:ro
       - grafana-data:/var/lib/grafana

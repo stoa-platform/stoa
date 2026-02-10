@@ -1,6 +1,7 @@
 {
   "realm": "stoa",
   "enabled": true,
+  "sslRequired": "none",
   "displayName": "STOA Identity",
   "displayNameHtml": "<div class=\"kc-logo-text\"><span>STOA Identity</span></div>",
   "loginTheme": "stoa",

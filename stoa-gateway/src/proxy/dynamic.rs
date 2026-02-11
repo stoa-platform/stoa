@@ -112,7 +112,16 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         "Dynamic proxy: forwarding request"
     );
 
+    let upstream_start = std::time::Instant::now();
     let response = forward_request(request, &method, &target_url).await;
+    let upstream_duration = upstream_start.elapsed().as_secs_f64();
+
+    // Record upstream latency metric
+    crate::metrics::record_upstream_latency(
+        &route.name,
+        response.status().as_u16(),
+        upstream_duration,
+    );
 
     // Record success/failure for circuit breaker
     if response.status().is_server_error() {

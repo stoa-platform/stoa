@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
+use crate::metrics;
+
 /// Circuit breaker state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CircuitState {
@@ -202,6 +204,7 @@ impl CircuitBreaker {
                     state.consecutive_failures = 0;
                     state.half_open_successes = 0;
                     state.last_state_change = Some(Instant::now());
+                    metrics::update_circuit_breaker_state(&self.name, 0.0);
                 }
             }
             CircuitState::Open => {
@@ -209,6 +212,7 @@ impl CircuitBreaker {
                 state.state = CircuitState::HalfOpen;
                 state.half_open_successes = 1;
                 state.last_state_change = Some(Instant::now());
+                metrics::update_circuit_breaker_state(&self.name, 2.0);
             }
         }
     }
@@ -236,6 +240,7 @@ impl CircuitBreaker {
                     state.state = CircuitState::Open;
                     state.last_state_change = Some(Instant::now());
                     self.open_count.fetch_add(1, Ordering::Relaxed);
+                    metrics::update_circuit_breaker_state(&self.name, 1.0);
                 }
             }
             CircuitState::HalfOpen => {
@@ -248,6 +253,7 @@ impl CircuitBreaker {
                 state.half_open_successes = 0;
                 state.last_state_change = Some(Instant::now());
                 self.open_count.fetch_add(1, Ordering::Relaxed);
+                metrics::update_circuit_breaker_state(&self.name, 1.0);
             }
             CircuitState::Open => {
                 // Already open, just update last failure time
@@ -300,6 +306,7 @@ impl CircuitBreaker {
         state.half_open_successes = 0;
         state.last_failure_time = None;
         state.last_state_change = Some(Instant::now());
+        metrics::update_circuit_breaker_state(&self.name, 0.0);
     }
 
     /// Get the circuit breaker name

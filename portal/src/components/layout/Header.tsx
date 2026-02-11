@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, Bell, User, LogOut, ExternalLink } from 'lucide-react';
 import { StoaLogo } from '@stoa/shared/components/StoaLogo';
@@ -11,6 +12,20 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuth();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close user menu on outside click
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [userMenuOpen]);
 
   return (
     <header className="bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800 sticky top-0 z-30 transition-colors">
@@ -19,7 +34,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         <div className="flex items-center gap-4">
           <button
             onClick={onMenuClick}
-            className="lg:hidden p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
+            className="lg:hidden p-2.5 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
             aria-label="Open menu"
           >
             <Menu className="h-6 w-6" aria-hidden="true" />
@@ -58,20 +73,20 @@ export function Header({ onMenuClick }: HeaderProps) {
 
           {/* Notifications */}
           <button
-            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md relative transition-colors"
+            className="p-2.5 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md relative transition-colors"
             aria-label="Notifications"
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
-            {/* Notification badge */}
-            {/* <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span> */}
           </button>
 
           {/* User menu */}
-          <div className="relative group">
+          <div className="relative" ref={userMenuRef}>
             <button
-              className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className="flex items-center gap-2 p-2.5 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
               aria-label="User menu"
               aria-haspopup="true"
+              aria-expanded={userMenuOpen}
             >
               <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
                 <User
@@ -85,30 +100,36 @@ export function Header({ onMenuClick }: HeaderProps) {
             </button>
 
             {/* Dropdown */}
-            <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-md shadow-lg border border-gray-200 dark:border-neutral-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150">
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-700">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{user?.name}</p>
-                <p className="text-xs text-gray-500 dark:text-neutral-400 truncate">
-                  {user?.email}
-                </p>
+            {userMenuOpen && (
+              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-md shadow-lg border border-gray-200 dark:border-neutral-700">
+                <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-700">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{user?.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-neutral-400 truncate">
+                    {user?.email}
+                  </p>
+                </div>
+                <div className="py-1">
+                  <Link
+                    to="/profile"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700"
+                  >
+                    <User className="h-4 w-4" aria-hidden="true" />
+                    My Profile
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      logout();
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                    Sign out
+                  </button>
+                </div>
               </div>
-              <div className="py-1">
-                <Link
-                  to="/profile"
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700"
-                >
-                  <User className="h-4 w-4" aria-hidden="true" />
-                  My Profile
-                </Link>
-                <button
-                  onClick={logout}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                >
-                  <LogOut className="h-4 w-4" aria-hidden="true" />
-                  Sign out
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

@@ -605,4 +605,89 @@ mod tests {
         let config = Config::load().expect("Should load defaults");
         assert_eq!(config.port, 8080);
     }
+
+    #[test]
+    fn test_default_gateway_mode() {
+        let config = Config::default();
+        assert_eq!(config.gateway_mode, GatewayMode::default());
+    }
+
+    #[test]
+    fn test_default_rate_limits() {
+        let config = Config::default();
+        assert_eq!(config.rate_limit_default, Some(1000));
+        assert_eq!(config.rate_limit_window_seconds, Some(60));
+    }
+
+    #[test]
+    fn test_default_kafka_disabled() {
+        let config = Config::default();
+        assert!(!config.kafka_enabled);
+        assert_eq!(config.kafka_brokers, "redpanda:9092");
+        assert_eq!(config.kafka_metering_topic, "stoa.metering");
+        assert_eq!(config.kafka_errors_topic, "stoa.errors");
+    }
+
+    #[test]
+    fn test_default_mtls_disabled() {
+        let config = Config::default();
+        assert!(!config.mtls.enabled);
+        assert!(config.mtls.require_binding);
+        assert!(config.mtls.trusted_proxies.is_empty());
+        assert!(config.mtls.allowed_issuers.is_empty());
+    }
+
+    #[test]
+    fn test_default_mtls_headers() {
+        let mtls = MtlsConfig::default();
+        assert_eq!(mtls.header_verify, "X-SSL-Client-Verify");
+        assert_eq!(mtls.header_fingerprint, "X-SSL-Client-Fingerprint");
+        assert_eq!(mtls.header_subject_dn, "X-SSL-Client-S-DN");
+        assert_eq!(mtls.header_issuer_dn, "X-SSL-Client-I-DN");
+        assert_eq!(mtls.header_serial, "X-SSL-Client-Serial");
+        assert_eq!(mtls.header_not_before, "X-SSL-Client-NotBefore");
+        assert_eq!(mtls.header_not_after, "X-SSL-Client-NotAfter");
+        assert_eq!(mtls.header_cert, "X-SSL-Client-Cert");
+    }
+
+    #[test]
+    fn test_default_quota_settings() {
+        let config = Config::default();
+        assert!(!config.quota_enforcement_enabled);
+        assert_eq!(config.quota_sync_interval_secs, 60);
+        assert_eq!(config.quota_default_rate_per_minute, 60);
+        assert_eq!(config.quota_default_daily_limit, 10_000);
+    }
+
+    #[test]
+    fn test_default_circuit_breaker_settings() {
+        let config = Config::default();
+        assert_eq!(config.cb_failure_threshold, 5);
+        assert_eq!(config.cb_reset_timeout_secs, 30);
+        assert_eq!(config.cb_success_threshold, 2);
+    }
+
+    #[test]
+    fn test_default_governance_settings() {
+        let config = Config::default();
+        assert!(config.zombie_detection_enabled);
+        assert_eq!(config.agent_session_ttl_secs, 600);
+        assert_eq!(config.attestation_interval, 100);
+    }
+
+    #[test]
+    fn test_default_gateway_external_url() {
+        let config = Config::default();
+        assert_eq!(
+            config.gateway_external_url,
+            Some("http://localhost:8080".to_string())
+        );
+    }
+
+    #[test]
+    fn test_validate_warns_but_succeeds() {
+        let config = Config::default();
+        // Default config has no CP URL and no JWT — validate should still succeed
+        assert!(config.validate().is_ok());
+    }
 }

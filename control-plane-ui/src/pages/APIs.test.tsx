@@ -7,6 +7,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Mocks
 // ---------------------------------------------------------------------------
 
+vi.mock('../contexts/EnvironmentContext', () => ({
+  useEnvironment: vi.fn(() => ({
+    activeEnvironment: 'dev',
+    activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+    environments: [
+      { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+      { name: 'staging', label: 'Staging', mode: 'full', color: 'amber' },
+      { name: 'prod', label: 'Production', mode: 'read-only', color: 'red' },
+    ],
+    switchEnvironment: vi.fn(),
+  })),
+}));
+
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
     user: {

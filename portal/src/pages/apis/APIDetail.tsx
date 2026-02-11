@@ -377,7 +377,7 @@ export function APIDetail() {
                             <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
                               Parameters
                             </h4>
-                            <div className="bg-gray-50 dark:bg-neutral-700 rounded-lg overflow-hidden">
+                            <div className="bg-gray-50 dark:bg-neutral-700 rounded-lg overflow-x-auto">
                               <table className="min-w-full text-sm">
                                 <thead>
                                   <tr className="border-b border-gray-200 dark:border-neutral-600">

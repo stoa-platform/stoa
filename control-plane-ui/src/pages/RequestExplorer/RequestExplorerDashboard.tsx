@@ -94,35 +94,35 @@ export function RequestExplorerDashboard() {
 
   // KPI queries
   const totalRequests = usePrometheusQuery(
-    `sum(increase(stoa_control_plane_http_requests_total[${timeRange}]))`,
+    `sum(increase(stoa_http_requests_total[${timeRange}]))`,
     AUTO_REFRESH_INTERVAL
   );
   const successRate = usePrometheusQuery(
-    `sum(rate(stoa_control_plane_http_requests_total{status=~"2.."}[5m])) / sum(rate(stoa_control_plane_http_requests_total[5m]))`,
+    `sum(rate(stoa_http_requests_total{status=~"2.."}[5m])) / sum(rate(stoa_http_requests_total[5m]))`,
     AUTO_REFRESH_INTERVAL
   );
   const avgLatency = usePrometheusQuery(
-    'sum(rate(stoa_control_plane_http_request_duration_seconds_sum[5m])) / sum(rate(stoa_control_plane_http_request_duration_seconds_count[5m]))',
+    'sum(rate(stoa_http_request_duration_seconds_sum[5m])) / sum(rate(stoa_http_request_duration_seconds_count[5m]))',
     AUTO_REFRESH_INTERVAL
   );
   const activeEndpoints = usePrometheusQuery(
-    `count(count by (path) (increase(stoa_control_plane_http_requests_total[${timeRange}]) > 0))`,
+    `count(count by (path) (increase(stoa_http_requests_total[${timeRange}]) > 0))`,
     AUTO_REFRESH_INTERVAL
   );
 
   // Status breakdown
   const statusBreakdown = usePrometheusQuery(
-    `sum by (status) (increase(stoa_control_plane_http_requests_total[${timeRange}]))`,
+    `sum by (status) (increase(stoa_http_requests_total[${timeRange}]))`,
     AUTO_REFRESH_INTERVAL
   );
 
   // Top endpoints
   const topEndpoints = usePrometheusQuery(
-    `topk(10, sum by (path, method) (increase(stoa_control_plane_http_requests_total[${timeRange}])))`,
+    `topk(10, sum by (path, method) (increase(stoa_http_requests_total[${timeRange}])))`,
     AUTO_REFRESH_INTERVAL
   );
   const topEndpointErrors = usePrometheusQuery(
-    `sum by (path, method) (increase(stoa_control_plane_http_requests_total{status=~"5.."}[${timeRange}]))`,
+    `sum by (path, method) (increase(stoa_http_requests_total{status=~"5.."}[${timeRange}]))`,
     AUTO_REFRESH_INTERVAL
   );
 

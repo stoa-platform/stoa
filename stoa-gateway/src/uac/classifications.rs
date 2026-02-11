@@ -31,6 +31,7 @@ pub enum Classification {
 
 impl Classification {
     /// Parse classification from string (case-insensitive).
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "H" => Some(Classification::H),

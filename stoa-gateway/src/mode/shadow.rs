@@ -821,10 +821,77 @@ pub struct ShadowStatus {
 mod tests {
     use super::*;
 
+    fn make_service(min_requests: u64) -> ShadowService {
+        ShadowService::new(ShadowSettings {
+            min_requests_for_uac: min_requests,
+            analysis_window_hours: 24,
+            ..Default::default()
+        })
+    }
+
+    fn make_tx(
+        id: &str,
+        method: &str,
+        path: &str,
+        status: u16,
+        latency: u64,
+    ) -> CapturedTransaction {
+        CapturedTransaction {
+            id: id.to_string(),
+            timestamp: chrono::Utc::now(),
+            request: CapturedRequest {
+                method: method.to_string(),
+                path: path.to_string(),
+                query_params: HashMap::new(),
+                headers: HashMap::new(),
+                content_type: Some("application/json".to_string()),
+                body: None,
+                body_size: 0,
+            },
+            response: CapturedResponse {
+                status_code: status,
+                headers: HashMap::new(),
+                content_type: Some("application/json".to_string()),
+                body: Some(serde_json::json!({"ok": true})),
+                body_size: 10,
+            },
+            latency_ms: latency,
+            source: "test".to_string(),
+        }
+    }
+
+    fn make_tx_with_auth(id: &str, auth_header: &str) -> CapturedTransaction {
+        let mut headers = HashMap::new();
+        headers.insert("authorization".to_string(), auth_header.to_string());
+        CapturedTransaction {
+            id: id.to_string(),
+            timestamp: chrono::Utc::now(),
+            request: CapturedRequest {
+                method: "GET".to_string(),
+                path: "/api/v1/data".to_string(),
+                query_params: HashMap::new(),
+                headers,
+                content_type: None,
+                body: None,
+                body_size: 0,
+            },
+            response: CapturedResponse {
+                status_code: 200,
+                headers: HashMap::new(),
+                content_type: None,
+                body: None,
+                body_size: 0,
+            },
+            latency_ms: 10,
+            source: "test".to_string(),
+        }
+    }
+
+    // === Existing tests ===
+
     #[test]
     fn test_normalize_path() {
-        let settings = ShadowSettings::default();
-        let service = ShadowService::new(settings);
+        let service = make_service(100);
 
         assert_eq!(
             service.normalize_path("GET", "/api/v1/users/123"),
@@ -839,9 +906,32 @@ mod tests {
     }
 
     #[test]
+    fn test_normalize_path_no_ids() {
+        let service = make_service(100);
+        assert_eq!(
+            service.normalize_path("POST", "/api/v1/users"),
+            "POST /api/v1/users"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_multiple_ids() {
+        let service = make_service(100);
+        assert_eq!(
+            service.normalize_path("GET", "/api/v1/tenants/42/users/99"),
+            "GET /api/v1/tenants/{id}/users/{id}"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_root() {
+        let service = make_service(100);
+        assert_eq!(service.normalize_path("GET", "/"), "GET /");
+    }
+
+    #[test]
     fn test_infer_schema() {
-        let settings = ShadowSettings::default();
-        let service = ShadowService::new(settings);
+        let service = make_service(100);
 
         let value = serde_json::json!({
             "name": "test",
@@ -859,9 +949,30 @@ mod tests {
     }
 
     #[test]
+    fn test_infer_schema_null() {
+        let service = make_service(100);
+        let schema = service.infer_schema(&serde_json::Value::Null);
+        assert_eq!(schema["type"], "null");
+    }
+
+    #[test]
+    fn test_infer_schema_number() {
+        let service = make_service(100);
+        let schema = service.infer_schema(&serde_json::json!(9.99));
+        assert_eq!(schema["type"], "number");
+    }
+
+    #[test]
+    fn test_infer_schema_empty_array() {
+        let service = make_service(100);
+        let schema = service.infer_schema(&serde_json::json!([]));
+        assert_eq!(schema["type"], "array");
+        assert!(schema["items"].is_null());
+    }
+
+    #[test]
     fn test_generate_operation_id() {
-        let settings = ShadowSettings::default();
-        let service = ShadowService::new(settings);
+        let service = make_service(100);
 
         assert_eq!(
             service.generate_operation_id("GET", "/api/v1/users"),
@@ -875,43 +986,264 @@ mod tests {
             service.generate_operation_id("GET", "/api/v1/users/{id}"),
             "get_api_v1_users"
         );
+        assert_eq!(
+            service.generate_operation_id("PUT", "/api/v1/users/{id}"),
+            "update_api_v1_users"
+        );
+        assert_eq!(
+            service.generate_operation_id("PATCH", "/api/v1/items/{id}"),
+            "patch_api_v1_items"
+        );
+        assert_eq!(
+            service.generate_operation_id("DELETE", "/api/v1/users/{id}"),
+            "delete_api_v1_users"
+        );
+    }
+
+    #[test]
+    fn test_generate_operation_id_root() {
+        let service = make_service(100);
+        assert_eq!(service.generate_operation_id("GET", "/"), "get");
+    }
+
+    #[test]
+    fn test_generate_operation_id_unknown_method() {
+        let service = make_service(100);
+        assert_eq!(
+            service.generate_operation_id("OPTIONS", "/api/v1/test"),
+            "options_api_v1_test"
+        );
     }
 
     #[tokio::test]
     async fn test_shadow_service_capture() {
-        let settings = ShadowSettings {
-            min_requests_for_uac: 10,
-            ..Default::default()
-        };
-        let service = ShadowService::new(settings);
+        let service = make_service(10);
 
-        let tx = CapturedTransaction {
-            id: "tx-1".to_string(),
-            timestamp: chrono::Utc::now(),
-            request: CapturedRequest {
-                method: "GET".to_string(),
-                path: "/api/v1/users".to_string(),
-                query_params: HashMap::new(),
-                headers: HashMap::new(),
-                content_type: None,
-                body: None,
-                body_size: 0,
-            },
-            response: CapturedResponse {
-                status_code: 200,
-                headers: HashMap::new(),
-                content_type: Some("application/json".to_string()),
-                body: Some(serde_json::json!({"users": []})),
-                body_size: 20,
-            },
-            latency_ms: 50,
-            source: "test".to_string(),
-        };
-
+        let tx = make_tx("tx-1", "GET", "/api/v1/users", 200, 50);
         service.capture(tx).await;
 
         let status = service.status().await;
         assert_eq!(status.transactions_captured, 1);
         assert!(!status.ready_for_generation);
+        assert_eq!(status.min_requests_threshold, 10);
+    }
+
+    #[tokio::test]
+    async fn test_shadow_service_status_ready() {
+        let service = make_service(2);
+
+        service
+            .capture(make_tx("tx-1", "GET", "/api/v1/a", 200, 10))
+            .await;
+        service
+            .capture(make_tx("tx-2", "GET", "/api/v1/b", 200, 20))
+            .await;
+
+        let status = service.status().await;
+        assert_eq!(status.transactions_captured, 2);
+        assert!(status.ready_for_generation);
+    }
+
+    // === Build endpoint pattern tests ===
+
+    #[test]
+    fn test_build_endpoint_pattern_empty() {
+        let service = make_service(100);
+        let txs: Vec<&CapturedTransaction> = vec![];
+        assert!(service.build_endpoint_pattern("GET /api", &txs).is_none());
+    }
+
+    #[test]
+    fn test_build_endpoint_pattern_invalid_key() {
+        let service = make_service(100);
+        let tx = make_tx("tx-1", "GET", "/api", 200, 10);
+        let txs = vec![&tx];
+        // Key without space separator
+        assert!(service.build_endpoint_pattern("invalid", &txs).is_none());
+    }
+
+    #[test]
+    fn test_build_endpoint_pattern_basic() {
+        let service = make_service(100);
+        let tx1 = make_tx("tx-1", "GET", "/api/v1/users", 200, 10);
+        let tx2 = make_tx("tx-2", "GET", "/api/v1/users", 200, 30);
+        let tx3 = make_tx("tx-3", "GET", "/api/v1/users", 500, 50);
+        let txs = vec![&tx1, &tx2, &tx3];
+
+        let pattern = service
+            .build_endpoint_pattern("GET /api/v1/users", &txs)
+            .unwrap();
+
+        assert_eq!(pattern.method, "GET");
+        assert_eq!(pattern.path_pattern, "/api/v1/users");
+        assert_eq!(pattern.sample_count, 3);
+        assert_eq!(pattern.avg_latency_ms, 30); // (10+30+50)/3
+                                                // Error rate: 1 out of 3 is >= 400
+        assert!((pattern.error_rate - 1.0 / 3.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_build_endpoint_pattern_detects_bearer_auth() {
+        let service = make_service(100);
+        let tx = make_tx_with_auth("tx-1", "Bearer eyJhbGciOi...");
+        let txs = vec![&tx];
+
+        let pattern = service
+            .build_endpoint_pattern("GET /api/v1/data", &txs)
+            .unwrap();
+        assert_eq!(pattern.auth_type, Some("bearer".to_string()));
+    }
+
+    #[test]
+    fn test_build_endpoint_pattern_detects_basic_auth() {
+        let service = make_service(100);
+        let tx = make_tx_with_auth("tx-1", "Basic dXNlcjpwYXNz");
+        let txs = vec![&tx];
+
+        let pattern = service
+            .build_endpoint_pattern("GET /api/v1/data", &txs)
+            .unwrap();
+        assert_eq!(pattern.auth_type, Some("basic".to_string()));
+    }
+
+    #[test]
+    fn test_build_endpoint_pattern_detects_api_key() {
+        let service = make_service(100);
+        let mut tx = make_tx("tx-1", "GET", "/api/v1/data", 200, 10);
+        tx.request
+            .headers
+            .insert("x-api-key".to_string(), "sk-test-123".to_string());
+        let txs = vec![&tx];
+
+        let pattern = service
+            .build_endpoint_pattern("GET /api/v1/data", &txs)
+            .unwrap();
+        assert_eq!(pattern.auth_type, Some("api_key".to_string()));
+    }
+
+    #[test]
+    fn test_build_endpoint_pattern_response_schema() {
+        let service = make_service(100);
+        let mut tx = make_tx("tx-1", "GET", "/api", 200, 10);
+        tx.response.body = Some(serde_json::json!({"users": [{"id": 1}]}));
+        let txs = vec![&tx];
+
+        let pattern = service.build_endpoint_pattern("GET /api", &txs).unwrap();
+        assert!(pattern.response_schemas.contains_key(&200));
+        assert_eq!(pattern.response_schemas[&200]["type"], "object");
+    }
+
+    // === Analyze patterns tests ===
+
+    #[tokio::test]
+    async fn test_analyze_patterns_groups_by_path() {
+        let service = make_service(100);
+        let txs = vec![
+            make_tx("tx-1", "GET", "/api/v1/users", 200, 10),
+            make_tx("tx-2", "GET", "/api/v1/users", 200, 20),
+            make_tx("tx-3", "POST", "/api/v1/users", 201, 30),
+        ];
+
+        let patterns = service.analyze_patterns(&txs).await;
+        assert_eq!(patterns.len(), 2); // GET + POST
+        assert!(patterns.contains_key("GET /api/v1/users"));
+        assert!(patterns.contains_key("POST /api/v1/users"));
+        assert_eq!(patterns["GET /api/v1/users"].sample_count, 2);
+        assert_eq!(patterns["POST /api/v1/users"].sample_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_analyze_patterns_normalizes_ids() {
+        let service = make_service(100);
+        let txs = vec![
+            make_tx("tx-1", "GET", "/api/v1/users/1", 200, 10),
+            make_tx("tx-2", "GET", "/api/v1/users/2", 200, 20),
+            make_tx("tx-3", "GET", "/api/v1/users/99", 200, 30),
+        ];
+
+        let patterns = service.analyze_patterns(&txs).await;
+        // All should be grouped under GET /api/v1/users/{id}
+        assert_eq!(patterns.len(), 1);
+        assert!(patterns.contains_key("GET /api/v1/users/{id}"));
+        assert_eq!(patterns["GET /api/v1/users/{id}"].sample_count, 3);
+    }
+
+    // === Generate UAC tests ===
+
+    #[tokio::test]
+    async fn test_generate_uac_no_patterns() {
+        let service = make_service(100);
+        let uac = service.generate_uac("test-api", "http://test.com").await;
+        assert!(uac.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_generate_uac_success() {
+        let service = make_service(2);
+
+        // Capture enough transactions to trigger analysis
+        service
+            .capture(make_tx("tx-1", "GET", "/api/v1/users", 200, 10))
+            .await;
+        service
+            .capture(make_tx("tx-2", "POST", "/api/v1/users", 201, 20))
+            .await;
+
+        let uac = service.generate_uac("User API", "http://users.local").await;
+        assert!(uac.is_some());
+
+        let uac = uac.unwrap();
+        assert_eq!(uac.api_id, "user-api-api");
+        assert_eq!(uac.api_name, "User API");
+        assert_eq!(uac.base_url, "http://users.local");
+        assert_eq!(uac.version, "v1");
+        assert!(!uac.endpoints.is_empty());
+        assert!(!uac.rate_limits.is_empty());
+        assert_eq!(uac.rate_limits[0].endpoint, "*");
+        assert_eq!(uac.rate_limits[0].limit, 1000);
+        assert!(uac.metadata.confidence > 0.0);
+        assert!(uac.metadata.transactions_analyzed >= 2);
+
+        // Check it's stored
+        let status = service.status().await;
+        assert_eq!(status.uacs_generated, 1);
+    }
+
+    // === Export YAML test ===
+
+    #[tokio::test]
+    async fn test_export_uac_yaml() {
+        let service = make_service(2);
+        service
+            .capture(make_tx("tx-1", "GET", "/api", 200, 10))
+            .await;
+        service
+            .capture(make_tx("tx-2", "GET", "/api", 200, 20))
+            .await;
+
+        let uac = service
+            .generate_uac("Test", "http://test.com")
+            .await
+            .unwrap();
+        let yaml = service.export_uac_yaml(&uac).await;
+        assert!(yaml.contains("api_name: Test"));
+        assert!(yaml.contains("base_url: http://test.com"));
+    }
+
+    // === Content type collection test ===
+
+    #[test]
+    fn test_build_endpoint_pattern_content_types() {
+        let service = make_service(100);
+        let mut tx1 = make_tx("tx-1", "POST", "/api/v1/data", 200, 10);
+        tx1.request.content_type = Some("application/json".to_string());
+        let mut tx2 = make_tx("tx-2", "POST", "/api/v1/data", 200, 20);
+        tx2.request.content_type = Some("application/xml".to_string());
+        let txs = vec![&tx1, &tx2];
+
+        let pattern = service
+            .build_endpoint_pattern("POST /api/v1/data", &txs)
+            .unwrap();
+        assert!(!pattern.content_types.is_empty()); // at least one content type
     }
 }

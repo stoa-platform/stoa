@@ -557,31 +557,32 @@ pub async fn handle_proxy(
 mod tests {
     use super::*;
 
+    fn make_route(prefix: &str, upstream: &str) -> RouteConfig {
+        RouteConfig {
+            path_prefix: prefix.to_string(),
+            upstream_url: upstream.to_string(),
+            strip_prefix: false,
+            rewrite_path: None,
+            timeout_secs: 30,
+            headers_to_add: HashMap::new(),
+            headers_to_remove: Vec::new(),
+            load_balance: false,
+            upstream_endpoints: Vec::new(),
+        }
+    }
+
+    fn make_route_strip(prefix: &str, upstream: &str) -> RouteConfig {
+        RouteConfig {
+            strip_prefix: true,
+            ..make_route(prefix, upstream)
+        }
+    }
+
     #[test]
     fn test_route_registry_find() {
         let mut registry = RouteRegistry::new();
-        registry.add_route(RouteConfig {
-            path_prefix: "/api/v1".to_string(),
-            upstream_url: "http://backend:8080".to_string(),
-            strip_prefix: true,
-            rewrite_path: None,
-            timeout_secs: 30,
-            headers_to_add: HashMap::new(),
-            headers_to_remove: Vec::new(),
-            load_balance: false,
-            upstream_endpoints: Vec::new(),
-        });
-        registry.add_route(RouteConfig {
-            path_prefix: "/api/v1/users".to_string(),
-            upstream_url: "http://users:8080".to_string(),
-            strip_prefix: true,
-            rewrite_path: None,
-            timeout_secs: 30,
-            headers_to_add: HashMap::new(),
-            headers_to_remove: Vec::new(),
-            load_balance: false,
-            upstream_endpoints: Vec::new(),
-        });
+        registry.add_route(make_route_strip("/api/v1", "http://backend:8080"));
+        registry.add_route(make_route_strip("/api/v1/users", "http://users:8080"));
 
         // Should match longest prefix
         let route = registry.find_route("/api/v1/users/123").unwrap();
@@ -596,17 +597,50 @@ mod tests {
     }
 
     #[test]
+    fn test_route_registry_empty() {
+        let registry = RouteRegistry::new();
+        assert!(registry.find_route("/anything").is_none());
+    }
+
+    #[test]
+    fn test_route_registry_default() {
+        let registry = RouteRegistry::default();
+        assert!(registry.find_route("/anything").is_none());
+    }
+
+    #[test]
+    fn test_route_registry_exact_match() {
+        let mut registry = RouteRegistry::new();
+        registry.add_route(make_route("/api/v1/health", "http://health:8080"));
+
+        let route = registry.find_route("/api/v1/health").unwrap();
+        assert_eq!(route.upstream_url, "http://health:8080");
+    }
+
+    #[test]
     fn test_hop_by_hop_headers() {
         assert!(is_hop_by_hop_header(&HeaderName::from_static("connection")));
         assert!(is_hop_by_hop_header(&HeaderName::from_static(
             "transfer-encoding"
         )));
+        assert!(is_hop_by_hop_header(&HeaderName::from_static("upgrade")));
+        assert!(is_hop_by_hop_header(&HeaderName::from_static("keep-alive")));
+        assert!(is_hop_by_hop_header(&HeaderName::from_static("te")));
+        assert!(is_hop_by_hop_header(&HeaderName::from_static("trailers")));
+        assert!(is_hop_by_hop_header(&HeaderName::from_static(
+            "proxy-authenticate"
+        )));
+        assert!(is_hop_by_hop_header(&HeaderName::from_static(
+            "proxy-authorization"
+        )));
+        // Non hop-by-hop
         assert!(!is_hop_by_hop_header(&HeaderName::from_static(
             "content-type"
         )));
         assert!(!is_hop_by_hop_header(&HeaderName::from_static(
             "authorization"
         )));
+        assert!(!is_hop_by_hop_header(&HeaderName::from_static("x-custom")));
     }
 
     #[test]
@@ -615,6 +649,7 @@ mod tests {
         headers.insert("X-Custom".to_string(), "value".to_string());
 
         let injector = HeaderInjector::new(headers);
+        assert_eq!(injector.name(), "header_injector");
 
         let mut request = ProxyRequest {
             method: Method::GET,
@@ -629,5 +664,184 @@ mod tests {
         injector.transform(&mut request).unwrap();
 
         assert!(request.headers.contains_key("x-custom"));
+    }
+
+    #[test]
+    fn test_header_injector_multiple() {
+        let mut headers = HashMap::new();
+        headers.insert("X-Tenant".to_string(), "acme".to_string());
+        headers.insert("X-Request-ID".to_string(), "req-123".to_string());
+
+        let injector = HeaderInjector::new(headers);
+
+        let mut request = ProxyRequest {
+            method: Method::POST,
+            uri: "/api".parse().unwrap(),
+            headers: HeaderMap::new(),
+            body: Vec::new(),
+            upstream_url: None,
+            route: None,
+            metadata: RequestMetadata::default(),
+        };
+
+        injector.transform(&mut request).unwrap();
+
+        assert_eq!(
+            request.headers.get("x-tenant").unwrap().to_str().unwrap(),
+            "acme"
+        );
+        assert_eq!(
+            request
+                .headers
+                .get("x-request-id")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "req-123"
+        );
+    }
+
+    #[test]
+    fn test_build_upstream_url_no_strip() {
+        let service = ProxyService::new(ProxySettings::default(), RouteRegistry::new());
+        let route = make_route("/api/v1", "http://backend:8080");
+        let uri: Uri = "/api/v1/users?page=1".parse().unwrap();
+
+        let url = service.build_upstream_url(&route, &uri).unwrap();
+        assert_eq!(url, "http://backend:8080/api/v1/users?page=1");
+    }
+
+    #[test]
+    fn test_build_upstream_url_strip_prefix() {
+        let service = ProxyService::new(ProxySettings::default(), RouteRegistry::new());
+        let route = make_route_strip("/api/v1", "http://backend:8080");
+        let uri: Uri = "/api/v1/users".parse().unwrap();
+
+        let url = service.build_upstream_url(&route, &uri).unwrap();
+        assert_eq!(url, "http://backend:8080/users");
+    }
+
+    #[test]
+    fn test_build_upstream_url_no_query() {
+        let service = ProxyService::new(ProxySettings::default(), RouteRegistry::new());
+        let route = make_route("/api", "http://backend:8080");
+        let uri: Uri = "/api/health".parse().unwrap();
+
+        let url = service.build_upstream_url(&route, &uri).unwrap();
+        assert_eq!(url, "http://backend:8080/api/health");
+    }
+
+    #[test]
+    fn test_default_timeout() {
+        assert_eq!(default_timeout(), 30);
+    }
+
+    #[test]
+    fn test_route_config_serde_defaults() {
+        let json = r#"{"path_prefix":"/api","upstream_url":"http://up:80"}"#;
+        let config: RouteConfig = serde_json::from_str(json).unwrap();
+
+        assert_eq!(config.path_prefix, "/api");
+        assert_eq!(config.upstream_url, "http://up:80");
+        assert!(!config.strip_prefix);
+        assert!(config.rewrite_path.is_none());
+        assert_eq!(config.timeout_secs, 30); // default_timeout()
+        assert!(config.headers_to_add.is_empty());
+        assert!(config.headers_to_remove.is_empty());
+        assert!(!config.load_balance);
+        assert!(config.upstream_endpoints.is_empty());
+    }
+
+    #[test]
+    fn test_proxy_error_display() {
+        let e = ProxyError::Connection("refused".to_string());
+        assert!(e.to_string().contains("refused"));
+
+        let e = ProxyError::Timeout;
+        assert_eq!(e.to_string(), "Upstream timeout");
+
+        let e = ProxyError::NoRoute("/unknown".to_string());
+        assert!(e.to_string().contains("/unknown"));
+
+        let e = ProxyError::RateLimited;
+        assert_eq!(e.to_string(), "Rate limited");
+
+        let e = ProxyError::PolicyDenied("blocked".to_string());
+        assert!(e.to_string().contains("blocked"));
+
+        let e = ProxyError::InvalidRequest("bad".to_string());
+        assert!(e.to_string().contains("bad"));
+
+        let e = ProxyError::Transformation("failed".to_string());
+        assert!(e.to_string().contains("failed"));
+    }
+
+    #[test]
+    fn test_proxy_service_add_transformer() {
+        let mut service = ProxyService::new(ProxySettings::default(), RouteRegistry::new());
+
+        let injector = Arc::new(HeaderInjector::new(HashMap::new()));
+        service.add_transformer(injector);
+
+        assert_eq!(service.transformers.len(), 1);
+    }
+
+    #[test]
+    fn test_proxy_service_add_response_transformer() {
+        struct NoopResponseTransformer;
+        impl ResponseTransformer for NoopResponseTransformer {
+            fn transform(&self, _response: &mut ProxyResponse) -> Result<(), ProxyError> {
+                Ok(())
+            }
+            fn name(&self) -> &str {
+                "noop"
+            }
+        }
+
+        let mut service = ProxyService::new(ProxySettings::default(), RouteRegistry::new());
+        service.add_response_transformer(Arc::new(NoopResponseTransformer));
+
+        assert_eq!(service.response_transformers.len(), 1);
+    }
+
+    #[test]
+    fn test_convert_response_ok() {
+        let service = ProxyService::new(ProxySettings::default(), RouteRegistry::new());
+        let response = ProxyResponse {
+            status: StatusCode::OK,
+            headers: HeaderMap::new(),
+            body: b"hello".to_vec(),
+            upstream_time_ms: 42,
+        };
+
+        let result = service.convert_response(response).unwrap();
+        assert_eq!(result.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn test_convert_response_with_headers() {
+        let service = ProxyService::new(ProxySettings::default(), RouteRegistry::new());
+        let mut headers = HeaderMap::new();
+        headers.insert("x-custom", HeaderValue::from_static("test"));
+
+        let response = ProxyResponse {
+            status: StatusCode::CREATED,
+            headers,
+            body: Vec::new(),
+            upstream_time_ms: 10,
+        };
+
+        let result = service.convert_response(response).unwrap();
+        assert_eq!(result.status(), StatusCode::CREATED);
+        assert_eq!(result.headers().get("x-custom").unwrap(), "test");
+    }
+
+    #[test]
+    fn test_request_metadata_default() {
+        let metadata = RequestMetadata::default();
+        assert!(metadata.request_id.is_empty());
+        assert!(metadata.tenant_id.is_none());
+        assert!(metadata.user_id.is_none());
+        assert!(metadata.start_time.is_none());
     }
 }

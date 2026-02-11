@@ -451,6 +451,37 @@ pub async fn health() -> &'static str {
 mod tests {
     use super::*;
 
+    fn make_sidecar(format: DecisionFormat) -> SidecarService {
+        SidecarService::new(SidecarSettings {
+            decision_format: format,
+            ..Default::default()
+        })
+    }
+
+    fn make_authz_request(user: Option<UserInfo>, tenant_id: Option<&str>) -> AuthzRequest {
+        AuthzRequest {
+            method: "GET".to_string(),
+            path: "/api/v1/users".to_string(),
+            headers: std::collections::HashMap::new(),
+            source_ip: None,
+            user,
+            tenant_id: tenant_id.map(|s| s.to_string()),
+            context: serde_json::Value::Null,
+        }
+    }
+
+    fn make_user(roles: Vec<&str>, scopes: Vec<&str>) -> UserInfo {
+        UserInfo {
+            id: "user-456".to_string(),
+            email: Some("user@example.com".to_string()),
+            roles: roles.into_iter().map(|s| s.to_string()).collect(),
+            scopes: scopes.into_iter().map(|s| s.to_string()).collect(),
+            claims: std::collections::HashMap::new(),
+        }
+    }
+
+    // === Existing tests ===
+
     #[test]
     fn test_authz_response_allow() {
         let response = AuthzResponse::allow();
@@ -485,6 +516,16 @@ mod tests {
         assert!(!response.allowed);
         assert_eq!(response.status_code, Some(429));
         assert!(response.headers_to_add.contains_key("X-RateLimit-Limit"));
+        assert!(response
+            .headers_to_add
+            .contains_key("X-RateLimit-Remaining"));
+        assert!(response.headers_to_add.contains_key("X-RateLimit-Reset"));
+        assert_eq!(
+            response.denial_reason,
+            Some("Rate limit exceeded".to_string())
+        );
+        assert_eq!(response.denied_by_policy, Some("rate_limit".to_string()));
+        assert!(response.metadata.is_some());
     }
 
     #[test]
@@ -502,6 +543,28 @@ mod tests {
             response.headers_to_add.get("X-Another"),
             Some(&"test".to_string())
         );
+    }
+
+    #[test]
+    fn test_authz_response_with_policy() {
+        let response = AuthzResponse::deny("forbidden").with_policy("rate_limit_policy");
+        assert_eq!(
+            response.denied_by_policy,
+            Some("rate_limit_policy".to_string())
+        );
+    }
+
+    #[test]
+    fn test_authz_response_with_metadata() {
+        let metadata = RequestMetadata {
+            request_id: "req-1".to_string(),
+            policies_evaluated: vec!["default".to_string()],
+            evaluation_time_us: 100,
+            rate_limit: None,
+        };
+        let response = AuthzResponse::allow().with_metadata(metadata);
+        assert!(response.metadata.is_some());
+        assert_eq!(response.metadata.unwrap().request_id, "req-1");
     }
 
     #[test]
@@ -525,5 +588,172 @@ mod tests {
         assert_eq!(request.tenant_id, Some("tenant-123".to_string()));
         assert!(request.user.is_some());
         assert_eq!(request.user.unwrap().id, "user-456");
+    }
+
+    #[test]
+    fn test_authz_request_deserialize_minimal() {
+        let json = r#"{"method":"POST","path":"/api"}"#;
+        let request: AuthzRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.method, "POST");
+        assert_eq!(request.path, "/api");
+        assert!(request.user.is_none());
+        assert!(request.tenant_id.is_none());
+        assert!(request.headers.is_empty());
+    }
+
+    // === Authorize flow tests ===
+
+    #[tokio::test]
+    async fn test_authorize_no_user_returns_unauthorized() {
+        let service = make_sidecar(DecisionFormat::JsonBody);
+        let request = make_authz_request(None, Some("tenant-1"));
+
+        let response = service.authorize(request).await;
+        assert!(!response.allowed);
+        assert_eq!(response.status_code, Some(401));
+        assert!(response
+            .denial_reason
+            .as_ref()
+            .unwrap()
+            .contains("Missing user"));
+    }
+
+    #[tokio::test]
+    async fn test_authorize_no_tenant_returns_deny() {
+        let service = make_sidecar(DecisionFormat::JsonBody);
+        let user = make_user(vec!["admin"], vec!["read"]);
+        let request = make_authz_request(Some(user), None);
+
+        let response = service.authorize(request).await;
+        assert!(!response.allowed);
+        assert_eq!(response.status_code, Some(403));
+        assert!(response
+            .denial_reason
+            .as_ref()
+            .unwrap()
+            .contains("Missing tenant"));
+    }
+
+    #[tokio::test]
+    async fn test_authorize_success_with_enrichment() {
+        let service = make_sidecar(DecisionFormat::JsonBody);
+        let user = make_user(vec!["admin", "devops"], vec!["read", "write"]);
+        let request = make_authz_request(Some(user), Some("acme"));
+
+        let response = service.authorize(request).await;
+        assert!(response.allowed);
+        assert_eq!(
+            response.headers_to_add.get("X-User-ID"),
+            Some(&"user-456".to_string())
+        );
+        assert_eq!(
+            response.headers_to_add.get("X-Tenant-ID"),
+            Some(&"acme".to_string())
+        );
+        assert!(response.headers_to_add.contains_key("X-Request-ID"));
+        assert_eq!(
+            response.headers_to_add.get("X-User-Scopes"),
+            Some(&"read,write".to_string())
+        );
+        assert_eq!(
+            response.headers_to_add.get("X-User-Roles"),
+            Some(&"admin,devops".to_string())
+        );
+        assert!(response.metadata.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_authorize_no_scopes_no_roles() {
+        let service = make_sidecar(DecisionFormat::JsonBody);
+        let user = make_user(vec![], vec![]);
+        let request = make_authz_request(Some(user), Some("acme"));
+
+        let response = service.authorize(request).await;
+        assert!(response.allowed);
+        assert!(!response.headers_to_add.contains_key("X-User-Scopes"));
+        assert!(!response.headers_to_add.contains_key("X-User-Roles"));
+    }
+
+    // === Format response tests ===
+
+    #[test]
+    fn test_format_status_code_allow() {
+        let service = make_sidecar(DecisionFormat::StatusCode);
+        let response = AuthzResponse::allow();
+        let http_resp = service.format_response(response);
+        assert_eq!(http_resp.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn test_format_status_code_deny() {
+        let service = make_sidecar(DecisionFormat::StatusCode);
+        let response = AuthzResponse::deny("forbidden");
+        let http_resp = service.format_response(response);
+        assert_eq!(http_resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn test_format_status_code_unauthorized() {
+        let service = make_sidecar(DecisionFormat::StatusCode);
+        let response = AuthzResponse::unauthorized("no token");
+        let http_resp = service.format_response(response);
+        assert_eq!(http_resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn test_format_json_body_allow() {
+        let service = make_sidecar(DecisionFormat::JsonBody);
+        let response = AuthzResponse::allow();
+        let http_resp = service.format_response(response);
+        assert_eq!(http_resp.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn test_format_json_body_deny() {
+        let service = make_sidecar(DecisionFormat::JsonBody);
+        let response = AuthzResponse::deny("blocked");
+        let http_resp = service.format_response(response);
+        assert_eq!(http_resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn test_format_envoy_allow() {
+        let service = make_sidecar(DecisionFormat::EnvoyExtAuthz);
+        let response = AuthzResponse::allow().with_header("X-User-ID", "uid-1");
+        let http_resp = service.format_response(response);
+        assert_eq!(http_resp.status(), StatusCode::OK);
+        // Envoy headers should be prefixed with x-ext-authz-
+        assert!(http_resp.headers().get("x-ext-authz-x-user-id").is_some());
+    }
+
+    #[test]
+    fn test_format_envoy_deny() {
+        let service = make_sidecar(DecisionFormat::EnvoyExtAuthz);
+        let response = AuthzResponse::deny("policy violation").with_policy("rbac");
+        let http_resp = service.format_response(response);
+        assert_eq!(http_resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn test_format_kong_allow() {
+        let service = make_sidecar(DecisionFormat::KongPlugin);
+        let response = AuthzResponse::allow().with_header("X-Tenant", "acme");
+        let http_resp = service.format_response(response);
+        assert_eq!(http_resp.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn test_format_kong_deny() {
+        let service = make_sidecar(DecisionFormat::KongPlugin);
+        let response = AuthzResponse::deny("rate exceeded");
+        let http_resp = service.format_response(response);
+        assert_eq!(http_resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn test_health_endpoint() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(health());
+        assert_eq!(result, "OK");
     }
 }

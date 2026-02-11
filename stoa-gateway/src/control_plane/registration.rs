@@ -333,6 +333,10 @@ impl GatewayRegistrar {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
+    use crate::mode::GatewayMode;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_registration_payload_serialization() {
@@ -353,6 +357,23 @@ mod tests {
     }
 
     #[test]
+    fn test_registration_payload_with_tenant() {
+        let payload = RegistrationPayload {
+            hostname: "gw-1".to_string(),
+            mode: "sidecar".to_string(),
+            version: "0.1.0".to_string(),
+            environment: "staging".to_string(),
+            capabilities: vec!["rest".to_string()],
+            admin_url: "http://gw-1:8081".to_string(),
+            tenant_id: Some("acme".to_string()),
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        assert!(json.contains("tenant_id"));
+        assert!(json.contains("acme"));
+    }
+
+    #[test]
     fn test_heartbeat_payload_serialization() {
         let payload = HeartbeatPayload {
             uptime_seconds: 3600,
@@ -369,6 +390,21 @@ mod tests {
     }
 
     #[test]
+    fn test_heartbeat_payload_full() {
+        let payload = HeartbeatPayload {
+            uptime_seconds: 7200,
+            routes_count: 5,
+            policies_count: 3,
+            requests_total: Some(5000),
+            error_rate: Some(0.02),
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        assert!(json.contains("error_rate"));
+        assert!(json.contains("0.02"));
+    }
+
+    #[test]
     fn test_registrar_creation() {
         let registrar = GatewayRegistrar::new(
             "https://api.example.com".to_string(),
@@ -377,5 +413,246 @@ mod tests {
 
         assert_eq!(registrar.cp_url, "https://api.example.com");
         assert_eq!(registrar.api_key, "test-key");
+    }
+
+    #[test]
+    fn test_registration_response_deserialize() {
+        let json = r#"{
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "name": "gw-edge-dev",
+            "status": "active"
+        }"#;
+
+        let resp: RegistrationResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.name, "gw-edge-dev");
+        assert_eq!(resp.status, "active");
+    }
+
+    #[test]
+    fn test_registration_error_display() {
+        let e = RegistrationError::InvalidApiKey;
+        assert_eq!(e.to_string(), "Invalid API key");
+
+        let e = RegistrationError::Unreachable("timeout".to_string());
+        assert!(e.to_string().contains("timeout"));
+
+        let e = RegistrationError::Rejected("duplicate".to_string());
+        assert!(e.to_string().contains("duplicate"));
+
+        let e = RegistrationError::HostnameError("no hostname".to_string());
+        assert!(e.to_string().contains("no hostname"));
+    }
+
+    #[test]
+    fn test_detect_capabilities_edge_mcp() {
+        let registrar = GatewayRegistrar::new("http://cp".to_string(), "key".to_string());
+        let config = Config {
+            gateway_mode: GatewayMode::EdgeMcp,
+            policy_enabled: true,
+            ..Config::default()
+        };
+
+        let caps = registrar.detect_capabilities(&config);
+        assert!(caps.contains(&"rest".to_string()));
+        assert!(caps.contains(&"oidc".to_string()));
+        assert!(caps.contains(&"metering".to_string()));
+        assert!(caps.contains(&"mcp".to_string()));
+        assert!(caps.contains(&"sse".to_string()));
+        assert!(caps.contains(&"policy".to_string()));
+    }
+
+    #[test]
+    fn test_detect_capabilities_sidecar() {
+        let registrar = GatewayRegistrar::new("http://cp".to_string(), "key".to_string());
+        let config = Config {
+            gateway_mode: GatewayMode::Sidecar,
+            policy_enabled: false,
+            ..Config::default()
+        };
+
+        let caps = registrar.detect_capabilities(&config);
+        assert!(caps.contains(&"ext_authz".to_string()));
+        assert!(!caps.contains(&"mcp".to_string()));
+        assert!(!caps.contains(&"policy".to_string()));
+    }
+
+    #[test]
+    fn test_detect_capabilities_proxy_with_rate_limit() {
+        let registrar = GatewayRegistrar::new("http://cp".to_string(), "key".to_string());
+        let config = Config {
+            gateway_mode: GatewayMode::Proxy,
+            rate_limit_default: Some(1000),
+            policy_enabled: false,
+            ..Config::default()
+        };
+
+        let caps = registrar.detect_capabilities(&config);
+        assert!(caps.contains(&"rate_limiting".to_string()));
+    }
+
+    #[test]
+    fn test_detect_capabilities_shadow() {
+        let registrar = GatewayRegistrar::new("http://cp".to_string(), "key".to_string());
+        let config = Config {
+            gateway_mode: GatewayMode::Shadow,
+            policy_enabled: false,
+            ..Config::default()
+        };
+
+        let caps = registrar.detect_capabilities(&config);
+        assert!(caps.contains(&"traffic_capture".to_string()));
+        assert!(!caps.contains(&"mcp".to_string()));
+    }
+
+    #[test]
+    fn test_get_hostname() {
+        let registrar = GatewayRegistrar::new("http://cp".to_string(), "key".to_string());
+        let hostname = registrar.get_hostname();
+        assert!(hostname.is_ok());
+        assert!(!hostname.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_gateway_id_initially_none() {
+        let registrar = GatewayRegistrar::new("http://cp".to_string(), "key".to_string());
+        assert!(registrar.gateway_id().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_register_success() {
+        let mock_server = MockServer::start().await;
+
+        let gw_id = Uuid::new_v4();
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .and(header("X-Gateway-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": gw_id.to_string(),
+                "name": "gw-edge-dev",
+                "status": "active"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "test-key".to_string());
+        let config = Config::default();
+
+        let result = registrar.register(&config).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), gw_id);
+        assert_eq!(registrar.gateway_id().await, Some(gw_id));
+    }
+
+    #[tokio::test]
+    async fn test_register_unauthorized() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "bad-key".to_string());
+        let config = Config::default();
+
+        let result = registrar.register(&config).await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RegistrationError::InvalidApiKey
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_register_forbidden() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .respond_with(ResponseTemplate::new(403))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "key".to_string());
+        let config = Config::default();
+
+        let result = registrar.register(&config).await;
+        assert!(matches!(
+            result.unwrap_err(),
+            RegistrationError::InvalidApiKey
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_register_server_error() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/internal/gateways/register"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("internal error"))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "key".to_string());
+        let config = Config::default();
+
+        let result = registrar.register(&config).await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RegistrationError::Rejected(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_send_heartbeat_success() {
+        let mock_server = MockServer::start().await;
+        let gw_id = Uuid::new_v4();
+
+        Mock::given(method("POST"))
+            .and(path(format!("/v1/internal/gateways/{}/heartbeat", gw_id)))
+            .and(header("X-Gateway-Key", "key"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "key".to_string());
+
+        let payload = HeartbeatPayload {
+            uptime_seconds: 60,
+            routes_count: 5,
+            policies_count: 2,
+            requests_total: None,
+            error_rate: None,
+        };
+
+        let result = registrar.send_heartbeat(gw_id, payload).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_send_heartbeat_failure() {
+        let mock_server = MockServer::start().await;
+        let gw_id = Uuid::new_v4();
+
+        Mock::given(method("POST"))
+            .and(path(format!("/v1/internal/gateways/{}/heartbeat", gw_id)))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&mock_server)
+            .await;
+
+        let registrar = GatewayRegistrar::new(mock_server.uri(), "key".to_string());
+
+        let payload = HeartbeatPayload {
+            uptime_seconds: 60,
+            routes_count: 0,
+            policies_count: 0,
+            requests_total: None,
+            error_rate: None,
+        };
+
+        let result = registrar.send_heartbeat(gw_id, payload).await;
+        assert!(result.is_err());
     }
 }

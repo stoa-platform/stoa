@@ -488,4 +488,109 @@ mod tests {
         assert_eq!(GatewayMode::Proxy.default_port(), 8082);
         assert_eq!(GatewayMode::Shadow.default_port(), 8083);
     }
+
+    #[test]
+    fn test_requires_upstream() {
+        assert!(!GatewayMode::EdgeMcp.requires_upstream());
+        assert!(!GatewayMode::Sidecar.requires_upstream());
+        assert!(GatewayMode::Proxy.requires_upstream());
+        assert!(GatewayMode::Shadow.requires_upstream());
+    }
+
+    #[test]
+    fn test_supports_transformation() {
+        assert!(!GatewayMode::EdgeMcp.supports_transformation());
+        assert!(!GatewayMode::Sidecar.supports_transformation());
+        assert!(GatewayMode::Proxy.supports_transformation());
+        assert!(!GatewayMode::Shadow.supports_transformation());
+    }
+
+    #[test]
+    fn test_description_not_empty() {
+        for mode in GatewayMode::all() {
+            assert!(!mode.description().is_empty());
+        }
+    }
+
+    #[test]
+    fn test_all_modes_count() {
+        assert_eq!(GatewayMode::all().len(), 4);
+    }
+
+    #[test]
+    fn test_mode_parse_variants() {
+        // edge-mcp has multiple aliases
+        assert_eq!(
+            "edge_mcp".parse::<GatewayMode>().unwrap(),
+            GatewayMode::EdgeMcp
+        );
+        assert_eq!(
+            "edgemcp".parse::<GatewayMode>().unwrap(),
+            GatewayMode::EdgeMcp
+        );
+        assert_eq!("MCP".parse::<GatewayMode>().unwrap(), GatewayMode::EdgeMcp);
+        assert_eq!(
+            "SIDECAR".parse::<GatewayMode>().unwrap(),
+            GatewayMode::Sidecar
+        );
+        assert_eq!("PROXY".parse::<GatewayMode>().unwrap(), GatewayMode::Proxy);
+        assert_eq!(
+            "SHADOW".parse::<GatewayMode>().unwrap(),
+            GatewayMode::Shadow
+        );
+    }
+
+    #[test]
+    fn test_mode_parse_error_message() {
+        let err = "foobar".parse::<GatewayMode>().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("foobar"));
+        assert!(msg.contains("edge-mcp"));
+    }
+
+    #[test]
+    fn test_mode_serde_roundtrip() {
+        let mode = GatewayMode::EdgeMcp;
+        let json = serde_json::to_string(&mode).unwrap();
+        assert_eq!(json, "\"edge-mcp\"");
+        let deserialized: GatewayMode = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, GatewayMode::EdgeMcp);
+    }
+
+    #[test]
+    fn test_mode_serde_all_variants() {
+        for mode in GatewayMode::all() {
+            let json = serde_json::to_string(mode).unwrap();
+            let back: GatewayMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(&back, mode);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Not in sidecar mode")]
+    fn test_mode_config_wrong_accessor_sidecar() {
+        let config = ModeConfig::from_env(); // defaults to EdgeMcp
+        let _ = config.sidecar();
+    }
+
+    #[test]
+    #[should_panic(expected = "Not in proxy mode")]
+    fn test_mode_config_wrong_accessor_proxy() {
+        let config = ModeConfig::from_env();
+        let _ = config.proxy();
+    }
+
+    #[test]
+    #[should_panic(expected = "Not in shadow mode")]
+    fn test_mode_config_wrong_accessor_shadow() {
+        let config = ModeConfig::from_env();
+        let _ = config.shadow();
+    }
+
+    #[test]
+    fn test_mode_config_edge_mcp_accessor() {
+        let config = ModeConfig::from_env(); // defaults to EdgeMcp
+        let settings = config.edge_mcp();
+        assert!(settings.sse_keepalive); // default is true
+    }
 }

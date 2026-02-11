@@ -212,7 +212,7 @@ class KongGatewayAdapter(GatewayAdapterInterface):
                 plugins = data.get("data", [])
                 result = []
                 for p in plugins:
-                    tags = p.get("tags", [])
+                    tags = p.get("tags") or []
                     if any(t.startswith("stoa-policy-") for t in tags):
                         result.append(mappers.map_kong_plugin_to_policy(p))
                 return result
@@ -281,7 +281,7 @@ class KongGatewayAdapter(GatewayAdapterInterface):
                 consumers = data.get("data", [])
                 result = []
                 for c in consumers:
-                    tags = c.get("tags", [])
+                    tags = c.get("tags") or []
                     if any(t.startswith("stoa-consumer-") for t in tags):
                         result.append(mappers.map_kong_consumer_to_cp(c))
                 return result
@@ -339,7 +339,7 @@ class KongGatewayAdapter(GatewayAdapterInterface):
                 for svc in data.get("data", []):
                     service_entry = {
                         "name": svc.get("name", ""),
-                        "url": f"{svc.get('protocol', 'http')}://{svc.get('host', '')}:{svc.get('port', 80)}{svc.get('path', '')}",
+                        "url": f"{svc.get('protocol', 'http')}://{svc.get('host', '')}:{svc.get('port', 80)}{svc.get('path') or ''}",
                     }
                     # Fetch routes for this service
                     routes_resp = await self._client.get(f"/services/{svc['id']}/routes")
@@ -376,7 +376,7 @@ class KongGatewayAdapter(GatewayAdapterInterface):
                             "name": p.get("name", ""),
                             "service": service_name,
                             "config": p.get("config", {}),
-                            "tags": p.get("tags", []),
+                            "tags": p.get("tags") or [],
                         }
                     )
         except Exception as e:
@@ -389,7 +389,7 @@ class KongGatewayAdapter(GatewayAdapterInterface):
                 consumers = [
                     {
                         "username": c.get("username", ""),
-                        "tags": c.get("tags", []),
+                        "tags": c.get("tags") or [],
                     }
                     for c in data.get("data", [])
                 ]

@@ -24,6 +24,11 @@ class KongGatewayAdapter(GatewayAdapterInterface):
 
     Communicates with the Kong Admin API (default port 8001).
     DB-less mode: ``GET`` endpoints work, mutations via ``POST /config``.
+
+    State management: all mutations follow the pattern:
+    1. Fetch current entities via GET
+    2. Merge desired change
+    3. POST full declarative config to /config (atomic reload)
     """
 
     def __init__(self, config: dict | None = None):
@@ -78,44 +83,60 @@ class KongGatewayAdapter(GatewayAdapterInterface):
     # --- APIs ---
 
     async def sync_api(self, api_spec: dict, tenant_id: str, auth_token: str | None = None) -> AdapterResult:
-        """Sync an API by posting a full declarative config reload.
+        """Sync an API using state management: fetch → merge → reload.
 
-        In DB-less mode, individual service creation is not supported.
-        We build a minimal declarative config with the requested service
-        and POST it to ``/config``.
+        1. GET /services to read current services
+        2. Upsert our service by name (replace if exists, add if new)
+        3. Collect existing plugins
+        4. POST /config with the full merged config
         """
         try:
             service = mappers.map_api_spec_to_kong_service(api_spec, tenant_id)
-            config_payload = {
-                "_format_version": "3.0",
-                "services": [service],
-            }
-            resp = await self._client.post("/config", json=config_payload)
+            current_config = await self._fetch_current_config()
+            services = current_config.get("services", [])
 
-            if resp.status_code in (200, 201):
+            # Upsert: replace existing service by name, or append
+            services = [s for s in services if s.get("name") != service["name"]]
+            services.append(service)
+
+            config_payload = self._build_config(
+                services=services,
+                plugins=current_config.get("plugins", []),
+                consumers=current_config.get("consumers", []),
+            )
+            result = await self._reload_config(config_payload)
+            if result.success:
                 return AdapterResult(
                     success=True,
                     resource_id=service["name"],
                     data={"service_name": service["name"]},
                 )
-            return AdapterResult(
-                success=False,
-                error=f"Kong sync_api failed: HTTP {resp.status_code} — {resp.text}",
-            )
+            return result
         except Exception as e:
             return AdapterResult(success=False, error=str(e))
 
     async def delete_api(self, api_id: str, auth_token: str | None = None) -> AdapterResult:
-        """Delete not directly supported in DB-less — returns success (idempotent).
+        """Delete an API: fetch state → remove service → reload config."""
+        try:
+            current_config = await self._fetch_current_config()
+            services = current_config.get("services", [])
+            plugins = current_config.get("plugins", [])
 
-        In production, the declarative config would be regenerated without
-        this service and reloaded via ``POST /config``.
-        """
-        return AdapterResult(
-            success=True,
-            resource_id=api_id,
-            data={"detail": "DB-less mode: service removed from declarative config"},
-        )
+            # Remove service and its associated plugins
+            services = [s for s in services if s.get("name") != api_id]
+            plugins = [p for p in plugins if p.get("service") != api_id]
+
+            config_payload = self._build_config(
+                services=services,
+                plugins=plugins,
+                consumers=current_config.get("consumers", []),
+            )
+            result = await self._reload_config(config_payload)
+            if result.success:
+                return AdapterResult(success=True, resource_id=api_id)
+            return result
+        except Exception as e:
+            return AdapterResult(success=False, error=str(e))
 
     async def list_apis(self, auth_token: str | None = None) -> list[dict]:
         try:
@@ -128,27 +149,145 @@ class KongGatewayAdapter(GatewayAdapterInterface):
         except Exception:
             return []
 
-    # --- Policies (not supported in DB-less) ---
+    # --- Policies ---
 
     async def upsert_policy(self, policy_spec: dict, auth_token: str | None = None) -> AdapterResult:
-        return AdapterResult(success=False, error=_NOT_SUPPORTED)
+        """Upsert a policy via declarative config: fetch → merge plugin → reload."""
+        try:
+            service_name = policy_spec.get("api_id", "")
+            plugin = mappers.map_policy_to_kong_plugin(policy_spec, service_name)
+            policy_id = policy_spec.get("id", "")
+
+            current_config = await self._fetch_current_config()
+            plugins = current_config.get("plugins", [])
+
+            # Remove existing plugin with same stoa-policy tag
+            tag = f"stoa-policy-{policy_id}"
+            plugins = [p for p in plugins if tag not in p.get("tags", [])]
+            plugins.append(plugin)
+
+            config_payload = self._build_config(
+                services=current_config.get("services", []),
+                plugins=plugins,
+                consumers=current_config.get("consumers", []),
+            )
+            result = await self._reload_config(config_payload)
+            if result.success:
+                return AdapterResult(
+                    success=True,
+                    resource_id=policy_id,
+                    data={"plugin_name": plugin["name"], "service": service_name},
+                )
+            return result
+        except Exception as e:
+            return AdapterResult(success=False, error=str(e))
 
     async def delete_policy(self, policy_id: str, auth_token: str | None = None) -> AdapterResult:
-        return AdapterResult(success=False, error=_NOT_SUPPORTED)
+        """Delete a policy: fetch → remove plugin by stoa tag → reload."""
+        try:
+            current_config = await self._fetch_current_config()
+            plugins = current_config.get("plugins", [])
+
+            tag = f"stoa-policy-{policy_id}"
+            plugins = [p for p in plugins if tag not in p.get("tags", [])]
+
+            config_payload = self._build_config(
+                services=current_config.get("services", []),
+                plugins=plugins,
+                consumers=current_config.get("consumers", []),
+            )
+            result = await self._reload_config(config_payload)
+            if result.success:
+                return AdapterResult(success=True, resource_id=policy_id)
+            return result
+        except Exception as e:
+            return AdapterResult(success=False, error=str(e))
 
     async def list_policies(self, auth_token: str | None = None) -> list[dict]:
-        return []
+        """List all plugins managed by STOA (identified by stoa-policy-* tags)."""
+        try:
+            resp = await self._client.get("/plugins")
+            if resp.status_code == 200:
+                data = resp.json()
+                plugins = data.get("data", [])
+                result = []
+                for p in plugins:
+                    tags = p.get("tags", [])
+                    if any(t.startswith("stoa-policy-") for t in tags):
+                        result.append(mappers.map_kong_plugin_to_policy(p))
+                return result
+            return []
+        except Exception:
+            return []
 
     # --- Applications ---
 
     async def provision_application(self, app_spec: dict, auth_token: str | None = None) -> AdapterResult:
-        return AdapterResult(success=False, error=_NOT_SUPPORTED)
+        """Provision a consumer in Kong declarative config.
+
+        Adds a consumer with key-auth credentials and optional rate-limiting.
+        """
+        try:
+            consumer = mappers.map_app_spec_to_kong_consumer(app_spec)
+            current_config = await self._fetch_current_config()
+            consumers = current_config.get("consumers", [])
+
+            # Upsert: replace existing consumer by username
+            consumers = [c for c in consumers if c.get("username") != consumer["username"]]
+            consumers.append(consumer)
+
+            config_payload = self._build_config(
+                services=current_config.get("services", []),
+                plugins=current_config.get("plugins", []),
+                consumers=consumers,
+            )
+            result = await self._reload_config(config_payload)
+            if result.success:
+                return AdapterResult(
+                    success=True,
+                    resource_id=consumer["username"],
+                    data={"consumer": consumer["username"]},
+                )
+            return result
+        except Exception as e:
+            return AdapterResult(success=False, error=str(e))
 
     async def deprovision_application(self, app_id: str, auth_token: str | None = None) -> AdapterResult:
-        return AdapterResult(success=False, error=_NOT_SUPPORTED)
+        """Remove a consumer from Kong declarative config."""
+        try:
+            current_config = await self._fetch_current_config()
+            consumers = current_config.get("consumers", [])
+
+            consumers = [c for c in consumers if c.get("username") != app_id]
+
+            config_payload = self._build_config(
+                services=current_config.get("services", []),
+                plugins=current_config.get("plugins", []),
+                consumers=consumers,
+            )
+            result = await self._reload_config(config_payload)
+            if result.success:
+                return AdapterResult(success=True, resource_id=app_id)
+            return result
+        except Exception as e:
+            return AdapterResult(success=False, error=str(e))
 
     async def list_applications(self, auth_token: str | None = None) -> list[dict]:
-        return []
+        """List consumers managed by STOA (identified by stoa-consumer-* tags)."""
+        try:
+            resp = await self._client.get("/consumers")
+            if resp.status_code == 200:
+                data = resp.json()
+                consumers = data.get("data", [])
+                result = []
+                for c in consumers:
+                    tags = c.get("tags", [])
+                    if any(t.startswith("stoa-consumer-") for t in tags):
+                        result.append(mappers.map_kong_consumer_to_cp(c))
+                return result
+            return []
+        except Exception:
+            return []
 
     # --- Auth / OIDC ---
 
@@ -183,3 +322,115 @@ class KongGatewayAdapter(GatewayAdapterInterface):
         if self._api_key:
             headers["Kong-Admin-Token"] = self._api_key
         return headers
+
+    async def _fetch_current_config(self) -> dict:
+        """Fetch current Kong state via GET endpoints.
+
+        Returns a dict with services, plugins, and consumers arrays.
+        """
+        services: list[dict] = []
+        plugins: list[dict] = []
+        consumers: list[dict] = []
+
+        try:
+            resp = await self._client.get("/services")
+            if resp.status_code == 200:
+                data = resp.json()
+                for svc in data.get("data", []):
+                    service_entry = {
+                        "name": svc.get("name", ""),
+                        "url": f"{svc.get('protocol', 'http')}://{svc.get('host', '')}:{svc.get('port', 80)}{svc.get('path', '')}",
+                    }
+                    # Fetch routes for this service
+                    routes_resp = await self._client.get(f"/services/{svc['id']}/routes")
+                    if routes_resp.status_code == 200:
+                        routes_data = routes_resp.json()
+                        service_entry["routes"] = [
+                            {
+                                "name": r.get("name", ""),
+                                "paths": r.get("paths", []),
+                                "methods": r.get("methods"),
+                                "strip_path": r.get("strip_path", True),
+                            }
+                            for r in routes_data.get("data", [])
+                        ]
+                    services.append(service_entry)
+        except Exception as e:
+            logger.warning("Failed to fetch Kong services: %s", e)
+
+        try:
+            resp = await self._client.get("/plugins")
+            if resp.status_code == 200:
+                data = resp.json()
+                for p in data.get("data", []):
+                    # Resolve service name from service.id
+                    service_id = ""
+                    svc_ref = p.get("service")
+                    if isinstance(svc_ref, dict):
+                        service_id = svc_ref.get("id", "")
+                    elif isinstance(svc_ref, str):
+                        service_id = svc_ref
+                    service_name = self._resolve_service_name(services, service_id)
+                    plugins.append(
+                        {
+                            "name": p.get("name", ""),
+                            "service": service_name,
+                            "config": p.get("config", {}),
+                            "tags": p.get("tags", []),
+                        }
+                    )
+        except Exception as e:
+            logger.warning("Failed to fetch Kong plugins: %s", e)
+
+        try:
+            resp = await self._client.get("/consumers")
+            if resp.status_code == 200:
+                data = resp.json()
+                consumers = [
+                    {
+                        "username": c.get("username", ""),
+                        "tags": c.get("tags", []),
+                    }
+                    for c in data.get("data", [])
+                ]
+        except Exception as e:
+            logger.warning("Failed to fetch Kong consumers: %s", e)
+
+        return {"services": services, "plugins": plugins, "consumers": consumers}
+
+    @staticmethod
+    def _resolve_service_name(services: list[dict], service_id: str) -> str:
+        """Resolve a service ID to its name (best-effort)."""
+        # In declarative config, service reference is by name
+        # This is a fallback; in practice the service_id might be the name
+        for svc in services:
+            if svc.get("id") == service_id or svc.get("name") == service_id:
+                return svc.get("name", "")
+        return service_id
+
+    @staticmethod
+    def _build_config(
+        services: list[dict],
+        plugins: list[dict],
+        consumers: list[dict],
+    ) -> dict:
+        """Build a full Kong declarative config payload."""
+        config: dict = {"_format_version": "3.0", "services": services}
+        if plugins:
+            config["plugins"] = plugins
+        if consumers:
+            config["consumers"] = consumers
+        return config
+
+    async def _reload_config(self, config_payload: dict) -> AdapterResult:
+        """POST /config to atomically reload the full Kong declarative config."""
+        try:
+            resp = await self._client.post("/config", json=config_payload)
+            if resp.status_code in (200, 201):
+                return AdapterResult(success=True)
+            return AdapterResult(
+                success=False,
+                error=f"Kong config reload failed: HTTP {resp.status_code} — {resp.text}",
+            )
+        except Exception as e:
+            return AdapterResult(success=False, error=str(e))

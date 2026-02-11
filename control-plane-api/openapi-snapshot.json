@@ -324,6 +324,63 @@
         "title": "APIUpdate",
         "type": "object"
       },
+      "AccessRequestCreate": {
+        "description": "Public form submission: email + optional company.",
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "AccessRequestCreate",
+        "type": "object"
+      },
+      "AccessRequestResponse": {
+        "description": "Response after submitting an access request.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "request_id"
+        ],
+        "title": "AccessRequestResponse",
+        "type": "object"
+      },
       "ActiveSubscription": {
         "description": "An active tool subscription",
         "example": {
@@ -12983,6 +13040,51 @@
         "summary": "Test Webhook",
         "tags": [
           "Tenant Webhooks"
+        ]
+      }
+    },
+    "/v1/access-requests": {
+      "post": {
+        "description": "Submit an access request (public, no auth).\n\nIdempotent: returns 200 if email already exists, 201 if new.",
+        "operationId": "create_access_request_v1_access_requests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRequestCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestResponse"
+                }
+              }
+            },
+            "description": "Email already registered"
+          },
+          "201": {
+            "description": "New request created"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Access Request",
+        "tags": [
+          "Access Requests"
         ]
       }
     },

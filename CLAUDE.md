@@ -23,13 +23,13 @@ CONTROL PLANE (Cloud)                    DATA PLANE (On-Premise)
 | Control Plane API | Python 3.11, FastAPI, SQLAlchemy | `control-plane-api/` |
 | Console UI | React 18, TypeScript, Keycloak-js | `control-plane-ui/` |
 | Developer Portal | React, Vite, TypeScript | `portal/` |
-| MCP Gateway | Python 3.11, FastAPI, OPA | `mcp-gateway/` |
+| MCP Gateway (archived) | Python 3.11, FastAPI, OPA | `archive/mcp-gateway/` |
 | STOA Gateway | Rust, Tokio, axum | `stoa-gateway/` |
 | CLI | Python, Typer, Rich | `cli/` |
 | E2E Tests | Playwright, BDD, Gherkin | `e2e/` |
 | Helm Chart | Helm 3 | `charts/stoa-platform/` |
 
-Gateway: 4 modes (ADR-024) — edge-mcp (current, Python), sidecar (Q2), proxy (Q3), shadow (deferred). Target: Rust (Q4 2026).
+Gateway: Rust (primary, replaced Python MCP Gateway Feb 2026). 4 modes (ADR-024) — edge-mcp (current), sidecar (Q2), proxy (Q3), shadow (deferred).
 
 ## RBAC Roles
 - **cpi-admin**: Full platform (stoa:admin)

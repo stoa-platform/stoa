@@ -77,6 +77,10 @@ Gateway: Rust (primary, replaced Python MCP Gateway Feb 2026). 4 modes (ADR-024)
 | `docs-writer` | ADRs, guides, runbooks, memory | No Bash |
 | `content-reviewer` | Contenu public, concurrents, compliance | Read-only (plan) |
 
+### Rules (`.claude/rules/`)
+Key rules for AI Factory workflow:
+- `seo-content.md` — SEO content generation, blog templates, hub & spoke model, editorial calendar integration
+
 ### Skills (`.claude/skills/`)
 - 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`
 - 2 modernes: `/ci-debug [PR|run-url]` (fork), `/parallel-review [PR|path]` (inline)

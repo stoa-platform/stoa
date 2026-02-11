@@ -17,7 +17,7 @@
 | 5 | 10:00 - 12:00 | OpenSearch: error snapshots, trace search | "Every error, traced" |
 | 6 | 12:00 - 14:00 | Keycloak: federation login cross-tenant | "Zero trust, multi-org" |
 | 7 | 14:00 - 17:00 | MCP Bridge: legacy API → AI agent tool | "The paradigm shift" |
-| 8 | 17:00 - 19:00 | AI Factory: how this was built | "The bombshell" |
+| 8 | 17:00 - 20:00 | Born GitOps + AI Factory | "The bombshell" |
 
 ---
 
@@ -306,11 +306,48 @@ curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
 
 ---
 
-## Act 8 — AI Factory: How This Was Built (2 min)
+## Act 8 — Born GitOps + AI Factory (3 min)
 
-**[Slide or terminal showing git log]**
+**[Slide: "How We're Different"]**
 
-> "One last thing. Let me tell you how we built this platform."
+> "Before I tell you how we built this, let me tell you why we're different."
+
+### 8.1 — Born GitOps (1:30 min)
+
+> "Every API management platform you know — Kong, Apigee, MuleSoft, Gravitee — they all started with a database. A UI. Click to deploy. Then, years later, they bolted on GitOps. A CLI here, a Maven plugin there."
+
+> "STOA is different. We're **Born GitOps**. Git IS the control plane — not a sync target."
+
+**[Slide: Competitive landscape table]**
+
+| | GitOps | Source of Truth | Prod Approval |
+|---|--------|----------------|---------------|
+| Kong | decK (2019, retrofit) | Database | PR reviews |
+| Apigee | Maven (2015, retrofit) | Database | RBAC only |
+| Gravitee | GKO (2023, semi-native) | Database + Cockpit | Cockpit SaaS |
+| **STOA** | **Born GitOps (2026)** | **Git** | **Git PR + CODEOWNERS** |
+
+> "What does that mean concretely?"
+
+**[Slide: Promote with Confidence workflow]**
+
+```
+Console (staging) → "Promote to Prod" →
+  1. Git PR generated automatically (with staging health report)
+  2. CODEOWNERS review (your team approves, not ours)
+  3. Merge → ArgoCD sync → Canary deploy (10% → 50% → 100%)
+  4. If metrics degrade → automatic rollback via git revert
+```
+
+> "Every production change is a Git commit. Every rollback is a git revert. Your compliance team can audit everything. Your DSI sleeps at night."
+
+> "Our Universal API Contract — the UAC — travels intact from staging to production. Same artifact, different configuration. Define Once, Promote Everywhere."
+
+### 8.2 — AI Factory (1:30 min)
+
+**[Terminal showing git log]**
+
+> "Now, how did we build all of this?"
 
 ```bash
 # Show the velocity
@@ -348,7 +385,7 @@ git shortlog --since="2026-02-09" -sn
 | 12:00 | Act 5 done | Skip drill-down, show table only |
 | 14:00 | Act 6 done | Skip curl demo, show Keycloak realms only |
 | 17:00 | Act 7 done | Pre-record MCP call as video backup |
-| 19:00 | Act 8 done | Shorten to 30s git stats + punchline |
+| 20:00 | Act 8 done | Skip GitOps slide, go straight to AI Factory punchline |
 
 ## If Something Breaks
 

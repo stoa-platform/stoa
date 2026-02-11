@@ -1,0 +1,7 @@
+---
+source: tests/contract/errors.rs
+assertion_line: 14
+expression: "format!(\"status: {}\\nbody: {}\", status, body)"
+---
+status: 404 Not Found
+body: No matching API route

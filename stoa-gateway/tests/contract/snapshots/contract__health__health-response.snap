@@ -1,0 +1,6 @@
+---
+source: tests/contract/health.rs
+assertion_line: 15
+expression: body
+---
+OK

@@ -1,0 +1,14 @@
+---
+source: tests/contract/tools.rs
+assertion_line: 28
+expression: json
+---
+{
+  "content": [
+    {
+      "text": "Tool 'nonexistent-tool' not found",
+      "type": "text"
+    }
+  ],
+  "isError": true
+}

@@ -19,8 +19,8 @@ fn failing_route(id: &str, prefix: &str) -> ApiRoute {
         name: format!("failing-{}", id),
         tenant_id: "acme".to_string(),
         path_prefix: prefix.to_string(),
-        // Port 19999 should be closed → connection refused
-        backend_url: "http://127.0.0.1:19999".to_string(),
+        // 192.0.2.1 = TEST-NET-1 (RFC 5737) — non-routable, not SSRF-blocked
+        backend_url: "http://192.0.2.1:19999".to_string(),
         methods: vec![],
         spec_hash: "abc".to_string(),
         activated: true,
@@ -184,7 +184,7 @@ async fn test_method_not_allowed_does_not_trip_cb() {
         name: "limited-api".to_string(),
         tenant_id: "acme".to_string(),
         path_prefix: "/apis/limited".to_string(),
-        backend_url: "http://127.0.0.1:19999".to_string(),
+        backend_url: "http://192.0.2.1:19999".to_string(),
         methods: vec!["POST".to_string()],
         spec_hash: "abc".to_string(),
         activated: true,

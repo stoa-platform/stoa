@@ -113,7 +113,8 @@ async fn test_proxy_timeout() {
         name: "timeout-api".to_string(),
         tenant_id: "acme".to_string(),
         path_prefix: "/apis/timeout".to_string(),
-        backend_url: "http://10.255.255.1:9999".to_string(),
+        // 192.0.2.1 = TEST-NET-1 (RFC 5737) — non-routable, not SSRF-blocked
+        backend_url: "http://192.0.2.1:9999".to_string(),
         methods: vec![],
         spec_hash: "abc".to_string(),
         activated: true,
@@ -149,7 +150,7 @@ async fn test_deactivated_route_returns_503() {
         name: "inactive-api".to_string(),
         tenant_id: "acme".to_string(),
         path_prefix: "/apis/inactive".to_string(),
-        backend_url: "http://127.0.0.1:19999".to_string(),
+        backend_url: "http://192.0.2.1:19999".to_string(),
         methods: vec![],
         spec_hash: "abc".to_string(),
         activated: false,

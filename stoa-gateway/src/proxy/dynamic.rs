@@ -9,6 +9,7 @@ use axum::{
     http::{header, HeaderMap, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
 };
+use std::net::IpAddr;
 use std::time::Duration;
 use tracing::{debug, error, instrument, warn};
 
@@ -89,6 +90,20 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     } else {
         target_url
     };
+
+    // SSRF protection: block requests to private/internal IP ranges (defense-in-depth)
+    if is_blocked_url(&target_url) {
+        warn!(
+            route_id = %route.id,
+            target_url = %target_url,
+            "SSRF blocked: backend URL resolves to private/internal IP range"
+        );
+        return (
+            StatusCode::FORBIDDEN,
+            "Backend URL blocked: private/internal IP range",
+        )
+            .into_response();
+    }
 
     debug!(
         method = %method,
@@ -237,6 +252,60 @@ async fn convert_response(resp: reqwest::Response) -> Response {
     response
         .body(Body::from(body))
         .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response())
+}
+
+/// Check if a URL targets a private/internal IP range (SSRF protection).
+///
+/// Blocks RFC 1918 private IPs, loopback, link-local (including AWS metadata
+/// at 169.254.169.254), and IPv6 loopback/unique-local addresses.
+///
+/// This is defense-in-depth: backend URLs come from the Control Plane (admin-configured),
+/// not from user input. But a compromised or misconfigured CP could still inject
+/// internal targets, so we block them at the proxy level.
+pub fn is_blocked_url(url: &str) -> bool {
+    // Parse the URL to extract the host
+    let parsed = match reqwest::Url::parse(url) {
+        Ok(u) => u,
+        Err(_) => return true, // Unparseable URL = blocked
+    };
+
+    let host = match parsed.host_str() {
+        Some(h) => h,
+        None => return true, // No host = blocked
+    };
+
+    // Try to parse as IP address (strip brackets for IPv6)
+    let host_clean = host.trim_start_matches('[').trim_end_matches(']');
+    if let Ok(ip) = host_clean.parse::<IpAddr>() {
+        return is_blocked_ip(ip);
+    }
+
+    // Hostname "localhost" is always blocked
+    if host == "localhost" {
+        return true;
+    }
+
+    // Non-IP hostnames are allowed (DNS resolution happens at request time)
+    false
+}
+
+/// Check if an IP address is in a blocked range.
+fn is_blocked_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_loopback()               // 127.0.0.0/8
+                || v4.is_private()          // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+                || v4.is_link_local()       // 169.254.0.0/16 (AWS metadata)
+                || v4.is_unspecified()      // 0.0.0.0
+                || v4.is_broadcast() // 255.255.255.255
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()               // ::1
+                || v6.is_unspecified()      // ::
+                // Unique local (fd00::/8) — check first byte
+                || (v6.segments()[0] & 0xfe00) == 0xfc00
+        }
+    }
 }
 
 /// Inject W3C Trace Context `traceparent` header into outgoing request.

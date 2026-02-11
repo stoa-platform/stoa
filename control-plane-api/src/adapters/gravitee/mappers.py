@@ -75,10 +75,12 @@ def map_policy_to_gravitee_plan(policy_spec: dict, api_name: str) -> dict:
             period_time, period_unit = interval // 60, "MINUTES"
 
         return {
+            "definitionVersion": "V4",
             "name": f"stoa-rate-limit-{policy_id}",
             "description": f"STOA rate-limit policy {policy_id} for {api_name}",
-            "validation": "AUTO",
+            "mode": "STANDARD",
             "security": {"type": "KEY_LESS"},
+            "characteristics": [],
             "flows": [
                 {
                     "name": "rate-limit-flow",
@@ -98,15 +100,16 @@ def map_policy_to_gravitee_plan(policy_spec: dict, api_name: str) -> dict:
                     ],
                 }
             ],
-            "tags": [f"stoa-policy-{policy_id}"],
         }
 
     # Generic policy fallback
     return {
+        "definitionVersion": "V4",
         "name": f"stoa-{policy_type}-{policy_id}",
         "description": f"STOA {policy_type} policy {policy_id}",
-        "validation": "AUTO",
+        "mode": "STANDARD",
         "security": {"type": "KEY_LESS"},
+        "characteristics": [],
         "flows": [
             {
                 "name": f"{policy_type}-flow",
@@ -120,18 +123,23 @@ def map_policy_to_gravitee_plan(policy_spec: dict, api_name: str) -> dict:
                 ],
             }
         ],
-        "tags": [f"stoa-policy-{policy_id}"],
     }
 
 
 def map_gravitee_plan_to_policy(plan: dict) -> dict:
     """Map a Gravitee Plan to CP-normalized policy dict."""
-    tags = plan.get("tags", [])
+    # Extract STOA ID from plan name (e.g. "stoa-rate-limit-{id}" → "{id}")
+    plan_name = plan.get("name", "")
     stoa_id = ""
-    for tag in tags:
-        if isinstance(tag, str) and tag.startswith("stoa-policy-"):
-            stoa_id = tag.removeprefix("stoa-policy-")
-            break
+    if plan_name.startswith("stoa-"):
+        # Name pattern: stoa-{type}-{id}  →  extract last segment as ID
+        parts = plan_name.split("-", 2)  # ["stoa", "rate", "limit-{id}"] or ["stoa", "type", "{id}"]
+        if len(parts) >= 3:
+            # For "stoa-rate-limit-xxx" → everything after "stoa-rate-limit-"
+            prefix_len = (
+                len("stoa-rate-limit-") if plan_name.startswith("stoa-rate-limit-") else len(f"stoa-{parts[1]}-")
+            )
+            stoa_id = plan_name[prefix_len:] if len(plan_name) > prefix_len else ""
 
     # Extract rate-limit config from flows
     flows = plan.get("flows", [])

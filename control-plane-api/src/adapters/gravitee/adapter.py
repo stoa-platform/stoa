@@ -271,8 +271,8 @@ class GraviteeGatewayAdapter(GatewayAdapterInterface):
                     continue
                 plans = await self._list_api_plans(api_id)
                 for plan in plans:
-                    tags = plan.get("tags", [])
-                    if any(isinstance(t, str) and t.startswith("stoa-policy-") for t in tags):
+                    name = plan.get("name", "")
+                    if name.startswith("stoa-"):
                         result.append(mappers.map_gravitee_plan_to_policy(plan))
             return result
         except Exception:
@@ -438,13 +438,13 @@ class GraviteeGatewayAdapter(GatewayAdapterInterface):
         return []
 
     async def _find_plan_by_stoa_id(self, api_id: str, stoa_policy_id: str) -> str | None:
-        """Find a plan by its stoa-policy tag."""
+        """Find a plan by its STOA name pattern (stoa-*-{policy_id})."""
         plans = await self._list_api_plans(api_id)
-        tag = f"stoa-policy-{stoa_policy_id}"
+        suffix = f"-{stoa_policy_id}"
         if isinstance(plans, list):
             for plan in plans:
-                tags = plan.get("tags", [])
-                if tag in tags:
+                name = plan.get("name", "")
+                if name.startswith("stoa-") and name.endswith(suffix):
                     return plan.get("id")
         return None
 

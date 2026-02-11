@@ -156,6 +156,7 @@ class TestKongMappers:
         result = map_kong_consumer_to_cp(consumer)
 
         assert result["id"] == "k-consumer-1"
+        assert result["name"] == "consumer-42"
         assert result["username"] == "consumer-42"
         assert result["subscription_id"] == "sub-1"
 

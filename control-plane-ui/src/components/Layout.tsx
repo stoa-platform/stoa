@@ -543,6 +543,81 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </nav>
 
+        {/* Mobile-only: Env & Tenant selectors */}
+        <div className="lg:hidden border-t border-gray-200 dark:border-neutral-800 px-3 py-3 space-y-2">
+          {/* Environment selector */}
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500 mb-1 px-1">
+              Environment
+            </p>
+            {environments.map((env) => (
+              <button
+                key={env.name}
+                onClick={() => {
+                  handleEnvSwitch(env.name);
+                  setSidebarOpen(false);
+                }}
+                className={clsx(
+                  'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  activeEnvironment === env.name
+                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800'
+                )}
+              >
+                <span
+                  className={clsx(
+                    'h-2 w-2 rounded-full flex-shrink-0',
+                    env.color === 'green' && 'bg-green-500',
+                    env.color === 'amber' && 'bg-amber-500',
+                    env.color === 'red' && 'bg-red-500'
+                  )}
+                />
+                <span className="flex-1 text-left">{env.label}</span>
+                {env.mode === 'read-only' && (
+                  <Lock className="h-3 w-3 text-neutral-400 flex-shrink-0" />
+                )}
+                {activeEnvironment === env.name && (
+                  <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Tenant selector */}
+          {tenants && tenants.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500 mb-1 px-1">
+                Tenant
+              </p>
+              {tenants.map((tenant) => {
+                const selectedId = activeTenantId || user?.tenant_id;
+                const isSelected = selectedId === tenant.id || selectedId === tenant.name;
+                return (
+                  <button
+                    key={tenant.id}
+                    onClick={() => {
+                      handleTenantSwitch(tenant.id);
+                      setSidebarOpen(false);
+                    }}
+                    className={clsx(
+                      'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                      isSelected
+                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800'
+                    )}
+                  >
+                    <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <span className="flex-1 text-left truncate">
+                      {tenant.display_name || tenant.name}
+                    </span>
+                    {isSelected && <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* User section */}
         <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 dark:border-neutral-800 p-4">
           <div className="flex items-center gap-3">
@@ -586,7 +661,7 @@ export function Layout({ children }: LayoutProps) {
           {/* Mobile menu button */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 lg:hidden"
+            className="rounded-lg p-2.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>

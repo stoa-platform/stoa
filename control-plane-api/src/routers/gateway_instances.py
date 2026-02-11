@@ -3,7 +3,7 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import case, func, select
+from sqlalchemy import String, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.rbac import require_role
@@ -96,7 +96,7 @@ async def get_gateway_mode_stats(
                 case((GatewayInstance.status == GatewayInstanceStatus.DEGRADED, 1))
             ).label("degraded"),
         )
-        .where(GatewayInstance.gateway_type.like("stoa%"))
+        .where(GatewayInstance.gateway_type.cast(String).like("stoa%"))
         .group_by(GatewayInstance.mode)
     )
 

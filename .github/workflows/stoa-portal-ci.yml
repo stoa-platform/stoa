@@ -72,7 +72,7 @@ jobs:
     uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: portal
-      image-name: stoa-portal
+      image-name: portal
       environment: ${{ github.event.inputs.environment || 'dev' }}
       platforms: linux/amd64
       use-monorepo-context: true

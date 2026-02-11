@@ -81,8 +81,18 @@ export interface ApplicationCreate {
   api_subscriptions: string[];
 }
 
+// Environment types (ADR-040 — Born GitOps)
+export type Environment = 'dev' | 'staging' | 'prod';
+export type EnvironmentMode = 'full' | 'read-only' | 'promote-only';
+
+export interface EnvironmentConfig {
+  name: Environment;
+  label: string;
+  mode: EnvironmentMode;
+  color: 'green' | 'amber' | 'red';
+}
+
 // Deployment types
-export type Environment = 'dev' | 'staging';
 export type DeploymentStatus = 'pending' | 'in_progress' | 'success' | 'failed' | 'rolled_back';
 
 export interface Deployment {

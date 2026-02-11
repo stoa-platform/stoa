@@ -529,6 +529,320 @@ mod tests {
         assert_eq!(data[0]["name"], "payments");
     }
 
+    fn build_full_admin_router(state: AppState) -> Router {
+        Router::new()
+            .route("/health", get(admin_health))
+            .route("/apis", get(list_apis).post(upsert_api))
+            .route("/apis/:id", get(get_api).delete(delete_api))
+            .route("/policies", get(list_policies).post(upsert_policy))
+            .route("/policies/:id", delete(delete_policy))
+            .route("/circuit-breaker/stats", get(circuit_breaker_stats))
+            .route(
+                "/circuit-breaker/reset",
+                axum::routing::post(circuit_breaker_reset),
+            )
+            .route("/cache/stats", get(cache_stats))
+            .route("/cache/clear", axum::routing::post(cache_clear))
+            .route("/sessions/stats", get(session_stats))
+            .route("/circuit-breakers", get(circuit_breakers_list))
+            .route(
+                "/circuit-breakers/:name/reset",
+                axum::routing::post(circuit_breaker_reset_by_name),
+            )
+            .route("/quotas", get(list_quotas))
+            .route("/quotas/:consumer_id", get(get_consumer_quota))
+            .route(
+                "/quotas/:consumer_id/reset",
+                axum::routing::post(reset_consumer_quota),
+            )
+            .route("/mtls/config", get(mtls_config))
+            .route("/mtls/stats", get(mtls_stats))
+            .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
+            .with_state(state)
+    }
+
+    fn auth_req(method: &str, uri: &str) -> Request<Body> {
+        Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("Authorization", "Bearer secret")
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    fn auth_json_req(method: &str, uri: &str, body: serde_json::Value) -> Request<Body> {
+        Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("Authorization", "Bearer secret")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_admin_auth_missing_header() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_admin_auth_empty_configured_token() {
+        let state = create_test_state(Some(""));
+        let app = build_admin_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .header("Authorization", "Bearer ")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        // Empty token = disabled
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn test_get_api_not_found() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/apis/nonexistent"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_upsert_update_existing_returns_200() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+        let route = serde_json::json!({
+            "id": "r1", "name": "payments", "tenant_id": "acme",
+            "path_prefix": "/apis/acme/payments", "backend_url": "https://backend.test",
+            "methods": ["GET"], "spec_hash": "abc", "activated": true
+        });
+        // First insert → CREATED
+        let _ = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/apis", route.clone()))
+            .await
+            .unwrap();
+        // Second insert (update) → OK
+        let response = app
+            .oneshot(auth_json_req("POST", "/apis", route))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_delete_api_not_found() {
+        let state = create_test_state(Some("secret"));
+        let app = build_admin_router(state);
+        let response = app
+            .oneshot(auth_req("DELETE", "/apis/ghost"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_upsert_and_list_policies() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let policy = serde_json::json!({
+            "id": "p1", "name": "rate-limit",
+            "policy_type": "rate_limit", "config": {"limit": 100},
+            "priority": 1, "api_id": "r1"
+        });
+        let response = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/policies", policy))
+            .await
+            .unwrap();
+        assert!(response.status() == StatusCode::CREATED || response.status() == StatusCode::OK);
+        let response = app.oneshot(auth_req("GET", "/policies")).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_delete_policy_not_found() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("DELETE", "/policies/ghost"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_stats() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/circuit-breaker/stats"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["state"], "closed");
+        assert_eq!(data["success_count"], 0);
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_reset() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("POST", "/circuit-breaker/reset"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn test_cache_stats() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app.oneshot(auth_req("GET", "/cache/stats")).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["hits"], 0);
+        assert_eq!(data["misses"], 0);
+    }
+
+    #[tokio::test]
+    async fn test_cache_clear() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app.oneshot(auth_req("POST", "/cache/clear")).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_session_stats() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/sessions/stats"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["active_sessions"], 0);
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breakers_list_empty() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/circuit-breakers"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert!(data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_reset_by_name_not_found() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("POST", "/circuit-breakers/unknown/reset"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_list_quotas_empty() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app.oneshot(auth_req("GET", "/quotas")).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert!(data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_consumer_quota_not_found() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/quotas/unknown-consumer"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_reset_consumer_quota_not_found() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("POST", "/quotas/unknown-consumer/reset"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_mtls_config_endpoint() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app.oneshot(auth_req("GET", "/mtls/config")).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_mtls_stats_endpoint() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app.oneshot(auth_req("GET", "/mtls/stats")).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
     #[tokio::test]
     async fn test_delete_api() {
         let state = create_test_state(Some("secret"));

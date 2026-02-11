@@ -675,3 +675,211 @@ fn extract_user(headers: &HeaderMap) -> Option<String> {
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    // === expand_role_scopes ===
+
+    #[test]
+    fn test_expand_cpi_admin_all_scopes() {
+        let roles = vec!["cpi-admin".to_string()];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        assert_eq!(scopes.len(), 6);
+        assert!(scopes.contains(&"stoa:admin".to_string()));
+        assert!(scopes.contains(&"stoa:read".to_string()));
+        assert!(scopes.contains(&"stoa:write".to_string()));
+        assert!(scopes.contains(&"stoa:execute".to_string()));
+        assert!(scopes.contains(&"stoa:deploy".to_string()));
+        assert!(scopes.contains(&"stoa:audit".to_string()));
+    }
+
+    #[test]
+    fn test_expand_cpi_admin_underscore_variant() {
+        let roles = vec!["cpi_admin".to_string()];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        assert_eq!(scopes.len(), 6);
+    }
+
+    #[test]
+    fn test_expand_admin_role() {
+        let roles = vec!["admin".to_string()];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        assert_eq!(scopes.len(), 6);
+    }
+
+    #[test]
+    fn test_expand_tenant_admin() {
+        let roles = vec!["tenant-admin".to_string()];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        assert_eq!(scopes.len(), 3);
+        assert!(scopes.contains(&"stoa:read".to_string()));
+        assert!(scopes.contains(&"stoa:write".to_string()));
+        assert!(scopes.contains(&"stoa:execute".to_string()));
+    }
+
+    #[test]
+    fn test_expand_tenant_admin_underscore() {
+        let roles = vec!["tenant_admin".to_string()];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        assert_eq!(scopes.len(), 3);
+    }
+
+    #[test]
+    fn test_expand_devops() {
+        let roles = vec!["devops".to_string()];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        assert_eq!(scopes.len(), 3);
+        assert!(scopes.contains(&"stoa:read".to_string()));
+        assert!(scopes.contains(&"stoa:write".to_string()));
+        assert!(scopes.contains(&"stoa:deploy".to_string()));
+    }
+
+    #[test]
+    fn test_expand_dev_ops_hyphen() {
+        let roles = vec!["dev-ops".to_string()];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        assert_eq!(scopes.len(), 3);
+        assert!(scopes.contains(&"stoa:deploy".to_string()));
+    }
+
+    #[test]
+    fn test_expand_viewer() {
+        let roles = vec!["viewer".to_string()];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        assert_eq!(scopes.len(), 1);
+        assert!(scopes.contains(&"stoa:read".to_string()));
+    }
+
+    #[test]
+    fn test_expand_readonly_variants() {
+        for role in &["read-only", "readonly"] {
+            let roles = vec![role.to_string()];
+            let mut scopes = vec![];
+            expand_role_scopes(&roles, &mut scopes);
+            assert_eq!(scopes.len(), 1, "Failed for role: {}", role);
+            assert!(scopes.contains(&"stoa:read".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_expand_unknown_role_adds_nothing() {
+        let roles = vec!["unknown-role".to_string()];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        assert!(scopes.is_empty());
+    }
+
+    #[test]
+    fn test_expand_no_duplicates() {
+        let roles = vec!["cpi-admin".to_string()];
+        let mut scopes = vec!["stoa:read".to_string(), "stoa:admin".to_string()];
+        expand_role_scopes(&roles, &mut scopes);
+        // Should still have 6 unique scopes, not 8
+        assert_eq!(scopes.len(), 6);
+    }
+
+    #[test]
+    fn test_expand_multiple_roles_combined() {
+        let roles = vec!["viewer".to_string(), "devops".to_string()];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        // viewer: read, devops: read+write+deploy → 3 unique
+        assert_eq!(scopes.len(), 3);
+        assert!(scopes.contains(&"stoa:read".to_string()));
+        assert!(scopes.contains(&"stoa:write".to_string()));
+        assert!(scopes.contains(&"stoa:deploy".to_string()));
+    }
+
+    #[test]
+    fn test_expand_empty_roles() {
+        let roles: Vec<String> = vec![];
+        let mut scopes = vec![];
+        expand_role_scopes(&roles, &mut scopes);
+        assert!(scopes.is_empty());
+    }
+
+    // === extract_tenant ===
+
+    #[test]
+    fn test_extract_tenant_present() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Tenant-ID", HeaderValue::from_static("acme-corp"));
+        assert_eq!(extract_tenant(&headers), Some("acme-corp".to_string()));
+    }
+
+    #[test]
+    fn test_extract_tenant_missing() {
+        let headers = HeaderMap::new();
+        assert_eq!(extract_tenant(&headers), None);
+    }
+
+    // === extract_user ===
+
+    #[test]
+    fn test_extract_user_present() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-User-ID", HeaderValue::from_static("user-42"));
+        assert_eq!(extract_user(&headers), Some("user-42".to_string()));
+    }
+
+    #[test]
+    fn test_extract_user_missing() {
+        let headers = HeaderMap::new();
+        assert_eq!(extract_user(&headers), None);
+    }
+
+    // === extract_optimization_level ===
+
+    #[test]
+    fn test_optimization_level_none_when_missing() {
+        let headers = HeaderMap::new();
+        assert_eq!(
+            extract_optimization_level(&headers),
+            OptimizationLevel::None
+        );
+    }
+
+    #[test]
+    fn test_optimization_level_moderate() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Token-Optimization", HeaderValue::from_static("moderate"));
+        assert_eq!(
+            extract_optimization_level(&headers),
+            OptimizationLevel::Moderate
+        );
+    }
+
+    #[test]
+    fn test_optimization_level_aggressive() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "X-Token-Optimization",
+            HeaderValue::from_static("aggressive"),
+        );
+        assert_eq!(
+            extract_optimization_level(&headers),
+            OptimizationLevel::Aggressive
+        );
+    }
+
+    #[test]
+    fn test_optimization_level_unknown_defaults_to_none() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Token-Optimization", HeaderValue::from_static("turbo"));
+        assert_eq!(
+            extract_optimization_level(&headers),
+            OptimizationLevel::None
+        );
+    }
+}

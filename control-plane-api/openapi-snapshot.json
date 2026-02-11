@@ -24112,6 +24112,24 @@
               "title": "Tenant Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Target environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target environment",
+              "title": "Environment"
+            }
           }
         ],
         "requestBody": {
@@ -24178,6 +24196,24 @@
             "schema": {
               "title": "Api Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Target environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target environment",
+              "title": "Environment"
             }
           }
         ],
@@ -24286,6 +24322,24 @@
             "schema": {
               "title": "Api Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Target environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target environment",
+              "title": "Environment"
             }
           }
         ],

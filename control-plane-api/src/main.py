@@ -26,6 +26,7 @@ from .middleware.metrics import MetricsMiddleware, get_metrics
 from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from .opensearch import search_router, setup_opensearch
 from .routers import (
+    access_requests,
     admin_prospects,
     apis,
     applications,  # noqa: F401
@@ -504,6 +505,9 @@ app.include_router(plans.router)
 
 # Quota Enforcement (CAB-1121 Phase 4)
 app.include_router(quotas.router)
+
+# Public — Portal email capture (no auth)
+app.include_router(access_requests.router)
 
 
 # Legacy health endpoint - redirect to new /health/live

@@ -285,10 +285,13 @@ interface QuickActionCardProps {
 
 // Color classes moved outside component to avoid recreation on each render
 const quickActionColorClasses = {
-  blue: 'bg-blue-50 text-blue-600 hover:bg-blue-100',
-  purple: 'bg-purple-50 text-purple-600 hover:bg-purple-100',
-  green: 'bg-green-50 text-green-600 hover:bg-green-100',
-  orange: 'bg-orange-50 text-orange-600 hover:bg-orange-100',
+  blue: 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-2 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30',
+  purple:
+    'bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 border-2 border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/30',
+  green:
+    'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 border-2 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/30',
+  orange:
+    'bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 border-2 border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/30',
 } as const;
 
 const QuickActionCard = memo(function QuickActionCard({
@@ -301,13 +304,15 @@ const QuickActionCard = memo(function QuickActionCard({
   return (
     <a
       href={href}
-      className={`block p-6 rounded-lg transition-colors ${quickActionColorClasses[color]}`}
+      className={`block p-6 rounded-xl transition-all hover:shadow-lg ${quickActionColorClasses[color]}`}
     >
       <div className="flex items-center gap-4">
-        <div className="flex-shrink-0">{icon}</div>
+        <div className="flex-shrink-0 p-2 rounded-lg bg-white/60 dark:bg-neutral-800 shadow-sm">
+          {icon}
+        </div>
         <div>
           <h3 className="font-semibold">{title}</h3>
-          <p className="text-sm opacity-80">{description}</p>
+          <p className="text-sm opacity-75">{description}</p>
         </div>
       </div>
     </a>

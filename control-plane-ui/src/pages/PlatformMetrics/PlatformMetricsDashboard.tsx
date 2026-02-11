@@ -98,28 +98,28 @@ export function PlatformMetricsDashboard() {
 
   // Prometheus queries
   const totalRequests = usePrometheusQuery(
-    `sum(increase(stoa_control_plane_http_requests_total[${timeRange}]))`,
+    `sum(increase(stoa_http_requests_total[${timeRange}]))`,
     AUTO_REFRESH_INTERVAL
   );
   const errorRate = usePrometheusQuery(
-    'sum(rate(stoa_control_plane_http_requests_total{status=~"5.."}[5m])) / sum(rate(stoa_control_plane_http_requests_total[5m]))',
+    'sum(rate(stoa_http_requests_total{status=~"5.."}[5m])) / sum(rate(stoa_http_requests_total[5m]))',
     AUTO_REFRESH_INTERVAL
   );
   const p95Latency = usePrometheusQuery(
-    'histogram_quantile(0.95, sum(rate(stoa_control_plane_http_request_duration_seconds_bucket[5m])) by (le))',
+    'histogram_quantile(0.95, sum(rate(stoa_http_request_duration_seconds_bucket[5m])) by (le))',
     AUTO_REFRESH_INTERVAL
   );
   const servicesUp = usePrometheusQuery('count(up == 1)', AUTO_REFRESH_INTERVAL);
 
   // Sparklines
   const requestRateSeries = usePrometheusRange(
-    'sum(rate(stoa_control_plane_http_requests_total[5m]))',
+    'sum(rate(stoa_http_requests_total[5m]))',
     rangeCfg.seconds,
     rangeCfg.step,
     AUTO_REFRESH_INTERVAL
   );
   const errorRateSeries = usePrometheusRange(
-    'sum(rate(stoa_control_plane_http_requests_total{status=~"5.."}[5m])) / sum(rate(stoa_control_plane_http_requests_total[5m]))',
+    'sum(rate(stoa_http_requests_total{status=~"5.."}[5m])) / sum(rate(stoa_http_requests_total[5m]))',
     rangeCfg.seconds,
     rangeCfg.step,
     AUTO_REFRESH_INTERVAL

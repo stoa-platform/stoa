@@ -77,7 +77,7 @@ describe('RequestExplorerDashboard', () => {
   it('renders link to error snapshots', () => {
     render(<RequestExplorerDashboard />);
     const errorLink = screen.getByText('Error Snapshots');
-    expect(errorLink.closest('a')).toHaveAttribute('href', '/mcp/errors');
+    expect(errorLink.closest('a')).toHaveAttribute('href', '/errors');
   });
 
   it('calls refetch when refresh button clicked', () => {

@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { errorSnapshotsService } from '../services/errorSnapshotsApi';
 import { useAuth } from '../contexts/AuthContext';
 import type {
-  MCPErrorSnapshotSummary,
-  MCPErrorSnapshot,
-  MCPErrorSnapshotStats,
-  MCPErrorSnapshotFilters,
-  MCPErrorType,
+  ErrorSnapshotSummary,
+  ErrorSnapshotDetail,
+  ErrorSnapshotStats,
+  ErrorSnapshotFilters,
+  SnapshotTrigger,
   SnapshotResolutionStatus,
   SnapshotFiltersResponse,
 } from '../types';
@@ -18,10 +18,8 @@ import {
   RefreshCw,
   ChevronRight,
   ChevronDown,
-  DollarSign,
-  Zap,
+  Clock,
   Server,
-  Wrench,
   Search,
   Copy,
   Check,
@@ -30,80 +28,25 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
-// Error type display config
-const errorTypeConfig: Record<string, { label: string; color: string; bg: string }> = {
-  server_timeout: {
-    label: 'Server Timeout',
-    color: 'text-orange-600',
-    bg: 'bg-orange-100 dark:bg-orange-900/30',
-  },
-  server_unavailable: {
-    label: 'Server Unavailable',
-    color: 'text-red-600',
-    bg: 'bg-red-100 dark:bg-red-900/30',
-  },
-  server_rate_limited: {
-    label: 'Rate Limited',
+// Trigger type display config
+const triggerConfig: Record<string, { label: string; color: string; bg: string }> = {
+  '4xx': {
+    label: '4xx Client Error',
     color: 'text-yellow-600',
     bg: 'bg-yellow-100 dark:bg-yellow-900/30',
   },
-  server_auth_failure: {
-    label: 'Auth Failure',
+  '5xx': {
+    label: '5xx Server Error',
     color: 'text-red-600',
     bg: 'bg-red-100 dark:bg-red-900/30',
   },
-  server_internal_error: {
-    label: 'Internal Error',
-    color: 'text-red-600',
-    bg: 'bg-red-100 dark:bg-red-900/30',
-  },
-  tool_not_found: {
-    label: 'Tool Not Found',
-    color: 'text-gray-600 dark:text-neutral-400',
-    bg: 'bg-gray-100 dark:bg-neutral-700',
-  },
-  tool_execution_error: {
-    label: 'Tool Error',
-    color: 'text-red-600',
-    bg: 'bg-red-100 dark:bg-red-900/30',
-  },
-  tool_validation_error: {
-    label: 'Validation Error',
-    color: 'text-yellow-600',
-    bg: 'bg-yellow-100 dark:bg-yellow-900/30',
-  },
-  tool_timeout: {
-    label: 'Tool Timeout',
+  timeout: {
+    label: 'Timeout',
     color: 'text-orange-600',
     bg: 'bg-orange-100 dark:bg-orange-900/30',
   },
-  llm_context_exceeded: {
-    label: 'Context Exceeded',
-    color: 'text-purple-600',
-    bg: 'bg-purple-100 dark:bg-purple-900/30',
-  },
-  llm_content_filtered: {
-    label: 'Content Filtered',
-    color: 'text-purple-600',
-    bg: 'bg-purple-100 dark:bg-purple-900/30',
-  },
-  llm_quota_exceeded: {
-    label: 'Quota Exceeded',
-    color: 'text-purple-600',
-    bg: 'bg-purple-100 dark:bg-purple-900/30',
-  },
-  llm_rate_limited: {
-    label: 'LLM Rate Limited',
-    color: 'text-purple-600',
-    bg: 'bg-purple-100 dark:bg-purple-900/30',
-  },
-  policy_denied: {
-    label: 'Policy Denied',
-    color: 'text-red-600',
-    bg: 'bg-red-100 dark:bg-red-900/30',
-  },
-  unknown: {
-    label: 'Unknown',
+  manual: {
+    label: 'Manual',
     color: 'text-gray-600 dark:text-neutral-400',
     bg: 'bg-gray-100 dark:bg-neutral-700',
   },
@@ -113,25 +56,27 @@ const resolutionConfig: Record<
   SnapshotResolutionStatus,
   { label: string; color: string; bg: string }
 > = {
-  unresolved: { label: 'Unresolved', color: 'text-red-600', bg: 'bg-red-100 dark:bg-red-900/30' },
+  unresolved: {
+    label: 'Unresolved',
+    color: 'text-red-600',
+    bg: 'bg-red-100 dark:bg-red-900/30',
+  },
   investigating: {
     label: 'Investigating',
     color: 'text-yellow-600',
     bg: 'bg-yellow-100 dark:bg-yellow-900/30',
   },
-  resolved: { label: 'Resolved', color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-900/30' },
+  resolved: {
+    label: 'Resolved',
+    color: 'text-green-600',
+    bg: 'bg-green-100 dark:bg-green-900/30',
+  },
   ignored: {
     label: 'Ignored',
     color: 'text-gray-600 dark:text-neutral-400',
     bg: 'bg-gray-100 dark:bg-neutral-700',
   },
 };
-
-function formatCost(cost: number): string {
-  if (cost === 0) return '$0.00';
-  if (cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
-}
 
 function formatDateTime(isoString?: string): string {
   if (!isoString) return '-';
@@ -142,6 +87,11 @@ function formatDateTime(isoString?: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 // Stats Card Component
@@ -174,22 +124,6 @@ function StatsCard({
   );
 }
 
-// Cost Badge Component
-function CostBadge({ cost }: { cost: number }) {
-  let colorClass = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-  if (cost >= 0.1) {
-    colorClass = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-  } else if (cost >= 0.01) {
-    colorClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-  }
-
-  return (
-    <span className={clsx('px-2 py-1 rounded-full text-xs font-medium', colorClass)}>
-      {formatCost(cost)}
-    </span>
-  );
-}
-
 // Resolution Status Badge
 function ResolutionBadge({
   status,
@@ -198,18 +132,18 @@ function ResolutionBadge({
   status: SnapshotResolutionStatus;
   onClick?: (e: React.MouseEvent) => void;
 }) {
-  const config = resolutionConfig[status];
+  const cfg = resolutionConfig[status];
   return (
     <button
       onClick={onClick}
       className={clsx(
         'px-2 py-1 rounded-full text-xs font-medium transition-colors',
-        config.bg,
-        config.color,
+        cfg.bg,
+        cfg.color,
         onClick && 'hover:opacity-80 cursor-pointer'
       )}
     >
-      {config.label}
+      {cfg.label}
     </button>
   );
 }
@@ -295,15 +229,15 @@ function SnapshotRow({
   onToggle,
   onResolutionChange,
 }: {
-  snapshot: MCPErrorSnapshotSummary;
+  snapshot: ErrorSnapshotSummary;
   isExpanded: boolean;
   onToggle: () => void;
   onResolutionChange: (status: SnapshotResolutionStatus) => void;
 }) {
-  const [details, setDetails] = useState<MCPErrorSnapshot | null>(null);
+  const [details, setDetails] = useState<ErrorSnapshotDetail | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const errorConfig = errorTypeConfig[snapshot.error_type] || errorTypeConfig.unknown;
+  const tConfig = triggerConfig[snapshot.trigger] || triggerConfig.manual;
 
   useEffect(() => {
     if (isExpanded && !details) {
@@ -327,58 +261,46 @@ function SnapshotRow({
           {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
         </button>
 
-        {/* Error type badge */}
+        {/* Trigger badge */}
         <span
           className={clsx(
-            'px-2 py-1 rounded-full text-xs font-medium',
-            errorConfig.bg,
-            errorConfig.color
+            'px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap',
+            tConfig.bg,
+            tConfig.color
           )}
         >
-          {errorConfig.label}
+          {tConfig.label}
         </span>
 
         {/* HTTP Status */}
         <span
           className={clsx(
             'px-2 py-0.5 rounded text-xs font-mono',
-            snapshot.response_status >= 500
+            snapshot.status >= 500
               ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
               : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
           )}
         >
-          {snapshot.response_status}
+          {snapshot.status}
         </span>
 
-        {/* Error message */}
+        {/* Method + Path */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-gray-900 dark:text-white truncate">{snapshot.error_message}</p>
+          <p className="text-sm text-gray-900 dark:text-white truncate">
+            <span className="font-mono font-medium">{snapshot.method}</span>{' '}
+            <span className="text-gray-600 dark:text-neutral-400">{snapshot.path}</span>
+          </p>
           <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-neutral-400">
-            {snapshot.mcp_server_name && (
-              <span className="flex items-center gap-1">
-                <Server className="h-3 w-3" />
-                {snapshot.mcp_server_name}
-              </span>
-            )}
-            {snapshot.tool_name && (
-              <span className="flex items-center gap-1">
-                <Wrench className="h-3 w-3" />
-                {snapshot.tool_name}
-              </span>
-            )}
+            <span className="flex items-center gap-1">
+              <Server className="h-3 w-3" />
+              {snapshot.source}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {formatDuration(snapshot.duration_ms)}
+            </span>
           </div>
         </div>
-
-        {/* Cost */}
-        <CostBadge cost={snapshot.total_cost_usd} />
-
-        {/* Tokens wasted */}
-        {snapshot.tokens_wasted > 0 && (
-          <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-neutral-400">
-            <Zap className="h-3 w-3" />
-            {snapshot.tokens_wasted.toLocaleString()}
-          </span>
-        )}
 
         {/* Resolution status */}
         <ResolutionBadge
@@ -413,18 +335,18 @@ function SnapshotRow({
                     'resolved',
                     'ignored',
                   ] as SnapshotResolutionStatus[]
-                ).map((status) => (
+                ).map((s) => (
                   <button
-                    key={status}
-                    onClick={() => onResolutionChange(status)}
+                    key={s}
+                    onClick={() => onResolutionChange(s)}
                     className={clsx(
                       'px-3 py-1 rounded-full text-xs font-medium transition-colors',
-                      details.resolution_status === status
-                        ? `${resolutionConfig[status].bg} ${resolutionConfig[status].color}`
+                      details.resolution_status === s
+                        ? `${resolutionConfig[s].bg} ${resolutionConfig[s].color}`
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-600'
                     )}
                   >
-                    {resolutionConfig[status].label}
+                    {resolutionConfig[s].label}
                   </button>
                 ))}
               </div>
@@ -436,20 +358,26 @@ function SnapshotRow({
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-neutral-400">Method:</span>
-                      <span className="font-mono">{details.request_method || '-'}</span>
+                      <span className="font-mono">{details.request.method}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-neutral-400">Path:</span>
                       <span
                         className="font-mono text-xs truncate max-w-48"
-                        title={details.request_path}
+                        title={details.request.path}
                       >
-                        {details.request_path || '-'}
+                        {details.request.path}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-neutral-400">Status:</span>
-                      <span className="font-mono">{details.response_status}</span>
+                      <span className="font-mono">{details.response.status}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-neutral-400">Duration:</span>
+                      <span className="font-mono">
+                        {formatDuration(details.response.duration_ms)}
+                      </span>
                     </div>
                     {details.trace_id && (
                       <div className="flex justify-between">
@@ -457,109 +385,133 @@ function SnapshotRow({
                         <span className="font-mono text-xs">{details.trace_id}</span>
                       </div>
                     )}
-                  </div>
-
-                  {/* Error details */}
-                  <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
-                    <h5 className="font-medium text-red-800 dark:text-red-400 mb-2">Error</h5>
-                    <p className="text-sm text-red-600 dark:text-red-400">
-                      {details.error_message}
-                    </p>
-                    {details.error_code && (
-                      <p className="text-xs text-red-500 dark:text-red-500 mt-1 font-mono">
-                        {details.error_code}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Middle: Tool/Server Context */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900 dark:text-white">MCP Context</h4>
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
-                    {details.mcp_server_name && (
+                    {details.request.client_ip && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Server:</span>
-                        <span>{details.mcp_server_name}</span>
+                        <span className="text-gray-500 dark:text-neutral-400">Client IP:</span>
+                        <span className="font-mono text-xs">{details.request.client_ip}</span>
                       </div>
                     )}
-                    {details.tool_name && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Tool:</span>
-                        <span>{details.tool_name}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-neutral-400">Retries:</span>
-                      <span>
-                        {details.retry_attempts}/{details.retry_max_attempts}
-                      </span>
-                    </div>
                   </div>
 
-                  {/* Tool invocation details */}
-                  {details.snapshot?.tool_invocation && (
-                    <div className="bg-white dark:bg-neutral-800 rounded-lg p-4">
-                      <h5 className="font-medium text-gray-700 dark:text-neutral-300 mb-2 text-sm">
-                        Tool Invocation
+                  {/* Response body preview */}
+                  {details.response.body != null && (
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
+                      <h5 className="font-medium text-red-800 dark:text-red-400 mb-2">
+                        Response Body
                       </h5>
-                      <div className="text-xs font-mono bg-gray-50 dark:bg-neutral-900 dark:text-neutral-300 rounded p-2 max-h-32 overflow-auto">
+                      <div className="text-xs font-mono bg-white/50 dark:bg-neutral-900 rounded p-2 max-h-32 overflow-auto text-red-600 dark:text-red-400">
                         <pre>
-                          {JSON.stringify(details.snapshot.tool_invocation.input_params, null, 2)}
+                          {typeof details.response.body === 'string'
+                            ? details.response.body
+                            : JSON.stringify(details.response.body, null, 2)}
                         </pre>
                       </div>
-                      {details.snapshot.tool_invocation.duration_ms && (
-                        <p className="text-xs text-gray-500 dark:text-neutral-400 mt-2">
-                          Duration: {details.snapshot.tool_invocation.duration_ms}ms
-                        </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Middle: Routing & Backend */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white">Routing</h4>
+                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-neutral-400">Source:</span>
+                      <span>{details.source}</span>
+                    </div>
+                    {details.routing.api_name && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-neutral-400">API:</span>
+                        <span>
+                          {details.routing.api_name}
+                          {details.routing.api_version && ` v${details.routing.api_version}`}
+                        </span>
+                      </div>
+                    )}
+                    {details.routing.backend_url && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-neutral-400">Backend:</span>
+                        <span
+                          className="text-xs truncate max-w-40"
+                          title={details.routing.backend_url}
+                        >
+                          {details.routing.backend_url}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Backend state */}
+                  {details.backend_state.health !== 'unknown' && (
+                    <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
+                      <h5 className="font-medium text-gray-700 dark:text-neutral-300">
+                        Backend Health
+                      </h5>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-neutral-400">Health:</span>
+                        <span
+                          className={clsx(
+                            'font-medium',
+                            details.backend_state.health === 'healthy'
+                              ? 'text-green-600'
+                              : details.backend_state.health === 'degraded'
+                                ? 'text-yellow-600'
+                                : 'text-red-600'
+                          )}
+                        >
+                          {details.backend_state.health}
+                        </span>
+                      </div>
+                      {details.backend_state.error_rate_1m != null && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500 dark:text-neutral-400">Error Rate:</span>
+                          <span>{(details.backend_state.error_rate_1m * 100).toFixed(1)}%</span>
+                        </div>
+                      )}
+                      {details.backend_state.p99_latency_ms != null && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500 dark:text-neutral-400">P99 Latency:</span>
+                          <span>{formatDuration(details.backend_state.p99_latency_ms)}</span>
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
 
-                {/* Right: LLM/Cost Context */}
+                {/* Right: Environment */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900 dark:text-white">Cost & Tokens</h4>
+                  <h4 className="font-medium text-gray-900 dark:text-white">Environment</h4>
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 space-y-2 text-sm">
+                    {details.environment.pod && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-neutral-400">Pod:</span>
+                        <span className="text-xs font-mono truncate max-w-40">
+                          {details.environment.pod}
+                        </span>
+                      </div>
+                    )}
+                    {details.environment.node && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-neutral-400">Node:</span>
+                        <span className="text-xs">{details.environment.node}</span>
+                      </div>
+                    )}
+                    {details.environment.namespace && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 dark:text-neutral-400">Namespace:</span>
+                        <span>{details.environment.namespace}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-neutral-400">Total Cost:</span>
-                      <CostBadge cost={details.total_cost_usd} />
+                      <span className="text-gray-500 dark:text-neutral-400">Trigger:</span>
+                      <span>{details.trigger}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-neutral-400">Tokens Wasted:</span>
-                      <span className="text-red-600">{details.tokens_wasted.toLocaleString()}</span>
-                    </div>
-                    {details.llm_provider && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">LLM Provider:</span>
-                        <span>{details.llm_provider}</span>
-                      </div>
-                    )}
-                    {details.llm_model && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Model:</span>
-                        <span className="text-xs">{details.llm_model}</span>
-                      </div>
-                    )}
-                    {details.llm_tokens_input !== undefined && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Input Tokens:</span>
-                        <span>{details.llm_tokens_input?.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {details.llm_tokens_output !== undefined && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500 dark:text-neutral-400">Output Tokens:</span>
-                        <span>{details.llm_tokens_output?.toLocaleString()}</span>
-                      </div>
-                    )}
                   </div>
 
                   {/* Masked fields warning */}
-                  {details.snapshot?.masked_fields && details.snapshot.masked_fields.length > 0 && (
+                  {details.masked_fields.length > 0 && (
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 text-xs text-yellow-700 dark:text-yellow-400">
                       <p className="font-medium">PII Masked:</p>
-                      <p className="mt-1">{details.snapshot.masked_fields.join(', ')}</p>
+                      <p className="mt-1">{details.masked_fields.join(', ')}</p>
                     </div>
                   )}
                 </div>
@@ -582,34 +534,33 @@ function SnapshotRow({
 // Main Error Snapshots Page
 export function ErrorSnapshots() {
   const { isReady } = useAuth();
-  const [snapshots, setSnapshots] = useState<MCPErrorSnapshotSummary[]>([]);
-  const [stats, setStats] = useState<MCPErrorSnapshotStats | null>(null);
-  const [filters, setFilters] = useState<MCPErrorSnapshotFilters>({});
+  const [snapshots, setSnapshots] = useState<ErrorSnapshotSummary[]>([]);
+  const [stats, setStats] = useState<ErrorSnapshotStats | null>(null);
+  const [filters, setFilters] = useState<ErrorSnapshotFilters>({});
   const [availableFilters, setAvailableFilters] = useState<SnapshotFiltersResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const pageSize = 20;
 
   const loadData = useCallback(async () => {
     try {
+      const activeFilters: ErrorSnapshotFilters = {
+        ...filters,
+        path_contains: searchQuery || undefined,
+      };
+
       const [snapshotsData, statsData, filtersData] = await Promise.all([
-        errorSnapshotsService.getSnapshots(
-          { ...filters, search: searchQuery || undefined },
-          page,
-          pageSize
-        ),
+        errorSnapshotsService.getSnapshots(activeFilters, page, pageSize),
         errorSnapshotsService.getStats(),
         availableFilters ? Promise.resolve(availableFilters) : errorSnapshotsService.getFilters(),
       ]);
-      setSnapshots(snapshotsData.snapshots);
+      setSnapshots(snapshotsData.items);
       setTotal(snapshotsData.total);
-      setHasNext(snapshotsData.has_next);
       setStats(statsData);
       if (!availableFilters) {
         setAvailableFilters(filtersData);
@@ -635,7 +586,6 @@ export function ErrorSnapshots() {
   const handleResolutionChange = async (snapshotId: string, status: SnapshotResolutionStatus) => {
     try {
       await errorSnapshotsService.updateResolution(snapshotId, status);
-      // Refresh data
       loadData();
     } catch (error) {
       console.error('Failed to update resolution:', error);
@@ -647,6 +597,8 @@ export function ErrorSnapshots() {
     setPage(1);
     loadData();
   };
+
+  const hasNext = page * pageSize < total;
 
   if (loading && snapshots.length === 0) {
     return (
@@ -661,9 +613,9 @@ export function ErrorSnapshots() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">MCP Error Snapshots</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Error Snapshots</h1>
           <p className="text-gray-500 dark:text-neutral-400">
-            Time-travel debugging for MCP Gateway errors
+            Time-travel debugging for gateway errors
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -697,16 +649,17 @@ export function ErrorSnapshots() {
             color="bg-red-500"
           />
           <StatsCard
-            title="Total Cost"
-            value={formatCost(stats.total_cost_usd)}
-            subtitle={`Avg: ${formatCost(stats.avg_cost_usd)}`}
-            icon={DollarSign}
-            color="bg-green-500"
+            title="5xx Errors"
+            value={stats.by_trigger['5xx'] || 0}
+            subtitle="Server errors"
+            icon={AlertCircle}
+            color="bg-orange-500"
           />
           <StatsCard
-            title="Tokens Wasted"
-            value={stats.total_tokens_wasted.toLocaleString()}
-            icon={Zap}
+            title="Timeouts"
+            value={stats.by_trigger['timeout'] || 0}
+            subtitle="Request timeouts"
+            icon={Clock}
             color="bg-purple-500"
           />
           <StatsCard
@@ -727,68 +680,66 @@ export function ErrorSnapshots() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search errors..."
+              placeholder="Search by path..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </form>
 
-          {/* Error type filter */}
+          {/* Trigger filter */}
           <select
-            value={filters.error_types?.[0] || ''}
+            value={filters.trigger || ''}
             onChange={(e) =>
               setFilters((f) => ({
                 ...f,
-                error_types: e.target.value ? [e.target.value as MCPErrorType] : undefined,
+                trigger: (e.target.value as SnapshotTrigger) || undefined,
               }))
             }
             className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
           >
-            <option value="">All Error Types</option>
-            {availableFilters?.error_types.map((type) => (
-              <option key={type} value={type}>
-                {errorTypeConfig[type]?.label || type}
+            <option value="">All Triggers</option>
+            {availableFilters?.triggers.map((t) => (
+              <option key={t} value={t}>
+                {triggerConfig[t]?.label || t}
               </option>
             ))}
           </select>
 
-          {/* Server filter */}
+          {/* Source filter */}
           <select
-            value={filters.server_names?.[0] || ''}
+            value={filters.source || ''}
             onChange={(e) =>
               setFilters((f) => ({
                 ...f,
-                server_names: e.target.value ? [e.target.value] : undefined,
+                source: e.target.value || undefined,
               }))
             }
             className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
           >
-            <option value="">All Servers</option>
-            {availableFilters?.servers.map((server) => (
-              <option key={server} value={server}>
-                {server}
+            <option value="">All Gateways</option>
+            {availableFilters?.sources.map((s) => (
+              <option key={s} value={s}>
+                {s}
               </option>
             ))}
           </select>
 
           {/* Resolution status filter */}
           <select
-            value={filters.resolution_status?.[0] || ''}
+            value={filters.resolution_status || ''}
             onChange={(e) =>
               setFilters((f) => ({
                 ...f,
-                resolution_status: e.target.value
-                  ? [e.target.value as SnapshotResolutionStatus]
-                  : undefined,
+                resolution_status: (e.target.value as SnapshotResolutionStatus) || undefined,
               }))
             }
             className="border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white"
           >
             <option value="">All Statuses</option>
-            {availableFilters?.resolution_statuses.map((status) => (
-              <option key={status} value={status}>
-                {resolutionConfig[status as SnapshotResolutionStatus]?.label || status}
+            {availableFilters?.resolution_statuses.map((s) => (
+              <option key={s} value={s}>
+                {resolutionConfig[s as SnapshotResolutionStatus]?.label || s}
               </option>
             ))}
           </select>
@@ -799,9 +750,8 @@ export function ErrorSnapshots() {
       <div className="rounded-lg bg-white dark:bg-neutral-800 shadow-sm">
         <div className="border-b border-gray-100 dark:border-neutral-700 px-4 py-3 flex justify-between items-center">
           <h2 className="font-medium text-gray-900 dark:text-white">Error Snapshots ({total})</h2>
-          {/* Pagination info */}
           <div className="text-sm text-gray-500 dark:text-neutral-400">
-            Page {page} of {Math.ceil(total / pageSize)}
+            Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
           </div>
         </div>
 
@@ -819,7 +769,7 @@ export function ErrorSnapshots() {
                 snapshot={snapshot}
                 isExpanded={expandedId === snapshot.id}
                 onToggle={() => setExpandedId(expandedId === snapshot.id ? null : snapshot.id)}
-                onResolutionChange={(status) => handleResolutionChange(snapshot.id, status)}
+                onResolutionChange={(s) => handleResolutionChange(snapshot.id, s)}
               />
             ))}
           </div>

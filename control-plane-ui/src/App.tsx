@@ -338,7 +338,7 @@ function ProtectedRoutes() {
               <Route path="/applications" element={<Applications />} />
               <Route path="/deployments" element={<Deployments />} />
               <Route path="/monitoring" element={<APIMonitoring />} />
-              <Route path="/mcp/errors" element={<ErrorSnapshots />} />
+              <Route path="/errors" element={<ErrorSnapshots />} />
               <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
               <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
               <Route path="/gateway" element={<GatewayStatus />} />

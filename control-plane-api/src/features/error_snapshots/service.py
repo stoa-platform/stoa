@@ -301,12 +301,31 @@ class SnapshotService:
             items = [i for i in items if filters.path_contains in i.path]
             total = len(items)
 
+        if filters.source:
+            items = [i for i in items if i.source == filters.source]
+            total = len(items)
+
+        if filters.resolution_status:
+            items = [
+                i
+                for i in items
+                if i.resolution_status == filters.resolution_status
+            ]
+            total = len(items)
+
         return SnapshotListResponse(
             items=items,
             total=total,
             page=page,
             page_size=page_size,
         )
+
+    async def save(self, snapshot: ErrorSnapshot) -> str:
+        """Save (or overwrite) a snapshot in storage.
+
+        Used by the PATCH endpoint to persist resolution status updates.
+        """
+        return await self.storage.save(snapshot)
 
     async def delete(self, snapshot_id: str, tenant_id: str) -> bool:
         """Delete snapshot.

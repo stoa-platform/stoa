@@ -21,6 +21,15 @@ class SnapshotTrigger(StrEnum):
     MANUAL = "manual"
 
 
+class ResolutionStatus(StrEnum):
+    """Resolution status for error snapshots."""
+
+    UNRESOLVED = "unresolved"
+    INVESTIGATING = "investigating"
+    RESOLVED = "resolved"
+    IGNORED = "ignored"
+
+
 class RequestSnapshot(BaseModel):
     """Captured HTTP request data."""
 
@@ -156,7 +165,11 @@ class ErrorSnapshot(BaseModel):
 
     # Metadata
     masked_fields: list[str] = Field(default_factory=list)
-    source: str = "control-plane"  # "control-plane" | "webmethods-gateway"
+    source: str = "control-plane"  # "control-plane" | "webmethods-gateway" | "stoa" | "kong" | "gravitee"
+
+    # Resolution tracking
+    resolution_status: ResolutionStatus = ResolutionStatus.UNRESOLVED
+    resolution_notes: str | None = None
 
 
 class SnapshotSummary(BaseModel):
@@ -171,6 +184,7 @@ class SnapshotSummary(BaseModel):
     path: str
     duration_ms: int
     source: str = "control-plane"
+    resolution_status: ResolutionStatus = ResolutionStatus.UNRESOLVED
 
 
 class SnapshotListResponse(BaseModel):
@@ -190,7 +204,8 @@ class SnapshotFilters(BaseModel):
     status_code: int | None = None
     trigger: SnapshotTrigger | None = None
     path_contains: str | None = None
-    source: str | None = None  # Filter by source: "control-plane" | "webmethods-gateway"
+    source: str | None = None
+    resolution_status: ResolutionStatus | None = None
 
 
 class ReplayResponse(BaseModel):
@@ -198,3 +213,19 @@ class ReplayResponse(BaseModel):
 
     curl_command: str
     warning: str | None = None
+
+
+class ResolutionUpdate(BaseModel):
+    """Request body for updating snapshot resolution status."""
+
+    resolution_status: ResolutionStatus
+    resolution_notes: str | None = None
+
+
+class SnapshotFiltersResponse(BaseModel):
+    """Available filter values for the snapshots list UI."""
+
+    triggers: list[str]
+    sources: list[str]
+    status_codes: list[int]
+    resolution_statuses: list[str]

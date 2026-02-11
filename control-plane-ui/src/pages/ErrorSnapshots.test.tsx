@@ -22,35 +22,37 @@ vi.mock('../contexts/AuthContext', () => ({
   })),
 }));
 
-// Mock errorSnapshotsService
+// Mock errorSnapshotsService — uses CP API types now
 const mockGetSnapshots = vi.fn().mockResolvedValue({
-  snapshots: [
+  items: [
     {
-      id: 'snap-1',
-      error_type: 'server_timeout',
-      error_message: 'Connection timed out after 30s',
-      response_status: 504,
-      mcp_server_name: 'weather-api',
-      tool_name: 'get_weather',
-      total_cost_usd: 0.05,
-      tokens_wasted: 1200,
+      id: 'SNP-20260115-094512-a1b2c3d4',
+      timestamp: '2026-01-15T09:45:12.345Z',
+      tenant_id: 'oasis-gunters',
+      trigger: '5xx',
+      status: 502,
+      method: 'POST',
+      path: '/api/v1/payments',
+      duration_ms: 30042,
+      source: 'stoa',
       resolution_status: 'unresolved',
-      timestamp: '2024-01-15T10:00:00Z',
     },
   ],
   total: 1,
-  has_next: false,
+  page: 1,
+  page_size: 20,
 });
 const mockGetStats = vi.fn().mockResolvedValue({
   total: 15,
-  total_cost_usd: 1.25,
-  avg_cost_usd: 0.083,
-  total_tokens_wasted: 18000,
+  by_trigger: { '5xx': 8, '4xx': 4, timeout: 3 },
+  by_status_code: { 500: 5, 502: 3, 400: 4, 504: 3 },
   resolution_stats: { unresolved: 5, investigating: 3, resolved: 6, ignored: 1 },
+  period: { start: null, end: null },
 });
 const mockGetFilters = vi.fn().mockResolvedValue({
-  error_types: ['server_timeout', 'tool_not_found'],
-  servers: ['weather-api', 'translate-api'],
+  triggers: ['4xx', '5xx', 'timeout'],
+  sources: ['stoa', 'kong'],
+  status_codes: [400, 500, 502, 504],
   resolution_statuses: ['unresolved', 'investigating', 'resolved', 'ignored'],
 });
 
@@ -65,15 +67,6 @@ vi.mock('../services/errorSnapshotsApi', () => ({
   },
 }));
 
-// Mock config
-vi.mock('../config', () => ({
-  config: {
-    services: {
-      mcpGateway: { url: 'https://mcp.gostoa.dev' },
-    },
-  },
-}));
-
 import ErrorSnapshots from './ErrorSnapshots';
 
 function renderComponent() {
@@ -83,18 +76,48 @@ function renderComponent() {
 describe('ErrorSnapshots', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSnapshots.mockResolvedValue({
+      items: [
+        {
+          id: 'SNP-20260115-094512-a1b2c3d4',
+          timestamp: '2026-01-15T09:45:12.345Z',
+          tenant_id: 'oasis-gunters',
+          trigger: '5xx',
+          status: 502,
+          method: 'POST',
+          path: '/api/v1/payments',
+          duration_ms: 30042,
+          source: 'stoa',
+          resolution_status: 'unresolved',
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    mockGetStats.mockResolvedValue({
+      total: 15,
+      by_trigger: { '5xx': 8, '4xx': 4, timeout: 3 },
+      by_status_code: { 500: 5, 502: 3, 400: 4, 504: 3 },
+      resolution_stats: { unresolved: 5, investigating: 3, resolved: 6, ignored: 1 },
+      period: { start: null, end: null },
+    });
+    mockGetFilters.mockResolvedValue({
+      triggers: ['4xx', '5xx', 'timeout'],
+      sources: ['stoa', 'kong'],
+      status_codes: [400, 500, 502, 504],
+      resolution_statuses: ['unresolved', 'investigating', 'resolved', 'ignored'],
+    });
   });
 
   it('renders the heading', async () => {
     renderComponent();
-    expect(await screen.findByRole('heading', { name: 'MCP Error Snapshots' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Error Snapshots' })).toBeInTheDocument();
   });
 
   it('renders the subtitle', async () => {
     renderComponent();
-    expect(
-      await screen.findByText('Time-travel debugging for MCP Gateway errors')
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Time-travel debugging for gateway errors')).toBeInTheDocument();
   });
 
   it('shows stats cards after loading', async () => {
@@ -103,29 +126,29 @@ describe('ErrorSnapshots', () => {
       expect(screen.getByText('Total Errors')).toBeInTheDocument();
     });
     expect(screen.getByText('15')).toBeInTheDocument();
-    expect(screen.getByText('Total Cost')).toBeInTheDocument();
-    expect(screen.getByText('Tokens Wasted')).toBeInTheDocument();
-    // 'Resolved' appears in both stats card and filter dropdown
+    expect(screen.getByText('5xx Errors')).toBeInTheDocument();
+    expect(screen.getByText('Timeouts')).toBeInTheDocument();
+    // 'Resolved' appears in stats card and filter dropdown
     expect(screen.getAllByText('Resolved').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('shows error snapshots list', async () => {
+  it('shows error snapshots list with method and path', async () => {
     renderComponent();
     await waitFor(() => {
-      expect(screen.getByText('Connection timed out after 30s')).toBeInTheDocument();
+      expect(screen.getByText('POST')).toBeInTheDocument();
     });
-    // 'Server Timeout' appears in snapshot row and filter dropdown
-    expect(screen.getAllByText('Server Timeout').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('504')).toBeInTheDocument();
+    expect(screen.getByText('/api/v1/payments')).toBeInTheDocument();
+    // '5xx Server Error' trigger badge
+    expect(screen.getAllByText('5xx Server Error').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('502')).toBeInTheDocument();
   });
 
-  it('shows server and tool names in snapshot row', async () => {
+  it('shows gateway source in snapshot row', async () => {
     renderComponent();
     await waitFor(() => {
-      // 'weather-api' appears in snapshot row and filter dropdown
-      expect(screen.getAllByText('weather-api').length).toBeGreaterThanOrEqual(1);
+      // 'stoa' appears in snapshot row and filter dropdown
+      expect(screen.getAllByText('stoa').length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getByText('get_weather')).toBeInTheDocument();
   });
 
   it('shows Refresh button', async () => {
@@ -141,15 +164,15 @@ describe('ErrorSnapshots', () => {
   it('shows filter dropdowns', async () => {
     renderComponent();
     await waitFor(() => {
-      expect(screen.getByText('All Error Types')).toBeInTheDocument();
+      expect(screen.getByText('All Triggers')).toBeInTheDocument();
     });
-    expect(screen.getByText('All Servers')).toBeInTheDocument();
+    expect(screen.getByText('All Gateways')).toBeInTheDocument();
     expect(screen.getByText('All Statuses')).toBeInTheDocument();
   });
 
   it('shows search input', async () => {
     renderComponent();
-    expect(await screen.findByPlaceholderText('Search errors...')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText('Search by path...')).toBeInTheDocument();
   });
 
   it('shows snapshot count in header', async () => {

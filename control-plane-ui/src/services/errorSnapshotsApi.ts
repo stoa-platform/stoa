@@ -1,65 +1,47 @@
 /**
  * Error Snapshots API Service
  *
- * Service for interacting with MCP Gateway Error Snapshots API.
+ * Routes through the CP API (/v1/snapshots) via same-origin nginx proxy.
+ * No cross-origin calls — avoids CORS issues with the gateway.
  *
  * Reference: CAB-397 - Error Snapshot / Flight Recorder (Time-Travel Debugging)
  */
 
-import { config } from '../config';
 import { apiService } from './api';
 import type {
-  MCPErrorSnapshot,
-  MCPErrorSnapshotStats,
-  MCPErrorSnapshotFilters,
-  MCPErrorSnapshotListResponse,
+  ErrorSnapshotDetail,
+  ErrorSnapshotStats,
+  ErrorSnapshotFilters,
+  ErrorSnapshotListResponse,
   SnapshotResolutionStatus,
   SnapshotFiltersResponse,
 } from '../types';
-
-// MCP Gateway base URL
-const MCP_GATEWAY_URL = config.services.mcpGateway.url;
-const SNAPSHOTS_BASE = `${MCP_GATEWAY_URL}/mcp/v1/errors/snapshots`;
 
 class ErrorSnapshotsService {
   /**
    * Get list of error snapshots with filters and pagination
    */
   async getSnapshots(
-    filters?: MCPErrorSnapshotFilters,
+    filters?: ErrorSnapshotFilters,
     page: number = 1,
     pageSize: number = 20
-  ): Promise<MCPErrorSnapshotListResponse> {
+  ): Promise<ErrorSnapshotListResponse> {
     const params = new URLSearchParams();
     params.set('page', String(page));
     params.set('page_size', String(pageSize));
 
     if (filters) {
-      if (filters.error_types?.length) {
-        filters.error_types.forEach((t) => params.append('error_type', t));
-      }
-      if (filters.status_codes?.length) {
-        filters.status_codes.forEach((c) => params.append('status_code', String(c)));
-      }
-      if (filters.server_names?.length) {
-        filters.server_names.forEach((s) => params.append('server_name', s));
-      }
-      if (filters.tool_names?.length) {
-        filters.tool_names.forEach((t) => params.append('tool_name', t));
-      }
-      if (filters.resolution_status?.length) {
-        filters.resolution_status.forEach((s) => params.append('resolution_status', s));
-      }
+      if (filters.trigger) params.set('trigger', filters.trigger);
+      if (filters.status_code) params.set('status_code', String(filters.status_code));
+      if (filters.source) params.set('source', filters.source);
+      if (filters.resolution_status) params.set('resolution_status', filters.resolution_status);
       if (filters.start_date) params.set('start_date', filters.start_date);
       if (filters.end_date) params.set('end_date', filters.end_date);
-      if (filters.min_cost_usd !== undefined) {
-        params.set('min_cost_usd', String(filters.min_cost_usd));
-      }
-      if (filters.search) params.set('search', filters.search);
+      if (filters.path_contains) params.set('path_contains', filters.path_contains);
     }
 
-    const { data } = await apiService.get<MCPErrorSnapshotListResponse>(
-      `${SNAPSHOTS_BASE}?${params.toString()}`
+    const { data } = await apiService.get<ErrorSnapshotListResponse>(
+      `/v1/snapshots?${params.toString()}`
     );
     return data;
   }
@@ -67,23 +49,23 @@ class ErrorSnapshotsService {
   /**
    * Get a single error snapshot by ID
    */
-  async getSnapshot(snapshotId: string): Promise<MCPErrorSnapshot> {
-    const { data } = await apiService.get<MCPErrorSnapshot>(`${SNAPSHOTS_BASE}/${snapshotId}`);
+  async getSnapshot(snapshotId: string): Promise<ErrorSnapshotDetail> {
+    const { data } = await apiService.get<ErrorSnapshotDetail>(`/v1/snapshots/${snapshotId}`);
     return data;
   }
 
   /**
    * Get aggregated error statistics
    */
-  async getStats(startDate?: string, endDate?: string): Promise<MCPErrorSnapshotStats> {
+  async getStats(startDate?: string, endDate?: string): Promise<ErrorSnapshotStats> {
     const params = new URLSearchParams();
     if (startDate) params.set('start_date', startDate);
     if (endDate) params.set('end_date', endDate);
 
     const queryString = params.toString();
-    const url = queryString ? `${SNAPSHOTS_BASE}/stats?${queryString}` : `${SNAPSHOTS_BASE}/stats`;
+    const url = queryString ? `/v1/snapshots/stats?${queryString}` : '/v1/snapshots/stats';
 
-    const { data } = await apiService.get<MCPErrorSnapshotStats>(url);
+    const { data } = await apiService.get<ErrorSnapshotStats>(url);
     return data;
   }
 
@@ -91,7 +73,7 @@ class ErrorSnapshotsService {
    * Get available filter values
    */
   async getFilters(): Promise<SnapshotFiltersResponse> {
-    const { data } = await apiService.get<SnapshotFiltersResponse>(`${SNAPSHOTS_BASE}/filters`);
+    const { data } = await apiService.get<SnapshotFiltersResponse>('/v1/snapshots/filters');
     return data;
   }
 
@@ -102,8 +84,8 @@ class ErrorSnapshotsService {
     snapshotId: string,
     status: SnapshotResolutionStatus,
     notes?: string
-  ): Promise<MCPErrorSnapshot> {
-    const { data } = await apiService.patch<MCPErrorSnapshot>(`${SNAPSHOTS_BASE}/${snapshotId}`, {
+  ): Promise<ErrorSnapshotDetail> {
+    const { data } = await apiService.patch<ErrorSnapshotDetail>(`/v1/snapshots/${snapshotId}`, {
       resolution_status: status,
       resolution_notes: notes,
     });
@@ -114,7 +96,7 @@ class ErrorSnapshotsService {
    * Delete an error snapshot
    */
   async deleteSnapshot(snapshotId: string): Promise<void> {
-    await apiService.delete(`${SNAPSHOTS_BASE}/${snapshotId}`);
+    await apiService.delete(`/v1/snapshots/${snapshotId}`);
   }
 
   /**
@@ -122,7 +104,7 @@ class ErrorSnapshotsService {
    */
   async generateReplay(snapshotId: string): Promise<{ curl_command: string; warning?: string }> {
     const { data } = await apiService.post<{ curl_command: string; warning?: string }>(
-      `${SNAPSHOTS_BASE}/${snapshotId}/replay`
+      `/v1/snapshots/${snapshotId}/replay`
     );
     return data;
   }

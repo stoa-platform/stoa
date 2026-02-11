@@ -2848,6 +2848,25 @@
           "request": {
             "$ref": "#/components/schemas/RequestSnapshot"
           },
+          "resolution_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Notes"
+          },
+          "resolution_status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResolutionStatus"
+              }
+            ],
+            "default": "unresolved"
+          },
           "response": {
             "$ref": "#/components/schemas/ResponseSnapshot"
           },
@@ -5003,6 +5022,63 @@
           "details"
         ],
         "title": "ImportResultResponse",
+        "type": "object"
+      },
+      "InternalAPIItem": {
+        "description": "API item for gateway internal discovery \u2014 includes backend_url.",
+        "properties": {
+          "backend_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Url"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "default": "1.0.0",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "InternalAPIItem",
+        "type": "object"
+      },
+      "InternalAPIsResponse": {
+        "description": "Response for internal API catalog endpoint.",
+        "properties": {
+          "apis": {
+            "items": {
+              "$ref": "#/components/schemas/InternalAPIItem"
+            },
+            "title": "Apis",
+            "type": "array"
+          }
+        },
+        "required": [
+          "apis"
+        ],
+        "title": "InternalAPIsResponse",
         "type": "object"
       },
       "KeyRotationRequest": {
@@ -9382,6 +9458,41 @@
         "title": "RequestSnapshot",
         "type": "object"
       },
+      "ResolutionStatus": {
+        "description": "Resolution status for error snapshots.",
+        "enum": [
+          "unresolved",
+          "investigating",
+          "resolved",
+          "ignored"
+        ],
+        "title": "ResolutionStatus",
+        "type": "string"
+      },
+      "ResolutionUpdate": {
+        "description": "Request body for updating snapshot resolution status.",
+        "properties": {
+          "resolution_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Notes"
+          },
+          "resolution_status": {
+            "$ref": "#/components/schemas/ResolutionStatus"
+          }
+        },
+        "required": [
+          "resolution_status"
+        ],
+        "title": "ResolutionUpdate",
+        "type": "object"
+      },
       "ResponseSnapshot": {
         "description": "Captured HTTP response data.",
         "properties": {
@@ -9678,6 +9789,47 @@
         "title": "ServiceAccountSecretRegenerated",
         "type": "object"
       },
+      "SnapshotFiltersResponse": {
+        "description": "Available filter values for the snapshots list UI.",
+        "properties": {
+          "resolution_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resolution Statuses",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "status_codes": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Status Codes",
+            "type": "array"
+          },
+          "triggers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Triggers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "triggers",
+          "sources",
+          "status_codes",
+          "resolution_statuses"
+        ],
+        "title": "SnapshotFiltersResponse",
+        "type": "object"
+      },
       "SnapshotListResponse": {
         "description": "Paginated list of snapshots.",
         "properties": {
@@ -9728,6 +9880,14 @@
           "path": {
             "title": "Path",
             "type": "string"
+          },
+          "resolution_status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResolutionStatus"
+              }
+            ],
+            "default": "unresolved"
           },
           "source": {
             "default": "control-plane",
@@ -18736,6 +18896,28 @@
         ]
       }
     },
+    "/v1/internal/catalog/apis": {
+      "get": {
+        "description": "List published APIs with backend_url for gateway API-to-Tool bridge.\n\nInternal endpoint \u2014 no JWT auth required (service-to-service on internal network).\nUsed by stoa-gateway to discover APIs and register them as MCP tools.",
+        "operationId": "internal_list_apis_v1_internal_catalog_apis_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalAPIsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Internal List Apis",
+        "tags": [
+          "Internal - Gateway API Bridge"
+        ]
+      }
+    },
     "/v1/internal/external-mcp-servers": {
       "get": {
         "description": "List all enabled external MCP servers with credentials for MCP Gateway.\n\nThis is an internal endpoint called by MCP Gateway.\nReturns servers with decrypted credentials.",
@@ -22216,7 +22398,7 @@
     },
     "/v1/snapshots": {
       "get": {
-        "description": "List error snapshots for the user's tenant.\n\nSupports filtering by:\n- Date range (start_date, end_date)\n- HTTP status code\n- Trigger type (4xx, 5xx, timeout, manual)\n- Path substring\n\nResults are paginated and sorted by timestamp (newest first).",
+        "description": "List error snapshots for the user's tenant.\n\nSupports filtering by:\n- Date range (start_date, end_date)\n- HTTP status code\n- Trigger type (4xx, 5xx, timeout, manual)\n- Path substring\n- Gateway source\n- Resolution status\n\nResults are paginated and sorted by timestamp (newest first).",
         "operationId": "list_snapshots_v1_snapshots_get",
         "parameters": [
           {
@@ -22337,6 +22519,42 @@
               "description": "Filter: path contains string",
               "title": "Path Contains"
             }
+          },
+          {
+            "description": "Filter: gateway source",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter: gateway source",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "Filter: resolution status",
+            "in": "query",
+            "name": "resolution_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResolutionStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter: resolution status",
+              "title": "Resolution Status"
+            }
           }
         ],
         "responses": {
@@ -22372,10 +22590,37 @@
         ]
       }
     },
-    "/v1/snapshots/stats/summary": {
+    "/v1/snapshots/filters": {
       "get": {
-        "description": "Get snapshot statistics summary.\n\nReturns counts by trigger type and status code.",
-        "operationId": "get_snapshot_stats_v1_snapshots_stats_summary_get",
+        "description": "Get available filter values for the UI.\n\nReturns distinct trigger types, sources, status codes,\nand resolution statuses from recent snapshots.",
+        "operationId": "get_available_filters_v1_snapshots_filters_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotFiltersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Available Filters",
+        "tags": [
+          "Error Snapshots"
+        ]
+      }
+    },
+    "/v1/snapshots/stats": {
+      "get": {
+        "description": "Get snapshot statistics (alias for /stats/summary).",
+        "operationId": "get_snapshot_stats_v1_snapshots_stats_get",
         "parameters": [
           {
             "description": "Start date for stats",
@@ -22421,7 +22666,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Snapshot Stats V1 Snapshots Stats Summary Get",
+                  "title": "Response Get Snapshot Stats V1 Snapshots Stats Get",
                   "type": "object"
                 }
               }
@@ -22445,6 +22690,84 @@
           }
         ],
         "summary": "Get Snapshot Stats",
+        "tags": [
+          "Error Snapshots"
+        ]
+      }
+    },
+    "/v1/snapshots/stats/summary": {
+      "get": {
+        "description": "Get snapshot statistics summary.\n\nReturns counts by trigger type, status code, and resolution status.",
+        "operationId": "get_snapshot_stats_summary_v1_snapshots_stats_summary_get",
+        "parameters": [
+          {
+            "description": "Start date for stats",
+            "in": "query",
+            "name": "start_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start date for stats",
+              "title": "Start Date"
+            }
+          },
+          {
+            "description": "End date for stats",
+            "in": "query",
+            "name": "end_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End date for stats",
+              "title": "End Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Snapshot Stats Summary V1 Snapshots Stats Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Snapshot Stats Summary",
         "tags": [
           "Error Snapshots"
         ]
@@ -22532,6 +22855,62 @@
           }
         ],
         "summary": "Get Snapshot",
+        "tags": [
+          "Error Snapshots"
+        ]
+      },
+      "patch": {
+        "description": "Update the resolution status of an error snapshot.\n\nAllows operators to mark snapshots as investigating, resolved, or ignored.",
+        "operationId": "update_snapshot_resolution_v1_snapshots__snapshot_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolutionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Snapshot Resolution",
         "tags": [
           "Error Snapshots"
         ]

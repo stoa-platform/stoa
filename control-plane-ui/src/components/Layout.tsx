@@ -168,7 +168,7 @@ const navigationSections: NavSection[] = [
       },
       {
         name: 'Error Snapshots',
-        href: '/mcp/errors',
+        href: '/errors',
         icon: AlertTriangle,
         permission: 'apis:read',
         badge: 'STOA',

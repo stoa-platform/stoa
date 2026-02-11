@@ -351,7 +351,7 @@ export function RequestExplorerDashboard() {
                 Top Endpoints
               </h2>
               <a
-                href="/mcp/errors"
+                href="/errors"
                 className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
               >
                 Error Snapshots

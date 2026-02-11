@@ -510,7 +510,7 @@ export function OperationsDashboard() {
                 </div>
               </a>
               <a
-                href="/mcp/errors"
+                href="/errors"
                 className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
               >
                 <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">

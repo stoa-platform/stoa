@@ -170,7 +170,7 @@ ACCOUNTS_SPEC = json.dumps(
                 "Manage user accounts, profiles, and preferences. " "Supports CRUD operations with full audit trail."
             ),
         },
-        "servers": [{"url": "https://api.gostoa.dev/mock/accounts"}],
+        "servers": [{"url": "https://httpbin.org/anything"}],
         "paths": {
             "/accounts": {
                 "get": {
@@ -327,7 +327,7 @@ PAYMENTS_SPEC = json.dumps(
             "version": "3.0.0",
             "description": ("Process payments, refunds, and manage payment methods. " "PCI-DSS Level 1 compliant."),
         },
-        "servers": [{"url": "https://api.gostoa.dev/mock/payments"}],
+        "servers": [{"url": "https://httpbin.org/anything"}],
         "paths": {
             "/payments": {
                 "post": {
@@ -499,7 +499,7 @@ DEMO_APIS = [
         "description": (
             "Manage user accounts, profiles, and preferences. " "Full CRUD with audit trail and role-based access."
         ),
-        "backend_url": "https://api.gostoa.dev/mock/accounts",
+        "backend_url": "https://httpbin.org/anything",
         "tags": ["portal:published", "rest", "demo", "enterprise"],
         "openapi_spec": ACCOUNTS_SPEC,
     },
@@ -511,7 +511,7 @@ DEMO_APIS = [
             "Process payments, refunds, and manage payment methods. "
             "PCI-DSS Level 1 compliant. Supports EUR, USD, GBP."
         ),
-        "backend_url": "https://api.gostoa.dev/mock/payments",
+        "backend_url": "https://httpbin.org/anything",
         "tags": ["portal:published", "rest", "demo", "enterprise", "pci"],
         "openapi_spec": PAYMENTS_SPEC,
     },

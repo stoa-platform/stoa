@@ -23,6 +23,7 @@ pub mod quota;
 pub mod rate_limit;
 pub mod resilience;
 pub mod routes;
+pub mod security_headers;
 pub mod shadow;
 pub mod state;
 pub mod telemetry;
@@ -110,7 +111,7 @@ pub fn build_router(state: AppState) -> Router {
         auth::mtls::mtls_extraction_middleware(config, stats, request, next)
     });
 
-    match state.config.gateway_mode {
+    let mode_router = match state.config.gateway_mode {
         GatewayMode::EdgeMcp => {
             // Full MCP protocol: OAuth discovery, MCP tools, SSE transport
             base
@@ -299,7 +300,13 @@ pub fn build_router(state: AppState) -> Router {
             )
             .with_state(state)
         }
-    }
+    };
+
+    // Security headers: outermost layer, applied AFTER all routes are registered.
+    // Adds X-Content-Type-Options, X-Frame-Options, etc. to every response.
+    mode_router.layer(axum::middleware::from_fn(
+        security_headers::security_headers_middleware,
+    ))
 }
 
 // === HTTP Metrics Middleware ===

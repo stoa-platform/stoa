@@ -128,8 +128,8 @@ jobs:
       component: control-plane-api
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: ${{ github.event.inputs.environment || 'dev' }}
-      environment-url: https://api.gostoa.dev
-      verify-endpoint: https://api.gostoa.dev/health
+      environment-url: https://api.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
+      verify-endpoint: https://api.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}/health
       expected-status: '200'
     permissions:
       contents: read

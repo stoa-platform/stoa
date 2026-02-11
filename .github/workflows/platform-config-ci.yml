@@ -40,7 +40,7 @@ permissions:
   contents: read
 
 env:
-  BASE_DOMAIN: gostoa.dev
+  BASE_DOMAIN: ${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
   GITLAB_PROJECT: cab6961310/stoa-gitops
 
 jobs:

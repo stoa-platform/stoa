@@ -156,4 +156,4 @@ jobs:
           echo "| Environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Image | \`${{ inputs.image-tag }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Previous | \`${{ steps.save-state.outputs.previous_image }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Cluster | K3s Hetzner |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cluster | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY

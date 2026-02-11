@@ -1,0 +1,6 @@
+---
+source: tests/contract/tools.rs
+assertion_line: 45
+expression: json
+---
+[]

@@ -1,0 +1,6 @@
+---
+source: tests/contract/oauth.rs
+assertion_line: 33
+expression: body
+---
+

@@ -1,0 +1,22 @@
+---
+source: tests/contract/oauth.rs
+assertion_line: 15
+expression: json
+---
+{
+  "authorization_servers": [
+    "/realms/stoa"
+  ],
+  "bearer_methods_supported": [
+    "header"
+  ],
+  "resource": "http://localhost:8080",
+  "scopes_supported": [
+    "openid",
+    "profile",
+    "email",
+    "stoa:read",
+    "stoa:write",
+    "stoa:admin"
+  ]
+}

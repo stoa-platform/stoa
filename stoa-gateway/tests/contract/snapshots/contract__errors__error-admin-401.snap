@@ -1,0 +1,6 @@
+---
+source: tests/contract/errors.rs
+assertion_line: 23
+expression: body
+---
+

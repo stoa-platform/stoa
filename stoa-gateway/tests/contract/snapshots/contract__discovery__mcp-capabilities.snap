@@ -1,0 +1,26 @@
+---
+source: tests/contract/discovery.rs
+assertion_line: 27
+expression: json
+---
+{
+  "capabilities": {
+    "logging": {},
+    "prompts": {
+      "listChanged": false
+    },
+    "resources": {
+      "listChanged": false,
+      "subscribe": false
+    },
+    "tools": {
+      "listChanged": false
+    }
+  },
+  "protocolVersion": "2025-03-26",
+  "serverInfo": {
+    "name": "STOA Gateway",
+    "protocolVersion": "2025-03-26",
+    "version": "0.1.0"
+  }
+}

@@ -63,6 +63,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Starting STOA Gateway"
     );
 
+    // Force-initialize all Prometheus metrics so they appear on /metrics
+    // even before any traffic arrives (fixes: only rate_limit_buckets visible)
+    metrics::init_all_metrics();
+
     // Initialize application state
     let state = AppState::new(config.clone());
 
@@ -230,7 +234,9 @@ fn build_router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(prometheus_metrics))
-        .nest("/admin", admin_router);
+        .nest("/admin", admin_router)
+        // HTTP metrics middleware: records method, path, status, duration for ALL requests
+        .layer(axum::middleware::from_fn(http_metrics_middleware));
 
     // Build mTLS extraction layer (CAB-864)
     // Stage 1: runs BEFORE JWT auth — extracts cert info from headers
@@ -483,6 +489,29 @@ async fn register_tools(state: &AppState) {
 
     // Background refresh: sync API catalog tools every 60s
     api_bridge::start_api_tool_refresh_task(state.tool_registry.clone(), cp_url, http_client);
+}
+
+// === HTTP Metrics Middleware ===
+
+/// Middleware that records Prometheus metrics for every HTTP request.
+///
+/// Captures: method, normalized path (low cardinality), status code, duration.
+/// Runs as the outermost layer so it measures total request time including auth/quota.
+async fn http_metrics_middleware(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let method = request.method().to_string();
+    let path = metrics::normalize_path(request.uri().path());
+    let start = std::time::Instant::now();
+
+    let response = next.run(request).await;
+
+    let duration = start.elapsed().as_secs_f64();
+    let status = response.status().as_u16();
+    metrics::record_http_request(&method, &path, status, duration);
+
+    response
 }
 
 // === Health Endpoints ===

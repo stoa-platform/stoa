@@ -77,14 +77,14 @@ jobs:
       platforms: linux/amd64
       use-monorepo-context: true
       build-args: |
-        VITE_BASE_DOMAIN=gostoa.dev
+        VITE_BASE_DOMAIN=${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
         VITE_ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}
-        VITE_KEYCLOAK_URL=https://auth.gostoa.dev
+        VITE_KEYCLOAK_URL=https://auth.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
         VITE_KEYCLOAK_REALM=stoa
         VITE_KEYCLOAK_CLIENT_ID=stoa-portal
-        VITE_MCP_URL=https://mcp.gostoa.dev
-        VITE_API_URL=https://api.gostoa.dev
-        VITE_CONSOLE_URL=https://console.gostoa.dev
+        VITE_MCP_URL=https://mcp.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
+        VITE_API_URL=https://api.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
+        VITE_CONSOLE_URL=https://console.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
     permissions:
       contents: read
       id-token: write
@@ -125,7 +125,7 @@ jobs:
       component: stoa-portal
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: ${{ github.event.inputs.environment || 'dev' }}
-      environment-url: https://portal.gostoa.dev
+      environment-url: https://portal.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
     permissions:
       contents: read
     secrets: inherit

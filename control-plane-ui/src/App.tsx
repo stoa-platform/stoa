@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy, memo } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { EnvironmentProvider } from './contexts/EnvironmentContext';
 import { Layout } from './components/Layout';
 import { PlatformStatus } from './components/PlatformStatus';
 import { quickLinks } from './config';
@@ -321,52 +322,54 @@ function ProtectedRoutes() {
   }
 
   return (
-    <CommandPaletteProvider>
-      <Layout>
-        {isLoading ? (
-          <PageLoader />
-        ) : (
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/tenants" element={<Tenants />} />
-              <Route path="/apis" element={<APIs />} />
-              <Route path="/ai-tools" element={<ToolCatalog />} />
-              <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
-              <Route path="/ai-tools/usage" element={<UsageDashboard />} />
-              <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
-              <Route path="/applications" element={<Applications />} />
-              <Route path="/deployments" element={<Deployments />} />
-              <Route path="/monitoring" element={<APIMonitoring />} />
-              <Route path="/errors" element={<ErrorSnapshots />} />
-              <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
-              <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
-              <Route path="/gateway" element={<GatewayStatus />} />
-              <Route path="/gateways/modes" element={<GatewayModes />} />
-              <Route path="/gateways" element={<GatewayRegistry />} />
-              <Route path="/gateway-deployments" element={<GatewayDeployments />} />
-              <Route path="/gateway-observability" element={<GatewayObservability />} />
-              <Route path="/operations" element={<OperationsDashboard />} />
-              <Route path="/my-usage" element={<TenantDashboard />} />
-              <Route path="/business" element={<BusinessDashboard />} />
-              <Route path="/admin/prospects" element={<AdminProspects />} />
-              {/* Native observability dashboards (replace iframe embeds) */}
-              <Route path="/observability" element={<PlatformMetrics />} />
-              <Route path="/observability/grafana" element={<GrafanaEmbed />} />
-              <Route path="/identity" element={<IdentityEmbed />} />
-              {/* Native request explorer (replace OpenSearch iframe) */}
-              <Route path="/logs" element={<RequestExplorer />} />
-              <Route path="/logs/opensearch" element={<LogsEmbed />} />
-              {/* CAB-1118: Skeleton pages for upcoming features */}
-              <Route path="/shadow-discovery" element={<ShadowDiscovery />} />
-              <Route path="/token-optimizer" element={<TokenOptimizer />} />
-              <Route path="/policies" element={<Policies />} />
-              <Route path="/audit-log" element={<AuditLog />} />
-            </Routes>
-          </Suspense>
-        )}
-      </Layout>
-    </CommandPaletteProvider>
+    <EnvironmentProvider>
+      <CommandPaletteProvider>
+        <Layout>
+          {isLoading ? (
+            <PageLoader />
+          ) : (
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/tenants" element={<Tenants />} />
+                <Route path="/apis" element={<APIs />} />
+                <Route path="/ai-tools" element={<ToolCatalog />} />
+                <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
+                <Route path="/ai-tools/usage" element={<UsageDashboard />} />
+                <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
+                <Route path="/applications" element={<Applications />} />
+                <Route path="/deployments" element={<Deployments />} />
+                <Route path="/monitoring" element={<APIMonitoring />} />
+                <Route path="/errors" element={<ErrorSnapshots />} />
+                <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
+                <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
+                <Route path="/gateway" element={<GatewayStatus />} />
+                <Route path="/gateways/modes" element={<GatewayModes />} />
+                <Route path="/gateways" element={<GatewayRegistry />} />
+                <Route path="/gateway-deployments" element={<GatewayDeployments />} />
+                <Route path="/gateway-observability" element={<GatewayObservability />} />
+                <Route path="/operations" element={<OperationsDashboard />} />
+                <Route path="/my-usage" element={<TenantDashboard />} />
+                <Route path="/business" element={<BusinessDashboard />} />
+                <Route path="/admin/prospects" element={<AdminProspects />} />
+                {/* Native observability dashboards (replace iframe embeds) */}
+                <Route path="/observability" element={<PlatformMetrics />} />
+                <Route path="/observability/grafana" element={<GrafanaEmbed />} />
+                <Route path="/identity" element={<IdentityEmbed />} />
+                {/* Native request explorer (replace OpenSearch iframe) */}
+                <Route path="/logs" element={<RequestExplorer />} />
+                <Route path="/logs/opensearch" element={<LogsEmbed />} />
+                {/* CAB-1118: Skeleton pages for upcoming features */}
+                <Route path="/shadow-discovery" element={<ShadowDiscovery />} />
+                <Route path="/token-optimizer" element={<TokenOptimizer />} />
+                <Route path="/policies" element={<Policies />} />
+                <Route path="/audit-log" element={<AuditLog />} />
+              </Routes>
+            </Suspense>
+          )}
+        </Layout>
+      </CommandPaletteProvider>
+    </EnvironmentProvider>
   );
 }
 

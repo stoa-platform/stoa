@@ -103,7 +103,7 @@ def map_kong_plugin_to_policy(plugin: dict) -> dict:
         cp_config = kong_config
         policy_type = plugin_name.replace("-", "_")
 
-    tags = plugin.get("tags", [])
+    tags = plugin.get("tags") or []
     stoa_id = ""
     for tag in tags:
         if tag.startswith("stoa-policy-"):
@@ -150,7 +150,7 @@ def map_app_spec_to_kong_consumer(app_spec: dict) -> dict:
 
 def map_kong_consumer_to_cp(consumer: dict) -> dict:
     """Map a Kong consumer object to CP-normalized application dict."""
-    tags = consumer.get("tags", [])
+    tags = consumer.get("tags") or []
     subscription_id = ""
     for tag in tags:
         if tag.startswith("stoa-consumer-"):
@@ -159,6 +159,7 @@ def map_kong_consumer_to_cp(consumer: dict) -> dict:
 
     return {
         "id": consumer.get("id", ""),
+        "name": consumer.get("username", ""),
         "username": consumer.get("username", ""),
         "subscription_id": subscription_id,
         "created_at": consumer.get("created_at"),

@@ -22398,7 +22398,7 @@
     },
     "/v1/snapshots": {
       "get": {
-        "description": "List error snapshots for the user's tenant.\n\nSupports filtering by:\n- Date range (start_date, end_date)\n- HTTP status code\n- Trigger type (4xx, 5xx, timeout, manual)\n- Path substring\n- Gateway source\n- Resolution status\n\nResults are paginated and sorted by timestamp (newest first).",
+        "description": "List error snapshots for the user's tenant.\n\nReturns empty list when storage is unavailable.",
         "operationId": "list_snapshots_v1_snapshots_get",
         "parameters": [
           {
@@ -22592,7 +22592,7 @@
     },
     "/v1/snapshots/filters": {
       "get": {
-        "description": "Get available filter values for the UI.\n\nReturns distinct trigger types, sources, status codes,\nand resolution statuses from recent snapshots.",
+        "description": "Get available filter values for the UI.\n\nReturns empty filters when storage is unavailable.",
         "operationId": "get_available_filters_v1_snapshots_filters_get",
         "responses": {
           "200": {
@@ -22697,7 +22697,7 @@
     },
     "/v1/snapshots/stats/summary": {
       "get": {
-        "description": "Get snapshot statistics summary.\n\nReturns counts by trigger type, status code, and resolution status.",
+        "description": "Get snapshot statistics summary.",
         "operationId": "get_snapshot_stats_summary_v1_snapshots_stats_summary_get",
         "parameters": [
           {
@@ -22775,7 +22775,7 @@
     },
     "/v1/snapshots/{snapshot_id}": {
       "delete": {
-        "description": "Delete an error snapshot.\n\nPermanently removes the snapshot from storage.\nAccess is restricted to the user's tenant.",
+        "description": "Delete an error snapshot.",
         "operationId": "delete_snapshot_v1_snapshots__snapshot_id__delete",
         "parameters": [
           {
@@ -22814,7 +22814,7 @@
         ]
       },
       "get": {
-        "description": "Get detailed error snapshot by ID.\n\nReturns the complete snapshot including:\n- Request/response data (with PII masked)\n- Routing and policy information\n- Backend state\n- Captured logs\n- Environment information\n\nAccess is restricted to the user's tenant.",
+        "description": "Get detailed error snapshot by ID.",
         "operationId": "get_snapshot_v1_snapshots__snapshot_id__get",
         "parameters": [
           {
@@ -22860,7 +22860,7 @@
         ]
       },
       "patch": {
-        "description": "Update the resolution status of an error snapshot.\n\nAllows operators to mark snapshots as investigating, resolved, or ignored.",
+        "description": "Update the resolution status of an error snapshot.",
         "operationId": "update_snapshot_resolution_v1_snapshots__snapshot_id__patch",
         "parameters": [
           {
@@ -22918,7 +22918,7 @@
     },
     "/v1/snapshots/{snapshot_id}/replay": {
       "post": {
-        "description": "Generate cURL command to replay the captured request.\n\nReturns a cURL command that can be used to replay the original\nrequest. Note that sensitive data (Authorization headers, etc.)\nwill show as [REDACTED] in the generated command.\n\nAccess is restricted to the user's tenant.",
+        "description": "Generate cURL command to replay the captured request.",
         "operationId": "generate_replay_v1_snapshots__snapshot_id__replay_post",
         "parameters": [
           {

@@ -1,0 +1,91 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: traffic-generator
+  namespace: stoa-system
+  labels:
+    app: traffic-generator
+    environment: production
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 420
+      template:
+        metadata:
+          labels:
+            app: traffic-generator
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: traffic-gen
+              image: python:3.11-slim
+              command:
+                - python
+                - /app/heartbeat.py
+              env:
+                - name: GATEWAY_URL
+                  value: "http://stoa-gateway:8080"
+                - name: API_URL
+                  value: "http://control-plane-api:8000"
+                - name: PORTAL_URL
+                  value: "http://stoa-portal:8080"
+                - name: DURATION
+                  value: "300"
+                - name: RATE
+                  value: "0.1"
+                - name: TENANTS
+                  value: "high-five,oasis,ioi"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 50m
+                  memory: 64Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: app
+                  mountPath: /app
+                  readOnly: true
+          initContainers:
+            - name: install-deps
+              image: python:3.11-slim
+              command:
+                - sh
+                - -c
+                - |
+                  pip install --no-cache-dir --target=/app requests==2.31.0 &&
+                  cp /script/heartbeat.py /app/heartbeat.py
+              volumeMounts:
+                - name: app
+                  mountPath: /app
+                - name: script
+                  mountPath: /script
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+          volumes:
+            - name: app
+              emptyDir: {}
+            - name: script
+              configMap:
+                name: traffic-generator-script

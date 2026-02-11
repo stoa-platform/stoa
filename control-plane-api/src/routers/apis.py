@@ -6,7 +6,14 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
+from ..auth import (
+    Permission,
+    User,
+    get_current_user,
+    require_permission,
+    require_tenant_access,
+    require_writable_environment,
+)
 from ..schemas.pagination import PaginatedResponse
 from ..services.git_service import git_service
 from ..services.kafka_service import kafka_service
@@ -124,7 +131,7 @@ async def get_api(tenant_id: str, api_id: str, user: User = Depends(get_current_
         raise HTTPException(status_code=500, detail="Failed to retrieve API")
 
 
-@router.post("", response_model=APIResponse)
+@router.post("", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])
 @require_permission(Permission.APIS_CREATE)
 @require_tenant_access
 async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_current_user)):
@@ -204,7 +211,7 @@ async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_cu
         raise HTTPException(status_code=500, detail=f"Failed to create API: {e!s}")
 
 
-@router.put("/{api_id}", response_model=APIResponse)
+@router.put("/{api_id}", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])
 @require_permission(Permission.APIS_UPDATE)
 @require_tenant_access
 async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = Depends(get_current_user)):
@@ -254,7 +261,7 @@ async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = D
         raise HTTPException(status_code=500, detail=f"Failed to update API: {e!s}")
 
 
-@router.delete("/{api_id}")
+@router.delete("/{api_id}", dependencies=[Depends(require_writable_environment)])
 @require_permission(Permission.APIS_DELETE)
 @require_tenant_access
 async def delete_api(tenant_id: str, api_id: str, user: User = Depends(get_current_user)):

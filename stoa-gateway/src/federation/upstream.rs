@@ -51,6 +51,7 @@ pub enum TransportType {
 }
 
 impl TransportType {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "streamable-http" | "streamable_http" | "http" => TransportType::StreamableHttp,

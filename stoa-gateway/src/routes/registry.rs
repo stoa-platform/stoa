@@ -33,6 +33,12 @@ pub struct RouteRegistry {
     routes: RwLock<HashMap<String, ApiRoute>>,
 }
 
+impl Default for RouteRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RouteRegistry {
     /// Create an empty registry.
     pub fn new() -> Self {

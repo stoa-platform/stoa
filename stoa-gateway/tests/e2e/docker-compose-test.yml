@@ -1,0 +1,80 @@
+# STOA Gateway E2E Test Environment
+#
+# 4 services: gateway (local build), wiremock (CP API mock), httpbin (upstream), keycloak (auth)
+#
+# Usage:
+#   docker compose -f tests/e2e/docker-compose-test.yml up -d
+#   ./tests/e2e/run-e2e.sh
+#   docker compose -f tests/e2e/docker-compose-test.yml down -v
+
+services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    ports:
+      - "18080:8080"
+    environment:
+      STOA_HOST: "0.0.0.0"
+      STOA_PORT: "8080"
+      STOA_GATEWAY_MODE: "edge-mcp"
+      STOA_ADMIN_API_TOKEN: "test-admin-token"
+      STOA_CONTROL_PLANE_URL: "http://wiremock:8080"
+      STOA_GATEWAY_EXTERNAL_URL: "http://localhost:18080"
+      STOA_LOG_LEVEL: "debug"
+      STOA_LOG_FORMAT: "json"
+      STOA_AUTO_REGISTER: "false"
+      STOA_NATIVE_TOOLS_ENABLED: "true"
+    depends_on:
+      wiremock:
+        condition: service_healthy
+      httpbin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+
+  wiremock:
+    image: wiremock/wiremock:3.12.1
+    ports:
+      - "18081:8080"
+    volumes:
+      - ./wiremock/mappings:/home/wiremock/mappings:ro
+      - ./wiremock/__files:/home/wiremock/__files:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/__admin/health"]
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+  httpbin:
+    image: kennethreitz/httpbin:latest
+    ports:
+      - "18082:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/get"]
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1
+    ports:
+      - "18083:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    command: start-dev
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200\\|UP'"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10

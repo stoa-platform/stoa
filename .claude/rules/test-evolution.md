@@ -1,0 +1,48 @@
+---
+description: Rules for keeping tests in sync with code changes
+globs: "**/tests/**,**/test_*,**/*.test.*,**/*.spec.*"
+---
+
+# Test Evolution — Keep Tests in Sync with Code
+
+## Trigger
+
+When a component, page, or hook is modified, verify its tests exist and are up to date.
+
+## Rules
+
+### Ratchet Rule
+Coverage thresholds in `vitest.config.ts` / `pyproject.toml` are floors, never ceilings.
+- Coverage can go UP (raise the threshold).
+- Coverage MUST NOT go DOWN. If a change lowers coverage, add tests in the same PR.
+
+### Persona Rule
+Any page or component with RBAC-conditional rendering (checks `hasPermission`, `hasRole`, or role-based UI) MUST have tests for all 4 personas:
+- `cpi-admin`, `tenant-admin`, `devops`, `viewer`
+- Use `describe.each<PersonaRole>([...])` pattern.
+
+### Helpers-First Rule
+Use shared test helpers — never duplicate mock setup inline:
+- **Console**: `control-plane-ui/src/test/helpers.tsx` (`createAuthMock`, `renderWithProviders`, mock data factories)
+- **Portal**: `portal/src/test/helpers.tsx` (same pattern)
+
+When `vi.mock('../contexts/AuthContext')` appears inline in >2 test files, refactor to use `createAuthMock` from helpers.
+
+### Mock Reset Rule
+When a test overrides a mock (e.g., `mockFn.mockRejectedValue()`), `vi.clearAllMocks()` does NOT reset implementations. Always re-initialize mocks in `beforeEach`:
+```typescript
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockGetData.mockResolvedValue(defaultData); // Re-set after clearAllMocks
+  vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+});
+```
+
+### Test Adjacency Rule
+New component = tests in the same PR. No "we'll add tests later".
+
+### Detection
+When reviewing a PR, check:
+1. Modified files in `src/pages/` → corresponding `.test.tsx` exists?
+2. New `vi.mock('AuthContext')` inline → should use `createAuthMock` from helpers?
+3. Coverage diff → threshold still met?

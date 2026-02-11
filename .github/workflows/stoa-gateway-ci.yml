@@ -32,10 +32,9 @@ on:
       environment:
         description: 'Target environment'
         required: true
-        default: 'dev'
+        default: 'staging'
         type: choice
         options:
-          - dev
           - staging
           - prod
 
@@ -67,7 +66,7 @@ jobs:
     with:
       component: stoa-gateway
       image-name: stoa-gateway
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: ${{ github.event.inputs.environment || 'staging' }}
       platforms: linux/amd64
       build-args: |
         CACHEBUST=${{ github.sha }}
@@ -86,7 +85,7 @@ jobs:
     permissions:
       contents: read
     environment:
-      name: ${{ github.event.inputs.environment || 'dev' }}
+      name: ${{ github.event.inputs.environment || 'staging' }}
       url: https://mcp.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
     steps:
       - name: Configure kubeconfig
@@ -124,7 +123,7 @@ jobs:
     uses: ./.github/workflows/reusable-notify.yml
     with:
       component: STOA Gateway
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: ${{ github.event.inputs.environment || 'staging' }}
       ci-result: ${{ needs.ci.outputs.test-result }}
       deploy-result: ${{ needs.deploy.result }}
       smoke-result: ${{ needs.smoke-test.result }}

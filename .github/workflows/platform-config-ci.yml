@@ -20,10 +20,9 @@ on:
       environment:
         description: 'Target environment'
         required: true
-        default: 'dev'
+        default: 'staging'
         type: choice
         options:
-          - dev
           - staging
           - prod
       dry_run:

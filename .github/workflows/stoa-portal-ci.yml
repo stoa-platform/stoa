@@ -34,10 +34,9 @@ on:
       environment:
         description: 'Target environment'
         required: true
-        default: 'dev'
+        default: 'staging'
         type: choice
         options:
-          - dev
           - staging
           - prod
 
@@ -73,12 +72,12 @@ jobs:
     with:
       component: portal
       image-name: portal
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: ${{ github.event.inputs.environment || 'staging' }}
       platforms: linux/amd64
       use-monorepo-context: true
       build-args: |
         VITE_BASE_DOMAIN=${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
-        VITE_ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}
+        VITE_ENVIRONMENT=${{ github.event.inputs.environment || 'staging' }}
         VITE_KEYCLOAK_URL=https://auth.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
         VITE_KEYCLOAK_REALM=stoa
         VITE_KEYCLOAK_CLIENT_ID=stoa-portal
@@ -100,7 +99,7 @@ jobs:
     permissions:
       contents: read
     environment:
-      name: ${{ github.event.inputs.environment || 'dev' }}
+      name: ${{ github.event.inputs.environment || 'staging' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
       - name: Configure kubeconfig
@@ -124,7 +123,7 @@ jobs:
     with:
       component: stoa-portal
       image-tag: ${{ needs.docker.outputs.image-tag }}
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: ${{ github.event.inputs.environment || 'staging' }}
       environment-url: https://portal.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
     permissions:
       contents: read
@@ -149,7 +148,7 @@ jobs:
     uses: ./.github/workflows/reusable-notify.yml
     with:
       component: STOA Portal
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: ${{ github.event.inputs.environment || 'staging' }}
       ci-result: ${{ needs.ci.outputs.test-result }}
       deploy-result: ${{ needs.deploy.result }}
       smoke-result: ${{ needs.smoke-test.result }}

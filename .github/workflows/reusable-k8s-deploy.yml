@@ -15,7 +15,7 @@ on:
         description: 'Target environment'
         required: false
         type: string
-        default: 'dev'
+        default: 'staging'
       namespace:
         description: 'Kubernetes namespace'
         required: false

@@ -32,10 +32,9 @@ on:
       environment:
         description: 'Target environment'
         required: true
-        default: 'dev'
+        default: 'staging'
         type: choice
         options:
-          - dev
           - staging
           - prod
 
@@ -110,7 +109,7 @@ jobs:
     with:
       component: control-plane-api
       image-name: control-plane-api
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: ${{ github.event.inputs.environment || 'staging' }}
       platforms: linux/amd64
     permissions:
       contents: read
@@ -127,7 +126,7 @@ jobs:
     with:
       component: control-plane-api
       image-tag: ${{ needs.docker.outputs.image-tag }}
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: ${{ github.event.inputs.environment || 'staging' }}
       environment-url: https://api.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
       verify-endpoint: https://api.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}/health
       expected-status: '200'
@@ -154,7 +153,7 @@ jobs:
     uses: ./.github/workflows/reusable-notify.yml
     with:
       component: Control Plane API
-      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment: ${{ github.event.inputs.environment || 'staging' }}
       ci-result: ${{ needs.ci.outputs.test-result }}
       deploy-result: ${{ needs.deploy.result }}
       smoke-result: ${{ needs.smoke-test.result }}

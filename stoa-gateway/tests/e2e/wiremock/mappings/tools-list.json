@@ -1,0 +1,28 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "/api/v1/tools"
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": [
+      {
+        "id": "tool-001",
+        "name": "get-weather",
+        "description": "Get weather for a location",
+        "endpoint": "http://httpbin:80/get",
+        "method": "GET"
+      },
+      {
+        "id": "tool-002",
+        "name": "post-data",
+        "description": "Post data to endpoint",
+        "endpoint": "http://httpbin:80/post",
+        "method": "POST"
+      }
+    ],
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

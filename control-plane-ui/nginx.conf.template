@@ -17,6 +17,7 @@ server {
     set $api_backend "${API_BACKEND_URL}";
     set $logs_backend "${LOGS_BACKEND_URL}";
     set $grafana_backend "${GRAFANA_BACKEND_URL}";
+    set $prometheus_backend "${PROMETHEUS_BACKEND_URL}";
 
     # =========================================================================
     # OpenSearch Dashboards proxy (STOA Logs — CAB-1114)
@@ -68,6 +69,22 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
+    }
+
+    # =========================================================================
+    # Prometheus proxy (Observability — native dashboards)
+    # usePrometheus hook queries /prometheus/api/v1/* (relative path)
+    # =========================================================================
+    location /prometheus/ {
+        rewrite ^/prometheus/(.*) /$1 break;
+        proxy_pass $prometheus_backend;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
     }
 
     # SPA routing - serve index.html for all unmatched routes

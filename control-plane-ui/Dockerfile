@@ -92,11 +92,12 @@ FROM nginxinc/nginx-unprivileged:alpine
 # Default backend URLs (overridable via K8s env vars)
 ENV API_BACKEND_URL=http://control-plane-api:8000 \
     LOGS_BACKEND_URL=http://opensearch-dashboards:5601 \
-    GRAFANA_BACKEND_URL=http://grafana:3000
+    GRAFANA_BACKEND_URL=http://grafana:3000 \
+    PROMETHEUS_BACKEND_URL=http://prometheus:9090
 
 # Entrypoint scripts (run in alphabetical order at container startup):
 # 15-extract-dns-resolver.envsh — exports DNS_RESOLVER from /etc/resolv.conf
-# 19-envsubst-custom.sh — runs envsubst with explicit filter (only our 4 vars)
+# 19-envsubst-custom.sh — runs envsubst with explicit filter (only our 5 vars)
 # The template is in /etc/nginx/custom-templates/ (NOT /etc/nginx/templates/)
 # so the built-in 20-envsubst-on-templates.sh has nothing to process and
 # won't clobber nginx variables like $uri, $host, $http_upgrade, etc.

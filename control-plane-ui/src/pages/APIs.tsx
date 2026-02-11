@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useEnvironment } from '../contexts/EnvironmentContext';
+import { useEnvironmentMode } from '../hooks/useEnvironmentMode';
 import { useDebounce } from '../hooks/useDebounce';
 import type { API, APICreate } from '../types';
 import yaml from 'js-yaml';
@@ -26,6 +27,7 @@ const statusColors: Record<string, string> = {
 export function APIs() {
   const { isReady } = useAuth();
   const { activeEnvironment } = useEnvironment();
+  const { canCreate, canEdit, canDelete, canDeploy, isReadOnly } = useEnvironmentMode();
   const toast = useToastActions();
   const queryClient = useQueryClient();
   const [confirm, ConfirmDialog] = useConfirm();
@@ -232,17 +234,43 @@ export function APIs() {
             Manage API definitions and deployments
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          disabled={!selectedTenant}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Create API
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            disabled={!selectedTenant}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Create API
+          </button>
+        )}
       </div>
+
+      {isReadOnly && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+          <svg
+            className="w-5 h-5 flex-shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+            />
+          </svg>
+          Production environment — read-only. Use Promote from staging to deploy changes.
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4">
@@ -444,32 +472,40 @@ export function APIs() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => handleDeploy(api, 'dev')}
-                        className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
-                        title="Deploy to DEV"
-                      >
-                        Deploy DEV
-                      </button>
-                      <button
-                        onClick={() => handleDeploy(api, 'staging')}
-                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                        title="Deploy to Staging"
-                      >
-                        Deploy STG
-                      </button>
-                      <button
-                        onClick={() => setEditingApi(api)}
-                        className="text-gray-600 hover:text-gray-800 dark:text-neutral-400 dark:hover:text-white"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(api.id, api.display_name || api.name)}
-                        className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                      >
-                        Delete
-                      </button>
+                      {canDeploy && (
+                        <>
+                          <button
+                            onClick={() => handleDeploy(api, 'dev')}
+                            className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
+                            title="Deploy to DEV"
+                          >
+                            Deploy DEV
+                          </button>
+                          <button
+                            onClick={() => handleDeploy(api, 'staging')}
+                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                            title="Deploy to Staging"
+                          >
+                            Deploy STG
+                          </button>
+                        </>
+                      )}
+                      {canEdit && (
+                        <button
+                          onClick={() => setEditingApi(api)}
+                          className="text-gray-600 hover:text-gray-800 dark:text-neutral-400 dark:hover:text-white"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={() => handleDelete(api.id, api.display_name || api.name)}
+                          className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

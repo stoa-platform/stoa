@@ -1,14 +1,38 @@
-//! MCP Metrics
+//! Gateway Metrics
 //!
-//! Prometheus metrics for MCP operations:
-//! - Tool call duration histograms
+//! Prometheus metrics for the STOA Gateway:
+//! - HTTP request counters and latency histograms (all endpoints)
+//! - MCP tool call duration histograms
 //! - SSE connection duration
-//! - Request counters
+//! - Rate limit and session gauges
 
 use once_cell::sync::Lazy;
 use prometheus::{
     register_counter_vec, register_gauge, register_histogram_vec, CounterVec, Gauge, HistogramVec,
 };
+
+// === HTTP Metrics (all requests) ===
+
+/// Counter of all HTTP requests by method, path, and status code.
+pub static HTTP_REQUESTS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_http_requests_total",
+        "Total number of HTTP requests",
+        &["method", "path", "status"]
+    )
+    .expect("Failed to create stoa_http_requests_total metric")
+});
+
+/// Histogram of HTTP request durations in seconds.
+pub static HTTP_REQUEST_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_http_request_duration_seconds",
+        "Duration of HTTP requests in seconds",
+        &["method", "path"],
+        vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+    )
+    .expect("Failed to create stoa_http_request_duration_seconds metric")
+});
 
 // === Tool Metrics ===
 
@@ -139,6 +163,64 @@ pub fn update_rate_limit_buckets(count: usize) {
     RATE_LIMIT_BUCKETS.set(count as f64);
 }
 
+// === HTTP metrics helpers ===
+
+/// Record an HTTP request with method, path, status, and duration.
+pub fn record_http_request(method: &str, path: &str, status: u16, duration_secs: f64) {
+    let status_str = status.to_string();
+    HTTP_REQUESTS_TOTAL
+        .with_label_values(&[method, path, &status_str])
+        .inc();
+    HTTP_REQUEST_DURATION
+        .with_label_values(&[method, path])
+        .observe(duration_secs);
+}
+
+/// Normalize a request path to a low-cardinality label.
+///
+/// Replaces dynamic path segments (UUIDs, numeric IDs) with placeholders
+/// to prevent label cardinality explosion in Prometheus.
+pub fn normalize_path(path: &str) -> String {
+    let segments: Vec<&str> = path.split('/').collect();
+    let normalized: Vec<String> = segments
+        .iter()
+        .map(|s| {
+            if s.is_empty() {
+                String::new()
+            } else if s.chars().all(|c| c.is_ascii_hexdigit() || c == '-') && s.len() >= 8 {
+                // UUID-like or hex ID
+                ":id".to_string()
+            } else if s.chars().all(|c| c.is_ascii_digit()) && !s.is_empty() {
+                // Numeric ID
+                ":id".to_string()
+            } else {
+                s.to_string()
+            }
+        })
+        .collect();
+    let result = normalized.join("/");
+    if result.is_empty() {
+        "/".to_string()
+    } else {
+        result
+    }
+}
+
+/// Force-initialize all Lazy metrics so they appear in /metrics output
+/// even before any traffic arrives. Call this once at startup.
+pub fn init_all_metrics() {
+    // Touch each Lazy static to force registration with the global Prometheus registry
+    Lazy::force(&HTTP_REQUESTS_TOTAL);
+    Lazy::force(&HTTP_REQUEST_DURATION);
+    Lazy::force(&MCP_TOOL_DURATION);
+    Lazy::force(&MCP_TOOL_CALLS_TOTAL);
+    Lazy::force(&MCP_SSE_CONNECTION_DURATION);
+    Lazy::force(&MCP_SSE_CONNECTIONS_ACTIVE);
+    Lazy::force(&MCP_SESSIONS_ACTIVE);
+    Lazy::force(&RATE_LIMIT_HITS);
+    Lazy::force(&RATE_LIMIT_BUCKETS);
+}
+
 /// Get the total number of MCP tool calls across all labels.
 pub fn get_requests_total() -> u64 {
     use prometheus::core::Collector;
@@ -223,5 +305,61 @@ mod tests {
         let rate = get_error_rate();
         assert!(rate > 0.0, "Expected non-zero error rate, got {}", rate);
         assert!(rate <= 1.0, "Error rate out of range: {}", rate);
+    }
+
+    #[test]
+    fn test_record_http_request() {
+        // Should not panic
+        record_http_request("GET", "/health", 200, 0.001);
+        record_http_request("POST", "/mcp/tools/call", 200, 0.05);
+        record_http_request("GET", "/mcp/tools/list", 401, 0.002);
+    }
+
+    #[test]
+    fn test_normalize_path_static() {
+        assert_eq!(normalize_path("/health"), "/health");
+        assert_eq!(normalize_path("/mcp/tools/list"), "/mcp/tools/list");
+        assert_eq!(normalize_path("/admin/apis"), "/admin/apis");
+        assert_eq!(normalize_path("/metrics"), "/metrics");
+    }
+
+    #[test]
+    fn test_normalize_path_uuid() {
+        assert_eq!(
+            normalize_path("/admin/apis/550e8400-e29b-41d4-a716-446655440000"),
+            "/admin/apis/:id"
+        );
+        assert_eq!(
+            normalize_path("/admin/quotas/abcdef12-3456-7890-abcd-ef1234567890/reset"),
+            "/admin/quotas/:id/reset"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_numeric_id() {
+        assert_eq!(normalize_path("/admin/apis/42"), "/admin/apis/:id");
+        assert_eq!(
+            normalize_path("/admin/circuit-breakers/12345/reset"),
+            "/admin/circuit-breakers/:id/reset"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_root() {
+        assert_eq!(normalize_path("/"), "/");
+    }
+
+    #[test]
+    fn test_normalize_path_preserves_short_hex() {
+        // Short segments that happen to be hex should NOT be normalized
+        // (e.g., "mcp", "sse", "v1" are fine)
+        assert_eq!(normalize_path("/mcp/v1/tools"), "/mcp/v1/tools");
+        assert_eq!(normalize_path("/mcp/sse"), "/mcp/sse");
+    }
+
+    #[test]
+    fn test_init_all_metrics_no_panic() {
+        // Should not panic — forces all Lazy statics to initialize
+        init_all_metrics();
     }
 }

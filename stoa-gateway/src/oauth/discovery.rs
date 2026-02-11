@@ -162,3 +162,97 @@ pub async fn openid_configuration(
 
     Ok(Json(oidc_config))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    fn test_state(keycloak_url: Option<&str>, gateway_url: Option<&str>) -> AppState {
+        let config = Config {
+            keycloak_url: keycloak_url.map(|s| s.to_string()),
+            keycloak_realm: Some("test-realm".to_string()),
+            gateway_external_url: gateway_url.map(|s| s.to_string()),
+            ..Config::default()
+        };
+        AppState::new(config)
+    }
+
+    #[tokio::test]
+    async fn test_protected_resource_metadata_defaults() {
+        let state = test_state(None, None);
+        let Json(meta) = protected_resource_metadata(State(state)).await;
+        assert_eq!(meta["resource"], "http://localhost:8080");
+        assert!(meta["authorization_servers"].is_array());
+        assert!(meta["scopes_supported"].is_array());
+        assert_eq!(meta["bearer_methods_supported"][0], "header");
+    }
+
+    #[tokio::test]
+    async fn test_protected_resource_metadata_custom_urls() {
+        let state = test_state(
+            Some("https://auth.gostoa.dev"),
+            Some("https://mcp.gostoa.dev"),
+        );
+        let Json(meta) = protected_resource_metadata(State(state)).await;
+        assert_eq!(meta["resource"], "https://mcp.gostoa.dev");
+        assert_eq!(
+            meta["authorization_servers"][0],
+            "https://auth.gostoa.dev/realms/test-realm"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_authorization_server_metadata_defaults() {
+        let state = test_state(None, None);
+        let Json(meta) = authorization_server_metadata(State(state)).await;
+        assert_eq!(meta["token_endpoint"], "http://localhost:8080/oauth/token");
+        assert_eq!(
+            meta["registration_endpoint"],
+            "http://localhost:8080/oauth/register"
+        );
+        assert!(meta["scopes_supported"].is_array());
+        assert!(meta["grant_types_supported"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_authorization_server_metadata_custom_urls() {
+        let state = test_state(
+            Some("https://auth.gostoa.dev"),
+            Some("https://mcp.gostoa.dev"),
+        );
+        let Json(meta) = authorization_server_metadata(State(state)).await;
+        assert_eq!(meta["issuer"], "https://auth.gostoa.dev/realms/test-realm");
+        assert_eq!(meta["token_endpoint"], "https://mcp.gostoa.dev/oauth/token");
+        assert_eq!(
+            meta["authorization_endpoint"],
+            "https://auth.gostoa.dev/realms/test-realm/protocol/openid-connect/auth"
+        );
+        assert_eq!(
+            meta["jwks_uri"],
+            "https://auth.gostoa.dev/realms/test-realm/protocol/openid-connect/certs"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_authorization_server_metadata_has_required_fields() {
+        let state = test_state(Some("https://kc.test"), Some("https://gw.test"));
+        let Json(meta) = authorization_server_metadata(State(state)).await;
+        // RFC 8414 required fields
+        assert!(meta.get("issuer").is_some());
+        assert!(meta.get("authorization_endpoint").is_some());
+        assert!(meta.get("token_endpoint").is_some());
+        assert!(meta.get("response_types_supported").is_some());
+        assert_eq!(meta["response_types_supported"][0], "code");
+        assert_eq!(meta["code_challenge_methods_supported"][0], "S256");
+        assert_eq!(meta["subject_types_supported"][0], "public");
+    }
+
+    #[tokio::test]
+    async fn test_openid_configuration_no_keycloak_returns_503() {
+        let state = test_state(None, None);
+        let result = openid_configuration(State(state)).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+}

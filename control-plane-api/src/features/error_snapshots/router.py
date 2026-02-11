@@ -1,6 +1,8 @@
 """API endpoints for error snapshots.
 
 CAB-397: CRUD operations for viewing and managing error snapshots.
+Routes with fixed paths (/stats, /filters) MUST be defined BEFORE
+/{snapshot_id} to avoid path parameter capture.
 """
 
 from datetime import datetime
@@ -12,7 +14,10 @@ from ...auth.dependencies import User, get_current_user
 from .models import (
     ErrorSnapshot,
     ReplayResponse,
+    ResolutionStatus,
+    ResolutionUpdate,
     SnapshotFilters,
+    SnapshotFiltersResponse,
     SnapshotListResponse,
     SnapshotTrigger,
 )
@@ -40,6 +45,9 @@ def get_snapshot_service() -> SnapshotService:
     return _snapshot_service
 
 
+# ── Fixed-path routes (MUST come before /{snapshot_id}) ──────────────
+
+
 @router.get("", response_model=SnapshotListResponse)
 async def list_snapshots(
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
@@ -61,6 +69,12 @@ async def list_snapshots(
     path_contains: Annotated[
         str | None, Query(description="Filter: path contains string")
     ] = None,
+    source: Annotated[
+        str | None, Query(description="Filter: gateway source")
+    ] = None,
+    resolution_status: Annotated[
+        ResolutionStatus | None, Query(description="Filter: resolution status")
+    ] = None,
     user: User = Depends(get_current_user),
     service: SnapshotService = Depends(get_snapshot_service),
 ) -> SnapshotListResponse:
@@ -71,10 +85,11 @@ async def list_snapshots(
     - HTTP status code
     - Trigger type (4xx, 5xx, timeout, manual)
     - Path substring
+    - Gateway source
+    - Resolution status
 
     Results are paginated and sorted by timestamp (newest first).
     """
-    # Use user's tenant_id for isolation
     tenant_id = user.tenant_id or "unknown"
 
     filters = SnapshotFilters(
@@ -83,6 +98,8 @@ async def list_snapshots(
         status_code=status_code,
         trigger=trigger,
         path_contains=path_contains,
+        source=source,
+        resolution_status=resolution_status,
     )
 
     return await service.list(
@@ -91,6 +108,80 @@ async def list_snapshots(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/stats/summary")
+async def get_snapshot_stats_summary(
+    start_date: Annotated[
+        datetime | None, Query(description="Start date for stats")
+    ] = None,
+    end_date: Annotated[
+        datetime | None, Query(description="End date for stats")
+    ] = None,
+    user: User = Depends(get_current_user),
+    service: SnapshotService = Depends(get_snapshot_service),
+) -> dict:
+    """Get snapshot statistics summary.
+
+    Returns counts by trigger type, status code, and resolution status.
+    """
+    return await _compute_stats(start_date, end_date, user, service)
+
+
+@router.get("/stats")
+async def get_snapshot_stats(
+    start_date: Annotated[
+        datetime | None, Query(description="Start date for stats")
+    ] = None,
+    end_date: Annotated[
+        datetime | None, Query(description="End date for stats")
+    ] = None,
+    user: User = Depends(get_current_user),
+    service: SnapshotService = Depends(get_snapshot_service),
+) -> dict:
+    """Get snapshot statistics (alias for /stats/summary)."""
+    return await _compute_stats(start_date, end_date, user, service)
+
+
+@router.get("/filters", response_model=SnapshotFiltersResponse)
+async def get_available_filters(
+    user: User = Depends(get_current_user),
+    service: SnapshotService = Depends(get_snapshot_service),
+) -> SnapshotFiltersResponse:
+    """Get available filter values for the UI.
+
+    Returns distinct trigger types, sources, status codes,
+    and resolution statuses from recent snapshots.
+    """
+    tenant_id = user.tenant_id or "unknown"
+
+    filters = SnapshotFilters()
+    result = await service.list(tenant_id, filters, page=1, page_size=1000)
+
+    triggers: set[str] = set()
+    sources: set[str] = set()
+    status_codes: set[int] = set()
+    resolution_statuses: set[str] = set()
+
+    for item in result.items:
+        triggers.add(item.trigger.value)
+        sources.add(item.source)
+        status_codes.add(item.status)
+        resolution_statuses.add(item.resolution_status.value)
+
+    # Always include all known resolution statuses
+    for rs in ResolutionStatus:
+        resolution_statuses.add(rs.value)
+
+    return SnapshotFiltersResponse(
+        triggers=sorted(triggers),
+        sources=sorted(sources),
+        status_codes=sorted(status_codes),
+        resolution_statuses=sorted(resolution_statuses),
+    )
+
+
+# ── Parameterized routes ──────────────────────────────────────────────
 
 
 @router.get("/{snapshot_id}", response_model=ErrorSnapshot)
@@ -119,6 +210,36 @@ async def get_snapshot(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Snapshot {snapshot_id} not found",
         )
+
+    return snapshot
+
+
+@router.patch("/{snapshot_id}", response_model=ErrorSnapshot)
+async def update_snapshot_resolution(
+    snapshot_id: str,
+    body: ResolutionUpdate,
+    user: User = Depends(get_current_user),
+    service: SnapshotService = Depends(get_snapshot_service),
+) -> ErrorSnapshot:
+    """Update the resolution status of an error snapshot.
+
+    Allows operators to mark snapshots as investigating, resolved, or ignored.
+    """
+    tenant_id = user.tenant_id or "unknown"
+
+    snapshot = await service.get(snapshot_id, tenant_id)
+
+    if not snapshot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Snapshot {snapshot_id} not found",
+        )
+
+    snapshot.resolution_status = body.resolution_status
+    if body.resolution_notes is not None:
+        snapshot.resolution_notes = body.resolution_notes
+
+    await service.save(snapshot)
 
     return snapshot
 
@@ -182,42 +303,45 @@ async def generate_replay(
     )
 
 
-@router.get("/stats/summary")
-async def get_snapshot_stats(
-    start_date: Annotated[
-        datetime | None, Query(description="Start date for stats")
-    ] = None,
-    end_date: Annotated[
-        datetime | None, Query(description="End date for stats")
-    ] = None,
-    user: User = Depends(get_current_user),
-    service: SnapshotService = Depends(get_snapshot_service),
-) -> dict:
-    """Get snapshot statistics summary.
+# ── Helpers ───────────────────────────────────────────────────────────
 
-    Returns counts by trigger type and status code.
-    """
+
+async def _compute_stats(
+    start_date: datetime | None,
+    end_date: datetime | None,
+    user: User,
+    service: SnapshotService,
+) -> dict:
+    """Shared stats computation for /stats and /stats/summary."""
     tenant_id = user.tenant_id or "unknown"
 
-    # Get all snapshots for the period
     filters = SnapshotFilters(start_date=start_date, end_date=end_date)
     result = await service.list(tenant_id, filters, page=1, page_size=1000)
 
-    # Calculate stats
     by_trigger: dict[str, int] = {}
     by_status: dict[int, int] = {}
+    by_resolution: dict[str, int] = {
+        "unresolved": 0,
+        "investigating": 0,
+        "resolved": 0,
+        "ignored": 0,
+    }
 
     for item in result.items:
-        trigger = item.trigger.value
-        by_trigger[trigger] = by_trigger.get(trigger, 0) + 1
+        trigger_val = item.trigger.value
+        by_trigger[trigger_val] = by_trigger.get(trigger_val, 0) + 1
 
-        status = item.status
-        by_status[status] = by_status.get(status, 0) + 1
+        status_val = item.status
+        by_status[status_val] = by_status.get(status_val, 0) + 1
+
+        res_val = item.resolution_status.value
+        by_resolution[res_val] = by_resolution.get(res_val, 0) + 1
 
     return {
         "total": result.total,
         "by_trigger": by_trigger,
         "by_status_code": by_status,
+        "resolution_stats": by_resolution,
         "period": {
             "start": start_date.isoformat() if start_date else None,
             "end": end_date.isoformat() if end_date else None,

@@ -270,6 +270,8 @@ class SnapshotStorage:
                         method=snapshot.request.method,
                         path=snapshot.request.path,
                         duration_ms=snapshot.response.duration_ms,
+                        source=snapshot.source,
+                        resolution_status=snapshot.resolution_status,
                     )
                 )
 

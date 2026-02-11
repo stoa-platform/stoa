@@ -288,182 +288,114 @@ export interface ToolSubscriptionCreate {
   usageLimit?: number;
 }
 
-// MCP Error Snapshot types (Phase 4)
-export type MCPErrorType =
-  | 'server_timeout'
-  | 'server_unavailable'
-  | 'server_rate_limited'
-  | 'server_auth_failure'
-  | 'server_internal_error'
-  | 'tool_not_found'
-  | 'tool_execution_error'
-  | 'tool_validation_error'
-  | 'tool_timeout'
-  | 'llm_context_exceeded'
-  | 'llm_content_filtered'
-  | 'llm_quota_exceeded'
-  | 'llm_rate_limited'
-  | 'llm_invalid_request'
-  | 'policy_denied'
-  | 'policy_error'
-  | 'unknown';
-
+// Error Snapshot types — gateway-agnostic (matches CP API /v1/snapshots)
+export type SnapshotTrigger = '4xx' | '5xx' | 'timeout' | 'manual';
 export type SnapshotResolutionStatus = 'unresolved' | 'investigating' | 'resolved' | 'ignored';
 
-export interface MCPServerContext {
-  name: string;
-  url?: string;
-  version?: string;
-  tools_available: string[];
-  health_at_error?: string;
-  latency_p99_ms?: number;
-  error_rate_percent?: number;
-}
-
-export interface ToolInvocation {
-  tool_name: string;
-  input_params?: Record<string, unknown>;
-  input_params_masked?: string[];
-  started_at?: string;
-  duration_ms?: number;
-  error_type?: string;
-  error_message?: string;
-  error_retryable?: boolean;
-  backend_status_code?: number;
-  backend_response_preview?: string;
-}
-
-export interface LLMContext {
-  provider: string;
-  model: string;
-  tokens_input: number;
-  tokens_output: number;
-  estimated_cost_usd: number;
-  latency_ms: number;
-  error_code?: string;
-  prompt_length?: number;
-  prompt_hash?: string;
-}
-
-export interface RetryContext {
-  attempts: number;
-  max_attempts: number;
-  strategy: string;
-  delays_ms?: number[];
-  fallback_attempted: boolean;
-  fallback_server?: string;
-  fallback_result?: string;
-}
-
-export interface RequestContext {
+export interface ErrorSnapshotSummary {
+  id: string;
+  timestamp: string;
+  tenant_id: string;
+  trigger: SnapshotTrigger;
+  status: number;
   method: string;
   path: string;
-  query_params?: Record<string, string>;
-  headers?: Record<string, string>;
+  duration_ms: number;
+  source: string;
+  resolution_status: SnapshotResolutionStatus;
+}
+
+export interface SnapshotRequest {
+  method: string;
+  path: string;
+  headers: Record<string, string>;
+  body?: unknown;
+  query_params: Record<string, string>;
   client_ip?: string;
   user_agent?: string;
 }
 
-export interface UserContext {
-  user_id?: string;
-  tenant_id?: string;
-  client_id?: string;
-  roles?: string[];
-  scopes?: string[];
+export interface SnapshotResponse {
+  status: number;
+  headers: Record<string, string>;
+  body?: unknown;
+  duration_ms: number;
 }
 
-export interface MCPErrorSnapshotSummary {
-  id: string;
-  timestamp: string;
-  error_type: MCPErrorType;
-  error_message: string;
-  response_status: number;
-  mcp_server_name?: string;
-  tool_name?: string;
-  total_cost_usd: number;
-  tokens_wasted: number;
-  resolution_status: SnapshotResolutionStatus;
+export interface SnapshotRouting {
+  api_name?: string;
+  api_version?: string;
+  route?: string;
+  backend_url?: string;
 }
 
-export interface MCPErrorSnapshot {
+export interface SnapshotBackendState {
+  health: string;
+  last_success?: string;
+  error_rate_1m?: number;
+  p99_latency_ms?: number;
+}
+
+export interface SnapshotEnvironment {
+  pod?: string;
+  node?: string;
+  namespace?: string;
+  memory_percent?: number;
+  cpu_percent?: number;
+}
+
+export interface ErrorSnapshotDetail {
   id: string;
   timestamp: string;
-  error_type: MCPErrorType;
-  error_message: string;
-  error_code?: string;
-  response_status: number;
-  request_method?: string;
-  request_path?: string;
-  user_id?: string;
-  tenant_id?: string;
-  mcp_server_name?: string;
-  tool_name?: string;
-  llm_provider?: string;
-  llm_model?: string;
-  llm_tokens_input?: number;
-  llm_tokens_output?: number;
-  total_cost_usd: number;
-  tokens_wasted: number;
-  retry_attempts: number;
-  retry_max_attempts: number;
+  tenant_id: string;
+  trigger: SnapshotTrigger;
+  request: SnapshotRequest;
+  response: SnapshotResponse;
+  routing: SnapshotRouting;
+  backend_state: SnapshotBackendState;
   trace_id?: string;
-  conversation_id?: string;
+  span_id?: string;
+  environment: SnapshotEnvironment;
+  masked_fields: string[];
+  source: string;
   resolution_status: SnapshotResolutionStatus;
   resolution_notes?: string;
-  resolved_at?: string;
-  resolved_by?: string;
-  snapshot: {
-    request?: RequestContext;
-    user?: UserContext;
-    mcp_server?: MCPServerContext;
-    tool_invocation?: ToolInvocation;
-    llm_context?: LLMContext;
-    retry_context?: RetryContext;
-    masked_fields?: string[];
-    [key: string]: unknown;
-  };
 }
 
-export interface MCPErrorSnapshotStats {
+export interface ErrorSnapshotStats {
   total: number;
-  by_error_type: Record<string, number>;
-  by_status: Record<number, number>;
-  by_server: Record<string, number>;
-  total_cost_usd: number;
-  total_tokens_wasted: number;
-  avg_cost_usd: number;
+  by_trigger: Record<string, number>;
+  by_status_code: Record<number, number>;
   resolution_stats: {
     unresolved: number;
     investigating: number;
     resolved: number;
     ignored: number;
   };
+  period: { start?: string; end?: string };
 }
 
-export interface MCPErrorSnapshotFilters {
-  error_types?: MCPErrorType[];
-  status_codes?: number[];
-  server_names?: string[];
-  tool_names?: string[];
-  resolution_status?: SnapshotResolutionStatus[];
+export interface ErrorSnapshotFilters {
+  trigger?: SnapshotTrigger;
+  status_code?: number;
+  source?: string;
+  resolution_status?: SnapshotResolutionStatus;
   start_date?: string;
   end_date?: string;
-  min_cost_usd?: number;
-  search?: string;
+  path_contains?: string;
 }
 
-export interface MCPErrorSnapshotListResponse {
-  snapshots: MCPErrorSnapshotSummary[];
+export interface ErrorSnapshotListResponse {
+  items: ErrorSnapshotSummary[];
   total: number;
   page: number;
   page_size: number;
-  has_next: boolean;
 }
 
 export interface SnapshotFiltersResponse {
-  error_types: string[];
-  servers: string[];
-  tools: string[];
+  triggers: string[];
+  sources: string[];
+  status_codes: number[];
   resolution_statuses: string[];
 }
 

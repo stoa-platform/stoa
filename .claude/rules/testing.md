@@ -26,5 +26,16 @@ globs: "**/tests/**,**/test_*,**/*.test.*,**/*.spec.*,e2e/**"
 - Auth: persona-based storage states in `fixtures/.auth/`
 - Run: `npx playwright test` (from `e2e/`)
 
+## Shared Test Helpers (React)
+
+Both Console and Portal have shared helpers for persona-based testing:
+- **Console**: `control-plane-ui/src/test/helpers.tsx`
+- **Portal**: `portal/src/test/helpers.tsx`
+
+Key exports: `createAuthMock(role)`, `renderWithProviders(ui, options?)`, mock data factories.
+4 personas: `cpi-admin`, `tenant-admin`, `devops`, `viewer`.
+
+See `test-evolution.md` for rules on keeping tests in sync with code changes.
+
 ## Rust (cargo test)
 - Run: `cargo test` (from `stoa-gateway/`)

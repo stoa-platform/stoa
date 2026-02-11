@@ -2,7 +2,7 @@
 
 > **Date**: 24 February 2026 | **Duration**: ~20 min
 > **Presenter**: Christophe Aboulicam | **Platform**: STOA
-> **Setup**: Docker Compose local (17 services) or EKS production
+> **Setup**: OVH Production (`*.gostoa.dev`) or Docker Compose local
 
 ---
 
@@ -21,37 +21,37 @@
 
 ---
 
-## Pre-Demo Setup
+## Pre-Demo Setup (Production)
 
 ```bash
-# Start the platform (with federation for Act 6)
-cd deploy/docker-compose
-docker compose --profile federation up -d
+# Verify OVH cluster is ready
+export KUBECONFIG=~/.kube/config-stoa-ovh
+kubectl get pods -n stoa-system
+kubectl get pods -n monitoring
+kubectl get pods -n opensearch
+kubectl get ingress -A
+kubectl get certificates -A | grep -v True  # all should be True
 
-# Wait for all services to be healthy (~60s)
-../../scripts/demo/check-health.sh --wait --federation
-
-# Seed demo data (auto-handles: Keycloak SSL, LDAP users, APIs, OpenSearch errors, federation tests)
-CONTROL_PLANE_URL=http://localhost:8000 \
-KEYCLOAK_URL=http://localhost:8080 \
-ANORAK_USER=halliday \
-ANORAK_PASSWORD=readyplayerone \
-SEED_TENANT=oasis \
-  ../../scripts/demo/seed-all.sh --federation
-
-# Expected: 7/7 steps PASS, 9/9 federation isolation tests PASS
+# Verify all HTTPS endpoints
+for svc in console portal api gateway mcp auth; do
+  echo -n "${svc}.gostoa.dev: "
+  curl -sI "https://${svc}.gostoa.dev" -o /dev/null -w "%{http_code}"
+  echo ""
+done
+curl -sI https://console.gostoa.dev/grafana -o /dev/null -w "grafana: %{http_code}\n"
+curl -sI https://opensearch.gostoa.dev -o /dev/null -w "opensearch: %{http_code}\n"
 ```
 
 ### Browser Tabs (pre-authenticated)
 
 | Tab | URL | User | Purpose |
 |-----|-----|------|---------|
-| 1 | http://localhost | halliday | Console (Platform Admin) |
-| 2 | http://localhost/portal | (not logged in) | Portal (developer flow) |
+| 1 | https://console.gostoa.dev | halliday | Console (Platform Admin) |
+| 2 | https://portal.gostoa.dev | (not logged in) | Portal (developer flow) |
 | 3 | Terminal | — | Gateway + curl commands |
-| 4 | http://localhost/grafana | admin | Grafana dashboards |
-| 5 | http://localhost/logs | admin | OpenSearch Dashboards |
-| 6 | http://localhost/auth | admin | Keycloak admin |
+| 4 | https://console.gostoa.dev/grafana | admin | Grafana dashboards |
+| 5 | https://opensearch.gostoa.dev | admin | OpenSearch Dashboards |
+| 6 | https://auth.gostoa.dev | admin | Keycloak admin |
 
 ---
 
@@ -138,8 +138,8 @@ SEED_TENANT=oasis \
 ### 3.1 — Health Check (15s)
 
 ```bash
-curl http://localhost/gateway/health
-# → {"status":"healthy","mode":"edge-mcp","version":"0.1.0"}
+curl https://gateway.gostoa.dev/health
+# → OK
 ```
 
 > "Gateway healthy. Rust. Sub-millisecond overhead."
@@ -148,7 +148,7 @@ curl http://localhost/gateway/health
 
 ```bash
 # Use the token from Act 2 — call petstore via MCP protocol
-curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/invoke \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
@@ -163,7 +163,7 @@ curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
 # Rapid-fire requests to trigger rate limit
 for i in $(seq 1 20); do
   curl -s -o /dev/null -w "%{http_code} " \
-    -X POST http://localhost:8081/mcp/v1/tools/invoke \
+    -X POST https://mcp.gostoa.dev/mcp/v1/tools/invoke \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
     -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
@@ -177,7 +177,7 @@ done
 
 ## Act 4 — Grafana: Live Dashboards (2 min)
 
-**[Tab 4: Grafana — http://localhost/grafana]**
+**[Tab 4: Grafana — https://console.gostoa.dev/grafana]**
 
 > "Every request we just made is already visible in real-time."
 
@@ -233,7 +233,7 @@ done
 
 ## Act 6 — Keycloak: Federation Cross-Tenant (2 min)
 
-**[Tab 6: Keycloak Admin — http://localhost/auth]**
+**[Tab 6: Keycloak Admin — https://auth.gostoa.dev]**
 
 > "Now the enterprise killer feature: identity federation."
 
@@ -251,22 +251,22 @@ done
 
 ```bash
 # Get token from org-alpha (confidential client)
-TOKEN_A=$(curl -s -X POST "http://localhost:8080/realms/demo-org-alpha/protocol/openid-connect/token" \
+TOKEN_A=$(curl -s -X POST "https://auth.gostoa.dev/realms/demo-org-alpha/protocol/openid-connect/token" \
   -d "grant_type=password&client_id=federation-demo&client_secret=alpha-demo-secret&username=demo-alpha&password=demo" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Decode to show stoa_realm claim
 echo $TOKEN_A | python3 -c "import sys,json,base64; t=sys.stdin.read().strip().split('.')[1]; t+='='*(4-len(t)%4); d=json.loads(base64.urlsafe_b64decode(t)); print(json.dumps({k:d[k] for k in ['iss','stoa_realm','preferred_username']}, indent=2))"
-# → {"iss": "http://localhost/auth/realms/demo-org-alpha", "stoa_realm": "demo-org-alpha", "preferred_username": "demo-alpha"}
+# → {"iss": "https://auth.gostoa.dev/realms/demo-org-alpha", "stoa_realm": "demo-org-alpha", "preferred_username": "demo-alpha"}
 
 # Get token from org-beta (different org, different secret)
-TOKEN_B=$(curl -s -X POST "http://localhost:8080/realms/demo-org-beta/protocol/openid-connect/token" \
+TOKEN_B=$(curl -s -X POST "https://auth.gostoa.dev/realms/demo-org-beta/protocol/openid-connect/token" \
   -d "grant_type=password&client_id=federation-demo&client_secret=beta-demo-secret&username=demo-beta&password=demo" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Compare issuers — different realms, different tokens, different trust boundaries
 echo $TOKEN_B | python3 -c "import sys,json,base64; t=sys.stdin.read().strip().split('.')[1]; t+='='*(4-len(t)%4); d=json.loads(base64.urlsafe_b64decode(t)); print(json.dumps({k:d[k] for k in ['iss','stoa_realm','preferred_username']}, indent=2))"
-# → {"iss": "http://localhost/auth/realms/demo-org-beta", "stoa_realm": "demo-org-beta", "preferred_username": "demo-beta"}
+# → {"iss": "https://auth.gostoa.dev/realms/demo-org-beta", "stoa_realm": "demo-org-beta", "preferred_username": "demo-beta"}
 ```
 
 > "Zero trust. Two organizations, two realms, two issuers. A token from Organization Alpha cannot impersonate Organization Beta. Enforced cryptographically — different signing keys, different trust boundaries."
@@ -283,7 +283,7 @@ echo $TOKEN_B | python3 -c "import sys,json,base64; t=sys.stdin.read().strip().s
 
 ```bash
 # List available MCP tools (each published API = one MCP tool)
-curl -s http://localhost:8081/mcp/v1/tools | jq '.[].name'
+curl -s https://mcp.gostoa.dev/mcp/v1/tools | jq '.[].name'
 # → "petstore"
 # → "account-management"
 # → "payments"
@@ -297,14 +297,14 @@ curl -s http://localhost:8081/mcp/v1/tools | jq '.[].name'
 
 ```bash
 # An AI agent invokes the Petstore API tool
-curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/invoke \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
 # → {"content": [{"type": "text", "text": "{...httpbin echo...}"}]}
 
 # Now the Payments API — same pattern, different tool
-curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/invoke \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"tool": "payments", "arguments": {"action": "get-status"}}'

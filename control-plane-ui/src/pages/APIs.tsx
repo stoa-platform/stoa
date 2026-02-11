@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useEnvironment } from '../contexts/EnvironmentContext';
 import { useDebounce } from '../hooks/useDebounce';
 import type { API, APICreate } from '../types';
 import yaml from 'js-yaml';
@@ -24,6 +25,7 @@ const statusColors: Record<string, string> = {
 
 export function APIs() {
   const { isReady } = useAuth();
+  const { activeEnvironment } = useEnvironment();
   const toast = useToastActions();
   const queryClient = useQueryClient();
   const [confirm, ConfirmDialog] = useConfirm();
@@ -65,8 +67,8 @@ export function APIs() {
     isLoading: apisLoading,
     error: apisError,
   } = useQuery({
-    queryKey: ['apis', selectedTenant],
-    queryFn: () => apiService.getApis(selectedTenant),
+    queryKey: ['apis', selectedTenant, activeEnvironment],
+    queryFn: () => apiService.getApis(selectedTenant, activeEnvironment),
     enabled: !!selectedTenant,
   });
 
@@ -112,8 +114,8 @@ export function APIs() {
   const totalPages = Math.ceil(filteredApis.length / PAGE_SIZE);
 
   const invalidateApis = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['apis', selectedTenant] });
-  }, [queryClient, selectedTenant]);
+    queryClient.invalidateQueries({ queryKey: ['apis', selectedTenant, activeEnvironment] });
+  }, [queryClient, selectedTenant, activeEnvironment]);
 
   // Memoized handlers to prevent unnecessary re-renders
   const handleCreate = useCallback(

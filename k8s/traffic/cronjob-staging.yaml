@@ -34,11 +34,11 @@ spec:
                 - /app/heartbeat.py
               env:
                 - name: GATEWAY_URL
-                  value: "http://stoa-gateway:8080"
+                  value: "http://stoa-gateway.stoa-system.svc:80"
                 - name: API_URL
-                  value: "http://control-plane-api:8000"
+                  value: "http://stoa-control-plane-api.stoa-system.svc:80"
                 - name: PORTAL_URL
-                  value: "http://stoa-portal:8080"
+                  value: "http://stoa-portal.stoa-system.svc:80"
                 - name: DURATION
                   value: "600"
                 - name: RATE

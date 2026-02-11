@@ -144,16 +144,18 @@ curl http://localhost/gateway/health
 
 > "Gateway healthy. Rust. Sub-millisecond overhead."
 
-### 3.2 — Authenticated API Call (45s)
+### 3.2 — Authenticated MCP Call (45s)
 
 ```bash
-# Use the token from Act 2
-curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8081/v1/proxy/payments/status
-# → 200 OK with response
+# Use the token from Act 2 — call petstore via MCP protocol
+curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
+# → {"content": [{"type": "text", "text": "{...httpbin response...}"}]}
 ```
 
-> "JWT validated, request proxied to backend, response in under 10ms. Try that with your ESB."
+> "JWT validated, MCP tool invoked, backend called, response in under 50ms. One unified protocol for humans AND AI agents."
 
 ### 3.3 — Rate Limiting Demo (1 min)
 
@@ -161,8 +163,10 @@ curl -H "Authorization: Bearer $TOKEN" \
 # Rapid-fire requests to trigger rate limit
 for i in $(seq 1 20); do
   curl -s -o /dev/null -w "%{http_code} " \
+    -X POST http://localhost:8081/mcp/v1/tools/invoke \
+    -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    http://localhost:8081/v1/proxy/payments/status
+    -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
 done
 # → 200 200 200 ... 429 429
 ```
@@ -292,12 +296,19 @@ curl -s http://localhost:8081/mcp/v1/tools | jq '.[].name'
 ### 7.2 — AI Agent Call (2 min)
 
 ```bash
-# An AI agent invokes the Payments API tool
+# An AI agent invokes the Petstore API tool
+curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
+# → {"content": [{"type": "text", "text": "{...httpbin echo...}"}]}
+
+# Now the Payments API — same pattern, different tool
 curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"tool": "payments", "arguments": {"action": "get-status"}}'
-# → {"content": [{"type": "text", "text": "{...}"}]}
+# → {"content": [{"type": "text", "text": "{...httpbin echo...}"}]}
 ```
 
 > "A Claude agent, a GPT agent, any MCP-compatible agent — they can now call your enterprise APIs. With authentication, rate limiting, monitoring, and audit trail. All the governance you need, none of the friction."

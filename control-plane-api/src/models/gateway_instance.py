@@ -3,6 +3,7 @@
 Represents a registered gateway (webMethods, Kong, Apigee, STOA, etc.)
 that the Control Plane can pilot via the Adapter Pattern (ADR-035).
 """
+
 import enum
 import uuid
 
@@ -15,10 +16,12 @@ from src.database import Base
 
 class GatewayType(enum.StrEnum):
     """Supported gateway types — each has a corresponding adapter."""
+
     WEBMETHODS = "webmethods"
     KONG = "kong"
     APIGEE = "apigee"
     AWS_APIGATEWAY = "aws_apigateway"
+    GRAVITEE = "gravitee"
     STOA = "stoa"
     # STOA Gateway modes (ADR-024) — for filtering/grouping
     STOA_EDGE_MCP = "stoa_edge_mcp"
@@ -29,6 +32,7 @@ class GatewayType(enum.StrEnum):
 
 class GatewayInstanceStatus(enum.StrEnum):
     """Health status of a gateway instance."""
+
     ONLINE = "online"
     OFFLINE = "offline"
     DEGRADED = "degraded"
@@ -41,13 +45,14 @@ class GatewayInstance(Base):
     Each instance represents a specific gateway deployment (e.g. "webmethods-prod")
     with its connection configuration and health status.
     """
+
     __tablename__ = "gateway_instances"
 
     # Primary key
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Identity
-    name = Column(String(255), unique=True, nullable=False)        # "webmethods-prod"
+    name = Column(String(255), unique=True, nullable=False)  # "webmethods-prod"
     display_name = Column(String(255), nullable=False)
     gateway_type = Column(
         SQLEnum(
@@ -57,11 +62,11 @@ class GatewayInstance(Base):
         ),
         nullable=False,
     )
-    environment = Column(String(50), nullable=False, index=True)   # dev / staging / prod
-    tenant_id = Column(String(255), nullable=True, index=True)     # null = platform-wide
+    environment = Column(String(50), nullable=False, index=True)  # dev / staging / prod
+    tenant_id = Column(String(255), nullable=True, index=True)  # null = platform-wide
 
     # Connection configuration
-    base_url = Column(String(500), nullable=False)                 # Admin API URL
+    base_url = Column(String(500), nullable=False)  # Admin API URL
     auth_config = Column(JSONB, nullable=False, default=dict)
     # auth_config examples:
     #   {"type": "oidc_proxy", "proxy_url": "https://apis.gostoa.dev/..."}
@@ -90,7 +95,7 @@ class GatewayInstance(Base):
     mode = Column(String(50), nullable=True, index=True)  # edge-mcp, sidecar, proxy, shadow
 
     # Metadata
-    version = Column(String(50), nullable=True)     # Gateway software version
+    version = Column(String(50), nullable=True)  # Gateway software version
     tags = Column(JSONB, nullable=False, default=list)
 
     # Timestamps
@@ -102,9 +107,7 @@ class GatewayInstance(Base):
         nullable=False,
     )
 
-    __table_args__ = (
-        Index('ix_gw_instances_type_env', 'gateway_type', 'environment'),
-    )
+    __table_args__ = (Index("ix_gw_instances_type_env", "gateway_type", "environment"),)
 
     def __repr__(self) -> str:
         return f"<GatewayInstance {self.name} type={self.gateway_type} env={self.environment}>"

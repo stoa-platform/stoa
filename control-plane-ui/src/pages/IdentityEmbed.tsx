@@ -1,58 +1,43 @@
-import { useState } from 'react';
+import { ExternalLink, Shield, User, Key, Clock, Building2 } from 'lucide-react';
 import { config } from '../config';
-import { ExternalLink, RefreshCw, Maximize2, Minimize2, Shield } from 'lucide-react';
-import { useServiceHealth } from '../hooks/useServiceHealth';
-import { ServiceUnavailable } from '../components/ServiceUnavailable';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
- * IdentityEmbed - Embedded Keycloak account console view
- * Part of CAB-1108 Phase 3: Console Integration via reverse proxy
+ * IdentityEmbed - Native identity management page
  *
- * The nginx reverse proxy strips X-Frame-Options from Keycloak responses,
- * allowing seamless iframe embedding within the Console.
+ * Displays user profile, roles, and security info from the auth context.
+ * Links to Keycloak Account Console for advanced management (password change, sessions, etc.)
+ *
+ * Note: Previously used iframe embedding (CAB-1108), replaced with native view
+ * because cross-origin cookie restrictions prevent Keycloak Account Console
+ * from authenticating in an iframe in production.
  */
 export function IdentityEmbed() {
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [key, setKey] = useState(0);
-
+  const { user, hasRole } = useAuth();
   const keycloakAccountUrl = `${config.keycloak.url}/realms/${config.keycloak.realm}/account`;
-  const { status: serviceStatus, retry: retryHealth } = useServiceHealth(keycloakAccountUrl);
 
-  const handleIframeLoad = () => {
-    setIsLoading(false);
-  };
-
-  const handleRefresh = () => {
-    setIsLoading(true);
-    setKey((prev) => prev + 1);
-  };
-
-  const handleOpenExternal = () => {
+  const handleOpenKeycloak = () => {
     window.open(keycloakAccountUrl, '_blank', 'noopener,noreferrer');
   };
 
-  if (serviceStatus === 'unavailable') {
-    return (
-      <ServiceUnavailable
-        serviceName="Keycloak"
-        description="The identity provider is not reachable. It may not be deployed or is temporarily unavailable."
-        icon={Shield}
-        externalUrl={keycloakAccountUrl}
-        configHint="Deploy Keycloak and ensure the realm is accessible at the configured URL"
-        onRetry={retryHealth}
-      />
-    );
-  }
+  const roleLabels: Record<string, string> = {
+    'cpi-admin': 'Platform Administrator',
+    'tenant-admin': 'Tenant Administrator',
+    devops: 'DevOps Engineer',
+    viewer: 'Viewer',
+  };
+
+  const roleColors: Record<string, string> = {
+    'cpi-admin': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    'tenant-admin': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    devops: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+    viewer: 'bg-gray-100 text-gray-800 dark:bg-neutral-700 dark:text-neutral-300',
+  };
 
   return (
-    <div
-      className={`${isFullscreen ? 'fixed inset-0 z-50 bg-white dark:bg-neutral-900' : 'space-y-4'}`}
-    >
+    <div className="space-y-6">
       {/* Header */}
-      <div
-        className={`flex items-center justify-between ${isFullscreen ? 'p-4 border-b border-gray-200 dark:border-neutral-700' : ''}`}
-      >
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
             <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
@@ -62,67 +47,174 @@ export function IdentityEmbed() {
               Identity Management
             </h1>
             <p className="text-gray-500 dark:text-neutral-400 mt-0.5">
-              Manage your account, security settings, and sessions
+              Your profile, roles, and security settings
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleRefresh}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
-          <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
-            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-          >
-            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            <span className="hidden sm:inline">{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
-          </button>
-          <button
-            onClick={handleOpenExternal}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
-            title="Open in new tab"
-          >
-            <ExternalLink className="h-4 w-4" />
-            <span className="hidden sm:inline">Open in Keycloak</span>
-          </button>
+        <button
+          onClick={handleOpenKeycloak}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Manage in Keycloak
+        </button>
+      </div>
+
+      {/* Profile Card */}
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-gray-200 dark:border-neutral-700 p-6">
+        <div className="flex items-start gap-6">
+          <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+            <User className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              {user?.name || 'Unknown User'}
+            </h2>
+            <p className="text-gray-500 dark:text-neutral-400 mt-1">{user?.email || 'No email'}</p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {user?.roles?.map((role) => (
+                <span
+                  key={role}
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${roleColors[role] || roleColors.viewer}`}
+                >
+                  {roleLabels[role] || role}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Iframe Container */}
-      <div
-        className={`relative bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 overflow-hidden ${
-          isFullscreen ? 'flex-1 m-4 mb-4' : ''
-        }`}
-        style={{ height: isFullscreen ? 'calc(100vh - 120px)' : 'calc(100vh - 220px)' }}
-      >
-        {/* Loading State */}
-        {(isLoading || serviceStatus === 'checking') && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-neutral-900 z-10">
-            <div className="text-center">
-              <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-neutral-400">Loading Identity Management...</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Account Details */}
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-gray-200 dark:border-neutral-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Key className="h-5 w-5 text-gray-400" />
+            Account Details
+          </h3>
+          <dl className="space-y-4">
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">User ID</dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white font-mono">
+                {user?.id || '—'}
+              </dd>
             </div>
-          </div>
-        )}
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">Email</dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white">{user?.email || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">
+                Authentication Provider
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+                Keycloak OIDC ({config.keycloak.realm} realm)
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">Client ID</dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white font-mono">
+                {config.keycloak.clientId}
+              </dd>
+            </div>
+          </dl>
+        </div>
 
-        {/* Keycloak Account Console Iframe */}
-        {serviceStatus === 'available' && (
-          <iframe
-            key={key}
-            src={keycloakAccountUrl}
-            title="STOA Identity Management - Keycloak"
-            className="w-full h-full border-0"
-            onLoad={handleIframeLoad}
-            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-        )}
+        {/* Organization */}
+        <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-gray-200 dark:border-neutral-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-gray-400" />
+            Organization
+          </h3>
+          <dl className="space-y-4">
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">Tenant</dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+                {user?.tenant_id || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">
+                Access Level
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+                {hasRole('cpi-admin')
+                  ? 'Full Platform Access'
+                  : hasRole('tenant-admin')
+                    ? 'Tenant Management'
+                    : hasRole('devops')
+                      ? 'Deploy & Monitor'
+                      : 'Read Only'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">
+                Permissions
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+                {user?.permissions?.length || 0} active permissions
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none border border-gray-200 dark:border-neutral-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <Clock className="h-5 w-5 text-gray-400" />
+          Security Actions
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <button
+            onClick={() =>
+              window.open(
+                `${keycloakAccountUrl}/#/security/signingin`,
+                '_blank',
+                'noopener,noreferrer'
+              )
+            }
+            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-left"
+          >
+            <Key className="h-5 w-5 text-purple-500 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">Change Password</p>
+              <p className="text-xs text-gray-500 dark:text-neutral-400">Update your credentials</p>
+            </div>
+          </button>
+          <button
+            onClick={() =>
+              window.open(
+                `${keycloakAccountUrl}/#/security/device-activity`,
+                '_blank',
+                'noopener,noreferrer'
+              )
+            }
+            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-left"
+          >
+            <Shield className="h-5 w-5 text-blue-500 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">Active Sessions</p>
+              <p className="text-xs text-gray-500 dark:text-neutral-400">
+                View and manage sessions
+              </p>
+            </div>
+          </button>
+          <button
+            onClick={handleOpenKeycloak}
+            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors text-left"
+          >
+            <ExternalLink className="h-5 w-5 text-green-500 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Full Account Console
+              </p>
+              <p className="text-xs text-gray-500 dark:text-neutral-400">
+                Open Keycloak management
+              </p>
+            </div>
+          </button>
+        </div>
       </div>
     </div>
   );

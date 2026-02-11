@@ -7,19 +7,28 @@ vi.mock('../config', () => ({
     keycloak: {
       url: 'https://auth.gostoa.dev',
       realm: 'stoa',
+      clientId: 'control-plane-ui',
     },
   },
 }));
 
-const mockRetry = vi.fn();
-vi.mock('../hooks/useServiceHealth', () => ({
-  useServiceHealth: () => ({ status: 'available', retry: mockRetry }),
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: {
+      id: 'user-admin',
+      name: 'James Halliday',
+      email: 'admin@gregarious-games.com',
+      tenant_id: 'gregarious-games',
+      roles: ['cpi-admin'],
+      permissions: ['tenants:create', 'tenants:read', 'apis:create', 'apis:read', 'apis:deploy'],
+    },
+    hasRole: (role: string) => role === 'cpi-admin',
+  }),
 }));
 
 describe('IdentityEmbed', () => {
   beforeEach(() => {
     vi.spyOn(window, 'open').mockImplementation(() => null);
-    mockRetry.mockClear();
   });
 
   it('renders title heading', () => {
@@ -27,48 +36,33 @@ describe('IdentityEmbed', () => {
     expect(screen.getByRole('heading', { name: 'Identity Management' })).toBeInTheDocument();
   });
 
-  it('renders iframe with correct src', () => {
+  it('displays user name and email', () => {
     render(<IdentityEmbed />);
-    const iframe = screen.getByTitle('STOA Identity Management - Keycloak');
-    expect(iframe).toBeInTheDocument();
-    expect(iframe).toHaveAttribute('src', 'https://auth.gostoa.dev/realms/stoa/account');
+    expect(screen.getByText('James Halliday')).toBeInTheDocument();
+    // Email appears in both profile card and account details
+    expect(screen.getAllByText('admin@gregarious-games.com')).toHaveLength(2);
   });
 
-  it('shows loading state initially', () => {
+  it('displays role badge', () => {
     render(<IdentityEmbed />);
-    expect(screen.getByText('Loading Identity Management...')).toBeInTheDocument();
+    expect(screen.getByText('Platform Administrator')).toBeInTheDocument();
   });
 
-  it('refresh button increments key and renders a new iframe', () => {
+  it('displays tenant and access level', () => {
     render(<IdentityEmbed />);
-    const iframe1 = screen.getByTitle('STOA Identity Management - Keycloak');
-    const refreshButton = screen.getByTitle('Refresh');
-    fireEvent.click(refreshButton);
-    const iframe2 = screen.getByTitle('STOA Identity Management - Keycloak');
-    expect(iframe2).toBeInTheDocument();
-    expect(iframe2).not.toBe(iframe1);
+    expect(screen.getByText('gregarious-games')).toBeInTheDocument();
+    expect(screen.getByText('Full Platform Access')).toBeInTheDocument();
   });
 
-  it('fullscreen toggle changes layout', () => {
-    const { container } = render(<IdentityEmbed />);
-    const rootDiv = container.firstChild as HTMLElement;
-    expect(rootDiv.className).toContain('space-y-4');
-    expect(rootDiv.className).not.toContain('fixed');
-    const fullscreenButton = screen.getByTitle('Fullscreen');
-    fireEvent.click(fullscreenButton);
-    expect(rootDiv.className).toContain('fixed');
-    expect(rootDiv.className).toContain('inset-0');
-    expect(rootDiv.className).not.toContain('space-y-4');
-    const exitButton = screen.getByTitle('Exit fullscreen');
-    fireEvent.click(exitButton);
-    expect(rootDiv.className).toContain('space-y-4');
-    expect(rootDiv.className).not.toContain('fixed');
+  it('displays permission count', () => {
+    render(<IdentityEmbed />);
+    expect(screen.getByText('5 active permissions')).toBeInTheDocument();
   });
 
-  it('open in new tab calls window.open', () => {
+  it('manage in keycloak button calls window.open', () => {
     render(<IdentityEmbed />);
-    const openButton = screen.getByTitle('Open in new tab');
-    fireEvent.click(openButton);
+    const button = screen.getByText('Manage in Keycloak');
+    fireEvent.click(button);
     expect(window.open).toHaveBeenCalledWith(
       'https://auth.gostoa.dev/realms/stoa/account',
       '_blank',
@@ -76,21 +70,31 @@ describe('IdentityEmbed', () => {
     );
   });
 
-  it('handles iframe load event and hides loading', () => {
+  it('change password button opens correct keycloak URL', () => {
     render(<IdentityEmbed />);
-    expect(screen.getByText('Loading Identity Management...')).toBeInTheDocument();
-    const iframe = screen.getByTitle('STOA Identity Management - Keycloak');
-    fireEvent.load(iframe);
-    expect(screen.queryByText('Loading Identity Management...')).not.toBeInTheDocument();
+    const button = screen.getByText('Change Password');
+    fireEvent.click(button);
+    expect(window.open).toHaveBeenCalledWith(
+      'https://auth.gostoa.dev/realms/stoa/account/#/security/signingin',
+      '_blank',
+      'noopener,noreferrer'
+    );
   });
 
-  it('iframe has sandbox and referrerPolicy attributes for security', () => {
+  it('active sessions button opens correct keycloak URL', () => {
     render(<IdentityEmbed />);
-    const iframe = screen.getByTitle('STOA Identity Management - Keycloak');
-    expect(iframe).toHaveAttribute(
-      'sandbox',
-      'allow-same-origin allow-scripts allow-popups allow-forms'
+    const button = screen.getByText('Active Sessions');
+    fireEvent.click(button);
+    expect(window.open).toHaveBeenCalledWith(
+      'https://auth.gostoa.dev/realms/stoa/account/#/security/device-activity',
+      '_blank',
+      'noopener,noreferrer'
     );
-    expect(iframe).toHaveAttribute('referrerPolicy', 'no-referrer-when-downgrade');
+  });
+
+  it('displays authentication provider info', () => {
+    render(<IdentityEmbed />);
+    expect(screen.getByText('Keycloak OIDC (stoa realm)')).toBeInTheDocument();
+    expect(screen.getByText('control-plane-ui')).toBeInTheDocument();
   });
 });

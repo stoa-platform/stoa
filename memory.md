@@ -1,12 +1,12 @@
 # STOA Memory
 
-> Last updated: 2026-02-10 (PR #301 merged — Console local build + Grafana auto-login)
+> Last updated: 2026-02-11 (PR #308 merged — Portal Functional Test Suite CAB-1133)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: Demo Design Partner (24 fev). Phase 1-2 DONE (5 livrables). Next: email Khalil (14 fev EOD).
-- **Latest**: Native observability dashboards live (PRs #299-#301), docker-compose Console builds from source
+- **Focus**: Demo prep (dry-runs, email), remaining tickets
+- **Latest**: OVH prod LIVE (12/12 HTTPS). Hetzner staging LIVE (6/6 HTTPS). Portal tests: 427 total (PR #308)
 
 ## Session State
 
@@ -76,12 +76,14 @@
 | DONE | — | Native Platform Metrics dashboard (replace Grafana iframe on /observability) | PR #299 |
 | DONE | — | Native Request Explorer dashboard (replace OpenSearch iframe on /logs) | PR #300 |
 | DONE | — | Docker-compose Console local build + Grafana auto-login + state files | PR #301 |
+| DONE | CAB-1133 | Portal Functional Test Suite — 164 tests, 13 pages × 4 personas | PR #308 |
+| IN PROGRESS | ADR-040 | Born GitOps: Multi-Environment Promotion Architecture | stoa-docs ADR |
 | NEXT | CAB-1130 | Email Khalil (send 14 fev EOD, wait feedback 15-16 fev) | — |
 | NEXT | CAB-1131 | Dry-runs 3x (18-23 fev, chrono < 5min) | — |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
 | NEXT | CAB-1035 | Persona Alex Test (manual) | — |
 
-## CI Pipeline Status (2026-02-09) — ALL GREEN THROUGH DEPLOY
+## CI Pipeline Status (2026-02-11) — ALL GREEN THROUGH DEPLOY
 
 | Component | CI | Docker | Apply | Deploy | Notes |
 |-----------|-----|--------|-------|--------|-------|
@@ -114,6 +116,8 @@
 - 2026-02-09: AI Factory modernization — state files auto-update protocol in ai-workflow.md
 - 2026-02-10: Replace iframe embeds (Grafana, OpenSearch) with native React dashboards querying Prometheus
 - 2026-02-10: Docker-compose Console switched to local build (always latest code)
+- 2026-02-11: Portal test helpers pattern — shared `test/helpers.tsx` with persona factories, mock data factories, `renderWithProviders` wrapper
+- 2026-02-11: ADR-040 Born GitOps — Console multi-env, Git=Control Plane, UAC as promotion unit, directory-per-env
 
 ## Known Issues
 - E2E smoke tests fail on live infra (timeouts, missing UI elements)
@@ -152,3 +156,5 @@
 - Console dark mode: 100% coverage (last 4 tools components fixed in PR #286)
 - Docs site: stoa-docs/ (Docusaurus 3.9), 20 pages
 - Vault v1.20.4 running, unsealed. ESO not yet deployed.
+- Portal test suite: 427 tests (37 files), 164 new in PR #308. 13 pages × 4 personas. Shared helpers at `portal/src/test/helpers.tsx`.
+- Not yet tested: APITestingSandbox, ApplicationDetail, Navigation routing (Phase 3 of CAB-1133)

@@ -67,7 +67,7 @@ timed_curl() {
     local start_ms=$(date +%s%N)
     local http_code
     http_code=$(curl -s -o /dev/null -w "%{http_code}" -X "$method" \
-        --max-time 10 "${extra_args[@]}" "$url" 2>/dev/null || echo "000")
+        --max-time 10 ${extra_args[@]+"${extra_args[@]}"} "$url" 2>/dev/null || echo "000")
     local end_ms=$(date +%s%N)
     local duration_ms=$(( (end_ms - start_ms) / 1000000 ))
 

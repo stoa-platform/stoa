@@ -87,7 +87,7 @@ jobs:
       contents: read
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
-      url: https://gateway.gostoa.dev
+      url: https://${{ (github.event.inputs.environment == 'staging' && 'staging-mcp') || 'mcp' }}.gostoa.dev
     steps:
       - name: Configure kubeconfig
         run: |

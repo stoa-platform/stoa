@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Last updated: 2026-02-11 (PR #308 merged — Portal Functional Test Suite CAB-1133)
+> Last updated: 2026-02-12 (Gateway Arena deployed on OVH — PR #374, full pipeline live)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
@@ -77,7 +77,13 @@
 | DONE | — | Native Request Explorer dashboard (replace OpenSearch iframe on /logs) | PR #300 |
 | DONE | — | Docker-compose Console local build + Grafana auto-login + state files | PR #301 |
 | DONE | CAB-1133 | Portal Functional Test Suite — 164 tests, 13 pages × 4 personas | PR #308 |
+| DONE | — | Email Capture Phase 1 — Portal login redesign + access_requests endpoint + Alembic 023 | PRs #351, #354, #356, #361 |
+| DONE | CAB-911 | Admin Prospects Dashboard — conversion cockpit (API + Console UI, 11 tests) | commit f60b79fa |
+| DONE | — | Website Analysis + Content Roadmap — 4 docs (1483 lines), 3 segments, 24 content pieces | untracked in docs/ |
+| DONE | — | Hardware Requirements + Perf Benchmarks + Blog — hey benchmark script, 2 reference pages, 1 blog post | stoa PR #370, stoa-docs PR #29 |
+| DONE | — | Gateway Arena deployed on OVH — ServiceMonitor + deploy script + Grafana dashboard imported | PR #374, CronJob every 30m |
 | IN PROGRESS | ADR-040 | Born GitOps: Multi-Environment Promotion Architecture | stoa-docs ADR |
+| IN PROGRESS | — | Email Capture Phase 2 — Stripe-inspired conversion funnel (content expansion, pricing, community) | docs/CONTENT-ROADMAP.md |
 | NEXT | CAB-1130 | Email Khalil (send 14 fev EOD, wait feedback 15-16 fev) | — |
 | NEXT | CAB-1131 | Dry-runs 3x (18-23 fev, chrono < 5min) | — |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
@@ -118,6 +124,10 @@
 - 2026-02-10: Docker-compose Console switched to local build (always latest code)
 - 2026-02-11: Portal test helpers pattern — shared `test/helpers.tsx` with persona factories, mock data factories, `renderWithProviders` wrapper
 - 2026-02-11: ADR-040 Born GitOps — Console multi-env, Git=Control Plane, UAC as promotion unit, directory-per-env
+- 2026-02-11: Email capture Phase 1 — two-panel Portal login (request access + SSO), public endpoint, Alembic 023
+- 2026-02-11: Website analysis (4 docs) — 3 audience gaps (freelancers, SMBs, security), 24 content pieces planned, ~€5K budget for €68-150K ROI
+- 2026-02-12: Hardware/perf docs OpSec review — no production topology, no exact costs, no provider mapping in public docs (generic profiles only)
+- 2026-02-12: Gateway Arena deployed on OVH — CronJob→Pushgateway→Prometheus→Grafana, first leaderboard: STOA 58.45, Kong 56.58, Gravitee 53.05
 
 ## Known Issues
 - E2E smoke tests fail on live infra (timeouts, missing UI elements)

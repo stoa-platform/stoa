@@ -20,6 +20,7 @@ use serde::Serialize;
 use tracing::{debug, warn};
 
 use crate::auth::middleware::AuthenticatedUser;
+use crate::metrics;
 use crate::state::AppState;
 
 use super::QuotaError;
@@ -90,6 +91,12 @@ pub async fn quota_middleware(
 
     // 4. Record the request (only on success path)
     state.quota_manager.record_request(&consumer_id);
+
+    // 4b. Emit quota remaining metrics
+    if let Some(stats) = state.quota_manager.get_stats(&consumer_id) {
+        metrics::update_quota_remaining(&consumer_id, "daily", stats.daily_remaining as f64);
+        metrics::update_quota_remaining(&consumer_id, "monthly", stats.monthly_remaining as f64);
+    }
 
     // 5. Add rate limit headers to response
     if rate_limit_info.limit > 0 {

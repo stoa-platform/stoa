@@ -1,11 +1,19 @@
 """APIs router - API lifecycle management via GitOps"""
+
 import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..auth import Permission, User, get_current_user, require_permission, require_tenant_access
+from ..auth import (
+    Permission,
+    User,
+    get_current_user,
+    require_permission,
+    require_tenant_access,
+    require_writable_environment,
+)
 from ..schemas.pagination import PaginatedResponse
 from ..services.git_service import git_service
 from ..services.kafka_service import kafka_service
@@ -79,12 +87,25 @@ async def list_apis(
     tenant_id: str,
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    environment: str | None = Query(default=None, description="Filter by environment (dev, staging, prod)"),
     user: User = Depends(get_current_user),
 ):
-    """List APIs for a tenant from GitLab (paginated)."""
+    """List APIs for a tenant from GitLab (paginated).
+
+    Optionally filter by environment — only returns APIs deployed to that environment.
+    """
     try:
         apis = await git_service.list_apis(tenant_id)
         all_items = [_api_from_yaml(tenant_id, api) for api in apis]
+        # Filter by environment if specified
+        if environment:
+            all_items = [
+                api
+                for api in all_items
+                if (environment == "dev" and api.deployed_dev)
+                or (environment == "staging" and api.deployed_staging)
+                or (environment == "prod")  # prod filter deferred to Phase 5
+            ]
         total = len(all_items)
         start = (page - 1) * page_size
         items = all_items[start : start + page_size]
@@ -110,7 +131,7 @@ async def get_api(tenant_id: str, api_id: str, user: User = Depends(get_current_
         raise HTTPException(status_code=500, detail="Failed to retrieve API")
 
 
-@router.post("", response_model=APIResponse)
+@router.post("", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])
 @require_permission(Permission.APIS_CREATE)
 @require_tenant_access
 async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_current_user)):
@@ -190,12 +211,10 @@ async def create_api(tenant_id: str, api: APICreate, user: User = Depends(get_cu
         raise HTTPException(status_code=500, detail=f"Failed to create API: {e!s}")
 
 
-@router.put("/{api_id}", response_model=APIResponse)
+@router.put("/{api_id}", response_model=APIResponse, dependencies=[Depends(require_writable_environment)])
 @require_permission(Permission.APIS_UPDATE)
 @require_tenant_access
-async def update_api(
-    tenant_id: str, api_id: str, api: APIUpdate, user: User = Depends(get_current_user)
-):
+async def update_api(tenant_id: str, api_id: str, api: APIUpdate, user: User = Depends(get_current_user)):
     """Update API in GitLab"""
     try:
         # Get current API
@@ -242,7 +261,7 @@ async def update_api(
         raise HTTPException(status_code=500, detail=f"Failed to update API: {e!s}")
 
 
-@router.delete("/{api_id}")
+@router.delete("/{api_id}", dependencies=[Depends(require_writable_environment)])
 @require_permission(Permission.APIS_DELETE)
 @require_tenant_access
 async def delete_api(tenant_id: str, api_id: str, user: User = Depends(get_current_user)):

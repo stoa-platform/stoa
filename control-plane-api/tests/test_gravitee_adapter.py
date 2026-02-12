@@ -66,14 +66,16 @@ class TestGraviteeMappers:
         result = map_policy_to_gravitee_plan(policy, "acme-api")
 
         assert result["name"] == "stoa-rate-limit-pol-1"
-        assert result["validation"] == "AUTO"
+        assert result["definitionVersion"] == "V4"
+        assert result["mode"] == "STANDARD"
         assert result["security"]["type"] == "KEY_LESS"
         flow = result["flows"][0]
         assert flow["request"][0]["policy"] == "rate-limit"
         rate_config = flow["request"][0]["configuration"]["rate"]
         assert rate_config["limit"] == 100
         assert rate_config["periodTimeUnit"] == "MINUTES"
-        assert "stoa-policy-pol-1" in result["tags"]
+        assert result["definitionVersion"] == "V4"
+        assert result["mode"] == "STANDARD"
 
     def test_map_policy_to_gravitee_plan_per_second(self):
         policy = {
@@ -100,7 +102,6 @@ class TestGraviteeMappers:
         plan = {
             "id": "plan-123",
             "name": "stoa-rate-limit-pol-1",
-            "tags": ["stoa-policy-pol-1"],
             "flows": [
                 {
                     "request": [
@@ -470,7 +471,7 @@ class TestGraviteeAdapterPolicies:
         # _find_plan_by_stoa_id returns existing plan
         plans_resp = MagicMock()
         plans_resp.status_code = 200
-        plans_resp.json.return_value = {"data": [{"id": "plan-existing", "tags": ["stoa-policy-pol-1"]}]}
+        plans_resp.json.return_value = {"data": [{"id": "plan-existing", "name": "stoa-rate-limit-pol-1"}]}
 
         update_resp = MagicMock()
         update_resp.status_code = 200
@@ -517,7 +518,7 @@ class TestGraviteeAdapterPolicies:
         # _find_plan_by_stoa_id returns a plan
         plans_resp = MagicMock()
         plans_resp.status_code = 200
-        plans_resp.json.return_value = {"data": [{"id": "plan-1", "tags": ["stoa-policy-pol-1"]}]}
+        plans_resp.json.return_value = {"data": [{"id": "plan-1", "name": "stoa-rate-limit-pol-1"}]}
 
         close_resp = MagicMock()
         close_resp.status_code = 200
@@ -552,7 +553,6 @@ class TestGraviteeAdapterPolicies:
                 {
                     "id": "plan-1",
                     "name": "stoa-rate-limit-pol-1",
-                    "tags": ["stoa-policy-pol-1"],
                     "flows": [
                         {
                             "request": [
@@ -569,7 +569,6 @@ class TestGraviteeAdapterPolicies:
                 {
                     "id": "plan-2",
                     "name": "non-stoa-plan",
-                    "tags": [],
                     "flows": [],
                 },
             ]

@@ -96,7 +96,11 @@ vi.mock('./pages/Unauthorized', () => ({
 
 vi.mock('./config', () => ({
   config: {
-    services: { console: { url: 'https://console.gostoa.dev' } },
+    api: { baseUrl: 'https://api.gostoa.dev' },
+    services: {
+      console: { url: 'https://console.gostoa.dev' },
+      docs: { url: 'https://docs.gostoa.dev' },
+    },
   },
 }));
 
@@ -139,7 +143,9 @@ describe('App', () => {
 
       renderApp('/');
 
-      expect(screen.getByText('Sign in with SSO')).toBeInTheDocument();
+      expect(screen.getByText('Discover AI-powered APIs')).toBeInTheDocument();
+      expect(screen.getByText('Request Access')).toBeInTheDocument();
+      expect(screen.getByText('Sign In')).toBeInTheDocument();
     });
 
     it('should show loading screen while authenticating', () => {

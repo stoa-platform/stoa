@@ -1,5 +1,6 @@
 ---
 description: Documentation strategy — two-repo split (stoa vs stoa-docs), routing rules, ADR numbering, anti-duplication
+globs: "docs/**,**/*.md"
 ---
 
 # Documentation Strategy

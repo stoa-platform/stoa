@@ -1,5 +1,6 @@
 ---
 description: Content compliance rules for public-facing docs — competitor mentions, client names, pricing, certifications
+globs: "docs/**,blog/**"
 ---
 
 # Content Compliance

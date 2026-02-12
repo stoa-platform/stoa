@@ -126,6 +126,7 @@ MOU-*.pdf
 # Session transcripts
 transcripts/
 session-*.md
+!.claude/rules/session-startup.md
 journal.md
 
 # Database dumps (may contain PII)

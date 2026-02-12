@@ -1,3 +1,8 @@
+---
+description: Gateway Arena benchmark lab — adding gateways, reading results, troubleshooting
+globs: "k8s/arena/**,scripts/traffic/**,docker/observability/grafana/**"
+---
+
 # Gateway Arena — Benchmark Lab
 
 ## Overview

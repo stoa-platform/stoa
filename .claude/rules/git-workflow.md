@@ -121,6 +121,11 @@ EOF
 )"
 ```
 
+After PR created, log the operation:
+```
+Append to operations.log: STEP-DONE | step=pr-created task=<TASK> pr=<NUMBER> branch=<BRANCH>
+```
+
 ### 5. CI Green
 ```bash
 gh pr checks <number> --watch
@@ -131,11 +136,32 @@ Component CI runs only if relevant paths changed.
 If CI fails: fix → commit → push. Same branch, same PR. Never create a new PR for CI fixes.
 
 ### 6. Merge
+
+**Pre-merge checkpoint** (Level 3 traceability):
+Write checkpoint file to `~/.claude/projects/.../memory/checkpoints/<timestamp>-<task>.json`:
+```json
+{
+  "task": "<TASK>",
+  "timestamp": "<ISO-8601>",
+  "branch": "<BRANCH>",
+  "git_sha": "<HEAD_SHA>",
+  "pr_number": "<NUMBER>",
+  "steps_completed": ["branch", "code", "quality-gate", "pr", "ci"],
+  "steps_remaining": ["merge", "verify-cd", "cleanup"],
+  "context": {"component": "<NAME>", "files_modified": ["..."]}
+}
+```
+Log: `CHECKPOINT | task=<TASK> file=<CHECKPOINT_FILE>`
+
 ```bash
 gh pr merge <number> --squash --delete-branch
 ```
 - Always `--squash` — one clean commit per feature on main (Stripe/GitHub standard)
 - `--delete-branch` — auto-cleanup remote branch
+After successful merge:
+- Delete checkpoint file
+- Log: `STEP-DONE | step=merged task=<TASK> pr=<NUMBER> sha=<MERGE_SHA>`
+
 - If strict branch protection blocks merge:
   ```bash
   gh api repos/stoa-platform/stoa/pulls/<number>/update-branch -X PUT -f update_method=merge
@@ -173,6 +199,8 @@ CD Status:
 ```
 If any step fails, report the error and propose a fix.
 
+After CD verified, log: `STEP-DONE | step=cd-verified task=<TASK> component=<NAME>`
+
 #### Component → CD verification map
 
 | Component | CI Workflow | ArgoCD App | Deploy Method | AWX? |
@@ -205,6 +233,11 @@ curl -s -u admin:$AWX_PASS https://awx.gostoa.dev/api/v2/jobs/?order_by=-finishe
 ```bash
 git checkout main && git pull origin main
 git branch -d feat/CAB-XXXX-short-description
+```
+
+After cleanup, log session end:
+```
+Append to operations.log: SESSION-END | task=<TASK> status=success pr=<NUMBER>
 ```
 
 ## Micro-PR Strategy (Stripe-inspired)

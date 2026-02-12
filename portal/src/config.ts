@@ -72,6 +72,7 @@ export const config = {
     enableApplications: import.meta.env.VITE_ENABLE_APPLICATIONS !== 'false', // Consumer apps
     enableAPITesting: import.meta.env.VITE_ENABLE_API_TESTING !== 'false', // Sandbox testing
     enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true',
+    enableGateways: import.meta.env.VITE_ENABLE_GATEWAYS !== 'false',
   },
 
   // API Testing Configuration

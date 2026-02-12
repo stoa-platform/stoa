@@ -2,7 +2,8 @@
  * PlatformStatus Component (CAB-654)
  *
  * Displays GitOps sync status for platform components via Argo CD.
- * Shows sync status, health, recent deployment events, and external links.
+ * Shows sync status, health, and external links.
+ * Gracefully handles ArgoCD unreachable state (no error spam).
  */
 import { useState, useEffect, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -10,29 +11,45 @@ import { usePlatformStatus, useSyncComponent } from '../hooks/usePlatformStatus'
 import { ComponentStatus } from '../services/api';
 import { observabilityPath, logsPath } from '../utils/navigation';
 
-// Status color mappings
+// Status color mappings — light + dark
 const syncStatusColors: Record<string, string> = {
-  Synced: 'text-green-600 bg-green-50',
-  OutOfSync: 'text-yellow-600 bg-yellow-50',
-  Unknown: 'text-gray-600 bg-gray-50',
-  Error: 'text-red-600 bg-red-50',
-  NotFound: 'text-gray-400 bg-gray-50',
+  Synced: 'text-green-600 bg-green-50 dark:bg-green-900/30 dark:text-green-400',
+  OutOfSync: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30 dark:text-yellow-400',
+  Unknown: 'text-neutral-500 bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-400',
+  Error: 'text-red-600 bg-red-50 dark:bg-red-900/30 dark:text-red-400',
+  NotFound: 'text-neutral-400 bg-neutral-50 dark:bg-neutral-800 dark:text-neutral-500',
 };
 
 const healthStatusColors: Record<string, string> = {
-  Healthy: 'text-green-600',
-  Progressing: 'text-blue-600',
-  Degraded: 'text-red-600',
-  Suspended: 'text-yellow-600',
-  Missing: 'text-gray-400',
-  Unknown: 'text-gray-600',
+  Healthy: 'text-green-600 dark:text-green-400',
+  Progressing: 'text-blue-600 dark:text-blue-400',
+  Degraded: 'text-red-600 dark:text-red-400',
+  Suspended: 'text-yellow-600 dark:text-yellow-400',
+  Missing: 'text-neutral-400 dark:text-neutral-500',
+  Unknown: 'text-neutral-500 dark:text-neutral-400',
 };
 
 const overallStatusConfig: Record<string, { color: string; bg: string; label: string }> = {
-  healthy: { color: 'text-green-700', bg: 'bg-green-100', label: 'All Systems Operational' },
-  degraded: { color: 'text-red-700', bg: 'bg-red-100', label: 'System Degraded' },
-  syncing: { color: 'text-blue-700', bg: 'bg-blue-100', label: 'Sync In Progress' },
-  unknown: { color: 'text-gray-700', bg: 'bg-gray-100', label: 'Status Unknown' },
+  healthy: {
+    color: 'text-green-700 dark:text-green-400',
+    bg: 'bg-green-100 dark:bg-green-900/30',
+    label: 'All Systems Operational',
+  },
+  degraded: {
+    color: 'text-red-700 dark:text-red-400',
+    bg: 'bg-red-100 dark:bg-red-900/30',
+    label: 'System Degraded',
+  },
+  syncing: {
+    color: 'text-blue-700 dark:text-blue-400',
+    bg: 'bg-blue-100 dark:bg-blue-900/30',
+    label: 'Sync In Progress',
+  },
+  unknown: {
+    color: 'text-neutral-500 dark:text-neutral-400',
+    bg: 'bg-neutral-100 dark:bg-neutral-800',
+    label: 'Checking Status...',
+  },
 };
 
 // Icons
@@ -75,19 +92,6 @@ function RefreshIcon({ className = '' }: { className?: string }) {
   );
 }
 
-function GitBranchIcon({ className = '' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
-      />
-    </svg>
-  );
-}
-
 function ExternalLinkIcon({ className = '' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,12 +118,11 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
     error,
     refetch,
   } = usePlatformStatus({
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
   const syncMutation = useSyncComponent();
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Update lastUpdated and notify parent when status data changes
   useEffect(() => {
     if (status) {
       setLastUpdated(new Date());
@@ -137,8 +140,8 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
       try {
         await syncMutation.mutateAsync(componentName);
         setLastUpdated(new Date());
-      } catch (err) {
-        console.error('Failed to sync component:', err);
+      } catch {
+        // Sync failed silently — status will refresh automatically
       }
     },
     [syncMutation]
@@ -146,10 +149,10 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
 
   if (isLoading && !status) {
     return (
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-xl shadow dark:shadow-none p-6">
         <div className="flex items-center justify-center">
-          <RefreshIcon className="w-5 h-5 animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-500 dark:text-neutral-400">
+          <RefreshIcon className="w-5 h-5 animate-spin text-neutral-400" />
+          <span className="ml-2 text-neutral-500 dark:text-neutral-400">
             Loading platform status...
           </span>
         </div>
@@ -157,15 +160,27 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
     );
   }
 
+  // Graceful error state — no scary messages
   if (error && !status) {
     return (
-      <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none p-6">
-        <div className="flex items-center gap-2 text-red-600">
-          <ExclamationCircleIcon className="w-5 h-5" />
-          <span>Failed to load platform status</span>
+      <div className="bg-white dark:bg-neutral-800 rounded-xl shadow dark:shadow-none border border-neutral-200 dark:border-neutral-700 p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-neutral-100 dark:bg-neutral-700">
+              <ExclamationCircleIcon className="w-5 h-5 text-neutral-400 dark:text-neutral-500" />
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                Platform Status
+              </h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                Status monitoring unavailable
+              </p>
+            </div>
+          </div>
           <button
             onClick={handleRefresh}
-            className="ml-auto text-sm text-blue-600 hover:text-blue-800"
+            className="px-3 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
           >
             Retry
           </button>
@@ -180,7 +195,7 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
 
   if (compact) {
     return (
-      <div className={`rounded-lg p-3 ${overallConfig.bg}`}>
+      <div className={`rounded-xl p-3 ${overallConfig.bg}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {status.gitops.status === 'healthy' ? (
@@ -193,7 +208,7 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
           <button
             onClick={handleRefresh}
             disabled={isLoading}
-            className="p-1 hover:bg-white/50 rounded transition-colors"
+            className="p-1 hover:bg-white/50 dark:hover:bg-neutral-700/50 rounded transition-colors"
             title="Refresh status"
           >
             <RefreshIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -204,13 +219,15 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg shadow dark:shadow-none">
+    <div className="bg-white dark:bg-neutral-800 rounded-xl shadow dark:shadow-none border border-neutral-200 dark:border-neutral-700">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 dark:border-neutral-700">
+      <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-700">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Platform Status</h3>
-            <p className="text-sm text-gray-500 dark:text-neutral-400">
+            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              Platform Status
+            </h3>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
               GitOps sync status via Argo CD
             </p>
           </div>
@@ -223,11 +240,11 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
             <button
               onClick={handleRefresh}
               disabled={isLoading}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
               title="Refresh status"
             >
               <RefreshIcon
-                className={`w-5 h-5 text-gray-600 dark:text-neutral-400 ${isLoading ? 'animate-spin' : ''}`}
+                className={`w-5 h-5 text-neutral-500 dark:text-neutral-400 ${isLoading ? 'animate-spin' : ''}`}
               />
             </button>
           </div>
@@ -247,63 +264,39 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
           ))}
         </div>
 
-        {/* Recent Events */}
-        {status.events.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Recent Deployments</h4>
-            <div className="space-y-2">
-              {status.events.slice(0, 5).map((event, idx) => (
-                <div
-                  key={`${event.component}-${event.timestamp}-${idx}`}
-                  className="flex items-center justify-between text-sm"
-                >
-                  <div className="flex items-center gap-2">
-                    <GitBranchIcon className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-900">{event.component}</span>
-                    <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">
-                      {event.revision}
-                    </code>
-                  </div>
-                  <span className="text-gray-500 text-xs">
-                    {formatRelativeTime(event.timestamp)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* External Links */}
         {status.external_links && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Quick Links</h4>
+          <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-700">
+            <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
+              Quick Links
+            </h4>
             <div className="flex flex-wrap gap-2">
               <a
                 href={status.external_links.argocd}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
               >
                 <ExternalLinkIcon className="w-4 h-4" />
                 ArgoCD
               </a>
               <button
                 onClick={() => navigate(observabilityPath(status.external_links.grafana))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
               >
                 <ExternalLinkIcon className="w-4 h-4" />
                 Grafana
               </button>
               <button
                 onClick={() => navigate(observabilityPath(status.external_links.prometheus))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
               >
                 <ExternalLinkIcon className="w-4 h-4" />
                 Prometheus
               </button>
               <button
                 onClick={() => navigate(logsPath(status.external_links.logs))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
               >
                 <ExternalLinkIcon className="w-4 h-4" />
                 Logs
@@ -314,7 +307,7 @@ export function PlatformStatus({ compact = false, onStatusChange }: PlatformStat
 
         {/* Last Updated */}
         {lastUpdated && (
-          <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400 text-right">
+          <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-700 text-xs text-neutral-400 dark:text-neutral-500 text-right">
             Last updated: {lastUpdated.toLocaleTimeString()}
           </div>
         )}
@@ -339,11 +332,11 @@ const ComponentCard = memo(function ComponentCard({
   const isOutOfSync = component.sync_status === 'OutOfSync';
 
   return (
-    <div className="border border-gray-200 dark:border-neutral-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-neutral-600 transition-colors">
+    <div className="border border-neutral-200 dark:border-neutral-700 rounded-xl p-4 hover:border-neutral-300 dark:hover:border-neutral-600 transition-colors bg-white dark:bg-neutral-800/50">
       <div className="flex items-start justify-between">
         <div>
-          <h4 className="font-medium text-gray-900 dark:text-white">{component.display_name}</h4>
-          <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">{component.name}</p>
+          <h4 className="font-medium text-neutral-900 dark:text-white">{component.display_name}</h4>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">{component.name}</p>
         </div>
         <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${syncColor}`}>
           {component.sync_status}
@@ -352,31 +345,29 @@ const ComponentCard = memo(function ComponentCard({
 
       <div className="mt-3 flex items-center justify-between text-sm">
         <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full ${healthColor.replace('text-', 'bg-')}`} />
+          <span
+            className={`w-2 h-2 rounded-full ${healthColor.replace('text-', 'bg-').replace(/dark:text-\S+/g, '')}`}
+          />
           <span className={healthColor}>{component.health_status}</span>
         </div>
         {component.revision && (
-          <code className="text-xs text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded">
-            {component.revision}
+          <code className="text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-700 px-1.5 py-0.5 rounded">
+            {component.revision.slice(0, 7)}
           </code>
         )}
       </div>
 
-      {component.message && (
-        <p className="mt-2 text-xs text-red-600 bg-red-50 rounded p-2">{component.message}</p>
-      )}
-
       <div className="mt-3 flex items-center justify-between">
         {component.last_sync && (
-          <p className="text-xs text-gray-400">
-            Last sync: {formatRelativeTime(component.last_sync)}
+          <p className="text-xs text-neutral-400 dark:text-neutral-500">
+            {formatRelativeTime(component.last_sync)}
           </p>
         )}
         {isOutOfSync && (
           <button
             onClick={() => onSync(component.name)}
             disabled={isSyncing}
-            className="ml-auto px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="ml-auto px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSyncing ? (
               <span className="flex items-center gap-1">

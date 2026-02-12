@@ -72,19 +72,19 @@ jobs:
     uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: portal
-      image-name: stoa-portal
+      image-name: portal
       environment: ${{ github.event.inputs.environment || 'dev' }}
       platforms: linux/amd64
       use-monorepo-context: true
       build-args: |
         VITE_BASE_DOMAIN=gostoa.dev
-        VITE_ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}
-        VITE_KEYCLOAK_URL=https://auth.gostoa.dev
+        VITE_ENVIRONMENT=${{ github.event.inputs.environment || 'production' }}
+        VITE_KEYCLOAK_URL=https://${{ (github.event.inputs.environment == 'staging' && 'staging-auth') || 'auth' }}.gostoa.dev
         VITE_KEYCLOAK_REALM=stoa
         VITE_KEYCLOAK_CLIENT_ID=stoa-portal
-        VITE_MCP_URL=https://mcp.gostoa.dev
-        VITE_API_URL=https://api.gostoa.dev
-        VITE_CONSOLE_URL=https://console.gostoa.dev
+        VITE_MCP_URL=https://${{ (github.event.inputs.environment == 'staging' && 'staging-mcp') || 'mcp' }}.gostoa.dev
+        VITE_API_URL=https://${{ (github.event.inputs.environment == 'staging' && 'staging-api') || 'api' }}.gostoa.dev
+        VITE_CONSOLE_URL=https://${{ (github.event.inputs.environment == 'staging' && 'staging-console') || 'console' }}.gostoa.dev
     permissions:
       contents: read
       id-token: write
@@ -125,7 +125,7 @@ jobs:
       component: stoa-portal
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: ${{ github.event.inputs.environment || 'dev' }}
-      environment-url: https://portal.gostoa.dev
+      environment-url: https://${{ (github.event.inputs.environment == 'staging' && 'staging-portal') || 'portal' }}.gostoa.dev
     permissions:
       contents: read
     secrets: inherit

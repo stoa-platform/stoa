@@ -8,7 +8,8 @@
 
 use once_cell::sync::Lazy;
 use prometheus::{
-    register_counter_vec, register_gauge, register_histogram_vec, CounterVec, Gauge, HistogramVec,
+    register_counter_vec, register_gauge, register_gauge_vec, register_histogram_vec, CounterVec,
+    Gauge, GaugeVec, HistogramVec,
 };
 
 // === HTTP Metrics (all requests) ===
@@ -108,6 +109,44 @@ pub static RATE_LIMIT_BUCKETS: Lazy<Gauge> = Lazy::new(|| {
     .expect("Failed to create stoa_rate_limit_buckets metric")
 });
 
+// === Circuit Breaker Metrics (ADR-025) ===
+
+/// Gauge of circuit breaker state per upstream.
+/// Values: 0 = closed, 1 = open, 2 = half_open
+pub static CIRCUIT_BREAKER_STATE: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "stoa_circuit_breaker_state",
+        "Circuit breaker state per upstream (0=closed, 1=open, 2=half_open)",
+        &["upstream"]
+    )
+    .expect("Failed to create stoa_circuit_breaker_state metric")
+});
+
+// === Quota Metrics (ADR-022) ===
+
+/// Gauge of remaining quota per consumer and period.
+pub static QUOTA_REMAINING: Lazy<GaugeVec> = Lazy::new(|| {
+    register_gauge_vec!(
+        "stoa_quota_remaining",
+        "Remaining quota requests per consumer and period",
+        &["consumer", "period"]
+    )
+    .expect("Failed to create stoa_quota_remaining metric")
+});
+
+// === Upstream Latency Metrics ===
+
+/// Histogram of upstream (backend) response times in seconds.
+pub static UPSTREAM_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "stoa_upstream_latency_seconds",
+        "Backend upstream response time in seconds",
+        &["upstream", "status"],
+        vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+    )
+    .expect("Failed to create stoa_upstream_latency_seconds metric")
+});
+
 // === Helper Functions ===
 
 /// Extract the current OTel trace_id from the active tracing span (if any).
@@ -161,6 +200,35 @@ pub fn record_rate_limit_hit(tenant: &str) {
 /// Update rate limit bucket count
 pub fn update_rate_limit_buckets(count: usize) {
     RATE_LIMIT_BUCKETS.set(count as f64);
+}
+
+// === Circuit Breaker metrics helpers ===
+
+/// Update circuit breaker state for an upstream.
+/// State values: 0 = closed, 1 = open, 2 = half_open
+pub fn update_circuit_breaker_state(upstream: &str, state: f64) {
+    CIRCUIT_BREAKER_STATE
+        .with_label_values(&[upstream])
+        .set(state);
+}
+
+// === Quota metrics helpers ===
+
+/// Update remaining quota for a consumer.
+pub fn update_quota_remaining(consumer: &str, period: &str, remaining: f64) {
+    QUOTA_REMAINING
+        .with_label_values(&[consumer, period])
+        .set(remaining);
+}
+
+// === Upstream latency helpers ===
+
+/// Record upstream (backend) response latency.
+pub fn record_upstream_latency(upstream: &str, status: u16, duration_secs: f64) {
+    let status_str = status.to_string();
+    UPSTREAM_LATENCY
+        .with_label_values(&[upstream, &status_str])
+        .observe(duration_secs);
 }
 
 // === HTTP metrics helpers ===
@@ -219,6 +287,9 @@ pub fn init_all_metrics() {
     Lazy::force(&MCP_SESSIONS_ACTIVE);
     Lazy::force(&RATE_LIMIT_HITS);
     Lazy::force(&RATE_LIMIT_BUCKETS);
+    Lazy::force(&CIRCUIT_BREAKER_STATE);
+    Lazy::force(&QUOTA_REMAINING);
+    Lazy::force(&UPSTREAM_LATENCY);
 }
 
 /// Get the total number of MCP tool calls across all labels.

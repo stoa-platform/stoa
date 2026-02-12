@@ -156,6 +156,7 @@ class TestKongMappers:
         result = map_kong_consumer_to_cp(consumer)
 
         assert result["id"] == "k-consumer-1"
+        assert result["name"] == "consumer-42"
         assert result["username"] == "consumer-42"
         assert result["subscription_id"] == "sub-1"
 
@@ -480,7 +481,8 @@ class TestKongAdapterPolicies:
         consumer_resp.status_code = 200
         consumer_resp.json.return_value = {"data": []}
 
-        client.get = AsyncMock(side_effect=[svc_resp, plugin_resp, consumer_resp])
+        # Order: services, consumers, plugins
+        client.get = AsyncMock(side_effect=[svc_resp, consumer_resp, plugin_resp])
 
         config_resp = MagicMock()
         config_resp.status_code = 200
@@ -520,7 +522,8 @@ class TestKongAdapterPolicies:
         consumer_resp.status_code = 200
         consumer_resp.json.return_value = {"data": []}
 
-        client.get = AsyncMock(side_effect=[svc_resp, plugin_resp, consumer_resp])
+        # Order: services, consumers, plugins
+        client.get = AsyncMock(side_effect=[svc_resp, consumer_resp, plugin_resp])
 
         config_resp = MagicMock()
         config_resp.status_code = 200
@@ -606,12 +609,19 @@ class TestKongAdapterApplications:
         consumer_resp.status_code = 200
         consumer_resp.json.return_value = {
             "data": [
-                {"username": "consumer-42", "tags": ["stoa-consumer-sub-1"]},
-                {"username": "consumer-99", "tags": ["stoa-consumer-sub-2"]},
+                {"id": "c1", "username": "consumer-42", "tags": ["stoa-consumer-sub-1"]},
+                {"id": "c2", "username": "consumer-99", "tags": ["stoa-consumer-sub-2"]},
             ]
         }
+        # Sub-resource responses for each consumer (key-auth + plugins)
+        empty_sub = MagicMock()
+        empty_sub.status_code = 200
+        empty_sub.json.return_value = {"data": []}
 
-        client.get = AsyncMock(side_effect=[svc_resp, plugin_resp, consumer_resp])
+        # Order: services, consumers, c1/key-auth, c1/plugins, c2/key-auth, c2/plugins, plugins
+        client.get = AsyncMock(
+            side_effect=[svc_resp, consumer_resp, empty_sub, empty_sub, empty_sub, empty_sub, plugin_resp]
+        )
 
         config_resp = MagicMock()
         config_resp.status_code = 200

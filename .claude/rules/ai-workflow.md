@@ -49,6 +49,7 @@ description: AI-native development workflow, session management, context managem
 - `memory.md` (repo root) — session state, ticket tracker, CI status, decisions, known issues
 - `plan.md` (repo root) — sprint scoreboard, remaining tasks, DoD matrix
 - `~/.claude/projects/.../memory/MEMORY.md` — private persistent memory across conversations
+- `~/.claude/projects/.../memory/operations.log` — append-only session traceability log
 
 ### Auto-Update Triggers
 
@@ -77,9 +78,45 @@ Update private `MEMORY.md` when:
 - **Never delete DONE items** from memory.md — they serve as audit trail
 - **Archive** items older than 2 sprints to reduce noise
 
+## Operation Logging (Traceability)
+
+### Log Location
+`~/.claude/projects/.../memory/operations.log` — append-only, never edit existing entries.
+
+### Event Types
+
+| Event | Trigger | Required Fields |
+|-------|---------|----------------|
+| `SESSION-START` | Session begins work on a task | `task`, `branch` |
+| `SESSION-END` | Session ends (success, paused, or crash detected) | `task`, `status` |
+| `STEP-START` | Major step begins (code, test, pr, merge, cd) | `step`, `task` |
+| `STEP-DONE` | Major step completes | `step`, `task` |
+| `CHECKPOINT` | Pre-merge/deploy checkpoint created | `task`, `file` |
+| `ERROR` | Non-fatal error during execution | `task`, `error` |
+| `RECOVERY` | Crash recovery action taken | `task`, `action` |
+
+### Format Rules
+- Timestamp: ISO 8601 short (`YYYY-MM-DDTHH:MM`)
+- Separator: ` | ` (space-pipe-space)
+- Fields: `key=value` pairs, space-separated
+- Append-only: never edit or delete existing log entries
+- One line per event, no multiline
+
+### Mandatory Events
+Every session MUST have at minimum:
+1. `SESSION-START` — logged when work begins on a task
+2. `SESSION-END` — logged when session ends, even on early exit
+
+Missing `SESSION-END` = crash indicator (see `crash-recovery.md`).
+
+### Checkpoint Directory
+`~/.claude/projects/.../memory/checkpoints/` — JSON files created before risky operations.
+See `crash-recovery.md` for checkpoint schema and lifecycle.
+
 ## Anti-Drift Rules
 - **1 thing at a time** — never mix feature + refactor + fix
 - **Never code without a validated plan**
 - **Red flags** (broken tests, tech debt, security flaw) -> fix before continuing
 - **If > 10 min structuring manually** -> STOP, use Claude Code
 - **State files are mandatory** — skipping memory.md update is a workflow violation
+- **Operation log is mandatory** — every session MUST have SESSION-START and SESSION-END entries

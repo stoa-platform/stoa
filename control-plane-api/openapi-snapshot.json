@@ -324,6 +324,96 @@
         "title": "APIUpdate",
         "type": "object"
       },
+      "AccessRequestCreate": {
+        "description": "Public form submission: profile + optional company/role.",
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "AccessRequestCreate",
+        "type": "object"
+      },
+      "AccessRequestResponse": {
+        "description": "Response after submitting an access request.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "request_id"
+        ],
+        "title": "AccessRequestResponse",
+        "type": "object"
+      },
       "ActiveSubscription": {
         "description": "An active tool subscription",
         "example": {
@@ -2725,6 +2815,39 @@
         "title": "Environment",
         "type": "string"
       },
+      "EnvironmentConfig": {
+        "properties": {
+          "color": {
+            "title": "Color",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "full",
+              "read-only",
+              "promote-only"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "mode",
+          "color"
+        ],
+        "title": "EnvironmentConfig",
+        "type": "object"
+      },
       "EnvironmentInfo": {
         "description": "Kubernetes/runtime environment info.",
         "properties": {
@@ -2785,6 +2908,22 @@
           }
         },
         "title": "EnvironmentInfo",
+        "type": "object"
+      },
+      "EnvironmentListResponse": {
+        "properties": {
+          "environments": {
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentConfig"
+            },
+            "title": "Environments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "environments"
+        ],
+        "title": "EnvironmentListResponse",
         "type": "object"
       },
       "ErrorSnapshot": {
@@ -12937,6 +13076,51 @@
         ]
       }
     },
+    "/v1/access-requests": {
+      "post": {
+        "description": "Submit an access request (public, no auth).\n\nIdempotent: returns 200 if email already exists, 201 if new.",
+        "operationId": "create_access_request_v1_access_requests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRequestCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestResponse"
+                }
+              }
+            },
+            "description": "Email already registered"
+          },
+          "201": {
+            "description": "New request created"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Access Request",
+        "tags": [
+          "Access Requests"
+        ]
+      }
+    },
     "/v1/admin/catalog/cache": {
       "delete": {
         "description": "Invalidate the in-memory API cache (if any).\n\nNote: This endpoint is maintained for backwards compatibility.\nWith the new PostgreSQL-based cache, the sync endpoints should be used instead.\n\nRequires: cpi-admin role",
@@ -18174,6 +18358,33 @@
         "summary": "Get Dashboard Stats",
         "tags": [
           "Dashboard"
+        ]
+      }
+    },
+    "/v1/environments": {
+      "get": {
+        "description": "List available environments with their configuration.\n\nReturns environment configs including mode (full, read-only, promote-only)\nwhich determines what actions are allowed in each environment.",
+        "operationId": "list_environments_v1_environments_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Environments",
+        "tags": [
+          "Environments"
         ]
       }
     },
@@ -23934,7 +24145,7 @@
     },
     "/v1/tenants/{tenant_id}/apis": {
       "get": {
-        "description": "List APIs for a tenant from GitLab (paginated).",
+        "description": "List APIs for a tenant from GitLab (paginated).\n\nOptionally filter by environment \u2014 only returns APIs deployed to that environment.",
         "operationId": "list_apis_v1_tenants__tenant_id__apis_get",
         "parameters": [
           {
@@ -23971,6 +24182,24 @@
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Filter by environment (dev, staging, prod)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment (dev, staging, prod)",
+              "title": "Environment"
             }
           }
         ],
@@ -24017,6 +24246,24 @@
             "schema": {
               "title": "Tenant Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Target environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target environment",
+              "title": "Environment"
             }
           }
         ],
@@ -24084,6 +24331,24 @@
             "schema": {
               "title": "Api Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Target environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target environment",
+              "title": "Environment"
             }
           }
         ],
@@ -24192,6 +24457,24 @@
             "schema": {
               "title": "Api Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Target environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target environment",
+              "title": "Environment"
             }
           }
         ],

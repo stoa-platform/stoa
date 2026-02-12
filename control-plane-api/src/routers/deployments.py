@@ -39,7 +39,6 @@ class DeploymentResponse(BaseModel):
     started_at: str
     completed_at: str | None = None
     deployed_by: str
-    awx_job_id: str | None = None
     error_message: str | None = None
 
 class RollbackRequest(BaseModel):
@@ -79,7 +78,7 @@ async def create_deployment(
     This will:
     1. Validate the API exists and is deployable
     2. Create a deploy-request event in Kafka
-    3. AWX will pick up the event and execute the deployment
+    3. Gateway adapter will process the deployment
     4. Status updates will be streamed via SSE
     """
     # Generate deployment ID
@@ -210,8 +209,8 @@ async def rollback_deployment(
 async def get_deployment_logs(
     tenant_id: str, deployment_id: str, user: User = Depends(get_current_user)
 ):
-    """Get deployment logs from AWX"""
-    # TODO: Implement with AWX service
+    """Get deployment logs"""
+    # TODO: Implement with gateway adapter service
     return {"logs": []}
 
 # Environment status endpoints

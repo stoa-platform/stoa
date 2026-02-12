@@ -144,7 +144,6 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ""
       OPENSEARCH_HOST: ""
       GITLAB_URL: ""
-      AWX_URL: ""
       ENABLE_DEPLOYMENT_WORKER: "false"
       ENABLE_SNAPSHOT_CONSUMER: "false"
     depends_on:

@@ -43,10 +43,6 @@ data:
   KAFKA_BOOTSTRAP_SERVERS: "redpanda.stoa-system.svc.cluster.local:9092"
   KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
 
-  # AWX Automation
-  AWX_URL: "https://awx.gostoa.dev"
-  AWX_VERIFY_SSL: "true"
-
   # API Gateway
   GATEWAY_URL: "https://gateway.gostoa.dev"
   GATEWAY_ADMIN_PROXY_URL: "https://apis.gostoa.dev/gateway/Gateway-Admin-API/1.0"

@@ -30,8 +30,8 @@ export const UACSpotlight: React.FC<UACSpotlightProps> = ({
       className={`
         fixed bottom-4 left-1/2 -translate-x-1/2
         w-full max-w-xl
-        bg-white
-        border border-blue-200
+        bg-white dark:bg-neutral-800
+        border border-blue-200 dark:border-blue-800
         rounded-lg
         shadow-lg
         animate-in slide-in-from-bottom-4 fade-in-0 duration-300
@@ -57,9 +57,9 @@ export const UACSpotlight: React.FC<UACSpotlightProps> = ({
             onClick={onDismiss}
             className="
               p-1 -m-1
-              text-gray-400 hover:text-gray-600
+              text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300
               rounded-md
-              hover:bg-gray-100
+              hover:bg-gray-100 dark:hover:bg-neutral-700
               transition-colors
               focus:outline-none focus:ring-2 focus:ring-blue-500
             "
@@ -71,8 +71,10 @@ export const UACSpotlight: React.FC<UACSpotlightProps> = ({
 
         {/* Content */}
         <div className="mt-2 ml-7">
-          <p className="text-gray-800 font-medium">STOA uses Universal API Contracts (UAC).</p>
-          <p className="text-gray-600 text-sm mt-1">
+          <p className="text-gray-800 dark:text-neutral-200 font-medium">
+            STOA uses Universal API Contracts (UAC).
+          </p>
+          <p className="text-gray-600 dark:text-neutral-400 text-sm mt-1">
             Define your API once, expose it everywhere — REST, MCP, GraphQL, and more from a single
             definition.
           </p>
@@ -89,9 +91,9 @@ export const UACSpotlight: React.FC<UACSpotlightProps> = ({
               px-3 py-1.5
               text-sm font-medium
               text-blue-600
-              border border-blue-200
+              border border-blue-200 dark:border-blue-800
               rounded-md
-              hover:bg-blue-50
+              hover:bg-blue-50 dark:hover:bg-blue-900/20
               transition-colors
               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
             "
@@ -105,10 +107,10 @@ export const UACSpotlight: React.FC<UACSpotlightProps> = ({
             className="
               px-3 py-1.5
               text-sm font-medium
-              text-gray-700
-              bg-gray-100
+              text-gray-700 dark:text-neutral-300
+              bg-gray-100 dark:bg-neutral-700
               rounded-md
-              hover:bg-gray-200
+              hover:bg-gray-200 dark:hover:bg-neutral-600
               transition-colors
               focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1
             "

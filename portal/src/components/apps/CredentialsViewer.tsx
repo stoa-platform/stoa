@@ -51,20 +51,23 @@ export function CredentialsViewer({
     <div className="space-y-4">
       {/* Client ID */}
       <div>
-        <span id="client-id-label" className="block text-sm font-medium text-gray-700 mb-1">
+        <span
+          id="client-id-label"
+          className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+        >
           Client ID
         </span>
         <div className="flex items-center gap-2">
           <div
-            className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg font-mono text-sm"
+            className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg font-mono text-sm dark:text-white"
             aria-labelledby="client-id-label"
           >
-            <Key className="h-4 w-4 text-gray-400" aria-hidden="true" />
+            <Key className="h-4 w-4 text-gray-400 dark:text-neutral-500" aria-hidden="true" />
             <span className="flex-1 truncate">{clientId}</span>
           </div>
           <button
             onClick={() => copyToClipboard(clientId, 'id')}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
             title="Copy Client ID"
           >
             {copiedField === 'id' ? (
@@ -78,26 +81,29 @@ export function CredentialsViewer({
 
       {/* Client Secret */}
       <div>
-        <span id="client-secret-label" className="block text-sm font-medium text-gray-700 mb-1">
+        <span
+          id="client-secret-label"
+          className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+        >
           Client Secret
         </span>
         {displaySecret ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg font-mono text-sm">
-                <Key className="h-4 w-4 text-gray-400" />
+              <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg font-mono text-sm dark:text-white">
+                <Key className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
                 <span className="flex-1 truncate">{showSecret ? displaySecret : maskedSecret}</span>
               </div>
               <button
                 onClick={() => setShowSecret(!showSecret)}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
                 title={showSecret ? 'Hide secret' : 'Show secret'}
               >
                 {showSecret ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
               <button
                 onClick={() => copyToClipboard(displaySecret, 'secret')}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
                 title="Copy Client Secret"
               >
                 {copiedField === 'secret' ? (
@@ -110,9 +116,9 @@ export function CredentialsViewer({
 
             {/* Warning for new secret */}
             {(showSecretOnce || newSecret) && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
-                <div className="text-sm text-amber-700">
+                <div className="text-sm text-amber-700 dark:text-amber-400">
                   <strong>Important:</strong> This secret will only be shown once. Make sure to copy
                   and store it securely now.
                 </div>
@@ -120,8 +126,8 @@ export function CredentialsViewer({
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500">
-            <Key className="h-4 w-4 text-gray-400" />
+          <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg text-sm text-gray-500 dark:text-neutral-400">
+            <Key className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
             <span>Secret is hidden. Regenerate to get a new one.</span>
           </div>
         )}
@@ -133,20 +139,20 @@ export function CredentialsViewer({
               <button
                 onClick={() => setShowRegenerateConfirm(true)}
                 disabled={isRegenerating}
-                className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50"
               >
                 <RefreshCw className={`h-4 w-4 ${isRegenerating ? 'animate-spin' : ''}`} />
                 Regenerate Secret
               </button>
             ) : (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <div className="flex items-start gap-2 mb-3">
                   <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-red-800">
+                    <p className="text-sm font-medium text-red-800 dark:text-red-400">
                       Are you sure you want to regenerate the secret?
                     </p>
-                    <p className="text-sm text-red-600 mt-1">
+                    <p className="text-sm text-red-600 dark:text-red-400 mt-1">
                       This will invalidate the current secret. Any applications using it will stop
                       working.
                     </p>
@@ -170,7 +176,7 @@ export function CredentialsViewer({
                   <button
                     onClick={() => setShowRegenerateConfirm(false)}
                     disabled={isRegenerating}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-red-100 rounded-lg disabled:opacity-50"
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg disabled:opacity-50"
                   >
                     Cancel
                   </button>

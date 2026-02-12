@@ -623,6 +623,31 @@ def create_client(token: str | None) -> httpx.Client:
 # =============================================================================
 
 
+def ensure_tenant(client: httpx.Client) -> bool:
+    """Create demo tenant if it doesn't exist."""
+    print(f"\n=== Phase 0: Ensuring tenant '{DEMO_TENANT}' exists ===")
+    payload = {
+        "name": DEMO_TENANT,
+        "display_name": "High Five - The Resistance",
+        "description": "Parzival's team — demo tenant for STOA Platform",
+        "owner_email": "parzival@highfive.oasis",
+    }
+    try:
+        resp = client.post("/v1/tenants", json=payload)
+        if resp.status_code in (200, 201):
+            print(f"  [+] Tenant '{DEMO_TENANT}' created")
+            return True
+        elif resp.status_code == 409:
+            print(f"  [=] Tenant '{DEMO_TENANT}' already exists")
+            return True
+        else:
+            print(f"  [-] Tenant creation failed: {resp.status_code} — {resp.text[:120]}")
+            return False
+    except Exception as e:
+        print(f"  [-] Tenant creation error: {e}")
+        return False
+
+
 def seed_apis_via_gitops(client: httpx.Client) -> dict[str, bool]:
     """Try creating APIs via GitOps endpoint. Returns {name: success}."""
     results = {}
@@ -1142,6 +1167,9 @@ def main() -> int:
     client = create_client(token)
 
     try:
+        # Phase 0: Ensure tenant exists
+        ensure_tenant(client)
+
         # Phase 1: APIs
         apis, used_offline = seed_apis(client)
 

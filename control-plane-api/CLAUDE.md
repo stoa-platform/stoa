@@ -24,8 +24,8 @@ src/
 ├── repositories/        # Data access layer (CRUD)
 ├── routers/             # 38+ API endpoint modules
 ├── schemas/             # Pydantic request/response schemas
-├── services/            # Business logic (keycloak, argocd, awx, kafka, etc.)
-└── workers/             # Background tasks (deployment_worker)
+├── services/            # Business logic (keycloak, argocd, kafka, etc.)
+└── workers/             # Background tasks (sync_engine, health_worker)
 ```
 
 ## Development

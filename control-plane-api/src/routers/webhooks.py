@@ -307,12 +307,12 @@ async def handle_push_event_traced_pg(
         )
         raise
 
-    # AWX Trigger step (pending, will be updated by deployment worker)
+    # Gateway sync step (pending, will be updated by gateway adapter)
     await service.add_step(
         trace,
-        name="awx_trigger",
+        name="gateway_sync",
         status="pending",
-        details={"note": "Awaiting deployment worker"},
+        details={"note": "Awaiting gateway adapter"},
     )
 
     # Publish MCP server events

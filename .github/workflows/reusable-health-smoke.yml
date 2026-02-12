@@ -1,0 +1,67 @@
+# =============================================================================
+# Reusable Health Smoke Test — Tier 1 post-deploy verification
+# =============================================================================
+# curl-based health checks against 5 production endpoints.
+# Zero auth required, runs in ~30s, catches real deploy failures:
+#   pod crash, ingress misconfiguration, Keycloak down, image pull error.
+#
+# For full E2E with Playwright + personas, see e2e-nightly.yml (Tier 2).
+# =============================================================================
+
+name: Reusable Health Smoke Test
+
+on:
+  workflow_call:
+    inputs:
+      component:
+        description: 'Component that was just deployed (for logging)'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment (dev, staging, prod)'
+        required: false
+        type: string
+        default: 'dev'
+
+jobs:
+  health-check:
+    name: Health Smoke (${{ inputs.component }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Wait for rollout (30s)
+        run: sleep 30
+
+      - name: Health checks
+        env:
+          ENV_PREFIX: ${{ inputs.environment == 'staging' && 'staging-' || '' }}
+        run: |
+          set -euo pipefail
+          PASS=0; FAIL=0
+
+          check() {
+            local name="$1" url="$2" expected="${3:-200}"
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 "$url") || status="000"
+            if [ "$status" = "$expected" ]; then
+              echo "  $name: $status"
+              PASS=$((PASS+1))
+            else
+              echo "  $name: $status (expected $expected)"
+              FAIL=$((FAIL+1))
+            fi
+          }
+
+          BASE="${ENV_PREFIX}gostoa.dev"
+          echo "Health checks for ${BASE} (after ${{ inputs.component }} deploy)"
+          echo "---"
+
+          check "API Health"      "https://${ENV_PREFIX}api.gostoa.dev/health"
+          check "Gateway Health"  "https://${ENV_PREFIX}mcp.gostoa.dev/health/ready"
+          check "Portal"          "https://${ENV_PREFIX}portal.gostoa.dev"
+          check "Console"         "https://${ENV_PREFIX}console.gostoa.dev"
+          check "Keycloak OIDC"   "https://${ENV_PREFIX}auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
+
+          echo "---"
+          echo "Results: $PASS passed, $FAIL failed (component: ${{ inputs.component }})"
+          [ "$FAIL" -eq 0 ] || exit 1

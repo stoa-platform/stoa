@@ -130,17 +130,17 @@ jobs:
       contents: read
     secrets: inherit
 
-  # === Smoke Test: E2E @smoke after deploy ===
+  # === Smoke Test: health checks after deploy (Tier 1) ===
+  # Full E2E with personas runs nightly (e2e-nightly.yml)
   smoke-test:
     needs: deploy
     if: needs.deploy.result == 'success'
-    uses: ./.github/workflows/reusable-smoke-test.yml
+    uses: ./.github/workflows/reusable-health-smoke.yml
     with:
       component: stoa-portal
+      environment: ${{ github.event.inputs.environment || 'dev' }}
     permissions:
       contents: read
-      id-token: write
-    secrets: inherit
 
   # === Notify: Slack ===
   notify:

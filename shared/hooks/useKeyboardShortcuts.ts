@@ -119,7 +119,7 @@ export function useSequenceShortcuts(
 ) {
   const { enabled = true, disableInInputs = true } = options;
   const sequenceRef = useRef<string[]>([]);
-  const timeoutRef = useRef<number>();
+  const timeoutRef = useRef<number>(undefined);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Ignore modifier keys

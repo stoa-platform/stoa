@@ -145,19 +145,21 @@ export function SubscribeModal({
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-neutral-700">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Subscribe to API</h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Subscribe to API
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
                 {api.name} v{api.version}
               </p>
             </div>
             <button
               onClick={handleClose}
               disabled={isLoading}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              className="p-2 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <X className="h-5 w-5" />
             </button>
@@ -168,9 +170,9 @@ export function SubscribeModal({
             <div className="p-6 space-y-6">
               {/* Error message */}
               {error && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                   <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
-                  <p className="text-sm text-red-700">{error}</p>
+                  <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
                 </div>
               )}
 
@@ -178,26 +180,28 @@ export function SubscribeModal({
               <div>
                 <label
                   htmlFor="application"
-                  className="block text-sm font-medium text-gray-700 mb-2"
+                  className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2"
                 >
                   Select Application <span className="text-red-500">*</span>
                 </label>
                 {appsLoading ? (
-                  <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                    <span className="text-sm text-gray-500">Loading applications...</span>
+                  <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg">
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-500 dark:text-neutral-400" />
+                    <span className="text-sm text-gray-500 dark:text-neutral-400">
+                      Loading applications...
+                    </span>
                   </div>
                 ) : activeApps.length === 0 ? (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-sm text-amber-700">
+                  <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <p className="text-sm text-amber-700 dark:text-amber-400">
                       You don't have any active applications. Please create an application first
                       before subscribing to APIs.
                     </p>
                     <a
                       href="/apps"
-                      className="mt-2 inline-block text-sm font-medium text-amber-800 hover:text-amber-900"
+                      className="mt-2 inline-block text-sm font-medium text-amber-800 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200"
                     >
-                      Go to My Applications →
+                      Go to My Applications &rarr;
                     </a>
                   </div>
                 ) : (
@@ -207,7 +211,7 @@ export function SubscribeModal({
                     onChange={(e) => setSelectedAppId(e.target.value)}
                     disabled={isLoading}
                     required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed dark:bg-neutral-800 dark:text-white"
                   >
                     <option value="">Select an application...</option>
                     {activeApps.map((app: Application) => (
@@ -221,7 +225,10 @@ export function SubscribeModal({
 
               {/* Select Plan */}
               <div role="radiogroup" aria-labelledby="plan-label">
-                <span id="plan-label" className="block text-sm font-medium text-gray-700 mb-3">
+                <span
+                  id="plan-label"
+                  className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3"
+                >
                   Select Plan{' '}
                   <span className="text-red-500" aria-hidden="true">
                     *
@@ -242,8 +249,8 @@ export function SubscribeModal({
                         disabled={isLoading}
                         className={`relative p-4 rounded-lg border-2 text-left transition-all ${
                           isSelected
-                            ? `${plan.borderColor} ${plan.bgColor} ring-2 ring-offset-1 ring-primary-500`
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                            ? `${plan.borderColor} ${plan.bgColor} ring-2 ring-offset-1 ring-primary-500 dark:ring-offset-neutral-800`
+                            : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800'
                         } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         <div className="flex items-start gap-3">
@@ -252,16 +259,18 @@ export function SubscribeModal({
                           </div>
                           <div className="flex-1">
                             <h4
-                              className={`font-semibold ${isSelected ? plan.color : 'text-gray-900'}`}
+                              className={`font-semibold ${isSelected ? plan.color : 'text-gray-900 dark:text-white'}`}
                             >
                               {plan.name}
                             </h4>
-                            <p className="text-xs text-gray-500 mt-0.5">{plan.description}</p>
+                            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
+                              {plan.description}
+                            </p>
                             <ul className="mt-2 space-y-1">
                               {plan.features.map((feature, idx) => (
                                 <li
                                   key={idx}
-                                  className="flex items-center gap-1.5 text-xs text-gray-600"
+                                  className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-neutral-400"
                                 >
                                   <Check className="h-3 w-3 text-green-500" />
                                   {feature}
@@ -284,8 +293,8 @@ export function SubscribeModal({
               </div>
 
               {/* Info box */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-700">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <p className="text-sm text-blue-700 dark:text-blue-400">
                   After subscribing, you can use your application's credentials to access this API.
                   You can change your plan or cancel the subscription at any time.
                 </p>
@@ -293,12 +302,12 @@ export function SubscribeModal({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-neutral-700">
               <button
                 type="button"
                 onClick={handleClose}
                 disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>

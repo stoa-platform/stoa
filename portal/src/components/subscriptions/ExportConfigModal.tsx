@@ -151,21 +151,25 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
         />
 
         {/* Modal */}
-        <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full">
+        <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-neutral-700">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary-50 rounded-lg">
-                <FileJson className="h-5 w-5 text-primary-600" />
+              <div className="p-2 bg-primary-50 dark:bg-primary-900/30 rounded-lg">
+                <FileJson className="h-5 w-5 text-primary-600 dark:text-primary-400" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Export MCP Config</h3>
-                <p className="text-sm text-gray-500">For Claude Desktop / Cursor</p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Export MCP Config
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-neutral-400">
+                  For Claude Desktop / Cursor
+                </p>
               </div>
             </div>
             <button
               onClick={handleClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
@@ -174,7 +178,7 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
           {/* Content */}
           <div className="px-6 py-4 space-y-4">
             {/* Tool Info */}
-            <div className="bg-gray-50 rounded-lg p-4">
+            <div className="bg-gray-50 dark:bg-neutral-900 rounded-lg p-4">
               <div className="flex items-center gap-3">
                 <img
                   src={STOA_LOGO_URL}
@@ -185,12 +189,12 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
                   }}
                 />
                 <div>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-neutral-400">
                     <span className="font-medium">Tool:</span> {subscription.tool_id}
                   </p>
-                  <p className="text-sm text-gray-600 mt-0.5">
+                  <p className="text-sm text-gray-600 dark:text-neutral-400 mt-0.5">
                     <span className="font-medium">Key Prefix:</span>{' '}
-                    <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">
+                    <code className="bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded text-xs">
                       {subscription.api_key_prefix}...
                     </code>
                   </p>
@@ -200,7 +204,10 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
 
             {/* Auth Method Selection */}
             <div role="radiogroup" aria-labelledby="auth-method-label">
-              <span id="auth-method-label" className="block text-sm font-medium text-gray-700 mb-2">
+              <span
+                id="auth-method-label"
+                className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2"
+              >
                 Authentication Method
               </span>
               <div className="grid grid-cols-2 gap-3">
@@ -208,8 +215,8 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
                   onClick={() => setAuthMethod('oauth2')}
                   className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
                     authMethod === 'oauth2'
-                      ? 'border-primary-500 bg-primary-50 text-primary-700'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                      : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600'
                   }`}
                 >
                   <Shield className="h-4 w-4" />
@@ -222,8 +229,8 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
                   onClick={() => setAuthMethod('apiKey')}
                   className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
                     authMethod === 'apiKey'
-                      ? 'border-primary-500 bg-primary-50 text-primary-700'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                      : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600'
                   }`}
                 >
                   <Key className="h-4 w-4" />
@@ -238,7 +245,10 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
             {/* Auth Inputs */}
             {authMethod === 'apiKey' ? (
               <div>
-                <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="apiKey"
+                  className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                >
                   API Key
                 </label>
                 <input
@@ -247,9 +257,9 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="stoa_sk_..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm dark:bg-neutral-800 dark:text-white"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
                   Use "Reveal Key" first if you don't have your API key.
                 </p>
               </div>
@@ -258,7 +268,7 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
                 <div>
                   <label
                     htmlFor="clientId"
-                    className="block text-sm font-medium text-gray-700 mb-1"
+                    className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
                   >
                     Client ID
                   </label>
@@ -268,13 +278,13 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
                     value={clientId}
                     onChange={(e) => setClientId(e.target.value)}
                     placeholder="stoa-mcp-client"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm dark:bg-neutral-800 dark:text-white"
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="clientSecret"
-                    className="block text-sm font-medium text-gray-700 mb-1"
+                    className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
                   >
                     Client Secret
                   </label>
@@ -284,11 +294,13 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
                     value={clientSecret}
                     onChange={(e) => setClientSecret(e.target.value)}
                     placeholder="your-client-secret"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm dark:bg-neutral-800 dark:text-white"
                   />
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500">Create service accounts in your profile.</p>
+                  <p className="text-xs text-gray-500 dark:text-neutral-400">
+                    Create service accounts in your profile.
+                  </p>
                   <Link
                     to="/service-accounts"
                     onClick={handleClose}
@@ -304,15 +316,15 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
             {/* Config Preview */}
             {config && (
               <>
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-sm text-green-700 flex items-center gap-2">
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                  <p className="text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
                     <Check className="h-4 w-4" />
                     Config ready to download!
                   </p>
                 </div>
 
                 <div>
-                  <span className="block text-sm font-medium text-gray-700 mb-1">
+                  <span className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
                     Configuration Preview
                   </span>
                   <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto max-h-48">
@@ -323,26 +335,28 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
             )}
 
             {/* Instructions */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-2">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
                 <Terminal className="h-4 w-4" />
                 How to use
               </h4>
-              <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
+              <ol className="text-sm text-blue-700 dark:text-blue-400 list-decimal list-inside space-y-1">
                 <li>Fill in your credentials above</li>
                 <li>Download or copy the config</li>
                 <li>
                   Merge into your{' '}
-                  <code className="bg-blue-100 px-1 rounded">claude_desktop_config.json</code>
+                  <code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">
+                    claude_desktop_config.json
+                  </code>
                 </li>
                 <li>Restart Claude Desktop / Cursor</li>
               </ol>
             </div>
 
             {!isValid && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-amber-700">
+                <div className="text-sm text-amber-700 dark:text-amber-400">
                   {authMethod === 'apiKey' ? (
                     <p>Use "Reveal Key" first if you don't have your API key saved.</p>
                   ) : (
@@ -351,7 +365,7 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
                       <Link
                         to="/service-accounts"
                         onClick={handleClose}
-                        className="text-amber-800 underline hover:no-underline font-medium"
+                        className="text-amber-800 dark:text-amber-300 underline hover:no-underline font-medium"
                       >
                         Create a Service Account
                       </Link>{' '}
@@ -364,10 +378,10 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 rounded-b-xl">
             <button
               onClick={handleClose}
-              className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium transition-colors"
+              className="px-4 py-2 text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors"
             >
               Close
             </button>
@@ -375,7 +389,7 @@ export function ExportConfigModal({ subscription, isOpen, onClose }: ExportConfi
             <button
               onClick={handleCopy}
               disabled={!config}
-              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {copied ? (
                 <>

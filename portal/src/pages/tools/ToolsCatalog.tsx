@@ -32,9 +32,21 @@ const statusConfig: Record<
     bg: string;
   }
 > = {
-  active: { label: 'Active', color: 'text-green-700', bg: 'bg-green-100' },
-  beta: { label: 'Beta', color: 'text-amber-700', bg: 'bg-amber-100' },
-  deprecated: { label: 'Deprecated', color: 'text-red-700', bg: 'bg-red-100' },
+  active: {
+    label: 'Active',
+    color: 'text-green-700 dark:text-green-400',
+    bg: 'bg-green-100 dark:bg-green-900/30',
+  },
+  beta: {
+    label: 'Beta',
+    color: 'text-amber-700 dark:text-amber-400',
+    bg: 'bg-amber-100 dark:bg-amber-900/30',
+  },
+  deprecated: {
+    label: 'Deprecated',
+    color: 'text-red-700 dark:text-red-400',
+    bg: 'bg-red-100 dark:bg-red-900/20',
+  },
 };
 
 const PAGE_SIZE = 24; // Multiple of 3 for grid layout
@@ -97,13 +109,15 @@ export function ToolsCatalog() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">AI Tools Catalog</h1>
-          <p className="text-gray-500 mt-1">Discover and subscribe to AI-powered tools</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Tools Catalog</h1>
+          <p className="text-gray-500 dark:text-neutral-400 mt-1">
+            Discover and subscribe to AI-powered tools
+          </p>
         </div>
         <button
           onClick={() => refetch()}
           disabled={isLoading}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           Refresh
@@ -113,21 +127,21 @@ export function ToolsCatalog() {
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-neutral-500" />
           <input
             type="text"
             placeholder="Search tools..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="h-5 w-5 text-gray-400" />
+          <Filter className="h-5 w-5 text-gray-400 dark:text-neutral-500" />
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           >
             {allCategories.map((cat) => (
               <option key={cat} value={cat}>
@@ -141,13 +155,13 @@ export function ToolsCatalog() {
       {/* Active Filters / Tags */}
       {(selectedTags.length > 0 || selectedCategory !== 'All' || searchQuery) && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-gray-500">Active filters:</span>
+          <span className="text-sm text-gray-500 dark:text-neutral-400">Active filters:</span>
           {selectedCategory !== 'All' && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm">
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 rounded-full text-sm">
               Category: {selectedCategory}
               <button
                 onClick={() => setSelectedCategory('All')}
-                className="hover:text-primary-900 ml-1"
+                className="hover:text-primary-900 dark:hover:text-primary-300 ml-1"
               >
                 ×
               </button>
@@ -157,7 +171,7 @@ export function ToolsCatalog() {
             <button
               key={tag}
               type="button"
-              className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm cursor-pointer hover:bg-blue-200"
+              className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-sm cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/50"
               onClick={() => setSelectedTags(selectedTags.filter((t) => t !== tag))}
               aria-label={`Remove ${tag} filter`}
             >
@@ -169,9 +183,12 @@ export function ToolsCatalog() {
             </button>
           ))}
           {searchQuery && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
-              Search: "{searchQuery}"
-              <button onClick={() => setSearchQuery('')} className="hover:text-gray-900 ml-1">
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-300 rounded-full text-sm">
+              Search: &quot;{searchQuery}&quot;
+              <button
+                onClick={() => setSearchQuery('')}
+                className="hover:text-gray-900 dark:hover:text-white ml-1"
+              >
                 ×
               </button>
             </span>
@@ -182,7 +199,7 @@ export function ToolsCatalog() {
               setSelectedCategory('All');
               setSelectedTags([]);
             }}
-            className="text-sm text-gray-500 hover:text-gray-700 underline"
+            className="text-sm text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 underline"
           >
             Clear all
           </button>
@@ -191,25 +208,25 @@ export function ToolsCatalog() {
 
       {/* Loading state */}
       {isLoading && (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
           <Loader2 className="h-8 w-8 text-primary-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Loading tools...</p>
+          <p className="text-gray-500 dark:text-neutral-400">Loading tools...</p>
         </div>
       )}
 
       {/* Error state */}
       {isError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
             <div>
-              <h3 className="font-medium text-red-800">Failed to load tools</h3>
-              <p className="text-sm text-red-600 mt-1">
+              <h3 className="font-medium text-red-800 dark:text-red-300">Failed to load tools</h3>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
                 {(error as Error)?.message || 'An unexpected error occurred'}
               </p>
               <button
                 onClick={() => refetch()}
-                className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-medium transition-colors"
+                className="mt-3 px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 text-sm font-medium transition-colors"
               >
                 Try Again
               </button>
@@ -222,7 +239,7 @@ export function ToolsCatalog() {
       {!isLoading && !isError && tools.length > 0 && (
         <>
           <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-gray-500 dark:text-neutral-400">
               {tools.length === 1 ? '1 tool' : `${tools.length} tools`}
               {selectedCategory !== 'All' && ` in ${selectedCategory}`}
               {totalPages > 1 && ` — Page ${currentPage}/${totalPages}`}
@@ -238,10 +255,10 @@ export function ToolsCatalog() {
                 <Link
                   key={toolId}
                   to={`/tools/${encodeURIComponent(toolId)}`}
-                  className="bg-white rounded-lg border border-gray-200 p-5 hover:border-primary-300 hover:shadow-md transition-all group"
+                  className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-5 hover:border-primary-300 hover:shadow-md transition-all group"
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div className="p-2 bg-primary-50 rounded-lg">
+                    <div className="p-2 bg-primary-50 dark:bg-primary-900/30 rounded-lg">
                       <Wrench className="h-5 w-5 text-primary-600" />
                     </div>
                     <span
@@ -251,12 +268,14 @@ export function ToolsCatalog() {
                     </span>
                   </div>
 
-                  <h3 className="font-semibold text-gray-900 group-hover:text-primary-700 transition-colors">
+                  <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-primary-700 dark:group-hover:text-primary-400 transition-colors">
                     {tool.displayName || tool.name}
                   </h3>
-                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{tool.description}</p>
+                  <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1 line-clamp-2">
+                    {tool.description}
+                  </p>
 
-                  <div className="flex items-center gap-4 mt-4 text-sm text-gray-500">
+                  <div className="flex items-center gap-4 mt-4 text-sm text-gray-500 dark:text-neutral-400">
                     {tool.pricing && (
                       <div className="flex items-center gap-1">
                         <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
@@ -288,8 +307,8 @@ export function ToolsCatalog() {
                           }}
                           className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full transition-colors ${
                             selectedTags.includes(toolTag)
-                              ? 'bg-blue-200 text-blue-800'
-                              : 'bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700'
+                              ? 'bg-blue-200 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
+                              : 'bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-400'
                           }`}
                         >
                           <Tag className="h-3 w-3" />
@@ -297,16 +316,18 @@ export function ToolsCatalog() {
                         </button>
                       ))}
                       {tool.tags.length > 3 && (
-                        <span className="text-xs text-gray-400">+{tool.tags.length - 3}</span>
+                        <span className="text-xs text-gray-400 dark:text-neutral-500">
+                          +{tool.tags.length - 3}
+                        </span>
                       )}
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-neutral-700">
                     {tool.category ? (
                       <button
                         type="button"
-                        className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded cursor-pointer hover:bg-primary-100 hover:text-primary-700"
+                        className="text-xs font-medium text-gray-500 dark:text-neutral-400 bg-gray-100 dark:bg-neutral-700 px-2 py-1 rounded cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-900/30 hover:text-primary-700 dark:hover:text-primary-400"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -319,7 +340,7 @@ export function ToolsCatalog() {
                     ) : (
                       <span />
                     )}
-                    <span className="flex items-center gap-1 text-sm font-medium text-primary-600 group-hover:text-primary-700">
+                    <span className="flex items-center gap-1 text-sm font-medium text-primary-600 group-hover:text-primary-700 dark:group-hover:text-primary-400">
                       View Details
                       <ArrowRight className="h-4 w-4" />
                     </span>
@@ -335,7 +356,7 @@ export function ToolsCatalog() {
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
+                className="flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors dark:text-neutral-300"
               >
                 <ChevronLeft className="h-4 w-4" />
                 Previous
@@ -346,7 +367,7 @@ export function ToolsCatalog() {
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
+                className="flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-neutral-600 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors dark:text-neutral-300"
               >
                 Next
                 <ChevronRight className="h-4 w-4" />
@@ -358,12 +379,14 @@ export function ToolsCatalog() {
 
       {/* Empty state */}
       {!isLoading && !isError && tools.length === 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <div className="inline-flex p-4 bg-gray-100 rounded-full mb-4">
-            <Wrench className="h-8 w-8 text-gray-400" />
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
+          <div className="inline-flex p-4 bg-gray-100 dark:bg-neutral-700 rounded-full mb-4">
+            <Wrench className="h-8 w-8 text-gray-400 dark:text-neutral-500" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">No Tools Found</h2>
-          <p className="text-gray-500 max-w-md mx-auto mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            No Tools Found
+          </h2>
+          <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
             {searchQuery || selectedCategory !== 'All' || selectedTags.length > 0
               ? 'No tools match your current filters. Try adjusting your search, category, or tags.'
               : 'No MCP tools are currently available. Check back later.'}
@@ -375,7 +398,7 @@ export function ToolsCatalog() {
                 setSelectedCategory('All');
                 setSelectedTags([]);
               }}
-              className="text-primary-600 hover:text-primary-700 font-medium"
+              className="text-primary-600 hover:text-primary-700 dark:hover:text-primary-400 font-medium"
             >
               Clear Filters
             </button>

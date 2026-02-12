@@ -100,11 +100,11 @@ export function ServiceAccountsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
             <Shield className="h-7 w-7 text-primary-600" />
             Service Accounts
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-600 dark:text-neutral-400 mt-1">
             Create OAuth2 credentials for MCP tool access (Claude Desktop, Cursor, etc.)
           </p>
         </div>
@@ -118,9 +118,9 @@ export function ServiceAccountsPage() {
       </div>
 
       {/* Info Box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-        <h3 className="text-sm font-medium text-blue-800 mb-2">How it works</h3>
-        <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
+      <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+        <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">How it works</h3>
+        <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1 list-disc list-inside">
           <li>Each service account gets a unique client_id and client_secret</li>
           <li>The account inherits your RBAC roles and tenant access</li>
           <li>Use the credentials in your MCP client configuration</li>
@@ -131,22 +131,22 @@ export function ServiceAccountsPage() {
       {/* Loading/Error States */}
       {isLoading && (
         <div className="text-center py-12">
-          <RefreshCw className="h-8 w-8 text-gray-400 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Loading service accounts...</p>
+          <RefreshCw className="h-8 w-8 text-gray-400 dark:text-neutral-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-neutral-400">Loading service accounts...</p>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-700">Failed to load service accounts</p>
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <p className="text-red-700 dark:text-red-400">Failed to load service accounts</p>
         </div>
       )}
 
       {/* Service Accounts List */}
       {accounts && accounts.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <Key className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 mb-4">No service accounts yet</p>
+        <div className="text-center py-12 bg-gray-50 dark:bg-neutral-900 rounded-lg">
+          <Key className="h-12 w-12 text-gray-300 dark:text-neutral-600 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-neutral-400 mb-4">No service accounts yet</p>
           <button
             onClick={() => setShowCreateModal(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
@@ -236,24 +236,24 @@ function ServiceAccountCard({
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+    <div className="bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg p-4 shadow-sm">
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-primary-50 rounded-lg">
+          <div className="p-2 bg-primary-50 dark:bg-primary-900/30 rounded-lg">
             <Key className="h-5 w-5 text-primary-600" />
           </div>
           <div>
-            <h3 className="font-medium text-gray-900">{account.name}</h3>
-            <p className="text-sm text-gray-500 mt-0.5">
+            <h3 className="font-medium text-gray-900 dark:text-white">{account.name}</h3>
+            <p className="text-sm text-gray-500 dark:text-neutral-400 mt-0.5">
               {account.description || 'No description'}
             </p>
             <div className="flex items-center gap-2 mt-2">
-              <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+              <code className="text-xs bg-gray-100 dark:bg-neutral-700 px-2 py-1 rounded font-mono">
                 {account.client_id}
               </code>
               <button
                 onClick={handleCopyClientId}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300"
                 title="Copy client_id"
               >
                 {copied ? (
@@ -270,7 +270,7 @@ function ServiceAccountCard({
           <button
             onClick={onRegenerate}
             disabled={isRegenerating}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-lg transition-colors disabled:opacity-50"
             title="Regenerate secret"
           >
             <RefreshCw className={`h-4 w-4 ${isRegenerating ? 'animate-spin' : ''}`} />
@@ -278,7 +278,7 @@ function ServiceAccountCard({
           </button>
           <button
             onClick={onDelete}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
             title="Delete service account"
           >
             <Trash2 className="h-4 w-4" />
@@ -289,29 +289,36 @@ function ServiceAccountCard({
 
       {/* Show regenerated secret */}
       {regeneratedSecret && (
-        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+        <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-amber-800">New secret generated!</p>
-              <p className="text-xs text-amber-700 mb-2">Copy it now - it won't be shown again.</p>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                New secret generated!
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+                Copy it now - it won't be shown again.
+              </p>
               <div className="flex items-center gap-2">
-                <code className="text-xs bg-amber-100 px-2 py-1 rounded font-mono flex-1 truncate">
+                <code className="text-xs bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded font-mono flex-1 truncate">
                   {showSecret ? regeneratedSecret : '••••••••••••••••••••••••'}
                 </code>
                 <button
                   onClick={() => setShowSecret(!showSecret)}
-                  className="text-amber-600 hover:text-amber-700"
+                  className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
                 >
                   {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
-                <button onClick={handleCopySecret} className="text-amber-600 hover:text-amber-700">
+                <button
+                  onClick={handleCopySecret}
+                  className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
+                >
                   <Copy className="h-4 w-4" />
                 </button>
               </div>
               <button
                 onClick={onClearSecret}
-                className="mt-2 text-xs text-amber-600 hover:underline"
+                className="mt-2 text-xs text-amber-600 dark:text-amber-400 hover:underline"
               >
                 I've saved it, hide this
               </button>
@@ -353,12 +360,17 @@ function CreateServiceAccountModal({
         aria-label="Close modal"
         tabIndex={0}
       />
-      <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Create Service Account</h2>
+      <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-md w-full p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Create Service Account
+        </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="sa-name" className="block text-sm font-medium text-gray-700 mb-1">
+            <label
+              htmlFor="sa-name"
+              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+            >
               Name{' '}
               <span className="text-red-500" aria-hidden="true">
                 *
@@ -371,7 +383,7 @@ function CreateServiceAccountModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., claude-desktop, cursor-ide"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               required
             />
           </div>
@@ -379,7 +391,7 @@ function CreateServiceAccountModal({
           <div>
             <label
               htmlFor="sa-description"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
             >
               Description
             </label>
@@ -389,13 +401,13 @@ function CreateServiceAccountModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700">{error}</p>
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
             </div>
           )}
 
@@ -403,7 +415,7 @@ function CreateServiceAccountModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 hover:text-gray-900"
+              className="px-4 py-2 text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white"
             >
               Cancel
             </button>
@@ -487,21 +499,23 @@ function NewAccountCreatedModal({
         aria-label="Close modal"
         tabIndex={0}
       />
-      <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+      <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full p-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 bg-green-100 rounded-full">
-            <Check className="h-6 w-6 text-green-600" aria-hidden="true" />
+          <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full">
+            <Check className="h-6 w-6 text-green-600 dark:text-green-400" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Service Account Created!</h2>
-            <p className="text-sm text-gray-500">{account.name}</p>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Service Account Created!
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-neutral-400">{account.name}</p>
           </div>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+        <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4">
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" aria-hidden="true" />
-            <p className="text-sm text-amber-800">
+            <p className="text-sm text-amber-800 dark:text-amber-300">
               <strong>Important:</strong> Save these credentials now. The client secret will not be
               shown again.
             </p>
@@ -510,11 +524,14 @@ function NewAccountCreatedModal({
 
         <div className="space-y-3 mb-6">
           <div>
-            <span id="sa-client-id-label" className="block text-xs font-medium text-gray-500 mb-1">
+            <span
+              id="sa-client-id-label"
+              className="block text-xs font-medium text-gray-500 dark:text-neutral-400 mb-1"
+            >
               Client ID
             </span>
             <code
-              className="block w-full p-2 bg-gray-100 rounded text-sm font-mono break-all"
+              className="block w-full p-2 bg-gray-100 dark:bg-neutral-700 rounded text-sm font-mono break-all"
               aria-labelledby="sa-client-id-label"
             >
               {account.client_id}
@@ -523,20 +540,20 @@ function NewAccountCreatedModal({
           <div>
             <span
               id="sa-client-secret-label"
-              className="block text-xs font-medium text-gray-500 mb-1"
+              className="block text-xs font-medium text-gray-500 dark:text-neutral-400 mb-1"
             >
               Client Secret
             </span>
             <div className="flex items-center gap-2">
               <code
-                className="flex-1 p-2 bg-gray-100 rounded text-sm font-mono break-all"
+                className="flex-1 p-2 bg-gray-100 dark:bg-neutral-700 rounded text-sm font-mono break-all"
                 aria-labelledby="sa-client-secret-label"
               >
                 {showSecret ? account.client_secret : '••••••••••••••••••••••••••••••••'}
               </code>
               <button
                 onClick={() => setShowSecret(!showSecret)}
-                className="p-2 text-gray-500 hover:text-gray-700"
+                className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200"
                 aria-label={showSecret ? 'Hide client secret' : 'Show client secret'}
               >
                 {showSecret ? (
@@ -552,7 +569,7 @@ function NewAccountCreatedModal({
         <div className="flex flex-wrap gap-3">
           <button
             onClick={handleCopyAll}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 dark:text-neutral-300"
           >
             {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
             {copied ? 'Copied!' : 'Copy Credentials'}
@@ -566,10 +583,10 @@ function NewAccountCreatedModal({
           </button>
         </div>
 
-        <div className="mt-6 pt-4 border-t border-gray-200">
+        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
           <button
             onClick={onClose}
-            className="w-full px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
+            className="w-full px-4 py-2 text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white font-medium"
           >
             I've saved my credentials
           </button>
@@ -599,21 +616,26 @@ function DeleteConfirmModal({
         aria-label="Close modal"
         tabIndex={0}
       />
-      <div className="relative bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+      <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-sm w-full p-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 bg-red-100 rounded-full">
-            <AlertTriangle className="h-6 w-6 text-red-600" />
+          <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-full">
+            <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-900">Delete Service Account?</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Delete Service Account?
+          </h2>
         </div>
 
-        <p className="text-gray-600 mb-6">
+        <p className="text-gray-600 dark:text-neutral-400 mb-6">
           This will immediately revoke access for any MCP clients using this account. This action
           cannot be undone.
         </p>
 
         <div className="flex justify-end gap-3">
-          <button onClick={onCancel} className="px-4 py-2 text-gray-700 hover:text-gray-900">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white"
+          >
             Cancel
           </button>
           <button

@@ -88,15 +88,18 @@ async def readiness():
     checks = {}
     all_healthy = True
 
-    # Check Kafka connection (critical)
-    try:
-        kafka_healthy = _check_kafka_connected()
-        checks["kafka"] = "ok" if kafka_healthy else "disconnected"
-        if not kafka_healthy:
+    # Check Kafka connection (critical — only if enabled)
+    if settings.KAFKA_ENABLED:
+        try:
+            kafka_healthy = _check_kafka_connected()
+            checks["kafka"] = "ok" if kafka_healthy else "disconnected"
+            if not kafka_healthy:
+                all_healthy = False
+        except Exception as e:
+            checks["kafka"] = f"error: {e!s}"
             all_healthy = False
-    except Exception as e:
-        checks["kafka"] = f"error: {e!s}"
-        all_healthy = False
+    else:
+        checks["kafka"] = "disabled"
 
     # Check Keycloak connection (critical)
     try:

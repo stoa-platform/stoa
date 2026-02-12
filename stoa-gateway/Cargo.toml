@@ -59,7 +59,7 @@ rdkafka = { version = "0.39", features = ["cmake-build"], optional = true }
 
 # === Phase 7: K8s CRD + Federation (CAB-1105) ===
 kube = { version = "3.0", features = ["runtime", "derive"], optional = true }
-k8s-openapi = { version = "0.23", features = ["latest"], optional = true }
+k8s-openapi = { version = "0.27", features = ["latest"], optional = true }
 schemars = { version = "0.8", optional = true }
 
 [features]

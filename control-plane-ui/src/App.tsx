@@ -1,12 +1,14 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy, memo } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { EnvironmentProvider } from './contexts/EnvironmentContext';
 import { Layout } from './components/Layout';
 import { PlatformStatus } from './components/PlatformStatus';
 import { quickLinks } from './config';
 import { ToastProvider } from '@stoa/shared/components/Toast';
 import { CommandPaletteProvider } from '@stoa/shared/components/CommandPalette';
 import { ThemeProvider } from '@stoa/shared/contexts';
+import { CelebrationProvider } from '@stoa/shared/components/Celebration';
 import { StoaLoader } from '@stoa/shared/components/StoaLoader';
 
 // Lazy load pages for code splitting
@@ -63,10 +65,17 @@ const BusinessDashboard = lazy(() =>
   import('./pages/Business').then((m) => ({ default: m.BusinessDashboard }))
 );
 
-// CAB-1108: Embedded iframe pages for unified STOA experience
+// Native observability dashboards (replace iframe embeds)
+const PlatformMetrics = lazy(() =>
+  import('./pages/PlatformMetrics').then((m) => ({ default: m.PlatformMetricsDashboard }))
+);
+// CAB-1108: Embedded iframe pages for unified STOA experience (retained for deep-link fallback)
 const GrafanaEmbed = lazy(() => import('./pages/GrafanaEmbed'));
 const IdentityEmbed = lazy(() => import('./pages/IdentityEmbed'));
-// CAB-1114: OpenSearch Dashboards for API trace logs
+const RequestExplorer = lazy(() =>
+  import('./pages/RequestExplorer').then((m) => ({ default: m.RequestExplorerDashboard }))
+);
+// CAB-1114: OpenSearch Dashboards for API trace logs (retained for deep-link fallback)
 const LogsEmbed = lazy(() => import('./pages/LogsEmbed'));
 
 // CAB-1118: Skeleton pages for upcoming features
@@ -276,10 +285,13 @@ interface QuickActionCardProps {
 
 // Color classes moved outside component to avoid recreation on each render
 const quickActionColorClasses = {
-  blue: 'bg-blue-50 text-blue-600 hover:bg-blue-100',
-  purple: 'bg-purple-50 text-purple-600 hover:bg-purple-100',
-  green: 'bg-green-50 text-green-600 hover:bg-green-100',
-  orange: 'bg-orange-50 text-orange-600 hover:bg-orange-100',
+  blue: 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-2 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30',
+  purple:
+    'bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 border-2 border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/30',
+  green:
+    'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 border-2 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/30',
+  orange:
+    'bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 border-2 border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/30',
 } as const;
 
 const QuickActionCard = memo(function QuickActionCard({
@@ -292,13 +304,15 @@ const QuickActionCard = memo(function QuickActionCard({
   return (
     <a
       href={href}
-      className={`block p-6 rounded-lg transition-colors ${quickActionColorClasses[color]}`}
+      className={`block p-6 rounded-xl transition-all hover:shadow-lg ${quickActionColorClasses[color]}`}
     >
       <div className="flex items-center gap-4">
-        <div className="flex-shrink-0">{icon}</div>
+        <div className="flex-shrink-0 p-2 rounded-lg bg-white/60 dark:bg-neutral-800 shadow-sm">
+          {icon}
+        </div>
         <div>
           <h3 className="font-semibold">{title}</h3>
-          <p className="text-sm opacity-80">{description}</p>
+          <p className="text-sm opacity-75">{description}</p>
         </div>
       </div>
     </a>
@@ -313,50 +327,54 @@ function ProtectedRoutes() {
   }
 
   return (
-    <CommandPaletteProvider>
-      <Layout>
-        {isLoading ? (
-          <PageLoader />
-        ) : (
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/tenants" element={<Tenants />} />
-              <Route path="/apis" element={<APIs />} />
-              <Route path="/ai-tools" element={<ToolCatalog />} />
-              <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
-              <Route path="/ai-tools/usage" element={<UsageDashboard />} />
-              <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
-              <Route path="/applications" element={<Applications />} />
-              <Route path="/deployments" element={<Deployments />} />
-              <Route path="/monitoring" element={<APIMonitoring />} />
-              <Route path="/mcp/errors" element={<ErrorSnapshots />} />
-              <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
-              <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
-              <Route path="/gateway" element={<GatewayStatus />} />
-              <Route path="/gateways/modes" element={<GatewayModes />} />
-              <Route path="/gateways" element={<GatewayRegistry />} />
-              <Route path="/gateway-deployments" element={<GatewayDeployments />} />
-              <Route path="/gateway-observability" element={<GatewayObservability />} />
-              <Route path="/operations" element={<OperationsDashboard />} />
-              <Route path="/my-usage" element={<TenantDashboard />} />
-              <Route path="/business" element={<BusinessDashboard />} />
-              <Route path="/admin/prospects" element={<AdminProspects />} />
-              {/* CAB-1108: Embedded observability and identity management */}
-              <Route path="/observability" element={<GrafanaEmbed />} />
-              <Route path="/identity" element={<IdentityEmbed />} />
-              {/* CAB-1114: OpenSearch Dashboards for API trace logs */}
-              <Route path="/logs" element={<LogsEmbed />} />
-              {/* CAB-1118: Skeleton pages for upcoming features */}
-              <Route path="/shadow-discovery" element={<ShadowDiscovery />} />
-              <Route path="/token-optimizer" element={<TokenOptimizer />} />
-              <Route path="/policies" element={<Policies />} />
-              <Route path="/audit-log" element={<AuditLog />} />
-            </Routes>
-          </Suspense>
-        )}
-      </Layout>
-    </CommandPaletteProvider>
+    <EnvironmentProvider>
+      <CommandPaletteProvider>
+        <Layout>
+          {isLoading ? (
+            <PageLoader />
+          ) : (
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/tenants" element={<Tenants />} />
+                <Route path="/apis" element={<APIs />} />
+                <Route path="/ai-tools" element={<ToolCatalog />} />
+                <Route path="/ai-tools/subscriptions" element={<MySubscriptions />} />
+                <Route path="/ai-tools/usage" element={<UsageDashboard />} />
+                <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
+                <Route path="/applications" element={<Applications />} />
+                <Route path="/deployments" element={<Deployments />} />
+                <Route path="/monitoring" element={<APIMonitoring />} />
+                <Route path="/errors" element={<ErrorSnapshots />} />
+                <Route path="/external-mcp-servers" element={<ExternalMCPServersList />} />
+                <Route path="/external-mcp-servers/:id" element={<ExternalMCPServerDetail />} />
+                <Route path="/gateway" element={<GatewayStatus />} />
+                <Route path="/gateways/modes" element={<GatewayModes />} />
+                <Route path="/gateways" element={<GatewayRegistry />} />
+                <Route path="/gateway-deployments" element={<GatewayDeployments />} />
+                <Route path="/gateway-observability" element={<GatewayObservability />} />
+                <Route path="/operations" element={<OperationsDashboard />} />
+                <Route path="/my-usage" element={<TenantDashboard />} />
+                <Route path="/business" element={<BusinessDashboard />} />
+                <Route path="/admin/prospects" element={<AdminProspects />} />
+                {/* Native observability dashboards (replace iframe embeds) */}
+                <Route path="/observability" element={<PlatformMetrics />} />
+                <Route path="/observability/grafana" element={<GrafanaEmbed />} />
+                <Route path="/identity" element={<IdentityEmbed />} />
+                {/* Native request explorer (replace OpenSearch iframe) */}
+                <Route path="/logs" element={<RequestExplorer />} />
+                <Route path="/logs/opensearch" element={<LogsEmbed />} />
+                {/* CAB-1118: Skeleton pages for upcoming features */}
+                <Route path="/shadow-discovery" element={<ShadowDiscovery />} />
+                <Route path="/token-optimizer" element={<TokenOptimizer />} />
+                <Route path="/policies" element={<Policies />} />
+                <Route path="/audit-log" element={<AuditLog />} />
+              </Routes>
+            </Suspense>
+          )}
+        </Layout>
+      </CommandPaletteProvider>
+    </EnvironmentProvider>
   );
 }
 
@@ -418,12 +436,14 @@ function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/*" element={<ProtectedRoutes />} />
-          </Routes>
-        </AuthProvider>
+        <CelebrationProvider>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/*" element={<ProtectedRoutes />} />
+            </Routes>
+          </AuthProvider>
+        </CelebrationProvider>
       </ToastProvider>
     </ThemeProvider>
   );

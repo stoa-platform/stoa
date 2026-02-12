@@ -39,6 +39,7 @@ Thumbs.db
 *.pem
 *.key
 secrets/
+!deploy/secrets/
 credentials/
 
 # Logs
@@ -68,3 +69,76 @@ node_modules/
 portal/node_modules/node_modules_CLAUDE_OFF/
 deploy/demo-federation/.env
 scripts/demo-federation/.tokens/
+
+# ============================================
+# Strategy & Confidential (NEVER commit)
+# ============================================
+
+# Sensitive AI Factory prompts (.txt = confidential, .md = tracked/safe)
+.claude/prompts/*.txt
+
+# Internal strategy & execution plans
+PLAN-*.md
+EXECUTION-*.md
+STRATEGY-*.md
+ROADMAP-INTERNAL.md
+GTM-*.md
+*-PARTNER-*.md
+
+# Client & partner data (GDPR)
+clients/
+partners/
+contacts/
+beta-testers.md
+design-partners.md
+
+# Demo presentations & recordings
+slides/
+presentations/
+*-slides.pdf
+*-slides.key
+*-slides.pptx
+*-presentation.*
+demo-recordings/
+*.mp4
+*.mov
+
+# Pricing & business model
+pricing/
+pricing-*.md
+business-model.md
+revenue-*.md
+commission-structure.md
+
+# Email drafts & communications
+drafts/
+emails/
+*-email-*.md
+communication-*.md
+
+# Legal documents
+contracts/
+invoices/
+NDA-*.pdf
+MOU-*.pdf
+*-contract.pdf
+
+# Session transcripts
+transcripts/
+session-*.md
+!.claude/rules/session-startup.md
+journal.md
+
+# Database dumps (may contain PII)
+*.sql
+*.dump
+*.db
+*.sqlite
+*.sqlite3
+backups/
+
+# Cloud credentials (extra safety)
+.aws/
+.gcloud/
+kubeconfig*
+.kube/

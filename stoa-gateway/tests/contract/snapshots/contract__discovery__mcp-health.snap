@@ -1,0 +1,11 @@
+---
+source: tests/contract/discovery.rs
+assertion_line: 38
+expression: json
+---
+{
+  "activeSessions": 0,
+  "protocolVersion": "2025-03-26",
+  "status": "healthy",
+  "tools": 0
+}

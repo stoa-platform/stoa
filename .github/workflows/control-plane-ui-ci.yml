@@ -15,7 +15,7 @@ on:
       - 'shared/**'
       - '.github/workflows/control-plane-ui-ci.yml'
       - '.github/workflows/reusable-node-ci.yml'
-      - '.github/workflows/reusable-docker-ecr.yml'
+      - '.github/workflows/reusable-docker-ghcr.yml'
       - '.github/workflows/reusable-k8s-deploy.yml'
       - '.github/actions/**'
 
@@ -65,28 +65,29 @@ jobs:
       contents: read
       checks: write
 
-  # === Docker: build + push ECR (with Vite env vars) ===
+  # === Docker: build + push GHCR (with Vite env vars) ===
   docker:
     needs: ci
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/reusable-docker-ecr.yml
+    uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: control-plane-ui
-      ecr-repository: apim/control-plane-ui
+      image-name: control-plane-ui
       environment: ${{ github.event.inputs.environment || 'dev' }}
       platforms: linux/amd64
       use-monorepo-context: true
       build-args: |
-        VITE_BASE_DOMAIN=${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
-        VITE_ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}
-        VITE_KEYCLOAK_URL=https://auth.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
+        VITE_BASE_DOMAIN=gostoa.dev
+        VITE_ENVIRONMENT=${{ github.event.inputs.environment || 'production' }}
+        VITE_KEYCLOAK_URL=https://${{ (github.event.inputs.environment == 'staging' && 'staging-auth') || 'auth' }}.gostoa.dev
         VITE_KEYCLOAK_REALM=stoa
         VITE_KEYCLOAK_CLIENT_ID=control-plane-ui
-        VITE_MCP_GATEWAY_URL=https://mcp.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
-        VITE_API_URL=https://api.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
+        VITE_MCP_GATEWAY_URL=https://${{ (github.event.inputs.environment == 'staging' && 'staging-mcp') || 'mcp' }}.gostoa.dev
+        VITE_API_URL=https://${{ (github.event.inputs.environment == 'staging' && 'staging-api') || 'api' }}.gostoa.dev
     permissions:
       contents: read
       id-token: write
+      packages: write
       attestations: write
     secrets: inherit
 
@@ -97,18 +98,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        with:
-          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
-          aws-region: eu-west-1
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name apim-dev-cluster --region eu-west-1
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
       - name: Apply k8s manifest
         run: |
           kubectl apply -f control-plane-ui/k8s/deployment.yaml 2>&1 || {
@@ -117,7 +115,7 @@ jobs:
             kubectl apply -f control-plane-ui/k8s/deployment.yaml
           }
 
-  # === Deploy: EKS rollout with auto-rollback ===
+  # === Deploy: K3s rollout with auto-rollback ===
   deploy:
     needs: [docker, apply-manifest]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -126,10 +124,9 @@ jobs:
       component: control-plane-ui
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: ${{ github.event.inputs.environment || 'dev' }}
-      environment-url: https://console.gostoa.dev
+      environment-url: https://${{ (github.event.inputs.environment == 'staging' && 'staging-console') || 'console' }}.gostoa.dev
     permissions:
       contents: read
-      id-token: write
     secrets: inherit
 
   # === Smoke Test: E2E @smoke after deploy ===

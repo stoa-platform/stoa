@@ -312,3 +312,268 @@ async fn patch_public_client(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use axum::{body::Body, http::Request, routing::post, Router};
+    use tower::ServiceExt;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn test_state_with_keycloak(keycloak_url: Option<&str>) -> AppState {
+        let config = Config {
+            keycloak_url: keycloak_url.map(|s| s.to_string()),
+            keycloak_realm: Some("stoa".to_string()),
+            keycloak_admin_password: Some("admin-pass".to_string()),
+            ..Config::default()
+        };
+        AppState::new(config)
+    }
+
+    fn build_oauth_router(state: AppState) -> Router {
+        Router::new()
+            .route("/oauth/token", post(token_proxy))
+            .route("/oauth/register", post(register_proxy))
+            .with_state(state)
+    }
+
+    // === token_proxy tests ===
+
+    #[tokio::test]
+    async fn test_token_proxy_no_keycloak_url() {
+        let state = test_state_with_keycloak(None);
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from("grant_type=client_credentials"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"], "server_error");
+    }
+
+    #[tokio::test]
+    async fn test_token_proxy_success() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/protocol/openid-connect/token"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"access_token": "test-token", "token_type": "Bearer"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from("grant_type=client_credentials&client_id=test"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["access_token"], "test-token");
+    }
+
+    #[tokio::test]
+    async fn test_token_proxy_keycloak_error() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/protocol/openid-connect/token"))
+            .respond_with(
+                ResponseTemplate::new(401).set_body_json(json!({"error": "invalid_client"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from("grant_type=client_credentials"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_token_proxy_keycloak_unreachable() {
+        // Point to a non-existent server
+        let state = test_state_with_keycloak(Some("http://127.0.0.1:1"));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/token")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from("grant_type=client_credentials"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    }
+
+    // === register_proxy tests ===
+
+    #[tokio::test]
+    async fn test_register_proxy_no_keycloak_url() {
+        let state = test_state_with_keycloak(None);
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_string(&json!({"client_name": "test"})).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn test_register_proxy_dcr_success() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/clients-registrations/openid-connect"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "client_id": "new-client-abc",
+                "client_secret": "secret-123",
+                "registration_access_token": "rat-xyz"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        // Admin token for public client patch
+        Mock::given(method("POST"))
+            .and(path("/realms/master/protocol/openid-connect/token"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"access_token": "admin-jwt"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        // Client lookup
+        Mock::given(method("GET"))
+            .and(path("/admin/realms/stoa/clients"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
+                "id": "internal-uuid",
+                "clientId": "new-client-abc"
+            }])))
+            .mount(&mock_server)
+            .await;
+
+        // Client update (PKCE patch)
+        Mock::given(method("PUT"))
+            .and(path("/admin/realms/stoa/clients/internal-uuid"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_string(&json!({"client_name": "claude-mcp"})).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["client_id"], "new-client-abc");
+    }
+
+    #[tokio::test]
+    async fn test_register_proxy_dcr_keycloak_error() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/clients-registrations/openid-connect"))
+            .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+                "error": "forbidden",
+                "error_description": "DCR disabled"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_string(&json!({"client_name": "test"})).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_register_proxy_keycloak_unreachable() {
+        let state = test_state_with_keycloak(Some("http://127.0.0.1:1"));
+        let app = build_oauth_router(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_string(&json!({"client_name": "test"})).unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    }
+}

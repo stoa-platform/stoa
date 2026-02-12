@@ -138,17 +138,17 @@ curl -X POST "${mcpGatewayUrl}/mcp/tools/invoke" \\
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
       {/* Tabs */}
-      <div className="flex border-b border-gray-200">
+      <div className="flex border-b border-gray-200 dark:border-neutral-700">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? 'text-blue-600 border-b-2 border-blue-600 -mb-px bg-blue-50'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                ? 'text-blue-600 border-b-2 border-blue-600 -mb-px bg-blue-50 dark:bg-blue-950/30'
+                : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700'
             }`}
           >
             {tab.icon}
@@ -172,12 +172,12 @@ curl -X POST "${mcpGatewayUrl}/mcp/tools/invoke" \\
       </div>
 
       {/* Help Text */}
-      <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 rounded-b-lg">
-        <p className="text-xs text-gray-500">
+      <div className="px-4 py-3 bg-gray-50 dark:bg-neutral-800/50 border-t border-gray-200 dark:border-neutral-700 rounded-b-lg">
+        <p className="text-xs text-gray-500 dark:text-neutral-400">
           {activeTab === 'claude-desktop' && (
             <>
               Add this configuration to your Claude Desktop config file at{' '}
-              <code className="bg-gray-200 px-1 rounded">
+              <code className="bg-gray-200 dark:bg-neutral-700 px-1 rounded">
                 ~/Library/Application Support/Claude/claude_desktop_config.json
               </code>
             </>
@@ -185,13 +185,16 @@ curl -X POST "${mcpGatewayUrl}/mcp/tools/invoke" \\
           {activeTab === 'python' && (
             <>
               Install the Anthropic SDK:{' '}
-              <code className="bg-gray-200 px-1 rounded">pip install anthropic</code>
+              <code className="bg-gray-200 dark:bg-neutral-700 px-1 rounded">
+                pip install anthropic
+              </code>
             </>
           )}
           {activeTab === 'curl' && (
             <>
-              Replace <code className="bg-gray-200 px-1 rounded">YOUR_TOKEN</code> with your
-              Keycloak access token.
+              Replace{' '}
+              <code className="bg-gray-200 dark:bg-neutral-700 px-1 rounded">YOUR_TOKEN</code> with
+              your Keycloak access token.
             </>
           )}
         </p>

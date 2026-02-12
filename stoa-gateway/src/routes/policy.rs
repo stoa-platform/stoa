@@ -29,6 +29,12 @@ pub struct PolicyRegistry {
     policies: RwLock<HashMap<String, PolicyEntry>>,
 }
 
+impl Default for PolicyRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PolicyRegistry {
     /// Create an empty registry.
     pub fn new() -> Self {

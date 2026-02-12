@@ -23,13 +23,13 @@ CONTROL PLANE (Cloud)                    DATA PLANE (On-Premise)
 | Control Plane API | Python 3.11, FastAPI, SQLAlchemy | `control-plane-api/` |
 | Console UI | React 18, TypeScript, Keycloak-js | `control-plane-ui/` |
 | Developer Portal | React, Vite, TypeScript | `portal/` |
-| MCP Gateway | Python 3.11, FastAPI, OPA | `mcp-gateway/` |
+| MCP Gateway (archived) | Python 3.11, FastAPI, OPA | `archive/mcp-gateway/` |
 | STOA Gateway | Rust, Tokio, axum | `stoa-gateway/` |
 | CLI | Python, Typer, Rich | `cli/` |
 | E2E Tests | Playwright, BDD, Gherkin | `e2e/` |
 | Helm Chart | Helm 3 | `charts/stoa-platform/` |
 
-Gateway: 4 modes (ADR-024) — edge-mcp (current, Python), sidecar (Q2), proxy (Q3), shadow (deferred). Target: Rust (Q4 2026).
+Gateway: Rust (primary, replaced Python MCP Gateway Feb 2026). 4 modes (ADR-024) — edge-mcp (current), sidecar (Q2), proxy (Q3), shadow (deferred).
 
 ## RBAC Roles
 - **cpi-admin**: Full platform (stoa:admin)
@@ -77,6 +77,10 @@ Gateway: 4 modes (ADR-024) — edge-mcp (current, Python), sidecar (Q2), proxy (
 | `docs-writer` | ADRs, guides, runbooks, memory | No Bash |
 | `content-reviewer` | Contenu public, concurrents, compliance | Read-only (plan) |
 
+### Rules (`.claude/rules/`)
+Key rules for AI Factory workflow:
+- `seo-content.md` — SEO content generation, blog templates, hub & spoke model, editorial calendar integration
+
 ### Skills (`.claude/skills/`)
 - 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`
 - 2 modernes: `/ci-debug [PR|run-url]` (fork), `/parallel-review [PR|path]` (inline)
@@ -86,11 +90,12 @@ Prerequis: `brew install tmux` + `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
 
 ## Repos
 
-| Repo | Stack | URL |
-|------|-------|-----|
-| stoa | Python + React + Rust | github.com/stoa-platform/stoa |
-| stoa-infra | Terraform + Ansible + Helm | github.com/PotoMitan/stoa-infra |
-| stoa-docs | Docusaurus | github.com/stoa-platform/stoa-docs |
-| stoa-web | Astro | github.com/stoa-platform/stoa-web |
-| stoa-quickstart | Docker Compose | github.com/stoa-platform/stoa-quickstart |
-| stoactl | Go + Cobra | github.com/stoa-platform/stoactl |
+| Repo | Stack | URL | Visibility |
+|------|-------|-----|------------|
+| stoa | Python + React + Rust | github.com/stoa-platform/stoa | Public |
+| stoa-strategy | Markdown + Prompts | github.com/PotoMitan/stoa-strategy | **Private** (client data, pricing, GTM) |
+| stoa-infra | Terraform + Ansible + Helm | github.com/PotoMitan/stoa-infra | Private |
+| stoa-docs | Docusaurus | github.com/stoa-platform/stoa-docs | Public |
+| stoa-web | Astro | github.com/stoa-platform/stoa-web | Public |
+| stoa-quickstart | Docker Compose | github.com/stoa-platform/stoa-quickstart | Public |
+| stoactl | Go + Cobra | github.com/stoa-platform/stoactl | Public |

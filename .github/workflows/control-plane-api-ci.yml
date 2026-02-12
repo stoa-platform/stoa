@@ -97,7 +97,7 @@ jobs:
           pytest tests/ -v -m integration --ignore=tests/test_opensearch.py --tb=short --junit-xml=junit-integration.xml
       - name: Upload integration test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: integration-test-results
           path: control-plane-api/junit-integration.xml

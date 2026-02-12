@@ -18,7 +18,7 @@ function ChartSkeleton() {
         {[...Array(7)].map((_, i) => (
           <div
             key={i}
-            className="flex-1 bg-gray-200 rounded-t"
+            className="flex-1 bg-gray-200 dark:bg-neutral-600 rounded-t"
             style={{ height: `${Math.random() * 60 + 20}%` }}
           />
         ))}
@@ -30,8 +30,10 @@ function ChartSkeleton() {
 export const UsageChart = memo(function UsageChart({ data, isLoading = false }: UsageChartProps) {
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Call Volume (7 days)</h3>
+      <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Call Volume (7 days)
+        </h3>
         <ChartSkeleton />
       </div>
     );
@@ -46,10 +48,12 @@ export const UsageChart = memo(function UsageChart({ data, isLoading = false }: 
   };
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6">
+    <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">Call Volume (7 days)</h3>
-        <span className="text-sm text-gray-500">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Call Volume (7 days)
+        </h3>
+        <span className="text-sm text-gray-500 dark:text-neutral-400">
           Total: {data.reduce((sum, d) => sum + d.calls, 0).toLocaleString()} calls
         </span>
       </div>
@@ -82,7 +86,7 @@ export const UsageChart = memo(function UsageChart({ data, isLoading = false }: 
 
               {/* Label */}
               <span
-                className={`text-xs ${isToday ? 'text-primary-600 font-medium' : 'text-gray-400'}`}
+                className={`text-xs ${isToday ? 'text-primary-600 font-medium' : 'text-gray-400 dark:text-neutral-500'}`}
               >
                 {formatDate(day.date)}
               </span>
@@ -92,7 +96,7 @@ export const UsageChart = memo(function UsageChart({ data, isLoading = false }: 
       </div>
 
       {/* Y-axis labels */}
-      <div className="flex justify-between mt-4 text-xs text-gray-400">
+      <div className="flex justify-between mt-4 text-xs text-gray-400 dark:text-neutral-500">
         <span>0</span>
         <span>{Math.round(maxCalls / 2).toLocaleString()}</span>
         <span>{maxCalls.toLocaleString()}</span>

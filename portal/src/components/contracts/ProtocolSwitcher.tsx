@@ -145,8 +145,10 @@ export const ProtocolSwitcher: React.FC<ProtocolSwitcherProps> = ({
     return (
       <div className={`border rounded-lg ${className}`}>
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-          <span className="ml-2 text-sm text-gray-500">Loading bindings...</span>
+          <Loader2 className="h-6 w-6 animate-spin text-gray-400 dark:text-neutral-500" />
+          <span className="ml-2 text-sm text-gray-500 dark:text-neutral-400">
+            Loading bindings...
+          </span>
         </div>
       </div>
     );
@@ -155,10 +157,12 @@ export const ProtocolSwitcher: React.FC<ProtocolSwitcherProps> = ({
   // Error state
   if (error) {
     return (
-      <div className={`border border-red-200 rounded-lg bg-red-50 ${className}`}>
+      <div
+        className={`border border-red-200 dark:border-red-800 rounded-lg bg-red-50 dark:bg-red-900/20 ${className}`}
+      >
         <div className="flex items-center justify-center py-8 px-4">
           <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
-          <span className="text-sm text-red-700">
+          <span className="text-sm text-red-700 dark:text-red-400">
             Failed to load bindings: {(error as Error).message}
           </span>
           <button
@@ -183,19 +187,21 @@ export const ProtocolSwitcher: React.FC<ProtocolSwitcherProps> = ({
   const enabledCount = sortedBindings.filter((b) => b.enabled).length;
 
   return (
-    <div className={`border border-gray-200 rounded-lg overflow-hidden ${className}`}>
+    <div
+      className={`border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden ${className}`}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between bg-gray-50 px-4 py-3 border-b border-gray-200">
+      <div className="flex items-center justify-between bg-gray-50 dark:bg-neutral-900 px-4 py-3 border-b border-gray-200 dark:border-neutral-700">
         <div>
-          <h3 className="text-sm font-medium text-gray-900">Protocols</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h3 className="text-sm font-medium text-gray-900 dark:text-white">Protocols</h3>
+          <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
             {enabledCount} of {sortedBindings.length} enabled
           </p>
         </div>
         <button
           onClick={() => refetch()}
           disabled={isLoading}
-          className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors rounded"
+          className="p-1.5 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors rounded"
           title="Refresh"
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -203,7 +209,7 @@ export const ProtocolSwitcher: React.FC<ProtocolSwitcherProps> = ({
       </div>
 
       {/* Bindings list */}
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-gray-100 dark:divide-neutral-700">
         {sortedBindings.map((binding) => (
           <ProtocolRow
             key={binding.protocol}
@@ -217,7 +223,7 @@ export const ProtocolSwitcher: React.FC<ProtocolSwitcherProps> = ({
         ))}
 
         {sortedBindings.length === 0 && (
-          <div className="py-8 text-center text-sm text-gray-500">
+          <div className="py-8 text-center text-sm text-gray-500 dark:text-neutral-400">
             No protocol bindings available
           </div>
         )}

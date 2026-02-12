@@ -137,21 +137,21 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
       />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+      <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-neutral-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary-50 rounded-lg">
-              <Key className="h-5 w-5 text-primary-600" />
+            <div className="p-2 bg-primary-50 dark:bg-primary-900/30 rounded-lg">
+              <Key className="h-5 w-5 text-primary-600 dark:text-primary-400" />
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900">Reveal API Key</h2>
-              <p className="text-sm text-gray-500">{subscription.tool_id}</p>
+              <h2 className="font-semibold text-gray-900 dark:text-white">Reveal API Key</h2>
+              <p className="text-sm text-gray-500 dark:text-neutral-400">{subscription.tool_id}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -161,12 +161,12 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
         <div className="p-6 space-y-4">
           {/* Security warning */}
           {!apiKey && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
               <div className="flex gap-3">
                 <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
                 <div className="text-sm">
-                  <p className="font-medium text-amber-800">Security Notice</p>
-                  <p className="text-amber-700 mt-1">
+                  <p className="font-medium text-amber-800 dark:text-amber-300">Security Notice</p>
+                  <p className="text-amber-700 dark:text-amber-400 mt-1">
                     Your API key will be visible for 30 seconds after reveal. Make sure no one can
                     see your screen.
                   </p>
@@ -180,7 +180,7 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
             <div className="space-y-2">
               <label
                 htmlFor="totp-input"
-                className="flex items-center gap-2 text-sm font-medium text-gray-700"
+                className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-neutral-300"
               >
                 <Shield className="h-4 w-4 text-primary-500" aria-hidden="true" />
                 2FA Verification Required
@@ -198,17 +198,19 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
                   setTotpCode(value);
                   setError(null);
                 }}
-                className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
               />
-              <p className="text-xs text-gray-500">Enter the code from your authenticator app</p>
+              <p className="text-xs text-gray-500 dark:text-neutral-400">
+                Enter the code from your authenticator app
+              </p>
             </div>
           )}
 
           {/* Error message */}
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-lg p-3 text-sm">
               {error}
             </div>
           )}
@@ -217,7 +219,7 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
           {apiKey && (
             <div className="space-y-4">
               {/* Countdown timer */}
-              <div className="flex items-center justify-center gap-2 text-amber-600">
+              <div className="flex items-center justify-center gap-2 text-amber-600 dark:text-amber-400">
                 <Clock className="h-4 w-4" />
                 <span className="font-medium">
                   Hiding in {countdown} second{countdown !== 1 ? 's' : ''}
@@ -264,10 +266,10 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-neutral-700 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className="px-4 py-2 text-gray-700 dark:text-neutral-300 bg-gray-100 dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 rounded-lg transition-colors"
           >
             {apiKey ? 'Close' : 'Cancel'}
           </button>

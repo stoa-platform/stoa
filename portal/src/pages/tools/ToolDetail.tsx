@@ -44,9 +44,21 @@ const statusConfig: Record<
     bg: string;
   }
 > = {
-  active: { label: 'Active', color: 'text-green-700', bg: 'bg-green-100' },
-  beta: { label: 'Beta', color: 'text-amber-700', bg: 'bg-amber-100' },
-  deprecated: { label: 'Deprecated', color: 'text-red-700', bg: 'bg-red-100' },
+  active: {
+    label: 'Active',
+    color: 'text-green-700 dark:text-green-400',
+    bg: 'bg-green-100 dark:bg-green-900/30',
+  },
+  beta: {
+    label: 'Beta',
+    color: 'text-amber-700 dark:text-amber-400',
+    bg: 'bg-amber-100 dark:bg-amber-900/30',
+  },
+  deprecated: {
+    label: 'Deprecated',
+    color: 'text-red-700 dark:text-red-400',
+    bg: 'bg-red-100 dark:bg-red-900/30',
+  },
 };
 
 const tabs: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -107,7 +119,7 @@ export function ToolDetail() {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary-600 mx-auto mb-4" />
-          <p className="text-gray-500">Loading tool details...</p>
+          <p className="text-gray-500 dark:text-neutral-400">Loading tool details...</p>
         </div>
       </div>
     );
@@ -116,24 +128,24 @@ export function ToolDetail() {
   // Error state
   if (isError || !tool) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
         <div className="flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
           <div>
-            <h3 className="font-medium text-red-800">Failed to load tool</h3>
-            <p className="text-sm text-red-600 mt-1">
+            <h3 className="font-medium text-red-800 dark:text-red-300">Failed to load tool</h3>
+            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
               {(error as Error)?.message || 'Tool not found or an unexpected error occurred'}
             </p>
             <div className="flex gap-3 mt-4">
               <button
                 onClick={() => refetch()}
-                className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-medium transition-colors"
+                className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 text-sm font-medium transition-colors"
               >
                 Try Again
               </button>
               <button
                 onClick={() => navigate('/tools')}
-                className="px-4 py-2 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors"
+                className="px-4 py-2 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg text-sm font-medium transition-colors"
               >
                 Back to Catalog
               </button>
@@ -152,24 +164,24 @@ export function ToolDetail() {
       {/* Back Button */}
       <Link
         to="/tools"
-        className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+        className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Tools Catalog
       </Link>
 
       {/* Header Card */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
           {/* Tool Info */}
           <div className="flex-1">
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-primary-50 rounded-xl">
+              <div className="p-3 bg-primary-50 dark:bg-primary-900/30 rounded-xl">
                 <Wrench className="h-8 w-8 text-primary-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-2xl font-bold text-gray-900">
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                     {tool.displayName || tool.name}
                   </h1>
                   <span
@@ -178,16 +190,18 @@ export function ToolDetail() {
                     {status.label}
                   </span>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  <code className="bg-gray-100 px-2 py-0.5 rounded">{tool.name}</code>
+                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+                  <code className="bg-gray-100 dark:bg-neutral-700 px-2 py-0.5 rounded dark:text-neutral-200">
+                    {tool.name}
+                  </code>
                   {tool.version && <span className="ml-2">v{tool.version}</span>}
                 </p>
-                <p className="text-gray-600 mt-3">{tool.description}</p>
+                <p className="text-gray-600 dark:text-neutral-400 mt-3">{tool.description}</p>
               </div>
             </div>
 
             {/* Meta Info */}
-            <div className="flex flex-wrap items-center gap-4 mt-6 text-sm text-gray-500">
+            <div className="flex flex-wrap items-center gap-4 mt-6 text-sm text-gray-500 dark:text-neutral-400">
               {tool.category && (
                 <div className="flex items-center gap-1.5">
                   <Tag className="h-4 w-4" />
@@ -220,7 +234,10 @@ export function ToolDetail() {
             {tool.tags && tool.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">
                 {tool.tags.map((tag) => (
-                  <span key={tag} className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
+                  <span
+                    key={tag}
+                    className="px-2 py-1 text-xs bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-400 rounded"
+                  >
                     {tag}
                   </span>
                 ))}
@@ -241,7 +258,7 @@ export function ToolDetail() {
             )}
             <button
               onClick={() => refetch()}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
             >
               <RefreshCw className="h-4 w-4" />
               Refresh
@@ -251,8 +268,8 @@ export function ToolDetail() {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="bg-white rounded-lg border border-gray-200">
-        <div className="border-b border-gray-200">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
+        <div className="border-b border-gray-200 dark:border-neutral-700">
           <nav className="flex -mb-px">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -263,7 +280,7 @@ export function ToolDetail() {
                   className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === tab.id
                       ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -282,13 +299,15 @@ export function ToolDetail() {
               {/* Endpoint Info */}
               {tool.endpoint && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">Endpoint Configuration</h3>
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3">
+                    Endpoint Configuration
+                  </h3>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-800 overflow-x-auto">
+                    <code className="flex-1 px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg text-sm font-mono text-gray-800 dark:text-neutral-200 overflow-x-auto">
                       {tool.endpoint}
                     </code>
                     {tool.method && (
-                      <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded uppercase">
+                      <span className="px-2 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded uppercase">
                         {tool.method}
                       </span>
                     )}
@@ -311,7 +330,9 @@ export function ToolDetail() {
 
               {/* Usage Example */}
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Usage Example</h3>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3">
+                  Usage Example
+                </h3>
                 <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
                   <pre className="text-sm text-gray-100 font-mono">
                     {`// MCP Client Usage
@@ -340,18 +361,20 @@ ${
 
               {/* Quick Actions */}
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Actions</h3>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3">
+                  Quick Actions
+                </h3>
                 <div className="flex flex-wrap gap-3">
                   <Link
                     to="/subscriptions"
-                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
                   >
                     <CheckCircle className="h-4 w-4" />
                     View My Subscriptions
                   </Link>
                   <button
                     onClick={() => setActiveTab('try-it')}
-                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
                   >
                     <Play className="h-4 w-4" />
                     Try This Tool
@@ -361,7 +384,7 @@ ${
                       href={tool.endpoint}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                      className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
                     >
                       <ExternalLink className="h-4 w-4" />
                       Open Endpoint
@@ -376,7 +399,7 @@ ${
           {activeTab === 'schema' && (
             <div className="space-y-6">
               {schemaLoading ? (
-                <div className="flex items-center gap-2 text-gray-500 py-8 justify-center">
+                <div className="flex items-center gap-2 text-gray-500 dark:text-neutral-400 py-8 justify-center">
                   <Loader2 className="h-5 w-5 animate-spin" />
                   Loading schema...
                 </div>
@@ -388,7 +411,9 @@ ${
                   {/* Output Schema */}
                   {tool.outputSchema && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-3">Output Schema</h3>
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3">
+                        Output Schema
+                      </h3>
                       <pre className="p-4 bg-gray-900 text-gray-100 rounded-lg overflow-x-auto text-sm font-mono">
                         {JSON.stringify(tool.outputSchema, null, 2)}
                       </pre>

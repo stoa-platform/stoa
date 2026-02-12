@@ -252,6 +252,7 @@ pub enum StoaRole {
 
 impl StoaRole {
     /// Parse a role string into a StoaRole.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "cpi-admin" | "cpi_admin" | "admin" => Some(StoaRole::CpiAdmin),

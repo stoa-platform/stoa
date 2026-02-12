@@ -2,6 +2,7 @@ import { ReactNode, useState, useEffect, useMemo, useCallback, useRef } from 're
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
+import { useEnvironment } from '../contexts/EnvironmentContext';
 import { useBreadcrumbs } from '../hooks/useBreadcrumbs';
 import { Breadcrumb } from '@stoa/shared/components/Breadcrumb';
 import { useCommandPalette, type CommandItem } from '@stoa/shared/components/CommandPalette';
@@ -42,6 +43,7 @@ import {
   FileCheck,
   ClipboardList,
   Check,
+  Lock,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -168,7 +170,7 @@ const navigationSections: NavSection[] = [
       },
       {
         name: 'Error Snapshots',
-        href: '/mcp/errors',
+        href: '/errors',
         icon: AlertTriangle,
         permission: 'apis:read',
         badge: 'STOA',
@@ -293,6 +295,30 @@ export function Layout({ children }: LayoutProps) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [tenantDropdownOpen]);
+
+  // Environment selector state (ADR-040)
+  const { activeEnvironment, activeConfig, environments, switchEnvironment } = useEnvironment();
+  const [envDropdownOpen, setEnvDropdownOpen] = useState(false);
+  const envDropdownRef = useRef<HTMLDivElement>(null);
+
+  const handleEnvSwitch = useCallback(
+    (env: 'dev' | 'staging' | 'prod') => {
+      switchEnvironment(env);
+      setEnvDropdownOpen(false);
+    },
+    [switchEnvironment]
+  );
+
+  useEffect(() => {
+    if (!envDropdownOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (envDropdownRef.current && !envDropdownRef.current.contains(event.target as Node)) {
+        setEnvDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [envDropdownOpen]);
 
   const filteredSections = useMemo(
     () =>
@@ -517,6 +543,81 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </nav>
 
+        {/* Mobile-only: Env & Tenant selectors */}
+        <div className="lg:hidden border-t border-gray-200 dark:border-neutral-800 px-3 py-3 space-y-2">
+          {/* Environment selector */}
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500 mb-1 px-1">
+              Environment
+            </p>
+            {environments.map((env) => (
+              <button
+                key={env.name}
+                onClick={() => {
+                  handleEnvSwitch(env.name);
+                  setSidebarOpen(false);
+                }}
+                className={clsx(
+                  'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  activeEnvironment === env.name
+                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800'
+                )}
+              >
+                <span
+                  className={clsx(
+                    'h-2 w-2 rounded-full flex-shrink-0',
+                    env.color === 'green' && 'bg-green-500',
+                    env.color === 'amber' && 'bg-amber-500',
+                    env.color === 'red' && 'bg-red-500'
+                  )}
+                />
+                <span className="flex-1 text-left">{env.label}</span>
+                {env.mode === 'read-only' && (
+                  <Lock className="h-3 w-3 text-neutral-400 flex-shrink-0" />
+                )}
+                {activeEnvironment === env.name && (
+                  <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Tenant selector */}
+          {tenants && tenants.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500 mb-1 px-1">
+                Tenant
+              </p>
+              {tenants.map((tenant) => {
+                const selectedId = activeTenantId || user?.tenant_id;
+                const isSelected = selectedId === tenant.id || selectedId === tenant.name;
+                return (
+                  <button
+                    key={tenant.id}
+                    onClick={() => {
+                      handleTenantSwitch(tenant.id);
+                      setSidebarOpen(false);
+                    }}
+                    className={clsx(
+                      'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                      isSelected
+                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-800'
+                    )}
+                  >
+                    <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                    <span className="flex-1 text-left truncate">
+                      {tenant.display_name || tenant.name}
+                    </span>
+                    {isSelected && <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* User section */}
         <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 dark:border-neutral-800 p-4">
           <div className="flex items-center gap-3">
@@ -560,7 +661,7 @@ export function Layout({ children }: LayoutProps) {
           {/* Mobile menu button */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 lg:hidden"
+            className="rounded-lg p-2.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-neutral-800 lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -600,6 +701,70 @@ export function Layout({ children }: LayoutProps) {
 
           {/* Theme toggle */}
           <ThemeToggle size="md" />
+
+          {/* Environment selector (ADR-040) */}
+          <div className="hidden sm:block relative" ref={envDropdownRef}>
+            <button
+              onClick={() => setEnvDropdownOpen(!envDropdownOpen)}
+              className="flex items-center gap-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 px-3 py-1.5 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+            >
+              <span
+                className={clsx(
+                  'h-2 w-2 rounded-full',
+                  activeConfig.color === 'green' && 'bg-green-500',
+                  activeConfig.color === 'amber' && 'bg-amber-500',
+                  activeConfig.color === 'red' && 'bg-red-500'
+                )}
+              />
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                {activeConfig.label}
+              </span>
+              {activeConfig.mode === 'read-only' && <Lock className="h-3 w-3 text-neutral-400" />}
+              <ChevronDown
+                className={clsx(
+                  'h-4 w-4 text-neutral-400 transition-transform duration-200',
+                  envDropdownOpen && 'rotate-180'
+                )}
+              />
+            </button>
+            {envDropdownOpen && (
+              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-lg z-50 py-1">
+                {environments.map((env) => (
+                  <button
+                    key={env.name}
+                    onClick={() => handleEnvSwitch(env.name)}
+                    className={clsx(
+                      'w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
+                      activeEnvironment === env.name
+                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                        : 'text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700'
+                    )}
+                  >
+                    <span
+                      className={clsx(
+                        'h-2 w-2 rounded-full flex-shrink-0',
+                        env.color === 'green' && 'bg-green-500',
+                        env.color === 'amber' && 'bg-amber-500',
+                        env.color === 'red' && 'bg-red-500'
+                      )}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate font-medium">{env.label}</p>
+                      <p className="truncate text-xs text-gray-500 dark:text-neutral-400">
+                        {env.mode === 'read-only' ? 'Read-only' : 'Full access'}
+                      </p>
+                    </div>
+                    {env.mode === 'read-only' && (
+                      <Lock className="h-3 w-3 text-neutral-400 flex-shrink-0" />
+                    )}
+                    {activeEnvironment === env.name && (
+                      <Check className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Tenant selector */}
           {(user?.tenant_id || (tenants && tenants.length > 0)) && (

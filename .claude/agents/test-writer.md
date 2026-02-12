@@ -33,6 +33,23 @@ Tu es un Test Engineer specialise pour le monorepo STOA Platform.
 - **Coverage minimum**: 53% control-plane-api, 40% mcp-gateway (see `ci-quality-gates.md`)
 - **ESLint ratchet**: control-plane-ui max 93 warnings, portal max 20 warnings
 
+## Shared Test Helpers (React — OBLIGATOIRE)
+
+Toujours utiliser les helpers partages pour les tests React:
+- **Console**: `control-plane-ui/src/test/helpers.tsx`
+- **Portal**: `portal/src/test/helpers.tsx`
+
+Exports cles:
+- `createAuthMock(role: PersonaRole)` — mock complet de useAuth pour un role
+- `renderWithProviders(ui, options?)` — wrapper QueryClientProvider + MemoryRouter
+- Mock data factories: `mockTenant()`, `mockAPI()`, `mockApplication()`, `mockGatewayInstance()`, `mockGatewayDeployment()`, `mockExternalMCPServer()`
+
+**Regles**:
+- Toujours `createAuthMock(role)` — jamais de mock inline pour useAuth
+- Toute page avec RBAC conditionnel → tester les 4 personas (`describe.each`)
+- `vi.clearAllMocks()` ne reset PAS les implementations → re-initialiser les mocks dans `beforeEach`
+- Voir `test-evolution.md` pour les regles completes
+
 ## Workflow
 
 ### Step 1: Analyser le fichier source

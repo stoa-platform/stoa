@@ -1,12 +1,12 @@
 # STOA Memory
 
-> Last updated: 2026-02-10 (PR #301 merged — Console local build + Grafana auto-login)
+> Last updated: 2026-02-12 (Gateway Arena deployed on OVH — PR #374, full pipeline live)
 
 ## Active Sprint
 - **Goal**: Revenue-ready demo by Feb 24, 2026
 - **Branch**: main
-- **Focus**: Demo Design Partner (24 fev). Phase 1-2 DONE (5 livrables). Next: email Khalil (14 fev EOD).
-- **Latest**: Native observability dashboards live (PRs #299-#301), docker-compose Console builds from source
+- **Focus**: Demo prep (dry-runs, email), remaining tickets
+- **Latest**: OVH prod LIVE (12/12 HTTPS). Hetzner staging LIVE (6/6 HTTPS). Portal tests: 427 total (PR #308)
 
 ## Session State
 
@@ -76,12 +76,20 @@
 | DONE | — | Native Platform Metrics dashboard (replace Grafana iframe on /observability) | PR #299 |
 | DONE | — | Native Request Explorer dashboard (replace OpenSearch iframe on /logs) | PR #300 |
 | DONE | — | Docker-compose Console local build + Grafana auto-login + state files | PR #301 |
+| DONE | CAB-1133 | Portal Functional Test Suite — 164 tests, 13 pages × 4 personas | PR #308 |
+| DONE | — | Email Capture Phase 1 — Portal login redesign + access_requests endpoint + Alembic 023 | PRs #351, #354, #356, #361 |
+| DONE | CAB-911 | Admin Prospects Dashboard — conversion cockpit (API + Console UI, 11 tests) | commit f60b79fa |
+| DONE | — | Website Analysis + Content Roadmap — 4 docs (1483 lines), 3 segments, 24 content pieces | untracked in docs/ |
+| DONE | — | Hardware Requirements + Perf Benchmarks + Blog — hey benchmark script, 2 reference pages, 1 blog post | stoa PR #370, stoa-docs PR #29 |
+| DONE | — | Gateway Arena deployed on OVH — ServiceMonitor + deploy script + Grafana dashboard imported | PR #374, CronJob every 30m |
+| IN PROGRESS | ADR-040 | Born GitOps: Multi-Environment Promotion Architecture | stoa-docs ADR |
+| IN PROGRESS | — | Email Capture Phase 2 — Stripe-inspired conversion funnel (content expansion, pricing, community) | docs/CONTENT-ROADMAP.md |
 | NEXT | CAB-1130 | Email Khalil (send 14 fev EOD, wait feedback 15-16 fev) | — |
 | NEXT | CAB-1131 | Dry-runs 3x (18-23 fev, chrono < 5min) | — |
 | NEXT | CAB-1066 | Landing gostoa.dev + Stripe (stoa-web) | — |
 | NEXT | CAB-1035 | Persona Alex Test (manual) | — |
 
-## CI Pipeline Status (2026-02-09) — ALL GREEN THROUGH DEPLOY
+## CI Pipeline Status (2026-02-11) — ALL GREEN THROUGH DEPLOY
 
 | Component | CI | Docker | Apply | Deploy | Notes |
 |-----------|-----|--------|-------|--------|-------|
@@ -114,6 +122,12 @@
 - 2026-02-09: AI Factory modernization — state files auto-update protocol in ai-workflow.md
 - 2026-02-10: Replace iframe embeds (Grafana, OpenSearch) with native React dashboards querying Prometheus
 - 2026-02-10: Docker-compose Console switched to local build (always latest code)
+- 2026-02-11: Portal test helpers pattern — shared `test/helpers.tsx` with persona factories, mock data factories, `renderWithProviders` wrapper
+- 2026-02-11: ADR-040 Born GitOps — Console multi-env, Git=Control Plane, UAC as promotion unit, directory-per-env
+- 2026-02-11: Email capture Phase 1 — two-panel Portal login (request access + SSO), public endpoint, Alembic 023
+- 2026-02-11: Website analysis (4 docs) — 3 audience gaps (freelancers, SMBs, security), 24 content pieces planned, ~€5K budget for €68-150K ROI
+- 2026-02-12: Hardware/perf docs OpSec review — no production topology, no exact costs, no provider mapping in public docs (generic profiles only)
+- 2026-02-12: Gateway Arena deployed on OVH — CronJob→Pushgateway→Prometheus→Grafana, first leaderboard: STOA 58.45, Kong 56.58, Gravitee 53.05
 
 ## Known Issues
 - E2E smoke tests fail on live infra (timeouts, missing UI elements)
@@ -152,3 +166,5 @@
 - Console dark mode: 100% coverage (last 4 tools components fixed in PR #286)
 - Docs site: stoa-docs/ (Docusaurus 3.9), 20 pages
 - Vault v1.20.4 running, unsealed. ESO not yet deployed.
+- Portal test suite: 427 tests (37 files), 164 new in PR #308. 13 pages × 4 personas. Shared helpers at `portal/src/test/helpers.tsx`.
+- Not yet tested: APITestingSandbox, ApplicationDetail, Navigation routing (Phase 3 of CAB-1133)

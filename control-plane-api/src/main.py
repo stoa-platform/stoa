@@ -2,6 +2,7 @@
 STOA Control-Plane API
 FastAPI backend with RBAC, GitOps, and Kafka integration
 """
+
 import asyncio
 import os
 from contextlib import asynccontextmanager, suppress
@@ -25,6 +26,7 @@ from .middleware.metrics import MetricsMiddleware, get_metrics
 from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from .opensearch import search_router, setup_opensearch
 from .routers import (
+    access_requests,
     admin_prospects,
     apis,
     applications,  # noqa: F401
@@ -34,6 +36,7 @@ from .routers import (
     consumers,
     contracts,
     deployments,
+    environments,
     events,
     gateway,
     gateway_deployments,
@@ -94,6 +97,7 @@ ENABLE_WORKER = os.getenv("ENABLE_DEPLOYMENT_WORKER", "true").lower() == "true"
 ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
 ENABLE_SYNC_ENGINE = os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
 ENABLE_GATEWAY_HEALTH_WORKER = os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true").lower() == "true"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -240,6 +244,7 @@ async def lifespan(app: FastAPI):
     # Flush remaining OTel spans before exit (CAB-1088)
     shutdown_tracing()
 
+
 API_DESCRIPTION = """
 ## STOA Platform API
 
@@ -384,9 +389,7 @@ async def httpx_error_handler(request: Request, exc: httpx.HTTPError) -> JSONRes
 
 @app.exception_handler(Exception)
 async def catch_all_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error(
-        "Unhandled exception", path=str(request.url.path), error_type=type(exc).__name__, error=str(exc)
-    )
+    logger.error("Unhandled exception", path=str(request.url.path), error_type=type(exc).__name__, error=str(exc))
     return JSONResponse(status_code=500, content={"detail": "Internal server error."})
 
 
@@ -493,6 +496,9 @@ app.include_router(gateway_policies.router)
 # Internal gateway registration API (ADR-028 auto-registration)
 app.include_router(gateway_internal.router)
 
+# Environments (ADR-040 — Born GitOps)
+app.include_router(environments.router)
+
 # Consumer Onboarding (CAB-1121)
 app.include_router(consumers.router)
 app.include_router(plans.router)
@@ -500,12 +506,16 @@ app.include_router(plans.router)
 # Quota Enforcement (CAB-1121 Phase 4)
 app.include_router(quotas.router)
 
+# Public — Portal email capture (no auth)
+app.include_router(access_requests.router)
+
 
 # Legacy health endpoint - redirect to new /health/live
 @app.get("/health", include_in_schema=False)
 async def health_legacy():
     """Legacy health endpoint for backward compatibility."""
     return {"status": "healthy", "version": settings.VERSION}
+
 
 @app.get("/")
 async def root():

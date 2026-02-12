@@ -2,7 +2,7 @@
 
 > **Date**: 24 February 2026 | **Duration**: ~20 min
 > **Presenter**: Christophe Aboulicam | **Platform**: STOA
-> **Setup**: Docker Compose local (17 services) or EKS production
+> **Setup**: OVH Production (`*.gostoa.dev`) or Docker Compose local
 
 ---
 
@@ -17,41 +17,41 @@
 | 5 | 10:00 - 12:00 | OpenSearch: error snapshots, trace search | "Every error, traced" |
 | 6 | 12:00 - 14:00 | Keycloak: federation login cross-tenant | "Zero trust, multi-org" |
 | 7 | 14:00 - 17:00 | MCP Bridge: legacy API → AI agent tool | "The paradigm shift" |
-| 8 | 17:00 - 19:00 | AI Factory: how this was built | "The bombshell" |
+| 8 | 17:00 - 20:00 | Born GitOps + AI Factory | "The bombshell" |
 
 ---
 
-## Pre-Demo Setup
+## Pre-Demo Setup (Production)
 
 ```bash
-# Start the platform (with federation for Act 6)
-cd deploy/docker-compose
-docker compose --profile federation up -d
+# Verify OVH cluster is ready
+export KUBECONFIG=~/.kube/config-stoa-ovh
+kubectl get pods -n stoa-system
+kubectl get pods -n monitoring
+kubectl get pods -n opensearch
+kubectl get ingress -A
+kubectl get certificates -A | grep -v True  # all should be True
 
-# Wait for all services to be healthy (~60s)
-../../scripts/demo/check-health.sh --wait --federation
-
-# Seed demo data (auto-handles: Keycloak SSL, LDAP users, APIs, OpenSearch errors, federation tests)
-CONTROL_PLANE_URL=http://localhost:8000 \
-KEYCLOAK_URL=http://localhost:8080 \
-ANORAK_USER=halliday \
-ANORAK_PASSWORD=readyplayerone \
-SEED_TENANT=oasis \
-  ../../scripts/demo/seed-all.sh --federation
-
-# Expected: 7/7 steps PASS, 9/9 federation isolation tests PASS
+# Verify all HTTPS endpoints
+for svc in console portal api gateway mcp auth; do
+  echo -n "${svc}.gostoa.dev: "
+  curl -sI "https://${svc}.gostoa.dev" -o /dev/null -w "%{http_code}"
+  echo ""
+done
+curl -sI https://console.gostoa.dev/grafana -o /dev/null -w "grafana: %{http_code}\n"
+curl -sI https://opensearch.gostoa.dev -o /dev/null -w "opensearch: %{http_code}\n"
 ```
 
 ### Browser Tabs (pre-authenticated)
 
 | Tab | URL | User | Purpose |
 |-----|-----|------|---------|
-| 1 | http://localhost | halliday | Console (Platform Admin) |
-| 2 | http://localhost/portal | (not logged in) | Portal (developer flow) |
+| 1 | https://console.gostoa.dev | halliday | Console (Platform Admin) |
+| 2 | https://portal.gostoa.dev | (not logged in) | Portal (developer flow) |
 | 3 | Terminal | — | Gateway + curl commands |
-| 4 | http://localhost/grafana | admin | Grafana dashboards |
-| 5 | http://localhost/logs | admin | OpenSearch Dashboards |
-| 6 | http://localhost/auth | admin | Keycloak admin |
+| 4 | https://console.gostoa.dev/grafana | admin | Grafana dashboards |
+| 5 | https://opensearch.gostoa.dev | admin | OpenSearch Dashboards |
+| 6 | https://auth.gostoa.dev | admin | Keycloak admin |
 
 ---
 
@@ -138,22 +138,24 @@ SEED_TENANT=oasis \
 ### 3.1 — Health Check (15s)
 
 ```bash
-curl http://localhost/gateway/health
-# → {"status":"healthy","mode":"edge-mcp","version":"0.1.0"}
+curl https://gateway.gostoa.dev/health
+# → OK
 ```
 
 > "Gateway healthy. Rust. Sub-millisecond overhead."
 
-### 3.2 — Authenticated API Call (45s)
+### 3.2 — Authenticated MCP Call (45s)
 
 ```bash
-# Use the token from Act 2
-curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8081/v1/proxy/payments/status
-# → 200 OK with response
+# Use the token from Act 2 — call petstore via MCP protocol
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/invoke \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
+# → {"content": [{"type": "text", "text": "{...httpbin response...}"}]}
 ```
 
-> "JWT validated, request proxied to backend, response in under 10ms. Try that with your ESB."
+> "JWT validated, MCP tool invoked, backend called, response in under 50ms. One unified protocol for humans AND AI agents."
 
 ### 3.3 — Rate Limiting Demo (1 min)
 
@@ -161,8 +163,10 @@ curl -H "Authorization: Bearer $TOKEN" \
 # Rapid-fire requests to trigger rate limit
 for i in $(seq 1 20); do
   curl -s -o /dev/null -w "%{http_code} " \
+    -X POST https://mcp.gostoa.dev/mcp/v1/tools/invoke \
+    -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    http://localhost:8081/v1/proxy/payments/status
+    -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
 done
 # → 200 200 200 ... 429 429
 ```
@@ -173,7 +177,7 @@ done
 
 ## Act 4 — Grafana: Live Dashboards (2 min)
 
-**[Tab 4: Grafana — http://localhost/grafana]**
+**[Tab 4: Grafana — https://console.gostoa.dev/grafana]**
 
 > "Every request we just made is already visible in real-time."
 
@@ -229,7 +233,7 @@ done
 
 ## Act 6 — Keycloak: Federation Cross-Tenant (2 min)
 
-**[Tab 6: Keycloak Admin — http://localhost/auth]**
+**[Tab 6: Keycloak Admin — https://auth.gostoa.dev]**
 
 > "Now the enterprise killer feature: identity federation."
 
@@ -247,22 +251,22 @@ done
 
 ```bash
 # Get token from org-alpha (confidential client)
-TOKEN_A=$(curl -s -X POST "http://localhost:8080/realms/demo-org-alpha/protocol/openid-connect/token" \
+TOKEN_A=$(curl -s -X POST "https://auth.gostoa.dev/realms/demo-org-alpha/protocol/openid-connect/token" \
   -d "grant_type=password&client_id=federation-demo&client_secret=alpha-demo-secret&username=demo-alpha&password=demo" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Decode to show stoa_realm claim
 echo $TOKEN_A | python3 -c "import sys,json,base64; t=sys.stdin.read().strip().split('.')[1]; t+='='*(4-len(t)%4); d=json.loads(base64.urlsafe_b64decode(t)); print(json.dumps({k:d[k] for k in ['iss','stoa_realm','preferred_username']}, indent=2))"
-# → {"iss": "http://localhost/auth/realms/demo-org-alpha", "stoa_realm": "demo-org-alpha", "preferred_username": "demo-alpha"}
+# → {"iss": "https://auth.gostoa.dev/realms/demo-org-alpha", "stoa_realm": "demo-org-alpha", "preferred_username": "demo-alpha"}
 
 # Get token from org-beta (different org, different secret)
-TOKEN_B=$(curl -s -X POST "http://localhost:8080/realms/demo-org-beta/protocol/openid-connect/token" \
+TOKEN_B=$(curl -s -X POST "https://auth.gostoa.dev/realms/demo-org-beta/protocol/openid-connect/token" \
   -d "grant_type=password&client_id=federation-demo&client_secret=beta-demo-secret&username=demo-beta&password=demo" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Compare issuers — different realms, different tokens, different trust boundaries
 echo $TOKEN_B | python3 -c "import sys,json,base64; t=sys.stdin.read().strip().split('.')[1]; t+='='*(4-len(t)%4); d=json.loads(base64.urlsafe_b64decode(t)); print(json.dumps({k:d[k] for k in ['iss','stoa_realm','preferred_username']}, indent=2))"
-# → {"iss": "http://localhost/auth/realms/demo-org-beta", "stoa_realm": "demo-org-beta", "preferred_username": "demo-beta"}
+# → {"iss": "https://auth.gostoa.dev/realms/demo-org-beta", "stoa_realm": "demo-org-beta", "preferred_username": "demo-beta"}
 ```
 
 > "Zero trust. Two organizations, two realms, two issuers. A token from Organization Alpha cannot impersonate Organization Beta. Enforced cryptographically — different signing keys, different trust boundaries."
@@ -279,7 +283,7 @@ echo $TOKEN_B | python3 -c "import sys,json,base64; t=sys.stdin.read().strip().s
 
 ```bash
 # List available MCP tools (each published API = one MCP tool)
-curl -s http://localhost:8081/mcp/v1/tools | jq '.[].name'
+curl -s https://mcp.gostoa.dev/mcp/v1/tools | jq '.[].name'
 # → "petstore"
 # → "account-management"
 # → "payments"
@@ -292,12 +296,19 @@ curl -s http://localhost:8081/mcp/v1/tools | jq '.[].name'
 ### 7.2 — AI Agent Call (2 min)
 
 ```bash
-# An AI agent invokes the Payments API tool
-curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
+# An AI agent invokes the Petstore API tool
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/invoke \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
+# → {"content": [{"type": "text", "text": "{...httpbin echo...}"}]}
+
+# Now the Payments API — same pattern, different tool
+curl -s -X POST https://mcp.gostoa.dev/mcp/v1/tools/invoke \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"tool": "payments", "arguments": {"action": "get-status"}}'
-# → {"content": [{"type": "text", "text": "{...}"}]}
+# → {"content": [{"type": "text", "text": "{...httpbin echo...}"}]}
 ```
 
 > "A Claude agent, a GPT agent, any MCP-compatible agent — they can now call your enterprise APIs. With authentication, rate limiting, monitoring, and audit trail. All the governance you need, none of the friction."
@@ -306,11 +317,48 @@ curl -s -X POST http://localhost:8081/mcp/v1/tools/invoke \
 
 ---
 
-## Act 8 — AI Factory: How This Was Built (2 min)
+## Act 8 — Born GitOps + AI Factory (3 min)
 
-**[Slide or terminal showing git log]**
+**[Slide: "How We're Different"]**
 
-> "One last thing. Let me tell you how we built this platform."
+> "Before I tell you how we built this, let me tell you why we're different."
+
+### 8.1 — Born GitOps (1:30 min)
+
+> "Every API management platform you know — Kong, Apigee, MuleSoft, Gravitee — they all started with a database. A UI. Click to deploy. Then, years later, they bolted on GitOps. A CLI here, a Maven plugin there."
+
+> "STOA is different. We're **Born GitOps**. Git IS the control plane — not a sync target."
+
+**[Slide: Competitive landscape table]**
+
+| | GitOps | Source of Truth | Prod Approval |
+|---|--------|----------------|---------------|
+| Kong | decK (2019, retrofit) | Database | PR reviews |
+| Apigee | Maven (2015, retrofit) | Database | RBAC only |
+| Gravitee | GKO (2023, semi-native) | Database + Cockpit | Cockpit SaaS |
+| **STOA** | **Born GitOps (2026)** | **Git** | **Git PR + CODEOWNERS** |
+
+> "What does that mean concretely?"
+
+**[Slide: Promote with Confidence workflow]**
+
+```
+Console (staging) → "Promote to Prod" →
+  1. Git PR generated automatically (with staging health report)
+  2. CODEOWNERS review (your team approves, not ours)
+  3. Merge → ArgoCD sync → Canary deploy (10% → 50% → 100%)
+  4. If metrics degrade → automatic rollback via git revert
+```
+
+> "Every production change is a Git commit. Every rollback is a git revert. Your compliance team can audit everything. Your DSI sleeps at night."
+
+> "Our Universal API Contract — the UAC — travels intact from staging to production. Same artifact, different configuration. Define Once, Promote Everywhere."
+
+### 8.2 — AI Factory (1:30 min)
+
+**[Terminal showing git log]**
+
+> "Now, how did we build all of this?"
 
 ```bash
 # Show the velocity
@@ -348,7 +396,7 @@ git shortlog --since="2026-02-09" -sn
 | 12:00 | Act 5 done | Skip drill-down, show table only |
 | 14:00 | Act 6 done | Skip curl demo, show Keycloak realms only |
 | 17:00 | Act 7 done | Pre-record MCP call as video backup |
-| 19:00 | Act 8 done | Shorten to 30s git stats + punchline |
+| 20:00 | Act 8 done | Skip GitOps slide, go straight to AI Factory punchline |
 
 ## If Something Breaks
 

@@ -1,0 +1,18 @@
+---
+source: tests/contract/discovery.rs
+assertion_line: 15
+expression: json
+---
+{
+  "endpoints": {
+    "capabilities": "/mcp/capabilities",
+    "sse": "/mcp/sse",
+    "tools_call": "/mcp/tools/call",
+    "tools_list": "/mcp/tools/list"
+  },
+  "server": {
+    "name": "STOA Gateway",
+    "protocolVersion": "[protocol_version]",
+    "version": "[version]"
+  }
+}

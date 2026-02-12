@@ -1,0 +1,39 @@
+---
+source: tests/contract/oauth.rs
+assertion_line: 24
+expression: json
+---
+{
+  "authorization_endpoint": "/realms/stoa/protocol/openid-connect/auth",
+  "code_challenge_methods_supported": [
+    "S256"
+  ],
+  "grant_types_supported": [
+    "authorization_code",
+    "client_credentials",
+    "refresh_token"
+  ],
+  "issuer": "/realms/stoa",
+  "jwks_uri": "/realms/stoa/protocol/openid-connect/certs",
+  "registration_endpoint": "http://localhost:8080/oauth/register",
+  "response_types_supported": [
+    "code"
+  ],
+  "scopes_supported": [
+    "openid",
+    "profile",
+    "email",
+    "stoa:read",
+    "stoa:write",
+    "stoa:admin"
+  ],
+  "subject_types_supported": [
+    "public"
+  ],
+  "token_endpoint": "http://localhost:8080/oauth/token",
+  "token_endpoint_auth_methods_supported": [
+    "none",
+    "client_secret_basic",
+    "client_secret_post"
+  ]
+}

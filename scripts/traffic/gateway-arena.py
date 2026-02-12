@@ -64,7 +64,6 @@ DEFAULT_GATEWAYS = json.dumps([
         "name": "gravitee",
         "health": "http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT",
         "proxy": "http://54.36.209.237:8082/echo/get",
-        "proxy_headers": {"Authorization": "Basic YWRtaW46YWRtaW4="},
     },
 ])
 

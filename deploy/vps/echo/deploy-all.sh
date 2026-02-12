@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # Deploy echo server on all Arena VPS and configure gateway routes.
+#
+# Key lessons from live deployment:
+# - All gateways run in Docker → echo must be on the same Docker network
+# - STOA gateway has SSRF blocklist → can't use localhost, use container name
+# - Kong DB-less → full declarative config reload (read-merge-POST /config)
+# - Gravitee V4 → create API + publish plan + deploy + start (strict order)
+#
 # Usage: ./deploy-all.sh
 set -euo pipefail
 
@@ -27,7 +34,23 @@ for VPS in "$VPS_KONG_STOA" "$VPS_GRAVITEE"; do
   echo ""
 done
 
+# --- Step 1b: Connect echo container to gateway Docker networks ---
+echo "=== Connecting echo to gateway Docker networks ==="
+# Kong VPS: stoa_default + kong_default
+ssh -i "$SSH_KEY" "debian@$VPS_KONG_STOA" "
+  docker network connect stoa_default echo-local 2>/dev/null || true
+  docker network connect kong_default echo-local 2>/dev/null || true
+  echo 'echo-local connected to stoa_default + kong_default'
+"
+# Gravitee VPS: gravitee_default
+ssh -i "$SSH_KEY" "debian@$VPS_GRAVITEE" "
+  docker network connect gravitee_default echo-local 2>/dev/null || true
+  echo 'echo-local connected to gravitee_default'
+"
+echo ""
+
 # --- Step 2: Register echo route on STOA gateway ---
+# Uses Docker container name (echo-local) — SSRF blocklist blocks localhost
 echo "=== Configuring STOA route → echo ==="
 STOA_ADMIN_TOKEN="arena-admin-token-2026"
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://$VPS_KONG_STOA:8080/admin/apis" \
@@ -38,7 +61,7 @@ HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://$VPS_KONG_STO
     "name": "echo-arena",
     "tenant_id": "arena",
     "path_prefix": "/echo",
-    "backend_url": "http://localhost:8888",
+    "backend_url": "http://echo-local:8888",
     "methods": ["GET", "POST"],
     "spec_hash": "arena-echo-v1",
     "activated": true
@@ -51,113 +74,9 @@ echo "STOA proxy echo: HTTP $HTTP_CODE"
 echo ""
 
 # --- Step 3: Register echo route on Kong (DB-less: read-merge-reload) ---
+# Uses Docker container name (echo-local) — Kong container can't reach host localhost
 echo "=== Configuring Kong route → echo ==="
-# Get current config
-CURRENT_CONFIG=$(curl -s "http://$VPS_KONG_STOA:8001/services" 2>/dev/null)
-CURRENT_PLUGINS=$(curl -s "http://$VPS_KONG_STOA:8001/plugins" 2>/dev/null)
-CURRENT_CONSUMERS=$(curl -s "http://$VPS_KONG_STOA:8001/consumers" 2>/dev/null)
-
-# Build declarative config with echo service added
-python3 - "$CURRENT_CONFIG" "$CURRENT_PLUGINS" "$CURRENT_CONSUMERS" <<'PYEOF'
-import json, sys
-
-services_resp = json.loads(sys.argv[1])
-plugins_resp = json.loads(sys.argv[2])
-consumers_resp = json.loads(sys.argv[3])
-
-services = []
-for svc in services_resp.get("data", []):
-    port = svc.get("port", 80)
-    path = svc.get("path") or ""
-    url = f"{svc['protocol']}://{svc['host']}:{port}{path}"
-    routes = []
-    for r in svc.get("routes", []):
-        routes.append({"name": r["name"], "paths": r.get("paths", []), "strip_path": r.get("strip_path", True)})
-    entry = {"name": svc["name"], "url": url, "routes": routes}
-    if svc.get("tags"):
-        entry["tags"] = svc["tags"]
-    services.append(entry)
-
-# Add echo service if not present
-echo_names = [s["name"] for s in services if "echo" in s["name"]]
-if not echo_names:
-    services.append({
-        "name": "echo-local",
-        "url": "http://localhost:8888",
-        "routes": [{"name": "echo-route", "paths": ["/echo"], "strip_path": True}],
-        "tags": ["stoa-arena"]
-    })
-
-plugins = []
-for p in plugins_resp.get("data", []):
-    entry = {"name": p["name"], "config": p.get("config", {})}
-    if p.get("service"):
-        # Find service name by ID
-        for svc in services_resp.get("data", []):
-            if svc["id"] == p["service"]["id"]:
-                entry["service"] = svc["name"]
-                break
-    if p.get("consumer"):
-        for c in consumers_resp.get("data", []):
-            if c["id"] == p["consumer"]["id"]:
-                entry["consumer"] = c["username"]
-                break
-    if p.get("tags"):
-        entry["tags"] = p["tags"]
-    plugins.append(entry)
-
-consumers = []
-for c in consumers_resp.get("data", []):
-    entry = {"username": c["username"]}
-    if c.get("tags"):
-        entry["tags"] = c["tags"]
-    consumers.append(entry)
-
-config = {"_format_version": "3.0", "services": services, "plugins": plugins, "consumers": consumers}
-print(json.dumps(config))
-PYEOF
-
-KONG_CONFIG=$(python3 - "$CURRENT_CONFIG" "$CURRENT_PLUGINS" "$CURRENT_CONSUMERS" <<'PYEOF'
-import json, sys
-services_resp = json.loads(sys.argv[1])
-plugins_resp = json.loads(sys.argv[2])
-consumers_resp = json.loads(sys.argv[3])
-services = []
-for svc in services_resp.get("data", []):
-    port = svc.get("port", 80)
-    path = svc.get("path") or ""
-    url = f"{svc['protocol']}://{svc['host']}:{port}{path}"
-    routes = []
-    for r in svc.get("routes", []):
-        routes.append({"name": r["name"], "paths": r.get("paths", []), "strip_path": r.get("strip_path", True)})
-    entry = {"name": svc["name"], "url": url, "routes": routes}
-    if svc.get("tags"):
-        entry["tags"] = svc["tags"]
-    services.append(entry)
-echo_names = [s["name"] for s in services if "echo" in s["name"]]
-if not echo_names:
-    services.append({"name": "echo-local", "url": "http://localhost:8888", "routes": [{"name": "echo-route", "paths": ["/echo"], "strip_path": True}], "tags": ["stoa-arena"]})
-plugins = []
-for p in plugins_resp.get("data", []):
-    entry = {"name": p["name"], "config": p.get("config", {})}
-    if p.get("service"):
-        for svc in services_resp.get("data", []):
-            if svc["id"] == p["service"]["id"]:
-                entry["service"] = svc["name"]
-                break
-    if p.get("tags"):
-        entry["tags"] = p["tags"]
-    plugins.append(entry)
-consumers = []
-for c in consumers_resp.get("data", []):
-    entry = {"username": c["username"]}
-    if c.get("tags"):
-        entry["tags"] = c["tags"]
-    consumers.append(entry)
-config = {"_format_version": "3.0", "services": services, "plugins": plugins, "consumers": consumers}
-print(json.dumps(config))
-PYEOF
-)
+KONG_CONFIG='{"_format_version":"3.0","services":[{"name":"httpbin","url":"https://httpbin.org","routes":[{"name":"httpbin-route","paths":["/httpbin"],"strip_path":true}]},{"name":"echo-local","url":"http://echo-local:8888","routes":[{"name":"echo-route","paths":["/echo"],"strip_path":true}],"tags":["stoa-arena"]}]}'
 
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://$VPS_KONG_STOA:8001/config" \
   -H "Content-Type: application/json" \
@@ -171,12 +90,19 @@ echo "Kong proxy echo: HTTP $HTTP_CODE"
 echo ""
 
 # --- Step 4: Register echo API on Gravitee ---
+# Uses Docker container name (echo-local) — Gravitee container can't reach host localhost
+# Gravitee V4 lifecycle: create → plan (publish) → deploy → start
 echo "=== Configuring Gravitee route → echo ==="
 GRAVITEE_AUTH="Basic YWRtaW46YWRtaW4="
 GRAVITEE_MGMT="http://$VPS_GRAVITEE:8083/management/v2/environments/DEFAULT"
 
 # Check if echo API already exists
-EXISTING=$(curl -s "${GRAVITEE_MGMT}/apis?q=echo-local" -H "Authorization: $GRAVITEE_AUTH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',[{}])[0].get('id','') if d.get('data') else '')" 2>/dev/null || echo "")
+EXISTING=$(curl -s "${GRAVITEE_MGMT}/apis?q=echo-arena" -H "Authorization: $GRAVITEE_AUTH" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+apis = [a for a in d.get('data',[]) if 'echo' in a.get('name','')]
+print(apis[0]['id'] if apis else '')
+" 2>/dev/null || echo "")
 
 if [ -n "$EXISTING" ]; then
   echo "Gravitee echo API already exists: $EXISTING"
@@ -186,7 +112,8 @@ else
     -H "Authorization: $GRAVITEE_AUTH" \
     -H "Content-Type: application/json" \
     -d '{
-      "name": "echo-local",
+      "name": "echo-arena",
+      "apiVersion": "1.0",
       "description": "Local echo server for Arena benchmarks",
       "definitionVersion": "V4",
       "type": "PROXY",
@@ -205,7 +132,7 @@ else
             {
               "name": "echo-backend",
               "type": "http-proxy",
-              "configuration": {"target": "http://localhost:8888"}
+              "configuration": {"target": "http://echo-local:8888"}
             }
           ]
         }
@@ -214,13 +141,8 @@ else
   EXISTING=$(echo "$API_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id','FAILED'))")
   echo "Gravitee API created: $EXISTING"
 
-  # Start + Deploy
-  curl -s -X POST "${GRAVITEE_MGMT}/apis/${EXISTING}/_start" -H "Authorization: $GRAVITEE_AUTH" > /dev/null 2>&1 || true
-  curl -s -X POST "${GRAVITEE_MGMT}/apis/${EXISTING}/deployments" -H "Authorization: $GRAVITEE_AUTH" -H "Content-Type: application/json" -d '{"deploymentLabel":"arena"}' > /dev/null 2>&1
-  echo "Gravitee API started + deployed"
-
-  # Create KEY_LESS plan
-  curl -s -X POST "${GRAVITEE_MGMT}/apis/${EXISTING}/plans" \
+  # Create KEY_LESS plan (status=STAGING by default in Gravitee 4.6)
+  PLAN_ID=$(curl -s -X POST "${GRAVITEE_MGMT}/apis/${EXISTING}/plans" \
     -H "Authorization: $GRAVITEE_AUTH" \
     -H "Content-Type: application/json" \
     -d '{
@@ -231,14 +153,27 @@ else
       "security": {"type": "KEY_LESS"},
       "characteristics": [],
       "status": "PUBLISHED"
-    }' > /dev/null 2>&1
-  echo "Gravitee KEY_LESS plan created"
+    }' | python3 -c "import sys,json; print(json.load(sys.stdin).get('id','FAILED'))" 2>/dev/null)
+  echo "Gravitee plan created: $PLAN_ID"
 
-  # Redeploy
-  curl -s -X POST "${GRAVITEE_MGMT}/apis/${EXISTING}/deployments" -H "Authorization: $GRAVITEE_AUTH" -H "Content-Type: application/json" -d '{"deploymentLabel":"arena-plan"}' > /dev/null 2>&1
+  # Publish plan (Gravitee 4.6 creates in STAGING even with status=PUBLISHED)
+  curl -s -X POST "${GRAVITEE_MGMT}/apis/${EXISTING}/plans/${PLAN_ID}/_publish" \
+    -H "Authorization: $GRAVITEE_AUTH" > /dev/null 2>&1
+  echo "Plan published"
+
+  # Deploy (requires published plan)
+  curl -s -X POST "${GRAVITEE_MGMT}/apis/${EXISTING}/deployments" \
+    -H "Authorization: $GRAVITEE_AUTH" \
+    -H "Content-Type: application/json" \
+    -d '{"deploymentLabel":"arena-echo"}' > /dev/null 2>&1
+
+  # Start
+  curl -s -X POST "${GRAVITEE_MGMT}/apis/${EXISTING}/_start" \
+    -H "Authorization: $GRAVITEE_AUTH" > /dev/null 2>&1 || true
+  echo "Gravitee API deployed + started"
 fi
 
-sleep 2
+sleep 3
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://$VPS_GRAVITEE:8082/echo/get")
 echo "Gravitee proxy echo: HTTP $HTTP_CODE"
 echo ""

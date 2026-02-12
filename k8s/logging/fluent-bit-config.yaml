@@ -43,7 +43,7 @@ data:
     [OUTPUT]
         Name              opensearch
         Match             gateway.*
-        Host              opensearch-svc.opensearch.svc.cluster.local
+        Host              opensearch.opensearch.svc.cluster.local
         Port              9200
         HTTP_User         admin
         HTTP_Passwd       ${OPENSEARCH_PASSWORD}

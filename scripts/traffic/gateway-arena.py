@@ -44,8 +44,8 @@ except ImportError:
 DEFAULT_GATEWAYS = json.dumps([
     {
         "name": "stoa",
-        "health": "http://stoa-gateway.stoa-system.svc:80/health",
-        "proxy": "http://stoa-gateway.stoa-system.svc:80/v1/apis",
+        "health": "https://mcp.gostoa.dev/health",
+        "proxy": "https://mcp.gostoa.dev/v1/apis",
         "proxy_headers": {"X-Tenant-ID": "oasis"},
     },
     {

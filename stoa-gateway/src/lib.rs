@@ -98,6 +98,8 @@ pub fn build_router(state: AppState) -> Router {
     // Common routes for all modes: health, metrics, admin
     let base = Router::new()
         .route("/health", get(health))
+        .route("/health/ready", get(ready))
+        .route("/health/live", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(prometheus_metrics))
         .nest("/admin", admin_router)

@@ -73,6 +73,7 @@ export const config = {
     enableAPITesting: import.meta.env.VITE_ENABLE_API_TESTING !== 'false', // Sandbox testing
     enableDebug: import.meta.env.VITE_ENABLE_DEBUG === 'true',
     enableGateways: import.meta.env.VITE_ENABLE_GATEWAYS !== 'false',
+    enableErrorSnapshots: import.meta.env.VITE_ENABLE_ERROR_SNAPSHOTS !== 'false',
   },
 
   // API Testing Configuration

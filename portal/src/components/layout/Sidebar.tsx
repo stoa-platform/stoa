@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Briefcase,
   Server,
+  AlertCircle,
   LucideIcon,
 } from 'lucide-react';
 import { config } from '../../config';
@@ -96,6 +97,12 @@ const sections: NavSection[] = [
         icon: Server,
         enabled: config.features.enableGateways,
         scope: 'stoa:admin',
+      },
+      {
+        name: 'Error Snapshots',
+        href: '/errors',
+        icon: AlertCircle,
+        enabled: config.features.enableErrorSnapshots,
       },
     ],
   },

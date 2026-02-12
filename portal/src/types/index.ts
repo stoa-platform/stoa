@@ -847,6 +847,69 @@ export interface GatewayModeStats {
   unhealthy: number;
 }
 
+// ============ Error Snapshot Types ============
+
+export type SnapshotTrigger = '4xx' | '5xx' | 'timeout' | 'manual';
+export type ResolutionStatus = 'unresolved' | 'investigating' | 'resolved' | 'ignored';
+
+export interface ErrorSnapshot {
+  id: string;
+  timestamp: string;
+  method: string;
+  path: string;
+  status_code: number;
+  duration_ms: number;
+  trigger: SnapshotTrigger;
+  source: string;
+  resolution: ResolutionStatus;
+  resolution_notes?: string;
+  trace_id?: string;
+  request_headers?: Record<string, string>;
+  request_body?: string;
+  response_headers?: Record<string, string>;
+  response_body?: string;
+  policies_applied?: SnapshotPolicy[];
+  backend_state?: SnapshotBackendState;
+}
+
+export interface SnapshotPolicy {
+  name: string;
+  result: 'pass' | 'fail' | 'skip';
+  duration_ms?: number;
+}
+
+export interface SnapshotBackendState {
+  health: string;
+  latency_ms: number;
+  url?: string;
+}
+
+export interface SnapshotSummary {
+  total: number;
+  by_trigger: Record<SnapshotTrigger, number>;
+  by_resolution: Record<ResolutionStatus, number>;
+  unresolved_count: number;
+}
+
+export interface SnapshotListResponse {
+  items: ErrorSnapshot[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface SnapshotFiltersResponse {
+  triggers: SnapshotTrigger[];
+  sources: string[];
+  status_codes: number[];
+  resolutions: ResolutionStatus[];
+  paths: string[];
+}
+
+export interface ReplayResponse {
+  curl_command: string;
+}
+
 // ============ Publish Contract Response Types (CAB-560) ============
 
 /**

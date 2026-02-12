@@ -50,6 +50,7 @@ const ConsumerRegistrationPage = lazy(() =>
 const GatewaysPage = lazy(() =>
   import('./pages/gateways').then((m) => ({ default: m.GatewaysPage }))
 );
+const ErrorsPage = lazy(() => import('./pages/errors').then((m) => ({ default: m.ErrorsPage })));
 const UnauthorizedPage = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.UnauthorizedPage }))
 );
@@ -518,6 +519,16 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:admin">
                   <GatewaysPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Error Snapshots (Operations) — authenticated users */}
+            <Route
+              path="/errors"
+              element={
+                <ProtectedRoute>
+                  <ErrorsPage />
                 </ProtectedRoute>
               }
             />

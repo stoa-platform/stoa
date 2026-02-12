@@ -55,7 +55,7 @@ regorus = "0.2"                              # Pure Rust OPA evaluator (no sidec
 serde_yaml = "0.9"                           # YAML serialization for UAC contracts
 
 # === Phase 3: Kafka Metering (CAB-1105) ===
-rdkafka = { version = "0.36", features = ["cmake-build"], optional = true }
+rdkafka = { version = "0.39", features = ["cmake-build"], optional = true }
 
 # === Phase 7: K8s CRD + Federation (CAB-1105) ===
 kube = { version = "0.97", features = ["runtime", "derive"], optional = true }

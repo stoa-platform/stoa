@@ -2,7 +2,7 @@
 # =============================================================================
 # STOA Platform — Production Smoke Test (OVH)
 # =============================================================================
-# Validates all 8 demo acts work against production URLs (*.gostoa.dev).
+# Validates all 8 demo acts + 5 gateways against production URLs (*.gostoa.dev).
 # Run this before Demo Day to ensure everything is operational.
 #
 # Usage:
@@ -157,6 +157,20 @@ check "MCP endpoint health" "$R" "200"
 
 R=$(curl -s --max-time 10 https://mcp.gostoa.dev/mcp/v1/tools 2>/dev/null || echo "error")
 check "MCP tools list" "$R" "tools\|name"
+
+# ─────────────────────────────────────────────────────────────────────
+# External Gateways (VPS — Kong, Gravitee, webMethods)
+# ─────────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BLUE}External Gateways:${NC}"
+R=$(curl -s --max-time 10 https://kong.gostoa.dev/status 2>/dev/null || echo "error")
+check "Kong health (DB-less)" "$R" "server"
+
+R=$(curl -sI -o /dev/null -w "%{http_code}" --max-time 10 https://gravitee.gostoa.dev/management/organizations/DEFAULT/environments 2>/dev/null || echo "000")
+check "Gravitee management API" "$R" "200\|401"
+
+R=$(curl -sI -o /dev/null -w "%{http_code}" -u Administrator:manage --max-time 10 https://webmethods.gostoa.dev/rest/apigateway/health 2>/dev/null || echo "000")
+check "webMethods health" "$R" "200"
 
 # ─────────────────────────────────────────────────────────────────────
 # Act 8: Born GitOps (informational — local git stats)

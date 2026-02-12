@@ -76,7 +76,7 @@ k8s = ["kube", "k8s-openapi", "schemars"]  # K8s CRD watcher (Phase 7)
 # tracing-opentelemetry = "0.28"
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.8"
 insta = { version = "1", features = ["json", "redactions"] }
 tokio-test = "0.4"
 tower = { version = "0.5", features = ["util"] }

@@ -75,7 +75,7 @@ python scripts/seed-demo-data.py
 | e2e-devops | team-beta | admin | inventory-lookup, notifications-send |
 | e2e-viewer | team-alpha | viewer | Read-only access |
 | e2e-viewer | team-beta | viewer | Read-only access |
-| e2e-admin | all | platform-admin | Full access (Grafana, AWX) |
+| e2e-admin | all | platform-admin | Full access (Grafana, ArgoCD) |
 
 ## Tenant Details
 

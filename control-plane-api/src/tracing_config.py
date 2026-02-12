@@ -50,7 +50,7 @@ def configure_tracing(app, settings) -> None:
 
     FastAPIInstrumentor.instrument_app(app)
 
-    # Auto-instrument httpx (traces outgoing HTTP calls to Keycloak, AWX, GitLab, etc.)
+    # Auto-instrument httpx (traces outgoing HTTP calls to Keycloak, GitLab, gateway adapters, etc.)
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
     HTTPXClientInstrumentor().instrument()

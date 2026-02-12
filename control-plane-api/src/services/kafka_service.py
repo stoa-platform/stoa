@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 # Kafka topics
 class Topics:
     API_EVENTS = "api-events"           # api-created, api-updated, api-deleted
-    DEPLOY_REQUESTS = "deploy-requests"  # Deployment requests for AWX
-    DEPLOY_RESULTS = "deploy-results"    # Deployment results from AWX
+    DEPLOY_REQUESTS = "deploy-requests"  # Deployment requests for gateway adapters
+    DEPLOY_RESULTS = "deploy-results"    # Deployment results from gateway adapters
     APP_EVENTS = "app-events"           # Application lifecycle events
     TENANT_EVENTS = "tenant-events"     # Tenant lifecycle events
     AUDIT_LOG = "audit-log"             # Audit trail
@@ -178,7 +178,7 @@ class KafkaService:
         version: str,
         user_id: str
     ) -> str:
-        """Emit deployment request for AWX to process"""
+        """Emit deployment request for gateway adapter to process"""
         return await self.publish(
             Topics.DEPLOY_REQUESTS,
             "deploy-request",

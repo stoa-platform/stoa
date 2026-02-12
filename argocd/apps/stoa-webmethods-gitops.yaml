@@ -3,7 +3,7 @@
 # UNIFIED TENANT-BASED ARCHITECTURE
 # Single source: stoa-catalog/tenants (includes stoa-platform for admin APIs)
 #
-# This application syncs webMethods configs and triggers AWX reconciliation
+# This application syncs webMethods configs from stoa-catalog
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

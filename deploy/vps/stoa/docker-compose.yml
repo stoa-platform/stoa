@@ -28,6 +28,3 @@ services:
       STOA_K8S_ENABLED: "false"
       STOA_MTLS_ENABLED: "false"
       STOA_QUOTA_ENFORCEMENT_ENABLED: "false"
-      STOA_ACCESS_LOG_ENABLED: "false"
-      RUST_BACKTRACE: "0"
-      TOKIO_WORKER_THREADS: "4"

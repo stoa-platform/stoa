@@ -60,11 +60,6 @@ ENV KAFKA_BOOTSTRAP_SERVERS=redpanda.stoa-system.svc.cluster.local:9092 \
     KAFKA_SASL_USERNAME="" \
     KAFKA_SASL_PASSWORD=""
 
-# AWX Automation
-ENV AWX_URL=https://awx.gostoa.dev \
-    AWX_TOKEN="" \
-    AWX_VERIFY_SSL=true
-
 # API Gateway
 ENV GATEWAY_URL=https://gateway.gostoa.dev \
     GATEWAY_ADMIN_USER=Administrator \

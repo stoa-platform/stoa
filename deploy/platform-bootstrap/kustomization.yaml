@@ -22,7 +22,7 @@ commonLabels:
 # Resources to deploy
 resources: []
 # Note: YAML configs are not K8s resources
-# They are synced to GitLab and applied to Gateway via AWX
+# They are synced to GitLab and applied to Gateway via CRD reconciliation
 # This kustomization is for reference/structure only
 
 # ConfigMaps from files (optional - for debugging)

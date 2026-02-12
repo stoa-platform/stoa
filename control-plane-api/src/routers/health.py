@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ..config import settings
-from ..services import awx_service, git_service, kafka_service, keycloak_service
+from ..services import git_service, kafka_service, keycloak_service
 from ..services.gateway_service import gateway_service
 
 router = APIRouter(prefix="/health", tags=["Health"])
@@ -31,11 +31,6 @@ def _check_gitlab_connected() -> bool:
 def _check_keycloak_connected() -> bool:
     """Check if Keycloak admin client is connected."""
     return keycloak_service._admin is not None
-
-
-def _check_awx_connected() -> bool:
-    """Check if AWX client is connected."""
-    return awx_service._client is not None
 
 
 def _check_gateway_connected() -> bool:
@@ -83,7 +78,7 @@ async def readiness():
 
     K8s will remove pod from service if this fails.
     Checks critical dependencies (Kafka, Keycloak).
-    Non-critical: GitLab, Gateway, AWX.
+    Non-critical: GitLab, Gateway.
     """
     checks = {}
     all_healthy = True
@@ -124,13 +119,6 @@ async def readiness():
         checks["gateway"] = "ok" if gateway_healthy else "disconnected"
     except Exception as e:
         checks["gateway"] = f"error: {e!s}"
-
-    # Check AWX connection (non-critical)
-    try:
-        awx_healthy = _check_awx_connected()
-        checks["awx"] = "ok" if awx_healthy else "disconnected"
-    except Exception as e:
-        checks["awx"] = f"error: {e!s}"
 
     status = "healthy" if all_healthy else "degraded"
 

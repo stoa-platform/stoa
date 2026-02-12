@@ -188,19 +188,19 @@ async def create_demo_trace(
         ("event_processing", 20, 100, True),
         ("analyze_changes", 50, 200, True),
         ("kafka_publish", 30, 150, True),
-        ("awx_trigger", 100, 500, final_status != TraceStatusDB.FAILED),
+        ("gateway_sync", 100, 500, final_status != TraceStatusDB.FAILED),
     ]
 
     for step_name, min_ms, max_ms, should_succeed in steps_config:
         duration = random.randint(min_ms, max_ms)
 
-        if not should_succeed and step_name == "awx_trigger":
+        if not should_succeed and step_name == "gateway_sync":
             await service.add_step(
                 trace,
                 name=step_name,
                 status="failed",
                 duration_ms=duration,
-                error="AWX job failed: Ansible playbook error",
+                error="Gateway sync failed: adapter error",
                 details={"job_id": random.randint(1000, 9999), "error_code": "ANSIBLE_ERROR"},
             )
         else:
@@ -214,7 +214,7 @@ async def create_demo_trace(
 
     # Complete trace
     if final_status == TraceStatusDB.FAILED:
-        await service.complete(trace, TraceStatusDB.FAILED, "Pipeline failed at awx_trigger step")
+        await service.complete(trace, TraceStatusDB.FAILED, "Pipeline failed at gateway_sync step")
     elif final_status == TraceStatusDB.IN_PROGRESS:
         pass  # Leave as in_progress
     else:

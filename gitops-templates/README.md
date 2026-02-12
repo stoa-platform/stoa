@@ -35,7 +35,7 @@ This folder contains **templates and models** for initializing a GitLab GitOps r
 └─────────────────────────────────────────────────────────────────┘
         │              │                    │
         v              v                    v
-  Control Plane   AWX Automation       ArgoCD (GitOps)
+  Control Plane   ArgoCD GitOps       ArgoCD (GitOps)
   - Webhooks      - provision-tenant   - Sync K8s
   - CRUD tenants  - register-api       - Auto-deploy
   - Events Kafka  - sync-gateway       - Rollback
@@ -47,9 +47,9 @@ This folder contains **templates and models** for initializing a GitLab GitOps r
 |-----------|--------|------|
 | **GitHub (stoa)** | Source code | Development, CI/CD, Docker images |
 | **GitHub (stoa-infra)** | Infrastructure | Terraform, Ansible, Helm charts |
-| **GitLab (stoa-gitops)** | Runtime data | Tenants, APIs, users, AWX playbooks |
+| **GitLab (stoa-gitops)** | Runtime data | Tenants, APIs, users, ArgoCD configs |
 | **ArgoCD** | GitLab | K8s sync from GitLab |
-| **AWX** | GitLab | Execute playbooks from GitLab |
+| **ArgoCD** | GitLab | Reconcile CRDs from GitLab |
 | **Control Plane API** | GitLab | Read/write tenants in GitLab |
 
 ## Contents

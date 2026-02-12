@@ -4,26 +4,34 @@
 Measures latency, availability, and burst resilience across multiple API gateways
 (STOA, Kong, Gravitee) and pushes metrics to Prometheus Pushgateway.
 
-Inspired by Chatbot Arena (Elo), Artificial Analysis (Quality Index), HELM (holistic eval).
+Uses a local echo backend (nginx returning static JSON in <1ms) on each VPS
+so benchmarks measure pure gateway overhead, not backend/network latency.
+
+Scenarios:
+  1. health          — single health check (availability)
+  2. proxy_sequential — 20 sequential requests (base overhead P50/P95)
+  3. burst_10        — 10 concurrent requests (light load)
+  4. burst_50        — 50 concurrent requests (production load)
+  5. burst_100       — 100 concurrent requests (stress test — Rust shines here)
+  6. sustained       — 100 sequential requests (consistency/jitter)
 
 Env vars:
-  GATEWAYS          — JSON array of gateway configs (see default below)
+  GATEWAYS          — JSON array of gateway configs
   PUSHGATEWAY_URL   — Pushgateway URL (default: http://pushgateway.monitoring.svc:9091)
-  BURST_SIZE        — Number of concurrent requests in burst scenario (default: 10)
-  PROXY_REPEAT      — Number of sequential proxy requests for P50/P95/P99 (default: 10)
+  BURST_SIZES       — Comma-separated burst sizes (default: 10,50,100)
+  PROXY_REPEAT      — Sequential requests count (default: 20)
+  SUSTAINED_COUNT   — Sustained scenario count (default: 100)
   TIMEOUT           — Request timeout in seconds (default: 5)
 """
 
 import json
 import logging
-import math
 import os
 import statistics
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from urllib.parse import urljoin
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,25 +53,26 @@ DEFAULT_GATEWAYS = json.dumps([
     {
         "name": "stoa",
         "health": "http://51.83.45.13:8080/health",
-        "proxy": "http://51.83.45.13:8080/httpbin/get",
+        "proxy": "http://51.83.45.13:8080/echo/get",
     },
     {
         "name": "kong",
         "health": "http://51.83.45.13:8001/status",
-        "proxy": "http://51.83.45.13:8000/httpbin/get",
+        "proxy": "http://51.83.45.13:8000/echo/get",
     },
     {
         "name": "gravitee",
         "health": "http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT",
-        "proxy": "http://54.36.209.237:8082/httpbin/get",
+        "proxy": "http://54.36.209.237:8082/echo/get",
         "proxy_headers": {"Authorization": "Basic YWRtaW46YWRtaW4="},
     },
 ])
 
 GATEWAYS = json.loads(os.getenv("GATEWAYS", DEFAULT_GATEWAYS))
 PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "http://pushgateway.monitoring.svc:9091")
-BURST_SIZE = int(os.getenv("BURST_SIZE", "10"))
-PROXY_REPEAT = int(os.getenv("PROXY_REPEAT", "10"))
+BURST_SIZES = [int(x) for x in os.getenv("BURST_SIZES", "10,50,100").split(",")]
+PROXY_REPEAT = int(os.getenv("PROXY_REPEAT", "20"))
+SUSTAINED_COUNT = int(os.getenv("SUSTAINED_COUNT", "100"))
 TIMEOUT = int(os.getenv("TIMEOUT", "5"))
 
 
@@ -78,7 +87,6 @@ class MetricStore:
         self._declared = set()
 
     def _declare(self, name, metric_type, help_text=""):
-        """Emit HELP/TYPE lines only once per metric name."""
         if name not in self._declared:
             self._declared.add(name)
             if help_text:
@@ -86,12 +94,11 @@ class MetricStore:
             self.lines.append(f"# TYPE {name} {metric_type}")
 
     def histogram(self, name, labels, values, help_text=""):
-        """Add histogram metric from a list of observed values."""
         if not values:
             return
         self._declare(name, "histogram", help_text)
         label_str = ",".join(f'{k}="{v}"' for k, v in labels.items())
-        buckets = [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
+        buckets = [0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
         for b in buckets:
             count_le = sum(1 for v in values if v <= b)
             self.lines.append(f'{name}_bucket{{{label_str},le="{b}"}} {count_le}')
@@ -107,10 +114,9 @@ class MetricStore:
     def gauge(self, name, labels, value, help_text=""):
         self._declare(name, "gauge", help_text)
         label_str = ",".join(f'{k}="{v}"' for k, v in labels.items())
-        self.lines.append(f"{name}{{{label_str}}} {value:.2f}")
+        self.lines.append(f"{name}{{{label_str}}} {value:.4f}")
 
     def push(self, url, job="gateway_arena"):
-        """Push all metrics to Pushgateway."""
         body = "\n".join(self.lines) + "\n"
         push_url = f"{url}/metrics/job/{job}"
         try:
@@ -124,7 +130,7 @@ class MetricStore:
 
 
 # ---------------------------------------------------------------------------
-# Benchmark scenarios
+# Benchmark primitives
 # ---------------------------------------------------------------------------
 def timed_request(url, headers=None, timeout=TIMEOUT):
     """Make a request and return (latency_seconds, status_code, ok)."""
@@ -139,82 +145,129 @@ def timed_request(url, headers=None, timeout=TIMEOUT):
         return time.monotonic() - start, 0, False
 
 
+def percentile(values, pct):
+    """Compute percentile from a sorted or unsorted list."""
+    if not values:
+        return 0.0
+    s = sorted(values)
+    idx = min(int(len(s) * pct / 100), len(s) - 1)
+    return s[idx]
+
+
+# ---------------------------------------------------------------------------
+# Scenarios
+# ---------------------------------------------------------------------------
 def scenario_health(gw):
-    """Scenario 1: Single health check — measures availability."""
+    """Single health check — availability baseline."""
     latency, status, ok = timed_request(gw["health"])
-    return {"scenario": "health", "latencies": [latency], "statuses": [status], "ok_count": 1 if ok else 0, "total": 1}
+    return {"scenario": "health", "latencies": [latency], "ok_count": 1 if ok else 0, "total": 1}
 
 
-def scenario_proxy(gw):
-    """Scenario 2: Sequential proxy requests — measures P50/P95/P99."""
-    latencies, statuses, ok_count = [], [], 0
+def scenario_proxy_sequential(gw, count):
+    """Sequential proxy requests — measures base gateway overhead (P50/P95)."""
+    latencies, ok_count = [], 0
     headers = gw.get("proxy_headers", {})
-    for _ in range(PROXY_REPEAT):
-        latency, status, ok = timed_request(gw["proxy"], headers=headers)
+    for _ in range(count):
+        latency, _, ok = timed_request(gw["proxy"], headers=headers)
         latencies.append(latency)
-        statuses.append(status)
         if ok:
             ok_count += 1
-    return {"scenario": "proxy_passthrough", "latencies": latencies, "statuses": statuses, "ok_count": ok_count, "total": PROXY_REPEAT}
+    return {"scenario": "proxy_sequential", "latencies": latencies, "ok_count": ok_count, "total": count}
 
 
-def scenario_burst(gw):
-    """Scenario 3: Concurrent burst — measures resilience under load."""
-    latencies, statuses, ok_count = [], [], 0
+def scenario_burst(gw, size):
+    """Concurrent burst — measures resilience under concurrent load."""
+    latencies, ok_count = [], 0
     headers = gw.get("proxy_headers", {})
-
-    with ThreadPoolExecutor(max_workers=BURST_SIZE) as pool:
-        futures = [pool.submit(timed_request, gw["proxy"], headers) for _ in range(BURST_SIZE)]
+    with ThreadPoolExecutor(max_workers=size) as pool:
+        futures = [pool.submit(timed_request, gw["proxy"], headers) for _ in range(size)]
         for future in as_completed(futures):
-            latency, status, ok = future.result()
+            latency, _, ok = future.result()
             latencies.append(latency)
-            statuses.append(status)
             if ok:
                 ok_count += 1
+    return {"scenario": f"burst_{size}", "latencies": latencies, "ok_count": ok_count, "total": size}
 
-    return {"scenario": "burst", "latencies": latencies, "statuses": statuses, "ok_count": ok_count, "total": BURST_SIZE}
+
+def scenario_sustained(gw, count):
+    """Sustained sequential load — measures consistency (jitter = GC pauses, thread contention)."""
+    latencies, ok_count = [], 0
+    headers = gw.get("proxy_headers", {})
+    for _ in range(count):
+        latency, _, ok = timed_request(gw["proxy"], headers=headers)
+        latencies.append(latency)
+        if ok:
+            ok_count += 1
+    return {"scenario": "sustained", "latencies": latencies, "ok_count": ok_count, "total": count}
 
 
 # ---------------------------------------------------------------------------
-# Composite score (Artificial Analysis inspired)
+# Composite score
 # ---------------------------------------------------------------------------
 def compute_score(all_results):
-    """Compute composite Arena Score (0-100) from all scenario results."""
-    all_latencies = []
+    """Compute composite Arena Score (0-100).
+
+    Weights tuned for gateway overhead differentiation:
+      - 15% base overhead (proxy_sequential P95)
+      - 25% burst_50 P95 (production load)
+      - 25% burst_100 P95 (stress — where async runtimes diverge)
+      - 15% availability (across all scenarios)
+      - 10% error rate
+      - 10% consistency (sustained jitter — GC-free = lower jitter)
+    """
+    # Collect per-scenario stats
+    scenario_map = {}
     total_ok = 0
     total_requests = 0
-
     for r in all_results:
-        all_latencies.extend(r["latencies"])
+        scenario_map[r["scenario"]] = r
         total_ok += r["ok_count"]
         total_requests += r["total"]
 
-    if not all_latencies or total_requests == 0:
+    if total_requests == 0:
         return 0.0
 
-    # Latency score: P95 based, 0-100 (lower is better, capped at 1s)
-    sorted_lat = sorted(all_latencies)
-    p95_idx = min(int(len(sorted_lat) * 0.95), len(sorted_lat) - 1)
-    p95 = sorted_lat[p95_idx]
-    latency_score = max(0, 100 * (1 - p95 / 1.0))
+    def latency_score(scenario_name, cap_seconds=0.5):
+        """Score a scenario's P95: 100 = instant, 0 = at/above cap."""
+        r = scenario_map.get(scenario_name)
+        if not r or not r["latencies"]:
+            return 50.0  # neutral if missing
+        p95 = percentile(r["latencies"], 95)
+        return max(0, 100 * (1 - p95 / cap_seconds))
 
-    # Availability score
+    # Base overhead — sequential proxy (cap at 200ms per request)
+    base_score = latency_score("proxy_sequential", 0.2)
+
+    # Burst scores — higher cap for larger bursts (fair)
+    burst50_score = latency_score("burst_50", 0.5)
+    burst100_score = latency_score("burst_100", 1.0)
+
+    # Availability
     availability_score = 100 * (total_ok / total_requests)
 
-    # Error rate score
-    error_count = total_requests - total_ok
-    error_score = 100 * (1 - error_count / total_requests)
+    # Error rate
+    error_score = 100 * (total_ok / total_requests)
 
-    # Consistency score (lower jitter = better)
-    mean_lat = statistics.mean(all_latencies)
-    if mean_lat > 0 and len(all_latencies) > 1:
-        stddev = statistics.stdev(all_latencies)
-        consistency_score = max(0, 100 * (1 - stddev / mean_lat))
+    # Consistency — coefficient of variation of sustained latencies
+    sustained = scenario_map.get("sustained")
+    if sustained and len(sustained["latencies"]) > 1:
+        mean_lat = statistics.mean(sustained["latencies"])
+        if mean_lat > 0:
+            cv = statistics.stdev(sustained["latencies"]) / mean_lat
+            consistency_score = max(0, 100 * (1 - cv))
+        else:
+            consistency_score = 100.0
     else:
         consistency_score = 100.0
 
-    # Weighted composite
-    score = (0.40 * latency_score) + (0.30 * availability_score) + (0.20 * error_score) + (0.10 * consistency_score)
+    score = (
+        0.15 * base_score
+        + 0.25 * burst50_score
+        + 0.25 * burst100_score
+        + 0.15 * availability_score
+        + 0.10 * error_score
+        + 0.10 * consistency_score
+    )
     return round(min(100, max(0, score)), 2)
 
 
@@ -222,17 +275,32 @@ def compute_score(all_results):
 # Main
 # ---------------------------------------------------------------------------
 def run():
-    log.info(f"Gateway Arena starting: {len(GATEWAYS)} gateways, burst={BURST_SIZE}, proxy_repeat={PROXY_REPEAT}")
+    log.info(json.dumps({
+        "event": "config",
+        "gateways": len(GATEWAYS),
+        "burst_sizes": BURST_SIZES,
+        "proxy_repeat": PROXY_REPEAT,
+        "sustained_count": SUSTAINED_COUNT,
+    }))
     metrics = MetricStore()
     results_summary = []
 
     for gw in GATEWAYS:
         name = gw["name"]
         log.info(f"Benchmarking gateway: {name}")
-
         gw_results = []
-        for scenario_fn in [scenario_health, scenario_proxy, scenario_burst]:
-            result = scenario_fn(gw)
+
+        # Run all scenarios
+        scenarios = [
+            lambda: scenario_health(gw),
+            lambda: scenario_proxy_sequential(gw, PROXY_REPEAT),
+        ]
+        for bs in BURST_SIZES:
+            scenarios.append((lambda s: lambda: scenario_burst(gw, s))(bs))
+        scenarios.append(lambda: scenario_sustained(gw, SUSTAINED_COUNT))
+
+        for scenario_fn in scenarios:
+            result = scenario_fn()
             gw_results.append(result)
             scenario = result["scenario"]
 
@@ -260,13 +328,24 @@ def run():
                     fail,
                 )
 
+            # Per-scenario stats
+            p50 = percentile(result["latencies"], 50) * 1000
+            p95 = percentile(result["latencies"], 95) * 1000
+            p99 = percentile(result["latencies"], 99) * 1000
             log.info(json.dumps({
                 "gateway": name,
                 "scenario": scenario,
                 "ok": ok,
                 "fail": fail,
-                "p50_ms": round(sorted(result["latencies"])[len(result["latencies"]) // 2] * 1000, 1) if result["latencies"] else 0,
+                "p50_ms": round(p50, 2),
+                "p95_ms": round(p95, 2),
+                "p99_ms": round(p99, 2),
             }))
+
+            # Record percentile gauges for Grafana
+            metrics.gauge("gateway_arena_p50_seconds", {"gateway": name, "scenario": scenario}, p50 / 1000, "P50 latency")
+            metrics.gauge("gateway_arena_p95_seconds", {"gateway": name, "scenario": scenario}, p95 / 1000, "P95 latency")
+            metrics.gauge("gateway_arena_p99_seconds", {"gateway": name, "scenario": scenario}, p99 / 1000, "P99 latency")
 
         # Composite score
         score = compute_score(gw_results)
@@ -280,7 +359,7 @@ def run():
     # Push to Pushgateway
     metrics.push(PUSHGATEWAY_URL)
 
-    # Leaderboard log
+    # Leaderboard
     leaderboard = sorted(results_summary, key=lambda x: x["score"], reverse=True)
     log.info(json.dumps({"event": "leaderboard", "ranking": leaderboard, "timestamp": datetime.now(timezone.utc).isoformat()}))
 

@@ -137,6 +137,9 @@ journal.md
 *.sqlite3
 backups/
 
+# Infisical
+.infisical.json
+
 # Cloud credentials (extra safety)
 .aws/
 .gcloud/

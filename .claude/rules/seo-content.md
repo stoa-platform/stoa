@@ -1,3 +1,8 @@
+---
+description: SEO content generation — blog templates, hub & spoke model, editorial calendar, quality gates
+globs: "docs/**,blog/**"
+---
+
 # SEO Content & Community Strategy
 
 ## Scope

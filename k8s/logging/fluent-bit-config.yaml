@@ -26,19 +26,30 @@ data:
         Refresh_Interval  5
         Mem_Buf_Limit     5MB
         Skip_Long_Lines   On
+        Read_from_Head    On
 
+    # Stage 1: Select only access_log entries (before JSON parsing)
     [FILTER]
         Name    grep
         Match   gateway.*
         Regex   log log_type.*access_log
 
+    # Stage 2: Parse the JSON log field from tracing::info! output
     [FILTER]
-        Name              kubernetes
-        Match             gateway.*
-        Kube_Tag_Prefix   gateway.var.log.containers.
-        Merge_Log         On
-        Keep_Log          Off
-        K8S-Logging.Parser  On
+        Name         parser
+        Match        gateway.*
+        Key_Name     log
+        Parser       json_log
+        Reserve_Data On
+
+    # Stage 3: Flatten nested "fields" object from tracing subscriber
+    # Before: {level: "INFO", fields: {method: "POST", path: "/mcp"}, target: "access_log"}
+    # After:  {method: "POST", path: "/mcp", log_type: "access_log", ...}
+    [FILTER]
+        Name          lua
+        Match         gateway.*
+        script        /fluent-bit/etc/flatten.lua
+        call          flatten_fields
 
     [OUTPUT]
         Name              opensearch
@@ -48,12 +59,11 @@ data:
         HTTP_User         admin
         HTTP_Passwd       ${OPENSEARCH_PASSWORD}
         Index             stoa-logs
-        Type              _doc
         tls               Off
         Suppress_Type_Name  On
         Logstash_Format   On
         Logstash_Prefix   stoa-logs
-        Pipeline          stoa-rgpd-redaction
+        Trace_Error       On
         Retry_Limit       3
 
   parsers.conf: |
@@ -63,3 +73,27 @@ data:
         Regex       ^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>[^ ]*) (?<log>.*)$
         Time_Key    time
         Time_Format %Y-%m-%dT%H:%M:%S.%L%z
+
+    [PARSER]
+        Name        json_log
+        Format      json
+        Time_Key    timestamp
+        Time_Format %Y-%m-%dT%H:%M:%S.%L%z
+
+  flatten.lua: |
+    -- Flatten the "fields" nested object from Rust tracing::info! output.
+    -- The tracing-subscriber JSON layer wraps structured fields in a "fields" key.
+    -- This filter lifts them to the top level for flat OpenSearch indexing.
+    function flatten_fields(tag, timestamp, record)
+        if record["fields"] ~= nil and type(record["fields"]) == "table" then
+            for k, v in pairs(record["fields"]) do
+                record[k] = v
+            end
+            record["fields"] = nil
+        end
+        -- Remove tracing metadata not needed in OpenSearch
+        record["logtag"] = nil
+        record["target"] = nil
+        record["level"] = nil
+        return 1, timestamp, record
+    end

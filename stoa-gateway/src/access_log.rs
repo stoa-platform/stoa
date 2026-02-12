@@ -11,7 +11,13 @@ use axum::{extract::Request, middleware::Next, response::Response};
 use std::time::Instant;
 
 /// Paths to skip from access logging (noisy health/metrics endpoints).
-const SKIP_PATHS: &[&str] = &["/health", "/ready", "/metrics"];
+const SKIP_PATHS: &[&str] = &[
+    "/health",
+    "/health/ready",
+    "/health/live",
+    "/ready",
+    "/metrics",
+];
 
 /// Access log middleware — emits structured JSON for each request.
 ///

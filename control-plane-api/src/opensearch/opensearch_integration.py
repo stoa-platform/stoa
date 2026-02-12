@@ -173,9 +173,5 @@ async def setup_opensearch(app: FastAPI) -> None:
     async def opensearch_health():
         return await service.health_check()
 
-    # Wire audit middleware (CAB-307) — logs all API requests to OpenSearch
     if service.audit_logger:
-        from .audit_middleware import AuditMiddleware
-
-        app.add_middleware(AuditMiddleware, audit_logger=service.audit_logger)
-        logger.info("Audit middleware attached — real audit logging enabled")
+        logger.info("Audit logger ready — middleware uses lazy lookup via OpenSearchService")

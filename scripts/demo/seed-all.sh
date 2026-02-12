@@ -268,6 +268,7 @@ info "Grafana:    http://localhost:3001"
 info "Dashboard:  http://localhost:3001/d/stoa-error-snapshots"
 info "Gateway:    http://localhost:3001/d/stoa-gateway-metrics"
 info "RED Method: http://localhost:3001/d/stoa-gateway-red"
+info "Arena:      http://localhost:3001/d/gateway-arena"
 info "OpenSearch: http://localhost:5601"
 echo "================================================================"
 

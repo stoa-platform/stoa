@@ -1,0 +1,151 @@
+---
+# Redpanda single-node deployment for STOA event streaming
+# Lightweight Kafka-compatible broker (~512MB RAM, 5Gi storage)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redpanda-config
+  namespace: stoa-system
+  labels:
+    app: redpanda
+data:
+  redpanda.yaml: |
+    redpanda:
+      data_directory: /var/lib/redpanda/data
+      auto_create_topics_enabled: true
+      default_topic_replications: 1
+      kafka_api:
+        - address: 0.0.0.0
+          port: 9092
+      advertised_kafka_api:
+        - address: redpanda.stoa-system.svc.cluster.local
+          port: 9092
+      admin:
+        - address: 0.0.0.0
+          port: 9644
+      developer_mode: true
+    pandaproxy:
+      pandaproxy_api:
+        - address: 0.0.0.0
+          port: 8082
+      advertised_pandaproxy_api:
+        - address: redpanda.stoa-system.svc.cluster.local
+          port: 8082
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda
+  namespace: stoa-system
+  labels:
+    app: redpanda
+    app.kubernetes.io/name: redpanda
+    app.kubernetes.io/component: messaging
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  clusterIP: None
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+    - name: admin
+      port: 9644
+      targetPort: 9644
+  selector:
+    app: redpanda
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redpanda
+  namespace: stoa-system
+  labels:
+    app: redpanda
+    app.kubernetes.io/name: redpanda
+    app.kubernetes.io/component: messaging
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  serviceName: redpanda
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda
+  template:
+    metadata:
+      labels:
+        app: redpanda
+    spec:
+      securityContext:
+        fsGroup: 101
+        runAsUser: 101
+        runAsGroup: 101
+      initContainers:
+        - name: config-setup
+          image: busybox:1.36
+          command: ["sh", "-c", "cp /etc/redpanda-cm/redpanda.yaml /etc/redpanda/redpanda.yaml"]
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: config-cm
+              mountPath: /etc/redpanda-cm
+            - name: config
+              mountPath: /etc/redpanda
+      containers:
+        - name: redpanda
+          image: docker.redpanda.com/redpandadata/redpanda:v24.3.1
+          args:
+            - redpanda
+            - start
+            - --smp=1
+            - --memory=512M
+            - --reserve-memory=0M
+            - --overprovisioned
+          ports:
+            - containerPort: 9092
+              name: kafka
+            - containerPort: 9644
+              name: admin
+            - containerPort: 8082
+              name: pandaproxy
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/redpanda/data
+            - name: config
+              mountPath: /etc/redpanda
+          readinessProbe:
+            httpGet:
+              path: /v1/status/ready
+              port: 9644
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v1/status/ready
+              port: 9644
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: config-cm
+          configMap:
+            name: redpanda-config
+        - name: config
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi

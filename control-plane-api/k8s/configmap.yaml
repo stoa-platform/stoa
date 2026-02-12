@@ -39,7 +39,7 @@ data:
   GITLAB_GITOPS_PROJECT_PATH: "cab6961310/stoa-gitops"
 
   # Kafka/Redpanda Event Streaming
-  KAFKA_ENABLED: "false"
+  KAFKA_ENABLED: "true"
   KAFKA_BOOTSTRAP_SERVERS: "redpanda.stoa-system.svc.cluster.local:9092"
   KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
 

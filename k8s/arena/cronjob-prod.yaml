@@ -1,0 +1,94 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gateway-arena
+  namespace: stoa-system
+  labels:
+    app: gateway-arena
+    environment: production
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app: gateway-arena
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: arena
+              image: python:3.11-slim
+              command:
+                - python
+                - /app/gateway-arena.py
+              env:
+                - name: PUSHGATEWAY_URL
+                  value: "http://pushgateway.monitoring.svc:9091"
+                - name: BURST_SIZE
+                  value: "10"
+                - name: PROXY_REPEAT
+                  value: "10"
+                - name: TIMEOUT
+                  value: "5"
+                - name: GATEWAYS
+                  value: |
+                    [
+                      {"name":"stoa","health":"http://51.83.45.13:8080/health","proxy":"http://51.83.45.13:8080/httpbin/get"},
+                      {"name":"kong","health":"http://51.83.45.13:8001/status","proxy":"http://51.83.45.13:8000/httpbin/get"},
+                      {"name":"gravitee","health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://54.36.209.237:8082/httpbin/get","proxy_headers":{"Authorization":"Basic YWRtaW46YWRtaW4="}}
+                    ]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: app
+                  mountPath: /app
+                  readOnly: true
+          initContainers:
+            - name: install-deps
+              image: python:3.11-slim
+              command:
+                - sh
+                - -c
+                - |
+                  pip install --no-cache-dir --target=/app requests==2.31.0 &&
+                  cp /script/gateway-arena.py /app/gateway-arena.py
+              volumeMounts:
+                - name: app
+                  mountPath: /app
+                - name: script
+                  mountPath: /script
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+          volumes:
+            - name: app
+              emptyDir: {}
+            - name: script
+              configMap:
+                name: gateway-arena-script

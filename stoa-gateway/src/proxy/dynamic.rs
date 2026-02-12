@@ -23,6 +23,9 @@ fn get_proxy_client() -> &'static reqwest::Client {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(5))
+            .pool_max_idle_per_host(32)
+            .pool_idle_timeout(Duration::from_secs(90))
+            .tcp_keepalive(Duration::from_secs(60))
             .build()
             .expect("Failed to create proxy HTTP client")
     })
@@ -112,7 +115,16 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         "Dynamic proxy: forwarding request"
     );
 
+    let upstream_start = std::time::Instant::now();
     let response = forward_request(request, &method, &target_url).await;
+    let upstream_duration = upstream_start.elapsed().as_secs_f64();
+
+    // Record upstream latency metric
+    crate::metrics::record_upstream_latency(
+        &route.name,
+        response.status().as_u16(),
+        upstream_duration,
+    );
 
     // Record success/failure for circuit breaker
     if response.status().is_server_error() {

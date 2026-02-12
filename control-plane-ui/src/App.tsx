@@ -360,6 +360,7 @@ function ProtectedRoutes() {
                 {/* Native observability dashboards (replace iframe embeds) */}
                 <Route path="/observability" element={<PlatformMetrics />} />
                 <Route path="/observability/grafana" element={<GrafanaEmbed />} />
+                <Route path="/observability/benchmarks" element={<GrafanaEmbed />} />
                 <Route path="/identity" element={<IdentityEmbed />} />
                 {/* Native request explorer (replace OpenSearch iframe) */}
                 <Route path="/logs" element={<RequestExplorer />} />

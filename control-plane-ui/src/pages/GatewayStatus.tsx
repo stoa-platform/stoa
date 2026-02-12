@@ -557,6 +557,34 @@ export default function GatewayStatus() {
         </div>
       </div>
 
+      {/* Gateway Arena */}
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
+              <Gauge className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Gateway Arena</h3>
+              <p className="text-xs text-gray-500 dark:text-neutral-400">
+                Continuous benchmark leaderboard — STOA vs Kong vs Gravitee
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() =>
+              navigate(
+                `/observability/benchmarks?url=${encodeURIComponent(config.services.grafana.arenaDashboardUrl)}`
+              )
+            }
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            <BarChart3 className="w-4 h-4" />
+            View Benchmarks
+          </button>
+        </div>
+      </div>
+
       {/* Info Banner */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
         <div className="flex">

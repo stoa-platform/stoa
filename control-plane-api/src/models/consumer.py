@@ -51,7 +51,7 @@ class Consumer(Base):
 
     # Status
     status = Column(
-        SQLEnum(ConsumerStatus, values_callable=lambda x: [e.value for e in x]),
+        SQLEnum(ConsumerStatus, values_callable=lambda x: [e.value for e in x], name="consumer_status_enum"),
         nullable=False,
         default=ConsumerStatus.ACTIVE,
     )

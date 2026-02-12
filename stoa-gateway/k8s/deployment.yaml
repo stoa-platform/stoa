@@ -31,7 +31,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: stoa-gateway
-          image: ghcr.io/stoa-platform/stoa-gateway:dev-latest
+          image: ghcr.io/stoa-platform/stoa-gateway:latest
           imagePullPolicy: Always
           ports:
             - name: http
@@ -43,7 +43,7 @@ spec:
             - name: STOA_HOST
               value: "0.0.0.0"
             - name: STOA_CONTROL_PLANE_URL
-              value: "http://control-plane-api.stoa-system.svc.cluster.local:8000"
+              value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
             - name: STOA_LOG_LEVEL
               value: "info"
             - name: STOA_LOG_FORMAT
@@ -54,6 +54,10 @@ spec:
               value: "stoa"
             - name: STOA_KEYCLOAK_CLIENT_ID
               value: "stoa-mcp-gateway"
+            - name: STOA_RATE_LIMIT_DEFAULT
+              value: "1000"
+            - name: STOA_GATEWAY_EXTERNAL_URL
+              value: "https://mcp.gostoa.dev"
             - name: STOA_KAFKA_ENABLED
               value: "true"
             - name: STOA_KAFKA_BROKERS

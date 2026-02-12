@@ -49,7 +49,7 @@ base64 = "0.22"                              # Base64url decode for RFC 8705 thu
 ipnet = "2"                                  # CIDR matching for trusted proxies
 
 # === Phase 2 OPA: Embedded Policy Engine (CAB-1094) ===
-regorus = "0.2"                              # Pure Rust OPA evaluator (no sidecar)
+regorus = "0.9"                              # Pure Rust OPA evaluator (no sidecar)
 
 # === Phase 8: Shadow Mode UAC Generation ===
 serde_yaml = "0.9"                           # YAML serialization for UAC contracts

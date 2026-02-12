@@ -32,7 +32,7 @@ Arena uses dedicated OVH VPS instances for each gateway to ensure fair compariso
 
 | Gateway | VPS IP | Health | Proxy | Backend |
 |---------|--------|--------|-------|---------|
-| STOA | `TODO_STOA_VPS_IP:8080` | `/health` | `/httpbin/get` | httpbin.org |
+| STOA | `51.83.45.13:8080` | `/health` | `/httpbin/get` | httpbin.org (colocated on Kong VPS) |
 | Kong | `51.83.45.13:8000` | `:8001/status` | `/httpbin/get` | httpbin.org |
 | Gravitee | `54.36.209.237:8082` | `:8083/management/...` | `/httpbin/get` | httpbin.org |
 
@@ -40,8 +40,8 @@ Arena uses dedicated OVH VPS instances for each gateway to ensure fair compariso
 
 ```bash
 # Deploy (one-time)
-scp -i ~/.ssh/id_ed25519_stoa -r deploy/vps/stoa/ debian@TODO_STOA_VPS_IP:~/stoa/
-ssh -i ~/.ssh/id_ed25519_stoa debian@TODO_STOA_VPS_IP
+scp -i ~/.ssh/id_ed25519_stoa -r deploy/vps/stoa/ debian@51.83.45.13:~/stoa/
+ssh -i ~/.ssh/id_ed25519_stoa debian@51.83.45.13
 cd ~/stoa && docker compose up -d && ./setup.sh
 ```
 

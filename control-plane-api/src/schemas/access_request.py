@@ -7,10 +7,13 @@ from pydantic import BaseModel, EmailStr
 
 
 class AccessRequestCreate(BaseModel):
-    """Public form submission: email + optional company."""
+    """Public form submission: profile + optional company/role."""
 
     email: EmailStr
+    first_name: str | None = None
+    last_name: str | None = None
     company: str | None = None
+    role: str | None = None
     source: str | None = None
 
 
@@ -26,7 +29,10 @@ class AccessRequestDetail(BaseModel):
 
     id: UUID
     email: str
+    first_name: str | None = None
+    last_name: str | None = None
     company: str | None = None
+    role: str | None = None
     source: str | None = None
     status: str
     created_at: datetime

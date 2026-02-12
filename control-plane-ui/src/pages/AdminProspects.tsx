@@ -243,7 +243,7 @@ export function AdminProspects() {
                 <thead className="bg-gray-50 dark:bg-neutral-700">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
-                      Company / Email
+                      Name / Email
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       Status
@@ -413,8 +413,19 @@ function ProspectRow({ prospect, onClick }: { prospect: ProspectSummary; onClick
       className="hover:bg-gray-50 dark:hover:bg-neutral-700 cursor-pointer transition-colors"
     >
       <td className="px-6 py-4">
-        <div className="font-medium text-gray-900 dark:text-white">{prospect.company}</div>
-        <div className="text-sm text-gray-500 dark:text-neutral-400">{prospect.email}</div>
+        <div className="font-medium text-gray-900 dark:text-white">
+          {prospect.first_name || prospect.last_name
+            ? `${prospect.first_name ?? ''} ${prospect.last_name ?? ''}`.trim()
+            : prospect.company || prospect.email}
+        </div>
+        <div className="text-sm text-gray-500 dark:text-neutral-400">
+          {prospect.email}
+          {prospect.role && (
+            <span className="ml-2 text-xs bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded">
+              {prospect.role}
+            </span>
+          )}
+        </div>
       </td>
       <td className="px-6 py-4">
         <span
@@ -469,9 +480,14 @@ function ProspectDetailModal({
             ) : prospect ? (
               <>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {prospect.company}
+                  {prospect.first_name || prospect.last_name
+                    ? `${prospect.first_name ?? ''} ${prospect.last_name ?? ''}`.trim()
+                    : prospect.company || prospect.email}
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-neutral-400">{prospect.email}</p>
+                <p className="text-sm text-gray-500 dark:text-neutral-400">
+                  {prospect.email}
+                  {prospect.company && ` · ${prospect.company}`}
+                </p>
               </>
             ) : null}
           </div>
@@ -496,6 +512,8 @@ function ProspectDetailModal({
               {/* Info Grid */}
               <div className="grid grid-cols-2 gap-4">
                 <InfoItem label="Status" value={prospect.status} />
+                <InfoItem label="Role" value={prospect.role || '—'} />
+                <InfoItem label="Company" value={prospect.company || '—'} />
                 <InfoItem label="Source" value={prospect.source || '—'} />
                 <InfoItem label="Invited" value={formatDate(prospect.created_at)} />
                 <InfoItem label="First Visit" value={formatDate(prospect.opened_at)} />

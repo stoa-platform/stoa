@@ -43,7 +43,10 @@ async def create_access_request(
 
     access_request = AccessRequest(
         email=payload.email,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
         company=payload.company,
+        role=payload.role,
         source=payload.source,
     )
     db.add(access_request)

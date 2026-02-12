@@ -669,7 +669,10 @@ export type NPSCategory = 'promoter' | 'passive' | 'detractor';
 export interface ProspectSummary {
   id: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
   company: string;
+  role?: string;
   status: ProspectStatus;
   source?: string;
   created_at: string;
@@ -712,7 +715,10 @@ export interface ProspectMetrics {
 export interface ProspectDetail {
   id: string;
   email: string;
+  first_name?: string;
+  last_name?: string;
   company: string;
+  role?: string;
   status: ProspectStatus;
   source?: string;
   created_at: string;

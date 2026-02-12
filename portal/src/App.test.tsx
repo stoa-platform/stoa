@@ -148,6 +148,18 @@ describe('App', () => {
       expect(screen.getByText('Sign In')).toBeInTheDocument();
     });
 
+    it('should show profile fields in request access form', () => {
+      mockAuth.isAuthenticated = false;
+
+      renderApp('/');
+
+      expect(screen.getByLabelText('First name *')).toBeInTheDocument();
+      expect(screen.getByLabelText('Last name *')).toBeInTheDocument();
+      expect(screen.getByLabelText('Work email *')).toBeInTheDocument();
+      expect(screen.getByLabelText('Company')).toBeInTheDocument();
+      expect(screen.getByLabelText('Role')).toBeInTheDocument();
+    });
+
     it('should show loading screen while authenticating', () => {
       mockAuth.isLoading = true;
 

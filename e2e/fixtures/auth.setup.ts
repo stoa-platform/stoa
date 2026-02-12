@@ -19,6 +19,23 @@ const PORTAL_URL = process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev';
 const CONSOLE_URL = process.env.STOA_CONSOLE_URL || 'https://console.gostoa.dev';
 
 /**
+ * Diagnose what type of Keycloak page is currently shown.
+ * Returns a description of the visible form elements for debugging.
+ */
+async function diagnoseKeycloakPage(
+  page: import('@playwright/test').Page,
+): Promise<string> {
+  return page.evaluate(() => {
+    const forms = Array.from(document.querySelectorAll('form')).map(f => f.id || f.action);
+    const buttons = Array.from(
+      document.querySelectorAll('button, input[type="submit"]'),
+    ).map(b => `${b.tagName}[${b.getAttribute('name') || b.getAttribute('id') || b.textContent?.trim().slice(0, 30)}]`);
+    const title = document.querySelector('#kc-page-title, .pf-c-title, h1')?.textContent?.trim();
+    return `title="${title || 'none'}" forms=[${forms.join(',')}] buttons=[${buttons.join(',')}]`;
+  });
+}
+
+/**
  * Perform Keycloak login flow (click SSO button if needed, fill form, wait for redirect)
  */
 async function keycloakLogin(
@@ -55,10 +72,10 @@ async function keycloakLogin(
     await page.locator('#kc-login').click();
   }
 
-  // Handle intermediate Keycloak pages (consent, terms, OTP) before redirect.
+  // Handle intermediate Keycloak pages (consent, terms, OTP, profile) before redirect.
   // After login, Keycloak may show additional forms (e.g. OAuth grant/consent
   // for the control-plane-ui client). We loop until we leave Keycloak.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const redirected = await page
       .waitForURL(
         url => !url.hostname.includes('auth.') && !url.pathname.includes('/auth/'),
@@ -69,28 +86,105 @@ async function keycloakLogin(
 
     if (redirected) break;
 
-    // Still on Keycloak — check for consent/grant form and approve it
-    const consentButton = page.locator(
-      '#kc-login, input[name="accept"], button:has-text("Yes"), button:has-text("Grant")',
-    );
-    if (await consentButton.first().isVisible({ timeout: 2000 }).catch(() => false)) {
-      console.log('  Approving Keycloak consent/grant form...');
-      await consentButton.first().click();
+    // Still on Keycloak — diagnose the page for debugging
+    const currentUrl = page.url();
+    const diagnosis = await diagnoseKeycloakPage(page).catch(() => 'evaluate failed');
+    console.log(`  Keycloak intermediate page (attempt ${attempt + 1}/5): ${currentUrl}`);
+    console.log(`  Page: ${diagnosis}`);
+
+    // Case 1: OAuth consent/grant form — check for accept button specifically
+    // Keycloak consent uses input[name="accept"] or button[name="accept"]
+    const acceptButton = page.locator('input[name="accept"], button[name="accept"]');
+    if (await acceptButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+      console.log('  Found OAuth accept button — granting consent...');
+      await acceptButton.click();
       continue;
     }
 
-    // Check for "Update Password" required action
+    // Case 2: Consent with Yes/Grant buttons (alternative Keycloak themes)
+    const yesButton = page.locator(
+      'button:has-text("Yes"), button:has-text("Grant access"), button:has-text("Accept")',
+    );
+    if (await yesButton.first().isVisible({ timeout: 1000 }).catch(() => false)) {
+      console.log('  Found Yes/Grant button — clicking...');
+      await yesButton.first().click();
+      continue;
+    }
+
+    // Case 3: Consent with scope checkboxes — check all scopes then submit
+    const scopeCheckboxes = page.locator(
+      'input[type="checkbox"][name^="grant"], input[type="checkbox"].pf-c-check__input',
+    );
+    const checkboxCount = await scopeCheckboxes.count();
+    if (checkboxCount > 0) {
+      console.log(`  Found ${checkboxCount} scope checkboxes — checking all...`);
+      for (let i = 0; i < checkboxCount; i++) {
+        const cb = scopeCheckboxes.nth(i);
+        if (!(await cb.isChecked())) await cb.check();
+      }
+      // After checking scopes, click the submit button
+      const submitBtn = page.locator('#kc-login, input[type="submit"], button[type="submit"]');
+      if (await submitBtn.first().isVisible({ timeout: 1000 }).catch(() => false)) {
+        await submitBtn.first().click();
+      }
+      continue;
+    }
+
+    // Case 4: Update Password required action
     const newPasswordField = page.locator('#password-new');
     if (await newPasswordField.isVisible({ timeout: 1000 }).catch(() => false)) {
       console.log('  Handling "Update Password" required action...');
       await newPasswordField.fill(password);
       await page.locator('#password-confirm').fill(password);
-      await page.locator('input[type="submit"], button[type="submit"]').click();
+      await page.locator('#kc-login, input[type="submit"], button[type="submit"]').first().click();
       continue;
     }
 
-    // Unknown intermediate page — log URL for debugging and break
-    console.warn(`  Unknown Keycloak page after login: ${page.url()}`);
+    // Case 5: Update Profile required action
+    const firstNameField = page.locator('#firstName');
+    if (await firstNameField.isVisible({ timeout: 1000 }).catch(() => false)) {
+      console.log('  Handling "Update Profile" required action...');
+      if ((await firstNameField.inputValue()) === '') await firstNameField.fill(username);
+      const lastNameField = page.locator('#lastName');
+      if (
+        (await lastNameField.isVisible().catch(() => false)) &&
+        (await lastNameField.inputValue()) === ''
+      ) {
+        await lastNameField.fill('Test');
+      }
+      const emailField = page.locator('#email');
+      if (
+        (await emailField.isVisible().catch(() => false)) &&
+        (await emailField.inputValue()) === ''
+      ) {
+        await emailField.fill(`${username}@test.gostoa.dev`);
+      }
+      await page.locator('#kc-login, input[type="submit"], button[type="submit"]').first().click();
+      continue;
+    }
+
+    // Case 6: Terms and Conditions — check the accept checkbox then submit
+    const termsCheckbox = page.locator('#kc-accept, input[name="accept_terms"]');
+    if (await termsCheckbox.isVisible({ timeout: 1000 }).catch(() => false)) {
+      console.log('  Handling Terms and Conditions...');
+      if (!(await termsCheckbox.isChecked())) await termsCheckbox.check();
+      await page.locator('#kc-login, input[type="submit"], button[type="submit"]').first().click();
+      continue;
+    }
+
+    // Case 7: Generic #kc-login submit (last resort)
+    const kcLogin = page.locator('#kc-login');
+    if (await kcLogin.isVisible({ timeout: 1000 }).catch(() => false)) {
+      console.log(`  Clicking #kc-login as last resort...`);
+      await kcLogin.click();
+      continue;
+    }
+
+    // Nothing recognizable — take screenshot for debugging and break
+    console.warn(`  No recognizable form on Keycloak page: ${currentUrl}`);
+    await page
+      .screenshot({ path: `e2e/fixtures/.auth/debug-${username}-attempt-${attempt}.png` })
+      .catch(() => {});
     break;
   }
 
@@ -101,12 +195,18 @@ async function keycloakLogin(
   );
 
   // Wait for OIDC callback — tokens stored in sessionStorage
+  // react-oidc-context may use 'oidc.' prefix or 'oidc.user:' prefix
   await page
     .waitForFunction(
       () => Object.keys(sessionStorage).some(k => k.startsWith('oidc.')),
       { timeout: 15000 },
     )
-    .catch(() => {});
+    .catch(() => {
+      // Fallback: check for any auth-related key
+      console.log(
+        '  Warning: no oidc.* keys in sessionStorage after 15s',
+      );
+    });
 
   // Wait for app to fully load
   await expect(

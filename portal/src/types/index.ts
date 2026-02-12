@@ -801,6 +801,52 @@ export interface PlanListResponse {
   total_pages: number;
 }
 
+// ============ Gateway Instance Types ============
+
+export type GatewayStatus = 'online' | 'offline' | 'degraded' | 'maintenance';
+
+export type GatewayType =
+  | 'stoa'
+  | 'stoa_edge_mcp'
+  | 'stoa_sidecar'
+  | 'stoa_proxy'
+  | 'stoa_shadow'
+  | 'kong'
+  | 'gravitee'
+  | 'webmethods'
+  | 'apigee'
+  | 'aws_apigateway';
+
+export interface GatewayInstance {
+  id: string;
+  name: string;
+  display_name: string;
+  gateway_type: GatewayType;
+  base_url: string;
+  admin_url?: string;
+  environment: string;
+  status: GatewayStatus;
+  mode?: string;
+  last_health_check?: string;
+  api_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GatewayInstancesResponse {
+  items: GatewayInstance[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface GatewayModeStats {
+  mode: string;
+  count: number;
+  healthy: number;
+  unhealthy: number;
+}
+
 // ============ Publish Contract Response Types (CAB-560) ============
 
 /**

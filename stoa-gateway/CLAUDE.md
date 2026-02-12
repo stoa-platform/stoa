@@ -37,14 +37,43 @@ src/
 └── uac/                 # Universal API Contract
 ```
 
+## Feature Flags (ADR-041 Phase 3)
+
+Optional Cargo features for community/enterprise image split:
+
+| Feature | Crate | Purpose | Build Dep |
+|---------|-------|---------|-----------|
+| `kafka` | rdkafka | Kafka metering | cmake, libsasl2-dev |
+| `k8s` | kube, k8s-openapi, schemars | K8s CRD watcher | None |
+| `otel` | *(placeholder)* | OpenTelemetry tracing | None |
+
+Default features: **none** (community image — lean, no optional deps).
+
+```bash
+# Community build (default)
+cargo build --release
+
+# Enterprise build (all features)
+cargo build --release --features "kafka,k8s"
+
+# Docker: community
+docker build -t stoa-gateway:community .
+
+# Docker: enterprise
+docker build --build-arg FEATURES="kafka,k8s" -t stoa-gateway:enterprise .
+```
+
 ## Development
 ```bash
 cargo check              # Fast compile check
-cargo test               # Run tests
+cargo test               # Run tests (default features)
+cargo test --features k8s # Run tests with K8s feature
 cargo clippy             # Lint
 cargo fmt --check        # Format check
 cargo run                # Run server
 ```
+
+Note: `cargo test --all-features` requires cmake (for rdkafka). Use `cargo test` locally.
 
 ## Dependencies
 - **Depends on**: control-plane-api (config/tool sync), Keycloak (JWT verification)

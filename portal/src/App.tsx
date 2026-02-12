@@ -47,6 +47,9 @@ const WorkspacePage = lazy(() =>
 const ConsumerRegistrationPage = lazy(() =>
   import('./pages/consumers').then((m) => ({ default: m.ConsumerRegistrationPage }))
 );
+const GatewaysPage = lazy(() =>
+  import('./pages/gateways').then((m) => ({ default: m.GatewaysPage }))
+);
 const UnauthorizedPage = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.UnauthorizedPage }))
 );
@@ -505,6 +508,16 @@ function AppContent() {
               element={
                 <ProtectedRoute scope="stoa:subscriptions:write">
                   <ConsumerRegistrationPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Gateway Instances (Operations) — admin only */}
+            <Route
+              path="/gateways"
+              element={
+                <ProtectedRoute scope="stoa:admin">
+                  <GatewaysPage />
                 </ProtectedRoute>
               }
             />

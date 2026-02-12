@@ -9,6 +9,7 @@ import {
   Wrench,
   ExternalLink,
   Briefcase,
+  Server,
   LucideIcon,
 } from 'lucide-react';
 import { config } from '../../config';
@@ -83,6 +84,18 @@ const sections: NavSection[] = [
         icon: Webhook,
         enabled: config.features.enableSubscriptions,
         scope: 'stoa:subscriptions:write',
+      },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      {
+        name: 'Gateways',
+        href: '/gateways',
+        icon: Server,
+        enabled: config.features.enableGateways,
+        scope: 'stoa:admin',
       },
     ],
   },

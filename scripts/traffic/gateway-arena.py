@@ -44,8 +44,8 @@ except ImportError:
 DEFAULT_GATEWAYS = json.dumps([
     {
         "name": "stoa",
-        "health": "http://TODO_STOA_VPS_IP:8080/health",
-        "proxy": "http://TODO_STOA_VPS_IP:8080/httpbin/get",
+        "health": "http://51.83.45.13:8080/health",
+        "proxy": "http://51.83.45.13:8080/httpbin/get",
     },
     {
         "name": "kong",

@@ -57,7 +57,7 @@ class Subscription(Base):
 
     # API Key (hashed for security)
     api_key_hash = Column(String(512), nullable=False, unique=True)
-    api_key_prefix = Column(String(10), nullable=False)  # First 8 chars for display
+    api_key_prefix = Column(String(20), nullable=False)  # Prefix: stoa_sk_ + 4 hex
 
     # Key rotation with grace period (CAB-314)
     previous_api_key_hash = Column(String(512), nullable=True, index=True)  # Old key during grace period

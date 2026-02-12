@@ -12,13 +12,7 @@ on:
         required: false
         type: string
         default: '@smoke'
-      vault-enabled:
-        description: 'Whether to fetch secrets from Vault (requires Vault JWT auth configured)'
-        required: false
-        type: boolean
-        default: true
     secrets:
-      # Legacy secrets (used when vault-enabled=false or as fallback)
       E2E_PORTAL_URL:
         required: false
       E2E_CONSOLE_URL:
@@ -61,41 +55,10 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      id-token: write  # Required for Vault OIDC authentication
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Fetch E2E secrets from Vault
-        if: inputs.vault-enabled
-        id: vault-secrets
-        continue-on-error: true  # Gracefully fall back to GitHub secrets if Vault fails
-        uses: hashicorp/vault-action@v3
-        with:
-          url: https://vault.gostoa.dev
-          method: jwt
-          role: github-actions
-          jwtGithubAudience: sigstore
-          exportEnv: true
-          secrets: |
-            secret/data/e2e/urls PORTAL_URL | E2E_PORTAL_URL ;
-            secret/data/e2e/urls CONSOLE_URL | E2E_CONSOLE_URL ;
-            secret/data/e2e/urls GATEWAY_URL | E2E_GATEWAY_URL ;
-            secret/data/e2e/urls KEYCLOAK_URL | E2E_KEYCLOAK_URL ;
-            secret/data/e2e/personas/parzival username | PARZIVAL_USER ;
-            secret/data/e2e/personas/parzival password | PARZIVAL_PASSWORD ;
-            secret/data/e2e/personas/art3mis username | ART3MIS_USER ;
-            secret/data/e2e/personas/art3mis password | ART3MIS_PASSWORD ;
-            secret/data/e2e/personas/aech username | AECH_USER ;
-            secret/data/e2e/personas/aech password | AECH_PASSWORD ;
-            secret/data/e2e/personas/sorrento username | SORRENTO_USER ;
-            secret/data/e2e/personas/sorrento password | SORRENTO_PASSWORD ;
-            secret/data/e2e/personas/anorak username | ANORAK_USER ;
-            secret/data/e2e/personas/anorak password | ANORAK_PASSWORD ;
-            secret/data/e2e/personas/alex username | ALEX_USER ;
-            secret/data/e2e/personas/alex password | ALEX_PASSWORD ;
-            secret/data/e2e/api-keys test | TEST_API_KEY
 
       - name: Setup E2E environment
         uses: ./.github/actions/e2e-setup
@@ -103,26 +66,26 @@ jobs:
       - name: Run smoke tests
         working-directory: e2e
         env:
-          # URLs - Vault values take precedence, then secrets, then defaults
-          STOA_PORTAL_URL: ${{ env.E2E_PORTAL_URL || secrets.E2E_PORTAL_URL || 'https://portal.gostoa.dev' }}
-          STOA_CONSOLE_URL: ${{ env.E2E_CONSOLE_URL || secrets.E2E_CONSOLE_URL || 'https://console.gostoa.dev' }}
-          STOA_GATEWAY_URL: ${{ env.E2E_GATEWAY_URL || secrets.E2E_GATEWAY_URL || 'https://api.gostoa.dev' }}
-          KEYCLOAK_URL: ${{ env.E2E_KEYCLOAK_URL || secrets.E2E_KEYCLOAK_URL || 'https://auth.gostoa.dev' }}
+          # URLs — GitHub Secrets with sane defaults
+          STOA_PORTAL_URL: ${{ secrets.E2E_PORTAL_URL || 'https://portal.gostoa.dev' }}
+          STOA_CONSOLE_URL: ${{ secrets.E2E_CONSOLE_URL || 'https://console.gostoa.dev' }}
+          STOA_GATEWAY_URL: ${{ secrets.E2E_GATEWAY_URL || 'https://api.gostoa.dev' }}
+          KEYCLOAK_URL: ${{ secrets.E2E_KEYCLOAK_URL || 'https://auth.gostoa.dev' }}
           KEYCLOAK_REALM: stoa
-          # Personas - Vault values take precedence, then secrets
-          PARZIVAL_USER: ${{ env.PARZIVAL_USER || secrets.PARZIVAL_USER }}
-          PARZIVAL_PASSWORD: ${{ env.PARZIVAL_PASSWORD || secrets.PARZIVAL_PASSWORD }}
-          ART3MIS_USER: ${{ env.ART3MIS_USER || secrets.ART3MIS_USER }}
-          ART3MIS_PASSWORD: ${{ env.ART3MIS_PASSWORD || secrets.ART3MIS_PASSWORD }}
-          AECH_USER: ${{ env.AECH_USER || secrets.AECH_USER }}
-          AECH_PASSWORD: ${{ env.AECH_PASSWORD || secrets.AECH_PASSWORD }}
-          SORRENTO_USER: ${{ env.SORRENTO_USER || secrets.SORRENTO_USER }}
-          SORRENTO_PASSWORD: ${{ env.SORRENTO_PASSWORD || secrets.SORRENTO_PASSWORD }}
-          ANORAK_USER: ${{ env.ANORAK_USER || secrets.ANORAK_USER }}
-          ANORAK_PASSWORD: ${{ env.ANORAK_PASSWORD || secrets.ANORAK_PASSWORD }}
-          ALEX_USER: ${{ env.ALEX_USER || secrets.ALEX_USER }}
-          ALEX_PASSWORD: ${{ env.ALEX_PASSWORD || secrets.ALEX_PASSWORD }}
-          TEST_API_KEY: ${{ env.TEST_API_KEY || secrets.TEST_API_KEY }}
+          # Personas — from GitHub Secrets (see scripts/dev/setup-e2e-secrets.sh)
+          PARZIVAL_USER: ${{ secrets.PARZIVAL_USER }}
+          PARZIVAL_PASSWORD: ${{ secrets.PARZIVAL_PASSWORD }}
+          ART3MIS_USER: ${{ secrets.ART3MIS_USER }}
+          ART3MIS_PASSWORD: ${{ secrets.ART3MIS_PASSWORD }}
+          AECH_USER: ${{ secrets.AECH_USER }}
+          AECH_PASSWORD: ${{ secrets.AECH_PASSWORD }}
+          SORRENTO_USER: ${{ secrets.SORRENTO_USER }}
+          SORRENTO_PASSWORD: ${{ secrets.SORRENTO_PASSWORD }}
+          ANORAK_USER: ${{ secrets.ANORAK_USER }}
+          ANORAK_PASSWORD: ${{ secrets.ANORAK_PASSWORD }}
+          ALEX_USER: ${{ secrets.ALEX_USER }}
+          ALEX_PASSWORD: ${{ secrets.ALEX_PASSWORD }}
+          TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
         run: |
           npx playwright test --project=auth-setup || exit 1
           npx playwright test --grep ${{ inputs.test-grep }}

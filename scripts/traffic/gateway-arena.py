@@ -234,12 +234,14 @@ def compute_score(all_results):
         p95 = percentile(r["latencies"], 95)
         return max(0, 100 * (1 - p95 / cap_seconds))
 
-    # Base overhead — sequential proxy (cap at 200ms per request)
-    base_score = latency_score("proxy_sequential", 0.2)
+    # Caps tuned for remote benchmarking (K8s → VPS adds ~10-90ms network baseline).
+    # Generous enough to produce meaningful 0-100 range, tight enough to differentiate.
+    # Base overhead — sequential proxy (cap at 500ms — leaves room above ~100ms baseline)
+    base_score = latency_score("proxy_sequential", 0.5)
 
-    # Burst scores — higher cap for larger bursts (fair)
-    burst50_score = latency_score("burst_50", 0.5)
-    burst100_score = latency_score("burst_100", 1.0)
+    # Burst scores — higher cap for larger concurrent loads
+    burst50_score = latency_score("burst_50", 3.0)
+    burst100_score = latency_score("burst_100", 5.0)
 
     # Availability
     availability_score = 100 * (total_ok / total_requests)

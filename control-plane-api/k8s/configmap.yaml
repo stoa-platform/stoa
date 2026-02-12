@@ -72,3 +72,11 @@ data:
   # Database
   DATABASE_POOL_SIZE: "5"
   DATABASE_MAX_OVERFLOW: "10"
+
+  # OpenSearch (CAB-307: Audit Trail)
+  OPENSEARCH_HOST: "https://opensearch-svc.opensearch.svc.cluster.local:9200"
+  OPENSEARCH_USER: "admin"
+  OPENSEARCH_VERIFY_CERTS: "false"
+  AUDIT_ENABLED: "true"
+  AUDIT_BUFFER_SIZE: "100"
+  AUDIT_FLUSH_INTERVAL: "5.0"

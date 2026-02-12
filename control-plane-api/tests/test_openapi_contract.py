@@ -81,6 +81,9 @@ class TestOpenAPIContract:
             f"  Removed: {sorted(removed)[:10]}"
         )
 
+    # Pydantic internal schemas that vary across versions (e.g. 2.5 vs 2.12)
+    PYDANTIC_INTERNAL_SCHEMAS = {"ValidationError", "HTTPValidationError"}
+
     def test_openapi_schema_properties_match_snapshot(self):
         """Schema property names must match snapshot (catches added/removed fields)."""
         with open(SNAPSHOT_PATH) as f:
@@ -93,6 +96,8 @@ class TestOpenAPIContract:
 
         diffs = []
         for name in sorted(set(snapshot_schemas) & set(live_schemas)):
+            if name in self.PYDANTIC_INTERNAL_SCHEMAS:
+                continue
             snap_props = set(snapshot_schemas[name].get("properties", {}).keys())
             live_props = set(live_schemas[name].get("properties", {}).keys())
             added = live_props - snap_props

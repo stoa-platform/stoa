@@ -71,6 +71,7 @@ jobs:
       platforms: linux/amd64
       build-args: |
         CACHEBUST=${{ github.sha }}
+        FEATURES=kafka
     permissions:
       contents: read
       id-token: write

@@ -54,6 +54,10 @@ spec:
               value: "stoa"
             - name: STOA_KEYCLOAK_CLIENT_ID
               value: "stoa-mcp-gateway"
+            - name: STOA_KAFKA_ENABLED
+              value: "true"
+            - name: STOA_KAFKA_BROKERS
+              value: "redpanda.stoa-system.svc.cluster.local:9092"
           # REQUIRED for auto-registration (ADR-028):
           # The Secret `stoa-gateway-secrets` MUST contain:
           #   STOA_CONTROL_PLANE_API_KEY - API key matching one entry in

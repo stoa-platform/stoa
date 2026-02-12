@@ -45,6 +45,34 @@ keywords:
 - `keywords` = for SEO research tracking, not rendered but used by AI Factory to plan content
 - `<!-- last verified: YYYY-MM -->` = required on any article with comparative claims
 
+### Scheduled Posts (Future-Dated Articles)
+
+Docusaurus has no native scheduling. STOA uses a prebuild script + daily CI cron.
+
+**How it works**:
+1. `scripts/manage-scheduled-posts.sh` runs before every build (`prebuild` hook)
+2. Posts with future dates get `unlisted: true` (hidden from listings/feeds, but URL works)
+3. When the date arrives, the daily CI cron rebuilds and removes `unlisted: true`
+4. Posts with manual `draft: true` are never touched by the script
+
+**Rules for AI Factory**:
+- When creating a blog post with a future date, do NOT add `unlisted: true` manually — the prebuild script handles it
+- When creating a post that should stay hidden regardless of date (e.g., unreleased feature), use `draft: true`
+- Never use both `draft: true` and `unlisted: true` — Docusaurus forbids it
+- After writing any blog post, always run `npm run build` to verify (the prebuild hook runs automatically)
+
+**Why unlisted (not draft)**:
+- `draft: true` hides the post completely — breaks cross-links from published posts
+- `unlisted: true` keeps the URL alive — cross-links work, but post is hidden from listings/RSS/sitemap
+- This matches the Vercel/Supabase "launch week" pattern for pre-published content
+
+**Commands**:
+```bash
+./scripts/manage-scheduled-posts.sh --status  # See all posts with dates + visibility
+./scripts/manage-scheduled-posts.sh --check   # Dry-run: what would change?
+./scripts/manage-scheduled-posts.sh --apply   # Apply changes (run by prebuild)
+```
+
 ### Available Tags (from `blog/tags.yml`)
 
 ```

@@ -47,22 +47,22 @@ export function ApplicationDetail() {
     active: {
       icon: CheckCircle,
       color: 'text-green-500',
-      bg: 'bg-green-100',
-      text: 'text-green-800',
+      bg: 'bg-green-100 dark:bg-green-900/30',
+      text: 'text-green-800 dark:text-green-400',
       label: 'Active',
     },
     suspended: {
       icon: PauseCircle,
       color: 'text-amber-500',
-      bg: 'bg-amber-100',
-      text: 'text-amber-800',
+      bg: 'bg-amber-100 dark:bg-amber-900/30',
+      text: 'text-amber-800 dark:text-amber-400',
       label: 'Suspended',
     },
     deleted: {
       icon: XCircle,
       color: 'text-red-500',
-      bg: 'bg-red-100',
-      text: 'text-red-800',
+      bg: 'bg-red-100 dark:bg-red-900/30',
+      text: 'text-red-800 dark:text-red-400',
       label: 'Deleted',
     },
   };
@@ -101,7 +101,7 @@ export function ApplicationDetail() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <Loader2 className="h-8 w-8 text-primary-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Loading application...</p>
+          <p className="text-gray-500 dark:text-neutral-400">Loading application...</p>
         </div>
       </div>
     );
@@ -113,18 +113,20 @@ export function ApplicationDetail() {
       <div className="space-y-6">
         <Link
           to="/apps"
-          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
+          className="inline-flex items-center text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
           Back to Applications
         </Link>
 
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
             <div>
-              <h3 className="font-medium text-red-800">Failed to load application</h3>
-              <p className="text-sm text-red-600 mt-1">
+              <h3 className="font-medium text-red-800 dark:text-red-400">
+                Failed to load application
+              </h3>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
                 {(error as Error)?.message || 'The application could not be found.'}
               </p>
               <Link
@@ -155,18 +157,20 @@ export function ApplicationDetail() {
       {/* Back link */}
       <Link
         to="/apps"
-        className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
+        className="inline-flex items-center text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
       >
         <ArrowLeft className="h-4 w-4 mr-1" />
         Back to Applications
       </Link>
 
       {/* Header */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-bold text-gray-900">{application.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {application.name}
+              </h1>
               <span
                 className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}
               >
@@ -174,7 +178,9 @@ export function ApplicationDetail() {
                 {status.label}
               </span>
             </div>
-            <p className="text-gray-600">{application.description || 'No description provided'}</p>
+            <p className="text-gray-600 dark:text-neutral-400">
+              {application.description || 'No description provided'}
+            </p>
           </div>
 
           {/* Actions */}
@@ -191,7 +197,7 @@ export function ApplicationDetail() {
         </div>
 
         {/* Metadata */}
-        <div className="flex items-center gap-6 mt-6 pt-6 border-t border-gray-100 text-sm text-gray-500">
+        <div className="flex items-center gap-6 mt-6 pt-6 border-t border-gray-100 dark:border-neutral-700 text-sm text-gray-500 dark:text-neutral-400">
           <div className="flex items-center gap-1">
             <Clock className="h-4 w-4" />
             Created {formatDate(application.createdAt)}
@@ -203,7 +209,7 @@ export function ApplicationDetail() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 dark:border-neutral-700">
         <nav className="flex gap-8">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -214,13 +220,13 @@ export function ApplicationDetail() {
                 className={`flex items-center gap-2 py-3 border-b-2 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 hover:border-gray-300 dark:hover:border-neutral-600'
                 }`}
               >
                 <Icon className="h-4 w-4" />
                 {tab.label}
                 {tab.id === 'subscriptions' && subscriptions && (
-                  <span className="ml-1 px-2 py-0.5 text-xs bg-gray-100 rounded-full">
+                  <span className="ml-1 px-2 py-0.5 text-xs bg-gray-100 dark:bg-neutral-700 rounded-full">
                     {subscriptions.length}
                   </span>
                 )}
@@ -231,19 +237,27 @@ export function ApplicationDetail() {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-white rounded-lg border border-gray-200">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="p-6 space-y-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Application Details</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Application Details
+              </h3>
               <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Client ID</dt>
-                  <dd className="mt-1 text-sm text-gray-900 font-mono">{application.clientId}</dd>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">
+                    Client ID
+                  </dt>
+                  <dd className="mt-1 text-sm text-gray-900 dark:text-white font-mono">
+                    {application.clientId}
+                  </dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Status</dt>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">
+                    Status
+                  </dt>
                   <dd className="mt-1">
                     <span
                       className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.text}`}
@@ -254,8 +268,10 @@ export function ApplicationDetail() {
                   </dd>
                 </div>
                 <div className="md:col-span-2">
-                  <dt className="text-sm font-medium text-gray-500">Description</dt>
-                  <dd className="mt-1 text-sm text-gray-900">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-neutral-400">
+                    Description
+                  </dt>
+                  <dd className="mt-1 text-sm text-gray-900 dark:text-white">
                     {application.description || 'No description provided'}
                   </dd>
                 </div>
@@ -265,11 +281,13 @@ export function ApplicationDetail() {
             {/* Callback URLs */}
             {application.callbackUrls && application.callbackUrls.length > 0 && (
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Callback URLs</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Callback URLs
+                </h3>
                 <ul className="space-y-2">
                   {application.callbackUrls.map((url, index) => (
                     <li key={index} className="flex items-center gap-2 text-sm">
-                      <ExternalLink className="h-4 w-4 text-gray-400" />
+                      <ExternalLink className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
                       <a
                         href={url}
                         target="_blank"
@@ -289,8 +307,10 @@ export function ApplicationDetail() {
         {/* Credentials Tab */}
         {activeTab === 'credentials' && (
           <div className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">API Credentials</h3>
-            <p className="text-sm text-gray-600 mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              API Credentials
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-neutral-400 mb-6">
               Use these credentials to authenticate your application with our APIs.
             </p>
             <CredentialsViewer
@@ -307,8 +327,12 @@ export function ApplicationDetail() {
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">API Subscriptions</h3>
-                <p className="text-sm text-gray-600 mt-1">APIs this application is subscribed to</p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  API Subscriptions
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-neutral-400 mt-1">
+                  APIs this application is subscribed to
+                </p>
               </div>
               <Link
                 to="/apis"
@@ -323,27 +347,27 @@ export function ApplicationDetail() {
                 <Loader2 className="h-6 w-6 text-primary-600 animate-spin" />
               </div>
             ) : subscriptions && subscriptions.length > 0 ? (
-              <div className="divide-y divide-gray-200">
+              <div className="divide-y divide-gray-200 dark:divide-neutral-700">
                 {subscriptions.map((sub: APISubscription) => (
                   <div key={sub.id} className="py-4 flex items-center justify-between">
                     <div>
                       <Link
                         to={`/apis/${sub.apiId}`}
-                        className="font-medium text-gray-900 hover:text-primary-600"
+                        className="font-medium text-gray-900 dark:text-white hover:text-primary-600"
                       >
                         {sub.api?.name || sub.apiId}
                       </Link>
-                      <p className="text-sm text-gray-500 mt-1">
+                      <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
                         Subscribed on {formatDate(sub.createdAt)}
                       </p>
                     </div>
                     <span
                       className={`px-2 py-1 text-xs font-medium rounded-full ${
                         sub.status === 'active'
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
                           : sub.status === 'pending'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-gray-100 text-gray-800'
+                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400'
+                            : 'bg-gray-100 dark:bg-neutral-700 text-gray-800 dark:text-neutral-200'
                       }`}
                     >
                       {sub.status}
@@ -353,9 +377,9 @@ export function ApplicationDetail() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <CreditCard className="h-8 w-8 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">No subscriptions yet</p>
-                <p className="text-sm text-gray-400 mt-1">
+                <CreditCard className="h-8 w-8 text-gray-300 dark:text-neutral-600 mx-auto mb-3" />
+                <p className="text-gray-500 dark:text-neutral-400">No subscriptions yet</p>
+                <p className="text-sm text-gray-400 dark:text-neutral-500 mt-1">
                   Browse the API catalog to subscribe to APIs
                 </p>
               </div>
@@ -376,14 +400,16 @@ export function ApplicationDetail() {
             tabIndex={0}
           />
           <div className="flex min-h-full items-center justify-center p-4">
-            <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-md w-full p-6">
               <div className="flex items-start gap-4">
-                <div className="p-3 bg-red-100 rounded-full">
+                <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
                   <Trash2 className="h-6 w-6 text-red-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Delete Application</h3>
-                  <p className="text-sm text-gray-600 mt-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Delete Application
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-neutral-400 mt-2">
                     Are you sure you want to delete "{application.name}"? This action cannot be
                     undone and will revoke all credentials.
                   </p>
@@ -393,7 +419,7 @@ export function ApplicationDetail() {
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
                   disabled={deleteMutation.isPending}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>

@@ -12,6 +12,11 @@ on:
         required: false
         type: boolean
         default: true
+      cargo-features:
+        description: 'Cargo feature flags for clippy/test (default: --all-features)'
+        required: false
+        type: string
+        default: '--all-features'
     outputs:
       test-result:
         description: 'Test result (success/failure)'
@@ -54,7 +59,7 @@ jobs:
         with:
           components: clippy
           working-directory: ${{ inputs.component }}
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo clippy --all-targets ${{ inputs.cargo-features }} -- -D warnings
 
   test:
     name: Run Tests
@@ -74,7 +79,7 @@ jobs:
       - uses: ./.github/actions/setup-rust-env
         with:
           working-directory: ${{ inputs.component }}
-      - run: cargo test --all-features
+      - run: cargo test ${{ inputs.cargo-features }}
       - name: Job Summary
         if: always()
         run: |

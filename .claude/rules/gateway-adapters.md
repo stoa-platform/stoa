@@ -1,3 +1,8 @@
+---
+description: Per-gateway adapter rules — STOA, Kong, Gravitee, webMethods interface, mappers, gotchas
+globs: "control-plane-api/src/adapters/**,control-plane-api/tests/test_*_adapter*"
+---
+
 # Gateway Adapters — Per-Gateway Rules & Tips
 
 ## Architecture Overview

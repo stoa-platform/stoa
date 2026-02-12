@@ -33,11 +33,13 @@ interface RequestBuilderProps {
 const HTTP_METHODS: RequestConfig['method'][] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
 
 const METHOD_COLORS: Record<RequestConfig['method'], string> = {
-  GET: 'bg-green-100 text-green-700 border-green-300',
-  POST: 'bg-blue-100 text-blue-700 border-blue-300',
-  PUT: 'bg-amber-100 text-amber-700 border-amber-300',
-  DELETE: 'bg-red-100 text-red-700 border-red-300',
-  PATCH: 'bg-purple-100 text-purple-700 border-purple-300',
+  GET: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700',
+  POST: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700',
+  PUT: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700',
+  DELETE:
+    'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-300 dark:border-red-700',
+  PATCH:
+    'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-700',
 };
 
 export function RequestBuilder({
@@ -139,7 +141,7 @@ export function RequestBuilder({
             onChange={(e) => setPath(e.target.value)}
             placeholder="/api/v1/resource"
             disabled={disabled}
-            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed font-mono text-sm"
+            className="w-full px-3 py-2.5 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed font-mono text-sm dark:bg-neutral-800 dark:text-white"
           />
         </div>
 
@@ -154,13 +156,15 @@ export function RequestBuilder({
       </div>
 
       {/* Full URL Preview */}
-      <div className="text-xs text-gray-500">
+      <div className="text-xs text-gray-500 dark:text-neutral-400">
         <span className="font-medium">Full URL:</span>{' '}
-        <code className="bg-gray-100 px-2 py-0.5 rounded break-all">{buildFullUrl()}</code>
+        <code className="bg-gray-100 dark:bg-neutral-700 px-2 py-0.5 rounded break-all">
+          {buildFullUrl()}
+        </code>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 dark:border-neutral-700">
         <nav className="flex gap-4">
           <button
             type="button"
@@ -170,13 +174,13 @@ export function RequestBuilder({
               ${
                 activeTab === 'params'
                   ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300'
               }
             `}
           >
             Query Params
             {queryParams.filter((p) => p.enabled && p.key).length > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-gray-100 rounded-full">
+              <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-neutral-700 rounded-full">
                 {queryParams.filter((p) => p.enabled && p.key).length}
               </span>
             )}
@@ -189,13 +193,13 @@ export function RequestBuilder({
               ${
                 activeTab === 'headers'
                   ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300'
               }
             `}
           >
             Headers
             {headers.filter((h) => h.enabled && h.key).length > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-gray-100 rounded-full">
+              <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-neutral-700 rounded-full">
                 {headers.filter((h) => h.enabled && h.key).length}
               </span>
             )}
@@ -209,13 +213,13 @@ export function RequestBuilder({
                 ${
                   activeTab === 'body'
                     ? 'border-primary-600 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300'
                 }
               `}
             >
               Body
               {body && (
-                <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full">
                   Set
                 </span>
               )}
@@ -236,7 +240,7 @@ export function RequestBuilder({
                   checked={param.enabled}
                   onChange={(e) => updateQueryParam(index, 'enabled', e.target.checked)}
                   disabled={disabled}
-                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  className="h-4 w-4 rounded border-gray-300 dark:border-neutral-600 text-primary-600 focus:ring-primary-500"
                 />
                 <input
                   type="text"
@@ -244,7 +248,7 @@ export function RequestBuilder({
                   onChange={(e) => updateQueryParam(index, 'key', e.target.value)}
                   placeholder="Key"
                   disabled={disabled}
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-neutral-700 dark:bg-neutral-800 dark:text-white"
                 />
                 <input
                   type="text"
@@ -252,13 +256,13 @@ export function RequestBuilder({
                   onChange={(e) => updateQueryParam(index, 'value', e.target.value)}
                   placeholder="Value"
                   disabled={disabled}
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-neutral-700 dark:bg-neutral-800 dark:text-white"
                 />
                 <button
                   type="button"
                   onClick={() => removeQueryParam(index)}
                   disabled={disabled}
-                  className="p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                  className="p-1.5 text-gray-400 dark:text-neutral-500 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -268,7 +272,7 @@ export function RequestBuilder({
               type="button"
               onClick={addQueryParam}
               disabled={disabled}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
               Add Parameter
@@ -286,7 +290,7 @@ export function RequestBuilder({
                   checked={header.enabled}
                   onChange={(e) => updateHeader(index, 'enabled', e.target.checked)}
                   disabled={disabled}
-                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  className="h-4 w-4 rounded border-gray-300 dark:border-neutral-600 text-primary-600 focus:ring-primary-500"
                 />
                 <input
                   type="text"
@@ -294,7 +298,7 @@ export function RequestBuilder({
                   onChange={(e) => updateHeader(index, 'key', e.target.value)}
                   placeholder="Header name"
                   disabled={disabled}
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-neutral-700 dark:bg-neutral-800 dark:text-white"
                 />
                 <input
                   type="text"
@@ -302,13 +306,13 @@ export function RequestBuilder({
                   onChange={(e) => updateHeader(index, 'value', e.target.value)}
                   placeholder="Value"
                   disabled={disabled}
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-neutral-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-neutral-700 dark:bg-neutral-800 dark:text-white"
                 />
                 <button
                   type="button"
                   onClick={() => removeHeader(index)}
                   disabled={disabled}
-                  className="p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                  className="p-1.5 text-gray-400 dark:text-neutral-500 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -318,7 +322,7 @@ export function RequestBuilder({
               type="button"
               onClick={addHeader}
               disabled={disabled}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
               Add Header
@@ -330,7 +334,9 @@ export function RequestBuilder({
         {activeTab === 'body' && showBodyTab && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-500">Request Body (JSON)</span>
+              <span className="text-sm text-gray-500 dark:text-neutral-400">
+                Request Body (JSON)
+              </span>
               <button
                 type="button"
                 onClick={() => {
@@ -353,7 +359,7 @@ export function RequestBuilder({
               placeholder='{\n  "key": "value"\n}'
               disabled={disabled}
               rows={8}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed resize-y"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed resize-y dark:bg-neutral-800 dark:text-white"
             />
           </div>
         )}

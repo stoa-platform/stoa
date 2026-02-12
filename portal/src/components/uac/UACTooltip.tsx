@@ -48,11 +48,11 @@ export const UACTooltip: React.FC<UACTooltipProps> = ({ bindings, docsUrl = '/do
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <span className="text-lg">🔗</span>
-        <span className="font-semibold text-gray-900">Universal API Contract</span>
+        <span className="font-semibold text-gray-900 dark:text-white">Universal API Contract</span>
       </div>
 
       {/* Description */}
-      <p className="text-sm text-gray-600 mb-3">
+      <p className="text-sm text-gray-600 dark:text-neutral-400 mb-3">
         This API is defined once and automatically available via multiple protocols:
       </p>
 
@@ -62,8 +62,10 @@ export const UACTooltip: React.FC<UACTooltipProps> = ({ bindings, docsUrl = '/do
           <div key={binding.protocol} className="flex items-start gap-2 text-sm">
             <span className="flex-shrink-0 w-5 text-center">{protocolIcons[binding.protocol]}</span>
             <div className="min-w-0">
-              <span className="font-medium text-gray-800">{protocolLabels[binding.protocol]}</span>
-              <span className="ml-2 text-gray-500 font-mono text-xs truncate block">
+              <span className="font-medium text-gray-800 dark:text-neutral-200">
+                {protocolLabels[binding.protocol]}
+              </span>
+              <span className="ml-2 text-gray-500 dark:text-neutral-400 font-mono text-xs truncate block">
                 {getBindingDisplay(binding)}
               </span>
             </div>
@@ -72,15 +74,17 @@ export const UACTooltip: React.FC<UACTooltipProps> = ({ bindings, docsUrl = '/do
       </div>
 
       {/* Tagline */}
-      <p className="text-xs text-gray-500 italic mb-3">One contract, zero duplication.</p>
+      <p className="text-xs text-gray-500 dark:text-neutral-400 italic mb-3">
+        One contract, zero duplication.
+      </p>
 
       {/* Divider and link */}
-      <div className="pt-3 border-t border-gray-100">
+      <div className="pt-3 border-t border-gray-100 dark:border-neutral-700">
         <a
           href={docsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
+          className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
         >
           Learn more
           <ExternalLink className="h-3 w-3" />

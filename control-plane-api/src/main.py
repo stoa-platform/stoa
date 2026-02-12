@@ -82,10 +82,9 @@ from .routers.mcp_admin import (
     admin_subscriptions_router as mcp_admin_subscriptions_router,
 )
 from .routers.portal import internal_router as portal_internal_router
-from .services import argocd_service, awx_service, git_service, kafka_service, keycloak_service, metrics_service
+from .services import argocd_service, git_service, kafka_service, keycloak_service, metrics_service
 from .services.gateway_service import gateway_service
 from .tracing_config import configure_tracing, shutdown_tracing
-from .workers.deployment_worker import deployment_worker
 from .workers.error_snapshot_consumer import error_snapshot_consumer
 from .workers.gateway_health_worker import gateway_health_worker
 from .workers.sync_engine import sync_engine
@@ -95,7 +94,6 @@ configure_logging()
 logger = get_logger(__name__)
 
 # Flag to control worker startup (can be disabled for dev/testing)
-ENABLE_WORKER = os.getenv("ENABLE_DEPLOYMENT_WORKER", "true").lower() == "true"
 ENABLE_SNAPSHOT_CONSUMER = os.getenv("ENABLE_SNAPSHOT_CONSUMER", "true").lower() == "true"
 ENABLE_SYNC_ENGINE = os.getenv("ENABLE_SYNC_ENGINE", "true").lower() == "true"
 ENABLE_GATEWAY_HEALTH_WORKER = os.getenv("ENABLE_GATEWAY_HEALTH_WORKER", "true").lower() == "true"
@@ -107,7 +105,6 @@ async def lifespan(app: FastAPI):
     logger.info("Starting STOA Control-Plane API", version=settings.VERSION, environment=settings.ENVIRONMENT)
 
     # Initialize services
-    worker_task = None
     try:
         await kafka_service.connect()
         logger.info("Kafka connected")
@@ -119,12 +116,6 @@ async def lifespan(app: FastAPI):
         logger.info("GitLab connected")
     except Exception as e:
         logger.warning("Failed to connect GitLab", error=str(e))
-
-    try:
-        await awx_service.connect()
-        logger.info("AWX connected")
-    except Exception as e:
-        logger.warning("Failed to connect AWX", error=str(e))
 
     try:
         await keycloak_service.connect()
@@ -157,14 +148,6 @@ async def lifespan(app: FastAPI):
         logger.info("OpenSearch connected")
     except Exception as e:
         logger.warning("Failed to connect OpenSearch", error=str(e))
-
-    # Start deployment worker in background
-    if ENABLE_WORKER:
-        try:
-            worker_task = asyncio.create_task(deployment_worker.start())
-            logger.info("Deployment worker started")
-        except Exception as e:
-            logger.warning("Failed to start deployment worker", error=str(e))
 
     # Connect error snapshots storage (CAB-397)
     # Note: Middleware is added at module level after app creation
@@ -207,13 +190,6 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down...")
 
-    # Stop deployment worker
-    if ENABLE_WORKER and worker_task:
-        await deployment_worker.stop()
-        worker_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await worker_task
-
     # Stop error snapshot consumer
     if ENABLE_SNAPSHOT_CONSUMER and snapshot_consumer_task:
         await error_snapshot_consumer.stop()
@@ -237,7 +213,6 @@ async def lifespan(app: FastAPI):
 
     await kafka_service.disconnect()
     await git_service.disconnect()
-    await awx_service.disconnect()
     await keycloak_service.disconnect()
     await gateway_service.disconnect()
     await argocd_service.disconnect()
@@ -298,7 +273,7 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 - Added Pipeline Tracing (`/v1/traces`) for end-to-end monitoring
 - Added GitLab Webhook integration (`/webhooks/gitlab`)
 - Added Kafka integration for event-driven deployments
-- Added AWX integration for automated Gateway deployments
+- Added Kafka integration for event-driven gateway orchestration
 
 #### v1.0.0
 - Initial release with tenant, API, and application management

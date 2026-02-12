@@ -217,12 +217,24 @@ class AuditMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app,
-        audit_logger: AuditLogger,
+        audit_logger: AuditLogger | None = None,
         skip_paths: set[str] | None = None,
     ):
         super().__init__(app)
-        self.audit_logger = audit_logger
+        self._audit_logger = audit_logger
         self.skip_paths = skip_paths or self.SKIP_PATHS
+
+    @property
+    def audit_logger(self) -> AuditLogger | None:
+        """Lazy lookup: use provided logger or get from OpenSearchService singleton."""
+        if self._audit_logger:
+            return self._audit_logger
+        try:
+            from .opensearch_integration import OpenSearchService
+            service = OpenSearchService.get_instance()
+            return service.audit_logger
+        except Exception:
+            return None
 
     async def dispatch(
         self,
@@ -230,6 +242,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
         call_next: RequestResponseEndpoint,
     ) -> Response:
         """Process request and log audit event."""
+
+        # Skip if audit logger not yet initialized (OpenSearch not connected)
+        if not self.audit_logger:
+            return await call_next(request)
 
         # Skip non-auditable paths
         if request.url.path in self.skip_paths:

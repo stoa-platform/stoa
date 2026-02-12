@@ -17,7 +17,7 @@ router = APIRouter(prefix="/v1/events", tags=["Events"])
 
 
 class DeploymentResult(BaseModel):
-    """Deployment result from AWX playbook"""
+    """Deployment result from gateway adapter"""
     api_name: str
     api_version: str | None = "1.0"
     api_id: str | None = None
@@ -168,9 +168,9 @@ async def get_event_history(
 @router.post("/deployment-result")
 async def receive_deployment_result(result: DeploymentResult):
     """
-    Receive deployment result notification from AWX playbooks.
+    Receive deployment result notification from gateway adapters.
 
-    This endpoint is called by Ansible playbooks after completing
+    This endpoint is called by gateway adapters after completing
     deployment, rollback, or other gateway operations.
 
     The result is published to Kafka for:

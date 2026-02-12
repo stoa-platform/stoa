@@ -30,7 +30,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import os
 
 # Set environment variables to disable workers before any imports
-os.environ["ENABLE_DEPLOYMENT_WORKER"] = "false"
 os.environ["ENABLE_SNAPSHOT_CONSUMER"] = "false"
 
 # Create mock services that will be patched into src.main
@@ -46,10 +45,6 @@ _mock_git_service.disconnect = AsyncMock()
 _mock_git_service._project = None
 _mock_git_service.get_tenant = AsyncMock(return_value=None)
 _mock_git_service.list_apis = AsyncMock(return_value=[])
-
-_mock_awx_service = MagicMock()
-_mock_awx_service.connect = AsyncMock()
-_mock_awx_service.disconnect = AsyncMock()
 
 _mock_keycloak_service = MagicMock()
 _mock_keycloak_service.connect = AsyncMock()
@@ -75,7 +70,6 @@ import src.main as _main_module
 # Using patch.object() instead of string-based patching for reliability
 patch.object(_main_module, 'kafka_service', _mock_kafka_service).start()
 patch.object(_main_module, 'git_service', _mock_git_service).start()
-patch.object(_main_module, 'awx_service', _mock_awx_service).start()
 patch.object(_main_module, 'keycloak_service', _mock_keycloak_service).start()
 patch.object(_main_module, 'gateway_service', _mock_gateway_service).start()
 patch.object(_main_module, 'argocd_service', _mock_argocd_service).start()

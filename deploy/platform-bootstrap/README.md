@@ -35,7 +35,7 @@ platform-bootstrap/
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  GitHub Actions │────▶│  GitLab Sync    │────▶│  AWX/ArgoCD     │
+│  GitHub Actions │────▶│  GitLab Sync    │────▶│  ArgoCD     │
 │  (Validate)     │     │  (stoa-gitops)  │     │  (Apply)        │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                                         │
@@ -52,7 +52,7 @@ The `platform-config-ci.yml` workflow:
 
 1. **Validate** - Lint YAML, check required fields, validate cross-references
 2. **Sync to GitLab** - Push configs to `stoa-gitops` repository
-3. **Reconcile Gateway** - Trigger AWX job to apply changes
+3. **Reconcile Gateway** - ArgoCD reconciles via CRD operator
 4. **Verify** - Check API is accessible on Gateway
 5. **Notify** - Send Slack notification
 
@@ -151,8 +151,6 @@ spec:
 | `BASE_DOMAIN` | `gostoa.dev` | Base domain for URLs |
 | `GITLAB_TOKEN` | - | GitLab access token |
 | `GITLAB_PROJECT` | `stoa-platform/stoa-gitops` | GitLab project path |
-| `AWX_URL` | `https://awx.${BASE_DOMAIN}` | AWX server URL |
-| `AWX_TOKEN` | - | AWX API token |
 
 ## Adding New APIs
 
@@ -181,10 +179,9 @@ spec:
    git -C /tmp/stoa-gitops log -1
    ```
 
-2. Check AWX job status:
+2. Check ArgoCD sync status:
    ```bash
-   curl -H "Authorization: Bearer $AWX_TOKEN" \
-     https://awx.gostoa.dev/api/v2/jobs/?order_by=-id
+   kubectl get applications -n argocd
    ```
 
 3. Check Gateway directly:

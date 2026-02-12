@@ -66,11 +66,6 @@ class Settings(BaseSettings):
     KAFKA_SASL_USERNAME: str = ""
     KAFKA_SASL_PASSWORD: str = ""
 
-    # AWX Automation
-    AWX_URL: str = f"https://awx.{_BASE_DOMAIN}"
-    AWX_TOKEN: str = ""
-    AWX_VERIFY_SSL: bool = True
-
     # API Gateway
     GATEWAY_URL: str = f"https://gateway.{_BASE_DOMAIN}"
     GATEWAY_ADMIN_USER: str = "Administrator"
@@ -161,7 +156,6 @@ class Settings(BaseSettings):
     LOG_DEBUG_AUTH_PAYLOAD: bool = False
 
     # Logging - External Services Debug
-    LOG_DEBUG_AWX_API: bool = False
     LOG_DEBUG_GITLAB_API: bool = False
     LOG_DEBUG_KEYCLOAK_API: bool = False
     LOG_DEBUG_GATEWAY_API: bool = False

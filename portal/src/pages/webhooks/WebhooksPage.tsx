@@ -62,10 +62,22 @@ const WEBHOOK_EVENTS: { value: WebhookEventType; label: string; description: str
 ];
 
 const statusConfig: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
-  success: { label: 'Delivered', color: 'text-green-600 bg-green-100', icon: CheckCircle },
-  failed: { label: 'Failed', color: 'text-red-600 bg-red-100', icon: XCircle },
-  pending: { label: 'Pending', color: 'text-yellow-600 bg-yellow-100', icon: AlertCircle },
-  retrying: { label: 'Retrying', color: 'text-blue-600 bg-blue-100', icon: RefreshCw },
+  success: {
+    label: 'Delivered',
+    color: 'text-green-600 bg-green-100 dark:bg-green-900/30',
+    icon: CheckCircle,
+  },
+  failed: { label: 'Failed', color: 'text-red-600 bg-red-100 dark:bg-red-900/30', icon: XCircle },
+  pending: {
+    label: 'Pending',
+    color: 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900/30',
+    icon: AlertCircle,
+  },
+  retrying: {
+    label: 'Retrying',
+    color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30',
+    icon: RefreshCw,
+  },
 };
 
 export function WebhooksPage() {
@@ -179,12 +191,14 @@ export function WebhooksPage() {
   if (!tenantId && isAdmin) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg p-6">
           <div className="flex items-center gap-3 mb-4">
             <Webhook className="h-8 w-8 text-primary-600" />
-            <h2 className="text-xl font-semibold text-gray-900">Webhook Management</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Webhook Management
+            </h2>
           </div>
-          <p className="text-gray-600 mb-4">
+          <p className="text-gray-600 dark:text-neutral-400 mb-4">
             As a platform administrator, enter the tenant ID to manage webhooks for:
           </p>
           <div className="flex gap-3">
@@ -193,7 +207,7 @@ export function WebhooksPage() {
               value={selectedTenantId}
               onChange={(e) => setSelectedTenantId(e.target.value)}
               placeholder="Enter tenant ID (e.g., acme, team-alpha)"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:bg-neutral-800 dark:border-neutral-600 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
             <button
               onClick={() => {}}
@@ -211,10 +225,12 @@ export function WebhooksPage() {
   if (!tenantId) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6 text-center">
           <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-yellow-800">Tenant Required</h3>
-          <p className="text-yellow-700 mt-2">
+          <h3 className="text-lg font-medium text-yellow-800 dark:text-yellow-200">
+            Tenant Required
+          </h3>
+          <p className="text-yellow-700 dark:text-yellow-400 mt-2">
             You need to be associated with a tenant to manage webhooks. Contact your administrator
             to be assigned to a tenant.
           </p>
@@ -228,11 +244,11 @@ export function WebhooksPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
             <Webhook className="h-7 w-7 text-primary-600" />
             Webhook Notifications
           </h1>
-          <p className="text-gray-500 mt-1">
+          <p className="text-gray-500 dark:text-neutral-400 mt-1">
             Configure webhooks to receive notifications for subscription events
           </p>
         </div>
@@ -249,7 +265,9 @@ export function WebhooksPage() {
       {testResult && (
         <div
           className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
-            testResult.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            testResult.success
+              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+              : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'
           }`}
         >
           <div className="flex items-center gap-2">
@@ -261,7 +279,7 @@ export function WebhooksPage() {
             <span className="font-medium">{testResult.message}</span>
             <button
               onClick={() => setTestResult(null)}
-              className="ml-4 text-gray-500 hover:text-gray-700"
+              className="ml-4 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300"
             >
               &times;
             </button>
@@ -278,9 +296,11 @@ export function WebhooksPage() {
 
       {/* Error State */}
       {isError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
           <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-red-800">Failed to load webhooks</h3>
+          <h3 className="text-lg font-medium text-red-800 dark:text-red-200">
+            Failed to load webhooks
+          </h3>
           <button
             onClick={() => refetch()}
             className="mt-4 text-red-600 hover:text-red-700 font-medium"
@@ -294,10 +314,12 @@ export function WebhooksPage() {
       {webhooksData && (
         <div className="space-y-4">
           {webhooksData.items.length === 0 ? (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
-              <Webhook className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-700">No webhooks configured</h3>
-              <p className="text-gray-500 mt-2">
+            <div className="bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-12 text-center">
+              <Webhook className="h-16 w-16 text-gray-300 dark:text-neutral-600 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-700 dark:text-neutral-300">
+                No webhooks configured
+              </h3>
+              <p className="text-gray-500 dark:text-neutral-400 mt-2">
                 Create your first webhook to start receiving subscription event notifications.
               </p>
               <button
@@ -392,34 +414,43 @@ function WebhookCard({
 }: WebhookCardProps) {
   return (
     <div
-      className={`bg-white border rounded-lg p-6 ${
-        webhook.enabled ? 'border-gray-200' : 'border-gray-200 opacity-60'
+      className={`bg-white dark:bg-neutral-800 border rounded-lg p-6 ${
+        webhook.enabled
+          ? 'border-gray-200 dark:border-neutral-700'
+          : 'border-gray-200 dark:border-neutral-700 opacity-60'
       }`}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold text-gray-900">{webhook.name}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{webhook.name}</h3>
             <span
               className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                webhook.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                webhook.enabled
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                  : 'bg-gray-100 dark:bg-neutral-700 text-gray-600 dark:text-neutral-400'
               }`}
             >
               {webhook.enabled ? 'Active' : 'Disabled'}
             </span>
             {webhook.has_secret && (
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
                 Signed
               </span>
             )}
           </div>
-          <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
+          <div className="mt-2 flex items-center gap-2 text-sm text-gray-500 dark:text-neutral-400">
             <ExternalLink className="h-4 w-4" />
-            <code className="bg-gray-100 px-2 py-0.5 rounded text-xs break-all">{webhook.url}</code>
+            <code className="bg-gray-100 dark:bg-neutral-700 px-2 py-0.5 rounded text-xs break-all">
+              {webhook.url}
+            </code>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {webhook.events.map((event) => (
-              <span key={event} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-md">
+              <span
+                key={event}
+                className="px-2 py-1 bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-neutral-300 text-xs rounded-md"
+              >
                 {event === '*' ? 'All Events' : event}
               </span>
             ))}
@@ -430,7 +461,7 @@ function WebhookCard({
           <button
             onClick={onToggle}
             disabled={isToggling}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
             title={webhook.enabled ? 'Disable webhook' : 'Enable webhook'}
           >
             {webhook.enabled ? (
@@ -442,7 +473,7 @@ function WebhookCard({
           <button
             onClick={onTest}
             disabled={isTesting || !webhook.enabled}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
             title="Send test event"
           >
             {isTesting ? (
@@ -453,21 +484,21 @@ function WebhookCard({
           </button>
           <button
             onClick={onViewDeliveries}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
             title="View delivery history"
           >
             <History className="h-5 w-5" />
           </button>
           <button
             onClick={onEdit}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
             title="Edit webhook"
           >
             <Edit2 className="h-5 w-5" />
           </button>
           <button
             onClick={onDelete}
-            className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+            className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
             title="Delete webhook"
           >
             <Trash2 className="h-5 w-5" />
@@ -548,16 +579,16 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
         tabIndex={0}
       />
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">
+        <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-lg w-full">
+          <div className="p-6 border-b border-gray-200 dark:border-neutral-700">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               {webhook ? 'Edit Webhook' : 'Create Webhook'}
             </h2>
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
                 {error}
               </div>
             )}
@@ -565,7 +596,7 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
             <div>
               <label
                 htmlFor="webhook-name"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2"
               >
                 Name
               </label>
@@ -575,12 +606,15 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Slack Notifications"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-4 py-2 border border-gray-300 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
             <div>
-              <label htmlFor="webhook-url" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="webhook-url"
+                className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2"
+              >
                 Webhook URL
               </label>
               <input
@@ -589,17 +623,17 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://hooks.example.com/webhook"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-4 py-2 border border-gray-300 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
             <div>
               <label
                 htmlFor="webhook-secret"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2"
               >
                 Secret (optional)
-                <span className="text-gray-400 font-normal ml-2">
+                <span className="text-gray-400 dark:text-neutral-500 font-normal ml-2">
                   For HMAC signature verification
                 </span>
               </label>
@@ -611,17 +645,19 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
                 placeholder={
                   webhook?.has_secret ? '••••••••' : 'Enter a secret (min 16 characters)'
                 }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full px-4 py-2 border border-gray-300 dark:bg-neutral-700 dark:border-neutral-600 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-gray-700 mb-3">Events</span>
+              <span className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-3">
+                Events
+              </span>
               <div className="space-y-2" role="group" aria-label="Webhook events">
                 {WEBHOOK_EVENTS.map((eventType) => (
                   <label
                     key={eventType.value}
-                    className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50"
+                    className="flex items-start gap-3 p-3 border border-gray-200 dark:border-neutral-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800"
                   >
                     <input
                       type="checkbox"
@@ -631,23 +667,27 @@ function WebhookModal({ webhook, onClose, onSave, isLoading }: WebhookModalProps
                       }
                       onChange={() => toggleEvent(eventType.value)}
                       disabled={eventType.value !== '*' && events.includes('*')}
-                      className="mt-0.5 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                      className="mt-0.5 h-4 w-4 text-primary-600 border-gray-300 dark:border-neutral-600 rounded focus:ring-primary-500"
                       aria-label={eventType.label}
                     />
                     <div>
-                      <div className="font-medium text-gray-900">{eventType.label}</div>
-                      <div className="text-sm text-gray-500">{eventType.description}</div>
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {eventType.label}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-neutral-400">
+                        {eventType.description}
+                      </div>
                     </div>
                   </label>
                 ))}
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-neutral-700">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                className="px-4 py-2 text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors font-medium"
               >
                 Cancel
               </button>
@@ -698,20 +738,22 @@ function DeliveriesModal({ tenantId, webhookId, onClose }: DeliveriesModalProps)
         tabIndex={0}
       />
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-          <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Delivery History</h2>
+        <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+          <div className="p-6 border-b border-gray-200 dark:border-neutral-700 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Delivery History
+            </h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => refetch()}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg"
                 aria-label="Refresh"
               >
                 <RefreshCw className="h-5 w-5" aria-hidden="true" />
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg"
                 aria-label="Close"
               >
                 &times;
@@ -725,7 +767,9 @@ function DeliveriesModal({ tenantId, webhookId, onClose }: DeliveriesModalProps)
                 <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
               </div>
             ) : data?.items.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">No deliveries yet</div>
+              <div className="text-center py-12 text-gray-500 dark:text-neutral-400">
+                No deliveries yet
+              </div>
             ) : (
               <div className="space-y-4">
                 {data?.items.map((delivery) => (
@@ -759,9 +803,9 @@ function DeliveryRow({ delivery, onRetry, isRetrying }: DeliveryRowProps) {
   const StatusIcon = status.icon;
 
   return (
-    <div className="border border-gray-200 rounded-lg">
+    <div className="border border-gray-200 dark:border-neutral-700 rounded-lg">
       <div
-        className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+        className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800"
         onClick={() => setExpanded(!expanded)}
         onKeyDown={(e) => e.key === 'Enter' && setExpanded(!expanded)}
         role="button"
@@ -773,17 +817,19 @@ function DeliveryRow({ delivery, onRetry, isRetrying }: DeliveryRowProps) {
             <StatusIcon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div>
-            <div className="font-medium text-gray-900">{delivery.event_type}</div>
-            <div className="text-sm text-gray-500">
+            <div className="font-medium text-gray-900 dark:text-white">{delivery.event_type}</div>
+            <div className="text-sm text-gray-500 dark:text-neutral-400">
               {new Date(delivery.created_at).toLocaleString()}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {delivery.response_status_code && (
-            <span className="text-sm text-gray-500">HTTP {delivery.response_status_code}</span>
+            <span className="text-sm text-gray-500 dark:text-neutral-400">
+              HTTP {delivery.response_status_code}
+            </span>
           )}
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-neutral-400">
             {delivery.attempt_count}/{delivery.max_attempts} attempts
           </span>
           {delivery.status === 'failed' && (
@@ -793,7 +839,7 @@ function DeliveryRow({ delivery, onRetry, isRetrying }: DeliveryRowProps) {
                 onRetry();
               }}
               disabled={isRetrying}
-              className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50"
+              className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/40 disabled:opacity-50"
             >
               Retry
             </button>
@@ -802,22 +848,28 @@ function DeliveryRow({ delivery, onRetry, isRetrying }: DeliveryRowProps) {
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-200 p-4 bg-gray-50 space-y-4">
+        <div className="border-t border-gray-200 dark:border-neutral-700 p-4 bg-gray-50 dark:bg-neutral-900 space-y-4">
           {delivery.error_message && (
             <div>
-              <span className="text-xs font-medium text-gray-500 uppercase">Error</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                Error
+              </span>
               <div className="mt-1 text-sm text-red-600">{delivery.error_message}</div>
             </div>
           )}
           <div>
-            <span className="text-xs font-medium text-gray-500 uppercase">Payload</span>
+            <span className="text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+              Payload
+            </span>
             <pre className="mt-1 text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">
               {JSON.stringify(delivery.payload, null, 2)}
             </pre>
           </div>
           {delivery.response_body && (
             <div>
-              <span className="text-xs font-medium text-gray-500 uppercase">Response</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase">
+                Response
+              </span>
               <pre className="mt-1 text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto max-h-40">
                 {delivery.response_body}
               </pre>

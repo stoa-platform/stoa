@@ -58,15 +58,17 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
     if (property.enum) {
       return (
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
             {name}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
           <select
             value={(value as string) || ''}
             onChange={(e) => handleChange(e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-              error ? 'border-red-300' : 'border-gray-300'
+            className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+              error
+                ? 'border-red-300 dark:border-red-700'
+                : 'border-gray-300 dark:border-neutral-600'
             }`}
           >
             <option value="">Select {name}...</option>
@@ -76,7 +78,9 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
               </option>
             ))}
           </select>
-          {property.description && <p className="text-xs text-gray-500">{property.description}</p>}
+          {property.description && (
+            <p className="text-xs text-gray-500 dark:text-neutral-400">{property.description}</p>
+          )}
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
       );
@@ -86,7 +90,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
     if (property.maxLength && property.maxLength > 200) {
       return (
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
             {name}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -95,11 +99,15 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             onChange={(e) => handleChange(e.target.value)}
             placeholder={property.description || `Enter ${name}...`}
             rows={3}
-            className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-              error ? 'border-red-300' : 'border-gray-300'
+            className={`w-full px-3 py-2 border rounded-lg text-sm font-mono dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+              error
+                ? 'border-red-300 dark:border-red-700'
+                : 'border-gray-300 dark:border-neutral-600'
             }`}
           />
-          {property.description && <p className="text-xs text-gray-500">{property.description}</p>}
+          {property.description && (
+            <p className="text-xs text-gray-500 dark:text-neutral-400">{property.description}</p>
+          )}
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
       );
@@ -108,14 +116,14 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
     // Regular text input
     return (
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
           {property.description && (
             <button
               type="button"
               onClick={() => setShowDescription(!showDescription)}
-              className="ml-1 text-gray-400 hover:text-gray-600"
+              className="ml-1 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300"
             >
               <Info className="h-3 w-3 inline" />
             </button>
@@ -126,12 +134,14 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           value={(value as string) || ''}
           onChange={(e) => handleChange(e.target.value)}
           placeholder={property.default?.toString() || `Enter ${name}...`}
-          className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            error ? 'border-red-300' : 'border-gray-300'
+          className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+            error ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-neutral-600'
           }`}
         />
         {showDescription && property.description && (
-          <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded">{property.description}</p>
+          <p className="text-xs text-gray-500 bg-gray-50 dark:bg-neutral-800 p-2 rounded">
+            {property.description}
+          </p>
         )}
         {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
@@ -142,7 +152,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
   if (property.type === 'number' || property.type === 'integer') {
     return (
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
         </label>
@@ -154,13 +164,15 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           min={property.minimum}
           max={property.maximum}
           step={property.type === 'integer' ? 1 : 'any'}
-          className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            error ? 'border-red-300' : 'border-gray-300'
+          className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+            error ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-neutral-600'
           }`}
         />
-        {property.description && <p className="text-xs text-gray-500">{property.description}</p>}
+        {property.description && (
+          <p className="text-xs text-gray-500 dark:text-neutral-400">{property.description}</p>
+        )}
         {(property.minimum !== undefined || property.maximum !== undefined) && (
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 dark:text-neutral-500">
             {property.minimum !== undefined && `Min: ${property.minimum}`}
             {property.minimum !== undefined && property.maximum !== undefined && ' • '}
             {property.maximum !== undefined && `Max: ${property.maximum}`}
@@ -180,9 +192,9 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             type="checkbox"
             checked={!!value}
             onChange={(e) => handleChange(e.target.checked)}
-            className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            className="w-4 h-4 text-primary-600 border-gray-300 dark:border-neutral-600 rounded focus:ring-primary-500"
           />
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
             {name}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </span>
@@ -201,7 +213,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
 
     return (
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
         </label>
@@ -216,7 +228,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
                   newArray[idx] = e.target.value;
                   handleChange(newArray);
                 }}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
               <button
                 type="button"
@@ -224,7 +236,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
                   const newArray = arrayValue.filter((_, i) => i !== idx);
                   handleChange(newArray);
                 }}
-                className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                className="p-2 text-gray-400 dark:text-neutral-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -239,7 +251,9 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
             Add item
           </button>
         </div>
-        {property.description && <p className="text-xs text-gray-500">{property.description}</p>}
+        {property.description && (
+          <p className="text-xs text-gray-500 dark:text-neutral-400">{property.description}</p>
+        )}
         {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
     );
@@ -251,10 +265,10 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
 
     return (
       <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
           {name}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
-          <span className="text-xs text-gray-400 ml-2">(JSON)</span>
+          <span className="text-xs text-gray-400 dark:text-neutral-500 ml-2">(JSON)</span>
         </label>
         <textarea
           value={jsonValue}
@@ -269,11 +283,15 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
           }}
           placeholder={`{\n  "key": "value"\n}`}
           rows={4}
-          className={`w-full px-3 py-2 border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            jsonError || error ? 'border-red-300' : 'border-gray-300'
+          className={`w-full px-3 py-2 border rounded-lg text-sm font-mono dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+            jsonError || error
+              ? 'border-red-300 dark:border-red-700'
+              : 'border-gray-300 dark:border-neutral-600'
           }`}
         />
-        {property.description && <p className="text-xs text-gray-500">{property.description}</p>}
+        {property.description && (
+          <p className="text-xs text-gray-500 dark:text-neutral-400">{property.description}</p>
+        )}
         {(jsonError || error) && <p className="text-xs text-red-600">{jsonError || error}</p>}
       </div>
     );
@@ -282,7 +300,7 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
   // Default fallback - text input
   return (
     <div className="space-y-1">
-      <label className="block text-sm font-medium text-gray-700">
+      <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
         {name}
         {isRequired && <span className="text-red-500 ml-1">*</span>}
       </label>
@@ -291,8 +309,8 @@ function FormField({ name, property, value, onChange, isRequired, error }: FormF
         value={(value as string) || ''}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={`Enter ${name}...`}
-        className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-          error ? 'border-red-300' : 'border-gray-300'
+        className={`w-full px-3 py-2 border rounded-lg text-sm dark:bg-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+          error ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-neutral-600'
         }`}
       />
       {error && <p className="text-xs text-red-600">{error}</p>}
@@ -395,23 +413,31 @@ export function TryItForm({
 
   if (!schema || Object.keys(properties).length === 0) {
     return (
-      <div className={`bg-white border border-gray-200 rounded-lg p-6 ${className}`}>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Try It</h2>
+      <div
+        className={`bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg p-6 ${className}`}
+      >
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Try It</h2>
         <div className="text-center py-8">
-          <AlertCircle className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">No input schema available</p>
-          <p className="text-gray-400 text-xs mt-1">This tool doesn't define input parameters</p>
+          <AlertCircle className="h-12 w-12 text-gray-300 dark:text-neutral-600 mx-auto mb-3" />
+          <p className="text-gray-500 dark:text-neutral-400 text-sm">No input schema available</p>
+          <p className="text-gray-400 dark:text-neutral-500 text-xs mt-1">
+            This tool doesn't define input parameters
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`bg-white border border-gray-200 rounded-lg overflow-hidden ${className}`}>
+    <div
+      className={`bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden ${className}`}
+    >
       {/* Header */}
-      <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">Try It</h2>
-        <p className="text-sm text-gray-500 mt-1">Test this tool with your own parameters</p>
+      <div className="px-6 py-4 bg-gray-50 dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-700">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Try It</h2>
+        <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+          Test this tool with your own parameters
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -419,9 +445,9 @@ export function TryItForm({
 
         {/* Error Display */}
         {error && (
-          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
         )}
 
@@ -447,7 +473,7 @@ export function TryItForm({
           <button
             type="button"
             onClick={handleReset}
-            className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+            className="px-4 py-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors font-medium"
           >
             Reset
           </button>
@@ -456,16 +482,18 @@ export function TryItForm({
 
       {/* Response Section */}
       {response !== null && (
-        <div className="border-t border-gray-200">
+        <div className="border-t border-gray-200 dark:border-neutral-700">
           <button
             onClick={() => setShowResponse(!showResponse)}
-            className="w-full px-6 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+            className="w-full px-6 py-3 flex items-center justify-between bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
           >
-            <span className="text-sm font-medium text-gray-700">Response</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+              Response
+            </span>
             {showResponse ? (
-              <ChevronUp className="h-4 w-4 text-gray-500" />
+              <ChevronUp className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
             ) : (
-              <ChevronDown className="h-4 w-4 text-gray-500" />
+              <ChevronDown className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
             )}
           </button>
           {showResponse && (

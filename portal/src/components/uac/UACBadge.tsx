@@ -88,7 +88,7 @@ export const UACBadge: React.FC<UACBadgeProps> = ({
           <>
             <Link2 className="h-3.5 w-3.5" />
             <span>UAC</span>
-            <span className="text-blue-400">•</span>
+            <span className="text-blue-400 dark:text-blue-500">•</span>
             <span>{enabledCount} bindings</span>
           </>
         );
@@ -112,13 +112,13 @@ export const UACBadge: React.FC<UACBadgeProps> = ({
           inline-flex items-center gap-1.5
           px-2.5 py-1
           text-xs font-medium
-          bg-blue-50 text-blue-700
-          border border-blue-200
+          bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400
+          border border-blue-200 dark:border-blue-800
           rounded-full
-          hover:bg-blue-100
+          hover:bg-blue-100 dark:hover:bg-blue-900/40
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
           transition-colors
-          ${isOpen ? 'bg-blue-100' : ''}
+          ${isOpen ? 'bg-blue-100 dark:bg-blue-900/40' : ''}
         `}
         aria-expanded={isOpen}
         aria-haspopup="true"
@@ -137,10 +137,10 @@ export const UACBadge: React.FC<UACBadgeProps> = ({
           className="
             absolute z-50
             mt-2
-            bg-white
+            bg-white dark:bg-neutral-800
             rounded-lg
             shadow-lg
-            border border-gray-200
+            border border-gray-200 dark:border-neutral-700
             animate-in fade-in-0 zoom-in-95 duration-200
           "
           style={{
@@ -153,8 +153,8 @@ export const UACBadge: React.FC<UACBadgeProps> = ({
             className="
               absolute -top-2 left-1/2 -translate-x-1/2
               w-4 h-4
-              bg-white
-              border-l border-t border-gray-200
+              bg-white dark:bg-neutral-800
+              border-l border-t border-gray-200 dark:border-neutral-700
               rotate-45
             "
           />

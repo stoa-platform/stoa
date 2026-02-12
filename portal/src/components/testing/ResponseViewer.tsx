@@ -37,11 +37,31 @@ interface ResponseViewerProps {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: typeof CheckCircle }> = {
-  '2xx': { bg: 'bg-green-100', text: 'text-green-700', icon: CheckCircle },
-  '3xx': { bg: 'bg-blue-100', text: 'text-blue-700', icon: CheckCircle },
-  '4xx': { bg: 'bg-amber-100', text: 'text-amber-700', icon: AlertTriangle },
-  '5xx': { bg: 'bg-red-100', text: 'text-red-700', icon: XCircle },
-  default: { bg: 'bg-gray-100', text: 'text-gray-700', icon: AlertTriangle },
+  '2xx': {
+    bg: 'bg-green-100 dark:bg-green-900/30',
+    text: 'text-green-700 dark:text-green-400',
+    icon: CheckCircle,
+  },
+  '3xx': {
+    bg: 'bg-blue-100 dark:bg-blue-900/30',
+    text: 'text-blue-700 dark:text-blue-400',
+    icon: CheckCircle,
+  },
+  '4xx': {
+    bg: 'bg-amber-100 dark:bg-amber-900/30',
+    text: 'text-amber-700 dark:text-amber-400',
+    icon: AlertTriangle,
+  },
+  '5xx': {
+    bg: 'bg-red-100 dark:bg-red-900/30',
+    text: 'text-red-700 dark:text-red-400',
+    icon: XCircle,
+  },
+  default: {
+    bg: 'bg-gray-100 dark:bg-neutral-700',
+    text: 'text-gray-700 dark:text-neutral-300',
+    icon: AlertTriangle,
+  },
 };
 
 function getStatusColor(status: number) {
@@ -71,10 +91,10 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-8">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-8">
         <div className="flex flex-col items-center justify-center">
           <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-gray-500">Sending request...</p>
+          <p className="text-gray-500 dark:text-neutral-400">Sending request...</p>
         </div>
       </div>
     );
@@ -82,11 +102,13 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
 
   if (!response) {
     return (
-      <div className="bg-gray-50 rounded-lg border border-gray-200 border-dashed p-8">
+      <div className="bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 border-dashed p-8">
         <div className="flex flex-col items-center justify-center text-center">
-          <FileJson className="h-12 w-12 text-gray-300 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-1">No Response Yet</h3>
-          <p className="text-sm text-gray-500">
+          <FileJson className="h-12 w-12 text-gray-300 dark:text-neutral-600 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">
+            No Response Yet
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-neutral-400">
             Configure your request above and click Send to see the response
           </p>
         </div>
@@ -121,9 +143,9 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 overflow-hidden">
       {/* Status Bar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900">
         <div className="flex items-center gap-4">
           {/* Status */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${statusColor.bg}`}>
@@ -133,19 +155,19 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
           </div>
 
           {/* Timing */}
-          <div className="flex items-center gap-1.5 text-gray-500">
+          <div className="flex items-center gap-1.5 text-gray-500 dark:text-neutral-400">
             <Clock className="h-4 w-4" />
             <span className="text-sm font-medium">{formatTiming(response.timing.total)}</span>
           </div>
 
           {/* Size */}
-          <div className="text-sm text-gray-500">{formatBytes(bodySize)}</div>
+          <div className="text-sm text-gray-500 dark:text-neutral-400">{formatBytes(bodySize)}</div>
         </div>
 
         {/* Copy Button */}
         <button
           onClick={copyToClipboard}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors"
         >
           {copied ? (
             <>
@@ -163,19 +185,19 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
 
       {/* Error Message */}
       {response.error && (
-        <div className="px-4 py-3 bg-red-50 border-b border-red-100">
+        <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-100 dark:border-red-800">
           <div className="flex items-start gap-2">
             <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="font-medium text-red-800">Request Failed</p>
-              <p className="text-sm text-red-600 mt-1">{response.error}</p>
+              <p className="font-medium text-red-800 dark:text-red-400">Request Failed</p>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">{response.error}</p>
             </div>
           </div>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 dark:border-neutral-700">
         <nav className="flex gap-4 px-4">
           <button
             onClick={() => setActiveTab('body')}
@@ -184,7 +206,7 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
               ${
                 activeTab === 'body'
                   ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300'
               }
             `}
           >
@@ -197,12 +219,12 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
               ${
                 activeTab === 'headers'
                   ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300'
               }
             `}
           >
             Headers
-            <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-gray-100 rounded-full">
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-neutral-700 rounded-full">
               {Object.keys(response.headers).length}
             </span>
           </button>
@@ -218,14 +240,14 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
             <div className="absolute top-2 right-2 z-10">
               <button
                 onClick={() => setShowRawBody(!showRawBody)}
-                className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                className="px-2 py-1 text-xs bg-gray-100 dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 rounded transition-colors"
               >
                 {showRawBody ? 'Pretty' : 'Raw'}
               </button>
             </div>
 
             {showRawBody ? (
-              <pre className="p-4 text-sm font-mono text-gray-800 whitespace-pre-wrap break-all">
+              <pre className="p-4 text-sm font-mono text-gray-800 dark:text-neutral-200 whitespace-pre-wrap break-all">
                 {bodyString}
               </pre>
             ) : (
@@ -241,7 +263,7 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
           <div className="p-4">
             <button
               onClick={() => setHeadersExpanded(!headersExpanded)}
-              className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-3"
+              className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white mb-3"
             >
               {headersExpanded ? (
                 <ChevronDown className="h-4 w-4" />
@@ -256,10 +278,14 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
                 {Object.entries(response.headers).map(([key, value]) => (
                   <div
                     key={key}
-                    className="flex items-start py-1.5 px-2 hover:bg-gray-50 rounded text-sm"
+                    className="flex items-start py-1.5 px-2 hover:bg-gray-50 dark:hover:bg-neutral-800 rounded text-sm"
                   >
-                    <span className="font-medium text-gray-700 w-48 flex-shrink-0">{key}:</span>
-                    <span className="text-gray-600 font-mono break-all">{value}</span>
+                    <span className="font-medium text-gray-700 dark:text-neutral-300 w-48 flex-shrink-0">
+                      {key}:
+                    </span>
+                    <span className="text-gray-600 dark:text-neutral-400 font-mono break-all">
+                      {value}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -270,9 +296,9 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
 
       {/* Timing Details */}
       {response.timing && (response.timing.dns || response.timing.tcp || response.timing.ttfb) && (
-        <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center gap-6 text-xs text-gray-500">
-            <span className="font-medium text-gray-700">Timing:</span>
+        <div className="px-4 py-3 border-t border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900">
+          <div className="flex items-center gap-6 text-xs text-gray-500 dark:text-neutral-400">
+            <span className="font-medium text-gray-700 dark:text-neutral-300">Timing:</span>
             {response.timing.dns !== undefined && (
               <span>DNS: {formatTiming(response.timing.dns)}</span>
             )}

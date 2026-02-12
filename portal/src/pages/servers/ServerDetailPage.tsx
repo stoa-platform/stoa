@@ -221,18 +221,20 @@ export function ServerDetailPage() {
       <div className="space-y-6">
         <Link
           to="/servers"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
+          className="inline-flex items-center gap-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Servers
         </Link>
 
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
             <div>
-              <h3 className="font-medium text-red-800">Error</h3>
-              <p className="text-sm text-red-600 mt-1">{error || 'Server not found'}</p>
+              <h3 className="font-medium text-red-800 dark:text-red-400">Error</h3>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                {error || 'Server not found'}
+              </p>
             </div>
           </div>
         </div>
@@ -247,39 +249,47 @@ export function ServerDetailPage() {
       {/* Breadcrumb */}
       <Link
         to="/servers"
-        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
+        className="inline-flex items-center gap-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Servers
       </Link>
 
       {/* Server Header */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-primary-50 rounded-lg">
             <CategoryIcon className="h-8 w-8 text-primary-600" />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">{server.displayName}</h1>
-              {server.version && <span className="text-sm text-gray-400">v{server.version}</span>}
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {server.displayName}
+              </h1>
+              {server.version && (
+                <span className="text-sm text-gray-400 dark:text-neutral-500">
+                  v{server.version}
+                </span>
+              )}
               <span
                 className={`px-2 py-1 text-xs font-medium rounded ${
                   server.status === 'active'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-amber-100 text-amber-700'
+                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
                 }`}
               >
                 {server.status}
               </span>
             </div>
-            <p className="text-gray-600 mt-2">{server.description}</p>
-            <div className="flex items-center gap-4 mt-4 text-sm text-gray-500">
+            <p className="text-gray-600 dark:text-neutral-400 mt-2">{server.description}</p>
+            <div className="flex items-center gap-4 mt-4 text-sm text-gray-500 dark:text-neutral-400">
               <span className="inline-flex items-center gap-1">
                 <Wrench className="h-4 w-4" />
                 {server.tools.length} tools
               </span>
-              <span className="capitalize bg-gray-100 px-2 py-1 rounded">{server.category}</span>
+              <span className="capitalize bg-gray-100 dark:bg-neutral-700 px-2 py-1 rounded">
+                {server.category}
+              </span>
               {server.documentation_url && (
                 <a
                   href={server.documentation_url}
@@ -299,8 +309,8 @@ export function ServerDetailPage() {
             <div
               className={`px-4 py-2 rounded-lg ${
                 subscription.status === 'active'
-                  ? 'bg-green-50 border border-green-200'
-                  : 'bg-amber-50 border border-amber-200'
+                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                  : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
               }`}
             >
               <div className="flex items-center gap-2">
@@ -311,14 +321,16 @@ export function ServerDetailPage() {
                 )}
                 <span
                   className={`font-medium ${
-                    subscription.status === 'active' ? 'text-green-700' : 'text-amber-700'
+                    subscription.status === 'active'
+                      ? 'text-green-700 dark:text-green-400'
+                      : 'text-amber-700 dark:text-amber-400'
                   }`}
                 >
                   {subscription.status === 'active' ? 'Subscribed' : 'Pending'}
                 </span>
               </div>
               {subscription.api_key_prefix && (
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
                   Key: {subscription.api_key_prefix}...
                 </div>
               )}
@@ -331,16 +343,18 @@ export function ServerDetailPage() {
       {newApiKey && (
         <div className="space-y-4">
           {/* API Key Section */}
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
             <div className="flex items-start gap-3">
               <Key className="h-5 w-5 text-green-600 mt-0.5" />
               <div className="flex-1">
-                <h3 className="font-medium text-green-800">Subscription Created!</h3>
-                <p className="text-sm text-green-600 mt-1">
+                <h3 className="font-medium text-green-800 dark:text-green-400">
+                  Subscription Created!
+                </h3>
+                <p className="text-sm text-green-600 dark:text-green-400 mt-1">
                   Save your API key now. It will only be shown once.
                 </p>
                 <div className="mt-3 flex items-center gap-2">
-                  <code className="flex-1 px-3 py-2 bg-white border border-green-200 rounded font-mono text-sm break-all">
+                  <code className="flex-1 px-3 py-2 bg-white dark:bg-neutral-800 border border-green-200 dark:border-green-800 rounded font-mono text-sm break-all">
                     {newApiKey}
                   </code>
                   <button
@@ -356,19 +370,21 @@ export function ServerDetailPage() {
           </div>
 
           {/* Claude.ai Configuration Section */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
             <div className="flex items-start gap-3">
               <Terminal className="h-5 w-5 text-blue-600 mt-0.5" />
               <div className="flex-1">
-                <h3 className="font-medium text-blue-800">Configure with Claude.ai</h3>
-                <p className="text-sm text-blue-600 mt-1">
+                <h3 className="font-medium text-blue-800 dark:text-blue-400">
+                  Configure with Claude.ai
+                </h3>
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
                   Add this MCP Server to Claude.ai to use the tools directly in your conversations.
                 </p>
 
                 {/* Claude.ai Web Config (Recommended) */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700 dark:text-neutral-300 flex items-center gap-2">
                       <Globe className="h-4 w-4" />
                       Claude.ai (Web) - Recommended
                     </span>
@@ -392,7 +408,7 @@ export function ServerDetailPage() {
                   <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto">
                     {JSON.stringify(generateClaudeConfig(newApiKey), null, 2)}
                   </pre>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-gray-500 dark:text-neutral-400 mt-2">
                     Go to{' '}
                     <a
                       href="https://claude.ai/settings/mcp"
@@ -409,7 +425,7 @@ export function ServerDetailPage() {
                 {/* Claude Desktop Config */}
                 <div className="mt-6">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700 dark:text-neutral-300 flex items-center gap-2">
                       <Download className="h-4 w-4" />
                       Claude Desktop App
                     </span>
@@ -433,9 +449,9 @@ export function ServerDetailPage() {
                   <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto">
                     {JSON.stringify(generateDesktopConfig(newApiKey), null, 2)}
                   </pre>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-gray-500 dark:text-neutral-400 mt-2">
                     Add to{' '}
-                    <code className="bg-gray-100 px-1 rounded">
+                    <code className="bg-gray-100 dark:bg-neutral-700 px-1 rounded">
                       ~/Library/Application Support/Claude/claude_desktop_config.json
                     </code>{' '}
                     (macOS)
@@ -448,9 +464,9 @@ export function ServerDetailPage() {
       )}
 
       {/* Tools List */}
-      <div className="bg-white rounded-lg border border-gray-200">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Available Tools</h2>
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700">
+        <div className="p-4 border-b border-gray-200 dark:border-neutral-700 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Available Tools</h2>
           {!subscription && (
             <button
               onClick={toggleAllTools}
@@ -461,7 +477,7 @@ export function ServerDetailPage() {
           )}
         </div>
 
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-gray-100 dark:divide-neutral-700">
           {server.tools.map((tool) => {
             const isSelected = selectedTools.has(tool.id);
             const accessStatus = getToolAccessStatus(tool.id);
@@ -470,7 +486,7 @@ export function ServerDetailPage() {
               <div
                 key={tool.id}
                 className={`p-4 flex items-center gap-4 ${
-                  !subscription ? 'cursor-pointer hover:bg-gray-50' : ''
+                  !subscription ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800' : ''
                 }`}
                 onClick={() => !subscription && toggleTool(tool.id)}
                 onKeyDown={(e) => e.key === 'Enter' && !subscription && toggleTool(tool.id)}
@@ -482,7 +498,9 @@ export function ServerDetailPage() {
                 {!subscription && (
                   <div
                     className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                      isSelected ? 'bg-primary-600 border-primary-600' : 'border-gray-300'
+                      isSelected
+                        ? 'bg-primary-600 border-primary-600'
+                        : 'border-gray-300 dark:border-neutral-600'
                     }`}
                   >
                     {isSelected && <Check className="h-3 w-3 text-white" />}
@@ -492,15 +510,19 @@ export function ServerDetailPage() {
                 {/* Tool Info */}
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <Wrench className="h-4 w-4 text-gray-400" />
-                    <span className="font-medium text-gray-900">{tool.displayName}</span>
+                    <Wrench className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {tool.displayName}
+                    </span>
                     {tool.requires_approval && (
-                      <span className="px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded">
+                      <span className="px-2 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded">
                         Requires Approval
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">{tool.description}</p>
+                  <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+                    {tool.description}
+                  </p>
                 </div>
 
                 {/* Access Status (only when subscribed) */}
@@ -537,11 +559,13 @@ export function ServerDetailPage() {
 
       {/* Subscribe Button */}
       {!subscription && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-medium text-gray-900">Subscribe to {server.displayName}</h3>
-              <p className="text-sm text-gray-500 mt-1">
+              <h3 className="font-medium text-gray-900 dark:text-white">
+                Subscribe to {server.displayName}
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
                 {selectedTools.size} of {server.tools.length} tools selected
               </p>
             </div>
@@ -568,14 +592,16 @@ export function ServerDetailPage() {
 
       {/* Manage Subscription */}
       {subscription && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="font-medium text-gray-900 mb-4">Subscription Management</h3>
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-6">
+          <h3 className="font-medium text-gray-900 dark:text-white mb-4">
+            Subscription Management
+          </h3>
           <div className="flex flex-wrap gap-3">
-            <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+            <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <RefreshCw className="h-4 w-4" />
               Rotate API Key
             </button>
-            <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+            <button className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <Shield className="h-4 w-4" />
               Request Additional Tools
             </button>

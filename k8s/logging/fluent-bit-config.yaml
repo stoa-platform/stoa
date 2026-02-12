@@ -49,8 +49,7 @@ data:
         HTTP_Passwd       ${OPENSEARCH_PASSWORD}
         Index             stoa-logs
         Type              _doc
-        tls               On
-        tls.verify        Off
+        tls               Off
         Suppress_Type_Name  On
         Logstash_Format   On
         Logstash_Prefix   stoa-logs

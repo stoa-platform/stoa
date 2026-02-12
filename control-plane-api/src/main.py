@@ -25,6 +25,7 @@ from .middleware.http_logging import HTTPLoggingMiddleware
 from .middleware.metrics import MetricsMiddleware, get_metrics
 from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
 from .opensearch import search_router, setup_opensearch
+from .opensearch.audit_middleware import AuditMiddleware
 from .routers import (
     access_requests,
     admin_prospects,
@@ -417,7 +418,8 @@ if settings.LOG_HTTP_MIDDLEWARE_ENABLED:
 # Must be added before app startup, connects to storage in lifespan
 add_error_snapshot_middleware(app)
 
-# Audit middleware (CAB-307) - AuditMiddleware added dynamically via setup_opensearch()
+# Audit middleware (CAB-307) - registered at init, lazy-connects to OpenSearch at request time
+app.add_middleware(AuditMiddleware)
 
 # Routers
 app.include_router(tenants.router)

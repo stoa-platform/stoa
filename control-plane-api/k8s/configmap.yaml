@@ -74,7 +74,7 @@ data:
   DATABASE_MAX_OVERFLOW: "10"
 
   # OpenSearch (CAB-307: Audit Trail)
-  OPENSEARCH_HOST: "https://opensearch.opensearch.svc.cluster.local:9200"
+  OPENSEARCH_HOST: "http://opensearch.opensearch.svc.cluster.local:9200"
   OPENSEARCH_USER: "admin"
   OPENSEARCH_VERIFY_CERTS: "false"
   AUDIT_ENABLED: "true"

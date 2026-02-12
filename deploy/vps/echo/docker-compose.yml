@@ -1,0 +1,16 @@
+# Echo server — ultra-fast local backend for Arena benchmarks.
+# Returns static JSON in sub-millisecond. Eliminates network noise
+# so benchmarks measure pure gateway overhead.
+#
+# Deploy: docker compose up -d
+# Test:   curl http://localhost:8888/get
+
+services:
+  echo:
+    image: nginx:alpine
+    container_name: echo-local
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro

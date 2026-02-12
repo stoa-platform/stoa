@@ -27,7 +27,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: control-plane-ui
-          image: 848853684735.dkr.ecr.eu-west-1.amazonaws.com/apim/control-plane-ui:latest
+          image: ghcr.io/stoa-platform/control-plane-ui:latest
           imagePullPolicy: Always
           ports:
             - name: http
@@ -69,6 +69,8 @@ spec:
               value: "http://opensearch-dashboards.stoa-system.svc:5601"
             - name: GRAFANA_BACKEND_URL
               value: "http://grafana.stoa-system.svc:3000"
+            - name: PROMETHEUS_BACKEND_URL
+              value: "http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090"
           securityContext:
             privileged: false
             runAsNonRoot: true

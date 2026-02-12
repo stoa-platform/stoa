@@ -4,6 +4,7 @@ Maintains a mapping of gateway_type -> adapter_class and creates
 configured adapter instances on demand. Adapters are registered at
 module load time (built-in) or dynamically (future plugin system).
 """
+
 import logging
 
 from .gateway_adapter_interface import GatewayAdapterInterface
@@ -45,8 +46,7 @@ class AdapterRegistry:
         if not adapter_class:
             available = ", ".join(cls._adapters.keys()) or "(none)"
             raise ValueError(
-                f"No adapter registered for gateway type '{gateway_type}'. "
-                f"Available types: {available}"
+                f"No adapter registered for gateway type '{gateway_type}'. " f"Available types: {available}"
             )
         return adapter_class(config=config)
 
@@ -64,10 +64,20 @@ class AdapterRegistry:
 def _register_builtin_adapters() -> None:
     """Register all built-in adapters. Called at module import time."""
     from .webmethods import WebMethodsGatewayAdapter
+
     AdapterRegistry.register("webmethods", WebMethodsGatewayAdapter)
 
     from .stoa import StoaGatewayAdapter
+
     AdapterRegistry.register("stoa", StoaGatewayAdapter)
+
+    from .kong import KongGatewayAdapter
+
+    AdapterRegistry.register("kong", KongGatewayAdapter)
+
+    from .gravitee import GraviteeGatewayAdapter
+
+    AdapterRegistry.register("gravitee", GraviteeGatewayAdapter)
 
 
 _register_builtin_adapters()

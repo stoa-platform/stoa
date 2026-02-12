@@ -1,6 +1,7 @@
 {
   "realm": "stoa",
   "enabled": true,
+  "sslRequired": "none",
   "displayName": "STOA Identity",
   "displayNameHtml": "<div class=\"kc-logo-text\"><span>STOA Identity</span></div>",
   "loginTheme": "stoa",
@@ -224,6 +225,49 @@
             "id.token.claim": "true",
             "access.token.claim": "true",
             "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "stoa-observability",
+      "name": "STOA Observability",
+      "description": "OIDC client for Grafana SSO and Prometheus oauth2-proxy",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "observability-dev-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost/grafana/login/generic_oauth",
+        "http://localhost/prometheus/oauth2/callback"
+      ],
+      "webOrigins": [
+        "http://localhost"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String"
           }
         }
       ]

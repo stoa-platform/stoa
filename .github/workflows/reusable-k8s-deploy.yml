@@ -21,11 +21,6 @@ on:
         required: false
         type: string
         default: 'stoa-system'
-      cluster-name:
-        description: 'EKS cluster name'
-        required: false
-        type: string
-        default: 'apim-dev-cluster'
       environment-url:
         description: 'Environment URL (for GitHub environment)'
         required: false
@@ -46,16 +41,12 @@ on:
         description: 'Previous deployment image (for rollback)'
         value: ${{ jobs.deploy.outputs.previous_image }}
 
-env:
-  AWS_REGION: eu-west-1
-
 jobs:
   deploy:
     name: Deploy ${{ inputs.component }} to ${{ inputs.environment }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     environment:
       name: ${{ inputs.environment }}
       url: ${{ inputs.environment-url }}
@@ -63,29 +54,24 @@ jobs:
       previous_image: ${{ steps.save-state.outputs.previous_image }}
 
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        with:
-          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Check if EKS cluster exists
-        id: cluster-check
+      - name: Configure kubeconfig
+        id: kubeconfig
         run: |
-          if aws eks describe-cluster --name ${{ inputs.cluster-name }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
-            echo "CLUSTER_EXISTS=true" >> $GITHUB_OUTPUT
+          if [ -n "${{ secrets.KUBECONFIG_B64 }}" ]; then
+            mkdir -p ~/.kube
+            echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
+            chmod 600 ~/.kube/config
+            echo "CLUSTER_READY=true" >> $GITHUB_OUTPUT
           else
-            echo "CLUSTER_EXISTS=false" >> $GITHUB_OUTPUT
-            echo "::warning::EKS cluster '${{ inputs.cluster-name }}' not found. Skipping deployment."
+            echo "CLUSTER_READY=false" >> $GITHUB_OUTPUT
+            echo "::warning::KUBECONFIG_B64 secret not set. Skipping deployment."
           fi
-
-      - name: Update kubeconfig
-        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
-        run: aws eks update-kubeconfig --name ${{ inputs.cluster-name }} --region ${{ env.AWS_REGION }}
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
 
       - name: Save current deployment state for rollback
         id: save-state
-        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        if: steps.kubeconfig.outputs.CLUSTER_READY == 'true'
         run: |
           PREV_IMAGE=$(kubectl get deployment/${{ inputs.component }} -n ${{ inputs.namespace }} \
             -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")  # intentional: deployment may not exist yet
@@ -93,7 +79,7 @@ jobs:
           echo "Previous image: $PREV_IMAGE"
 
       - name: Deploy
-        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        if: steps.kubeconfig.outputs.CLUSTER_READY == 'true'
         run: |
           echo "Deploying ${{ inputs.component }} with image: ${{ inputs.image-tag }}"
           kubectl set image deployment/${{ inputs.component }} \
@@ -108,7 +94,7 @@ jobs:
           fi
 
       - name: Diagnose failure
-        if: failure() && steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        if: failure() && steps.kubeconfig.outputs.CLUSTER_READY == 'true'
         run: |
           # Diagnostic commands - || true is intentional to collect all available debug info
           echo "=== Deployment Description ==="
@@ -139,7 +125,7 @@ jobs:
           kubectl top nodes 2>/dev/null || kubectl get nodes -o wide || true
 
       - name: Verify deployment
-        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true'
+        if: steps.kubeconfig.outputs.CLUSTER_READY == 'true'
         run: |
           echo "=== Deployment Status ==="
           kubectl get deployment ${{ inputs.component }} -n ${{ inputs.namespace }}
@@ -149,7 +135,7 @@ jobs:
             kubectl get pods -n ${{ inputs.namespace }} -l app.kubernetes.io/name=${{ inputs.component }} -o wide || true
 
       - name: Post-deploy endpoint check
-        if: steps.cluster-check.outputs.CLUSTER_EXISTS == 'true' && inputs.verify-endpoint != ''
+        if: steps.kubeconfig.outputs.CLUSTER_READY == 'true' && inputs.verify-endpoint != ''
         run: |
           sleep 10
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ inputs.verify-endpoint }}" || echo "000")  # intentional: network failure returns safe default
@@ -170,4 +156,4 @@ jobs:
           echo "| Environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Image | \`${{ inputs.image-tag }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Previous | \`${{ steps.save-state.outputs.previous_image }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Cluster | ${{ inputs.cluster-name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cluster | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY

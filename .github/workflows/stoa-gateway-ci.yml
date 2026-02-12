@@ -15,7 +15,7 @@ on:
       - 'stoa-gateway/**'
       - '.github/workflows/stoa-gateway-ci.yml'
       - '.github/workflows/reusable-rust-ci.yml'
-      - '.github/workflows/reusable-docker-ecr.yml'
+      - '.github/workflows/reusable-docker-ghcr.yml'
       - '.github/actions/**'
 
   pull_request:
@@ -59,14 +59,14 @@ jobs:
     permissions:
       contents: read
 
-  # === Docker: build + push ECR (AMD64 only — EKS target) ===
+  # === Docker: build + push GHCR (AMD64 only) ===
   docker:
     needs: ci
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/reusable-docker-ecr.yml
+    uses: ./.github/workflows/reusable-docker-ghcr.yml
     with:
       component: stoa-gateway
-      ecr-repository: apim/stoa-gateway
+      image-name: stoa-gateway
       environment: ${{ github.event.inputs.environment || 'dev' }}
       platforms: linux/amd64
       build-args: |
@@ -74,32 +74,33 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: write
       attestations: write
     secrets: inherit
 
-  # === Deploy: trigger pod restart so ArgoCD-managed pods pull new image ===
-  # ArgoCD manages the deployment manifest (stoa-infra/charts/stoa-gateway).
-  # Image tag is dev-latest with pullPolicy: Always — a rollout restart
-  # forces pods to pull the freshly-pushed image from ECR.
+  # === Deploy: trigger pod restart to pull new GHCR image ===
   deploy:
     needs: docker
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     environment:
       name: ${{ github.event.inputs.environment || 'dev' }}
-      url: https://mcp.gostoa.dev
+      url: https://${{ (github.event.inputs.environment == 'staging' && 'staging-mcp') || 'mcp' }}.gostoa.dev
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        with:
-          role-to-assume: arn:aws:iam::848853684735:role/github-actions-stoa-infra
-          aws-region: eu-west-1
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name apim-dev-cluster --region eu-west-1
-      - name: Restart deployment (pull new dev-latest image)
+      - name: Configure kubeconfig
+        run: |
+          if [ -z "$KUBECONFIG_B64" ]; then
+            echo "::warning::KUBECONFIG_B64 secret not set. Skipping deployment."
+            exit 0
+          fi
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+      - name: Restart deployment (pull new image from GHCR)
         run: |
           kubectl rollout restart deployment/stoa-gateway -n stoa-system
           kubectl rollout status deployment/stoa-gateway -n stoa-system --timeout=300s

@@ -18,6 +18,8 @@ import type {
   ProspectListResponse,
   ProspectsMetricsResponse,
   ProspectDetail,
+  Environment,
+  EnvironmentConfig,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -163,11 +165,17 @@ class ApiService {
     await this.client.delete(`/v1/tenants/${tenantId}`);
   }
 
+  // Environments (ADR-040)
+  async getEnvironments(): Promise<EnvironmentConfig[]> {
+    const { data } = await this.client.get('/v1/environments');
+    return data.environments;
+  }
+
   // APIs
-  async getApis(tenantId: string): Promise<API[]> {
-    const { data } = await this.client.get(`/v1/tenants/${tenantId}/apis`, {
-      params: { page: 1, page_size: 100 },
-    });
+  async getApis(tenantId: string, environment?: Environment): Promise<API[]> {
+    const params: Record<string, unknown> = { page: 1, page_size: 100 };
+    if (environment) params.environment = environment;
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/apis`, { params });
     return data.items ?? data;
   }
 
@@ -222,8 +230,14 @@ class ApiService {
   }
 
   // Deployments
-  async getDeployments(tenantId: string, apiId?: string): Promise<Deployment[]> {
-    const params = apiId ? { api_id: apiId } : {};
+  async getDeployments(
+    tenantId: string,
+    apiId?: string,
+    environment?: Environment
+  ): Promise<Deployment[]> {
+    const params: Record<string, string> = {};
+    if (apiId) params.api_id = apiId;
+    if (environment) params.environment = environment;
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/deployments`, { params });
     return data;
   }

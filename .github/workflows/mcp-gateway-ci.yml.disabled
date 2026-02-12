@@ -1,0 +1,120 @@
+# =============================================================================
+# GitHub Actions: MCP Gateway CI/CD
+# =============================================================================
+# Thin orchestrator — delegates to reusable workflows (ADR-031)
+# =============================================================================
+
+name: MCP Gateway CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mcp-gateway/**'
+      - '.github/workflows/mcp-gateway-ci.yml'
+      - '.github/workflows/reusable-python-ci.yml'
+      - '.github/workflows/reusable-docker-ghcr.yml'
+      - '.github/workflows/reusable-k8s-deploy.yml'
+      - '.github/actions/**'
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'mcp-gateway/**'
+      - '.github/workflows/mcp-gateway-ci.yml'
+      - '.github/workflows/reusable-python-ci.yml'
+      - '.github/actions/**'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  id-token: write
+  checks: write
+  attestations: write
+
+jobs:
+  # === CI: lint + mypy + pytest + coverage ===
+  ci:
+    uses: ./.github/workflows/reusable-python-ci.yml
+    with:
+      component: mcp-gateway
+      python-version: '3.11'
+      coverage-threshold: 40
+    permissions:
+      contents: read
+      checks: write
+
+  # === Docker: build + push GHCR ===
+  docker:
+    needs: ci
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/reusable-docker-ghcr.yml
+    with:
+      component: mcp-gateway
+      image-name: mcp-gateway
+      environment: ${{ github.event.inputs.environment || 'dev' }}
+      platforms: linux/amd64
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+      attestations: write
+    secrets: inherit
+
+  # === Deploy: K3s rollout with auto-rollback ===
+  deploy:
+    needs: docker
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/reusable-k8s-deploy.yml
+    with:
+      component: mcp-gateway
+      image-tag: ${{ needs.docker.outputs.image-tag }}
+      environment: ${{ github.event.inputs.environment || 'dev' }}
+      environment-url: https://mcp.gostoa.dev
+      verify-endpoint: https://mcp.gostoa.dev/health
+      expected-status: '200'
+    permissions:
+      contents: read
+    secrets: inherit
+
+  # === Smoke Test: E2E @smoke after deploy ===
+  smoke-test:
+    needs: deploy
+    if: needs.deploy.result == 'success'
+    uses: ./.github/workflows/reusable-smoke-test.yml
+    with:
+      component: mcp-gateway
+    permissions:
+      contents: read
+      id-token: write
+    secrets: inherit
+
+  # === Notify: Slack ===
+  notify:
+    needs: [ci, docker, deploy, smoke-test]
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/reusable-notify.yml
+    with:
+      component: MCP Gateway
+      environment: ${{ github.event.inputs.environment || 'dev' }}
+      ci-result: ${{ needs.ci.outputs.test-result }}
+      deploy-result: ${{ needs.deploy.result }}
+      smoke-result: ${{ needs.smoke-test.result }}
+    secrets: inherit

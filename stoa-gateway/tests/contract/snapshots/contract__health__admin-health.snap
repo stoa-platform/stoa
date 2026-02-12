@@ -1,0 +1,11 @@
+---
+source: tests/contract/health.rs
+assertion_line: 36
+expression: json
+---
+{
+  "policies_count": 0,
+  "routes_count": 0,
+  "status": "ok",
+  "version": "[version]"
+}

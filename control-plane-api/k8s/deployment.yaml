@@ -32,6 +32,9 @@ spec:
                 name: stoa-control-plane-api-config
             - secretRef:
                 name: stoa-control-plane-api-secrets
+            - secretRef:
+                name: stoa-opensearch-secret
+                optional: true
           resources:
             requests:
               memory: "256Mi"

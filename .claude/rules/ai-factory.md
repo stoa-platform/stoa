@@ -99,6 +99,7 @@ A task is DONE if and only if ALL checks pass. No partial credit, no "mostly don
 | 7 | PR created | PR URL exists | `gh pr view` |
 | 8 | CI green | 3 required checks pass | `gh pr checks` |
 | 9 | State files updated | `memory.md` reflects changes | Manual check |
+| 10 | Session logged | SESSION-START exists in operations.log for this task | `tail -20 operations.log` |
 
 #### Component-Specific Checks
 
@@ -171,19 +172,24 @@ Usage: PR review rapide, validation pre-merge.
 
 ### Pattern 3: Feature development (Ship/Show/Ask)
 ```
-1. [Inline] Explorer + planifier (Plan mode)
-2. [Inline] Branch: git checkout -b feat/CAB-XXXX-description
-3. [Inline] Implementer le code + micro-commits (<150 LOC chacun)
-4. [test-writer] Generer les tests
-5. [security-reviewer] Review securite
-6. [docs-writer] Documenter si ADR ou guide necessaire
-7. [Inline] Local quality gate (ci-quality-gates.md)
-8. [Inline] Push + PR (gh pr create)
-9. [Inline] CI green (gh pr checks --watch)
-10. [Inline] Ship/Show → merge auto | Ask → attendre "merge"
-11. [Inline] Verify CD: CI main → ArgoCD sync → Pod healthy
-12. [k8s-ops] Si ArgoCD OutOfSync ou pod CrashLoop → diagnostiquer
-13. [Inline] Update state files (memory.md, plan.md) + cleanup branch
+1.  [Inline] Explorer + planifier (Plan mode)
+2.  [Inline] Branch: git checkout -b feat/CAB-XXXX-description
+3.  [LOG] SESSION-START | task=CAB-XXXX branch=feat/...
+4.  [Inline] Implementer le code + micro-commits (<150 LOC chacun)
+5.  [test-writer] Generer les tests
+6.  [security-reviewer] Review securite
+7.  [docs-writer] Documenter si ADR ou guide necessaire
+8.  [Inline] Local quality gate (ci-quality-gates.md)
+9.  [Inline] Push + PR (gh pr create)
+10. [LOG] STEP-DONE | step=pr-created task=CAB-XXXX pr=XXX
+11. [Inline] CI green (gh pr checks --watch)
+12. [LOG+CHECKPOINT] Before merge — create checkpoint file
+13. [Inline] Ship/Show → merge auto | Ask → attendre "merge"
+14. [LOG] STEP-DONE | step=merged task=CAB-XXXX pr=XXX — delete checkpoint
+15. [Inline] Verify CD: CI main → ArgoCD sync → Pod healthy
+16. [k8s-ops] Si ArgoCD OutOfSync ou pod CrashLoop → diagnostiquer
+17. [Inline] Update state files (memory.md, plan.md) + cleanup branch
+18. [LOG] SESSION-END | task=CAB-XXXX status=success
 ```
 Usage: implementation complete d'un ticket CAB-XXXX. Voir `git-workflow.md` pour Ship/Show/Ask + CD verification map.
 
@@ -248,14 +254,18 @@ Tache a realiser ?
 
 ### Pattern 5: CI-first development (always-green main)
 ```
-1. [Inline] Branch + implementer la feature + micro-commits
-2. [Inline] Executer le pre-commit checklist (voir ci-quality-gates.md)
-3. [test-writer] Generer les tests + verifier coverage seuil
-4. [security-reviewer] Review securite + secrets
-5. [Inline] Push + PR + CI green + merge (voir git-workflow.md)
-6. [Inline] Verify CD: CI main + ArgoCD + Pod (voir git-workflow.md step 7)
-7. [k8s-ops] Si probleme CD → diagnostiquer et proposer fix
-8. [Inline] Update state files
+1.  [Inline] Branch + implementer la feature + micro-commits
+2.  [LOG] SESSION-START | task=<TASK> branch=<BRANCH>
+3.  [Inline] Executer le pre-commit checklist (voir ci-quality-gates.md)
+4.  [test-writer] Generer les tests + verifier coverage seuil
+5.  [security-reviewer] Review securite + secrets
+6.  [LOG+CHECKPOINT] Before merge — create checkpoint file
+7.  [Inline] Push + PR + CI green + merge (voir git-workflow.md)
+8.  [LOG] STEP-DONE | step=merged — delete checkpoint
+9.  [Inline] Verify CD: CI main + ArgoCD + Pod (voir git-workflow.md step 7)
+10. [k8s-ops] Si probleme CD → diagnostiquer et proposer fix
+11. [Inline] Update state files
+12. [LOG] SESSION-END | task=<TASK> status=success
 ```
 Usage: tout changement de code. Objectif: zero surprise en CI, always-green main.
 
@@ -270,17 +280,21 @@ Usage: tout contenu public avec mentions concurrents, reglementations ou clients
 
 ### Pattern 7: Spec-driven development (Osmani-inspired)
 ```
-1. [Inline] User provides feature request
-2. [Inline] Claude generates plan in Plan Mode (plan structure standard above)
-3. [Inline] User approves or iterates on plan
-4. [test-writer] Generate failing tests from plan (test-first)
-5. [Inline] Implement code to pass tests (<300 LOC per PR)
-6. [security-reviewer] Review securite
-7. [Inline] Local quality gate (all DoD checkboxes green)
-8. [Inline] Ship/Show/Ask categorization (decision matrix)
-9. [Inline] PR + CI + merge
-10. [Inline] CD verification (post-merge checks)
-11. [Inline] Update state files (memory.md, plan.md)
+1.  [Inline] User provides feature request
+2.  [Inline] Claude generates plan in Plan Mode (plan structure standard above)
+3.  [Inline] User approves or iterates on plan
+4.  [LOG] SESSION-START | task=<TASK> branch=<BRANCH>
+5.  [test-writer] Generate failing tests from plan (test-first)
+6.  [Inline] Implement code to pass tests (<300 LOC per PR)
+7.  [security-reviewer] Review securite
+8.  [Inline] Local quality gate (all DoD checkboxes green)
+9.  [Inline] Ship/Show/Ask categorization (decision matrix)
+10. [LOG+CHECKPOINT] Before merge — create checkpoint file
+11. [Inline] PR + CI + merge
+12. [LOG] STEP-DONE | step=merged — delete checkpoint
+13. [Inline] CD verification (post-merge checks)
+14. [Inline] Update state files (memory.md, plan.md)
+15. [LOG] SESSION-END | task=<TASK> status=success
 ```
 Usage: all new features. Objective: test-first + quality parity with human code.
 

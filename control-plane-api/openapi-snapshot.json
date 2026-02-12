@@ -324,6 +324,96 @@
         "title": "APIUpdate",
         "type": "object"
       },
+      "AccessRequestCreate": {
+        "description": "Public form submission: profile + optional company/role.",
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "AccessRequestCreate",
+        "type": "object"
+      },
+      "AccessRequestResponse": {
+        "description": "Response after submitting an access request.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "request_id"
+        ],
+        "title": "AccessRequestResponse",
+        "type": "object"
+      },
       "ActiveSubscription": {
         "description": "An active tool subscription",
         "example": {
@@ -2725,6 +2815,39 @@
         "title": "Environment",
         "type": "string"
       },
+      "EnvironmentConfig": {
+        "properties": {
+          "color": {
+            "title": "Color",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "full",
+              "read-only",
+              "promote-only"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "mode",
+          "color"
+        ],
+        "title": "EnvironmentConfig",
+        "type": "object"
+      },
       "EnvironmentInfo": {
         "description": "Kubernetes/runtime environment info.",
         "properties": {
@@ -2787,6 +2910,22 @@
         "title": "EnvironmentInfo",
         "type": "object"
       },
+      "EnvironmentListResponse": {
+        "properties": {
+          "environments": {
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentConfig"
+            },
+            "title": "Environments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "environments"
+        ],
+        "title": "EnvironmentListResponse",
+        "type": "object"
+      },
       "ErrorSnapshot": {
         "description": "Complete error snapshot for time-travel debugging.\n\nCaptures the full context of an error including:\n- Request/response data (with PII masked)\n- Routing and policy information\n- Backend state and health\n- Related log entries\n- Environment information",
         "example": {
@@ -2847,6 +2986,25 @@
           },
           "request": {
             "$ref": "#/components/schemas/RequestSnapshot"
+          },
+          "resolution_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Notes"
+          },
+          "resolution_status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResolutionStatus"
+              }
+            ],
+            "default": "unresolved"
           },
           "response": {
             "$ref": "#/components/schemas/ResponseSnapshot"
@@ -5003,6 +5161,63 @@
           "details"
         ],
         "title": "ImportResultResponse",
+        "type": "object"
+      },
+      "InternalAPIItem": {
+        "description": "API item for gateway internal discovery \u2014 includes backend_url.",
+        "properties": {
+          "backend_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Url"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "default": "1.0.0",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "InternalAPIItem",
+        "type": "object"
+      },
+      "InternalAPIsResponse": {
+        "description": "Response for internal API catalog endpoint.",
+        "properties": {
+          "apis": {
+            "items": {
+              "$ref": "#/components/schemas/InternalAPIItem"
+            },
+            "title": "Apis",
+            "type": "array"
+          }
+        },
+        "required": [
+          "apis"
+        ],
+        "title": "InternalAPIsResponse",
         "type": "object"
       },
       "KeyRotationRequest": {
@@ -9382,6 +9597,41 @@
         "title": "RequestSnapshot",
         "type": "object"
       },
+      "ResolutionStatus": {
+        "description": "Resolution status for error snapshots.",
+        "enum": [
+          "unresolved",
+          "investigating",
+          "resolved",
+          "ignored"
+        ],
+        "title": "ResolutionStatus",
+        "type": "string"
+      },
+      "ResolutionUpdate": {
+        "description": "Request body for updating snapshot resolution status.",
+        "properties": {
+          "resolution_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Notes"
+          },
+          "resolution_status": {
+            "$ref": "#/components/schemas/ResolutionStatus"
+          }
+        },
+        "required": [
+          "resolution_status"
+        ],
+        "title": "ResolutionUpdate",
+        "type": "object"
+      },
       "ResponseSnapshot": {
         "description": "Captured HTTP response data.",
         "properties": {
@@ -9678,6 +9928,47 @@
         "title": "ServiceAccountSecretRegenerated",
         "type": "object"
       },
+      "SnapshotFiltersResponse": {
+        "description": "Available filter values for the snapshots list UI.",
+        "properties": {
+          "resolution_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resolution Statuses",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "status_codes": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Status Codes",
+            "type": "array"
+          },
+          "triggers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Triggers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "triggers",
+          "sources",
+          "status_codes",
+          "resolution_statuses"
+        ],
+        "title": "SnapshotFiltersResponse",
+        "type": "object"
+      },
       "SnapshotListResponse": {
         "description": "Paginated list of snapshots.",
         "properties": {
@@ -9728,6 +10019,14 @@
           "path": {
             "title": "Path",
             "type": "string"
+          },
+          "resolution_status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResolutionStatus"
+              }
+            ],
+            "default": "unresolved"
           },
           "source": {
             "default": "control-plane",
@@ -12774,6 +13073,51 @@
         "summary": "Test Webhook",
         "tags": [
           "Tenant Webhooks"
+        ]
+      }
+    },
+    "/v1/access-requests": {
+      "post": {
+        "description": "Submit an access request (public, no auth).\n\nIdempotent: returns 200 if email already exists, 201 if new.",
+        "operationId": "create_access_request_v1_access_requests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRequestCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestResponse"
+                }
+              }
+            },
+            "description": "Email already registered"
+          },
+          "201": {
+            "description": "New request created"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Access Request",
+        "tags": [
+          "Access Requests"
         ]
       }
     },
@@ -18017,6 +18361,33 @@
         ]
       }
     },
+    "/v1/environments": {
+      "get": {
+        "description": "List available environments with their configuration.\n\nReturns environment configs including mode (full, read-only, promote-only)\nwhich determines what actions are allowed in each environment.",
+        "operationId": "list_environments_v1_environments_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Environments",
+        "tags": [
+          "Environments"
+        ]
+      }
+    },
     "/v1/events/deployment-result": {
       "post": {
         "description": "Receive deployment result notification from AWX playbooks.\n\nThis endpoint is called by Ansible playbooks after completing\ndeployment, rollback, or other gateway operations.\n\nThe result is published to Kafka for:\n- Real-time UI updates via SSE\n- Audit logging\n- Metrics collection",
@@ -18733,6 +19104,28 @@
         "summary": "List Gateway Scopes",
         "tags": [
           "Gateway"
+        ]
+      }
+    },
+    "/v1/internal/catalog/apis": {
+      "get": {
+        "description": "List published APIs with backend_url for gateway API-to-Tool bridge.\n\nInternal endpoint \u2014 no JWT auth required (service-to-service on internal network).\nUsed by stoa-gateway to discover APIs and register them as MCP tools.",
+        "operationId": "internal_list_apis_v1_internal_catalog_apis_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalAPIsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Internal List Apis",
+        "tags": [
+          "Internal - Gateway API Bridge"
         ]
       }
     },
@@ -22216,7 +22609,7 @@
     },
     "/v1/snapshots": {
       "get": {
-        "description": "List error snapshots for the user's tenant.\n\nSupports filtering by:\n- Date range (start_date, end_date)\n- HTTP status code\n- Trigger type (4xx, 5xx, timeout, manual)\n- Path substring\n\nResults are paginated and sorted by timestamp (newest first).",
+        "description": "List error snapshots for the user's tenant.\n\nReturns empty list when storage is unavailable.",
         "operationId": "list_snapshots_v1_snapshots_get",
         "parameters": [
           {
@@ -22337,6 +22730,42 @@
               "description": "Filter: path contains string",
               "title": "Path Contains"
             }
+          },
+          {
+            "description": "Filter: gateway source",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter: gateway source",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "Filter: resolution status",
+            "in": "query",
+            "name": "resolution_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResolutionStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter: resolution status",
+              "title": "Resolution Status"
+            }
           }
         ],
         "responses": {
@@ -22372,10 +22801,37 @@
         ]
       }
     },
-    "/v1/snapshots/stats/summary": {
+    "/v1/snapshots/filters": {
       "get": {
-        "description": "Get snapshot statistics summary.\n\nReturns counts by trigger type and status code.",
-        "operationId": "get_snapshot_stats_v1_snapshots_stats_summary_get",
+        "description": "Get available filter values for the UI.\n\nReturns empty filters when storage is unavailable.",
+        "operationId": "get_available_filters_v1_snapshots_filters_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotFiltersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Available Filters",
+        "tags": [
+          "Error Snapshots"
+        ]
+      }
+    },
+    "/v1/snapshots/stats": {
+      "get": {
+        "description": "Get snapshot statistics (alias for /stats/summary).",
+        "operationId": "get_snapshot_stats_v1_snapshots_stats_get",
         "parameters": [
           {
             "description": "Start date for stats",
@@ -22421,7 +22877,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Snapshot Stats V1 Snapshots Stats Summary Get",
+                  "title": "Response Get Snapshot Stats V1 Snapshots Stats Get",
                   "type": "object"
                 }
               }
@@ -22450,9 +22906,87 @@
         ]
       }
     },
+    "/v1/snapshots/stats/summary": {
+      "get": {
+        "description": "Get snapshot statistics summary.",
+        "operationId": "get_snapshot_stats_summary_v1_snapshots_stats_summary_get",
+        "parameters": [
+          {
+            "description": "Start date for stats",
+            "in": "query",
+            "name": "start_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start date for stats",
+              "title": "Start Date"
+            }
+          },
+          {
+            "description": "End date for stats",
+            "in": "query",
+            "name": "end_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End date for stats",
+              "title": "End Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Snapshot Stats Summary V1 Snapshots Stats Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Snapshot Stats Summary",
+        "tags": [
+          "Error Snapshots"
+        ]
+      }
+    },
     "/v1/snapshots/{snapshot_id}": {
       "delete": {
-        "description": "Delete an error snapshot.\n\nPermanently removes the snapshot from storage.\nAccess is restricted to the user's tenant.",
+        "description": "Delete an error snapshot.",
         "operationId": "delete_snapshot_v1_snapshots__snapshot_id__delete",
         "parameters": [
           {
@@ -22491,7 +23025,7 @@
         ]
       },
       "get": {
-        "description": "Get detailed error snapshot by ID.\n\nReturns the complete snapshot including:\n- Request/response data (with PII masked)\n- Routing and policy information\n- Backend state\n- Captured logs\n- Environment information\n\nAccess is restricted to the user's tenant.",
+        "description": "Get detailed error snapshot by ID.",
         "operationId": "get_snapshot_v1_snapshots__snapshot_id__get",
         "parameters": [
           {
@@ -22535,11 +23069,67 @@
         "tags": [
           "Error Snapshots"
         ]
+      },
+      "patch": {
+        "description": "Update the resolution status of an error snapshot.",
+        "operationId": "update_snapshot_resolution_v1_snapshots__snapshot_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolutionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Snapshot Resolution",
+        "tags": [
+          "Error Snapshots"
+        ]
       }
     },
     "/v1/snapshots/{snapshot_id}/replay": {
       "post": {
-        "description": "Generate cURL command to replay the captured request.\n\nReturns a cURL command that can be used to replay the original\nrequest. Note that sensitive data (Authorization headers, etc.)\nwill show as [REDACTED] in the generated command.\n\nAccess is restricted to the user's tenant.",
+        "description": "Generate cURL command to replay the captured request.",
         "operationId": "generate_replay_v1_snapshots__snapshot_id__replay_post",
         "parameters": [
           {
@@ -23555,7 +24145,7 @@
     },
     "/v1/tenants/{tenant_id}/apis": {
       "get": {
-        "description": "List APIs for a tenant from GitLab (paginated).",
+        "description": "List APIs for a tenant from GitLab (paginated).\n\nOptionally filter by environment \u2014 only returns APIs deployed to that environment.",
         "operationId": "list_apis_v1_tenants__tenant_id__apis_get",
         "parameters": [
           {
@@ -23592,6 +24182,24 @@
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Filter by environment (dev, staging, prod)",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by environment (dev, staging, prod)",
+              "title": "Environment"
             }
           }
         ],
@@ -23638,6 +24246,24 @@
             "schema": {
               "title": "Tenant Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Target environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target environment",
+              "title": "Environment"
             }
           }
         ],
@@ -23705,6 +24331,24 @@
             "schema": {
               "title": "Api Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Target environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target environment",
+              "title": "Environment"
             }
           }
         ],
@@ -23813,6 +24457,24 @@
             "schema": {
               "title": "Api Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Target environment",
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Target environment",
+              "title": "Environment"
             }
           }
         ],

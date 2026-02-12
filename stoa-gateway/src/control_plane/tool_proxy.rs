@@ -345,3 +345,304 @@ impl ToolProxyClient {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn make_tool_context() -> ToolContext {
+        ToolContext {
+            tenant_id: "acme".to_string(),
+            user_id: Some("uid-1".to_string()),
+            user_email: Some("user@test.com".to_string()),
+            request_id: "req-1".to_string(),
+            roles: vec!["admin".to_string()],
+            scopes: vec!["stoa:read".to_string()],
+            raw_token: None,
+        }
+    }
+
+    #[test]
+    fn test_tool_proxy_client_new_no_oidc() {
+        let client = ToolProxyClient::new("http://localhost:8000", None);
+        assert_eq!(client.base_url(), "http://localhost:8000");
+        assert!(client.oidc.is_none());
+    }
+
+    #[test]
+    fn test_tool_proxy_client_new_with_oidc() {
+        let oidc = OidcConfig {
+            token_url: "http://kc/token".to_string(),
+            client_id: "gw".to_string(),
+            client_secret: "secret".to_string(),
+        };
+        let client = ToolProxyClient::new("http://localhost:8000/", Some(oidc));
+        // Trailing slash stripped
+        assert_eq!(client.base_url(), "http://localhost:8000");
+        assert!(client.oidc.is_some());
+    }
+
+    #[test]
+    fn test_remote_tool_def_deserialize() {
+        let json = r#"{
+            "name": "list_users",
+            "description": "List all users",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"page": {"type": "integer"}},
+                "required": ["page"]
+            }
+        }"#;
+
+        let tool: RemoteToolDef = serde_json::from_str(json).unwrap();
+        assert_eq!(tool.name, "list_users");
+        assert_eq!(tool.description, "List all users");
+        assert_eq!(tool.input_schema.schema_type, "object");
+        assert!(tool.input_schema.properties.contains_key("page"));
+        assert_eq!(tool.input_schema.required, vec!["page"]);
+    }
+
+    #[test]
+    fn test_remote_tool_def_deserialize_minimal() {
+        let json = r#"{
+            "name": "health",
+            "description": "Check health",
+            "inputSchema": {}
+        }"#;
+
+        let tool: RemoteToolDef = serde_json::from_str(json).unwrap();
+        assert_eq!(tool.name, "health");
+        // default_object() should provide "object"
+        assert_eq!(tool.input_schema.schema_type, "object");
+        assert!(tool.input_schema.properties.is_empty());
+        assert!(tool.input_schema.required.is_empty());
+    }
+
+    #[test]
+    fn test_tools_list_response_deserialize() {
+        let json = r#"{"tools": [
+            {"name": "t1", "description": "d1", "inputSchema": {}},
+            {"name": "t2", "description": "d2", "inputSchema": {"type": "object"}}
+        ]}"#;
+
+        let resp: ToolsListResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.tools.len(), 2);
+        assert_eq!(resp.tools[0].name, "t1");
+        assert_eq!(resp.tools[1].name, "t2");
+    }
+
+    #[tokio::test]
+    async fn test_discover_tools_unauthenticated() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/mcp/tools"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [
+                    {"name": "tool_a", "description": "A", "inputSchema": {}},
+                    {"name": "tool_b", "description": "B", "inputSchema": {}}
+                ]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = ToolProxyClient::new(&mock_server.uri(), None);
+        let tools = client.discover_tools().await.unwrap();
+        assert_eq!(tools.len(), 2);
+        assert_eq!(tools[0].name, "tool_a");
+    }
+
+    #[tokio::test]
+    async fn test_discover_tools_server_error() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/mcp/tools"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("Internal error"))
+            .mount(&mock_server)
+            .await;
+
+        let client = ToolProxyClient::new(&mock_server.uri(), None);
+        let result = client.discover_tools().await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("500"));
+    }
+
+    #[tokio::test]
+    async fn test_discover_tools_authenticated_with_fallback() {
+        let mock_server = MockServer::start().await;
+
+        // Token endpoint
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "test-token",
+                "expires_in": 300,
+                "token_type": "Bearer"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        // Authenticated endpoint returns 401 → triggers fallback
+        Mock::given(method("GET"))
+            .and(path("/v1/mcp/tools"))
+            .and(header("Authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&mock_server)
+            .await;
+
+        // Unauthenticated fallback works
+        Mock::given(method("GET"))
+            .and(path("/v1/mcp/tools"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [{"name": "fallback_tool", "description": "ok", "inputSchema": {}}]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let oidc = OidcConfig {
+            token_url: format!("{}/token", mock_server.uri()),
+            client_id: "gw".to_string(),
+            client_secret: "secret".to_string(),
+        };
+
+        let client = ToolProxyClient::new(&mock_server.uri(), Some(oidc));
+        let tools = client.discover_tools().await.unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "fallback_tool");
+    }
+
+    #[tokio::test]
+    async fn test_call_tool_unauthenticated() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/mcp/tools/list_users/invoke"))
+            .and(header("X-Tenant-ID", "acme"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"result": "ok", "users": []})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let client = ToolProxyClient::new(&mock_server.uri(), None);
+        let ctx = make_tool_context();
+        let args = serde_json::json!({"page": 1});
+
+        let result = client.call_tool("list_users", args, &ctx).await.unwrap();
+        assert_eq!(result["result"], "ok");
+    }
+
+    #[tokio::test]
+    async fn test_call_tool_with_user_token() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/mcp/tools/my_tool/invoke"))
+            .and(header("Authorization", "Bearer user-jwt-token"))
+            .and(header("X-User-Id", "uid-1"))
+            .and(header("X-User-Email", "user@test.com"))
+            .and(header("X-User-Roles", "admin"))
+            .and(header("X-Tenant-ID", "acme"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "done"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let client = ToolProxyClient::new(&mock_server.uri(), None);
+        let mut ctx = make_tool_context();
+        ctx.raw_token = Some("user-jwt-token".to_string());
+
+        let result = client
+            .call_tool("my_tool", serde_json::json!({}), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(result["status"], "done");
+    }
+
+    #[tokio::test]
+    async fn test_call_tool_server_error_fallback() {
+        let mock_server = MockServer::start().await;
+
+        // All calls fail
+        Mock::given(method("POST"))
+            .and(path("/v1/mcp/tools/bad_tool/invoke"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
+            .mount(&mock_server)
+            .await;
+
+        let client = ToolProxyClient::new(&mock_server.uri(), None);
+        let ctx = make_tool_context();
+        let result = client
+            .call_tool("bad_tool", serde_json::json!({}), &ctx)
+            .await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("500"));
+    }
+
+    #[tokio::test]
+    async fn test_get_token_no_oidc() {
+        let client = ToolProxyClient::new("http://localhost:8000", None);
+        let result = client.get_token().await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("OIDC not configured"));
+    }
+
+    #[tokio::test]
+    async fn test_get_token_success_and_cache() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "fresh-token",
+                "expires_in": 3600,
+                "token_type": "Bearer"
+            })))
+            .expect(1) // Should only be called once due to caching
+            .mount(&mock_server)
+            .await;
+
+        let oidc = OidcConfig {
+            token_url: format!("{}/token", mock_server.uri()),
+            client_id: "gw".to_string(),
+            client_secret: "s3cret".to_string(),
+        };
+
+        let client = ToolProxyClient::new(&mock_server.uri(), Some(oidc));
+
+        // First call - fetches token
+        let token1 = client.get_token().await.unwrap();
+        assert_eq!(token1, "fresh-token");
+
+        // Second call - should use cache (mock expects exactly 1 call)
+        let token2 = client.get_token().await.unwrap();
+        assert_eq!(token2, "fresh-token");
+    }
+
+    #[tokio::test]
+    async fn test_get_token_error_response() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("bad credentials"))
+            .mount(&mock_server)
+            .await;
+
+        let oidc = OidcConfig {
+            token_url: format!("{}/token", mock_server.uri()),
+            client_id: "gw".to_string(),
+            client_secret: "wrong".to_string(),
+        };
+
+        let client = ToolProxyClient::new(&mock_server.uri(), Some(oidc));
+        let result = client.get_token().await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("401"));
+    }
+}

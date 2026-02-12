@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -6,6 +6,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
+
+vi.mock('../contexts/EnvironmentContext', () => ({
+  useEnvironment: vi.fn(() => ({
+    activeEnvironment: 'dev',
+    activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+    environments: [
+      { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
+      { name: 'staging', label: 'Staging', mode: 'full', color: 'amber' },
+      { name: 'prod', label: 'Production', mode: 'read-only', color: 'red' },
+    ],
+    switchEnvironment: vi.fn(),
+  })),
+}));
 
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
@@ -118,7 +131,27 @@ vi.mock('@stoa/shared/components/Collapsible', () => ({
   Collapsible: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+const mockUseEnvironmentMode = vi.fn(() => ({
+  canCreate: true,
+  canEdit: true,
+  canDelete: true,
+  canDeploy: true,
+  isReadOnly: false,
+}));
+
+vi.mock('../hooks/useEnvironmentMode', () => ({
+  useEnvironmentMode: () => mockUseEnvironmentMode(),
+}));
+
 import { APIs } from './APIs';
+
+const READ_ONLY_MODE = {
+  canCreate: false,
+  canEdit: false,
+  canDelete: false,
+  canDeploy: false,
+  isReadOnly: true,
+};
 
 function renderAPIs() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -132,6 +165,16 @@ function renderAPIs() {
 }
 
 describe('APIs', () => {
+  afterEach(() => {
+    mockUseEnvironmentMode.mockReturnValue({
+      canCreate: true,
+      canEdit: true,
+      canDelete: true,
+      canDeploy: true,
+      isReadOnly: false,
+    });
+  });
+
   it('renders the page heading', async () => {
     renderAPIs();
     expect(await screen.findByText('Manage API definitions and deployments')).toBeInTheDocument();
@@ -176,5 +219,34 @@ describe('APIs', () => {
     renderAPIs();
     expect(await screen.findByText('https://payments.example.com')).toBeInTheDocument();
     expect(screen.getByText('https://users.example.com')).toBeInTheDocument();
+  });
+
+  it('hides Create API button in read-only mode', async () => {
+    mockUseEnvironmentMode.mockReturnValue(READ_ONLY_MODE);
+    renderAPIs();
+    await screen.findByText('Payment API');
+    expect(screen.queryByText('Create API')).not.toBeInTheDocument();
+  });
+
+  it('shows read-only banner in read-only mode', async () => {
+    mockUseEnvironmentMode.mockReturnValue(READ_ONLY_MODE);
+    renderAPIs();
+    expect(await screen.findByText(/Production environment — read-only/)).toBeInTheDocument();
+  });
+
+  it('hides Edit and Delete buttons in read-only mode', async () => {
+    mockUseEnvironmentMode.mockReturnValue(READ_ONLY_MODE);
+    renderAPIs();
+    await screen.findByText('Payment API');
+    expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Delete')).not.toBeInTheDocument();
+  });
+
+  it('hides Deploy buttons in read-only mode', async () => {
+    mockUseEnvironmentMode.mockReturnValue(READ_ONLY_MODE);
+    renderAPIs();
+    await screen.findByText('Payment API');
+    expect(screen.queryByText('Deploy DEV')).not.toBeInTheDocument();
+    expect(screen.queryByText('Deploy STG')).not.toBeInTheDocument();
   });
 });

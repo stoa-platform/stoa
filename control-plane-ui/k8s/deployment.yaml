@@ -69,6 +69,8 @@ spec:
               value: "http://opensearch-dashboards.stoa-system.svc:5601"
             - name: GRAFANA_BACKEND_URL
               value: "http://grafana.stoa-system.svc:3000"
+            - name: PROMETHEUS_BACKEND_URL
+              value: "http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090"
           securityContext:
             privileged: false
             runAsNonRoot: true

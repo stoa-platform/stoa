@@ -77,13 +77,13 @@ jobs:
       platforms: linux/amd64
       use-monorepo-context: true
       build-args: |
-        VITE_BASE_DOMAIN=${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
-        VITE_ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}
-        VITE_KEYCLOAK_URL=https://auth.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
+        VITE_BASE_DOMAIN=gostoa.dev
+        VITE_ENVIRONMENT=${{ github.event.inputs.environment || 'production' }}
+        VITE_KEYCLOAK_URL=https://${{ (github.event.inputs.environment == 'staging' && 'staging-auth') || 'auth' }}.gostoa.dev
         VITE_KEYCLOAK_REALM=stoa
         VITE_KEYCLOAK_CLIENT_ID=control-plane-ui
-        VITE_MCP_GATEWAY_URL=https://mcp.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
-        VITE_API_URL=https://api.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
+        VITE_MCP_GATEWAY_URL=https://${{ (github.event.inputs.environment == 'staging' && 'staging-mcp') || 'mcp' }}.gostoa.dev
+        VITE_API_URL=https://${{ (github.event.inputs.environment == 'staging' && 'staging-api') || 'api' }}.gostoa.dev
     permissions:
       contents: read
       id-token: write
@@ -124,7 +124,7 @@ jobs:
       component: control-plane-ui
       image-tag: ${{ needs.docker.outputs.image-tag }}
       environment: ${{ github.event.inputs.environment || 'dev' }}
-      environment-url: https://console.${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
+      environment-url: https://${{ (github.event.inputs.environment == 'staging' && 'staging-console') || 'console' }}.gostoa.dev
     permissions:
       contents: read
     secrets: inherit

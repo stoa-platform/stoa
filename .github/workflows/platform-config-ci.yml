@@ -40,7 +40,8 @@ permissions:
   contents: read
 
 env:
-  BASE_DOMAIN: ${{ (github.event.inputs.environment == 'staging' && 'staging.gostoa.dev') || 'gostoa.dev' }}
+  BASE_DOMAIN: gostoa.dev
+  ENV_PREFIX: ${{ (github.event.inputs.environment == 'staging' && 'staging-') || '' }}
   GITLAB_PROJECT: cab6961310/stoa-gitops
 
 jobs:
@@ -296,7 +297,7 @@ jobs:
 
           # Check API is accessible via Gateway
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://apis.${BASE_DOMAIN}/gateway/Control-Plane-API/2.0/" \
+            "https://${ENV_PREFIX}apis.${BASE_DOMAIN}/gateway/Control-Plane-API/2.0/" \
             -H "Accept: application/json")
 
           echo "Gateway API response: HTTP $HTTP_CODE"
@@ -318,10 +319,10 @@ jobs:
           echo "=== Verifying backend health ==="
 
           # Direct API health
-          curl -s "https://api.${BASE_DOMAIN}/health/ready" | jq .
+          curl -s "https://${ENV_PREFIX}api.${BASE_DOMAIN}/health/ready" | jq .
 
           # MCP Gateway health (internal only, should 403)
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://mcp.${BASE_DOMAIN}/health")
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://${ENV_PREFIX}mcp.${BASE_DOMAIN}/health")
           echo "MCP Gateway health (should be 403): $HTTP_CODE"
 
   # ============================================

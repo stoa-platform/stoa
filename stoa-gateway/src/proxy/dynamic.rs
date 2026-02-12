@@ -11,7 +11,7 @@ use axum::{
 };
 use std::net::IpAddr;
 use std::time::Duration;
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, warn};
 
 use crate::state::AppState;
 
@@ -40,7 +40,6 @@ fn get_proxy_client() -> &'static reqwest::Client {
 /// 2. If found + activated: proxy to backend_url
 /// 3. If found but not activated: 503
 /// 4. If not found: 404
-#[instrument(name = "proxy.dynamic", skip(state, request), fields(otel.kind = "client"))]
 pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>) -> Response {
     let path = request.uri().path().to_string();
     let method = request.method().clone();
@@ -58,8 +57,8 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     }
 
     // Check method allowed (empty methods list = all methods allowed)
-    let method_str = method.to_string();
-    if !route.methods.is_empty() && !route.methods.contains(&method_str) {
+    // Use as_str() to avoid String allocation from to_string()
+    if !route.methods.is_empty() && !route.methods.iter().any(|m| m.as_str() == method.as_str()) {
         return (
             StatusCode::METHOD_NOT_ALLOWED,
             "Method not allowed for this API",
@@ -116,8 +115,11 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         "Dynamic proxy: forwarding request"
     );
 
+    // Decompose request to avoid headers.clone() in forward_request
+    let (parts, body) = request.into_parts();
+
     let upstream_start = std::time::Instant::now();
-    let response = forward_request(request, &method, &target_url).await;
+    let response = forward_request(parts.headers, body, &method, &target_url).await;
     let upstream_duration = upstream_start.elapsed().as_secs_f64();
 
     // Record upstream latency metric
@@ -137,10 +139,17 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     response
 }
 
-/// Forward request to the backend, reusing the webMethods proxy pattern.
-async fn forward_request(request: Request<Body>, method: &Method, target_url: &str) -> Response {
+/// Forward request to the backend.
+///
+/// Takes pre-decomposed headers and body (via `request.into_parts()`) to avoid
+/// cloning the entire HeaderMap — significant savings under concurrent load.
+async fn forward_request(
+    headers: HeaderMap<HeaderValue>,
+    body: Body,
+    method: &Method,
+    target_url: &str,
+) -> Response {
     let client = get_proxy_client();
-    let headers = request.headers().clone();
 
     // Build the proxied request
     let mut req_builder = match *method {
@@ -164,13 +173,11 @@ async fn forward_request(request: Request<Body>, method: &Method, target_url: &s
     req_builder = copy_headers(req_builder, &headers);
 
     // Inject W3C traceparent header for distributed tracing propagation.
-    // This allows downstream services (Control-Plane API, backends) to
-    // correlate their spans with the gateway's trace.
     req_builder = inject_traceparent(req_builder);
 
     // Forward body as a stream for methods that support it (zero-copy)
     if matches!(*method, Method::POST | Method::PUT | Method::PATCH) {
-        let body_stream = request.into_body().into_data_stream();
+        let body_stream = body.into_data_stream();
         req_builder = req_builder.body(reqwest::Body::wrap_stream(body_stream));
     }
 

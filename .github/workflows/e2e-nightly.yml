@@ -1,0 +1,35 @@
+# =============================================================================
+# E2E Nightly Tests — Tier 2 full verification
+# =============================================================================
+# Runs the full @smoke Playwright suite with persona auth against production.
+# Scheduled nightly at 6h UTC, or on-demand via workflow_dispatch.
+#
+# Requires GitHub Secrets for 7 personas (see scripts/dev/setup-e2e-secrets.sh).
+# For post-deploy health checks (Tier 1), see reusable-health-smoke.yml.
+# =============================================================================
+
+name: E2E Nightly Tests
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      test-grep:
+        description: 'Playwright grep pattern'
+        type: choice
+        options:
+          - '@smoke'
+          - '@critical'
+          - '@smoke|@critical'
+        default: '@smoke'
+
+jobs:
+  e2e:
+    uses: ./.github/workflows/reusable-smoke-test.yml
+    with:
+      component: nightly
+      test-grep: ${{ inputs.test-grep || '@smoke' }}
+    permissions:
+      contents: read
+    secrets: inherit

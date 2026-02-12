@@ -47,7 +47,7 @@ class Plan(Base):
 
     # Status
     status = Column(
-        SQLEnum(PlanStatus, values_callable=lambda x: [e.value for e in x]),
+        SQLEnum(PlanStatus, values_callable=lambda x: [e.value for e in x], name="plan_status_enum"),
         nullable=False,
         default=PlanStatus.ACTIVE,
     )

@@ -39,6 +39,10 @@ class KafkaService:
 
     async def connect(self):
         """Initialize Kafka producer with retry logic"""
+        if not settings.KAFKA_ENABLED:
+            logger.info("Kafka disabled — skipping producer initialization")
+            return
+
         import time
         max_retries = 5
         retry_delay = 2
@@ -116,6 +120,10 @@ class KafkaService:
         Returns:
             Event ID
         """
+        if not settings.KAFKA_ENABLED:
+            logger.debug(f"Kafka disabled — skipping {event_type} event to {topic}")
+            return str(uuid.uuid4())
+
         if not self._producer:
             raise RuntimeError("Kafka producer not initialized")
 

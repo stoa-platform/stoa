@@ -228,6 +228,12 @@ pub struct Config {
     #[serde(default = "default_quota_daily_limit")]
     pub quota_default_daily_limit: u32,
 
+    // === Access Log ===
+    /// Enable structured access log output (JSON via tracing, for Fluent Bit)
+    /// Env: STOA_ACCESS_LOG_ENABLED
+    #[serde(default = "default_access_log_enabled")]
+    pub access_log_enabled: bool,
+
     // === Per-Upstream Circuit Breaker (CAB-362) ===
     /// Failure threshold before opening circuit (default: 5)
     /// Env: STOA_CB_FAILURE_THRESHOLD
@@ -446,6 +452,10 @@ fn default_quota_daily_limit() -> u32 {
     10_000
 }
 
+fn default_access_log_enabled() -> bool {
+    true // Enabled by default — structured access logs for observability
+}
+
 fn default_cb_failure_threshold() -> u32 {
     5
 }
@@ -507,6 +517,7 @@ impl Default for Config {
             quota_sync_interval_secs: default_quota_sync_interval(),
             quota_default_rate_per_minute: default_quota_rate_per_minute(),
             quota_default_daily_limit: default_quota_daily_limit(),
+            access_log_enabled: default_access_log_enabled(),
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),

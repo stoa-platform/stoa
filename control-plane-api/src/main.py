@@ -30,6 +30,7 @@ from .routers import (
     admin_prospects,
     apis,
     applications,  # noqa: F401
+    audit,
     business,
     catalog_admin,
     certificates,
@@ -416,8 +417,7 @@ if settings.LOG_HTTP_MIDDLEWARE_ENABLED:
 # Must be added before app startup, connects to storage in lifespan
 add_error_snapshot_middleware(app)
 
-# Audit middleware (CAB-307) - logs all API requests to OpenSearch
-# Note: AuditMiddleware is added dynamically via setup_opensearch()
+# Audit middleware (CAB-307) - AuditMiddleware added dynamically via setup_opensearch()
 
 # Routers
 app.include_router(tenants.router)
@@ -505,6 +505,9 @@ app.include_router(plans.router)
 
 # Quota Enforcement (CAB-1121 Phase 4)
 app.include_router(quotas.router)
+
+# Audit Trail (CAB-307)
+app.include_router(audit.router)
 
 # Public — Portal email capture (no auth)
 app.include_router(access_requests.router)

@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from ..auth import User, get_current_user, require_tenant_access
+from ..opensearch.opensearch_integration import OpenSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -192,12 +193,24 @@ async def list_audit_entries(
     Returns paginated audit log entries with optional filters.
     Only entries for the specified tenant are returned.
     """
+    # Try OpenSearch first (real audit data from AuditMiddleware)
+    service = OpenSearchService.get_instance()
+    if service.client:
+        try:
+            result = await _query_opensearch_audit(
+                service.client, tenant_id, page, page_size,
+                action=action, status=status, start_date=start_date, end_date=end_date,
+            )
+            if result is not None:
+                return result
+        except Exception as e:
+            logger.warning(f"OpenSearch query failed, falling back to demo data: {e}")
+
+    # Fallback to demo data
     _init_demo_data()
 
-    # Filter entries by tenant
     entries = [e for e in _demo_audit_entries if e["tenant_id"] == tenant_id]
 
-    # Apply filters
     if action:
         entries = [e for e in entries if e["action"] == action]
     if status:
@@ -208,16 +221,16 @@ async def list_audit_entries(
         entries = [e for e in entries if datetime.fromisoformat(e["timestamp"]) <= end_date]
 
     total = len(entries)
-    start = (page - 1) * page_size
-    end = start + page_size
-    page_entries = entries[start:end]
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    page_entries = entries[start_idx:end_idx]
 
     return AuditListResponse(
         entries=[AuditEntry(**e) for e in page_entries],
         total=total,
         page=page,
         page_size=page_size,
-        has_more=end < total,
+        has_more=end_idx < total,
     )
 
 
@@ -343,22 +356,32 @@ async def get_security_events(
     - Policy violations
     - Cross-tenant access attempts
     """
+    # Try OpenSearch first (real security events)
+    service = OpenSearchService.get_instance()
+    if service.client:
+        try:
+            result = await _query_opensearch_security(
+                service.client, tenant_id, limit,
+                severity=severity, event_type=event_type,
+            )
+            if result is not None:
+                return result
+        except Exception as e:
+            logger.warning(f"OpenSearch security query failed, falling back to demo: {e}")
+
+    # Fallback to demo data
     _init_demo_data()
 
-    # Filter by tenant
     events = [e for e in _demo_security_events if e["tenant_id"] == tenant_id]
 
-    # Apply filters
     if severity:
         events = [e for e in events if e["severity"] == severity]
     if event_type:
         events = [e for e in events if e["event_type"] == event_type]
 
-    # Limit results
     events = events[:limit]
 
-    # Calculate summary
-    summary = {}
+    summary: dict[str, int] = {}
     for event in events:
         event_type_key = event["event_type"]
         summary[event_type_key] = summary.get(event_type_key, 0) + 1
@@ -473,3 +496,129 @@ async def get_global_audit_summary(
         "security_by_severity": security_by_severity,
         "generated_at": datetime.now(UTC).isoformat(),
     }
+
+
+# =============================================================================
+# OpenSearch Query Helpers
+# =============================================================================
+
+
+async def _query_opensearch_audit(
+    client: Any,
+    tenant_id: str,
+    page: int,
+    page_size: int,
+    *,
+    action: str | None = None,
+    status: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> AuditListResponse | None:
+    """Query audit-* index in OpenSearch. Returns None if no index exists."""
+    must = [{"term": {"actor.tenant_id": tenant_id}}]
+    if action:
+        must.append({"match": {"action": action}})
+    if status:
+        must.append({"term": {"outcome": status}})
+    if start_date or end_date:
+        ts_range: dict[str, str] = {}
+        if start_date:
+            ts_range["gte"] = start_date.isoformat()
+        if end_date:
+            ts_range["lte"] = end_date.isoformat()
+        must.append({"range": {"@timestamp": ts_range}})
+
+    body = {
+        "query": {"bool": {"must": must}},
+        "sort": [{"@timestamp": "desc"}],
+        "from": (page - 1) * page_size,
+        "size": page_size,
+    }
+
+    resp = await client.search(index="audit-*", body=body)
+    hits = resp.get("hits", {})
+    total = hits.get("total", {}).get("value", 0)
+    if total == 0 and page == 1:
+        return None  # No data — fall back to demo
+
+    entries = []
+    for hit in hits.get("hits", []):
+        src = hit["_source"]
+        entries.append(AuditEntry(
+            id=src.get("event_id", hit["_id"]),
+            timestamp=src.get("@timestamp", datetime.now(UTC).isoformat()),
+            tenant_id=src.get("actor", {}).get("tenant_id", tenant_id),
+            user_id=src.get("actor", {}).get("id"),
+            user_email=src.get("actor", {}).get("email"),
+            action=src.get("action", "unknown"),
+            resource_type=src.get("resource", {}).get("type", "unknown"),
+            resource_id=src.get("resource", {}).get("id"),
+            status=src.get("outcome", "unknown"),
+            client_ip=src.get("actor", {}).get("ip_address"),
+            user_agent=src.get("actor", {}).get("user_agent"),
+            details=src.get("details"),
+            request_id=src.get("correlation_id"),
+        ))
+
+    return AuditListResponse(
+        entries=entries,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_more=(page * page_size) < total,
+    )
+
+
+async def _query_opensearch_security(
+    client: Any,
+    tenant_id: str,
+    limit: int,
+    *,
+    severity: str | None = None,
+    event_type: str | None = None,
+) -> SecurityEventsResponse | None:
+    """Query audit-* for security events (severity >= warning). Returns None if empty."""
+    must: list[dict[str, Any]] = [
+        {"term": {"actor.tenant_id": tenant_id}},
+        {"terms": {"severity": ["warning", "error", "critical"]}},
+    ]
+    if severity:
+        must[-1] = {"term": {"severity": severity}}
+    if event_type:
+        must.append({"match": {"event_type": event_type}})
+
+    body = {
+        "query": {"bool": {"must": must}},
+        "sort": [{"@timestamp": "desc"}],
+        "size": limit,
+    }
+
+    resp = await client.search(index="audit-*", body=body)
+    hits = resp.get("hits", {})
+    total = hits.get("total", {}).get("value", 0)
+    if total == 0:
+        return None
+
+    events = []
+    summary: dict[str, int] = {}
+    for hit in hits.get("hits", []):
+        src = hit["_source"]
+        et = src.get("event_type", "unknown")
+        summary[et] = summary.get(et, 0) + 1
+        events.append(SecurityEvent(
+            id=src.get("event_id", hit["_id"]),
+            timestamp=src.get("@timestamp", datetime.now(UTC).isoformat()),
+            tenant_id=src.get("actor", {}).get("tenant_id", tenant_id),
+            event_type=et,
+            severity=src.get("severity", "info"),
+            user_id=src.get("actor", {}).get("id"),
+            client_ip=src.get("actor", {}).get("ip_address"),
+            description=src.get("action", ""),
+            details=src.get("details"),
+        ))
+
+    return SecurityEventsResponse(
+        events=events,
+        total=total,
+        summary=summary,
+    )

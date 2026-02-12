@@ -2,6 +2,7 @@
 //!
 //! Public modules and router builder for integration testing and the binary entry point.
 
+pub mod access_log;
 pub mod auth;
 pub mod cache;
 pub mod config;
@@ -53,6 +54,8 @@ use state::AppState;
 /// - Shadow: Passive traffic capture and UAC generation
 pub fn build_router(state: AppState) -> Router {
     use mode::GatewayMode;
+
+    let access_log_enabled = state.config.access_log_enabled;
 
     // Admin API (shared across all modes)
     let admin_router = Router::new()
@@ -302,9 +305,17 @@ pub fn build_router(state: AppState) -> Router {
         }
     };
 
+    // Access log: structured JSON for every request (shipped to OpenSearch via Fluent Bit).
+    // Runs after auth so tenant_id/consumer_id are available from extensions.
+    let with_access_log = if access_log_enabled {
+        mode_router.layer(axum::middleware::from_fn(access_log::access_log_middleware))
+    } else {
+        mode_router
+    };
+
     // Security headers: outermost layer, applied AFTER all routes are registered.
     // Adds X-Content-Type-Options, X-Frame-Options, etc. to every response.
-    mode_router.layer(axum::middleware::from_fn(
+    with_access_log.layer(axum::middleware::from_fn(
         security_headers::security_headers_middleware,
     ))
 }

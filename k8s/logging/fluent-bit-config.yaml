@@ -1,0 +1,66 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: logging
+  labels:
+    app: fluent-bit
+    app.kubernetes.io/part-of: stoa-platform
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         5
+        Log_Level     info
+        Daemon        off
+        Parsers_File  parsers.conf
+        HTTP_Server   On
+        HTTP_Listen   0.0.0.0
+        HTTP_Port     2020
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*stoa-gateway*.log
+        Parser            cri
+        Tag               gateway.*
+        Refresh_Interval  5
+        Mem_Buf_Limit     5MB
+        Skip_Long_Lines   On
+
+    [FILTER]
+        Name    grep
+        Match   gateway.*
+        Regex   log log_type.*access_log
+
+    [FILTER]
+        Name              kubernetes
+        Match             gateway.*
+        Kube_Tag_Prefix   gateway.var.log.containers.
+        Merge_Log         On
+        Keep_Log          Off
+        K8S-Logging.Parser  On
+
+    [OUTPUT]
+        Name              opensearch
+        Match             gateway.*
+        Host              opensearch-svc.opensearch.svc.cluster.local
+        Port              9200
+        HTTP_User         admin
+        HTTP_Passwd       ${OPENSEARCH_PASSWORD}
+        Index             stoa-logs
+        Type              _doc
+        tls               On
+        tls.verify        Off
+        Suppress_Type_Name  On
+        Logstash_Format   On
+        Logstash_Prefix   stoa-logs
+        Pipeline          stoa-rgpd-redaction
+        Retry_Limit       3
+
+  parsers.conf: |
+    [PARSER]
+        Name        cri
+        Format      regex
+        Regex       ^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>[^ ]*) (?<log>.*)$
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L%z

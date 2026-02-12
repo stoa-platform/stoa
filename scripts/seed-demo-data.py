@@ -27,7 +27,7 @@ Environment Variables:
     CONTROL_PLANE_URL   API base URL          (default: https://api.gostoa.dev)
     KEYCLOAK_URL        Keycloak base URL     (default: https://auth.gostoa.dev)
     KEYCLOAK_REALM      Keycloak realm        (default: stoa)
-    ANORAK_USER         Admin username         (default: anorak@gostoa.dev)
+    ANORAK_USER         Admin username         (default: anorak)
     ANORAK_PASSWORD     Admin password         (required)
     SEED_TENANT         Target tenant          (default: high-five)
 """
@@ -51,7 +51,7 @@ except ImportError:
 API_URL = os.getenv("CONTROL_PLANE_URL", "https://api.gostoa.dev")
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.gostoa.dev")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "stoa")
-SEED_USER = os.getenv("ANORAK_USER", "anorak@gostoa.dev")
+SEED_USER = os.getenv("ANORAK_USER", "anorak")
 SEED_PASSWORD = os.getenv("ANORAK_PASSWORD", "")
 DEMO_TENANT = os.getenv("SEED_TENANT", "high-five")
 

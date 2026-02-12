@@ -55,10 +55,49 @@ async function keycloakLogin(
     await page.locator('#kc-login').click();
   }
 
-  // Wait for redirect back to application
+  // Handle intermediate Keycloak pages (consent, terms, OTP) before redirect.
+  // After login, Keycloak may show additional forms (e.g. OAuth grant/consent
+  // for the control-plane-ui client). We loop until we leave Keycloak.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const redirected = await page
+      .waitForURL(
+        url => !url.hostname.includes('auth.') && !url.pathname.includes('/auth/'),
+        { timeout: 10000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+
+    if (redirected) break;
+
+    // Still on Keycloak — check for consent/grant form and approve it
+    const consentButton = page.locator(
+      '#kc-login, input[name="accept"], button:has-text("Yes"), button:has-text("Grant")',
+    );
+    if (await consentButton.first().isVisible({ timeout: 2000 }).catch(() => false)) {
+      console.log('  Approving Keycloak consent/grant form...');
+      await consentButton.first().click();
+      continue;
+    }
+
+    // Check for "Update Password" required action
+    const newPasswordField = page.locator('#password-new');
+    if (await newPasswordField.isVisible({ timeout: 1000 }).catch(() => false)) {
+      console.log('  Handling "Update Password" required action...');
+      await newPasswordField.fill(password);
+      await page.locator('#password-confirm').fill(password);
+      await page.locator('input[type="submit"], button[type="submit"]').click();
+      continue;
+    }
+
+    // Unknown intermediate page — log URL for debugging and break
+    console.warn(`  Unknown Keycloak page after login: ${page.url()}`);
+    break;
+  }
+
+  // Final wait for redirect (covers the case where consent/action was just approved)
   await page.waitForURL(
     url => !url.hostname.includes('auth.') && !url.pathname.includes('/auth/'),
-    { timeout: 30000 },
+    { timeout: 15000 },
   );
 
   // Wait for OIDC callback — tokens stored in sessionStorage

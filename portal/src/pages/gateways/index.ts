@@ -1,0 +1,1 @@
+export { GatewaysPage } from './GatewaysPage';

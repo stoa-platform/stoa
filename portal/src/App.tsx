@@ -66,7 +66,10 @@ function LoginScreen() {
   const { login } = useAuth();
   const [activeTab, setActiveTab] = useState<'request' | 'signin'>('request');
   const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [company, setCompany] = useState('');
+  const [role, setRole] = useState('');
   const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'success' | 'error'>(
     'idle'
   );
@@ -78,7 +81,14 @@ function LoginScreen() {
       const res = await fetch(`${config.api.baseUrl}/v1/access-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, company: company || undefined, source: 'portal' }),
+        body: JSON.stringify({
+          email,
+          first_name: firstName || undefined,
+          last_name: lastName || undefined,
+          company: company || undefined,
+          role: role || undefined,
+          source: 'portal',
+        }),
       });
       if (res.ok) {
         setSubmitState('success');
@@ -169,7 +179,43 @@ function LoginScreen() {
                   </p>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label
+                        htmlFor="firstName"
+                        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                      >
+                        First name *
+                      </label>
+                      <input
+                        id="firstName"
+                        type="text"
+                        required
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        placeholder="Jane"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="lastName"
+                        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                      >
+                        Last name *
+                      </label>
+                      <input
+                        id="lastName"
+                        type="text"
+                        required
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        placeholder="Doe"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                      />
+                    </div>
+                  </div>
                   <div>
                     <label
                       htmlFor="email"
@@ -199,9 +245,32 @@ function LoginScreen() {
                       type="text"
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
-                      placeholder="Acme Corp"
+                      placeholder="Acme Corp (or Freelance)"
                       className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                     />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="role"
+                      className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                    >
+                      Role
+                    </label>
+                    <select
+                      id="role"
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                    >
+                      <option value="">Select your role...</option>
+                      <option value="developer">Developer</option>
+                      <option value="architect">Architect</option>
+                      <option value="devops">DevOps / SRE</option>
+                      <option value="tech-lead">Tech Lead / CTO</option>
+                      <option value="freelance">Freelance</option>
+                      <option value="student">Student</option>
+                      <option value="other">Other</option>
+                    </select>
                   </div>
                   <button
                     type="submit"

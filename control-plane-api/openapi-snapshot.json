@@ -325,7 +325,7 @@
         "type": "object"
       },
       "AccessRequestCreate": {
-        "description": "Public form submission: email + optional company.",
+        "description": "Public form submission: profile + optional company/role.",
         "properties": {
           "company": {
             "anyOf": [
@@ -342,6 +342,39 @@
             "format": "email",
             "title": "Email",
             "type": "string"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
           },
           "source": {
             "anyOf": [

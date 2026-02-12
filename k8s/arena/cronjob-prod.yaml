@@ -44,7 +44,7 @@ spec:
                 - name: GATEWAYS
                   value: |
                     [
-                      {"name":"stoa","health":"http://stoa-gateway.stoa-system.svc:80/health","proxy":"http://stoa-gateway.stoa-system.svc:80/v1/apis","proxy_headers":{"X-Tenant-ID":"oasis"}},
+                      {"name":"stoa","health":"http://51.83.45.13:8080/health","proxy":"http://51.83.45.13:8080/httpbin/get"},
                       {"name":"kong","health":"http://51.83.45.13:8001/status","proxy":"http://51.83.45.13:8000/httpbin/get"},
                       {"name":"gravitee","health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://54.36.209.237:8082/httpbin/get","proxy_headers":{"Authorization":"Basic YWRtaW46YWRtaW4="}}
                     ]

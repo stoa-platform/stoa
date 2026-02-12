@@ -44,9 +44,8 @@ except ImportError:
 DEFAULT_GATEWAYS = json.dumps([
     {
         "name": "stoa",
-        "health": "http://stoa-gateway.stoa-system.svc:80/health",
-        "proxy": "http://stoa-gateway.stoa-system.svc:80/v1/apis",
-        "proxy_headers": {"X-Tenant-ID": "oasis"},
+        "health": "http://51.83.45.13:8080/health",
+        "proxy": "http://51.83.45.13:8080/httpbin/get",
     },
     {
         "name": "kong",
@@ -76,22 +75,24 @@ class MetricStore:
 
     def __init__(self):
         self.lines = []
+        self._declared = set()
+
+    def _declare(self, name, metric_type, help_text=""):
+        """Emit HELP/TYPE lines only once per metric name."""
+        if name not in self._declared:
+            self._declared.add(name)
+            if help_text:
+                self.lines.append(f"# HELP {name} {help_text}")
+            self.lines.append(f"# TYPE {name} {metric_type}")
 
     def histogram(self, name, labels, values, help_text=""):
         """Add histogram metric from a list of observed values."""
         if not values:
             return
+        self._declare(name, "histogram", help_text)
         label_str = ",".join(f'{k}="{v}"' for k, v in labels.items())
         buckets = [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
-        if help_text:
-            self.lines.append(f"# HELP {name} {help_text}")
-            self.lines.append(f"# TYPE {name} histogram")
-        cumulative = 0
         for b in buckets:
-            cumulative += sum(1 for v in values if v <= b) - sum(
-                1 for v in values if v <= (buckets[buckets.index(b) - 1] if buckets.index(b) > 0 else 0)
-            )
-            # Simpler: just count all values <= b
             count_le = sum(1 for v in values if v <= b)
             self.lines.append(f'{name}_bucket{{{label_str},le="{b}"}} {count_le}')
         self.lines.append(f'{name}_bucket{{{label_str},le="+Inf"}} {len(values)}')
@@ -99,17 +100,13 @@ class MetricStore:
         self.lines.append(f"{name}_count{{{label_str}}} {len(values)}")
 
     def counter(self, name, labels, value, help_text=""):
+        self._declare(name, "counter", help_text)
         label_str = ",".join(f'{k}="{v}"' for k, v in labels.items())
-        if help_text:
-            self.lines.append(f"# HELP {name} {help_text}")
-            self.lines.append(f"# TYPE {name} counter")
         self.lines.append(f"{name}{{{label_str}}} {value}")
 
     def gauge(self, name, labels, value, help_text=""):
+        self._declare(name, "gauge", help_text)
         label_str = ",".join(f'{k}="{v}"' for k, v in labels.items())
-        if help_text:
-            self.lines.append(f"# HELP {name} {help_text}")
-            self.lines.append(f"# TYPE {name} gauge")
         self.lines.append(f"{name}{{{label_str}}} {value:.2f}")
 
     def push(self, url, job="gateway_arena"):

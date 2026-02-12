@@ -20,7 +20,10 @@ class AccessRequest(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), nullable=False)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
     company = Column(String(255), nullable=True)
+    role = Column(String(50), nullable=True)
     source = Column(String(100), nullable=True)
     status = Column(String(20), nullable=False, default="pending")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

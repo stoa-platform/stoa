@@ -1,3 +1,8 @@
+---
+description: Gateway Arena benchmark lab — adding gateways, reading results, troubleshooting
+globs: "k8s/arena/**,scripts/traffic/**,docker/observability/grafana/**"
+---
+
 # Gateway Arena — Benchmark Lab
 
 ## Overview
@@ -25,6 +30,29 @@ CronJob runs every 30 min on OVH K8s, pushes metrics to Pushgateway, visualized 
 
 Score formula: `0.40 * Latency + 0.30 * Availability + 0.20 * ErrorRate + 0.10 * Consistency`
 
+## Fair Comparison — All Gateways on VPS
+
+Arena uses dedicated OVH VPS instances for each gateway to ensure fair comparison
+(same network conditions, same backend, no K8s/LB/TLS overhead):
+
+| Gateway | VPS IP | Health | Proxy | Backend |
+|---------|--------|--------|-------|---------|
+| STOA | `51.83.45.13:8080` | `/health` | `/httpbin/get` | httpbin.org (colocated on Kong VPS) |
+| Kong | `51.83.45.13:8000` | `:8001/status` | `/httpbin/get` | httpbin.org |
+| Gravitee | `54.36.209.237:8082` | `:8083/management/...` | `/httpbin/get` | httpbin.org |
+
+### STOA VPS Setup
+
+```bash
+# Deploy (one-time)
+scp -i ~/.ssh/id_ed25519_stoa -r deploy/vps/stoa/ debian@51.83.45.13:~/stoa/
+ssh -i ~/.ssh/id_ed25519_stoa debian@51.83.45.13
+cd ~/stoa && docker compose up -d && ./setup.sh
+```
+
+Config: `deploy/vps/stoa/docker-compose.yml` (standalone mode, all optional features OFF).
+Route registration: `deploy/vps/stoa/setup.sh` (POST `/admin/apis` with httpbin route).
+
 ## Key Files
 
 | File | Purpose |
@@ -33,6 +61,8 @@ Score formula: `0.40 * Latency + 0.30 * Availability + 0.20 * ErrorRate + 0.10 *
 | `k8s/arena/cronjob-prod.yaml` | CronJob manifest (every 30 min) |
 | `k8s/arena/pushgateway.yaml` | Pushgateway deployment + service |
 | `docker/observability/grafana/dashboards/gateway-arena.json` | Grafana leaderboard dashboard |
+| `deploy/vps/stoa/docker-compose.yml` | STOA VPS deployment (standalone) |
+| `deploy/vps/stoa/setup.sh` | Register httpbin proxy route on STOA VPS |
 
 ## Troubleshooting
 

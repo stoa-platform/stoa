@@ -29,6 +29,7 @@ title: <Title with Primary Keyword (max 65 chars)>
 description: <Meta description 120-160 chars with primary keyword>
 authors: [stoa-team]
 tags: [<2-5 from tags.yml>]
+unlisted: true          # ← ADD if post date > today, REMOVE when date arrives
 keywords:
   - <primary keyword>
   - <3-5 secondary keywords>
@@ -42,6 +43,7 @@ keywords:
 - `title` must contain the primary keyword, ideally near the start
 - `description` = the meta description Google shows; 120-160 chars, include primary keyword
 - `tags` = only tags that exist in `blog/tags.yml` (build fails otherwise)
+- `unlisted` = **MANDATORY** for future-dated posts (date > today). Omit for posts publishing today
 - `keywords` = for SEO research tracking, not rendered but used by AI Factory to plan content
 - `<!-- last verified: YYYY-MM -->` = required on any article with comparative claims
 
@@ -55,11 +57,12 @@ Docusaurus has no native scheduling. STOA uses a prebuild script + daily CI cron
 3. When the date arrives, the daily CI cron rebuilds and removes `unlisted: true`
 4. Posts with manual `draft: true` are never touched by the script
 
-**Rules for AI Factory**:
-- When creating a blog post with a future date, do NOT add `unlisted: true` manually — the prebuild script handles it
+**Rules for AI Factory (MANDATORY when writing blog posts)**:
+- When creating a blog post with a future date, ALWAYS add `unlisted: true` in frontmatter — Claude handles this, the prebuild script is only a safety net
+- When the post date is today or past, do NOT add `unlisted: true`
 - When creating a post that should stay hidden regardless of date (e.g., unreleased feature), use `draft: true`
 - Never use both `draft: true` and `unlisted: true` — Docusaurus forbids it
-- After writing any blog post, always run `npm run build` to verify (the prebuild hook runs automatically)
+- After writing any blog post, always run `npm run build` to verify (the prebuild hook also runs the script as double-check)
 
 **Why unlisted (not draft)**:
 - `draft: true` hides the post completely — breaks cross-links from published posts

@@ -23,9 +23,12 @@ fn get_proxy_client() -> &'static reqwest::Client {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(5))
-            .pool_max_idle_per_host(32)
+            .pool_max_idle_per_host(128)
             .pool_idle_timeout(Duration::from_secs(90))
             .tcp_keepalive(Duration::from_secs(60))
+            .tcp_nodelay(true)
+            .http2_keep_alive_interval(Duration::from_secs(30))
+            .http2_keep_alive_timeout(Duration::from_secs(10))
             .build()
             .expect("Failed to create proxy HTTP client")
     })
@@ -79,20 +82,18 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
             .into_response();
     }
 
-    // Build target URL: replace path_prefix with backend_url
+    // Build target URL: replace path_prefix with backend_url (pre-allocated)
     let remaining_path = path.strip_prefix(&route.path_prefix).unwrap_or("");
-    let target_url = format!(
-        "{}{}",
-        route.backend_url.trim_end_matches('/'),
-        remaining_path
-    );
-
-    // Preserve query string
-    let target_url = if let Some(query) = request.uri().query() {
-        format!("{}?{}", target_url, query)
-    } else {
-        target_url
-    };
+    let backend = route.backend_url.trim_end_matches('/');
+    let query = request.uri().query();
+    let capacity = backend.len() + remaining_path.len() + query.map_or(0, |q| 1 + q.len());
+    let mut target_url = String::with_capacity(capacity);
+    target_url.push_str(backend);
+    target_url.push_str(remaining_path);
+    if let Some(q) = query {
+        target_url.push('?');
+        target_url.push_str(q);
+    }
 
     // SSRF protection: block requests to private/internal IP ranges (defense-in-depth)
     if is_blocked_url(&target_url) {
@@ -167,22 +168,15 @@ async fn forward_request(request: Request<Body>, method: &Method, target_url: &s
     // correlate their spans with the gateway's trace.
     req_builder = inject_traceparent(req_builder);
 
-    // Forward body for methods that support it
+    // Forward body as a stream for methods that support it (zero-copy)
     if matches!(*method, Method::POST | Method::PUT | Method::PATCH) {
-        match axum::body::to_bytes(request.into_body(), 10 * 1024 * 1024).await {
-            Ok(bytes) => {
-                req_builder = req_builder.body(bytes);
-            }
-            Err(e) => {
-                error!(error = %e, "Failed to read request body");
-                return (StatusCode::BAD_REQUEST, "Failed to read request body").into_response();
-            }
-        }
+        let body_stream = request.into_body().into_data_stream();
+        req_builder = req_builder.body(reqwest::Body::wrap_stream(body_stream));
     }
 
     // Send the request
     match req_builder.send().await {
-        Ok(resp) => convert_response(resp).await,
+        Ok(resp) => convert_response(resp),
         Err(e) => {
             error!(
                 error = %e,
@@ -202,25 +196,14 @@ async fn forward_request(request: Request<Body>, method: &Method, target_url: &s
 }
 
 /// Copy headers excluding hop-by-hop headers.
+///
+/// HeaderName is already lowercase in http crate, so no `.to_lowercase()` needed.
 fn copy_headers(
     mut builder: reqwest::RequestBuilder,
     headers: &HeaderMap<HeaderValue>,
 ) -> reqwest::RequestBuilder {
-    const HOP_BY_HOP: &[&str] = &[
-        "connection",
-        "keep-alive",
-        "proxy-authenticate",
-        "proxy-authorization",
-        "te",
-        "trailer",
-        "transfer-encoding",
-        "upgrade",
-        "host",
-    ];
-
     for (name, value) in headers.iter() {
-        let name_str = name.as_str().to_lowercase();
-        if !HOP_BY_HOP.contains(&name_str.as_str()) {
+        if !is_hop_by_hop(name.as_str()) {
             if let Ok(header_name) = reqwest::header::HeaderName::from_bytes(name.as_ref()) {
                 if let Ok(header_value) = reqwest::header::HeaderValue::from_bytes(value.as_bytes())
                 {
@@ -233,26 +216,33 @@ fn copy_headers(
     builder
 }
 
-/// Convert a reqwest response to an axum response.
-async fn convert_response(resp: reqwest::Response) -> Response {
+/// O(1) hop-by-hop header check. HeaderName::as_str() is already lowercase.
+fn is_hop_by_hop(name: &str) -> bool {
+    matches!(
+        name,
+        "connection"
+            | "keep-alive"
+            | "proxy-authenticate"
+            | "proxy-authorization"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
+            | "host"
+    )
+}
+
+/// Convert a reqwest response to an axum response (streaming, zero-copy).
+fn convert_response(resp: reqwest::Response) -> Response {
     let status = resp.status();
     let headers = resp.headers().clone();
-
-    let body = match resp.bytes().await {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            error!(error = %e, "Failed to read response body from backend");
-            return (StatusCode::BAD_GATEWAY, "Failed to read upstream response").into_response();
-        }
-    };
 
     let mut response =
         Response::builder().status(StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::OK));
 
     // Copy response headers (excluding hop-by-hop)
     for (name, value) in headers.iter() {
-        let name_str = name.as_str().to_lowercase();
-        if !["connection", "keep-alive", "transfer-encoding"].contains(&name_str.as_str()) {
+        if !is_hop_by_hop(name.as_str()) {
             if let Ok(header_name) = header::HeaderName::from_bytes(name.as_ref()) {
                 if let Ok(header_value) = header::HeaderValue::from_bytes(value.as_bytes()) {
                     response = response.header(header_name, header_value);
@@ -261,8 +251,11 @@ async fn convert_response(resp: reqwest::Response) -> Response {
         }
     }
 
+    // Stream the response body (no buffering)
+    let body = Body::from_stream(resp.bytes_stream());
+
     response
-        .body(Body::from(body))
+        .body(body)
         .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response())
 }
 

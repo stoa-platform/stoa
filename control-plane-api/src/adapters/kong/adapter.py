@@ -327,6 +327,8 @@ class KongGatewayAdapter(GatewayAdapterInterface):
         """Fetch current Kong state via GET endpoints.
 
         Returns a dict with services, plugins, and consumers arrays.
+        Services include an internal ``_id`` field (Kong UUID) used to
+        resolve plugin service references; stripped by ``_build_config``.
         """
         services: list[dict] = []
         plugins: list[dict] = []
@@ -337,8 +339,9 @@ class KongGatewayAdapter(GatewayAdapterInterface):
             if resp.status_code == 200:
                 data = resp.json()
                 for svc in data.get("data", []):
-                    service_entry = {
+                    service_entry: dict = {
                         "name": svc.get("name", ""),
+                        "_id": svc.get("id", ""),
                         "url": f"{svc.get('protocol', 'http')}://{svc.get('host', '')}:{svc.get('port', 80)}{svc.get('path') or ''}",
                     }
                     # Fetch routes for this service
@@ -358,11 +361,53 @@ class KongGatewayAdapter(GatewayAdapterInterface):
         except Exception as e:
             logger.warning("Failed to fetch Kong services: %s", e)
 
+        # Build consumer ID→name map (needed to skip consumer-scoped plugins)
+        consumer_ids: set[str] = set()
+        try:
+            resp = await self._client.get("/consumers")
+            if resp.status_code == 200:
+                data = resp.json()
+                for c in data.get("data", []):
+                    cid = c.get("id", "")
+                    if cid:
+                        consumer_ids.add(cid)
+                    consumer_entry: dict = {
+                        "username": c.get("username", ""),
+                        "tags": c.get("tags") or [],
+                    }
+                    # Fetch credentials for this consumer
+                    creds_resp = await self._client.get(f"/consumers/{cid}/key-auth")
+                    if creds_resp.status_code == 200:
+                        creds_data = creds_resp.json()
+                        keys = [{"key": k.get("key", "")} for k in creds_data.get("data", []) if k.get("key")]
+                        if keys:
+                            consumer_entry["keyauth_credentials"] = keys
+                    # Fetch consumer-scoped plugins (inline in declarative config)
+                    cplugins_resp = await self._client.get(f"/consumers/{cid}/plugins")
+                    if cplugins_resp.status_code == 200:
+                        cplugins_data = cplugins_resp.json()
+                        inline_plugins = [
+                            {"name": cp.get("name", ""), "config": cp.get("config", {})}
+                            for cp in cplugins_data.get("data", [])
+                        ]
+                        if inline_plugins:
+                            consumer_entry["plugins"] = inline_plugins
+                    consumers.append(consumer_entry)
+        except Exception as e:
+            logger.warning("Failed to fetch Kong consumers: %s", e)
+
         try:
             resp = await self._client.get("/plugins")
             if resp.status_code == 200:
                 data = resp.json()
                 for p in data.get("data", []):
+                    # Skip consumer-scoped plugins (handled inline in consumers)
+                    consumer_ref = p.get("consumer")
+                    if consumer_ref:
+                        consumer_id = consumer_ref.get("id", "") if isinstance(consumer_ref, dict) else str(consumer_ref)
+                        if consumer_id in consumer_ids:
+                            continue
+
                     # Resolve service name from service.id
                     service_id = ""
                     svc_ref = p.get("service")
@@ -370,43 +415,34 @@ class KongGatewayAdapter(GatewayAdapterInterface):
                         service_id = svc_ref.get("id", "")
                     elif isinstance(svc_ref, str):
                         service_id = svc_ref
-                    service_name = self._resolve_service_name(services, service_id)
-                    plugins.append(
-                        {
-                            "name": p.get("name", ""),
-                            "service": service_name,
-                            "config": p.get("config", {}),
-                            "tags": p.get("tags") or [],
-                        }
-                    )
+
+                    plugin_entry: dict = {
+                        "name": p.get("name", ""),
+                        "config": p.get("config", {}),
+                        "tags": p.get("tags") or [],
+                    }
+                    # Only set service if plugin is service-scoped (not global)
+                    if service_id:
+                        service_name = self._resolve_service_name(services, service_id)
+                        if service_name:
+                            plugin_entry["service"] = service_name
+                    plugins.append(plugin_entry)
         except Exception as e:
             logger.warning("Failed to fetch Kong plugins: %s", e)
-
-        try:
-            resp = await self._client.get("/consumers")
-            if resp.status_code == 200:
-                data = resp.json()
-                consumers = [
-                    {
-                        "username": c.get("username", ""),
-                        "tags": c.get("tags") or [],
-                    }
-                    for c in data.get("data", [])
-                ]
-        except Exception as e:
-            logger.warning("Failed to fetch Kong consumers: %s", e)
 
         return {"services": services, "plugins": plugins, "consumers": consumers}
 
     @staticmethod
     def _resolve_service_name(services: list[dict], service_id: str) -> str:
-        """Resolve a service ID to its name (best-effort)."""
-        # In declarative config, service reference is by name
-        # This is a fallback; in practice the service_id might be the name
+        """Resolve a service ID (UUID) to its name for declarative config.
+
+        The ``_id`` field is the Kong UUID from GET /services, used to match
+        plugin service references back to service names.
+        """
         for svc in services:
-            if svc.get("id") == service_id or svc.get("name") == service_id:
+            if svc.get("_id") == service_id or svc.get("name") == service_id:
                 return svc.get("name", "")
-        return service_id
+        return ""
 
     @staticmethod
     def _build_config(
@@ -414,8 +450,13 @@ class KongGatewayAdapter(GatewayAdapterInterface):
         plugins: list[dict],
         consumers: list[dict],
     ) -> dict:
-        """Build a full Kong declarative config payload."""
-        config: dict = {"_format_version": "3.0", "services": services}
+        """Build a full Kong declarative config payload.
+
+        Strips internal ``_id`` fields from services (used only for
+        resolving plugin service references during fetch).
+        """
+        clean_services = [{k: v for k, v in s.items() if k != "_id"} for s in services]
+        config: dict = {"_format_version": "3.0", "services": clean_services}
         if plugins:
             config["plugins"] = plugins
         if consumers:

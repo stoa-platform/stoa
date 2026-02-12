@@ -1,5 +1,6 @@
 ---
 description: Secrets management strategy — Vault, ESO, AWS SM. Consult when adding/modifying credentials or env vars.
+globs: "deploy/**,k8s/**,charts/**,.env*,**/secrets*"
 ---
 
 # Secrets Management

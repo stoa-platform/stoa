@@ -1,7 +1,8 @@
 # Staging environment overrides
 global:
   environment: staging
-  domain: staging.gostoa.dev
+  domain: gostoa.dev
+  domainPrefix: staging-
 
 replicaCount: 2
 
@@ -38,7 +39,7 @@ stoaGateway:
   replicas: 2
   mode: edge-mcp
   environment: staging
-  keycloakUrl: "https://auth.gostoa.dev"
+  keycloakUrl: "https://staging-auth.gostoa.dev"
   logLevel: info
   policies:
     enabled: true
@@ -49,13 +50,13 @@ stoaGateway:
     brokers: "redpanda.stoa-system.svc.cluster.local:9092"
   ingress:
     enabled: true
-    host: mcp.staging.gostoa.dev
+    host: staging-mcp.gostoa.dev
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-staging
     tls:
       - secretName: stoa-gateway-tls
         hosts:
-          - mcp.staging.gostoa.dev
+          - staging-mcp.gostoa.dev
   resources:
     requests:
       cpu: 100m

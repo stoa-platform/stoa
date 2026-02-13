@@ -134,6 +134,37 @@ pub static QUOTA_REMAINING: Lazy<GaugeVec> = Lazy::new(|| {
     .expect("Failed to create stoa_quota_remaining metric")
 });
 
+// === mTLS Metrics (CAB-864) ===
+
+/// Counter of mTLS certificate validation outcomes.
+pub static MTLS_VALIDATIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_mtls_validations_total",
+        "Total mTLS certificate validations",
+        &["result", "tenant"]
+    )
+    .expect("Failed to create stoa_mtls_validations_total metric")
+});
+
+/// Counter of RFC 8705 certificate-token binding checks.
+pub static MTLS_BINDING_CHECKS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_mtls_binding_checks_total",
+        "Total RFC 8705 certificate-token binding checks",
+        &["result"]
+    )
+    .expect("Failed to create stoa_mtls_binding_checks_total metric")
+});
+
+/// Gauge of certificates expiring within 30 days.
+pub static MTLS_CERTS_EXPIRING_SOON: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
+        "stoa_mtls_certs_expiring_soon",
+        "Number of certificates expiring within 30 days"
+    )
+    .expect("Failed to create stoa_mtls_certs_expiring_soon metric")
+});
+
 // === Upstream Latency Metrics ===
 
 /// Histogram of upstream (backend) response times in seconds.
@@ -231,6 +262,20 @@ pub fn record_upstream_latency(upstream: &str, status: u16, duration_secs: f64) 
         .observe(duration_secs);
 }
 
+// === mTLS metrics helpers ===
+
+/// Record an mTLS validation outcome.
+pub fn record_mtls_validation(result: &str, tenant: &str) {
+    MTLS_VALIDATIONS_TOTAL
+        .with_label_values(&[result, tenant])
+        .inc();
+}
+
+/// Record an RFC 8705 binding check outcome.
+pub fn record_mtls_binding_check(result: &str) {
+    MTLS_BINDING_CHECKS_TOTAL.with_label_values(&[result]).inc();
+}
+
 // === HTTP metrics helpers ===
 
 /// Record an HTTP request with method, path, status, and duration.
@@ -290,6 +335,9 @@ pub fn init_all_metrics() {
     Lazy::force(&CIRCUIT_BREAKER_STATE);
     Lazy::force(&QUOTA_REMAINING);
     Lazy::force(&UPSTREAM_LATENCY);
+    Lazy::force(&MTLS_VALIDATIONS_TOTAL);
+    Lazy::force(&MTLS_BINDING_CHECKS_TOTAL);
+    Lazy::force(&MTLS_CERTS_EXPIRING_SOON);
 }
 
 /// Get the total number of MCP tool calls across all labels.

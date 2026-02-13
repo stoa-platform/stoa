@@ -26,6 +26,7 @@ use subtle::ConstantTimeEq;
 use tracing::{debug, info, warn};
 
 use crate::config::MtlsConfig;
+use crate::metrics;
 
 // =============================================================================
 // Client Certificate Info (request extension)
@@ -382,6 +383,7 @@ pub async fn mtls_extraction_middleware(
                         "mTLS headers from untrusted proxy"
                     );
                     stats.denied.fetch_add(1, Ordering::Relaxed);
+                    metrics::record_mtls_validation("denied", "unknown");
                     return Err(MtlsError::untrusted_proxy());
                 }
             }
@@ -400,14 +402,17 @@ pub async fn mtls_extraction_middleware(
             // No cert presented
             if route_required {
                 stats.no_cert.fetch_add(1, Ordering::Relaxed);
+                metrics::record_mtls_validation("no_cert", "unknown");
                 return Err(MtlsError::cert_required());
             }
             // Optional: continue without cert
             stats.no_cert.fetch_add(1, Ordering::Relaxed);
+            metrics::record_mtls_validation("no_cert", "unknown");
             return Ok(next.run(request).await);
         }
         Some(ref v) if v != "SUCCESS" => {
             stats.invalid.fetch_add(1, Ordering::Relaxed);
+            metrics::record_mtls_validation("invalid", "unknown");
             return Err(MtlsError::cert_invalid(v));
         }
         _ => {} // SUCCESS — continue
@@ -420,11 +425,13 @@ pub async fn mtls_extraction_middleware(
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| {
             stats.invalid.fetch_add(1, Ordering::Relaxed);
+            metrics::record_mtls_validation("invalid", "unknown");
             MtlsError::cert_invalid("missing fingerprint header")
         })?;
 
     let fingerprint = normalize_fingerprint_to_hex(raw_fingerprint).map_err(|e| {
         stats.invalid.fetch_add(1, Ordering::Relaxed);
+        metrics::record_mtls_validation("invalid", "unknown");
         MtlsError::cert_invalid(&e)
     })?;
 
@@ -475,6 +482,7 @@ pub async fn mtls_extraction_middleware(
                 "Client certificate expired"
             );
             stats.expired.fetch_add(1, Ordering::Relaxed);
+            metrics::record_mtls_validation("expired", "unknown");
             return Err(MtlsError::cert_expired(&date_str));
         }
     }
@@ -492,6 +500,7 @@ pub async fn mtls_extraction_middleware(
             "Certificate issuer not in allowed list"
         );
         stats.denied.fetch_add(1, Ordering::Relaxed);
+        metrics::record_mtls_validation("denied", "unknown");
         return Err(MtlsError::issuer_denied());
     }
 
@@ -514,6 +523,7 @@ pub async fn mtls_extraction_middleware(
 
     // Store in request extensions for Stage 3 and handlers
     request.extensions_mut().insert(cert_info);
+    metrics::record_mtls_validation("success", "unknown");
 
     Ok(next.run(request).await)
 }
@@ -539,6 +549,7 @@ pub fn verify_binding(
                     "JWT missing cnf claim but binding required"
                 );
                 stats.denied.fetch_add(1, Ordering::Relaxed);
+                metrics::record_mtls_binding_check("denied");
                 return Err(MtlsError::binding_required());
             }
             // Not required: warn and continue
@@ -547,6 +558,7 @@ pub fn verify_binding(
                 "JWT has no cnf claim, binding not required — continuing"
             );
             stats.success.fetch_add(1, Ordering::Relaxed);
+            metrics::record_mtls_binding_check("skipped");
             Ok(())
         }
         Some(thumbprint) => {
@@ -558,6 +570,7 @@ pub fn verify_binding(
                         "Certificate-token binding verified"
                     );
                     stats.success.fetch_add(1, Ordering::Relaxed);
+                    metrics::record_mtls_binding_check("match");
                     Ok(())
                 }
                 Ok(false) => {
@@ -566,6 +579,7 @@ pub fn verify_binding(
                         "Certificate-token binding MISMATCH"
                     );
                     stats.mismatch.fetch_add(1, Ordering::Relaxed);
+                    metrics::record_mtls_binding_check("mismatch");
                     Err(MtlsError::binding_mismatch())
                 }
                 Err(e) => {
@@ -575,6 +589,7 @@ pub fn verify_binding(
                         "Fingerprint comparison error"
                     );
                     stats.invalid.fetch_add(1, Ordering::Relaxed);
+                    metrics::record_mtls_binding_check("error");
                     Err(MtlsError::cert_invalid(&e))
                 }
             }

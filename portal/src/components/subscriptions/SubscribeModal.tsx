@@ -5,8 +5,10 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Loader2, AlertCircle, Check, Zap, Crown, Building2 } from 'lucide-react';
+import { X, Loader2, AlertCircle, Check, Zap, Crown, Building2, Shield } from 'lucide-react';
 import { useApplications } from '../../hooks/useApplications';
+import { CertificateUploader } from './CertificateUploader';
+import type { CertificateValidationResult } from '../../services/certificateValidator';
 import type { API, Application } from '../../types';
 
 type SubscriptionPlan = 'free' | 'basic' | 'premium' | 'enterprise';
@@ -16,6 +18,7 @@ export interface SubscribeFormData {
   applicationName: string;
   apiId: string;
   plan: SubscriptionPlan;
+  certificateFingerprint?: string;
 }
 
 interface SubscribeModalProps {
@@ -86,6 +89,9 @@ export function SubscribeModal({
 }: SubscribeModalProps) {
   const [selectedAppId, setSelectedAppId] = useState<string>('');
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>('free');
+  const [certResult, setCertResult] = useState<CertificateValidationResult | null>(null);
+
+  const requiresMtls = api.tags?.includes('mtls') ?? false;
 
   const { data: applications, isLoading: appsLoading } = useApplications();
 
@@ -94,6 +100,7 @@ export function SubscribeModal({
     if (isOpen) {
       setSelectedAppId('');
       setSelectedPlan('free');
+      setCertResult(null);
     }
   }, [isOpen]);
 
@@ -117,6 +124,7 @@ export function SubscribeModal({
       applicationName: selectedApp.name,
       apiId: api.id,
       plan: selectedPlan,
+      certificateFingerprint: certResult?.certificate?.fingerprint_sha256,
     });
   };
 
@@ -292,6 +300,35 @@ export function SubscribeModal({
                 </div>
               </div>
 
+              {/* mTLS Certificate Upload (conditional) */}
+              {requiresMtls && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
+                      Client Certificate{' '}
+                      <span className="text-red-500" aria-hidden="true">
+                        *
+                      </span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">
+                    This API requires mTLS. Upload your X.509 client certificate for
+                    certificate-bound access tokens (RFC 8705).
+                  </p>
+                  <CertificateUploader
+                    required
+                    onCertificateValidated={setCertResult}
+                    onCertificateCleared={() => setCertResult(null)}
+                  />
+                  {certResult?.certificate && (
+                    <p className="mt-2 text-xs text-gray-500 dark:text-neutral-400 font-mono">
+                      Fingerprint: {certResult.certificate.fingerprint_sha256.substring(0, 24)}...
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Info box */}
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm text-blue-700 dark:text-blue-400">
@@ -313,7 +350,12 @@ export function SubscribeModal({
               </button>
               <button
                 type="submit"
-                disabled={isLoading || !selectedAppId || activeApps.length === 0}
+                disabled={
+                  isLoading ||
+                  !selectedAppId ||
+                  activeApps.length === 0 ||
+                  (requiresMtls && !certResult?.valid)
+                }
                 className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (

@@ -21,6 +21,15 @@ spec:
             app: gateway-arena
         spec:
           restartPolicy: Never
+          affinity:
+            podAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchLabels:
+                        app: stoa-gateway
+                    topologyKey: kubernetes.io/hostname
           securityContext:
             runAsNonRoot: true
             runAsUser: 12345

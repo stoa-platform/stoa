@@ -61,7 +61,11 @@ CAB-872: mTLS Integration E2E + Script Démo (3 pts) — Todo
 CAB-1075: Demo Day Ready — Freeze + Dry Run Témoin + Plan B/C (5 pts) — Backlog
 
 ### P0 — Strategy (livrable de la démo, pas prérequis technique)
-CAB-1031: Plan d'Action SI Post-Démo — Arbre de Décision (21 pts) — Todo
+CAB-1031: Plan d'Action SI Post-Démo — Arbre de Décision (21 pts) — **DONE** (13/02)
+- ✅ Document: stoa-strategy/execution/PLAN-ACTION-SI-POST-DEMO.md (684 lignes)
+- ✅ 8 sections: Executive Summary, Arbre Decision (3 gates), Roadmap Go/Pivot/Stop, Budget, Onboarding Cedric, KPIs
+- ✅ Council Review 8.5/10 Go — 3 adjustments applied: Gate 2 controllable triggers, CIR warning on pivot consulting, realistic star KPIs
+- ✅ Pushed to stoa-strategy main (private repo)
 
 ## 📋 NEXT (post-démo ou si le temps le permet)
 

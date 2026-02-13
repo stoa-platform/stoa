@@ -8,7 +8,7 @@
 | OpenAPI→MCP bridge | stoactl bridge demo | 🟡 CAB-1137 |
 | Error Snapshot | Provoquer + investiguer en live | 🔴 CAB-550 |
 | Dry run 2x sans bug | 5 min chrono | 🔴 CAB-802 |
-| Plan SI post-démo | Arbre décision + roadmap | 🔴 CAB-1031 |
+| Plan SI post-démo | Arbre décision + roadmap | ✅ CAB-1031 |
 | Docs site | Complet, 0 placeholder | ✅ DONE |
 
 ## Semaine 7 (13-16 fév) — CODE CRITIQUE
@@ -39,10 +39,12 @@ Focus: Finir les 2 gros MEGAs code
 ## Semaine 8 (17-21 fév) — POLISH + DRY RUN
 Focus: Intégration, script démo, répétitions
 
-- [ ] CAB-1031: Plan d'Action SI Post-Démo (21 pts)
-  - Arbre de décision (3 scénarios: Go/Pivot/Stop)
-  - Roadmap conditionnelle Q2-Q4
-  - Budget et planning équipe élargie (Cédric + indépendants)
+- [x] CAB-1031: Plan d'Action SI Post-Démo (21 pts) — Done 13/02
+  - ✅ Arbre de décision (3 gates: J+7 Design Partner, J+30 Community, J+90 Revenue)
+  - ✅ 3 scénarios: Go Full (roadmap Q2-Q4), Pivot Lean (3 options), Stop/Park
+  - ✅ Budget progressif (3.7K→8.7K→15.7K EUR/mois) + onboarding Cédric
+  - ✅ Council 8.5/10 — 3 adjustments applied
+  - Document: stoa-strategy/execution/PLAN-ACTION-SI-POST-DEMO.md (private)
 
 - [ ] CAB-550: Error Snapshot Scenario (3 pts)
   - Setup données démo: 3 erreurs pré-générées

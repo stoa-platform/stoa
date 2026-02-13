@@ -23,3 +23,16 @@ Feature: Gateway - mTLS Certificate Binding (RFC 8705)
     When I call "POST /mcp/v1/tools/invoke" without mTLS certificate
     Then I receive a 401 error
     And the error message contains "MTLS_CERT_REQUIRED"
+
+  # Edge cases — require --profile=mixed seed data (CAB-872)
+
+  @security @mtls @edge-case
+  Scenario: Revoked consumer cannot obtain new credentials
+    When I attempt to authenticate as consumer "api-consumer-099"
+    Then the authentication is rejected
+
+  @security @mtls @edge-case
+  Scenario: Expired certificate is rejected at gateway
+    When I call "POST /mcp/v1/tools/invoke" with expired mTLS certificate
+    Then I receive a 403 error
+    And the error message contains "MTLS_CERT_EXPIRED"

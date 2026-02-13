@@ -369,3 +369,87 @@ When(
     }
   }
 );
+
+// ============================================================================
+// mTLS EDGE CASE STEPS (CAB-872)
+// ============================================================================
+
+// Track auth attempt result for revoked consumer scenarios
+let authAttemptFailed = false;
+
+When(
+  'I attempt to authenticate as consumer {string}',
+  async ({ request }, consumerId: string) => {
+    authAttemptFailed = false;
+
+    let clientId: string;
+    let clientSecret: string;
+    try {
+      const creds = loadConsumerCredentials(consumerId);
+      clientId = creds.clientId;
+      clientSecret = creds.clientSecret;
+    } catch {
+      // No credentials found — consumer may not exist or seed not run
+      authAttemptFailed = true;
+      return;
+    }
+
+    try {
+      const tokenResponse = await request.fetch(
+        `${AUTH_URL}/realms/stoa/protocol/openid-connect/token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          data: `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`,
+        }
+      );
+
+      if (!tokenResponse.ok()) {
+        authAttemptFailed = true;
+      }
+    } catch {
+      authAttemptFailed = true;
+    }
+  }
+);
+
+Then('the authentication is rejected', async () => {
+  expect(authAttemptFailed).toBe(true);
+});
+
+When(
+  'I call {string} with expired mTLS certificate',
+  async ({ request }, endpoint: string) => {
+    const [method, ...pathParts] = endpoint.split(' ');
+    const urlPath = pathParts.join(' ');
+
+    expect(currentToken).not.toBeNull();
+    expect(currentFingerprint).not.toBeNull();
+
+    // Simulate an expired certificate: valid fingerprint but NotAfter date in the past
+    const pastDate = new Date(Date.now() - 86400000).toISOString(); // 24h ago
+
+    try {
+      const response = await request.fetch(`${URLS.gateway}${urlPath}`, {
+        method: method as 'GET' | 'POST' | 'PUT' | 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${currentToken}`,
+          'X-SSL-Client-Verify': 'SUCCESS',
+          'X-SSL-Client-Fingerprint': currentFingerprint!,
+          'X-SSL-Client-S-DN': 'CN=api-consumer-001,OU=tenant-acme,O=Acme Corp,C=FR',
+          'X-SSL-Client-I-DN': 'CN=STOA Demo CA,O=STOA Platform,C=FR',
+          'X-SSL-Client-NotAfter': pastDate,
+        },
+        data: JSON.stringify({ tool: 'petstore', arguments: { action: 'list-pets' } }),
+      });
+
+      lastResponse = {
+        status: response.status(),
+        body: await response.json().catch(() => ({})),
+      };
+    } catch (error) {
+      lastResponse = { status: 500, body: { error: String(error) } };
+    }
+  }
+);

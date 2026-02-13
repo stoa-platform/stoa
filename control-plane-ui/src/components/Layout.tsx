@@ -44,6 +44,7 @@ import {
   ClipboardList,
   Check,
   Lock,
+  Users,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -121,6 +122,13 @@ const navigationSections: NavSection[] = [
         permission: 'admin:servers',
       },
       { name: 'Applications', href: '/applications', icon: AppWindow, permission: 'apps:read' },
+      {
+        name: 'Consumers',
+        href: '/consumers',
+        icon: Users,
+        permission: 'consumers:read',
+        shortcut: ['g', 'c'],
+      },
     ],
   },
   {

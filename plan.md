@@ -4,7 +4,7 @@
 | Métrique | Cible | Status |
 |----------|-------|--------|
 | Consumer flow E2E | Portal→Subscribe→Token→Call | 🔴 CAB-1121 |
-| mTLS use case client | 100+ certs, RFC 8705 | 🔴 CAB-864 |
+| mTLS use case client | 100+ certs, RFC 8705 | 🟢 CAB-864 (Phase 2 done, E2E remains) |
 | OpenAPI→MCP bridge | stoactl bridge demo | 🟡 CAB-1137 |
 | Error Snapshot | Provoquer + investiguer en live | 🔴 CAB-550 |
 | Dry run 2x sans bug | 5 min chrono | 🔴 CAB-802 |
@@ -25,11 +25,16 @@ Focus: Finir les 2 gros MEGAs code
   - Session unique: Parser OpenAPI 3.0/3.1 → génère MCP tool definitions
   - Démo: `stoactl bridge petstore.yaml` → 5 tools créés en 3 secondes
 
-- [ ] CAB-864: mTLS + OAuth2 Certificate Binding (34 pts)
-  - Session 1: Certificate management API + Keycloak cert-bound tokens
-  - Session 2: F5/Gateway integration + rotation automatique
-  - Session 3: Bulk onboarding 100+ consumers script
-  - Session 4: E2E test cert→token→API avec mTLS enforced
+- [~] CAB-864: mTLS + OAuth2 Certificate Binding (34 pts)
+  - ✅ Session 1: Certificate management API + Keycloak cert-bound tokens (already implemented)
+  - ✅ Session 2: F5/Gateway integration + rotation automatique (already implemented)
+  - ✅ Session 3: Demo scenario scripts (generate-mtls-certs.sh, seed-mtls-demo.py, mtls-demo-commands.sh, DEMO-SCRIPT Act 3b, seed-all.sh integration) — Done 13/02
+  - ✅ Session 4: Phase 2 Self-Service (13/02) — 4 micro-PRs #426-#429 merged:
+    - PR #426: Console Consumers page (table, search, RBAC, mobile)
+    - PR #427: Portal CertificateUploader → SubscribeModal wiring
+    - PR #428: Gateway mTLS Prometheus metrics (3 counters/gauges)
+    - PR #429: Grafana mTLS dashboard (7 panels) + 3 alerting rules
+  - [ ] Session 5: E2E test cert→token→API avec mTLS enforced (→ CAB-872)
 
 ## Semaine 8 (17-21 fév) — POLISH + DRY RUN
 Focus: Intégration, script démo, répétitions

@@ -66,12 +66,15 @@ fi
 echo "[6/$TOTAL] Applying Pushgateway..."
 kubectl apply -f "$SCRIPT_DIR/pushgateway.yaml"
 
-# 7. ConfigMap from arena script
-echo "[7/$TOTAL] Creating ConfigMap from gateway-arena.py..."
-kubectl create configmap gateway-arena-script \
-  --from-file="$REPO_ROOT/scripts/traffic/gateway-arena.py" \
+# 7. ConfigMap from k6 arena scripts
+echo "[7/$TOTAL] Creating ConfigMap from k6 arena scripts..."
+kubectl create configmap gateway-arena-scripts \
+  --from-file="$REPO_ROOT/scripts/traffic/arena/benchmark.js" \
+  --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena.sh" \
   -n stoa-system \
   --dry-run=client -o yaml | kubectl apply -f -
+# Clean up old ConfigMap if it exists
+kubectl delete configmap gateway-arena-script -n stoa-system --ignore-not-found
 
 # 8. ServiceMonitor + CronJob
 echo "[8/$TOTAL] Applying ServiceMonitor + CronJob..."

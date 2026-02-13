@@ -7,7 +7,7 @@ globs: "k8s/arena/**,scripts/traffic/**,docker/observability/grafana/**"
 
 ## Overview
 
-Continuous comparative benchmarking across STOA, Kong, and Gravitee gateways.
+Continuous comparative benchmarking: 6 gateways (3 K8s + 3 VPS) across STOA, Kong, and Gravitee.
 CronJob runs every 30 min on OVH K8s, pushes metrics to Pushgateway, visualized in Grafana.
 
 ## Adding a New Gateway
@@ -37,40 +37,51 @@ Consistency: IQR-based CV (robust to bimodal network latency).
 
 ## Fair Comparison — Local Echo Backend
 
-Arena uses a local nginx echo server (static JSON, <1ms) on each VPS so benchmarks
+Arena uses a local nginx echo server (static JSON, <1ms) so benchmarks
 measure pure gateway overhead, not backend/network latency.
+
+### In-Cluster (K8s — OVH MKS)
+
+| Gateway | Service | Health | Proxy | Backend |
+|---------|---------|--------|-------|---------|
+| stoa-k8s | `stoa-gateway.stoa-system.svc` | `/health` | `/echo/get` | echo-backend:8888 |
+| kong-k8s | `kong-arena.stoa-system.svc:8000` | `:8001/status` | `/echo/get` | echo-backend:8888 |
+| gravitee-k8s | `gravitee-arena-gw.stoa-system.svc:8082` | `:18082/_node/health` | `/echo/get` | echo-backend:8888 |
+
+### VPS (External)
 
 | Gateway | VPS IP | Health | Proxy | Backend |
 |---------|--------|--------|-------|---------|
-| STOA | `51.83.45.13:8080` | `/health` | `/echo/get` | echo-local:8888 (Docker) |
-| Kong | `51.83.45.13:8000` | `:8001/status` | `/echo/get` | echo-local:8888 (Docker) |
-| Gravitee | `54.36.209.237:8082` | `:8083/management/...` | `/echo/get` | echo-local:8888 (Docker) |
+| stoa-vps | `51.83.45.13:8080` | `/health` | `/echo/get` | echo-local:8888 (Docker) |
+| kong-vps | `51.83.45.13:8000` | `:8001/status` | `/echo/get` | echo-local:8888 (Docker) |
+| gravitee-vps | `54.36.209.237:8082` | `:8083/management/...` | `/echo/get` | echo-local:8888 (Docker) |
 
-### Docker Network Setup (critical)
+### Docker Network Setup (VPS only)
 
-All gateways run in Docker. The echo container MUST be on the same Docker network:
+VPS gateways run in Docker. The echo container MUST be on the same Docker network:
 - Kong VPS: `docker network connect kong_default echo-local && docker network connect stoa_default echo-local`
 - Gravitee VPS: `docker network connect gravitee_default echo-local`
 - Backend URL must be `http://echo-local:8888` (container name, NOT localhost)
 - STOA's SSRF blocklist blocks `localhost` — use container name or public IP
 
-### Deploy Echo + Configure Routes
+### Deploy
 
-```bash
-./deploy/vps/echo/deploy-all.sh
-```
+**K8s (all 3 gateways)**: `KUBECONFIG=~/.kube/config-stoa-ovh ./k8s/arena/deploy.sh`
 
-This script: deploys echo on both VPS, connects Docker networks, registers routes on all 3 gateways.
+**VPS echo + routes**: `./deploy/vps/echo/deploy-all.sh`
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `scripts/traffic/gateway-arena.py` | Benchmark script (6 scenarios x N gateways) |
-| `k8s/arena/cronjob-prod.yaml` | CronJob manifest (every 30 min) |
+| `k8s/arena/cronjob-prod.yaml` | CronJob manifest (every 30 min, 6 gateways) |
+| `k8s/arena/kong.yaml` | Kong DB-less in-cluster (ConfigMap + Deploy + Svc) |
+| `k8s/arena/gravitee.yaml` | Gravitee APIM in-cluster (Mongo + Mgmt + GW + Init Job) |
+| `k8s/arena/echo-backend.yaml` | Shared echo backend (nginx, port 8888) |
 | `k8s/arena/pushgateway.yaml` | Pushgateway deployment + service |
 | `k8s/arena/pushgateway-servicemonitor.yaml` | Prometheus auto-discovery |
-| `k8s/arena/deploy.sh` | K8s deploy script (idempotent) |
+| `k8s/arena/deploy.sh` | K8s deploy script (idempotent, 9 steps) |
 | `docker/observability/grafana/dashboards/gateway-arena.json` | Grafana leaderboard dashboard |
 | `deploy/vps/echo/deploy-all.sh` | VPS echo + route setup |
 | `deploy/vps/echo/docker-compose.yml` | Echo server (nginx:alpine) |

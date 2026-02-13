@@ -142,14 +142,18 @@ describe('Consumers', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the page title', () => {
+  it('renders the page title', async () => {
     renderConsumers();
-    expect(screen.getByText('Consumers')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Consumers')).toBeInTheDocument();
+    });
   });
 
-  it('renders the search input', () => {
+  it('renders the search input', async () => {
     renderConsumers();
-    expect(screen.getByPlaceholderText(/search consumers/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/search consumers/i)).toBeInTheDocument();
+    });
   });
 
   it('shows consumer data after loading', async () => {

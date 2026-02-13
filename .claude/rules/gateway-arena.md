@@ -31,7 +31,9 @@ CronJob runs every 30 min on OVH K8s, pushes metrics to Pushgateway, visualized 
 Score formula: `0.15*Base + 0.25*Burst50 + 0.25*Burst100 + 0.15*Avail + 0.10*Error + 0.10*Consistency`
 
 6 scenarios: health, proxy_sequential(20), burst_10, burst_50, burst_100, sustained(100).
-Scoring caps: 500ms (sequential), 3s (burst_50), 5s (burst_100) — tuned for K8s→VPS remote benchmarking.
+HTTP keepalive: `requests.Session` + `HTTPAdapter(pool_maxsize=200)` + 5-request warm-up.
+Scoring caps: 400ms (sequential), 2.5s (burst_50), 4s (burst_100) — calibrated for keepalive over K8s→VPS.
+Consistency: IQR-based CV (robust to bimodal network latency).
 
 ## Fair Comparison — Local Echo Backend
 

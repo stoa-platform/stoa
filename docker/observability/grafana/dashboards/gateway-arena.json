@@ -9,6 +9,20 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": false,
+        "iconColor": "#FF9830",
+        "name": "k6 Migration",
+        "type": "dashboard",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": ["k6-migration"],
+          "type": "tags"
+        }
       }
     ]
   },
@@ -36,7 +50,7 @@
       "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
       "id": 100,
       "panels": [],
-      "title": "Leaderboard",
+      "title": "Leaderboard (Median of 5 runs, 1 discarded)",
       "type": "row"
     },
     {
@@ -100,6 +114,42 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Arena Score with 95% confidence interval error bars. Narrow CI = reproducible results.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 15, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
+          "min": 0,
+          "max": 100,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 10, "x": 8, "y": 1},
+      "id": 15,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "gateway_arena_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} score",
+          "refId": "A"
+        },
+        {
+          "expr": "gateway_arena_score_ci_upper{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} CI95 upper",
+          "refId": "B"
+        },
+        {
+          "expr": "gateway_arena_score_ci_lower{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} CI95 lower",
+          "refId": "C"
+        }
+      ],
+      "title": "Score ± CI95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "description": "Gateway availability (0-100%) from health check scenario",
       "fieldConfig": {
         "defaults": {
@@ -132,8 +182,98 @@
       "type": "stat"
     },
     {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Run-to-run standard deviation of composite score. Lower is better — indicates benchmark reproducibility.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 3}
+            ]
+          },
+          "min": 0,
+          "unit": "none",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 7},
+      "id": 12,
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "gateway_arena_score_stddev{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Score Stddev (Run-to-Run)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Score standard deviation trend. Target: < 1.0 for publishable results.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
+          "min": 0,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 10, "x": 6, "y": 7},
+      "id": 13,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "gateway_arena_score_stddev{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Stddev Trend",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Number of valid benchmark runs (after discarding warm-up runs)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 3},
+              {"color": "green", "value": 4}
+            ]
+          },
+          "min": 0,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 7},
+      "id": 14,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "gateway_arena_runs{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Valid Runs",
+      "type": "stat"
+    },
+    {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 7},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 13},
       "id": 200,
       "panels": [],
       "title": "Latency Comparison",
@@ -149,7 +289,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 14},
       "id": 4,
       "options": {"barWidth": 0.5, "groupWidth": 0.7, "legend": {"displayMode": "list", "placement": "bottom"}, "orientation": "horizontal", "showValue": "always", "tooltip": {"mode": "multi"}},
       "targets": [
@@ -173,7 +313,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 14},
       "id": 5,
       "options": {"barWidth": 0.5, "groupWidth": 0.7, "legend": {"displayMode": "list", "placement": "bottom"}, "orientation": "horizontal", "showValue": "always", "tooltip": {"mode": "multi"}},
       "targets": [
@@ -198,7 +338,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 14},
       "id": 6,
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
@@ -218,7 +358,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 16},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 22},
       "id": 300,
       "panels": [],
       "title": "Reliability",
@@ -244,7 +384,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 17},
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 23},
       "id": 7,
       "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
       "targets": [
@@ -277,7 +417,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 17},
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 23},
       "id": 8,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
       "targets": [
@@ -303,7 +443,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 17},
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 23},
       "id": 9,
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
@@ -318,7 +458,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 23},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 29},
       "id": 400,
       "panels": [],
       "title": "Raw Data",
@@ -335,7 +475,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 24},
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 30},
       "id": 10,
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
@@ -359,7 +499,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 24},
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 30},
       "id": 11,
       "options": {"footer": {"enablePagination": false, "reducer": ["sum"], "show": false}, "showHeader": true, "sortBy": [{"desc": true, "displayName": "Value"}]},
       "targets": [

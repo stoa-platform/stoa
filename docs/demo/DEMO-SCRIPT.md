@@ -13,11 +13,12 @@
 | 1 | 0:00 - 3:00 | Console: create tenant + publish API | "Admin in 3 min" |
 | 2 | 3:00 - 6:00 | Portal: discover, subscribe, get token | "5 days → 5 minutes" |
 | 3 | 6:00 - 8:00 | Rust Gateway: API call, JWT, zero latency | "Sub-millisecond proxy" |
-| 4 | 8:00 - 10:00 | Grafana: live dashboards, real-time metrics | "Full observability" |
-| 5 | 10:00 - 12:00 | OpenSearch: error snapshots, trace search | "Every error, traced" |
-| 6 | 12:00 - 14:00 | Keycloak: federation login cross-tenant | "Zero trust, multi-org" |
-| 7 | 14:00 - 17:00 | MCP Bridge: legacy API → AI agent tool | "The paradigm shift" |
-| 8 | 17:00 - 20:00 | Born GitOps + AI Factory | "The bombshell" |
+| 3b | 8:00 - 11:00 | mTLS: enterprise certificate binding (RFC 8705) | "100 clients, zero trust" |
+| 4 | 11:00 - 12:00 | Grafana: live dashboards | "Full observability" |
+| 5 | 12:00 - 14:00 | OpenSearch: error snapshots, trace search | "Every error, traced" |
+| 6 | 14:00 - 16:00 | Keycloak: federation login cross-tenant | "Zero trust, multi-org" |
+| 7 | 16:00 - 18:00 | MCP Bridge: legacy API → AI agent tool | "The paradigm shift" |
+| 8 | 18:00 - 20:00 | Born GitOps + AI Factory | "The bombshell" |
 
 ---
 
@@ -175,32 +176,106 @@ done
 
 ---
 
-## Act 4 — Grafana: Live Dashboards (2 min)
+## Act 3b — mTLS: Enterprise Certificate Binding (3 min)
+
+**[Tab 3: Terminal]**
+
+> "Now the enterprise killer feature. Your clients have X.509 certificates — from F5, from their PKI. We bind those certificates to OAuth2 tokens. RFC 8705."
+
+### 3b.1 — Show Bulk Onboarding Result (30s)
+
+> "We just onboarded 100 enterprise clients with certificates. Each one got an OAuth2 client with automatic certificate binding. No manual configuration."
+
+```bash
+# Show consumer count (pre-seeded by seed-mtls-demo.py)
+curl -s "$API_URL/v1/consumers/acme-corp?page_size=3" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -m json.tool
+# → 100 consumers, each with certificate_fingerprint and certificate_status: "active"
+```
+
+### 3b.2 — Show Certificate-Bound Token (45s)
+
+```bash
+# Get a cert-bound token (cnf claim embedded automatically by Keycloak)
+TOKEN_MTLS=$(curl -s -X POST "$AUTH_URL/realms/stoa/protocol/openid-connect/token" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=$CONSUMER_CLIENT_ID" \
+  -d "client_secret=$CONSUMER_CLIENT_SECRET" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Decode to show the cnf claim
+echo $TOKEN_MTLS | python3 -c "
+import sys, json, base64
+token = sys.stdin.read().strip().split('.')[1]
+token += '=' * (4 - len(token) % 4)
+claims = json.loads(base64.urlsafe_b64decode(token))
+print(json.dumps({'cnf': claims.get('cnf', {}), 'consumer_id': claims.get('consumer_id', '')}, indent=2))
+"
+# → { "cnf": { "x5t#S256": "<base64url fingerprint>" } }
+```
+
+> "Look at the token. The `cnf` claim contains the certificate fingerprint. This token is cryptographically bound to one specific certificate."
+
+### 3b.3 — Correct Certificate → Access Granted (30s)
+
+```bash
+# Call gateway with correct certificate headers (F5 injects these after mTLS handshake)
+curl -s -w "\nHTTP %{http_code}\n" \
+  -X POST "$GATEWAY_URL/mcp/v1/tools/invoke" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_MTLS" \
+  -H "X-SSL-Client-Verify: SUCCESS" \
+  -H "X-SSL-Client-Fingerprint: $CORRECT_FINGERPRINT" \
+  -H "X-SSL-Client-S-DN: CN=api-consumer-001,OU=tenant-acme,O=Acme Corp,C=FR" \
+  -H "X-SSL-Client-I-DN: CN=STOA Demo CA,O=STOA Platform,C=FR" \
+  -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
+# → HTTP 200 ✅ — Certificate matches token binding
+```
+
+> "200 OK. Certificate matches the token. Access granted."
+
+### 3b.4 — Wrong Certificate → Binding Mismatch (45s)
+
+```bash
+# Same token, DIFFERENT certificate fingerprint → stolen token scenario
+curl -s -w "\nHTTP %{http_code}\n" \
+  -X POST "$GATEWAY_URL/mcp/v1/tools/invoke" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN_MTLS" \
+  -H "X-SSL-Client-Verify: SUCCESS" \
+  -H "X-SSL-Client-Fingerprint: 0000000000000000000000000000000000000000000000000000000000000000" \
+  -H "X-SSL-Client-S-DN: CN=attacker,OU=evil-corp,O=Evil Inc,C=XX" \
+  -H "X-SSL-Client-I-DN: CN=STOA Demo CA,O=STOA Platform,C=FR" \
+  -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}'
+# → HTTP 403 MTLS_BINDING_MISMATCH 🚫 — Stolen token detected!
+```
+
+> "403. Binding mismatch. Even with a valid JWT, the wrong certificate means instant rejection. This is how you detect stolen tokens."
+
+### 3b.5 — Wrap-Up (30s)
+
+> "RFC 8705. 100 clients onboarded in seconds. Certificate-token binding verified in microseconds. Zero trust, end to end."
+>
+> "In production, F5 handles TLS termination and injects these headers. The STOA Gateway validates the binding. Rotate a certificate — the binding updates automatically. Revoke one — instant block."
+
+---
+
+## Act 4 — Grafana: Live Dashboards (1 min)
 
 **[Tab 4: Grafana — https://console.gostoa.dev/grafana]**
 
-> "Every request we just made is already visible in real-time."
+> "Every request we just made — including the mTLS calls — is already visible in real-time."
 
 ### 4.1 — Gateway Metrics (1 min)
 
 1. Open **STOA Gateway Metrics** dashboard
 2. Point out:
-   - Tool calls/sec graph (shows the burst we just did)
+   - Tool calls/sec graph (shows all the calls we just made)
    - Latency percentiles: p50, p90, p99
-   - Rate limit hits (the 429s are visible)
+   - mTLS binding verifications (if mTLS metrics panel exists)
    - Active SSE connections
 
-> "Real-time gateway metrics. Every API call measured, every rate limit tracked."
-
-### 4.2 — Platform Overview (1 min)
-
-1. Open **STOA Platform Overview** dashboard
-2. Show:
-   - Total APIs, tenants, active subscriptions
-   - Request volume over time
-   - Error rate
-
-> "Platform-wide observability. Not a black box. Every metric, every tenant, every API."
+> "Real-time gateway metrics. Every API call measured, every mTLS binding verified, every tenant tracked."
 
 ---
 
@@ -392,10 +467,11 @@ git shortlog --since="2026-02-09" -sn
 | 3:00 | Act 1 done | Skip tenant creation, show existing |
 | 6:00 | Act 2 done | Skip registration, use pre-auth |
 | 8:00 | Act 3 done | Skip rate limit demo |
-| 10:00 | Act 4 done | Show 1 dashboard instead of 2 |
-| 12:00 | Act 5 done | Skip drill-down, show table only |
-| 14:00 | Act 6 done | Skip curl demo, show Keycloak realms only |
-| 17:00 | Act 7 done | Pre-record MCP call as video backup |
+| 11:00 | Act 3b done | Skip wrong-cert demo (step 3b.4), just show success + explain |
+| 12:00 | Act 4 done | Show 1 dashboard, 30s max |
+| 14:00 | Act 5 done | Skip drill-down, show table only |
+| 16:00 | Act 6 done | Skip curl demo, show Keycloak realms only |
+| 18:00 | Act 7 done | Pre-record MCP call as video backup |
 | 20:00 | Act 8 done | Skip GitOps slide, go straight to AI Factory punchline |
 
 ## If Something Breaks
@@ -406,6 +482,7 @@ git shortlog --since="2026-02-09" -sn
 | Gateway returns 500 | Show pre-recorded terminal output |
 | Grafana empty | Show screenshot in slides |
 | OpenSearch down | "Error tracking is indexing, let me show you the architecture" |
+| mTLS binding fails | Show pre-decoded JWT with cnf claim (screenshot) + explain RFC 8705 |
 | Federation token fails | Show Keycloak admin UI realms (visual proof) |
 | MCP endpoint missing | "The MCP bridge is in development — let me show you the architecture" |
 | Everything down | Switch to video backup (offline, pre-recorded) |

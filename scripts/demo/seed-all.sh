@@ -33,6 +33,7 @@ KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8080}"
 OPENSEARCH_URL="${OPENSEARCH_URL:-https://localhost:9200}"
 OPENSEARCH_AUTH="${OPENSEARCH_AUTH:-admin:StOa_Admin_2026!}"
 SKIP_TRAFFIC="${SKIP_TRAFFIC:-false}"
+SKIP_MTLS="${SKIP_MTLS:-false}"
 FEDERATION="${FEDERATION:-false}"
 OPENSEARCH_ONLY="${OPENSEARCH_ONLY:-false}"
 TRAFFIC_DURATION="${TRAFFIC_DURATION:-60}"
@@ -42,10 +43,11 @@ ERROR_COUNT="${ERROR_COUNT:-50}"
 for arg in "$@"; do
   case $arg in
     --skip-traffic)    SKIP_TRAFFIC=true ;;
+    --skip-mtls)       SKIP_MTLS=true ;;
     --federation)      FEDERATION=true ;;
     --opensearch-only) OPENSEARCH_ONLY=true ;;
     --help|-h)
-      echo "Usage: $0 [--skip-traffic] [--federation] [--opensearch-only]"
+      echo "Usage: $0 [--skip-traffic] [--skip-mtls] [--federation] [--opensearch-only]"
       echo ""
       echo "Environment:"
       echo "  CONTROL_PLANE_URL   API URL (default: http://localhost:8000)"
@@ -54,6 +56,7 @@ for arg in "$@"; do
       echo "  OPENSEARCH_URL      OpenSearch URL (default: https://localhost:9200)"
       echo "  TRAFFIC_DURATION    Traffic gen duration in seconds (default: 60)"
       echo "  ERROR_COUNT         Number of error snapshots to seed (default: 50)"
+      echo "  MTLS_TENANT         Tenant for mTLS consumers (default: acme-corp)"
       exit 0
       ;;
   esac
@@ -145,6 +148,17 @@ run_traffic() {
     --no-warmup
 }
 
+generate_mtls_certs() {
+  "$SCRIPT_DIR/generate-mtls-certs.sh" --count=100
+}
+
+seed_mtls() {
+  CONTROL_PLANE_URL="$CONTROL_PLANE_URL" \
+  KEYCLOAK_URL="$KEYCLOAK_URL" \
+  ADMIN_PASSWORD="${ADMIN_PASSWORD:-${ANORAK_PASSWORD:-}}" \
+    python3 "$SCRIPT_DIR/seed-mtls-demo.py" --force
+}
+
 seed_ldap() {
   # OpenLDAP auto-import doesn't load /ldif-seed — must seed manually
   if docker exec stoa-federation-ldap ldapsearch -x -H ldap://localhost:389 \
@@ -227,7 +241,7 @@ echo "================================================================"
 info "API:         $CONTROL_PLANE_URL"
 info "Keycloak:    $KEYCLOAK_URL"
 info "OpenSearch:  $OPENSEARCH_URL"
-info "Flags:       skip-traffic=$SKIP_TRAFFIC federation=$FEDERATION opensearch-only=$OPENSEARCH_ONLY"
+info "Flags:       skip-traffic=$SKIP_TRAFFIC skip-mtls=$SKIP_MTLS federation=$FEDERATION opensearch-only=$OPENSEARCH_ONLY"
 
 if [ "$OPENSEARCH_ONLY" = true ]; then
   run_step "OpenSearch Health" check_opensearch
@@ -239,6 +253,13 @@ else
   run_step "OpenSearch Health Check" check_opensearch
   run_step "Seed Demo Data (APIs, Plans, Consumers)" seed_demo_data
   run_step "Seed Error Snapshots (OpenSearch)" seed_opensearch
+
+  if [ "$SKIP_MTLS" != true ]; then
+    run_step "Generate mTLS Test Certificates (100)" generate_mtls_certs
+    run_step "Seed mTLS Consumers (100 with certs)" seed_mtls
+  else
+    info "Skipping mTLS seed (--skip-mtls)"
+  fi
 
   if [ "$SKIP_TRAFFIC" != true ]; then
     run_step "Traffic Generator (${TRAFFIC_DURATION}s)" run_traffic

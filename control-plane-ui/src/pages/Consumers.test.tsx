@@ -152,7 +152,7 @@ describe('Consumers', () => {
   it('renders the search input', async () => {
     renderConsumers();
     await waitFor(() => {
-      expect(screen.getByPlaceholderText(/search consumers/i)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/search by id, name, email/i)).toBeInTheDocument();
     });
   });
 

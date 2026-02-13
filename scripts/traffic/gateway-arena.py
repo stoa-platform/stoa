@@ -175,14 +175,26 @@ def timed_request(session, url, headers=None, timeout=TIMEOUT):
 
 
 def warm_up(session, gw, count):
-    """Send warm-up requests to establish TCP connections and warm gateway caches."""
+    """Warm up with sequential + concurrent requests to fill the connection pool.
+
+    Phase 1: 'count' sequential requests (establish first connection, warm caches).
+    Phase 2: burst of max(burst_sizes) concurrent requests (fill pool for burst tests).
+    """
     headers = gw.get("proxy_headers", {})
     ok = 0
     for _ in range(count):
         _, _, success = timed_request(session, gw["proxy"], headers=headers)
         if success:
             ok += 1
-    log.info(f"Warm-up: {ok}/{count} OK for {gw['name']}")
+    # Concurrent warm-up: pre-fill the connection pool for burst scenarios
+    pool_size = max(BURST_SIZES) if BURST_SIZES else 50
+    with ThreadPoolExecutor(max_workers=pool_size) as pool:
+        futures = [pool.submit(timed_request, session, gw["proxy"], headers) for _ in range(pool_size)]
+        for f in as_completed(futures):
+            _, _, success = f.result()
+            if success:
+                ok += 1
+    log.info(f"Warm-up: {ok}/{count + pool_size} OK for {gw['name']}")
 
 
 def percentile(values, pct):

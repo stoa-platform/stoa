@@ -1,0 +1,88 @@
+# Echo backend for Arena benchmarks — minimal nginx returning static JSON.
+# Deployed in stoa-system so the CronJob and gateway can reach it via ClusterIP.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: echo-nginx-config
+  namespace: stoa-system
+data:
+  default.conf: |
+    server {
+        listen 8888;
+        server_name _;
+        location / {
+            default_type application/json;
+            add_header X-Echo-Server "nginx-echo-k8s";
+            return 200 '{"status":"ok","server":"echo-k8s"}';
+        }
+        location /health {
+            default_type application/json;
+            return 200 '{"status":"healthy"}';
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-backend
+  namespace: stoa-system
+  labels:
+    app: echo-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo-backend
+  template:
+    metadata:
+      labels:
+        app: echo-backend
+    spec:
+      containers:
+        - name: echo
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          ports:
+            - containerPort: 8888
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8888
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8888
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: echo-nginx-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-backend
+  namespace: stoa-system
+  labels:
+    app: echo-backend
+spec:
+  selector:
+    app: echo-backend
+  ports:
+    - port: 8888
+      targetPort: 8888
+      protocol: TCP

@@ -40,9 +40,20 @@ CAB-1137: OpenAPI → MCP Auto-Bridge stoactl (8 pts) — In Progress
 - Différenciateur critique vs Kong/Gravitee
 
 ### P0 — Préparation démo (semaine du 17-23 fév)
-CAB-864: mTLS + OAuth2 Certificate Binding 100+ clients (34 pts) — Todo, due 26/02
-- Use case client principal
-- F5 → RI SAG → webMethods → Backend
+CAB-864: mTLS + OAuth2 Certificate Binding 100+ clients (34 pts) — In Progress, due 26/02
+- ✅ Gateway mTLS middleware (mtls.rs) — already implemented
+- ✅ Control Plane cert management (certificate_utils.py, consumer model, bulk endpoint) — already implemented
+- ✅ Keycloak cnf.x5t#S256 binding — already implemented
+- ✅ Demo scenario scripts (2026-02-13): generate-mtls-certs.sh, seed-mtls-demo.py, mtls-demo-commands.sh
+- ✅ DEMO-SCRIPT.md updated with Act 3b (3 min mTLS demo)
+- ✅ seed-all.sh integrated with --skip-mtls flag
+- ✅ Council Review 8.5/10 Go — 3 adjustments applied (13/02):
+  - openssl version check in generate-mtls-certs.sh
+  - Token lifetime verified: 60 min (3600s) — 20x safety margin for 3 min Act 3b
+  - DEMO ONLY headers on all 3 scripts + credentials.json output
+- ✅ PR #425 merged (13/02) — 6 files, 866 LOC, Ship mode
+- ✅ Phase 2 Self-Service (13/02): 4 micro-PRs #426-#429 merged — Console + Portal + Gateway + Grafana (~450 LOC total)
+- 🔴 Reste: E2E test against running stack (CAB-872)
 
 CAB-802: Dry Run + Script + Video Backup (3 pts) — Todo, due 23/02
 CAB-550: Error Snapshot Demo Scenario (3 pts) — Todo, due 23/02
@@ -53,6 +64,12 @@ CAB-1075: Demo Day Ready — Freeze + Dry Run Témoin + Plan B/C (5 pts) — Bac
 CAB-1031: Plan d'Action SI Post-Démo — Arbre de Décision (21 pts) — Todo
 
 ## 📋 NEXT (post-démo ou si le temps le permet)
+
+~~Portal mTLS Self-Service~~ — **DONE** (13/02, Phase 2 PRs #426-#429):
+- ✅ Console Consumers page (PR #426, ~200 LOC) — table, search, status filter, RBAC, mobile cards
+- ✅ Portal cert-to-subscription wiring (PR #427, ~80 LOC) — CertificateUploader in SubscribeModal
+- ✅ Gateway mTLS Prometheus metrics (PR #428, ~50 LOC Rust) — validations_total, binding_checks_total, certs_expiring_soon
+- ✅ Grafana mTLS dashboard + 3 alerts (PR #429, ~120 LOC) — 7 panels, StoaMtlsHighFailureRate/BindingMismatch/CertsExpiringSoon
 
 CAB-1133: Portal Functional Test Suite 17 routes × 4 personas (34 pts) — In Progress
 CAB-1134: ADR-040 Born GitOps Multi-Env (5 pts) — In Progress
@@ -70,3 +87,6 @@ CAB-353: Go/No-Go Checklist 3 Months — Todo
 - docs.gostoa.dev = complet, 0 "Coming Soon", build green
 - Velocity avec Claude: estimation ÷10, 107 pts docs en 1 soirée
 - Chemin critique: CAB-1121 (35pts) + CAB-864 (34pts) = 69 pts code en 10 jours
+- CAB-864 demo scripts done (13/02): 6 files created/modified, 100 certs tested OK in ~10s
+- CAB-864 Council adjustments applied (13/02): openssl check, token lifetime verified, DEMO ONLY headers
+- Portal 2FA for cert upload: user requirement from Council session — use Keycloak TOTP step-up (realm-totp.json exists)

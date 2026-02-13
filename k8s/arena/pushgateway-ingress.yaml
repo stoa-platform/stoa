@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pushgateway
+  namespace: monitoring
+  labels:
+    app: pushgateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    nginx.ingress.kubernetes.io/whitelist-source-range: "51.83.45.13/32,54.36.209.237/32,51.255.201.17/32"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - pushgateway.gostoa.dev
+      secretName: pushgateway-tls
+  rules:
+    - host: pushgateway.gostoa.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pushgateway
+                port:
+                  number: 9091

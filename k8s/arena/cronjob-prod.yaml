@@ -21,81 +21,70 @@ spec:
             app: gateway-arena
         spec:
           restartPolicy: Never
+          affinity:
+            podAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchLabels:
+                        app: stoa-gateway
+                    topologyKey: kubernetes.io/hostname
           securityContext:
             runAsNonRoot: true
-            runAsUser: 65534
+            runAsUser: 12345
             seccompProfile:
               type: RuntimeDefault
           containers:
             - name: arena
-              image: python:3.11-slim
+              image: ghcr.io/stoa-platform/arena-bench:0.1.0
               command:
-                - python
-                - /app/gateway-arena.py
+                - bash
+                - /scripts/run-arena.sh
               env:
                 - name: PUSHGATEWAY_URL
                   value: "http://pushgateway.monitoring.svc:9091"
-                - name: BURST_SIZES
-                  value: "10,50,100"
-                - name: PROXY_REPEAT
-                  value: "20"
-                - name: SUSTAINED_COUNT
-                  value: "100"
+                - name: RUNS
+                  value: "5"
+                - name: DISCARD_FIRST
+                  value: "1"
                 - name: TIMEOUT
                   value: "5"
-                - name: WARMUP_COUNT
-                  value: "5"
+                - name: SCRIPT_PATH
+                  value: "/scripts/benchmark.js"
+                  # VPS gateways benchmarked locally via deploy/vps/bench/ (co-located)
                 - name: GATEWAYS
                   value: |
                     [
                       {"name":"stoa-k8s","health":"http://stoa-gateway.stoa-system.svc/health","proxy":"http://stoa-gateway.stoa-system.svc/echo/get"},
                       {"name":"kong-k8s","health":"http://kong-arena.stoa-system.svc:8001/status","proxy":"http://kong-arena.stoa-system.svc:8000/echo/get"},
-                      {"name":"gravitee-k8s","health":"http://gravitee-arena-gw.stoa-system.svc:18082/_node/health","proxy":"http://gravitee-arena-gw.stoa-system.svc:8082/echo/get"},
-                      {"name":"stoa-vps","health":"http://51.83.45.13:8080/health","proxy":"http://51.83.45.13:8080/echo/get"},
-                      {"name":"kong-vps","health":"http://51.83.45.13:8001/status","proxy":"http://51.83.45.13:8000/echo/get"},
-                      {"name":"gravitee-vps","health":"http://54.36.209.237:8083/management/organizations/DEFAULT/environments/DEFAULT","proxy":"http://54.36.209.237:8082/echo/get"}
+                      {"name":"gravitee-k8s","health":"http://gravitee-arena-gw.stoa-system.svc:18082/_node/health","proxy":"http://gravitee-arena-gw.stoa-system.svc:8082/echo/get"}
                     ]
               resources:
+                # Guaranteed QoS: requests == limits (no CPU throttling)
                 requests:
-                  cpu: 100m
-                  memory: 64Mi
+                  cpu: "1"
+                  memory: 512Mi
                 limits:
                   cpu: "1"
-                  memory: 128Mi
+                  memory: 512Mi
               securityContext:
                 privileged: false
                 allowPrivilegeEscalation: false
-                readOnlyRootFilesystem: true
+                readOnlyRootFilesystem: false
                 capabilities:
                   drop:
                     - ALL
               volumeMounts:
-                - name: app
-                  mountPath: /app
+                - name: scripts
+                  mountPath: /scripts
                   readOnly: true
-          initContainers:
-            - name: install-deps
-              image: python:3.11-slim
-              command:
-                - sh
-                - -c
-                - |
-                  pip install --no-cache-dir --target=/app requests==2.31.0 &&
-                  cp /script/gateway-arena.py /app/gateway-arena.py
-              volumeMounts:
-                - name: app
-                  mountPath: /app
-                - name: script
-                  mountPath: /script
-              securityContext:
-                privileged: false
-                allowPrivilegeEscalation: false
-                capabilities:
-                  drop:
-                    - ALL
+                - name: tmp
+                  mountPath: /tmp
           volumes:
-            - name: app
-              emptyDir: {}
-            - name: script
+            - name: scripts
               configMap:
-                name: gateway-arena-script
+                name: gateway-arena-scripts
+                defaultMode: 0755
+            - name: tmp
+              emptyDir: {}

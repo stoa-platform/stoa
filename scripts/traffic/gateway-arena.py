@@ -14,6 +14,10 @@ and measures pure gateway processing time — matching real-world API client beh
 Warm-up: 5 sequential requests before scenarios to establish TCP connections and
 warm up gateway internal caches/pools.
 
+Scoring caps calibrated for keepalive over K8s→VPS (~90ms network floor):
+  base=400ms, burst_50=2500ms, burst_100=4000ms.
+Consistency uses IQR-based CV (robust to bimodal network latency).
+
 Scenarios:
   1. health          — single health check (availability)
   2. proxy_sequential — 20 sequential requests (base overhead P50/P95)
@@ -255,10 +259,13 @@ def compute_score(all_results):
       - 10% error rate
       - 10% consistency (sustained jitter — GC-free = lower jitter)
 
-    Caps tightened for keepalive benchmarking (TCP reuse eliminates handshake overhead):
-      - base: 200ms (was 500ms — sequential with keepalive should be <50ms)
-      - burst_50: 1000ms (was 3000ms — pool reuse, no connection storm)
-      - burst_100: 2000ms (was 5000ms — same logic, larger scale)
+    Caps calibrated for keepalive benchmarking (K8s → VPS, TCP reuse):
+      - base: 400ms (sequential P95 ≈ 90ms network floor + gateway overhead)
+      - burst_50: 2500ms (50 concurrent with pool reuse)
+      - burst_100: 4000ms (100 concurrent, stress test)
+
+    Consistency uses IQR-based coefficient of variation (robust to bimodal
+    network latency — ~80% of requests at gateway-speed, ~20% at network-speed).
     """
     # Collect per-scenario stats
     scenario_map = {}
@@ -280,11 +287,11 @@ def compute_score(all_results):
         p95 = percentile(r["latencies"], 95)
         return max(0, 100 * (1 - p95 / cap_seconds))
 
-    # Caps tuned for keepalive benchmarking (K8s → VPS, TCP reuse).
-    # Tighter than raw-TCP caps because keepalive eliminates connection storms.
-    base_score = latency_score("proxy_sequential", 0.2)
-    burst50_score = latency_score("burst_50", 1.0)
-    burst100_score = latency_score("burst_100", 2.0)
+    # Caps calibrated for keepalive benchmarking (K8s → VPS, TCP reuse).
+    # Account for ~90ms network floor at P95 while differentiating gateways.
+    base_score = latency_score("proxy_sequential", 0.4)
+    burst50_score = latency_score("burst_50", 2.5)
+    burst100_score = latency_score("burst_100", 4.0)
 
     # Availability
     availability_score = 100 * (total_ok / total_requests)
@@ -292,13 +299,18 @@ def compute_score(all_results):
     # Error rate
     error_score = 100 * (total_ok / total_requests)
 
-    # Consistency — coefficient of variation of sustained latencies
+    # Consistency — IQR-based coefficient of variation of sustained latencies.
+    # Uses (P75 - P25) / P50 instead of stdev/mean — robust to bimodal network
+    # latency where ~80% of requests are fast (gateway-speed) and ~20% hit the
+    # network RTT floor. Standard CV penalizes this unfairly.
     sustained = scenario_map.get("sustained")
     if sustained and len(sustained["latencies"]) > 1:
-        mean_lat = statistics.mean(sustained["latencies"])
-        if mean_lat > 0:
-            cv = statistics.stdev(sustained["latencies"]) / mean_lat
-            consistency_score = max(0, 100 * (1 - cv))
+        p25 = percentile(sustained["latencies"], 25)
+        p50 = percentile(sustained["latencies"], 50)
+        p75 = percentile(sustained["latencies"], 75)
+        if p50 > 0:
+            iqr_cv = (p75 - p25) / p50
+            consistency_score = max(0, 100 * (1 - iqr_cv))
         else:
             consistency_score = 100.0
     else:

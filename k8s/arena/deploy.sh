@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TOTAL=9
 
-echo "=== Gateway Arena Deploy (6 gateways: 3 K8s + 3 VPS) ==="
+echo "=== Gateway Arena Deploy (3 K8s gateways, co-located) ==="
 
 # 1. Echo backend (nginx returning static JSON — same as VPS echo)
 echo "[1/$TOTAL] Applying echo backend..."
@@ -62,9 +62,10 @@ else
   echo "    kubectl logs -n stoa-system job/gravitee-arena-init"
 fi
 
-# 6. Pushgateway (Deployment + Service)
+# 6. Pushgateway (Deployment + Service + Ingress)
 echo "[6/$TOTAL] Applying Pushgateway..."
 kubectl apply -f "$SCRIPT_DIR/pushgateway.yaml"
+kubectl apply -f "$SCRIPT_DIR/pushgateway-ingress.yaml"
 
 # 7. ConfigMap from k6 arena scripts
 echo "[7/$TOTAL] Creating ConfigMap from k6 arena scripts..."
@@ -104,8 +105,9 @@ if kubectl wait --for=condition=complete "job/$JOB_NAME" -n stoa-system --timeou
   kubectl get cronjob -n stoa-system gateway-arena
   echo ""
   echo "Deploy complete. Next steps:"
-  echo "  1. Verify 6 gateway scores in Pushgateway: curl http://pushgateway.monitoring.svc:9091/metrics"
-  echo "  2. Check Grafana dashboard for 6-gateway leaderboard"
+  echo "  1. Verify 3 K8s gateway scores: curl http://pushgateway.monitoring.svc:9091/metrics | grep gateway_arena_score"
+  echo "  2. Deploy VPS sidecars: ./deploy/vps/bench/deploy.sh"
+  echo "  3. Check Grafana dashboard for leaderboard"
   echo "  3. Clean up smoke job: kubectl delete job $JOB_NAME -n stoa-system"
 else
   echo "Job did not complete in 10m. Check logs:"

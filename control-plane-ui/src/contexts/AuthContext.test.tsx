@@ -144,6 +144,30 @@ describe('AuthContext', () => {
     expect(result.current.hasPermission('tenants:delete')).toBe(false);
   });
 
+  it('grants consumers permissions based on role (CAB-864)', () => {
+    // cpi-admin gets full consumers CRUD
+    mockOidcState.isAuthenticated = true;
+    mockOidcState.user = createOidcUser(['cpi-admin']);
+    const { result: admin } = renderHook(() => useAuth(), { wrapper: createWrapper() });
+    expect(admin.current.hasPermission('consumers:read')).toBe(true);
+    expect(admin.current.hasPermission('consumers:write')).toBe(true);
+    expect(admin.current.hasPermission('consumers:create')).toBe(true);
+    expect(admin.current.hasPermission('consumers:delete')).toBe(true);
+
+    // viewer gets read-only consumers access
+    mockOidcState.user = createOidcUser(['viewer']);
+    const { result: viewer } = renderHook(() => useAuth(), { wrapper: createWrapper() });
+    expect(viewer.current.hasPermission('consumers:read')).toBe(true);
+    expect(viewer.current.hasPermission('consumers:write')).toBe(false);
+
+    // devops gets read-only consumers access
+    mockOidcState.user = createOidcUser(['devops']);
+    const { result: devops } = renderHook(() => useAuth(), { wrapper: createWrapper() });
+    expect(devops.current.hasPermission('consumers:read')).toBe(true);
+    expect(devops.current.hasPermission('consumers:write')).toBe(false);
+    expect(devops.current.hasPermission('consumers:delete')).toBe(false);
+  });
+
   it('hasRole returns correct values', () => {
     mockOidcState.isAuthenticated = true;
     mockOidcState.user = createOidcUser(['tenant-admin']);

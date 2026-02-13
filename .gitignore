@@ -69,6 +69,7 @@ node_modules/
 portal/node_modules/node_modules_CLAUDE_OFF/
 deploy/demo-federation/.env
 scripts/demo-federation/.tokens/
+scripts/demo/certs/
 
 # ============================================
 # Strategy & Confidential (NEVER commit)

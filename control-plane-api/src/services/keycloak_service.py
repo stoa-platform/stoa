@@ -2,6 +2,7 @@
 
 import logging
 
+import httpx
 from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
 
 from ..config import settings
@@ -387,7 +388,6 @@ class KeycloakService:
             "id": client_uuid,
         }
 
-
     async def create_consumer_client_with_cert(
         self,
         tenant_slug: str,
@@ -452,8 +452,7 @@ class KeycloakService:
             "clientId": client_id,
             "name": f"Consumer: {consumer_external_id}",
             "description": (
-                f"mTLS-bound OAuth2 client for consumer {consumer_external_id} "
-                f"in tenant {tenant_slug}"
+                f"mTLS-bound OAuth2 client for consumer {consumer_external_id} " f"in tenant {tenant_slug}"
             ),
             "enabled": True,
             "protocol": "openid-connect",
@@ -483,9 +482,7 @@ class KeycloakService:
         client_uuid = client["id"]
         secret_data = self._admin.get_client_secrets(client_uuid)
 
-        logger.info(
-            f"Created mTLS consumer client {client_id} for tenant {tenant_slug}"
-        )
+        logger.info(f"Created mTLS consumer client {client_id} for tenant {tenant_slug}")
 
         return {
             "client_id": client_id,
@@ -514,9 +511,7 @@ class KeycloakService:
 
         # Find existing cnf mapper or create new one
         mappers = client.get("protocolMappers", [])
-        cnf_mapper = next(
-            (m for m in mappers if m.get("name") == "cnf-x5t-s256"), None
-        )
+        cnf_mapper = next((m for m in mappers if m.get("name") == "cnf-x5t-s256"), None)
 
         if cnf_mapper:
             cnf_mapper["config"]["claim.value"] = fingerprint_b64url
@@ -559,6 +554,63 @@ class KeycloakService:
         logger.info(f"Disabled consumer client {client_id}")
         return True
 
+    async def exchange_token(
+        self,
+        client_id: str,
+        client_secret: str,
+        subject_token: str,
+        subject_token_type: str = "urn:ietf:params:oauth:token-type:access_token",  # noqa: S107
+        audience: str | None = None,
+        scope: str | None = None,
+    ) -> dict:
+        """
+        Perform RFC 8693 token exchange via Keycloak.
+
+        Uses the consumer's Keycloak client as the acting party to exchange
+        a subject token for a new access token with potentially narrowed scope.
+
+        Args:
+            client_id: Consumer's Keycloak client_id (acting party)
+            client_secret: Consumer's Keycloak client secret
+            subject_token: The token to exchange
+            subject_token_type: Token type identifier (default: access_token)
+            audience: Target audience for the exchanged token
+            scope: Requested scope for the exchanged token
+
+        Returns:
+            dict with access_token, token_type, expires_in, scope
+
+        Raises:
+            httpx.HTTPStatusError: If Keycloak returns an error
+            RuntimeError: If Keycloak is unreachable
+        """
+        token_url = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}" f"/protocol/openid-connect/token"
+
+        data = {
+            "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "subject_token": subject_token,
+            "subject_token_type": subject_token_type,
+            "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+        }
+
+        if audience:
+            data["audience"] = audience
+        if scope:
+            data["scope"] = scope
+
+        async with httpx.AsyncClient(timeout=10.0) as http_client:
+            response = await http_client.post(
+                token_url,
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            response.raise_for_status()
+
+        result = response.json()
+        logger.info(f"Token exchange succeeded for client {client_id}")
+        return result
 
     async def delete_consumer_client(self, client_id: str) -> bool:
         """Delete a consumer's Keycloak client by client_id."""

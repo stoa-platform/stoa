@@ -7,6 +7,7 @@ import math
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +30,8 @@ from ..schemas.consumer import (
     ConsumerResponse,
     ConsumerStatusEnum,
     ConsumerUpdate,
+    TokenExchangeRequest,
+    TokenExchangeResponse,
 )
 from ..schemas.quota import QuotaCounters, QuotaLimits, QuotaRemaining, QuotaResets, QuotaStatusResponse
 from ..services.certificate_utils import parse_pem_certificate, validate_certificate_not_expired
@@ -415,6 +418,124 @@ async def get_consumer_credentials(
         )
 
 
+# ============== Token Exchange (RFC 8693) ==============
+
+
+@router.post(
+    "/{tenant_id}/{consumer_id}/token-exchange",
+    response_model=TokenExchangeResponse,
+)
+async def exchange_consumer_token(
+    tenant_id: str,
+    consumer_id: UUID,
+    request: TokenExchangeRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Exchange a token via RFC 8693 using a consumer's Keycloak client.
+
+    The consumer's OAuth2 client acts as the acting party in the exchange.
+    The exchanged token inherits the consumer's protocol-mapped claims
+    (tenant_id, consumer_id, plan_slug).
+    """
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    repo = ConsumerRepository(db)
+    consumer = await repo.get_by_id(consumer_id)
+
+    if not consumer or consumer.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Consumer not found")
+
+    if consumer.status != ConsumerStatus.ACTIVE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Consumer must be active for token exchange, current status: {consumer.status}",
+        )
+
+    if not consumer.keycloak_client_id:
+        raise HTTPException(
+            status_code=404,
+            detail="No Keycloak client configured for this consumer",
+        )
+
+    # Retrieve client secret from Keycloak
+    try:
+        client = await keycloak_service.get_client(consumer.keycloak_client_id)
+        if not client:
+            raise HTTPException(status_code=404, detail="Keycloak client not found")
+
+        client_uuid = client["id"]
+        secret_data = keycloak_service._admin.get_client_secrets(client_uuid)
+        client_secret = secret_data.get("value", "")
+    except RuntimeError as e:
+        logger.error(f"Keycloak unavailable for token exchange: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Authentication service unavailable, retry later"},
+            headers={"Retry-After": "5"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to retrieve client secret for consumer {consumer_id}: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Authentication service unavailable, retry later"},
+            headers={"Retry-After": "5"},
+        )
+
+    # Perform token exchange
+    try:
+        result = await keycloak_service.exchange_token(
+            client_id=consumer.keycloak_client_id,
+            client_secret=client_secret,
+            subject_token=request.subject_token,
+            subject_token_type=request.subject_token_type,
+            audience=request.audience,
+            scope=request.scope,
+        )
+
+        logger.info(f"Token exchange for consumer {consumer_id} by {user.email}")
+
+        return TokenExchangeResponse(
+            access_token=result["access_token"],
+            token_type=result.get("token_type", "Bearer"),
+            expires_in=result.get("expires_in", 300),
+            scope=result.get("scope"),
+            issued_token_type=result.get(
+                "issued_token_type",
+                "urn:ietf:params:oauth:token-type:access_token",
+            ),
+        )
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        try:
+            error_body = e.response.json()
+            error_desc = error_body.get("error_description", error_body.get("error", str(e)))
+        except Exception:
+            error_desc = str(e)
+
+        if status == 400:
+            raise HTTPException(status_code=401, detail=f"Token exchange failed: {error_desc}")
+        raise HTTPException(status_code=status, detail=f"Token exchange failed: {error_desc}")
+    except RuntimeError as e:
+        logger.error(f"Keycloak unavailable for token exchange: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Authentication service unavailable, retry later"},
+            headers={"Retry-After": "5"},
+        )
+    except Exception as e:
+        logger.error(f"Token exchange failed for consumer {consumer_id}: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Authentication service unavailable, retry later"},
+            headers={"Retry-After": "5"},
+        )
+
+
 # ============== Bulk Onboarding (CAB-864 Phase 3) ==============
 
 MAX_BULK_ROWS = 100
@@ -472,7 +593,12 @@ async def bulk_create_consumers(
 
     for row_num, row in enumerate(rows, start=1):
         result = await _process_bulk_row(
-            row_num=row_num, row=row, tenant_id=tenant_id, user=user, repo=repo, db=db,
+            row_num=row_num,
+            row=row,
+            tenant_id=tenant_id,
+            user=user,
+            repo=repo,
+            db=db,
         )
         results.append(result)
         if result.status == "created":
@@ -488,13 +614,20 @@ async def bulk_create_consumers(
     )
 
     return BulkResultResponse(
-        total=len(rows), success=success_count, failed=failed_count, results=results,
+        total=len(rows),
+        success=success_count,
+        failed=failed_count,
+        results=results,
     )
 
 
 async def _process_bulk_row(
-    row_num: int, row: dict, tenant_id: str, user: User,
-    repo: ConsumerRepository, db: AsyncSession,
+    row_num: int,
+    row: dict,
+    tenant_id: str,
+    user: User,
+    repo: ConsumerRepository,
+    db: AsyncSession,
 ) -> BulkResultItem:
     """Process a single row from bulk CSV upload."""
     external_id = row.get("external_id", "").strip()
@@ -517,7 +650,9 @@ async def _process_bulk_row(
     existing = await repo.get_by_external_id(tenant_id, external_id)
     if existing:
         return BulkResultItem(
-            row=row_num, status="error", external_id=external_id,
+            row=row_num,
+            status="error",
+            external_id=external_id,
             error="Consumer with external_id already exists",
         )
 
@@ -527,20 +662,25 @@ async def _process_bulk_row(
             cert_info = parse_pem_certificate(certificate_pem)
             validate_certificate_not_expired(cert_info)
         except ValueError as e:
-            return BulkResultItem(
-                row=row_num, status="error", external_id=external_id, error=str(e)
-            )
+            return BulkResultItem(row=row_num, status="error", external_id=external_id, error=str(e))
 
         dup = await repo.get_by_fingerprint(tenant_id, cert_info.fingerprint_hex)
         if dup:
             return BulkResultItem(
-                row=row_num, status="error", external_id=external_id,
+                row=row_num,
+                status="error",
+                external_id=external_id,
                 error="Certificate fingerprint already registered",
             )
 
     consumer = Consumer(
-        external_id=external_id, name=name, email=email, company=company,
-        tenant_id=tenant_id, status=ConsumerStatus.ACTIVE, created_by=user.id,
+        external_id=external_id,
+        name=name,
+        email=email,
+        company=company,
+        tenant_id=tenant_id,
+        status=ConsumerStatus.ACTIVE,
+        created_by=user.id,
     )
 
     if cert_info:
@@ -557,21 +697,22 @@ async def _process_bulk_row(
         consumer = await repo.create(consumer)
     except Exception as e:
         logger.error(f"Bulk row {row_num}: failed to create consumer: {e}")
-        return BulkResultItem(
-            row=row_num, status="error", external_id=external_id, error="Database error"
-        )
+        return BulkResultItem(row=row_num, status="error", external_id=external_id, error="Database error")
 
     client_id = None
     client_secret = None
     try:
         if cert_info:
             kc_result = await keycloak_service.create_consumer_client_with_cert(
-                tenant_slug=tenant_id, consumer_external_id=external_id,
-                consumer_id=str(consumer.id), fingerprint_b64url=cert_info.fingerprint_b64url,
+                tenant_slug=tenant_id,
+                consumer_external_id=external_id,
+                consumer_id=str(consumer.id),
+                fingerprint_b64url=cert_info.fingerprint_b64url,
             )
         else:
             kc_result = await keycloak_service.create_consumer_client(
-                tenant_slug=tenant_id, consumer_external_id=external_id,
+                tenant_slug=tenant_id,
+                consumer_external_id=external_id,
                 consumer_id=str(consumer.id),
             )
         client_id = kc_result["client_id"]
@@ -582,8 +723,12 @@ async def _process_bulk_row(
         logger.warning(f"Bulk row {row_num}: Keycloak client creation failed: {e}")
 
     return BulkResultItem(
-        row=row_num, status="created", external_id=external_id,
-        consumer_id=consumer.id, client_id=client_id, client_secret=client_secret,
+        row=row_num,
+        status="created",
+        external_id=external_id,
+        consumer_id=consumer.id,
+        client_id=client_id,
+        client_secret=client_secret,
     )
 
 
@@ -687,9 +832,7 @@ async def rotate_certificate(
     consumer.certificate_not_after = cert_info.not_after
     consumer.certificate_pem = cert_info.pem
     consumer.certificate_status = CertificateStatus.ROTATING
-    consumer.previous_cert_expires_at = datetime.now(UTC) + timedelta(
-        hours=request.grace_period_hours
-    )
+    consumer.previous_cert_expires_at = datetime.now(UTC) + timedelta(hours=request.grace_period_hours)
     consumer.last_rotated_at = datetime.now(UTC)
     consumer.rotation_count = (consumer.rotation_count or 0) + 1
 
@@ -698,7 +841,8 @@ async def rotate_certificate(
     if consumer.keycloak_client_id:
         try:
             await keycloak_service.update_consumer_client_cnf(
-                consumer.keycloak_client_id, cert_info.fingerprint_b64url,
+                consumer.keycloak_client_id,
+                cert_info.fingerprint_b64url,
             )
         except Exception as e:
             logger.warning(f"Failed to update Keycloak cnf for consumer {consumer_id}: {e}")
@@ -735,11 +879,13 @@ async def get_consumer_quota_status(
     from sqlalchemy import select as sa_select
 
     sub_result = await db.execute(
-        sa_select(Subscription.plan_id).where(
+        sa_select(Subscription.plan_id)
+        .where(
             Subscription.consumer_id == consumer_id,
             Subscription.tenant_id == tenant_id,
             Subscription.status == "active",
-        ).limit(1)
+        )
+        .limit(1)
     )
     sub_row = sub_result.first()
 
@@ -767,13 +913,9 @@ async def get_consumer_quota_status(
     now = datetime.utcnow()
     daily_reset = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     if now.month == 12:
-        monthly_reset = now.replace(
-            year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0
-        )
+        monthly_reset = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
     else:
-        monthly_reset = now.replace(
-            month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0
-        )
+        monthly_reset = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
     return QuotaStatusResponse(
         consumer_id=consumer_id,

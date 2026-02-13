@@ -111,9 +111,39 @@ class CertificateRotateRequest(BaseModel):
     """Schema for certificate rotation request (CAB-864)."""
 
     certificate_pem: str = Field(..., min_length=1, description="New PEM-encoded X.509 certificate")
-    grace_period_hours: int = Field(
-        default=24, ge=1, le=720, description="Hours during which both certs are valid"
+    grace_period_hours: int = Field(default=24, ge=1, le=720, description="Hours during which both certs are valid")
+
+
+class TokenExchangeRequest(BaseModel):
+    """Schema for RFC 8693 token exchange request."""
+
+    subject_token: str = Field(..., min_length=1, description="The token to exchange")
+    subject_token_type: str = Field(
+        default="urn:ietf:params:oauth:token-type:access_token",
+        description="Token type identifier per RFC 8693",
     )
+    audience: str | None = Field(None, description="Target audience for the exchanged token")
+    scope: str | None = Field(None, description="Requested scope for the exchanged token")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "subject_token": "eyJhbGciOiJSUzI1NiIs...",
+                "audience": "stoa-api",
+                "scope": "openid profile",
+            }
+        }
+    )
+
+
+class TokenExchangeResponse(BaseModel):
+    """Schema for RFC 8693 token exchange response."""
+
+    access_token: str
+    token_type: str = "Bearer"
+    expires_in: int
+    scope: str | None = None
+    issued_token_type: str = "urn:ietf:params:oauth:token-type:access_token"
 
 
 class BulkResultItem(BaseModel):

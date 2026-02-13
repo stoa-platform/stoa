@@ -14,6 +14,8 @@ import type {
   ConsumerUpdate,
   ConsumerCredentials,
   ConsumerListResponse,
+  TokenExchangeRequest,
+  TokenExchangeResponse,
 } from '../types';
 
 export interface ListConsumersParams {
@@ -94,6 +96,22 @@ export const consumersService = {
   activate: async (tenantId: string, consumerId: string): Promise<Consumer> => {
     const response = await apiClient.post<Consumer>(
       `/v1/consumers/${tenantId}/${consumerId}/activate`
+    );
+    return response.data;
+  },
+
+  /**
+   * Exchange a token via RFC 8693 using the consumer's Keycloak client
+   * POST /v1/consumers/{tenant_id}/{consumer_id}/token-exchange
+   */
+  exchangeToken: async (
+    tenantId: string,
+    consumerId: string,
+    request: TokenExchangeRequest
+  ): Promise<TokenExchangeResponse> => {
+    const response = await apiClient.post<TokenExchangeResponse>(
+      `/v1/consumers/${tenantId}/${consumerId}/token-exchange`,
+      request
     );
     return response.data;
   },

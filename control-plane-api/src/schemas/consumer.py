@@ -1,4 +1,4 @@
-"""Pydantic schemas for consumer endpoints (CAB-1121 + CAB-864)."""
+"""Pydantic schemas for consumer endpoints (CAB-1121 + CAB-864 + CAB-872)."""
 
 from datetime import datetime
 from enum import StrEnum
@@ -144,6 +144,50 @@ class TokenExchangeResponse(BaseModel):
     expires_in: int
     scope: str | None = None
     issued_token_type: str = "urn:ietf:params:oauth:token-type:access_token"
+
+
+class CertificateBindRequest(BaseModel):
+    """Schema for binding an initial certificate to a consumer (CAB-872)."""
+
+    certificate_pem: str = Field(..., min_length=1, description="PEM-encoded X.509 certificate")
+
+
+class CertificateExpiryItem(BaseModel):
+    """A consumer with an expiring certificate (CAB-872)."""
+
+    consumer_id: UUID
+    external_id: str
+    name: str
+    tenant_id: str
+    certificate_fingerprint: str
+    certificate_subject_dn: str | None = None
+    certificate_not_after: datetime
+    days_until_expiry: int
+    health_score: int
+    certificate_status: str
+
+
+class CertificateExpiryResponse(BaseModel):
+    """Response listing consumers with expiring certificates (CAB-872)."""
+
+    items: list[CertificateExpiryItem]
+    total: int
+    days_threshold: int
+
+
+class BulkRevokeRequest(BaseModel):
+    """Request to revoke certificates for multiple consumers (CAB-872)."""
+
+    consumer_ids: list[UUID] = Field(..., min_length=1, max_length=100)
+
+
+class BulkRevokeResponse(BaseModel):
+    """Response for bulk certificate revocation (CAB-872)."""
+
+    success: int
+    failed: int
+    skipped: int
+    errors: list[str]
 
 
 class BulkResultItem(BaseModel):

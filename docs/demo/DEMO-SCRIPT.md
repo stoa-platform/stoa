@@ -17,7 +17,7 @@
 | 4 | 11:00 - 12:00 | Grafana: live dashboards | "Full observability" |
 | 5 | 12:00 - 14:00 | OpenSearch: error snapshots, trace search | "Every error, traced" |
 | 6 | 14:00 - 16:00 | Keycloak: federation login cross-tenant | "Zero trust, multi-org" |
-| 7 | 16:00 - 18:00 | MCP Bridge: legacy API → AI agent tool | "The paradigm shift" |
+| 7 | 16:00 - 18:00 | MCP Bridge: OpenAPI → MCP in 3s + AI agent call | "The paradigm shift" |
 | 8 | 18:00 - 20:00 | Born GitOps + AI Factory | "The bombshell" |
 
 ---
@@ -359,7 +359,26 @@ echo $TOKEN_B | python3 -c "import sys,json,base64; t=sys.stdin.read().strip().s
 
 > "Here's the paradigm shift. Everything we've built — APIs, authentication, rate limiting — all of that becomes available to AI agents."
 
-### 7.1 — MCP Tool Discovery (1 min)
+### 7.1 — OpenAPI → MCP Bridge (1 min)
+
+```bash
+# Bridge any OpenAPI spec into MCP tools — one command, 3 seconds
+stoactl bridge petstore.yaml --namespace tenant-acme \
+  --include-tags pets --apply --server-name petstore-mcp
+# → ✓ Parsed OpenAPI spec: Petstore v1.0.0
+# → ✓ Mapped 5 operations to Tool CRDs
+# → Created MCP server "petstore-mcp" (id=...)
+# →   + list-pets
+# →   + create-pet
+# →   + get-pet-by-id
+# →   + update-pet
+# →   + delete-pet
+# → Registered 5 tools on MCP server "petstore-mcp"
+```
+
+> "One command. Five tools registered. Three seconds. Any OpenAPI spec becomes MCP-ready."
+
+### 7.2 — MCP Tool Discovery (30s)
 
 ```bash
 # List available MCP tools (each published API = one MCP tool)
@@ -373,7 +392,7 @@ curl -s https://mcp.gostoa.dev/mcp/v1/tools | jq '.[].name'
 
 > "Every API in our catalog is automatically exposed as an MCP tool. Define Once, Expose Everywhere — that's our Universal API Contract."
 
-### 7.2 — AI Agent Call (2 min)
+### 7.3 — AI Agent Call (1:30 min)
 
 ```bash
 # An AI agent invokes the Petstore API tool

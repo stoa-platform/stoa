@@ -133,6 +133,47 @@ spec:
             runbook_url: "https://gitlab.gostoa.dev/stoa/stoa-catalog/-/blob/main/docs/runbooks/stoa-gateway-oidc.md"
 
     # ============================================
+    # STOA Gateway mTLS Alerts (CAB-864)
+    # ============================================
+    - name: stoa.stoa-gateway-mtls.rules
+      rules:
+        - alert: StoaMtlsHighFailureRate
+          expr: |
+            (
+              sum(rate(stoa_mtls_validations_total{result!="success"}[5m]))
+              / sum(rate(stoa_mtls_validations_total[5m]))
+            ) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            component: stoa-gateway
+          annotations:
+            summary: "mTLS validation failure rate high"
+            description: "mTLS certificate validation failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+        - alert: StoaMtlsBindingMismatch
+          expr: |
+            sum(rate(stoa_mtls_binding_checks_total{result="mismatch"}[5m])) > 0
+          for: 1m
+          labels:
+            severity: critical
+            component: stoa-gateway
+          annotations:
+            summary: "RFC 8705 certificate-token binding mismatch detected"
+            description: "Certificate-token binding mismatches detected — possible token theft or replay attack"
+
+        - alert: StoaMtlsCertsExpiringSoon
+          expr: |
+            stoa_mtls_certs_expiring_soon > 10
+          for: 1h
+          labels:
+            severity: warning
+            component: stoa-gateway
+          annotations:
+            summary: "Many mTLS certificates expiring soon"
+            description: "{{ $value }} certificates will expire within 30 days — notify affected consumers"
+
+    # ============================================
     # Control-Plane API Alerts
     # ============================================
     - name: stoa.control-plane-api.rules

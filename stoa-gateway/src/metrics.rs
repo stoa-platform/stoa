@@ -273,9 +273,7 @@ pub fn record_mtls_validation(result: &str, tenant: &str) {
 
 /// Record an RFC 8705 binding check outcome.
 pub fn record_mtls_binding_check(result: &str) {
-    MTLS_BINDING_CHECKS_TOTAL
-        .with_label_values(&[result])
-        .inc();
+    MTLS_BINDING_CHECKS_TOTAL.with_label_values(&[result]).inc();
 }
 
 // === HTTP metrics helpers ===

@@ -104,6 +104,33 @@ export interface Consumer {
   updated_at: string;
 }
 
+// Certificate lifecycle types (CAB-872)
+export interface CertificateExpiryItem {
+  consumer_id: string;
+  external_id: string;
+  name: string;
+  tenant_id: string;
+  certificate_fingerprint: string;
+  certificate_subject_dn?: string;
+  certificate_not_after: string;
+  days_until_expiry: number;
+  health_score: number;
+  certificate_status: CertificateStatus;
+}
+
+export interface CertificateExpiryResponse {
+  items: CertificateExpiryItem[];
+  total: number;
+  days_threshold: number;
+}
+
+export interface BulkRevokeResponse {
+  success: number;
+  failed: number;
+  skipped: number;
+  errors: string[];
+}
+
 // Environment types (ADR-040 — Born GitOps)
 export type Environment = 'dev' | 'staging' | 'prod';
 export type EnvironmentMode = 'full' | 'read-only' | 'promote-only';

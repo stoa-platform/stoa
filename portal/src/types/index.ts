@@ -769,6 +769,23 @@ export interface ConsumerListResponse {
   total_pages: number;
 }
 
+// ============ Token Exchange Types (CAB-1121 / RFC 8693) ============
+
+export interface TokenExchangeRequest {
+  subject_token: string;
+  subject_token_type?: string;
+  audience?: string;
+  scope?: string;
+}
+
+export interface TokenExchangeResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  scope?: string;
+  issued_token_type?: string;
+}
+
 // ============ Plan Types (CAB-1121) ============
 
 export type PlanStatus = 'active' | 'deprecated' | 'archived';

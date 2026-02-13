@@ -153,6 +153,48 @@ def seed_consumers(token: str | None) -> dict:
         return {"total": len(cert_files), "success": 0, "failed": len(cert_files), "results": []}
 
 
+# =============================================================================
+# Mixed profile post-processing
+# =============================================================================
+
+
+REVOKE_EXTERNAL_IDS = ["api-consumer-099", "api-consumer-100"]
+
+
+def apply_mixed_profile(token: str | None, result: dict) -> dict:
+    """Post-process bulk creation: revoke 2 consumers for mixed status demo."""
+    revoked = 0
+    for item in result.get("results", []):
+        ext_id = item.get("external_id", "")
+        consumer_id = item.get("consumer_id", "")
+        if ext_id in REVOKE_EXTERNAL_IDS and consumer_id:
+            ok = revoke_consumer_certificate(token, consumer_id)
+            if ok:
+                revoked += 1
+                item["certificate_status"] = "revoked"
+                print(f"    [+] Revoked: {ext_id} ({consumer_id})")
+            else:
+                print(f"    [-] Failed to revoke: {ext_id}")
+
+    print(f"  [*] Mixed profile: {revoked}/{len(REVOKE_EXTERNAL_IDS)} consumers revoked")
+    return result
+
+
+def revoke_consumer_certificate(token: str | None, consumer_id: str) -> bool:
+    """Revoke a consumer's certificate via CP API."""
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    url = f"{API_URL}/v1/consumers/{MTLS_TENANT}/{consumer_id}/certificate/revoke"
+    try:
+        resp = httpx.post(url, headers=headers, timeout=10.0)
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"    [-] Revoke error: {e}")
+        return False
+
+
 def save_credentials(result: dict) -> None:
     """Save client_id + client_secret pairs for demo use."""
     credentials = []
@@ -302,6 +344,12 @@ def print_verification_summary(
 def main() -> None:
     parser = argparse.ArgumentParser(description="STOA mTLS Demo Seed (CAB-864)")
     parser.add_argument("--force", action="store_true", help="Overwrite existing credentials")
+    parser.add_argument(
+        "--profile",
+        choices=["default", "mixed"],
+        default="default",
+        help="Seed profile: 'mixed' revokes consumers 099-100 for demo edge cases",
+    )
     args = parser.parse_args()
 
     creds_path = CERTS_DIR / "credentials.json"
@@ -313,6 +361,7 @@ def main() -> None:
     print(f"  KC:      {KEYCLOAK_URL}")
     print(f"  Tenant:  {MTLS_TENANT}")
     print(f"  Certs:   {CERTS_DIR}")
+    print(f"  Profile: {args.profile}")
     print()
 
     # Check certs exist
@@ -347,6 +396,11 @@ def main() -> None:
     failed = result.get("failed", 0)
 
     print(f"\n  Result: {success}/{total} consumers created ({failed} failed)")
+
+    # Mixed profile post-processing (revoke 2 consumers)
+    if args.profile == "mixed" and success > 0:
+        print("[2b/4] Applying mixed profile (revoking 2 consumers)...")
+        result = apply_mixed_profile(token, result)
 
     # Save credentials
     print("[3/4] Saving credentials...")

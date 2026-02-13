@@ -187,10 +187,15 @@ done
 > "We just onboarded 100 enterprise clients with certificates. Each one got an OAuth2 client with automatic certificate binding. No manual configuration."
 
 ```bash
-# Show consumer count (pre-seeded by seed-mtls-demo.py)
+# Pre-seed with mixed profile (run the weekend before the demo):
+#   ./scripts/demo/generate-mtls-certs.sh --profile=mixed --count 100
+#   python3 scripts/demo/seed-mtls-demo.py --profile=mixed
+# Result: 85 active, 8 expiring (7d), 5 expired (1d — naturally expired by demo), 2 revoked
+
+# Show consumer count
 curl -s "$API_URL/v1/consumers/acme-corp?page_size=3" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -m json.tool
-# → 100 consumers, each with certificate_fingerprint and certificate_status: "active"
+# → 100 consumers, mixed statuses: active, expiring, expired, revoked
 ```
 
 ### 3b.2 — Show Certificate-Bound Token (45s)

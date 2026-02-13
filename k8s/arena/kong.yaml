@@ -1,0 +1,112 @@
+# Kong DB-less for Arena benchmarks — single pod, declarative config.
+# No persistence, no ingress — benchmark traffic only via ClusterIP.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-arena-config
+  namespace: stoa-system
+  labels:
+    app: kong-arena
+data:
+  kong.yml: |
+    _format_version: "3.0"
+    services:
+      - name: echo-local
+        url: http://echo-backend.stoa-system.svc:8888
+        routes:
+          - name: echo-route
+            paths:
+              - /echo
+            strip_path: true
+        tags:
+          - stoa-arena
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong-arena
+  namespace: stoa-system
+  labels:
+    app: kong-arena
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kong-arena
+  template:
+    metadata:
+      labels:
+        app: kong-arena
+    spec:
+      containers:
+        - name: kong
+          image: kong:3.9-ubuntu
+          ports:
+            - containerPort: 8000
+              name: proxy
+            - containerPort: 8001
+              name: admin
+          env:
+            - name: KONG_DATABASE
+              value: "off"
+            - name: KONG_DECLARATIVE_CONFIG
+              value: /config/kong.yml
+            - name: KONG_PROXY_LISTEN
+              value: "0.0.0.0:8000"
+            - name: KONG_ADMIN_LISTEN
+              value: "0.0.0.0:8001"
+            - name: KONG_LOG_LEVEL
+              value: warn
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsUser: 100
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 30
+      volumes:
+        - name: config
+          configMap:
+            name: kong-arena-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-arena
+  namespace: stoa-system
+  labels:
+    app: kong-arena
+spec:
+  selector:
+    app: kong-arena
+  ports:
+    - name: proxy
+      port: 8000
+      targetPort: 8000
+    - name: admin
+      port: 8001
+      targetPort: 8001

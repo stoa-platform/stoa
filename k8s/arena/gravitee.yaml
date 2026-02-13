@@ -1,0 +1,378 @@
+# Gravitee APIM for Arena benchmarks — minimal stack (MongoDB + Mgmt API + Gateway).
+# No persistence (emptyDir), no ingress — benchmark traffic only via ClusterIP.
+# Echo route registered via init Job after all components are ready.
+
+# --- MongoDB ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gravitee-arena-mongo
+  namespace: stoa-system
+  labels:
+    app: gravitee-arena-mongo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gravitee-arena-mongo
+  template:
+    metadata:
+      labels:
+        app: gravitee-arena-mongo
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:7.0
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gravitee-arena-mongo
+  namespace: stoa-system
+  labels:
+    app: gravitee-arena-mongo
+spec:
+  selector:
+    app: gravitee-arena-mongo
+  ports:
+    - port: 27017
+      targetPort: 27017
+---
+# --- Management API ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gravitee-arena-mgmt
+  namespace: stoa-system
+  labels:
+    app: gravitee-arena-mgmt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gravitee-arena-mgmt
+  template:
+    metadata:
+      labels:
+        app: gravitee-arena-mgmt
+    spec:
+      containers:
+        - name: mgmt-api
+          image: graviteeio/apim-management-api:4.6
+          ports:
+            - containerPort: 8083
+          env:
+            - name: gravitee_management_mongodb_uri
+              value: mongodb://gravitee-arena-mongo.stoa-system.svc:27017/gravitee
+            - name: gravitee_analytics_mongodb_uri
+              value: mongodb://gravitee-arena-mongo.stoa-system.svc:27017/gravitee
+            - name: gravitee_analytics_type
+              value: mongodb
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+          readinessProbe:
+            httpGet:
+              path: /_node/health
+              port: 8083
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /_node/health
+              port: 8083
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gravitee-arena-mgmt
+  namespace: stoa-system
+  labels:
+    app: gravitee-arena-mgmt
+spec:
+  selector:
+    app: gravitee-arena-mgmt
+  ports:
+    - port: 8083
+      targetPort: 8083
+---
+# --- Gateway ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gravitee-arena-gw
+  namespace: stoa-system
+  labels:
+    app: gravitee-arena-gw
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gravitee-arena-gw
+  template:
+    metadata:
+      labels:
+        app: gravitee-arena-gw
+    spec:
+      containers:
+        - name: gateway
+          image: graviteeio/apim-gateway:4.6
+          ports:
+            - containerPort: 8082
+              name: proxy
+            - containerPort: 18082
+              name: technical
+          env:
+            - name: gravitee_management_mongodb_uri
+              value: mongodb://gravitee-arena-mongo.stoa-system.svc:27017/gravitee
+            - name: gravitee_ratelimit_mongodb_uri
+              value: mongodb://gravitee-arena-mongo.stoa-system.svc:27017/gravitee
+            - name: gravitee_reporters_mongodb_uri
+              value: mongodb://gravitee-arena-mongo.stoa-system.svc:27017/gravitee
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+          readinessProbe:
+            httpGet:
+              path: /_node/health
+              port: 18082
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /_node/health
+              port: 18082
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gravitee-arena-gw
+  namespace: stoa-system
+  labels:
+    app: gravitee-arena-gw
+spec:
+  selector:
+    app: gravitee-arena-gw
+  ports:
+    - name: proxy
+      port: 8082
+      targetPort: 8082
+    - name: technical
+      port: 18082
+      targetPort: 18082
+---
+# --- Echo Route Init Job ---
+# Registers echo API on Gravitee after all components are ready.
+# Gravitee V4 lifecycle: create API → create plan → publish plan → deploy → start.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gravitee-arena-init
+  namespace: stoa-system
+  labels:
+    app: gravitee-arena-init
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: gravitee-arena-init
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: wait-mgmt
+          image: curlimages/curl:8.11.1
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Gravitee Management API..."
+              for i in $(seq 1 60); do
+                if curl -sf http://gravitee-arena-mgmt.stoa-system.svc:8083/_node/health > /dev/null 2>&1; then
+                  echo "Management API is ready"
+                  exit 0
+                fi
+                echo "  attempt $i/60 — not ready yet"
+                sleep 5
+              done
+              echo "Management API did not become ready in 5 minutes"
+              exit 1
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+        - name: wait-gateway
+          image: curlimages/curl:8.11.1
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Gravitee Gateway..."
+              for i in $(seq 1 60); do
+                if curl -sf http://gravitee-arena-gw.stoa-system.svc:18082/_node/health > /dev/null 2>&1; then
+                  echo "Gateway is ready"
+                  exit 0
+                fi
+                echo "  attempt $i/60 — not ready yet"
+                sleep 5
+              done
+              echo "Gateway did not become ready in 5 minutes"
+              exit 1
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: register-echo
+          image: curlimages/curl:8.11.1
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              MGMT="http://gravitee-arena-mgmt.stoa-system.svc:8083/management/v2/environments/DEFAULT"
+              AUTH="Basic YWRtaW46YWRtaW4="
+
+              # Check if echo API already exists
+              EXISTING=$(curl -sf "${MGMT}/apis?q=echo-arena" -H "Authorization: ${AUTH}" \
+                | sed -n 's/.*"id":"\([^"]*\)".*"name":"echo-arena".*/\1/p' \
+                || echo "")
+
+              if [ -n "$EXISTING" ]; then
+                echo "Echo API already exists: $EXISTING"
+              else
+                echo "Creating V4 echo API..."
+                API_RESPONSE=$(curl -sf -X POST "${MGMT}/apis" \
+                  -H "Authorization: ${AUTH}" \
+                  -H "Content-Type: application/json" \
+                  -d '{
+                    "name": "echo-arena",
+                    "apiVersion": "1.0",
+                    "description": "Echo backend for Arena benchmarks",
+                    "definitionVersion": "V4",
+                    "type": "PROXY",
+                    "listeners": [
+                      {
+                        "type": "HTTP",
+                        "paths": [{"path": "/echo"}],
+                        "entrypoints": [{"type": "http-proxy"}]
+                      }
+                    ],
+                    "endpointGroups": [
+                      {
+                        "name": "default",
+                        "type": "http-proxy",
+                        "endpoints": [
+                          {
+                            "name": "echo-backend",
+                            "type": "http-proxy",
+                            "configuration": {"target": "http://echo-backend.stoa-system.svc:8888"}
+                          }
+                        ]
+                      }
+                    ]
+                  }')
+                EXISTING=$(echo "$API_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+                echo "API created: $EXISTING"
+
+                # Create KEY_LESS plan
+                echo "Creating KEY_LESS plan..."
+                PLAN_RESPONSE=$(curl -sf -X POST "${MGMT}/apis/${EXISTING}/plans" \
+                  -H "Authorization: ${AUTH}" \
+                  -H "Content-Type: application/json" \
+                  -d '{
+                    "name": "keyless",
+                    "description": "Open access for Arena",
+                    "definitionVersion": "V4",
+                    "mode": "STANDARD",
+                    "security": {"type": "KEY_LESS"},
+                    "characteristics": [],
+                    "status": "PUBLISHED"
+                  }')
+                PLAN_ID=$(echo "$PLAN_RESPONSE" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+                echo "Plan created: $PLAN_ID"
+
+                # Publish plan (Gravitee 4.6 may create in STAGING even with status=PUBLISHED)
+                echo "Publishing plan..."
+                curl -sf -X POST "${MGMT}/apis/${EXISTING}/plans/${PLAN_ID}/_publish" \
+                  -H "Authorization: ${AUTH}" > /dev/null 2>&1 || true
+
+                # Deploy
+                echo "Deploying API..."
+                curl -sf -X POST "${MGMT}/apis/${EXISTING}/deployments" \
+                  -H "Authorization: ${AUTH}" \
+                  -H "Content-Type: application/json" \
+                  -d '{"deploymentLabel":"arena-echo"}' > /dev/null 2>&1
+
+                # Start (may 400 on some V4 APIs — non-blocking)
+                echo "Starting API..."
+                curl -sf -X POST "${MGMT}/apis/${EXISTING}/_start" \
+                  -H "Authorization: ${AUTH}" > /dev/null 2>&1 || true
+
+                echo "Echo API deployed and started"
+              fi
+
+              # Verify echo route via gateway
+              echo "Verifying echo route..."
+              sleep 5
+              HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' http://gravitee-arena-gw.stoa-system.svc:8082/echo/get)
+              echo "Gravitee proxy echo: HTTP $HTTP_CODE"
+              if [ "$HTTP_CODE" = "200" ]; then
+                echo "SUCCESS: echo route is working"
+              else
+                echo "WARNING: echo route returned HTTP $HTTP_CODE (may need more time to sync)"
+              fi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL

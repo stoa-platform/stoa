@@ -1,0 +1,133 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: gatewaybindings.gostoa.dev
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  group: gostoa.dev
+  names:
+    kind: GatewayBinding
+    listKind: GatewayBindingList
+    plural: gatewaybindings
+    singular: gatewaybinding
+    shortNames:
+      - gwb
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: API
+          type: string
+          jsonPath: .spec.apiRef.name
+        - name: Gateway
+          type: string
+          jsonPath: .spec.gatewayRef.name
+        - name: Sync
+          type: string
+          jsonPath: .status.syncStatus
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - apiRef
+                - gatewayRef
+              properties:
+                apiRef:
+                  type: object
+                  required:
+                    - name
+                  description: Reference to the API catalog entry
+                  properties:
+                    name:
+                      type: string
+                      description: API catalog entry name
+                    version:
+                      type: string
+                      description: API version to bind
+                gatewayRef:
+                  type: object
+                  required:
+                    - name
+                  description: Reference to the target GatewayInstance
+                  properties:
+                    name:
+                      type: string
+                      description: GatewayInstance resource name
+                    namespace:
+                      type: string
+                      description: GatewayInstance namespace (if cross-namespace)
+                contractRef:
+                  type: object
+                  description: "Reference to the Universal API Contract (UAC)"
+                  properties:
+                    name:
+                      type: string
+                      description: UAC resource name
+                    namespace:
+                      type: string
+                      description: UAC namespace
+                desiredState:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: Desired configuration on the target gateway
+                policies:
+                  type: array
+                  description: Policies to apply on this binding (rate-limit, cors, etc.)
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: Policy name
+                      type:
+                        type: string
+                        description: "Policy type (rate_limit, cors, request_validation)"
+                      config:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                        description: Policy configuration
+            status:
+              type: object
+              properties:
+                syncStatus:
+                  type: string
+                  description: Synchronization status
+                  enum:
+                    - pending
+                    - syncing
+                    - synced
+                    - drifted
+                    - error
+                    - deleting
+                actualState:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: State reported by the gateway
+                gatewayResourceId:
+                  type: string
+                  description: Resource ID assigned by the gateway
+                lastSyncAttempt:
+                  type: string
+                  format: date-time
+                  description: Last sync attempt timestamp
+                lastSyncSuccess:
+                  type: string
+                  format: date-time
+                  description: Last successful sync timestamp
+                syncAttempts:
+                  type: integer
+                  description: Number of sync attempts
+                syncError:
+                  type: string
+                  description: Error message from last failed sync
+      subresources:
+        status: {}

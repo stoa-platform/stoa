@@ -1,0 +1,123 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: gatewayinstances.gostoa.dev
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  group: gostoa.dev
+  names:
+    kind: GatewayInstance
+    listKind: GatewayInstanceList
+    plural: gatewayinstances
+    singular: gatewayinstance
+    shortNames:
+      - gwi
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Type
+          type: string
+          jsonPath: .spec.gatewayType
+        - name: Environment
+          type: string
+          jsonPath: .spec.environment
+        - name: URL
+          type: string
+          jsonPath: .spec.baseUrl
+          priority: 1
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - displayName
+                - gatewayType
+                - environment
+                - baseUrl
+              properties:
+                displayName:
+                  type: string
+                  description: Human-readable display name
+                gatewayType:
+                  type: string
+                  description: Gateway product type
+                  enum:
+                    - webmethods
+                    - kong
+                    - apigee
+                    - aws_apigateway
+                    - gravitee
+                    - stoa
+                    - stoa_edge_mcp
+                    - stoa_sidecar
+                    - stoa_proxy
+                    - stoa_shadow
+                environment:
+                  type: string
+                  description: "Target environment (dev, staging, prod)"
+                tenantId:
+                  type: string
+                  description: Owning tenant (empty for platform-wide instances)
+                baseUrl:
+                  type: string
+                  description: Gateway admin API base URL
+                authConfig:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: Authentication configuration for the gateway admin API
+                capabilities:
+                  type: array
+                  description: "Supported capabilities (rest, graphql, websocket, oidc, rate_limiting, mcp)"
+                  items:
+                    type: string
+                  default: []
+                mode:
+                  type: string
+                  description: "STOA gateway mode (ADR-024): edge-mcp, sidecar, proxy, shadow"
+                  enum:
+                    - edge-mcp
+                    - sidecar
+                    - proxy
+                    - shadow
+                version:
+                  type: string
+                  description: Gateway software version
+                tags:
+                  type: array
+                  description: Arbitrary tags for filtering
+                  items:
+                    type: string
+                  default: []
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  description: "Gateway health: online, offline, degraded, maintenance"
+                  enum:
+                    - online
+                    - offline
+                    - degraded
+                    - maintenance
+                lastHealthCheck:
+                  type: string
+                  format: date-time
+                  description: Last successful health check timestamp
+                healthDetails:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: Last health check result payload
+                error:
+                  type: string
+                  description: Error message if health check failed
+      subresources:
+        status: {}

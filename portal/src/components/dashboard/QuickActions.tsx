@@ -5,7 +5,15 @@
  */
 
 import { Link } from 'react-router-dom';
-import { Wrench, BarChart3, CreditCard, BookOpen, ArrowRight, ExternalLink } from 'lucide-react';
+import {
+  Wrench,
+  BarChart3,
+  CreditCard,
+  BookOpen,
+  ArrowRight,
+  ExternalLink,
+  UserPlus,
+} from 'lucide-react';
 import { config } from '../../config';
 
 interface QuickAction {
@@ -34,6 +42,14 @@ const actions: QuickAction[] = [
     icon: Wrench,
     color: 'from-primary-500 to-primary-600',
     enabled: config.features.enableMCPTools,
+  },
+  {
+    title: 'Register as Consumer',
+    description: 'Get API credentials',
+    href: '/consumers/register',
+    icon: UserPlus,
+    color: 'from-violet-500 to-violet-600',
+    enabled: config.features.enableSubscriptions,
   },
   {
     title: 'View Usage',

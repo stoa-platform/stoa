@@ -100,7 +100,7 @@ export function ConsumerRegistrationPage() {
 
   const handleCredentialsClose = () => {
     setShowCredentials(false);
-    navigate('/workspace?tab=apps');
+    navigate('/apis');
   };
 
   const isSubmitting = registerMutation.isPending || credentialsMutation.isPending;

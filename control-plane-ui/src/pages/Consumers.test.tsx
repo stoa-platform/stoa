@@ -11,9 +11,7 @@ vi.mock('../contexts/EnvironmentContext', () => ({
   useEnvironment: vi.fn(() => ({
     activeEnvironment: 'dev',
     activeConfig: { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
-    environments: [
-      { name: 'dev', label: 'Development', mode: 'full', color: 'green' },
-    ],
+    environments: [{ name: 'dev', label: 'Development', mode: 'full', color: 'green' }],
     switchEnvironment: vi.fn(),
   })),
 }));

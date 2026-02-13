@@ -310,28 +310,43 @@ curl -s -w "\nHTTP %{http_code}\n" \
 
 ## Act 5 — OpenSearch: Error Snapshots (2 min)
 
-**[Tab 5: OpenSearch Dashboards or Grafana Error Snapshots]**
+**[Tab 3: Terminal → then Tab 5: OpenSearch Dashboards]**
 
 > "What happens when things go wrong? Let me show you our error tracking."
 
-### 5.1 — Error Snapshots Dashboard (1 min)
+### 5.1 — Error Injection + Analysis (1 min)
 
-1. Open **STOA Error Snapshots** dashboard in Grafana
-2. Point out:
-   - Total errors count
-   - Errors by status code (pie chart: 400, 401, 404, 429, 500, 504)
-   - Errors by tenant (pie chart)
-   - Error timeline (stacked bar chart)
+```bash
+# Fire controlled errors through the gateway + seed 50 error snapshots
+./scripts/demo/opensearch-live-demo.sh --prod --cleanup
+```
 
-> "Every error captured with context: tenant, trace ID, status code, timestamp."
+Point out terminal output as it runs:
+- **Phase 0**: 5 real gateway errors (401, 404, 400) fired live
+- **Phase 1**: 50 error snapshots seeded into OpenSearch
+- **Phase 2**: Distribution by type (7 types: validation, auth, rate limit, timeout, internal, tool_not_found, contract_violation)
+- **Phase 3**: Distribution by tenant (4 tenants, multi-tenant isolation)
+- **Phase 4**: Severity breakdown (critical / error / warning)
+- **Phase 5**: Live trace lookup — random error with full detail
 
-### 5.2 — Trace ID Drill-Down (1 min)
+> "50 errors indexed, classified by type, tenant, and severity. Every one has a trace ID."
 
-1. Scroll to **Recent Errors** table
-2. Click a trace ID → opens OpenSearch Dashboards
-3. Show the full error document: trace_id, error_message, endpoint, method
+### 5.2 — OpenSearch Drill-Down (1 min)
 
-> "Click any trace ID to get the full picture. From dashboard to root cause in one click."
+**[Tab 5: OpenSearch Dashboards — https://opensearch.gostoa.dev]**
+
+1. Open **Discover** tab
+2. Select index pattern `stoa-errors-*`
+3. Filter: last 15 minutes → show 50+ errors
+4. Click one error document → show fields:
+   - `trace_id` — unique per request
+   - `tenant_id` — multi-tenant isolation
+   - `error_type` — classification
+   - `error_message` — human-readable root cause
+   - `endpoint` — which API failed
+   - `response_time_ms` — performance data
+
+> "From error to root cause in one click. No grepping, no guessing, no 3-team investigation."
 
 ---
 
@@ -543,7 +558,7 @@ git shortlog --since="2026-02-09" -sn
 | parzival | Console | copperkeystart | Tenant Admin (OASIS Gunters) |
 | art3mis | Portal | samantha2045 | Developer |
 | admin | Grafana | admin / admin | Monitoring |
-| admin | OpenSearch | admin / StOa_Admin_2026! | Logs |
+| admin | OpenSearch | admin / StoaAdmin2026Prod | Logs |
 | admin | Keycloak | admin / admin | Auth Admin |
 | demo-alpha | Federation (alpha) | demo | Demo Org Alpha user |
 | demo-beta | Federation (beta) | demo | Demo Org Beta user |

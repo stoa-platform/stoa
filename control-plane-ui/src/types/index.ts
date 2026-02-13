@@ -82,6 +82,8 @@ export interface ApplicationCreate {
 }
 
 // Consumer types (CAB-864 — mTLS Self-Service)
+export type CertificateStatus = 'active' | 'rotating' | 'revoked' | 'expired';
+
 export interface Consumer {
   id: string;
   tenant_id: string;
@@ -89,8 +91,15 @@ export interface Consumer {
   name: string;
   email: string;
   company?: string;
+  description?: string;
   status: 'active' | 'suspended' | 'blocked';
   certificate_fingerprint?: string;
+  certificate_status?: CertificateStatus;
+  certificate_subject_dn?: string;
+  certificate_not_before?: string;
+  certificate_not_after?: string;
+  last_rotated_at?: string;
+  rotation_count?: number;
   created_at: string;
   updated_at: string;
 }

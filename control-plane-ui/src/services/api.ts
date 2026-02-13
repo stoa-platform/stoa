@@ -257,6 +257,31 @@ class ApiService {
     await this.client.delete(`/v1/consumers/${tenantId}/${consumerId}`);
   }
 
+  async rotateCertificate(
+    tenantId: string,
+    consumerId: string,
+    certificatePem: string,
+    gracePeriodHours: number = 24
+  ): Promise<Consumer> {
+    const { data } = await this.client.post(
+      `/v1/consumers/${tenantId}/${consumerId}/certificate/rotate`,
+      { certificate_pem: certificatePem, grace_period_hours: gracePeriodHours }
+    );
+    return data;
+  }
+
+  async revokeCertificate(tenantId: string, consumerId: string): Promise<Consumer> {
+    const { data } = await this.client.post(
+      `/v1/consumers/${tenantId}/${consumerId}/certificate/revoke`
+    );
+    return data;
+  }
+
+  async blockConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
+    const { data } = await this.client.post(`/v1/consumers/${tenantId}/${consumerId}/block`);
+    return data;
+  }
+
   // Deployments
   async getDeployments(
     tenantId: string,

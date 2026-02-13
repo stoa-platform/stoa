@@ -46,6 +46,11 @@ const mockGetConsumers = vi.fn().mockResolvedValue([
     company: 'Acme Corp',
     status: 'active',
     certificate_fingerprint: 'AB:CD:EF:12:34:56:78:90',
+    certificate_status: 'active',
+    certificate_subject_dn: 'CN=alice,O=Acme',
+    certificate_not_before: '2024-01-01T00:00:00Z',
+    certificate_not_after: '2025-01-01T00:00:00Z',
+    rotation_count: 0,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
   },
@@ -168,7 +173,31 @@ describe('Consumers', () => {
   it('shows status badge', async () => {
     renderConsumers();
     await waitFor(() => {
-      expect(screen.getByText('active')).toBeInTheDocument();
+      // "active" appears in both consumer status badge and certificate status
+      const activeElements = screen.getAllByText('active');
+      expect(activeElements.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('shows certificate fingerprint in table', async () => {
+    renderConsumers();
+    await waitFor(() => {
+      expect(screen.getByText(/AB:CD:EF:12/)).toBeInTheDocument();
+    });
+  });
+
+  it('opens detail modal when clicking a row', async () => {
+    renderConsumers();
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeInTheDocument();
+    });
+    const row = screen.getByText('Alice').closest('tr');
+    expect(row).toBeInTheDocument();
+    row!.click();
+    await waitFor(() => {
+      // Modal should show consumer details — the modal header repeats the name
+      const aliceElements = screen.getAllByText('Alice');
+      expect(aliceElements.length).toBeGreaterThanOrEqual(2); // table + modal
     });
   });
 

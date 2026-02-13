@@ -493,7 +493,7 @@ export function Consumers() {
         </div>
       )}
 
-      <ConfirmDialog />
+      {ConfirmDialog}
     </div>
   );
 }

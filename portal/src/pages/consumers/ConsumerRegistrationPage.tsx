@@ -289,6 +289,8 @@ export function ConsumerRegistrationPage() {
           onClose={handleCredentialsClose}
           credentials={credentials}
           consumerName={form.name}
+          tenantId={tenantId}
+          consumerId={credentials.consumer_id}
         />
       )}
     </div>

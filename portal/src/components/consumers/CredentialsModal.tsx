@@ -10,12 +10,15 @@
 import { useState } from 'react';
 import { X, Copy, Check, AlertTriangle, Key, Terminal } from 'lucide-react';
 import type { ConsumerCredentials } from '../../types';
+import { TokenExchangePanel } from './TokenExchangePanel';
 
 interface CredentialsModalProps {
   isOpen: boolean;
   onClose: () => void;
   credentials: ConsumerCredentials;
   consumerName: string;
+  tenantId?: string;
+  consumerId?: string;
 }
 
 export function CredentialsModal({
@@ -23,6 +26,8 @@ export function CredentialsModal({
   onClose,
   credentials,
   consumerName,
+  tenantId,
+  consumerId,
 }: CredentialsModalProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -135,6 +140,17 @@ export function CredentialsModal({
               </div>
             </div>
           </div>
+
+          {/* Token Exchange Section */}
+          {tenantId && consumerId && (
+            <div className="px-6 pb-4 border-t border-gray-200 dark:border-neutral-700 pt-4">
+              <TokenExchangePanel
+                tenantId={tenantId}
+                consumerId={consumerId}
+                consumerName={consumerName}
+              />
+            </div>
+          )}
 
           {/* Footer */}
           <div className="flex justify-end p-6 border-t border-gray-200 dark:border-neutral-700">

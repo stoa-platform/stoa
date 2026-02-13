@@ -43,6 +43,8 @@ spec:
                   value: "100"
                 - name: TIMEOUT
                   value: "5"
+                - name: WARMUP_COUNT
+                  value: "5"
                 - name: GATEWAYS
                   value: |
                     [

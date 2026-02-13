@@ -7,6 +7,13 @@ Measures latency, availability, and burst resilience across multiple API gateway
 Uses a local echo backend (nginx returning static JSON in <1ms) on each VPS
 so benchmarks measure pure gateway overhead, not backend/network latency.
 
+HTTP keepalive: uses requests.Session with connection pooling (pool_maxsize=200)
+to reuse TCP connections across requests. This eliminates TCP handshake overhead
+and measures pure gateway processing time — matching real-world API client behavior.
+
+Warm-up: 5 sequential requests before scenarios to establish TCP connections and
+warm up gateway internal caches/pools.
+
 Scenarios:
   1. health          — single health check (availability)
   2. proxy_sequential — 20 sequential requests (base overhead P50/P95)
@@ -22,6 +29,7 @@ Env vars:
   PROXY_REPEAT      — Sequential requests count (default: 20)
   SUSTAINED_COUNT   — Sustained scenario count (default: 100)
   TIMEOUT           — Request timeout in seconds (default: 5)
+  WARMUP_COUNT      — Warm-up requests per gateway (default: 5)
 """
 
 import json
@@ -42,6 +50,7 @@ log = logging.getLogger("gateway-arena")
 
 try:
     import requests
+    from requests.adapters import HTTPAdapter
 except ImportError:
     log.error("requests library not found. Install: pip install requests")
     sys.exit(1)
@@ -73,6 +82,23 @@ BURST_SIZES = [int(x) for x in os.getenv("BURST_SIZES", "10,50,100").split(",")]
 PROXY_REPEAT = int(os.getenv("PROXY_REPEAT", "20"))
 SUSTAINED_COUNT = int(os.getenv("SUSTAINED_COUNT", "100"))
 TIMEOUT = int(os.getenv("TIMEOUT", "5"))
+WARMUP_COUNT = int(os.getenv("WARMUP_COUNT", "5"))
+
+
+# ---------------------------------------------------------------------------
+# HTTP Session with connection pooling (keepalive)
+# ---------------------------------------------------------------------------
+def create_session():
+    """Create a requests.Session with large connection pool for burst tests.
+
+    pool_connections: number of connection pools to cache (per host)
+    pool_maxsize: max connections per host (must cover burst_100)
+    """
+    session = requests.Session()
+    adapter = HTTPAdapter(pool_connections=10, pool_maxsize=200)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
 
 
 # ---------------------------------------------------------------------------
@@ -131,17 +157,28 @@ class MetricStore:
 # ---------------------------------------------------------------------------
 # Benchmark primitives
 # ---------------------------------------------------------------------------
-def timed_request(url, headers=None, timeout=TIMEOUT):
-    """Make a request and return (latency_seconds, status_code, ok)."""
+def timed_request(session, url, headers=None, timeout=TIMEOUT):
+    """Make a request using a keepalive session. Returns (latency_seconds, status_code, ok)."""
     start = time.monotonic()
     try:
-        resp = requests.get(url, headers=headers or {}, timeout=timeout)
+        resp = session.get(url, headers=headers or {}, timeout=timeout)
         elapsed = time.monotonic() - start
         return elapsed, resp.status_code, resp.status_code < 500
     except requests.exceptions.Timeout:
         return time.monotonic() - start, 0, False
     except requests.exceptions.ConnectionError:
         return time.monotonic() - start, 0, False
+
+
+def warm_up(session, gw, count):
+    """Send warm-up requests to establish TCP connections and warm gateway caches."""
+    headers = gw.get("proxy_headers", {})
+    ok = 0
+    for _ in range(count):
+        _, _, success = timed_request(session, gw["proxy"], headers=headers)
+        if success:
+            ok += 1
+    log.info(f"Warm-up: {ok}/{count} OK for {gw['name']}")
 
 
 def percentile(values, pct):
@@ -154,32 +191,36 @@ def percentile(values, pct):
 
 
 # ---------------------------------------------------------------------------
-# Scenarios
+# Scenarios (all use keepalive session)
 # ---------------------------------------------------------------------------
-def scenario_health(gw):
+def scenario_health(session, gw):
     """Single health check — availability baseline."""
-    latency, status, ok = timed_request(gw["health"])
+    latency, status, ok = timed_request(session, gw["health"])
     return {"scenario": "health", "latencies": [latency], "ok_count": 1 if ok else 0, "total": 1}
 
 
-def scenario_proxy_sequential(gw, count):
+def scenario_proxy_sequential(session, gw, count):
     """Sequential proxy requests — measures base gateway overhead (P50/P95)."""
     latencies, ok_count = [], 0
     headers = gw.get("proxy_headers", {})
     for _ in range(count):
-        latency, _, ok = timed_request(gw["proxy"], headers=headers)
+        latency, _, ok = timed_request(session, gw["proxy"], headers=headers)
         latencies.append(latency)
         if ok:
             ok_count += 1
     return {"scenario": "proxy_sequential", "latencies": latencies, "ok_count": ok_count, "total": count}
 
 
-def scenario_burst(gw, size):
-    """Concurrent burst — measures resilience under concurrent load."""
+def scenario_burst(session, gw, size):
+    """Concurrent burst — measures resilience under concurrent load.
+
+    requests.Session is thread-safe for connection pooling. Each thread reuses
+    connections from the shared pool, matching real-world load balancer behavior.
+    """
     latencies, ok_count = [], 0
     headers = gw.get("proxy_headers", {})
     with ThreadPoolExecutor(max_workers=size) as pool:
-        futures = [pool.submit(timed_request, gw["proxy"], headers) for _ in range(size)]
+        futures = [pool.submit(timed_request, session, gw["proxy"], headers) for _ in range(size)]
         for future in as_completed(futures):
             latency, _, ok = future.result()
             latencies.append(latency)
@@ -188,12 +229,12 @@ def scenario_burst(gw, size):
     return {"scenario": f"burst_{size}", "latencies": latencies, "ok_count": ok_count, "total": size}
 
 
-def scenario_sustained(gw, count):
+def scenario_sustained(session, gw, count):
     """Sustained sequential load — measures consistency (jitter = GC pauses, thread contention)."""
     latencies, ok_count = [], 0
     headers = gw.get("proxy_headers", {})
     for _ in range(count):
-        latency, _, ok = timed_request(gw["proxy"], headers=headers)
+        latency, _, ok = timed_request(session, gw["proxy"], headers=headers)
         latencies.append(latency)
         if ok:
             ok_count += 1
@@ -213,6 +254,11 @@ def compute_score(all_results):
       - 15% availability (across all scenarios)
       - 10% error rate
       - 10% consistency (sustained jitter — GC-free = lower jitter)
+
+    Caps tightened for keepalive benchmarking (TCP reuse eliminates handshake overhead):
+      - base: 200ms (was 500ms — sequential with keepalive should be <50ms)
+      - burst_50: 1000ms (was 3000ms — pool reuse, no connection storm)
+      - burst_100: 2000ms (was 5000ms — same logic, larger scale)
     """
     # Collect per-scenario stats
     scenario_map = {}
@@ -234,14 +280,11 @@ def compute_score(all_results):
         p95 = percentile(r["latencies"], 95)
         return max(0, 100 * (1 - p95 / cap_seconds))
 
-    # Caps tuned for remote benchmarking (K8s → VPS adds ~10-90ms network baseline).
-    # Generous enough to produce meaningful 0-100 range, tight enough to differentiate.
-    # Base overhead — sequential proxy (cap at 500ms — leaves room above ~100ms baseline)
-    base_score = latency_score("proxy_sequential", 0.5)
-
-    # Burst scores — higher cap for larger concurrent loads
-    burst50_score = latency_score("burst_50", 3.0)
-    burst100_score = latency_score("burst_100", 5.0)
+    # Caps tuned for keepalive benchmarking (K8s → VPS, TCP reuse).
+    # Tighter than raw-TCP caps because keepalive eliminates connection storms.
+    base_score = latency_score("proxy_sequential", 0.2)
+    burst50_score = latency_score("burst_50", 1.0)
+    burst100_score = latency_score("burst_100", 2.0)
 
     # Availability
     availability_score = 100 * (total_ok / total_requests)
@@ -282,6 +325,8 @@ def run():
         "burst_sizes": BURST_SIZES,
         "proxy_repeat": PROXY_REPEAT,
         "sustained_count": SUSTAINED_COUNT,
+        "warmup_count": WARMUP_COUNT,
+        "keepalive": True,
     }))
     metrics = MetricStore()
     results_summary = []
@@ -289,16 +334,23 @@ def run():
     for gw in GATEWAYS:
         name = gw["name"]
         log.info(f"Benchmarking gateway: {name}")
+
+        # Create a keepalive session per gateway (connection pool reused across scenarios)
+        session = create_session()
+
+        # Warm-up: establish TCP connections before measuring
+        warm_up(session, gw, WARMUP_COUNT)
+
         gw_results = []
 
         # Run all scenarios
         scenarios = [
-            lambda: scenario_health(gw),
-            lambda: scenario_proxy_sequential(gw, PROXY_REPEAT),
+            lambda: scenario_health(session, gw),
+            lambda: scenario_proxy_sequential(session, gw, PROXY_REPEAT),
         ]
         for bs in BURST_SIZES:
-            scenarios.append((lambda s: lambda: scenario_burst(gw, s))(bs))
-        scenarios.append(lambda: scenario_sustained(gw, SUSTAINED_COUNT))
+            scenarios.append((lambda s: lambda: scenario_burst(session, gw, s))(bs))
+        scenarios.append(lambda: scenario_sustained(session, gw, SUSTAINED_COUNT))
 
         for scenario_fn in scenarios:
             result = scenario_fn()
@@ -347,6 +399,9 @@ def run():
             metrics.gauge("gateway_arena_p50_seconds", {"gateway": name, "scenario": scenario}, p50 / 1000, "P50 latency")
             metrics.gauge("gateway_arena_p95_seconds", {"gateway": name, "scenario": scenario}, p95 / 1000, "P95 latency")
             metrics.gauge("gateway_arena_p99_seconds", {"gateway": name, "scenario": scenario}, p99 / 1000, "P99 latency")
+
+        # Close session after all scenarios for this gateway
+        session.close()
 
         # Composite score
         score = compute_score(gw_results)

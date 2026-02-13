@@ -11,7 +11,7 @@
 | Act | Time | What | Key Moment |
 |-----|------|------|------------|
 | 1 | 0:00 - 3:00 | Console: create tenant + publish API | "Admin in 3 min" |
-| 2 | 3:00 - 6:00 | Portal: discover, subscribe, get token | "5 days → 5 minutes" |
+| 2 | 3:00 - 6:00 | Portal: register consumer, get credentials, token exchange | "5 days → 5 minutes" |
 | 3 | 6:00 - 8:00 | Rust Gateway: API call, JWT, zero latency | "Sub-millisecond proxy" |
 | 3b | 8:00 - 11:00 | mTLS: enterprise certificate binding (RFC 8705) | "100 clients, zero trust" |
 | 4 | 11:00 - 12:00 | Grafana: live dashboards | "Full observability" |
@@ -94,39 +94,63 @@ curl -sI https://opensearch.gostoa.dev -o /dev/null -w "opensearch: %{http_code}
 
 ---
 
-## Act 2 — Portal: Discover, Subscribe, Get Token (3 min)
+## Act 2 — Portal: Register Consumer, Get Credentials, Token Exchange (3 min)
 
-**[Tab 2: Portal — fresh browser, not logged in]**
+**[Tab 2: Portal — logged in as art3mis (developer)]**
 
-> "Now I switch sides. I'm a developer. I heard there's a Payments API available."
+> "Now I switch sides. I'm a developer. I need API access."
 
-### 2.1 — Self-Registration (30s)
+### 2.1 — Consumer Registration (1 min)
 
-1. Click **Sign Up**
-2. Fill registration form (or show it's pre-configured via Keycloak)
-3. Redirect to portal catalog
+1. On the Portal **Dashboard**, click **"Register as Consumer"** in Quick Actions
+2. Fill the form:
+   - Name: "Acme Payments App"
+   - Email: "dev@acme.com"
+   - Company: "Acme Corp"
+3. Click **Register**
+4. **CredentialsModal appears** — point out: `client_id`, `client_secret`, `token_endpoint`, cURL snippet
 
-> "Self-service registration. No ServiceNow ticket required."
+> "Self-service registration. OAuth2 credentials generated instantly. Not in 5 days — right now."
 
-### 2.2 — API Discovery (1 min)
+### 2.2 — Get OAuth2 Token (30s)
 
-1. Browse the API Catalog
-2. Search for "payments"
-3. Click on **Payments API**
-4. Show: description, endpoints, OpenAPI spec tab
+**[Tab 3: Terminal]** — copy the cURL from CredentialsModal
 
-> "Full API documentation, searchable, always up-to-date. Not a shared Excel file."
+```bash
+# Get a client_credentials token (copy from CredentialsModal)
+TOKEN=$(curl -s -X POST ${STOA_AUTH_URL}/realms/stoa/protocol/openid-connect/token \
+  -d "grant_type=client_credentials" \
+  -d "client_id=$CLIENT_ID" \
+  -d "client_secret=$CLIENT_SECRET" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+echo $TOKEN | cut -c1-50
+```
 
-### 2.3 — Subscribe + Get Token (1:30 min)
+> "Standard OAuth2 client_credentials grant. The token is a JWT — signed, auditable, time-limited."
 
-1. Click **Subscribe**
-2. Select application and plan
-3. Confirm
-4. **Show the generated API key / JWT token**
+### 2.3 — Token Exchange (1 min)
 
-> "One click. Credentials generated instantly. Not in 5 days. Right now."
+**[Tab 2: Portal — CredentialsModal still open]**
 
-5. Copy the token for Act 3
+1. Click the **Token Exchange** tab in the CredentialsModal
+2. Paste the `$TOKEN` from the terminal
+3. Click **Exchange Token**
+4. Show the decoded claims: `consumer_id`, `tenant_id`, scopes
+5. Copy the gateway cURL snippet
+
+> "RFC 8693 token exchange. The consumer gets a gateway-scoped token — per-consumer quotas, per-tenant isolation. Enterprise-grade from day one."
+
+### 2.4 — Call Gateway with Exchanged Token (30s)
+
+**[Tab 3: Terminal]**
+
+```bash
+# Use the exchanged token to call the gateway
+curl -s -H "Authorization: Bearer $EXCHANGED_TOKEN" \
+  ${STOA_GATEWAY_URL}/mcp/v1/tools | python3 -m json.tool
+```
+
+> "One token, one gateway call. Authentication, rate limiting, audit trail — all automatic."
 
 ---
 

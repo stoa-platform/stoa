@@ -25,6 +25,7 @@ export interface CreateAPISubscriptionRequest {
   tenant_id: string;
   plan_id?: string;
   plan_name?: string;
+  certificate_fingerprint?: string;
 }
 
 export interface APISubscriptionResponse {

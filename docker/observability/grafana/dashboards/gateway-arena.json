@@ -114,6 +114,42 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Arena Score with 95% confidence interval error bars. Narrow CI = reproducible results.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 15, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
+          "min": 0,
+          "max": 100,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 10, "x": 8, "y": 1},
+      "id": 15,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "gateway_arena_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} score",
+          "refId": "A"
+        },
+        {
+          "expr": "gateway_arena_score_ci_upper{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} CI95 upper",
+          "refId": "B"
+        },
+        {
+          "expr": "gateway_arena_score_ci_lower{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} CI95 lower",
+          "refId": "C"
+        }
+      ],
+      "title": "Score ± CI95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "description": "Gateway availability (0-100%) from health check scenario",
       "fieldConfig": {
         "defaults": {

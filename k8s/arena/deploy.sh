@@ -72,6 +72,7 @@ echo "[7/$TOTAL] Creating ConfigMap from k6 arena scripts..."
 kubectl create configmap gateway-arena-scripts \
   --from-file="$REPO_ROOT/scripts/traffic/arena/benchmark.js" \
   --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena.sh" \
+  --from-file="$REPO_ROOT/scripts/traffic/arena/run-arena.py" \
   -n stoa-system \
   --dry-run=client -o yaml | kubectl apply -f -
 # Clean up old ConfigMap if it exists

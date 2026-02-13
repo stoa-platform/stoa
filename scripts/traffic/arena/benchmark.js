@@ -48,16 +48,22 @@ const scenarios = {
     maxDuration: '15s',
   },
   burst_50: {
-    executor: 'shared-iterations',
-    vus: 50,
-    iterations: 50,
-    maxDuration: '30s',
+    executor: 'ramping-vus',
+    startVUs: 0,
+    stages: [
+      { duration: '5s', target: 50 },   // ramp-up
+      { duration: '10s', target: 50 },  // hold
+      { duration: '3s', target: 0 },    // ramp-down
+    ],
   },
   burst_100: {
-    executor: 'shared-iterations',
-    vus: 100,
-    iterations: 100,
-    maxDuration: '30s',
+    executor: 'ramping-vus',
+    startVUs: 0,
+    stages: [
+      { duration: '5s', target: 100 },  // ramp-up
+      { duration: '10s', target: 100 }, // hold
+      { duration: '3s', target: 0 },    // ramp-down
+    ],
   },
   sustained: {
     executor: 'shared-iterations',

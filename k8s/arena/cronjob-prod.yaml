@@ -61,9 +61,10 @@ spec:
                       {"name":"gravitee-k8s","health":"http://gravitee-arena-gw.stoa-system.svc:18082/_node/health","proxy":"http://gravitee-arena-gw.stoa-system.svc:8082/echo/get"}
                     ]
               resources:
+                # Guaranteed QoS: requests == limits (no CPU throttling)
                 requests:
-                  cpu: 500m
-                  memory: 256Mi
+                  cpu: "1"
+                  memory: 512Mi
                 limits:
                   cpu: "1"
                   memory: 512Mi

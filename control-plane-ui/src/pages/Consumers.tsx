@@ -5,11 +5,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useEnvironmentMode } from '../hooks/useEnvironmentMode';
 import { useDebounce } from '../hooks/useDebounce';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import type { Consumer } from '../types';
+import type { Consumer, CertificateStatus } from '../types';
 import { useToastActions } from '@stoa/shared/components/Toast';
 import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
+import { ConsumerDetailModal } from '../components/ConsumerDetailModal';
 
 const PAGE_SIZE = 20;
 
@@ -17,6 +18,13 @@ const statusColors: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
   suspended: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
   blocked: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+};
+
+const certStatusColors: Record<CertificateStatus, string> = {
+  active: 'text-green-600 dark:text-green-400',
+  rotating: 'text-blue-600 dark:text-blue-400',
+  revoked: 'text-red-600 dark:text-red-400',
+  expired: 'text-gray-500 dark:text-gray-400',
 };
 
 export function Consumers() {
@@ -32,6 +40,7 @@ export function Consumers() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [selectedConsumer, setSelectedConsumer] = useState<Consumer | null>(null);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
 
@@ -343,7 +352,8 @@ export function Consumers() {
               {paginatedConsumers.map((consumer) => (
                 <tr
                   key={consumer.id}
-                  className="hover:bg-gray-50 dark:hover:bg-neutral-700/50 transition-colors"
+                  onClick={() => setSelectedConsumer(consumer)}
+                  className="hover:bg-gray-50 dark:hover:bg-neutral-700/50 transition-colors cursor-pointer"
                 >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-white">
                     {consumer.external_id}
@@ -364,12 +374,26 @@ export function Consumers() {
                       {consumer.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500 dark:text-neutral-400">
-                    {consumer.certificate_fingerprint
-                      ? `${consumer.certificate_fingerprint.substring(0, 16)}...`
-                      : '—'}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {consumer.certificate_fingerprint ? (
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-medium capitalize ${consumer.certificate_status ? certStatusColors[consumer.certificate_status as CertificateStatus] : 'text-gray-500'}`}
+                        >
+                          {consumer.certificate_status || 'active'}
+                        </span>
+                        <span className="font-mono text-xs text-gray-400 dark:text-neutral-500">
+                          {consumer.certificate_fingerprint.substring(0, 12)}...
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 dark:text-neutral-500">—</span>
+                    )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                  <td
+                    className="px-6 py-4 whitespace-nowrap text-right text-sm"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="flex justify-end gap-2">
                       {canEdit && consumer.status === 'active' && (
                         <button
@@ -413,7 +437,8 @@ export function Consumers() {
           {paginatedConsumers.map((consumer) => (
             <div
               key={consumer.id}
-              className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4 space-y-2"
+              onClick={() => setSelectedConsumer(consumer)}
+              className="bg-white dark:bg-neutral-800 rounded-lg shadow p-4 space-y-2 cursor-pointer"
             >
               <div className="flex justify-between items-start">
                 <div>
@@ -437,7 +462,10 @@ export function Consumers() {
                   Cert: {consumer.certificate_fingerprint.substring(0, 24)}...
                 </p>
               )}
-              <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-neutral-700">
+              <div
+                className="flex gap-2 pt-2 border-t border-gray-100 dark:border-neutral-700"
+                onClick={(e) => e.stopPropagation()}
+              >
                 {canEdit && consumer.status === 'active' && (
                   <button
                     onClick={() => handleSuspend(consumer)}
@@ -491,6 +519,14 @@ export function Consumers() {
             </button>
           </div>
         </div>
+      )}
+
+      {selectedConsumer && (
+        <ConsumerDetailModal
+          consumer={selectedConsumer}
+          tenantId={activeTenant}
+          onClose={() => setSelectedConsumer(null)}
+        />
       )}
 
       {ConfirmDialog}

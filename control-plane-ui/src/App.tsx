@@ -22,6 +22,7 @@ const APIs = lazy(() => import('./pages/APIs').then((m) => ({ default: m.APIs })
 const Applications = lazy(() =>
   import('./pages/Applications').then((m) => ({ default: m.Applications }))
 );
+const Consumers = lazy(() => import('./pages/Consumers').then((m) => ({ default: m.Consumers })));
 const Deployments = lazy(() =>
   import('./pages/Deployments').then((m) => ({ default: m.Deployments }))
 );
@@ -343,6 +344,7 @@ function ProtectedRoutes() {
                 <Route path="/ai-tools/usage" element={<UsageDashboard />} />
                 <Route path="/ai-tools/:toolName" element={<ToolDetail />} />
                 <Route path="/applications" element={<Applications />} />
+                <Route path="/consumers" element={<Consumers />} />
                 <Route path="/deployments" element={<Deployments />} />
                 <Route path="/monitoring" element={<APIMonitoring />} />
                 <Route path="/errors" element={<ErrorSnapshots />} />

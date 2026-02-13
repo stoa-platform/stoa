@@ -7,6 +7,7 @@ import type {
   APICreate,
   Application,
   ApplicationCreate,
+  Consumer,
   Deployment,
   DeploymentRequest,
   CommitInfo,
@@ -227,6 +228,33 @@ class ApiService {
 
   async deleteApplication(tenantId: string, appId: string): Promise<void> {
     await this.client.delete(`/v1/tenants/${tenantId}/applications/${appId}`);
+  }
+
+  // Consumers (CAB-864 — mTLS Self-Service)
+  async getConsumers(tenantId: string): Promise<Consumer[]> {
+    const { data } = await this.client.get(`/v1/consumers/${tenantId}`, {
+      params: { page: 1, page_size: 100 },
+    });
+    return data.items ?? data;
+  }
+
+  async getConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
+    const { data } = await this.client.get(`/v1/consumers/${tenantId}/${consumerId}`);
+    return data;
+  }
+
+  async suspendConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
+    const { data } = await this.client.post(`/v1/consumers/${tenantId}/${consumerId}/suspend`);
+    return data;
+  }
+
+  async activateConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
+    const { data } = await this.client.post(`/v1/consumers/${tenantId}/${consumerId}/activate`);
+    return data;
+  }
+
+  async deleteConsumer(tenantId: string, consumerId: string): Promise<void> {
+    await this.client.delete(`/v1/consumers/${tenantId}/${consumerId}`);
   }
 
   // Deployments

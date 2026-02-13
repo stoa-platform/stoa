@@ -81,6 +81,20 @@ export interface ApplicationCreate {
   api_subscriptions: string[];
 }
 
+// Consumer types (CAB-864 — mTLS Self-Service)
+export interface Consumer {
+  id: string;
+  tenant_id: string;
+  external_id: string;
+  name: string;
+  email: string;
+  company?: string;
+  status: 'active' | 'suspended' | 'blocked';
+  certificate_fingerprint?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // Environment types (ADR-040 — Born GitOps)
 export type Environment = 'dev' | 'staging' | 'prod';
 export type EnvironmentMode = 'full' | 'read-only' | 'promote-only';

@@ -4,7 +4,7 @@ CAB-330: Enhanced debug logging for authentication troubleshooting.
 """
 
 import httpx
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -13,7 +13,8 @@ from ..config import settings
 from ..logging_config import bind_request_context, get_logger
 
 logger = get_logger(__name__)
-security = HTTPBearer(auto_error=True)
+security = HTTPBearer(auto_error=False)
+
 
 class User(BaseModel):
     id: str
@@ -21,6 +22,7 @@ class User(BaseModel):
     username: str
     roles: list[str]
     tenant_id: str | None = None
+
 
 async def get_keycloak_public_key():
     """Fetch Keycloak realm public key"""
@@ -31,10 +33,33 @@ async def get_keycloak_public_key():
         public_key = data.get("public_key")
         return f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
 
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> User:
-    """Validate JWT token and return current user."""
+    """Validate JWT token and return current user.
+
+    Supports service-to-service auth via X-Operator-Key header (ADR-042).
+    """
+    # Service-to-service auth for internal operators (ADR-042)
+    operator_key = request.headers.get("X-Operator-Key")
+    if operator_key and operator_key in settings.gateway_api_keys_list:
+        logger.info("Operator authenticated via X-Operator-Key")
+        bind_request_context(user_id="stoa-operator")
+        return User(
+            id="stoa-operator",
+            email="",
+            username="stoa-operator",
+            roles=["cpi-admin"],
+        )
+
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
     token = credentials.credentials
 
     # Debug logging for auth troubleshooting (CAB-330)
@@ -50,12 +75,7 @@ async def get_current_user(
         public_key = await get_keycloak_public_key()
 
         # Decode without audience validation first
-        payload = jwt.decode(
-            token,
-            public_key,
-            algorithms=["RS256"],
-            options={"verify_aud": False}
-        )
+        payload = jwt.decode(token, public_key, algorithms=["RS256"], options={"verify_aud": False})
 
         # Debug: log payload structure (not values) for troubleshooting
         if settings.LOG_DEBUG_AUTH_PAYLOAD:
@@ -144,10 +164,7 @@ async def get_current_user(
                 typ=payload.get("typ"),
                 azp=payload.get("azp"),
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token: missing user ID"
-            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token: missing user ID")
 
         return User(
             id=user_id,
@@ -163,10 +180,7 @@ async def get_current_user(
             error=str(e),
             error_type=type(e).__name__,
         )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {e!s}"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e!s}")
     except httpx.HTTPError as e:
         logger.error(
             "Failed to fetch Keycloak public key",
@@ -175,6 +189,5 @@ async def get_current_user(
             realm=settings.KEYCLOAK_REALM,
         )
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Authentication service unavailable"
         )

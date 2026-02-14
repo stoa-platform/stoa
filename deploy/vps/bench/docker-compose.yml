@@ -2,17 +2,22 @@ services:
   arena:
     image: ghcr.io/stoa-platform/arena-bench:0.1.0
     container_name: arena-bench
+    network_mode: host
+    entrypoint: ["bash"]
+    command: ["/scripts/run-arena.sh"]
+    user: "12345:12345"
     volumes:
       - ./scripts:/scripts:ro
-      - /tmp/arena:/tmp
+    tmpfs:
+      - /tmp:size=128m
     environment:
       - PUSHGATEWAY_URL=${PUSHGATEWAY_URL:-https://pushgateway.gostoa.dev}
+      - PUSHGATEWAY_AUTH=${PUSHGATEWAY_AUTH:-arena:arena-push-2026}
       - RUNS=${RUNS:-5}
       - DISCARD_FIRST=${DISCARD_FIRST:-1}
       - TIMEOUT=${TIMEOUT:-5}
       - SCRIPT_PATH=/scripts/benchmark.js
       - GATEWAYS=${GATEWAYS}
-    command: ["bash", "/scripts/run-arena.sh"]
     restart: "no"
     security_opt:
       - no-new-privileges:true

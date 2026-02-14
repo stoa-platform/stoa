@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
-# Deploy Arena bench sidecar to 3 VPS (co-located benchmarks)
+# Deploy Arena bench sidecar to VPS (co-located benchmarks)
+# Each VPS benchmarks only its local gateway(s) and pushes to pushgateway.gostoa.dev
+#
+# Prerequisites:
+#   - SSH key: ~/.ssh/id_ed25519_stoa
+#   - Pushgateway ingress deployed: https://pushgateway.gostoa.dev
+#   - Docker installed on VPS with ghcr.io login
+#   - Echo server deployed: ./deploy/vps/echo/deploy-all.sh
+#
 # Usage: ./deploy/vps/bench/deploy.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+SSH_KEY=~/.ssh/id_ed25519_stoa
 
 # VPS configs: name, IP, GATEWAYS JSON
+# stoa-vps and kong-vps share the same VPS (51.83.45.13)
 declare -A VPS_IPS=(
   ["stoa-vps"]="51.83.45.13"
   ["kong-vps"]="51.83.45.13"
@@ -30,6 +40,15 @@ PUSHGATEWAY_URL="https://pushgateway.gostoa.dev"
 
 echo "=== Arena VPS Bench Deploy ==="
 
+# Pre-check: verify pushgateway is reachable
+echo "Pre-check: Pushgateway health..."
+if curl -sf "${PUSHGATEWAY_URL}/-/healthy" > /dev/null 2>&1; then
+  echo "  Pushgateway OK"
+else
+  echo "  WARNING: Pushgateway unreachable at ${PUSHGATEWAY_URL}"
+  echo "  VPS benches will run but can't push metrics. Fix ingress/TLS first."
+fi
+
 for VPS_IP in "${!UNIQUE_VPS[@]}"; do
   GATEWAY_NAMES="${UNIQUE_VPS[$VPS_IP]}"
   echo ""
@@ -50,36 +69,70 @@ for VPS_IP in "${!UNIQUE_VPS[@]}"; do
   done
   COMBINED_GATEWAYS="${COMBINED_GATEWAYS}]"
 
-  echo "  [1/4] Creating remote directory..."
-  ssh "root@${VPS_IP}" "mkdir -p ${REMOTE_DIR}/scripts"
+  echo "  [1/5] Creating remote directory..."
+  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "mkdir -p ${REMOTE_DIR}/scripts"
 
-  echo "  [2/4] Copying scripts + docker-compose..."
-  scp -q "$REPO_ROOT/scripts/traffic/arena/benchmark.js" "root@${VPS_IP}:${REMOTE_DIR}/scripts/"
-  scp -q "$REPO_ROOT/scripts/traffic/arena/run-arena.sh" "root@${VPS_IP}:${REMOTE_DIR}/scripts/"
-  scp -q "$SCRIPT_DIR/docker-compose.yml" "root@${VPS_IP}:${REMOTE_DIR}/"
+  echo "  [2/5] Copying scripts + docker-compose..."
+  scp -i "$SSH_KEY" -q \
+    "$REPO_ROOT/scripts/traffic/arena/benchmark.js" \
+    "$REPO_ROOT/scripts/traffic/arena/run-arena.sh" \
+    "$REPO_ROOT/scripts/traffic/arena/run-arena.py" \
+    "debian@${VPS_IP}:${REMOTE_DIR}/scripts/"
+  scp -i "$SSH_KEY" -q "$SCRIPT_DIR/docker-compose.yml" "debian@${VPS_IP}:${REMOTE_DIR}/"
 
-  echo "  [3/4] Creating .env file..."
-  ssh "root@${VPS_IP}" "cat > ${REMOTE_DIR}/.env <<ENVEOF
+  echo "  [3/5] Creating .env file..."
+  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "cat > ${REMOTE_DIR}/.env <<ENVEOF
 PUSHGATEWAY_URL=${PUSHGATEWAY_URL}
+PUSHGATEWAY_AUTH=arena:arena-push-2026
 RUNS=5
 DISCARD_FIRST=1
 TIMEOUT=5
 GATEWAYS=${COMBINED_GATEWAYS}
 ENVEOF"
 
-  echo "  [4/4] Installing crontab..."
-  CRON_LINE="*/30 * * * * cd ${REMOTE_DIR} && docker compose run --rm arena >> /var/log/arena-bench.log 2>&1"
-  ssh "root@${VPS_IP}" "(crontab -l 2>/dev/null | grep -v arena || true; echo '${CRON_LINE}') | crontab -"
+  echo "  [4/5] Pulling arena-bench image..."
+  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "docker pull ghcr.io/stoa-platform/arena-bench:0.1.0 2>/dev/null || echo 'Pull failed — ensure docker login ghcr.io'"
+
+  echo "  [5/5] Installing systemd timer (every 30 min)..."
+  ssh -i "$SSH_KEY" "debian@${VPS_IP}" "sudo tee /etc/systemd/system/arena-bench.service > /dev/null <<'SVCEOF'
+[Unit]
+Description=Gateway Arena Benchmark
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=${REMOTE_DIR}
+ExecStart=/usr/bin/docker compose run --rm arena
+User=debian
+StandardOutput=append:/var/log/arena-bench.log
+StandardError=append:/var/log/arena-bench.log
+SVCEOF
+
+sudo tee /etc/systemd/system/arena-bench.timer > /dev/null <<'TMREOF'
+[Unit]
+Description=Run Arena Benchmark every 30 minutes
+
+[Timer]
+OnCalendar=*:00,30
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target
+TMREOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now arena-bench.timer"
 
   echo "  Done: $VPS_IP"
 done
 
 echo ""
 echo "=== VPS Deploy Complete ==="
-echo "Cron schedule: */30 * * * * on each VPS"
+echo "Timer: every 30 min (systemd) on each VPS"
 echo "Pushgateway: ${PUSHGATEWAY_URL}"
 echo ""
-echo "Verify:"
-echo "  ssh root@51.83.45.13 'cd /opt/arena && docker compose run --rm arena'"
-echo "  ssh root@54.36.209.237 'cd /opt/arena && docker compose run --rm arena'"
-echo "  curl -sf https://pushgateway.gostoa.dev/metrics | grep gateway_arena_score"
+echo "Verify (manual run):"
+echo "  ssh -i $SSH_KEY debian@51.83.45.13 'cd /opt/arena && docker compose run --rm arena'"
+echo "  ssh -i $SSH_KEY debian@54.36.209.237 'cd /opt/arena && docker compose run --rm arena'"
+echo "  curl -sf -u arena:arena-push-2026 https://pushgateway.gostoa.dev/metrics | grep gateway_arena_score"

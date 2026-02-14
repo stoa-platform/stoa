@@ -6,7 +6,7 @@
   "displayNameHtml": "<div class=\"kc-logo-text\"><span>STOA Identity</span></div>",
   "loginTheme": "stoa",
   "accountTheme": "stoa",
-  "registrationAllowed": false,
+  "registrationAllowed": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,

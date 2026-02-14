@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -72,6 +72,9 @@ vi.mock('../services/api', () => ({
     suspendConsumer: vi.fn(),
     activateConsumer: vi.fn(),
     deleteConsumer: vi.fn(),
+    bulkRevokeCertificates: vi
+      .fn()
+      .mockResolvedValue({ success: 1, failed: 0, skipped: 0, errors: [] }),
   },
 }));
 
@@ -206,6 +209,50 @@ describe('Consumers', () => {
     renderConsumers();
     await waitFor(() => {
       expect(screen.getByText(/no consumers/i)).toBeInTheDocument();
+    });
+  });
+
+  // --- CAB-872: Health Badge, Cert Filter, Bulk Actions ---
+
+  it('shows CertificateHealthBadge in table for cert with active status', async () => {
+    renderConsumers();
+    await waitFor(() => {
+      // The badge renders "Expired" since notAfter is 2025-01-01 which is past
+      expect(screen.getByText('Expired')).toBeInTheDocument();
+    });
+  });
+
+  it('shows certificate filter dropdown', async () => {
+    renderConsumers();
+    await waitFor(() => {
+      expect(screen.getByText('Certificate')).toBeInTheDocument();
+    });
+    // Check filter options exist
+    const certSelect = screen.getByDisplayValue('All Certs');
+    expect(certSelect).toBeInTheDocument();
+  });
+
+  it('shows checkbox column for bulk selection', async () => {
+    renderConsumers();
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeInTheDocument();
+    });
+    // canEdit = true, so checkboxes should be present
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes.length).toBeGreaterThanOrEqual(2); // header + at least 1 row
+  });
+
+  it('shows bulk toolbar when row checkbox is clicked', async () => {
+    renderConsumers();
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeInTheDocument();
+    });
+    const checkboxes = screen.getAllByRole('checkbox');
+    // Click the row checkbox (not the header)
+    fireEvent.click(checkboxes[1]);
+    await waitFor(() => {
+      expect(screen.getByText('1 selected')).toBeInTheDocument();
+      expect(screen.getByText(/Revoke Selected/)).toBeInTheDocument();
     });
   });
 });

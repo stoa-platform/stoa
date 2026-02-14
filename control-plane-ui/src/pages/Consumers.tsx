@@ -11,6 +11,7 @@ import { useConfirm } from '@stoa/shared/components/ConfirmDialog';
 import { EmptyState } from '@stoa/shared/components/EmptyState';
 import { TableSkeleton } from '@stoa/shared/components/Skeleton';
 import { ConsumerDetailModal } from '../components/ConsumerDetailModal';
+import { CertificateHealthBadge } from '../components/CertificateHealthBadge';
 
 const PAGE_SIZE = 20;
 
@@ -18,13 +19,6 @@ const statusColors: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
   suspended: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
   blocked: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-};
-
-const certStatusColors: Record<CertificateStatus, string> = {
-  active: 'text-green-600 dark:text-green-400',
-  rotating: 'text-blue-600 dark:text-blue-400',
-  revoked: 'text-red-600 dark:text-red-400',
-  expired: 'text-gray-500 dark:text-gray-400',
 };
 
 export function Consumers() {
@@ -41,6 +35,9 @@ export function Consumers() {
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [selectedConsumer, setSelectedConsumer] = useState<Consumer | null>(null);
+  const [certFilter, setCertFilter] = useState<string>('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkRevoking, setBulkRevoking] = useState(false);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
 
@@ -108,8 +105,20 @@ export function Consumers() {
       result = result.filter((c) => c.status === statusFilter);
     }
 
+    if (certFilter === 'expiring') {
+      result = result.filter((c) => {
+        if (!c.certificate_not_after || c.certificate_status !== 'active') return false;
+        const days = Math.floor(
+          (new Date(c.certificate_not_after).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        );
+        return days > 0 && days <= 90;
+      });
+    } else if (certFilter === 'no-cert') {
+      result = result.filter((c) => !c.certificate_fingerprint);
+    }
+
     return result;
-  }, [consumers, debouncedSearch, statusFilter, activeTenant]);
+  }, [consumers, debouncedSearch, statusFilter, certFilter, activeTenant]);
 
   // Pagination
   const paginatedConsumers = useMemo(() => {
@@ -179,6 +188,53 @@ export function Consumers() {
     },
     [activeTenant, confirm, toast, invalidateConsumers]
   );
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    if (selectedIds.size === paginatedConsumers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(paginatedConsumers.map((c) => c.id)));
+    }
+  }, [selectedIds.size, paginatedConsumers]);
+
+  const handleBulkRevoke = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    const confirmed = await confirm({
+      title: 'Bulk Revoke Certificates',
+      message: `Revoke certificates for ${ids.length} selected consumer${ids.length > 1 ? 's' : ''}? This will disable their API access immediately.`,
+      confirmLabel: `Revoke ${ids.length}`,
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    setBulkRevoking(true);
+    try {
+      const result = await apiService.bulkRevokeCertificates(activeTenant, ids);
+      toast.success(
+        'Bulk revoke complete',
+        `${result.success} revoked, ${result.skipped} skipped, ${result.failed} failed`
+      );
+      setSelectedIds(new Set());
+      invalidateConsumers();
+    } catch (err: unknown) {
+      toast.error(
+        'Bulk revoke failed',
+        err instanceof Error ? err.message : 'Failed to bulk revoke certificates'
+      );
+    } finally {
+      setBulkRevoking(false);
+    }
+  }, [selectedIds, activeTenant, confirm, toast, invalidateConsumers]);
 
   if (loading && tenants.length === 0) {
     return (
@@ -283,11 +339,52 @@ export function Consumers() {
             </select>
           </div>
 
+          {/* Certificate Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
+              Certificate
+            </label>
+            <select
+              value={certFilter}
+              onChange={(e) => {
+                setCertFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-40 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All Certs</option>
+              <option value="expiring">Expiring Soon</option>
+              <option value="no-cert">No Certificate</option>
+            </select>
+          </div>
+
           {/* Results count */}
           <div className="text-sm text-gray-500 dark:text-neutral-400 self-end pb-2">
             {filteredConsumers.length} of {consumers.length} consumers
           </div>
         </div>
+
+        {/* Bulk Actions Toolbar */}
+        {canEdit && selectedIds.size > 0 && (
+          <div className="mt-3 flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+              {selectedIds.size} selected
+            </span>
+            <button
+              onClick={handleBulkRevoke}
+              disabled={bulkRevoking}
+              className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50"
+            >
+              {bulkRevoking ? 'Revoking...' : `Revoke Selected (${selectedIds.size})`}
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400"
+            >
+              Clear selection
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -325,6 +422,19 @@ export function Consumers() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
             <thead className="bg-gray-50 dark:bg-neutral-900">
               <tr>
+                {canEdit && (
+                  <th className="px-3 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={
+                        paginatedConsumers.length > 0 &&
+                        selectedIds.size === paginatedConsumers.length
+                      }
+                      onChange={toggleAll}
+                      className="rounded border-gray-300 dark:border-neutral-600"
+                    />
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                   External ID
                 </th>
@@ -355,6 +465,16 @@ export function Consumers() {
                   onClick={() => setSelectedConsumer(consumer)}
                   className="hover:bg-gray-50 dark:hover:bg-neutral-700/50 transition-colors cursor-pointer"
                 >
+                  {canEdit && (
+                    <td className="px-3 py-4 w-10" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(consumer.id)}
+                        onChange={() => toggleSelection(consumer.id)}
+                        className="rounded border-gray-300 dark:border-neutral-600"
+                      />
+                    </td>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-white">
                     {consumer.external_id}
                   </td>
@@ -377,11 +497,10 @@ export function Consumers() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {consumer.certificate_fingerprint ? (
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs font-medium capitalize ${consumer.certificate_status ? certStatusColors[consumer.certificate_status as CertificateStatus] : 'text-gray-500'}`}
-                        >
-                          {consumer.certificate_status || 'active'}
-                        </span>
+                        <CertificateHealthBadge
+                          status={consumer.certificate_status as CertificateStatus}
+                          notAfter={consumer.certificate_not_after}
+                        />
                         <span className="font-mono text-xs text-gray-400 dark:text-neutral-500">
                           {consumer.certificate_fingerprint.substring(0, 12)}...
                         </span>
@@ -458,9 +577,15 @@ export function Consumers() {
                 <p className="text-sm text-gray-500 dark:text-neutral-400">{consumer.company}</p>
               )}
               {consumer.certificate_fingerprint && (
-                <p className="text-xs font-mono text-gray-400 dark:text-neutral-500 truncate">
-                  Cert: {consumer.certificate_fingerprint.substring(0, 24)}...
-                </p>
+                <div className="flex items-center gap-2">
+                  <CertificateHealthBadge
+                    status={consumer.certificate_status as CertificateStatus}
+                    notAfter={consumer.certificate_not_after}
+                  />
+                  <span className="text-xs font-mono text-gray-400 dark:text-neutral-500 truncate">
+                    {consumer.certificate_fingerprint.substring(0, 20)}...
+                  </span>
+                </div>
               )}
               <div
                 className="flex gap-2 pt-2 border-t border-gray-100 dark:border-neutral-700"

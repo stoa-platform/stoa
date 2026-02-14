@@ -8,6 +8,8 @@ import type {
   Application,
   ApplicationCreate,
   Consumer,
+  CertificateExpiryResponse,
+  BulkRevokeResponse,
   Deployment,
   DeploymentRequest,
   CommitInfo,
@@ -279,6 +281,38 @@ class ApiService {
 
   async blockConsumer(tenantId: string, consumerId: string): Promise<Consumer> {
     const { data } = await this.client.post(`/v1/consumers/${tenantId}/${consumerId}/block`);
+    return data;
+  }
+
+  // Certificate Lifecycle (CAB-872)
+  async bindCertificate(
+    tenantId: string,
+    consumerId: string,
+    certificatePem: string
+  ): Promise<Consumer> {
+    const { data } = await this.client.post(`/v1/consumers/${tenantId}/${consumerId}/certificate`, {
+      certificate_pem: certificatePem,
+    });
+    return data;
+  }
+
+  async getExpiringCertificates(
+    tenantId: string,
+    days: number = 30
+  ): Promise<CertificateExpiryResponse> {
+    const { data } = await this.client.get(`/v1/consumers/${tenantId}/certificates/expiring`, {
+      params: { days },
+    });
+    return data;
+  }
+
+  async bulkRevokeCertificates(
+    tenantId: string,
+    consumerIds: string[]
+  ): Promise<BulkRevokeResponse> {
+    const { data } = await this.client.post(`/v1/consumers/${tenantId}/certificates/bulk-revoke`, {
+      consumer_ids: consumerIds,
+    });
     return data;
   }
 

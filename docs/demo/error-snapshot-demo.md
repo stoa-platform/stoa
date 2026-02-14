@@ -44,21 +44,19 @@ Each request gets a unique `trace_id` propagated through the entire chain. When 
 
 **[Switch: terminal]**
 
-Run the seed script to generate controlled errors:
+Run the live demo script against production:
 
 ```bash
-python scripts/demo/seed-error-snapshot.py \
-  --api-url https://api.<BASE_DOMAIN> \
-  --execute
+./scripts/demo/opensearch-live-demo.sh --prod --cleanup
 ```
 
-> "I'm sending 3 types of requests that will fail at different layers."
+> "I'm firing real errors through the gateway, then seeding 50 error snapshots."
 
-Point out each error type as it fires:
-
-1. **400 Bad Request** — invalid payload, caught at API layer
-2. **500 Internal Server Error** — backend failure, propagated through gateway
-3. **504 Gateway Timeout** — slow upstream, gateway times out
+The script runs 6 phases automatically:
+1. **Phase 0**: 5 controlled gateway errors (401, 404, 400) — live, real requests
+2. **Phase 1**: 50 error snapshots seeded into OpenSearch (`stoa-errors-*`)
+3. **Phases 2-4**: Terminal analysis — type, tenant, and severity distribution
+4. **Phase 5**: Live trace lookup — one random error with full details
 
 > "Each error has a unique trace ID. Let's see what that looks like."
 
@@ -66,28 +64,25 @@ Point out each error type as it fires:
 
 ## 0:50 - 1:40 | SHOW
 
-**[Switch: browser — OpenSearch Dashboards]**
+**[Switch: browser — OpenSearch Dashboards at https://opensearch.gostoa.dev]**
 
-1. Navigate to `https://opensearch.<BASE_DOMAIN>/_dashboards`
-2. Open the **STOA Error Correlation** dashboard (or Discover tab)
-3. Filter by last 5 minutes
+1. Open **Discover** tab (pre-authenticated as `admin:StoaAdmin2026Prod`)
+2. Select index pattern `stoa-errors-*`
+3. Filter by last 15 minutes → 50+ errors visible
 
-> "Here are all 3 errors, each with their trace ID."
+> "50 errors — each with a trace ID, tenant, and classification."
 
-4. Click on the **500 Internal Server Error** entry
-5. Show the trace_id field
-6. Filter by that trace_id
+4. Click on any error entry
+5. Show the full document with fields:
+   - `trace_id` — unique request identifier
+   - `tenant_id` — which organization this error belongs to
+   - `error_type` — classification (validation, auth, rate_limit, timeout...)
+   - `error_message` — human-readable root cause
+   - `http_status` — error code
+   - `endpoint` — which API endpoint failed
+   - `response_time_ms` — how long it took
 
-> "One click — and I see the entire request journey. From the client, through the gateway, to the backend that failed. The exact line, the exact service, the exact timestamp."
-
-7. Point out the fields:
-   - `trace_id` — same across all log entries
-   - `service` — which component logged it
-   - `status_code` — error code at each layer
-   - `duration_ms` — time spent at each hop
-   - `error.message` — root cause
-
-> "No more grepping through 5 different log files. No more guessing which service failed."
+> "From error to root cause in one click. No grepping, no guessing, no 3-team investigation."
 
 ---
 
@@ -103,20 +98,25 @@ Point out each error type as it fires:
 
 ### Prerequisites
 
-- OpenSearch Dashboards accessible at `https://opensearch.<BASE_DOMAIN>`
-- Index pattern `stoa-gateway-*` configured
-- Seed script tested in dry-run mode first
+- OpenSearch Dashboards accessible at `https://opensearch.gostoa.dev` (auth: `admin:StoaAdmin2026Prod`)
+- Gateway accessible at `https://mcp.gostoa.dev`
+- Index pattern `stoa-errors-*` (created automatically by the seed script)
 
 ### Pre-Demo Setup
 
 ```bash
 # Verify OpenSearch is up
-curl -s https://opensearch.<BASE_DOMAIN>/_cluster/health | python3 -m json.tool
+curl -sk -u admin:StoaAdmin2026Prod https://opensearch.gostoa.dev/_cluster/health | python3 -m json.tool
 
-# Dry-run the seed script
-python scripts/demo/seed-error-snapshot.py --api-url https://api.<BASE_DOMAIN> --dry-run
+# Verify gateway is up
+curl -sk https://mcp.gostoa.dev/health
 
-# Pre-open dashboard in a browser tab
+# Optional: dry run the seed script first
+python3 scripts/demo/seed-error-snapshot.py --seed-opensearch \
+  --opensearch-url https://opensearch.gostoa.dev \
+  --opensearch-auth admin:StoaAdmin2026Prod --count 5
+
+# Pre-open OpenSearch Dashboards in a browser tab
 ```
 
 ### If OpenSearch Is Down

@@ -1159,6 +1159,58 @@
         "title": "BulkResultResponse",
         "type": "object"
       },
+      "BulkRevokeRequest": {
+        "description": "Request to revoke certificates for multiple consumers (CAB-872).",
+        "properties": {
+          "consumer_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Consumer Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "consumer_ids"
+        ],
+        "title": "BulkRevokeRequest",
+        "type": "object"
+      },
+      "BulkRevokeResponse": {
+        "description": "Response for bulk certificate revocation (CAB-872).",
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "success": {
+            "title": "Success",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "success",
+          "failed",
+          "skipped",
+          "errors"
+        ],
+        "title": "BulkRevokeResponse",
+        "type": "object"
+      },
       "BusinessMetrics": {
         "description": "Business dashboard metrics response.",
         "properties": {
@@ -1342,6 +1394,116 @@
           "unpublished_apis"
         ],
         "title": "CatalogStatsResponse",
+        "type": "object"
+      },
+      "CertificateBindRequest": {
+        "description": "Schema for binding an initial certificate to a consumer (CAB-872).",
+        "properties": {
+          "certificate_pem": {
+            "description": "PEM-encoded X.509 certificate",
+            "minLength": 1,
+            "title": "Certificate Pem",
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_pem"
+        ],
+        "title": "CertificateBindRequest",
+        "type": "object"
+      },
+      "CertificateExpiryItem": {
+        "description": "A consumer with an expiring certificate (CAB-872).",
+        "properties": {
+          "certificate_fingerprint": {
+            "title": "Certificate Fingerprint",
+            "type": "string"
+          },
+          "certificate_not_after": {
+            "format": "date-time",
+            "title": "Certificate Not After",
+            "type": "string"
+          },
+          "certificate_status": {
+            "title": "Certificate Status",
+            "type": "string"
+          },
+          "certificate_subject_dn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Subject Dn"
+          },
+          "consumer_id": {
+            "format": "uuid",
+            "title": "Consumer Id",
+            "type": "string"
+          },
+          "days_until_expiry": {
+            "title": "Days Until Expiry",
+            "type": "integer"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "health_score": {
+            "title": "Health Score",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumer_id",
+          "external_id",
+          "name",
+          "tenant_id",
+          "certificate_fingerprint",
+          "certificate_not_after",
+          "days_until_expiry",
+          "health_score",
+          "certificate_status"
+        ],
+        "title": "CertificateExpiryItem",
+        "type": "object"
+      },
+      "CertificateExpiryResponse": {
+        "description": "Response listing consumers with expiring certificates (CAB-872).",
+        "properties": {
+          "days_threshold": {
+            "title": "Days Threshold",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CertificateExpiryItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "days_threshold"
+        ],
+        "title": "CertificateExpiryResponse",
         "type": "object"
       },
       "CertificateInfo": {
@@ -18100,6 +18262,126 @@
         ]
       }
     },
+    "/v1/consumers/{tenant_id}/certificates/bulk-revoke": {
+      "post": {
+        "description": "Revoke certificates for multiple consumers at once (CAB-872).\n\nIdempotent \u2014 already-revoked or no-cert consumers are skipped.",
+        "operationId": "bulk_revoke_certificates_v1_consumers__tenant_id__certificates_bulk_revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkRevokeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Revoke Certificates",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/certificates/expiring": {
+      "get": {
+        "description": "List consumers with certificates expiring within N days (CAB-872).\n\nAlso auto-expires any active certificates that are past their not_after date.",
+        "operationId": "list_expiring_certificates_v1_consumers__tenant_id__certificates_expiring_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Days threshold for expiry",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "Days threshold for expiry",
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateExpiryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Expiring Certificates",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
     "/v1/consumers/{tenant_id}/{consumer_id}": {
       "delete": {
         "description": "Delete a consumer.",
@@ -18384,6 +18666,74 @@
           }
         ],
         "summary": "Block Consumer",
+        "tags": [
+          "Consumers"
+        ]
+      }
+    },
+    "/v1/consumers/{tenant_id}/{consumer_id}/certificate": {
+      "post": {
+        "description": "Bind an initial mTLS certificate to a consumer (CAB-872).\n\nUse this when a consumer has no certificate yet, or when the previous\ncertificate was revoked/expired and needs replacement.\nReturns 409 if consumer already has an active or rotating certificate.",
+        "operationId": "bind_certificate_v1_consumers__tenant_id___consumer_id__certificate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Consumer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificateBindRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bind Certificate",
         "tags": [
           "Consumers"
         ]

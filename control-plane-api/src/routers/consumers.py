@@ -1,4 +1,4 @@
-"""Consumers router - External API consumer management (CAB-1121 + CAB-864)."""
+"""Consumers router - External API consumer management (CAB-1121 + CAB-864 + CAB-872)."""
 
 import csv
 import io
@@ -23,6 +23,11 @@ from ..repositories.quota_usage import QuotaUsageRepository
 from ..schemas.consumer import (
     BulkResultItem,
     BulkResultResponse,
+    BulkRevokeRequest,
+    BulkRevokeResponse,
+    CertificateBindRequest,
+    CertificateExpiryItem,
+    CertificateExpiryResponse,
     CertificateRotateRequest,
     ConsumerCreate,
     ConsumerCredentialsResponse,
@@ -34,7 +39,12 @@ from ..schemas.consumer import (
     TokenExchangeResponse,
 )
 from ..schemas.quota import QuotaCounters, QuotaLimits, QuotaRemaining, QuotaResets, QuotaStatusResponse
-from ..services.certificate_utils import parse_pem_certificate, validate_certificate_not_expired
+from ..services.certificate_utils import (
+    certificate_health_score,
+    days_until_expiry,
+    parse_pem_certificate,
+    validate_certificate_not_expired,
+)
 from ..services.keycloak_service import keycloak_service
 
 logger = logging.getLogger(__name__)
@@ -732,6 +742,98 @@ async def _process_bulk_row(
     )
 
 
+# ============== Certificate Bind (CAB-872) ==============
+
+
+@router.post("/{tenant_id}/{consumer_id}/certificate", response_model=ConsumerResponse, status_code=201)
+async def bind_certificate(
+    tenant_id: str,
+    consumer_id: UUID,
+    request: CertificateBindRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Bind an initial mTLS certificate to a consumer (CAB-872).
+
+    Use this when a consumer has no certificate yet, or when the previous
+    certificate was revoked/expired and needs replacement.
+    Returns 409 if consumer already has an active or rotating certificate.
+    """
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    repo = ConsumerRepository(db)
+    consumer = await repo.get_by_id(consumer_id)
+
+    if not consumer:
+        raise HTTPException(status_code=404, detail="Consumer not found")
+    if consumer.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Consumer not found")
+
+    # Only allow bind if no active/rotating cert exists
+    if consumer.certificate_fingerprint and consumer.certificate_status in (
+        CertificateStatus.ACTIVE,
+        CertificateStatus.ROTATING,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Consumer already has an active certificate. Use rotate or revoke first.",
+        )
+
+    try:
+        cert_info = parse_pem_certificate(request.certificate_pem)
+        validate_certificate_not_expired(cert_info)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Check fingerprint uniqueness
+    dup = await repo.get_by_fingerprint(tenant_id, cert_info.fingerprint_hex)
+    if dup and dup.id != consumer.id:
+        raise HTTPException(status_code=409, detail="Certificate fingerprint already registered")
+
+    # Store certificate metadata
+    consumer.certificate_fingerprint = cert_info.fingerprint_hex
+    consumer.certificate_subject_dn = cert_info.subject_dn
+    consumer.certificate_issuer_dn = cert_info.issuer_dn
+    consumer.certificate_serial = cert_info.serial
+    consumer.certificate_not_before = cert_info.not_before
+    consumer.certificate_not_after = cert_info.not_after
+    consumer.certificate_pem = cert_info.pem
+    consumer.certificate_status = CertificateStatus.ACTIVE
+    consumer.certificate_fingerprint_previous = None
+    consumer.previous_cert_expires_at = None
+
+    consumer = await repo.update(consumer)
+
+    # Create or update Keycloak client with mTLS cnf binding
+    if consumer.keycloak_client_id:
+        try:
+            await keycloak_service.update_consumer_client_cnf(
+                consumer.keycloak_client_id,
+                cert_info.fingerprint_b64url,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update Keycloak cnf for consumer {consumer_id}: {e}")
+    else:
+        try:
+            kc_result = await keycloak_service.create_consumer_client_with_cert(
+                tenant_slug=tenant_id,
+                consumer_external_id=consumer.external_id,
+                consumer_id=str(consumer.id),
+                fingerprint_b64url=cert_info.fingerprint_b64url,
+            )
+            consumer.keycloak_client_id = kc_result["client_id"]
+            consumer = await repo.update(consumer)
+        except Exception as e:
+            logger.warning(f"Failed to create Keycloak cert client for consumer {consumer_id}: {e}")
+
+    await db.commit()
+    logger.info(f"Certificate bound to consumer {consumer_id} by {user.email}")
+
+    return ConsumerResponse.model_validate(consumer)
+
+
 # ============== Certificate Revocation (CAB-864) ==============
 
 
@@ -854,6 +956,125 @@ async def rotate_certificate(
     )
 
     return ConsumerResponse.model_validate(consumer)
+
+
+# ============== Certificate Expiry Monitoring (CAB-872) ==============
+
+
+@router.get("/{tenant_id}/certificates/expiring", response_model=CertificateExpiryResponse)
+async def list_expiring_certificates(
+    tenant_id: str,
+    days: int = Query(default=30, ge=1, le=365, description="Days threshold for expiry"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List consumers with certificates expiring within N days (CAB-872).
+
+    Also auto-expires any active certificates that are past their not_after date.
+    """
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    repo = ConsumerRepository(db)
+
+    # Auto-expire overdue certs
+    expired_count = await repo.expire_overdue_certificates(tenant_id)
+    if expired_count:
+        await db.commit()
+        logger.info(f"Auto-expired {expired_count} certificates for tenant {tenant_id}")
+
+    consumers = await repo.list_expiring(tenant_id, days=days)
+
+    items = []
+    for c in consumers:
+        d = days_until_expiry(c.certificate_not_after)
+        score = certificate_health_score(
+            c.certificate_not_after,
+            c.certificate_status or "active",
+            c.rotation_count,
+        )
+        items.append(
+            CertificateExpiryItem(
+                consumer_id=c.id,
+                external_id=c.external_id,
+                name=c.name,
+                tenant_id=c.tenant_id,
+                certificate_fingerprint=c.certificate_fingerprint,
+                certificate_subject_dn=c.certificate_subject_dn,
+                certificate_not_after=c.certificate_not_after,
+                days_until_expiry=d,
+                health_score=score,
+                certificate_status=c.certificate_status or "active",
+            )
+        )
+
+    return CertificateExpiryResponse(items=items, total=len(items), days_threshold=days)
+
+
+# ============== Bulk Certificate Revoke (CAB-872) ==============
+
+
+@router.post("/{tenant_id}/certificates/bulk-revoke", response_model=BulkRevokeResponse)
+async def bulk_revoke_certificates(
+    tenant_id: str,
+    request: BulkRevokeRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Revoke certificates for multiple consumers at once (CAB-872).
+
+    Idempotent — already-revoked or no-cert consumers are skipped.
+    """
+    if not _has_tenant_access(user, tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    repo = ConsumerRepository(db)
+    success = 0
+    failed = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for cid in request.consumer_ids:
+        consumer = await repo.get_by_id(cid)
+        if not consumer or consumer.tenant_id != tenant_id:
+            errors.append(f"{cid}: consumer not found")
+            failed += 1
+            continue
+
+        if not consumer.certificate_fingerprint:
+            skipped += 1
+            continue
+
+        if consumer.certificate_status == CertificateStatus.REVOKED:
+            skipped += 1
+            continue
+
+        try:
+            consumer.certificate_status = CertificateStatus.REVOKED
+            consumer.certificate_fingerprint_previous = None
+            consumer.previous_cert_expires_at = None
+            await repo.update(consumer)
+
+            if consumer.keycloak_client_id:
+                try:
+                    await keycloak_service.disable_consumer_client(consumer.keycloak_client_id)
+                except Exception as e:
+                    logger.warning(f"Failed to disable KC client for consumer {cid}: {e}")
+
+            success += 1
+        except Exception as e:
+            errors.append(f"{cid}: {e}")
+            failed += 1
+
+    await db.commit()
+    logger.info(
+        f"Bulk revoke for tenant {tenant_id}: {success} revoked, "
+        f"{skipped} skipped, {failed} failed, by {user.email}"
+    )
+
+    return BulkRevokeResponse(success=success, failed=failed, skipped=skipped, errors=errors)
 
 
 # ============== Quota Status (CAB-1121 Phase 4) ==============

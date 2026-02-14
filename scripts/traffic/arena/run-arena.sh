@@ -6,8 +6,9 @@
 #
 # Env vars:
 #   GATEWAYS        — JSON array of gateway configs (same format as Python version)
-#   PUSHGATEWAY_URL — Pushgateway URL (default: http://pushgateway.monitoring.svc:9091)
-#   RUNS            — Number of runs per gateway (default: 5)
+#   PUSHGATEWAY_URL  — Pushgateway URL (default: http://pushgateway.monitoring.svc:9091)
+#   PUSHGATEWAY_AUTH — Basic auth user:pass for external Pushgateway (optional)
+#   RUNS             — Number of runs per gateway (default: 5)
 #   DISCARD_FIRST   — Discard first N runs as JVM warm-up (default: 1)
 #   TIMEOUT         — Request timeout in seconds (default: 5)
 #   SCRIPT_PATH     — Path to benchmark.js (default: /scripts/benchmark.js)
@@ -108,8 +109,12 @@ done < "$SCORER_STDERR"
 # ---------------------------------------------------------------------------
 PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/gateway_arena"
 RESPONSE_FILE="$WORK_DIR/push_response.txt"
+CURL_AUTH=""
+if [ -n "${PUSHGATEWAY_AUTH:-}" ]; then
+  CURL_AUTH="-u ${PUSHGATEWAY_AUTH}"
+fi
 HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" -X PUT --data-binary @"$METRICS_FILE" \
-  -H "Content-Type: text/plain" "$PUSH_URL" 2>/dev/null)
+  -H "Content-Type: text/plain" $CURL_AUTH "$PUSH_URL" 2>/dev/null)
 [ -z "$HTTP_CODE" ] && HTTP_CODE="000"
 
 if [ "$HTTP_CODE" -lt 300 ] && [ "$HTTP_CODE" != "000" ]; then

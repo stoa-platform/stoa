@@ -1,12 +1,14 @@
 """kopf handlers for GatewayInstance CRD (gostoa.dev/v1alpha1)."""
 
 import logging
+import time
 from datetime import UTC, datetime
 
 import httpx
 import kopf
 
 from src.cp_client import cp_client
+from src.metrics import RESOURCES_MANAGED, record_reconciliation
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ async def on_gwi_create(
     **_kwargs: object,
 ) -> dict:
     """Register gateway in CP API when a GatewayInstance is created."""
+    start = time.monotonic()
     gw_type = spec.get("gatewayType", "unknown")
     base_url = spec.get("baseUrl", "")
     logger.info(
@@ -61,6 +64,8 @@ async def on_gwi_create(
         except httpx.HTTPStatusError:
             patch.status["phase"] = "offline"
 
+        RESOURCES_MANAGED.labels(kind="gwi").inc()
+        record_reconciliation("gwi", "create", "success", time.monotonic() - start)
         return {"message": f"GatewayInstance {name} registered (id={gw_id})"}
 
     except httpx.HTTPStatusError as exc:
@@ -68,12 +73,14 @@ async def on_gwi_create(
         logger.error("GWI create failed for %s: %s", name, msg)
         patch.status["phase"] = "error"
         patch.status["error"] = msg
+        record_reconciliation("gwi", "create", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=30) from exc
     except httpx.RequestError as exc:
         msg = f"CP API unreachable: {exc}"
         logger.error("GWI create failed for %s: %s", name, msg)
         patch.status["phase"] = "error"
         patch.status["error"] = msg
+        record_reconciliation("gwi", "create", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=60) from exc
     finally:
         await cp_client.close()
@@ -92,6 +99,7 @@ async def on_gwi_update(
     **_kwargs: object,
 ) -> dict:
     """Update gateway in CP API when spec changes."""
+    start = time.monotonic()
     old_spec = old.get("spec", {})
     new_spec = new.get("spec", {})
     if old_spec == new_spec:
@@ -118,17 +126,20 @@ async def on_gwi_update(
 
         patch.status["error"] = ""
         patch.status["lastHealthCheck"] = datetime.now(UTC).isoformat()
+        record_reconciliation("gwi", "update", "success", time.monotonic() - start)
         return {"message": f"GatewayInstance {name} updated in CP API"}
 
     except httpx.HTTPStatusError as exc:
         msg = f"CP API error: {exc.response.status_code} — {exc.response.text}"
         logger.error("GWI update failed for %s: %s", name, msg)
         patch.status["error"] = msg
+        record_reconciliation("gwi", "update", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=30) from exc
     except httpx.RequestError as exc:
         msg = f"CP API unreachable: {exc}"
         logger.error("GWI update failed for %s: %s", name, msg)
         patch.status["error"] = msg
+        record_reconciliation("gwi", "update", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=60) from exc
     finally:
         await cp_client.close()
@@ -143,6 +154,7 @@ async def on_gwi_delete(
     **_kwargs: object,
 ) -> None:
     """Delete gateway from CP API when CRD is deleted."""
+    start = time.monotonic()
     gw_id = status.get("cpGatewayId", "")
     logger.info("GatewayInstance deleted: %s/%s cpGatewayId=%s", namespace, name, gw_id)
 
@@ -154,13 +166,17 @@ async def on_gwi_delete(
         await cp_client.connect()
         await cp_client.delete_gateway(gw_id)
         logger.info("Gateway %s deleted from CP API", gw_id)
+        RESOURCES_MANAGED.labels(kind="gwi").dec()
+        record_reconciliation("gwi", "delete", "success", time.monotonic() - start)
     except httpx.HTTPStatusError as exc:
         msg = f"CP API error on delete: {exc.response.status_code}"
         logger.error("GWI delete failed for %s: %s", name, msg)
+        record_reconciliation("gwi", "delete", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=30) from exc
     except httpx.RequestError as exc:
         msg = f"CP API unreachable: {exc}"
         logger.error("GWI delete failed for %s: %s", name, msg)
+        record_reconciliation("gwi", "delete", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=60) from exc
     finally:
         await cp_client.close()
@@ -176,6 +192,7 @@ async def on_gwi_resume(
     **_kwargs: object,
 ) -> None:
     """Reconcile existing GatewayInstances on operator startup."""
+    start = time.monotonic()
     gw_id = status.get("cpGatewayId", "")
     phase = status.get("phase", "unknown")
     logger.info(
@@ -217,14 +234,18 @@ async def on_gwi_resume(
 
         patch.status["error"] = ""
         patch.status["lastHealthCheck"] = datetime.now(UTC).isoformat()
+        RESOURCES_MANAGED.labels(kind="gwi").inc()
+        record_reconciliation("gwi", "resume", "success", time.monotonic() - start)
 
     except httpx.HTTPStatusError as exc:
         msg = f"CP API error: {exc.response.status_code}"
         logger.error("GWI resume failed for %s: %s", name, msg)
         patch.status["error"] = msg
+        record_reconciliation("gwi", "resume", "error", time.monotonic() - start)
     except httpx.RequestError as exc:
         msg = f"CP API unreachable: {exc}"
         logger.error("GWI resume failed for %s: %s", name, msg)
         patch.status["error"] = msg
+        record_reconciliation("gwi", "resume", "error", time.monotonic() - start)
     finally:
         await cp_client.close()

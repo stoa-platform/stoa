@@ -41,6 +41,10 @@ for svc in console portal api gateway mcp auth; do
 done
 curl -sI https://console.gostoa.dev/grafana -o /dev/null -w "grafana: %{http_code}\n"
 curl -sI https://opensearch.gostoa.dev -o /dev/null -w "opensearch: %{http_code}\n"
+
+# Validate mTLS pipeline (Act 3b pre-flight)
+./scripts/demo/validate-mtls-flow.sh
+# Expected: ALL 8 CHECKS PASSED — if not, fix before demo
 ```
 
 ### Browser Tabs (pre-authenticated)

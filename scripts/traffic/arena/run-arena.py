@@ -122,27 +122,32 @@ def main():
     discard_first = int(os.environ.get("DISCARD_FIRST", "1"))
     total_runs = int(os.environ.get("RUNS", "5"))
 
-    lines = []  # Prometheus text format
-    lines.append("# HELP gateway_arena_score Composite arena score 0-100")
-    lines.append("# TYPE gateway_arena_score gauge")
-    lines.append("# HELP gateway_arena_availability Gateway availability 0-1")
-    lines.append("# TYPE gateway_arena_availability gauge")
-    lines.append("# HELP gateway_arena_score_stddev Run-to-run standard deviation")
-    lines.append("# TYPE gateway_arena_score_stddev gauge")
-    lines.append("# HELP gateway_arena_score_ci_lower CI95 lower bound")
-    lines.append("# TYPE gateway_arena_score_ci_lower gauge")
-    lines.append("# HELP gateway_arena_score_ci_upper CI95 upper bound")
-    lines.append("# TYPE gateway_arena_score_ci_upper gauge")
-    lines.append("# HELP gateway_arena_runs Number of valid runs after discard")
-    lines.append("# TYPE gateway_arena_runs gauge")
-    lines.append("# HELP gateway_arena_p50_seconds P50 latency")
-    lines.append("# TYPE gateway_arena_p50_seconds gauge")
-    lines.append("# HELP gateway_arena_p95_seconds P95 latency")
-    lines.append("# TYPE gateway_arena_p95_seconds gauge")
-    lines.append("# HELP gateway_arena_p99_seconds P99 latency")
-    lines.append("# TYPE gateway_arena_p99_seconds gauge")
-    lines.append("# HELP gateway_arena_requests_total Total requests by status")
-    lines.append("# TYPE gateway_arena_requests_total gauge")
+    # Prometheus text format requires all samples of a metric family grouped together.
+    # Collect samples per metric family, emit grouped at the end.
+    families: dict[str, list[str]] = {
+        "gateway_arena_score": [],
+        "gateway_arena_availability": [],
+        "gateway_arena_score_stddev": [],
+        "gateway_arena_score_ci_lower": [],
+        "gateway_arena_score_ci_upper": [],
+        "gateway_arena_runs": [],
+        "gateway_arena_p50_seconds": [],
+        "gateway_arena_p95_seconds": [],
+        "gateway_arena_p99_seconds": [],
+        "gateway_arena_requests_total": [],
+    }
+    family_meta = {
+        "gateway_arena_score": ("gauge", "Composite arena score 0-100"),
+        "gateway_arena_availability": ("gauge", "Gateway availability 0-1"),
+        "gateway_arena_score_stddev": ("gauge", "Run-to-run standard deviation"),
+        "gateway_arena_score_ci_lower": ("gauge", "CI95 lower bound"),
+        "gateway_arena_score_ci_upper": ("gauge", "CI95 upper bound"),
+        "gateway_arena_runs": ("gauge", "Number of valid runs after discard"),
+        "gateway_arena_p50_seconds": ("gauge", "P50 latency"),
+        "gateway_arena_p95_seconds": ("gauge", "P95 latency"),
+        "gateway_arena_p99_seconds": ("gauge", "P99 latency"),
+        "gateway_arena_requests_total": ("gauge", "Total requests by status"),
+    }
 
     leaderboard = []
 
@@ -188,12 +193,17 @@ def main():
             total_ok += ok_sum
             total_req += ok_sum + fail_sum
 
-            lines.append(f'gateway_arena_p50_seconds{{gateway="{name}",scenario="{scenario}"}} {med["p50"]:.6f}')
-            lines.append(f'gateway_arena_p95_seconds{{gateway="{name}",scenario="{scenario}"}} {med["p95"]:.6f}')
-            lines.append(f'gateway_arena_p99_seconds{{gateway="{name}",scenario="{scenario}"}} {med["p99"]:.6f}')
-            lines.append(f'gateway_arena_requests_total{{gateway="{name}",scenario="{scenario}",status="200"}} {ok_sum}')
+            families["gateway_arena_p50_seconds"].append(
+                f'gateway_arena_p50_seconds{{gateway="{name}",scenario="{scenario}"}} {med["p50"]:.6f}')
+            families["gateway_arena_p95_seconds"].append(
+                f'gateway_arena_p95_seconds{{gateway="{name}",scenario="{scenario}"}} {med["p95"]:.6f}')
+            families["gateway_arena_p99_seconds"].append(
+                f'gateway_arena_p99_seconds{{gateway="{name}",scenario="{scenario}"}} {med["p99"]:.6f}')
+            families["gateway_arena_requests_total"].append(
+                f'gateway_arena_requests_total{{gateway="{name}",scenario="{scenario}",status="200"}} {ok_sum}')
             if fail_sum > 0:
-                lines.append(f'gateway_arena_requests_total{{gateway="{name}",scenario="{scenario}",status="error"}} {fail_sum}')
+                families["gateway_arena_requests_total"].append(
+                    f'gateway_arena_requests_total{{gateway="{name}",scenario="{scenario}",status="error"}} {fail_sum}')
 
         # Composite score (median)
         score = compute_gateway_score(scenario_medians, total_ok, total_req)
@@ -228,12 +238,12 @@ def main():
         h_total = h_ok + sum(r["fail"] for r in health_runs)
         avail = h_ok / h_total if h_total > 0 else 0.0
 
-        lines.append(f'gateway_arena_score{{gateway="{name}"}} {score:.2f}')
-        lines.append(f'gateway_arena_availability{{gateway="{name}"}} {avail:.4f}')
-        lines.append(f'gateway_arena_score_stddev{{gateway="{name}"}} {stddev:.4f}')
-        lines.append(f'gateway_arena_score_ci_lower{{gateway="{name}"}} {ci_lower:.2f}')
-        lines.append(f'gateway_arena_score_ci_upper{{gateway="{name}"}} {ci_upper:.2f}')
-        lines.append(f'gateway_arena_runs{{gateway="{name}"}} {n}')
+        families["gateway_arena_score"].append(f'gateway_arena_score{{gateway="{name}"}} {score:.2f}')
+        families["gateway_arena_availability"].append(f'gateway_arena_availability{{gateway="{name}"}} {avail:.4f}')
+        families["gateway_arena_score_stddev"].append(f'gateway_arena_score_stddev{{gateway="{name}"}} {stddev:.4f}')
+        families["gateway_arena_score_ci_lower"].append(f'gateway_arena_score_ci_lower{{gateway="{name}"}} {ci_lower:.2f}')
+        families["gateway_arena_score_ci_upper"].append(f'gateway_arena_score_ci_upper{{gateway="{name}"}} {ci_upper:.2f}')
+        families["gateway_arena_runs"].append(f'gateway_arena_runs{{gateway="{name}"}} {n}')
 
         leaderboard.append({"gateway": name, "score": round(score, 2), "stddev": round(stddev, 4),
                             "ci95": f"[{ci_lower:.2f}, {ci_upper:.2f}]"})
@@ -241,7 +251,15 @@ def main():
         print(f'{{"gateway":"{name}","score":{score:.2f},"stddev":{stddev:.4f},"ci95":[{ci_lower:.2f},{ci_upper:.2f}]}}',
               file=sys.stderr)
 
-    # Output metrics to stdout
+    # Output metrics to stdout — grouped by metric family (Prometheus requirement)
+    lines = []
+    for family_name in families:
+        if not families[family_name]:
+            continue
+        mtype, mhelp = family_meta[family_name]
+        lines.append(f"# HELP {family_name} {mhelp}")
+        lines.append(f"# TYPE {family_name} {mtype}")
+        lines.extend(families[family_name])
     print("\n".join(lines))
 
     # Leaderboard to stderr

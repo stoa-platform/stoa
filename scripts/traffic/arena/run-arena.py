@@ -142,7 +142,7 @@ def main():
     lines.append("# HELP gateway_arena_p99_seconds P99 latency")
     lines.append("# TYPE gateway_arena_p99_seconds gauge")
     lines.append("# HELP gateway_arena_requests_total Total requests by status")
-    lines.append("# TYPE gateway_arena_requests_total counter")
+    lines.append("# TYPE gateway_arena_requests_total gauge")
 
     leaderboard = []
 

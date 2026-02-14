@@ -14,12 +14,14 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
-      activeDeadlineSeconds: 600
+      activeDeadlineSeconds: 900
       template:
         metadata:
           labels:
             app: gateway-arena
         spec:
+          imagePullSecrets:
+            - name: ghcr-pull-secret
           restartPolicy: Never
           affinity:
             podAffinity:
@@ -53,12 +55,13 @@ spec:
                 - name: SCRIPT_PATH
                   value: "/scripts/benchmark.js"
                   # VPS gateways benchmarked locally via deploy/vps/bench/ (co-located)
+                  # Gravitee-k8s disabled: APIM 4.6 health probe incompatible, Java startup too slow
+                  # Re-enable when Gravitee probe path is fixed for v4.6
                 - name: GATEWAYS
                   value: |
                     [
                       {"name":"stoa-k8s","health":"http://stoa-gateway.stoa-system.svc/health","proxy":"http://stoa-gateway.stoa-system.svc/echo/get"},
-                      {"name":"kong-k8s","health":"http://kong-arena.stoa-system.svc:8001/status","proxy":"http://kong-arena.stoa-system.svc:8000/echo/get"},
-                      {"name":"gravitee-k8s","health":"http://gravitee-arena-gw.stoa-system.svc:18082/_node/health","proxy":"http://gravitee-arena-gw.stoa-system.svc:8082/echo/get"}
+                      {"name":"kong-k8s","health":"http://kong-arena.stoa-system.svc:8001/status","proxy":"http://kong-arena.stoa-system.svc:8000/echo/get"}
                     ]
               resources:
                 # Guaranteed QoS: requests == limits (no CPU throttling)

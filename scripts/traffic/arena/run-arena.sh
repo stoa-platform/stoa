@@ -92,21 +92,20 @@ done
 # Compute scores + CI95 via Python aggregator
 # ---------------------------------------------------------------------------
 METRICS_FILE="$WORK_DIR/metrics.txt"
+SCORER_STDERR="$WORK_DIR/scorer_stderr.txt"
 SCORER_PATH="$(dirname "$SCRIPT_PATH")/run-arena.py"
 
 log_json "\"Computing scores with CI95 via run-arena.py\""
-python3 "$SCORER_PATH" "$WORK_DIR" "$GATEWAYS" > "$METRICS_FILE" 2> >(while IFS= read -r line; do
+python3 "$SCORER_PATH" "$WORK_DIR" "$GATEWAYS" > "$METRICS_FILE" 2> "$SCORER_STDERR"
+
+# Log scorer stderr (scores + leaderboard)
+while IFS= read -r line; do
   log_json "\"$line\""
-done)
+done < "$SCORER_STDERR"
 
 # ---------------------------------------------------------------------------
 # Push to Pushgateway
 # ---------------------------------------------------------------------------
-# Debug: show first line of metrics file
-FIRST_LINE=$(head -1 "$METRICS_FILE" 2>/dev/null)
-FIRST_HEX=$(head -c 20 "$METRICS_FILE" 2>/dev/null | od -A n -t x1 | tr -d '\n ')
-log_json "\"Metrics file: first_line='$FIRST_LINE' hex='$FIRST_HEX' size=$(wc -c < "$METRICS_FILE" | tr -d ' ')b\""
-
 PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/gateway_arena"
 RESPONSE_FILE="$WORK_DIR/push_response.txt"
 HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" -X PUT --data-binary @"$METRICS_FILE" \
@@ -115,7 +114,7 @@ HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" -X PUT --data-binary @
 
 if [ "$HTTP_CODE" -lt 300 ] && [ "$HTTP_CODE" != "000" ]; then
   METRIC_LINES=$(wc -l < "$METRICS_FILE" | tr -d ' ')
-  log_json "\"Pushed $METRIC_LINES metric lines to $PUSH_URL\""
+  log_json "\"Pushed $METRIC_LINES metric lines to $PUSH_URL (HTTP $HTTP_CODE)\""
 else
   RESP_BODY=$(cat "$RESPONSE_FILE" 2>/dev/null | head -c 500 | tr '"' "'")
   METRIC_SIZE=$(wc -c < "$METRICS_FILE" | tr -d ' ')

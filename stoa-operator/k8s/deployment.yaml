@@ -26,6 +26,8 @@ spec:
     spec:
       serviceAccountName: stoa-operator
       automountServiceAccountToken: true
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: stoa-operator
           image: ghcr.io/stoa-platform/stoa-operator:latest

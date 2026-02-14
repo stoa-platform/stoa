@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# STOA Platform — mTLS Demo Commands (CAB-864)
+# STOA Platform — mTLS Demo Commands (CAB-864 / CAB-872)
 # =============================================================================
 # !! DEMO ONLY — NOT FOR PRODUCTION USE !!
 # These commands use demo credentials and test certificates.
@@ -16,6 +16,8 @@
 # Usage:
 #   source scripts/demo/mtls-demo-commands.sh       (load variables)
 #   Then copy-paste each section into the terminal
+#
+#   ./scripts/demo/mtls-demo-commands.sh --validate  (automated pre-flight check)
 # =============================================================================
 
 # === Token Lifetime ===
@@ -24,10 +26,12 @@
 # If token expires mid-demo: re-run STEP 2 to get a fresh one.
 
 # === Configuration (adjust for your environment) ===
-GATEWAY_URL="${GATEWAY_URL:-https://gateway.gostoa.dev}"
+GATEWAY_URL="${GATEWAY_URL:-https://mcp.gostoa.dev}"
 AUTH_URL="${AUTH_URL:-https://auth.gostoa.dev}"
 API_URL="${API_URL:-https://api.gostoa.dev}"
-CERTS_DIR="${MTLS_CERTS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/certs}"
+# When sourced, BASH_SOURCE[0] is this file; when executed, $0 works too
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+CERTS_DIR="${MTLS_CERTS_DIR:-$SCRIPT_DIR/certs}"
 
 # Load first consumer credentials from seed output
 if [ -f "$CERTS_DIR/credentials.json" ]; then
@@ -40,6 +44,157 @@ if [ -f "$CERTS_DIR/fingerprints.csv" ]; then
   CORRECT_FINGERPRINT=$(awk -F',' 'NR==2{print $2}' "$CERTS_DIR/fingerprints.csv")
   WRONG_FINGERPRINT="0000000000000000000000000000000000000000000000000000000000000000"
 fi
+
+# =============================================================================
+# --validate: Automated pre-flight check (CAB-872)
+# =============================================================================
+if [ "${1:-}" = "--validate" ]; then
+  set -euo pipefail
+  FAILURES=0
+  PASS='\033[0;32mPASS\033[0m'
+  FAIL='\033[0;31mFAIL\033[0m'
+
+  echo "================================================================"
+  echo "  STOA mTLS Validate — RFC 8705 Pre-Flight Check"
+  echo "================================================================"
+  echo "  Gateway:  $GATEWAY_URL"
+  echo "  Auth:     $AUTH_URL"
+  echo "  Certs:    $CERTS_DIR"
+  echo ""
+
+  # CHECK 1: Prerequisites
+  echo -n "  [1/6] Prerequisites (credentials.json + fingerprints.csv)... "
+  if [ -z "${CONSUMER_CLIENT_ID:-}" ] || [ -z "${CORRECT_FINGERPRINT:-}" ]; then
+    echo -e "$FAIL"
+    echo "        credentials.json or fingerprints.csv missing in $CERTS_DIR"
+    echo "        Run: ./scripts/demo/generate-mtls-certs.sh && python3 scripts/demo/seed-mtls-demo.py"
+    FAILURES=$((FAILURES + 1))
+    echo ""
+    echo "Cannot continue without prerequisites. $FAILURES check(s) failed."
+    exit $FAILURES
+  fi
+  echo -e "$PASS (client_id=${CONSUMER_CLIENT_ID:0:8}..., fingerprint=${CORRECT_FINGERPRINT:0:16}...)"
+
+  # CHECK 2: Get token
+  echo -n "  [2/6] Token acquisition (client_credentials grant)... "
+  TOKEN_RESPONSE=$(curl -sf -X POST "$AUTH_URL/realms/stoa/protocol/openid-connect/token" \
+    -d "grant_type=client_credentials" \
+    -d "client_id=$CONSUMER_CLIENT_ID" \
+    -d "client_secret=$CONSUMER_CLIENT_SECRET" 2>/dev/null || echo "")
+  TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null || echo "")
+  if [ -z "$TOKEN" ]; then
+    echo -e "$FAIL"
+    echo "        Could not get token from $AUTH_URL"
+    echo "        Response: ${TOKEN_RESPONSE:0:200}"
+    FAILURES=$((FAILURES + 1))
+  else
+    echo -e "$PASS (${#TOKEN} chars)"
+  fi
+
+  # CHECK 3: cnf.x5t#S256 in JWT
+  echo -n "  [3/6] JWT cnf.x5t#S256 claim present... "
+  if [ -n "$TOKEN" ]; then
+    CNF_CLAIM=$(echo "$TOKEN" | python3 -c "
+import sys, json, base64
+token = sys.stdin.read().strip()
+payload = token.split('.')[1]
+payload += '=' * (4 - len(payload) % 4)
+claims = json.loads(base64.urlsafe_b64decode(payload))
+cnf = claims.get('cnf', {})
+print(cnf.get('x5t#S256', ''))
+" 2>/dev/null || echo "")
+    if [ -n "$CNF_CLAIM" ]; then
+      echo -e "$PASS (x5t#S256=${CNF_CLAIM:0:16}...)"
+    else
+      echo -e "$FAIL"
+      echo "        Token missing cnf.x5t#S256 claim (Keycloak mapper not configured?)"
+      FAILURES=$((FAILURES + 1))
+    fi
+  else
+    echo -e "$FAIL (skipped — no token)"
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  # CHECK 4: Correct cert → expect 200
+  echo -n "  [4/6] Correct certificate → HTTP 200... "
+  if [ -n "$TOKEN" ]; then
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+      -X POST "$GATEWAY_URL/mcp/v1/tools/invoke" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "X-SSL-Client-Verify: SUCCESS" \
+      -H "X-SSL-Client-Fingerprint: $CORRECT_FINGERPRINT" \
+      -H "X-SSL-Client-S-DN: CN=api-consumer-001,OU=tenant-acme,O=Acme Corp,C=FR" \
+      -H "X-SSL-Client-I-DN: CN=STOA Demo CA,O=STOA Platform,C=FR" \
+      -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}' 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" = "200" ]; then
+      echo -e "$PASS (HTTP $HTTP_CODE)"
+    else
+      echo -e "$FAIL (HTTP $HTTP_CODE, expected 200)"
+      FAILURES=$((FAILURES + 1))
+    fi
+  else
+    echo -e "$FAIL (skipped — no token)"
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  # CHECK 5: Wrong cert → expect 403
+  echo -n "  [5/6] Wrong certificate → HTTP 403... "
+  if [ -n "$TOKEN" ]; then
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+      -X POST "$GATEWAY_URL/mcp/v1/tools/invoke" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "X-SSL-Client-Verify: SUCCESS" \
+      -H "X-SSL-Client-Fingerprint: $WRONG_FINGERPRINT" \
+      -H "X-SSL-Client-S-DN: CN=attacker,OU=evil-corp,O=Evil Inc,C=XX" \
+      -H "X-SSL-Client-I-DN: CN=STOA Demo CA,O=STOA Platform,C=FR" \
+      -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}' 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" = "403" ]; then
+      echo -e "$PASS (HTTP $HTTP_CODE)"
+    else
+      echo -e "$FAIL (HTTP $HTTP_CODE, expected 403)"
+      FAILURES=$((FAILURES + 1))
+    fi
+  else
+    echo -e "$FAIL (skipped — no token)"
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  # CHECK 6: No cert → expect 401
+  echo -n "  [6/6] No certificate → HTTP 401... "
+  if [ -n "$TOKEN" ]; then
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+      -X POST "$GATEWAY_URL/mcp/v1/tools/invoke" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d '{"tool": "petstore", "arguments": {"action": "list-pets"}}' 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" = "401" ]; then
+      echo -e "$PASS (HTTP $HTTP_CODE)"
+    else
+      echo -e "$FAIL (HTTP $HTTP_CODE, expected 401)"
+      FAILURES=$((FAILURES + 1))
+    fi
+  else
+    echo -e "$FAIL (skipped — no token)"
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  # Summary
+  echo ""
+  echo "================================================================"
+  if [ "$FAILURES" -eq 0 ]; then
+    echo -e "  \033[0;32mALL 6 CHECKS PASSED\033[0m — mTLS demo ready"
+  else
+    echo -e "  \033[0;31m$FAILURES CHECK(S) FAILED\033[0m — fix issues above"
+  fi
+  echo "================================================================"
+  exit "$FAILURES"
+fi
+
+# =============================================================================
+# Source mode: print demo commands for copy-paste
+# =============================================================================
 
 echo "================================================================"
 echo "  STOA mTLS Demo — RFC 8705 Certificate Binding"

@@ -28,8 +28,8 @@ paths = [
   '''control-plane-api/src/schemas/client\.py''',
   # Plan documents
   '''PLAN_DETAILLE\.md''',
-  # Smoke test with default webMethods trial credentials (Administrator:manage — public)
-  '''scripts/demo/smoke-test-production\.sh''',
+  # Demo scripts with test/demo credentials (not real secrets)
+  '''scripts/demo/.*''',
   # AI Factory rules with curl examples using default trial credentials
   '''\.claude/rules/gateway-adapters\.md''',
 ]

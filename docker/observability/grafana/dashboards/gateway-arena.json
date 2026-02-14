@@ -26,7 +26,7 @@
       }
     ]
   },
-  "description": "Gateway Arena — Comparative benchmarking across STOA, Kong, and Gravitee",
+  "description": "Gateway Arena — Comparative benchmarking across STOA, Kong, and Gravitee (k6, median-of-5, CI95)",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -55,7 +55,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Composite Arena Score per gateway (0-100). Higher is better. Weights: 40% latency, 30% availability, 20% error rate, 10% consistency.",
+      "description": "Composite Arena Score per gateway (0-100). Higher is better. Weights: 15% base latency, 25% burst50, 25% burst100, 15% availability, 10% error rate, 10% consistency.",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "thresholds"},
@@ -69,11 +69,12 @@
           },
           "min": 0,
           "max": 100,
-          "unit": "none"
+          "unit": "none",
+          "decimals": 1
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 1},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 1},
       "id": 1,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
       "targets": [
@@ -85,68 +86,6 @@
       ],
       "title": "Arena Score",
       "type": "stat"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Arena Score trend over time per gateway",
-      "fieldConfig": {
-        "defaults": {
-          "color": {"mode": "palette-classic"},
-          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
-          "min": 0,
-          "max": 100,
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {"h": 6, "w": 10, "x": 8, "y": 1},
-      "id": 2,
-      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
-      "targets": [
-        {
-          "expr": "gateway_arena_score{gateway=~\"$gateway\"}",
-          "legendFormat": "{{gateway}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Score Trend (24h)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Arena Score with 95% confidence interval error bars. Narrow CI = reproducible results.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {"mode": "palette-classic"},
-          "custom": {"drawStyle": "line", "fillOpacity": 15, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
-          "min": 0,
-          "max": 100,
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {"h": 6, "w": 10, "x": 8, "y": 1},
-      "id": 15,
-      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
-      "targets": [
-        {
-          "expr": "gateway_arena_score{gateway=~\"$gateway\"}",
-          "legendFormat": "{{gateway}} score",
-          "refId": "A"
-        },
-        {
-          "expr": "gateway_arena_score_ci_upper{gateway=~\"$gateway\"}",
-          "legendFormat": "{{gateway}} CI95 upper",
-          "refId": "B"
-        },
-        {
-          "expr": "gateway_arena_score_ci_lower{gateway=~\"$gateway\"}",
-          "legendFormat": "{{gateway}} CI95 lower",
-          "refId": "C"
-        }
-      ],
-      "title": "Score ± CI95",
-      "type": "timeseries"
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
@@ -168,7 +107,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 1},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 1},
       "id": 3,
       "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
       "targets": [
@@ -201,7 +140,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 7},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 1},
       "id": 12,
       "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
       "targets": [
@@ -211,33 +150,8 @@
           "refId": "A"
         }
       ],
-      "title": "Score Stddev (Run-to-Run)",
+      "title": "Score Stddev",
       "type": "stat"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Score standard deviation trend. Target: < 1.0 for publishable results.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {"mode": "palette-classic"},
-          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
-          "min": 0,
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {"h": 6, "w": 10, "x": 6, "y": 7},
-      "id": 13,
-      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
-      "targets": [
-        {
-          "expr": "gateway_arena_score_stddev{gateway=~\"$gateway\"}",
-          "legendFormat": "{{gateway}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Stddev Trend",
-      "type": "timeseries"
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
@@ -258,7 +172,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 7},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 1},
       "id": 14,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
       "targets": [
@@ -272,20 +186,92 @@
       "type": "stat"
     },
     {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Arena Score trend over time per gateway",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
+          "min": 0,
+          "max": 100,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 6},
+      "id": 2,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "gateway_arena_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Score Trend",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Arena Score with 95% confidence interval. Narrow CI = reproducible results.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 15, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
+          "min": 0,
+          "max": 100,
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": "CI95"},
+            "properties": [
+              {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [10, 5]}},
+              {"id": "custom.lineWidth", "value": 1},
+              {"id": "custom.fillOpacity", "value": 0}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 6},
+      "id": 15,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "gateway_arena_score{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} score",
+          "refId": "A"
+        },
+        {
+          "expr": "gateway_arena_score_ci_upper{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} CI95 upper",
+          "refId": "B"
+        },
+        {
+          "expr": "gateway_arena_score_ci_lower{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} CI95 lower",
+          "refId": "C"
+        }
+      ],
+      "title": "Score \u00b1 CI95",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {"h": 1, "w": 24, "x": 0, "y": 13},
       "id": 200,
       "panels": [],
-      "title": "Latency Comparison",
+      "title": "Latency by Scenario",
       "type": "row"
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Median (P50) proxy passthrough latency per gateway",
+      "description": "P50 latency per gateway per scenario. Lower is better.",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "palette-classic"},
-          "unit": "s"
+          "unit": "s",
+          "decimals": 3
         },
         "overrides": []
       },
@@ -294,22 +280,23 @@
       "options": {"barWidth": 0.5, "groupWidth": 0.7, "legend": {"displayMode": "list", "placement": "bottom"}, "orientation": "horizontal", "showValue": "always", "tooltip": {"mode": "multi"}},
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, gateway_arena_latency_seconds_bucket{scenario=\"proxy_passthrough\",gateway=~\"$gateway\"})",
-          "legendFormat": "{{gateway}}",
+          "expr": "gateway_arena_p50_seconds{scenario=~\"$scenario\",gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} ({{scenario}})",
           "refId": "A",
           "instant": true
         }
       ],
-      "title": "P50 Latency (Proxy)",
+      "title": "P50 Latency",
       "type": "barchart"
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "95th percentile proxy passthrough latency per gateway",
+      "description": "P95 latency per gateway per scenario. Lower is better.",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "palette-classic"},
-          "unit": "s"
+          "unit": "s",
+          "decimals": 3
         },
         "overrides": []
       },
@@ -318,18 +305,43 @@
       "options": {"barWidth": 0.5, "groupWidth": 0.7, "legend": {"displayMode": "list", "placement": "bottom"}, "orientation": "horizontal", "showValue": "always", "tooltip": {"mode": "multi"}},
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, gateway_arena_latency_seconds_bucket{scenario=\"proxy_passthrough\",gateway=~\"$gateway\"})",
-          "legendFormat": "{{gateway}}",
+          "expr": "gateway_arena_p95_seconds{scenario=~\"$scenario\",gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} ({{scenario}})",
           "refId": "A",
           "instant": true
         }
       ],
-      "title": "P95 Latency (Proxy)",
+      "title": "P95 Latency",
       "type": "barchart"
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Proxy passthrough latency over time by gateway (P50 line)",
+      "description": "P99 latency per gateway per scenario. Lower is better.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "s",
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 14},
+      "id": 16,
+      "options": {"barWidth": 0.5, "groupWidth": 0.7, "legend": {"displayMode": "list", "placement": "bottom"}, "orientation": "horizontal", "showValue": "always", "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "gateway_arena_p99_seconds{scenario=~\"$scenario\",gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} ({{scenario}})",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "P99 Latency",
+      "type": "barchart"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Latency percentiles over time for the selected scenario",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "palette-classic"},
@@ -338,27 +350,27 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 14},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22},
       "id": 6,
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, gateway_arena_latency_seconds_bucket{scenario=\"proxy_passthrough\",gateway=~\"$gateway\"})",
-          "legendFormat": "{{gateway}} P50",
+          "expr": "gateway_arena_p50_seconds{scenario=~\"$scenario\",gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} P50 ({{scenario}})",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, gateway_arena_latency_seconds_bucket{scenario=\"proxy_passthrough\",gateway=~\"$gateway\"})",
-          "legendFormat": "{{gateway}} P95",
+          "expr": "gateway_arena_p95_seconds{scenario=~\"$scenario\",gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} P95 ({{scenario}})",
           "refId": "B"
         }
       ],
-      "title": "Latency Trend (Proxy)",
+      "title": "Latency Trend (P50 + P95)",
       "type": "timeseries"
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 22},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 30},
       "id": 300,
       "panels": [],
       "title": "Reliability",
@@ -366,7 +378,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Error rate per gateway across all scenarios (1h window)",
+      "description": "Error rate per gateway across all scenarios",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "thresholds"},
@@ -384,12 +396,12 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 23},
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 31},
       "id": 7,
       "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
       "targets": [
         {
-          "expr": "gateway_arena_requests_total{status=\"error\",gateway=~\"$gateway\"} / ignoring(status) group_left gateway_arena_requests_total{status=\"200\",gateway=~\"$gateway\"}",
+          "expr": "sum by (gateway) (gateway_arena_requests_total{status=\"error\",gateway=~\"$gateway\"}) / sum by (gateway) (gateway_arena_requests_total{gateway=~\"$gateway\"})",
           "legendFormat": "{{gateway}}",
           "refId": "A"
         }
@@ -399,7 +411,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Burst scenario success rate per gateway (10 concurrent requests)",
+      "description": "Burst 50 VU scenario success rate per gateway",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "thresholds"},
@@ -417,17 +429,17 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 23},
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 31},
       "id": 8,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
       "targets": [
         {
-          "expr": "gateway_arena_requests_total{scenario=\"burst\",status=\"200\",gateway=~\"$gateway\"} / (gateway_arena_requests_total{scenario=\"burst\",status=\"200\",gateway=~\"$gateway\"} + gateway_arena_requests_total{scenario=\"burst\",status=\"error\",gateway=~\"$gateway\"})",
+          "expr": "gateway_arena_requests_total{scenario=\"burst_50\",status=\"200\",gateway=~\"$gateway\"} / (gateway_arena_requests_total{scenario=\"burst_50\",status=\"200\",gateway=~\"$gateway\"} + (gateway_arena_requests_total{scenario=\"burst_50\",status=\"error\",gateway=~\"$gateway\"} or gateway_arena_requests_total{scenario=\"burst_50\",status=\"200\",gateway=~\"$gateway\"} * 0))",
           "legendFormat": "{{gateway}}",
           "refId": "A"
         }
       ],
-      "title": "Burst Survival Rate",
+      "title": "Burst 50 Survival Rate",
       "type": "stat"
     },
     {
@@ -443,7 +455,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 23},
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 31},
       "id": 9,
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
@@ -458,7 +470,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 29},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 37},
       "id": 400,
       "panels": [],
       "title": "Raw Data",
@@ -475,7 +487,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 30},
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 38},
       "id": 10,
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
@@ -499,7 +511,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 30},
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 38},
       "id": 11,
       "options": {"footer": {"enablePagination": false, "reducer": ["sum"], "show": false}, "showHeader": true, "sortBy": [{"desc": true, "displayName": "Value"}]},
       "targets": [
@@ -522,11 +534,36 @@
         }
       ],
       "type": "table"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Stddev trend over time. Target: < 1.0 for publishable results.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
+          "min": 0,
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 45},
+      "id": 13,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "gateway_arena_score_stddev{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Stddev Trend",
+      "type": "timeseries"
     }
   ],
   "refresh": "5m",
   "schemaVersion": 39,
-  "tags": ["stoa", "gateway", "arena", "benchmark"],
+  "tags": ["stoa", "gateway", "arena", "benchmark", "k6"],
   "templating": {
     "list": [
       {
@@ -551,6 +588,21 @@
         "multi": true,
         "name": "gateway",
         "query": {"query": "label_values(gateway_arena_score, gateway)", "refId": "StandardVariableQuery"},
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {"selected": true, "text": ["All"], "value": ["$__all"]},
+        "datasource": {"type": "prometheus", "uid": "${datasource}"},
+        "definition": "label_values(gateway_arena_p50_seconds, scenario)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "scenario",
+        "query": {"query": "label_values(gateway_arena_p50_seconds, scenario)", "refId": "StandardVariableQuery"},
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,

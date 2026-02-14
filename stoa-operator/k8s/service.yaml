@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: stoa-operator
+  namespace: stoa-system
+  labels:
+    app: stoa-operator
+    app.kubernetes.io/name: stoa-operator
+spec:
+  selector:
+    app: stoa-operator
+  ports:
+    - name: metrics
+      port: 8000
+      targetPort: 8000

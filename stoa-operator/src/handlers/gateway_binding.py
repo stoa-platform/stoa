@@ -1,12 +1,14 @@
 """kopf handlers for GatewayBinding CRD (gostoa.dev/v1alpha1)."""
 
 import logging
+import time
 from datetime import UTC, datetime
 
 import httpx
 import kopf
 
 from src.cp_client import cp_client
+from src.metrics import RESOURCES_MANAGED, record_reconciliation
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,7 @@ async def on_gwb_create(
     **_kwargs: object,
 ) -> dict:
     """Create deployment in CP API when a GatewayBinding is created."""
+    start = time.monotonic()
     api_name = spec.get("apiRef", {}).get("name", "unknown")
     gw_name = spec.get("gatewayRef", {}).get("name", "unknown")
     logger.info(
@@ -68,9 +71,12 @@ async def on_gwb_create(
         patch.status["syncAttempts"] = 1
         patch.status["lastSyncAttempt"] = datetime.now(UTC).isoformat()
         patch.status["syncError"] = ""
+        RESOURCES_MANAGED.labels(kind="gwb").inc()
+        record_reconciliation("gwb", "create", "success", time.monotonic() - start)
         return {"message": f"GatewayBinding {name} deployed (deployment={deployment_id})"}
 
     except (kopf.TemporaryError, kopf.PermanentError):
+        record_reconciliation("gwb", "create", "error", time.monotonic() - start)
         raise
     except httpx.HTTPStatusError as exc:
         msg = f"CP API error: {exc.response.status_code} — {exc.response.text}"
@@ -79,6 +85,7 @@ async def on_gwb_create(
         patch.status["syncError"] = msg
         patch.status["syncAttempts"] = (patch.status.get("syncAttempts") or 0) + 1
         patch.status["lastSyncAttempt"] = datetime.now(UTC).isoformat()
+        record_reconciliation("gwb", "create", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=30) from exc
     except httpx.RequestError as exc:
         msg = f"CP API unreachable: {exc}"
@@ -86,6 +93,7 @@ async def on_gwb_create(
         patch.status["syncStatus"] = "error"
         patch.status["syncError"] = msg
         patch.status["lastSyncAttempt"] = datetime.now(UTC).isoformat()
+        record_reconciliation("gwb", "create", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=60) from exc
     finally:
         await cp_client.close()
@@ -104,6 +112,7 @@ async def on_gwb_update(
     **_kwargs: object,
 ) -> dict:
     """Force re-sync deployment when GatewayBinding spec changes."""
+    start = time.monotonic()
     old_spec = old.get("spec", {})
     new_spec = new.get("spec", {})
     if old_spec == new_spec:
@@ -131,6 +140,7 @@ async def on_gwb_update(
         patch.status["syncAttempts"] = (status.get("syncAttempts") or 0) + 1
         patch.status["lastSyncAttempt"] = datetime.now(UTC).isoformat()
         patch.status["syncError"] = ""
+        record_reconciliation("gwb", "update", "success", time.monotonic() - start)
         return {"message": f"GatewayBinding {name} re-synced"}
 
     except httpx.HTTPStatusError as exc:
@@ -140,6 +150,7 @@ async def on_gwb_update(
         patch.status["syncError"] = msg
         patch.status["syncAttempts"] = (status.get("syncAttempts") or 0) + 1
         patch.status["lastSyncAttempt"] = datetime.now(UTC).isoformat()
+        record_reconciliation("gwb", "update", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=30) from exc
     except httpx.RequestError as exc:
         msg = f"CP API unreachable: {exc}"
@@ -147,6 +158,7 @@ async def on_gwb_update(
         patch.status["syncStatus"] = "error"
         patch.status["syncError"] = msg
         patch.status["lastSyncAttempt"] = datetime.now(UTC).isoformat()
+        record_reconciliation("gwb", "update", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=60) from exc
     finally:
         await cp_client.close()
@@ -161,6 +173,7 @@ async def on_gwb_delete(
     **_kwargs: object,
 ) -> None:
     """Delete deployment from CP API when CRD is deleted."""
+    start = time.monotonic()
     deployment_id = status.get("gatewayResourceId", "")
     api_name = spec.get("apiRef", {}).get("name", "unknown")
     gw_name = spec.get("gatewayRef", {}).get("name", "unknown")
@@ -181,13 +194,17 @@ async def on_gwb_delete(
         await cp_client.connect()
         await cp_client.delete_deployment(deployment_id)
         logger.info("Deployment %s deleted from CP API", deployment_id)
+        RESOURCES_MANAGED.labels(kind="gwb").dec()
+        record_reconciliation("gwb", "delete", "success", time.monotonic() - start)
     except httpx.HTTPStatusError as exc:
         msg = f"CP API error on delete: {exc.response.status_code}"
         logger.error("GWB delete failed for %s: %s", name, msg)
+        record_reconciliation("gwb", "delete", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=30) from exc
     except httpx.RequestError as exc:
         msg = f"CP API unreachable: {exc}"
         logger.error("GWB delete failed for %s: %s", name, msg)
+        record_reconciliation("gwb", "delete", "error", time.monotonic() - start)
         raise kopf.TemporaryError(msg, delay=60) from exc
     finally:
         await cp_client.close()
@@ -203,6 +220,7 @@ async def on_gwb_resume(
     **_kwargs: object,
 ) -> None:
     """Reconcile existing GatewayBindings on operator startup."""
+    start = time.monotonic()
     deployment_id = status.get("gatewayResourceId", "")
     sync_status = status.get("syncStatus", "unknown")
     api_name = spec.get("apiRef", {}).get("name", "unknown")
@@ -247,16 +265,21 @@ async def on_gwb_resume(
 
         patch.status["syncError"] = ""
         patch.status["lastSyncAttempt"] = datetime.now(UTC).isoformat()
+        RESOURCES_MANAGED.labels(kind="gwb").inc()
+        record_reconciliation("gwb", "resume", "success", time.monotonic() - start)
 
     except (kopf.TemporaryError, kopf.PermanentError):
+        record_reconciliation("gwb", "resume", "error", time.monotonic() - start)
         raise
     except httpx.HTTPStatusError as exc:
         msg = f"CP API error: {exc.response.status_code}"
         logger.error("GWB resume failed for %s: %s", name, msg)
         patch.status["syncError"] = msg
+        record_reconciliation("gwb", "resume", "error", time.monotonic() - start)
     except httpx.RequestError as exc:
         msg = f"CP API unreachable: {exc}"
         logger.error("GWB resume failed for %s: %s", name, msg)
         patch.status["syncError"] = msg
+        record_reconciliation("gwb", "resume", "error", time.monotonic() - start)
     finally:
         await cp_client.close()

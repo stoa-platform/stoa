@@ -1,11 +1,13 @@
 """Control Plane API client for the operator."""
 
 import logging
+import time
 from typing import Any
 
 import httpx
 
 from src.config import settings
+from src.metrics import record_cp_api_call
 
 logger = logging.getLogger(__name__)
 
@@ -42,37 +44,49 @@ class ControlPlaneClient:
             raise RuntimeError(msg)
         return self._client
 
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """Send an HTTP request and record metrics."""
+        start = time.monotonic()
+        resp = await self.client.request(method, path, **kwargs)
+        record_cp_api_call(method, path, str(resp.status_code), time.monotonic() - start)
+        return resp
+
     # --- Gateway Instance methods ---
 
     async def register_gateway(self, data: dict[str, Any]) -> dict[str, Any]:
-        resp = await self.client.post("/v1/admin/gateways", json=data)
+        resp = await self._request("POST", "/v1/admin/gateways", json=data)
         resp.raise_for_status()
         return resp.json()
 
     async def get_gateway(self, gateway_id: str) -> dict[str, Any]:
-        resp = await self.client.get(f"/v1/admin/gateways/{gateway_id}")
+        resp = await self._request("GET", f"/v1/admin/gateways/{gateway_id}")
         resp.raise_for_status()
         return resp.json()
 
     async def update_gateway(self, gateway_id: str, data: dict[str, Any]) -> dict[str, Any]:
-        resp = await self.client.put(f"/v1/admin/gateways/{gateway_id}", json=data)
+        resp = await self._request("PUT", f"/v1/admin/gateways/{gateway_id}", json=data)
         resp.raise_for_status()
         return resp.json()
 
     async def delete_gateway(self, gateway_id: str) -> None:
-        resp = await self.client.delete(f"/v1/admin/gateways/{gateway_id}")
+        resp = await self._request("DELETE", f"/v1/admin/gateways/{gateway_id}")
         if resp.status_code == 404:
             logger.info("Gateway %s already deleted (404), treating as success", gateway_id)
             return
         resp.raise_for_status()
 
     async def list_gateways(self) -> list[dict[str, Any]]:
-        resp = await self.client.get("/v1/admin/gateways")
+        resp = await self._request("GET", "/v1/admin/gateways")
         resp.raise_for_status()
         return resp.json().get("items", [])
 
     async def health_check_gateway(self, gateway_id: str) -> dict[str, Any]:
-        resp = await self.client.post(f"/v1/admin/gateways/{gateway_id}/health")
+        resp = await self._request("POST", f"/v1/admin/gateways/{gateway_id}/health")
         resp.raise_for_status()
         return resp.json()
 
@@ -89,7 +103,8 @@ class ControlPlaneClient:
     async def create_deployment(
         self, api_catalog_id: str, gateway_instance_ids: list[str]
     ) -> list[dict[str, Any]]:
-        resp = await self.client.post(
+        resp = await self._request(
+            "POST",
             "/v1/admin/deployments",
             json={"api_catalog_id": api_catalog_id, "gateway_instance_ids": gateway_instance_ids},
         )
@@ -97,24 +112,24 @@ class ControlPlaneClient:
         return resp.json()
 
     async def get_deployment(self, deployment_id: str) -> dict[str, Any]:
-        resp = await self.client.get(f"/v1/admin/deployments/{deployment_id}")
+        resp = await self._request("GET", f"/v1/admin/deployments/{deployment_id}")
         resp.raise_for_status()
         return resp.json()
 
     async def delete_deployment(self, deployment_id: str) -> None:
-        resp = await self.client.delete(f"/v1/admin/deployments/{deployment_id}")
+        resp = await self._request("DELETE", f"/v1/admin/deployments/{deployment_id}")
         if resp.status_code == 404:
             logger.info("Deployment %s already deleted (404), treating as success", deployment_id)
             return
         resp.raise_for_status()
 
     async def force_sync_deployment(self, deployment_id: str) -> dict[str, Any]:
-        resp = await self.client.post(f"/v1/admin/deployments/{deployment_id}/sync")
+        resp = await self._request("POST", f"/v1/admin/deployments/{deployment_id}/sync")
         resp.raise_for_status()
         return resp.json()
 
     async def get_catalog_entries(self) -> list[dict[str, Any]]:
-        resp = await self.client.get("/v1/admin/deployments/catalog-entries")
+        resp = await self._request("GET", "/v1/admin/deployments/catalog-entries")
         resp.raise_for_status()
         return resp.json()
 

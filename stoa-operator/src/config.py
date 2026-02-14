@@ -12,6 +12,7 @@ class OperatorSettings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     RECONCILE_INTERVAL_SECONDS: int = 60
     MAX_RETRIES: int = 3
+    METRICS_PORT: int = 8000
 
     model_config = {"env_prefix": "STOA_OPERATOR_"}
 

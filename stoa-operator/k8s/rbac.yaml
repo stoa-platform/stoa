@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stoa-operator
+  namespace: stoa-system
+  labels:
+    app: stoa-operator
+    app.kubernetes.io/name: stoa-operator
+    app.kubernetes.io/part-of: stoa-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: stoa-operator
+  labels:
+    app: stoa-operator
+    app.kubernetes.io/name: stoa-operator
+    app.kubernetes.io/part-of: stoa-platform
+rules:
+  # CRD resources — watch, get, list, patch status
+  - apiGroups: ["gostoa.dev"]
+    resources: ["gatewayinstances", "gatewaybindings"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["gostoa.dev"]
+    resources: ["gatewayinstances/status", "gatewaybindings/status"]
+    verbs: ["get", "patch", "update"]
+  # Events — create for kopf event posting
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+  # kopf peering — leader election
+  - apiGroups: ["kopf.dev"]
+    resources: ["clusterkopfpeerings"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: stoa-operator
+  labels:
+    app: stoa-operator
+    app.kubernetes.io/name: stoa-operator
+    app.kubernetes.io/part-of: stoa-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: stoa-operator
+subjects:
+  - kind: ServiceAccount
+    name: stoa-operator
+    namespace: stoa-system

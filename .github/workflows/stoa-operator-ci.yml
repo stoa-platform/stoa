@@ -1,0 +1,19 @@
+name: STOA Operator CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'stoa-operator/**'
+  push:
+    branches: [main]
+    paths:
+      - 'stoa-operator/**'
+
+jobs:
+  test:
+    uses: ./.github/workflows/reusable-python-ci.yml
+    with:
+      component: stoa-operator
+      python-version: '3.11'
+      coverage-threshold: 70

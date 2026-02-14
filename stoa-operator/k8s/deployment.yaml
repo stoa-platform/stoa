@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stoa-operator
+  namespace: stoa-system
+  labels:
+    app: stoa-operator
+    app.kubernetes.io/name: stoa-operator
+    app.kubernetes.io/component: operator
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  selector:
+    matchLabels:
+      app: stoa-operator
+  template:
+    metadata:
+      labels:
+        app: stoa-operator
+        app.kubernetes.io/name: stoa-operator
+    spec:
+      serviceAccountName: stoa-operator
+      automountServiceAccountToken: true
+      containers:
+        - name: stoa-operator
+          image: ghcr.io/stoa-platform/stoa-operator:latest
+          imagePullPolicy: Always
+          env:
+            - name: STOA_OPERATOR_CP_API_URL
+              value: "http://stoa-control-plane-api.stoa-system.svc.cluster.local:80"
+            - name: STOA_OPERATOR_NAMESPACE
+              value: "stoa-system"
+            - name: STOA_OPERATOR_LOG_LEVEL
+              value: "INFO"
+          envFrom:
+            - secretRef:
+                name: stoa-operator-secrets
+                optional: true
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1000
+      volumes:
+        - name: tmp
+          emptyDir: {}

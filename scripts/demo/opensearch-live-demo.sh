@@ -21,6 +21,7 @@ OPENSEARCH_AUTH="${OPENSEARCH_AUTH:-admin:admin}"
 GATEWAY_URL="${GATEWAY_URL:-https://mcp.gostoa.dev}"
 ERROR_COUNT="${ERROR_COUNT:-50}"
 CLEANUP=false
+VALIDATE=false
 
 # Parse flags
 for arg in "$@"; do
@@ -32,6 +33,9 @@ for arg in "$@"; do
       ;;
     --cleanup)
       CLEANUP=true
+      ;;
+    --validate)
+      VALIDATE=true
       ;;
   esac
 done
@@ -70,6 +74,57 @@ echo ""
 if ! curl $CURL_OPTS "${OPENSEARCH_URL}/_cluster/health" > /dev/null 2>&1; then
   echo -e "${RED}OpenSearch not ready at ${OPENSEARCH_URL}${NC}"
   exit 1
+fi
+
+# ─── Validate mode (pre-demo check) ─────────────────────────────────────
+if [ "$VALIDATE" = true ]; then
+  banner "Pre-Demo Validation"
+  PASS=0; FAIL=0
+
+  # 1. OpenSearch cluster health
+  OS_HEALTH=$(curl $CURL_OPTS "${OPENSEARCH_URL}/_cluster/health" 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])" 2>/dev/null || echo "unreachable")
+  if [ "$OS_HEALTH" = "green" ] || [ "$OS_HEALTH" = "yellow" ]; then
+    echo -e "  ${GREEN}PASS${NC} OpenSearch cluster: ${OS_HEALTH}"; PASS=$((PASS+1))
+  else
+    echo -e "  ${RED}FAIL${NC} OpenSearch cluster: ${OS_HEALTH}"; FAIL=$((FAIL+1))
+  fi
+
+  # 2. Gateway health
+  GW_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" "${GATEWAY_URL}/health" 2>/dev/null || echo "000")
+  if [ "$GW_STATUS" = "200" ]; then
+    echo -e "  ${GREEN}PASS${NC} Gateway health: HTTP ${GW_STATUS}"; PASS=$((PASS+1))
+  else
+    echo -e "  ${RED}FAIL${NC} Gateway health: HTTP ${GW_STATUS}"; FAIL=$((FAIL+1))
+  fi
+
+  # 3. Document count in stoa-errors-*
+  DOC_CT=$(curl $CURL_OPTS "${OPENSEARCH_URL}/${INDEX_PATTERN}/_count" 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['count'])" 2>/dev/null || echo "0")
+  if [ "$DOC_CT" -gt 0 ] 2>/dev/null; then
+    echo -e "  ${GREEN}PASS${NC} Error documents: ${DOC_CT} in ${INDEX_PATTERN}"; PASS=$((PASS+1))
+  else
+    echo -e "  ${RED}FAIL${NC} No documents in ${INDEX_PATTERN}"; FAIL=$((FAIL+1))
+  fi
+
+  # 4. Hero errors present
+  HERO_CT=$(curl $CURL_OPTS -X POST "${OPENSEARCH_URL}/${INDEX_PATTERN}/_count" \
+    -H 'Content-Type: application/json' \
+    -d '{"query":{"wildcard":{"trace_id.keyword":"HERO-*"}}}' 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['count'])" 2>/dev/null || echo "0")
+  if [ "$HERO_CT" -ge 3 ] 2>/dev/null; then
+    echo -e "  ${GREEN}PASS${NC} Hero errors: ${HERO_CT} (expected >= 3)"; PASS=$((PASS+1))
+  else
+    echo -e "  ${RED}FAIL${NC} Hero errors: ${HERO_CT} (expected >= 3)"; FAIL=$((FAIL+1))
+  fi
+
+  echo ""
+  if [ "$FAIL" -eq 0 ]; then
+    echo -e "  ${GREEN}${BOLD}ALL ${PASS} CHECKS PASSED${NC} — ready for demo"
+  else
+    echo -e "  ${RED}${BOLD}${FAIL} CHECK(S) FAILED${NC} — run with --prod --cleanup first to seed data"
+  fi
+  exit "$FAIL"
 fi
 
 # ─── Cleanup (optional) ─────────────────────────────────────────────────
@@ -209,12 +264,12 @@ pause 1
 # ═════════════════════════════════════════════════════════════════════════
 banner "PHASE 5 — Live Trace Lookup"
 
-echo -e "  ${DIM}Pick a random error, trace it end-to-end${NC}\n"
+echo -e "  ${DIM}Search for a critical timeout error by HERO trace ID${NC}\n"
 
-# Get a random trace_id from indexed docs
+# Get the hero timeout error (deterministic — always findable)
 TRACE_DOC=$(curl $CURL_OPTS -X POST "${OPENSEARCH_URL}/${INDEX_PATTERN}/_search" \
   -H 'Content-Type: application/json' \
-  -d '{"size":1,"query":{"match_all":{}},"sort":[{"@timestamp":"desc"}]}' 2>/dev/null)
+  -d '{"size":1,"query":{"wildcard":{"trace_id.keyword":"HERO-TIMEOUT-*"}}}' 2>/dev/null)
 
 echo "$TRACE_DOC" | python3 -c "
 import sys, json

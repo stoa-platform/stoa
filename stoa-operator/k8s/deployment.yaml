@@ -26,6 +26,8 @@ spec:
     spec:
       serviceAccountName: stoa-operator
       automountServiceAccountToken: true
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: stoa-operator
           image: ghcr.io/stoa-platform/stoa-operator:latest
@@ -37,10 +39,25 @@ spec:
               value: "stoa-system"
             - name: STOA_OPERATOR_LOG_LEVEL
               value: "INFO"
+          ports:
+            - name: metrics
+              containerPort: 8000
           envFrom:
             - secretRef:
                 name: stoa-operator-secrets
                 optional: true
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
           resources:
             requests:
               memory: "64Mi"

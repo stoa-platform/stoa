@@ -95,16 +95,17 @@ METRICS_FILE="$WORK_DIR/metrics.txt"
 SCORER_PATH="$(dirname "$SCRIPT_PATH")/run-arena.py"
 
 log_json "\"Computing scores with CI95 via run-arena.py\""
-python3 "$SCORER_PATH" "$WORK_DIR" "$GATEWAYS" > "$METRICS_FILE" 2>&1 | while IFS= read -r line; do
+python3 "$SCORER_PATH" "$WORK_DIR" "$GATEWAYS" > "$METRICS_FILE" 2> >(while IFS= read -r line; do
   log_json "\"$line\""
-done
+done)
 
 # ---------------------------------------------------------------------------
 # Push to Pushgateway
 # ---------------------------------------------------------------------------
 PUSH_URL="${PUSHGATEWAY_URL}/metrics/job/gateway_arena"
-HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" -X PUT --data-binary @"$METRICS_FILE" \
-  -H "Content-Type: text/plain" "$PUSH_URL" 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT --data-binary @"$METRICS_FILE" \
+  -H "Content-Type: text/plain" "$PUSH_URL" 2>/dev/null)
+[ -z "$HTTP_CODE" ] && HTTP_CODE="000"
 
 if [ "$HTTP_CODE" -lt 300 ] && [ "$HTTP_CODE" != "000" ]; then
   METRIC_LINES=$(wc -l < "$METRICS_FILE" | tr -d ' ')

@@ -122,10 +122,65 @@ def build_error_scenarios(api_url: str) -> list[dict]:
     ]
 
 
-def build_opensearch_documents(count: int = 50) -> list[dict]:
-    """Build sample error snapshot documents for OpenSearch indexing."""
+def build_hero_errors() -> list[dict]:
+    """Build 3 deterministic hero errors the presenter can search by HERO-* prefix."""
     now = datetime.now(timezone.utc)
-    docs = []
+    return [
+        {
+            "@timestamp": (now - timedelta(minutes=5)).isoformat(),
+            "trace_id": f"HERO-TIMEOUT-{uuid.uuid4().hex[:12]}",
+            "tenant_id": "oasis",
+            "error_type": "upstream_timeout",
+            "error_message": "Upstream did not respond within 30s for /mcp/v1/tools/invoke: connection to backend timed out after 30000ms",
+            "http_status": 504,
+            "method": "POST",
+            "endpoint": "/mcp/v1/tools/invoke",
+            "severity": "critical",
+            "resolution_status": "unresolved",
+            "user_agent": "Claude/3.5 (MCP Agent)",
+            "response_time_ms": 30000,
+            "request_id": str(uuid.uuid4()),
+        },
+        {
+            "@timestamp": (now - timedelta(minutes=10)).isoformat(),
+            "trace_id": f"HERO-AUTH-{uuid.uuid4().hex[:12]}",
+            "tenant_id": "acme-corp",
+            "error_type": "authentication_error",
+            "error_message": "JWT token expired at 2026-02-24T09:00:00Z, current time 2026-02-24T10:35:00Z — token lifetime exceeded by 95 minutes",
+            "http_status": 401,
+            "method": "GET",
+            "endpoint": "/v1/portal/apis",
+            "severity": "error",
+            "resolution_status": "unresolved",
+            "user_agent": "Mozilla/5.0 (Portal)",
+            "response_time_ms": 12,
+            "request_id": str(uuid.uuid4()),
+        },
+        {
+            "@timestamp": (now - timedelta(minutes=15)).isoformat(),
+            "trace_id": f"HERO-CONTRACT-{uuid.uuid4().hex[:12]}",
+            "tenant_id": "demo-org-alpha",
+            "error_type": "contract_violation",
+            "error_message": "Response does not match UAC contract schema for /v1/subscriptions: field 'quota_remaining' expected integer, got null — schema version v2.1.0",
+            "http_status": 422,
+            "method": "POST",
+            "endpoint": "/v1/subscriptions",
+            "severity": "error",
+            "resolution_status": "investigating",
+            "user_agent": "stoactl/1.0",
+            "response_time_ms": 145,
+            "request_id": str(uuid.uuid4()),
+        },
+    ]
+
+
+def build_opensearch_documents(count: int = 50) -> list[dict]:
+    """Build sample error snapshot documents for OpenSearch indexing.
+
+    Always prepends 3 deterministic hero errors for demo reliability.
+    """
+    now = datetime.now(timezone.utc)
+    docs = list(build_hero_errors())
 
     for i in range(count):
         # Spread errors over the last 24 hours
@@ -333,10 +388,13 @@ def main() -> None:
         print()
 
         docs = build_opensearch_documents(args.count)
+        hero_count = len(build_hero_errors())
 
-        # Show sample
-        print(f"Sample document:")
-        print(f"  {json.dumps(docs[0], indent=2)[:300]}...")
+        # Show hero errors
+        print(f"Hero errors ({hero_count} deterministic):")
+        for doc in docs[:hero_count]:
+            print(f"  {doc['trace_id']:<30} {doc['severity']:<10} {doc['error_type']}")
+        print(f"\n+ {len(docs) - hero_count} random error snapshots")
         print()
 
         indexed = index_to_opensearch(args.opensearch_url, docs, args.opensearch_auth)

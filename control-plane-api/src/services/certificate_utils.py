@@ -83,6 +83,61 @@ def validate_certificate_not_expired(cert_info: CertificateInfo) -> None:
     """
     now = datetime.now(UTC)
     if cert_info.not_after < now:
-        raise ValueError(
-            f"Certificate expired on {cert_info.not_after.isoformat()}"
-        )
+        raise ValueError(f"Certificate expired on {cert_info.not_after.isoformat()}")
+
+
+def days_until_expiry(not_after: datetime) -> int:
+    """Calculate days until certificate expiry.
+
+    Args:
+        not_after: Certificate expiration datetime.
+
+    Returns:
+        Number of days until expiry (negative if already expired).
+    """
+    now = datetime.now(UTC)
+    delta = not_after - now
+    return delta.days
+
+
+def certificate_health_score(
+    not_after: datetime,
+    status: str,
+    rotation_count: int | None = None,
+) -> int:
+    """Compute a 0-100 health score for a certificate.
+
+    Scoring:
+    - Base: days until expiry mapped to 0-70 points
+    - Status bonus: active=30, rotating=20, revoked/expired=0
+    - Rotation bonus: +5 if rotated at least once (max 5)
+
+    Args:
+        not_after: Certificate expiration datetime.
+        status: Certificate status string.
+        rotation_count: Number of times certificate has been rotated.
+
+    Returns:
+        Integer health score 0-100.
+    """
+    days = days_until_expiry(not_after)
+
+    # Base score from days until expiry (0-70)
+    if days <= 0:
+        base = 0
+    elif days <= 7:
+        base = 10
+    elif days <= 30:
+        base = 30
+    elif days <= 90:
+        base = 50
+    else:
+        base = 70
+
+    # Status bonus (0-30)
+    status_bonus = {"active": 30, "rotating": 20}.get(status, 0)
+
+    # Rotation bonus (0-5)
+    rotation_bonus = 5 if (rotation_count or 0) > 0 else 0
+
+    return min(base + status_bonus + rotation_bonus, 100)

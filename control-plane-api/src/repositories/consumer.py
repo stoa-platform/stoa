@@ -1,12 +1,12 @@
-"""Repository for consumer CRUD operations (CAB-1121 + CAB-864)."""
+"""Repository for consumer CRUD operations (CAB-1121 + CAB-864 + CAB-872)."""
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.consumer import Consumer, ConsumerStatus
+from src.models.consumer import CertificateStatus, Consumer, ConsumerStatus
 
 
 def escape_like(value: str) -> str:
@@ -125,6 +125,54 @@ class ConsumerRepository:
         """Delete a consumer (hard delete)."""
         await self.session.delete(consumer)
         await self.session.flush()
+
+    async def list_expiring(
+        self,
+        tenant_id: str,
+        days: int = 30,
+    ) -> list[Consumer]:
+        """List consumers with certificates expiring within N days (CAB-872)."""
+        cutoff = datetime.now(UTC) + timedelta(days=days)
+        query = (
+            select(Consumer)
+            .where(
+                and_(
+                    Consumer.tenant_id == tenant_id,
+                    Consumer.certificate_not_after.isnot(None),
+                    Consumer.certificate_not_after <= cutoff,
+                    Consumer.certificate_status == CertificateStatus.ACTIVE,
+                )
+            )
+            .order_by(Consumer.certificate_not_after.asc())
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    async def expire_overdue_certificates(self, tenant_id: str) -> int:
+        """Set expired status on active certs past not_after (CAB-872).
+
+        Returns:
+            Number of certificates marked as expired.
+        """
+        now = datetime.now(UTC)
+        query = select(Consumer).where(
+            and_(
+                Consumer.tenant_id == tenant_id,
+                Consumer.certificate_not_after.isnot(None),
+                Consumer.certificate_not_after < now,
+                Consumer.certificate_status == CertificateStatus.ACTIVE,
+            )
+        )
+        result = await self.session.execute(query)
+        consumers = result.scalars().all()
+        count = 0
+        for consumer in consumers:
+            consumer.certificate_status = CertificateStatus.EXPIRED
+            consumer.updated_at = datetime.utcnow()
+            count += 1
+        if count:
+            await self.session.flush()
+        return count
 
     async def get_stats(self, tenant_id: str | None = None) -> dict:
         """Get consumer statistics."""

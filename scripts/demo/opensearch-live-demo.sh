@@ -1,19 +1,41 @@
 #!/usr/bin/env bash
 # =============================================================================
-# STOA Platform — OpenSearch Error Correlation Live Demo (2 min)
+# STOA Platform — OpenSearch Error Correlation Live Demo (~90s)
 # "Every error, traced — from API call to root cause"
 #
-# Usage: ./scripts/demo/opensearch-live-demo.sh
-# Prerequisites: Docker Compose stack running with OpenSearch
+# Usage:
+#   ./scripts/demo/opensearch-live-demo.sh           # local (localhost:9200)
+#   ./scripts/demo/opensearch-live-demo.sh --prod     # production (opensearch.gostoa.dev)
+#   ./scripts/demo/opensearch-live-demo.sh --cleanup  # delete stoa-errors-* first
+#
+# Prerequisites: OpenSearch accessible (local Docker Compose or production)
 # =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Defaults (local dev)
 OPENSEARCH_URL="${OPENSEARCH_URL:-https://localhost:9200}"
 OPENSEARCH_AUTH="${OPENSEARCH_AUTH:-admin:admin}"
+GATEWAY_URL="${GATEWAY_URL:-https://mcp.gostoa.dev}"
 ERROR_COUNT="${ERROR_COUNT:-50}"
+CLEANUP=false
+
+# Parse flags
+for arg in "$@"; do
+  case $arg in
+    --prod)
+      OPENSEARCH_URL="https://opensearch.gostoa.dev"
+      OPENSEARCH_AUTH="admin:StoaAdmin2026Prod"
+      GATEWAY_URL="https://mcp.gostoa.dev"
+      ;;
+    --cleanup)
+      CLEANUP=true
+      ;;
+  esac
+done
+
 CURL_OPTS="-sfk -u ${OPENSEARCH_AUTH}"
 INDEX_PATTERN="stoa-errors-*"
 
@@ -41,10 +63,54 @@ os_query() {
 }
 
 # ─── Pre-flight ──────────────────────────────────────────────────────────
+echo -e "  ${DIM}OpenSearch: ${OPENSEARCH_URL}${NC}"
+echo -e "  ${DIM}Gateway:    ${GATEWAY_URL}${NC}"
+echo ""
+
 if ! curl $CURL_OPTS "${OPENSEARCH_URL}/_cluster/health" > /dev/null 2>&1; then
-  echo -e "${RED}OpenSearch not ready at ${OPENSEARCH_URL}. Start docker-compose first.${NC}"
+  echo -e "${RED}OpenSearch not ready at ${OPENSEARCH_URL}${NC}"
   exit 1
 fi
+
+# ─── Cleanup (optional) ─────────────────────────────────────────────────
+if [ "$CLEANUP" = true ]; then
+  echo -e "  ${YELLOW}Cleaning up: deleting ${INDEX_PATTERN} index...${NC}"
+  curl $CURL_OPTS -X DELETE "${OPENSEARCH_URL}/${INDEX_PATTERN}" > /dev/null 2>&1 || true
+  echo -e "  ${GREEN}✓${NC} Index cleaned\n"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════
+# PHASE 0 — Fire real gateway errors (10s)
+# ═════════════════════════════════════════════════════════════════════════
+banner "PHASE 0 — Firing Controlled Gateway Errors"
+
+echo -e "  ${DIM}Sending requests that will fail at the gateway level...${NC}\n"
+
+# 401 — no auth token
+STATUS_401=$(curl -sk -o /dev/null -w "%{http_code}" "${GATEWAY_URL}/mcp/v1/tools" 2>/dev/null || echo "000")
+echo -e "  ${RED}401${NC} No auth token      → HTTP ${STATUS_401}"
+
+# 404 — nonexistent path
+STATUS_404=$(curl -sk -o /dev/null -w "%{http_code}" "${GATEWAY_URL}/nonexistent-tool-xyz" 2>/dev/null || echo "000")
+echo -e "  ${RED}404${NC} Bad path           → HTTP ${STATUS_404}"
+
+# 401 — invalid bearer token
+STATUS_BAD=$(curl -sk -o /dev/null -w "%{http_code}" -H "Authorization: Bearer invalid-token-demo" \
+  "${GATEWAY_URL}/mcp/v1/tools" 2>/dev/null || echo "000")
+echo -e "  ${RED}401${NC} Invalid JWT        → HTTP ${STATUS_BAD}"
+
+# 405 — wrong method on health endpoint
+STATUS_405=$(curl -sk -o /dev/null -w "%{http_code}" -X DELETE "${GATEWAY_URL}/health" 2>/dev/null || echo "000")
+echo -e "  ${RED}405${NC} Wrong HTTP method  → HTTP ${STATUS_405}"
+
+# 400 — malformed JSON body
+STATUS_400=$(curl -sk -o /dev/null -w "%{http_code}" -X POST \
+  -H "Content-Type: application/json" -d '{broken' \
+  "${GATEWAY_URL}/mcp/v1/tools/invoke" 2>/dev/null || echo "000")
+echo -e "  ${RED}400${NC} Malformed JSON     → HTTP ${STATUS_400}"
+
+echo -e "\n  ${GREEN}✓${NC} 5 controlled errors fired — visible in gateway access logs"
+pause 1
 
 # ═════════════════════════════════════════════════════════════════════════
 # PHASE 1 — Seed fresh errors (10s)
@@ -202,9 +268,9 @@ echo "    3. 4 tenants isolated — each org sees only their errors"
 echo "    4. Severity triage: critical / error / warning"
 echo "    5. Single trace lookup: from error to root cause in seconds"
 echo ""
-echo -e "  ${CYAN}Dashboards:${NC}"
-echo "    Grafana:    http://localhost:3001/d/stoa-error-snapshots"
-echo "    OpenSearch: http://localhost:5601/app/discover"
+echo -e "  ${CYAN}Next:${NC}"
+echo "    OpenSearch Dashboards → Discover → stoa-errors-* → filter last 15 min"
+echo "    Click any error → trace_id, tenant_id, error_type, response_time_ms"
 echo ""
 echo -e "  ${DIM}\"Every error, traced — from API call to root cause\"${NC}"
 echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"

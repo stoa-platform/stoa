@@ -9,11 +9,13 @@ import type { Consumer } from '../types';
 
 const mockRevokeCertificate = vi.fn().mockResolvedValue({});
 const mockRotateCertificate = vi.fn().mockResolvedValue({});
+const mockBindCertificate = vi.fn().mockResolvedValue({});
 
 vi.mock('../services/api', () => ({
   apiService: {
     revokeCertificate: (...args: unknown[]) => mockRevokeCertificate(...args),
     rotateCertificate: (...args: unknown[]) => mockRotateCertificate(...args),
+    bindCertificate: (...args: unknown[]) => mockBindCertificate(...args),
   },
 }));
 
@@ -168,5 +170,72 @@ describe('ConsumerDetailModal', () => {
     await waitFor(() => {
       expect(mockToast.error).toHaveBeenCalledWith('Revoke failed', 'Network error');
     });
+  });
+
+  // --- Bind Certificate Tests (CAB-872) ---
+
+  it('shows Bind Certificate button when no cert', () => {
+    const noCertConsumer = { ...baseConsumer, certificate_fingerprint: undefined };
+    renderModal(noCertConsumer);
+    expect(screen.getByText('Bind Certificate')).toBeInTheDocument();
+  });
+
+  it('opens bind form when clicking Bind Certificate', () => {
+    const noCertConsumer = { ...baseConsumer, certificate_fingerprint: undefined };
+    renderModal(noCertConsumer);
+    fireEvent.click(screen.getByText('Bind Certificate'));
+    expect(screen.getByText('PEM Certificate')).toBeInTheDocument();
+    expect(screen.getByText('Confirm Bind')).toBeInTheDocument();
+  });
+
+  it('calls bindCertificate on confirm', async () => {
+    const onClose = vi.fn();
+    const noCertConsumer = { ...baseConsumer, certificate_fingerprint: undefined };
+    renderModal(noCertConsumer, onClose);
+    fireEvent.click(screen.getByText('Bind Certificate'));
+    const textarea = screen.getByPlaceholderText(/BEGIN CERTIFICATE/);
+    fireEvent.change(textarea, {
+      target: { value: '-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----' },
+    });
+    fireEvent.click(screen.getByText('Confirm Bind'));
+    await waitFor(() => {
+      expect(mockBindCertificate).toHaveBeenCalledWith(
+        'tenant-1',
+        'consumer-1',
+        '-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----'
+      );
+    });
+    expect(mockToast.success).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows error when bind fails', async () => {
+    mockBindCertificate.mockRejectedValueOnce(new Error('Invalid PEM'));
+    const noCertConsumer = { ...baseConsumer, certificate_fingerprint: undefined };
+    renderModal(noCertConsumer);
+    fireEvent.click(screen.getByText('Bind Certificate'));
+    const textarea = screen.getByPlaceholderText(/BEGIN CERTIFICATE/);
+    fireEvent.change(textarea, { target: { value: 'invalid-pem' } });
+    fireEvent.click(screen.getByText('Confirm Bind'));
+    await waitFor(() => {
+      expect(mockToast.error).toHaveBeenCalledWith('Bind failed', 'Invalid PEM');
+    });
+  });
+
+  it('shows Rebind Certificate for revoked cert', () => {
+    const revokedConsumer = { ...baseConsumer, certificate_status: 'revoked' as const };
+    renderModal(revokedConsumer);
+    expect(screen.getByText('Rebind Certificate')).toBeInTheDocument();
+  });
+
+  it('shows Replace Certificate for expired cert', () => {
+    const expiredConsumer = { ...baseConsumer, certificate_status: 'expired' as const };
+    renderModal(expiredConsumer);
+    expect(screen.getByText('Replace Certificate')).toBeInTheDocument();
+  });
+
+  it('shows CertificateHealthBadge for active cert', () => {
+    renderModal();
+    expect(screen.getByText('Health')).toBeInTheDocument();
   });
 });

@@ -202,3 +202,102 @@ Then('the client ID is visible', async ({ authSession }) => {
 
   expect(isVisible || hasLabel).toBe(true);
 });
+
+// ============================================================================
+// FULL PIPELINE — Token Exchange + Gateway Call (CAB-1121 E2E)
+// ============================================================================
+
+// Stored credentials from the registration modal
+let savedCredentials: {
+  clientId: string;
+  clientSecret: string;
+  tokenEndpoint: string;
+} | null = null;
+
+// Access token obtained via client_credentials grant
+let consumerAccessToken: string | null = null;
+
+// Last gateway response for assertion
+let gatewayResponse: { status: number; body: unknown } | null = null;
+
+Then('I save the consumer credentials from the modal', async ({ authSession }) => {
+  const page = authSession.page;
+
+  // The CredentialsModal renders a cURL snippet in a <pre> tag containing
+  // client_id, client_secret, and the token endpoint URL
+  const curlSnippet = await page.locator('pre').first().textContent({ timeout: 10000 });
+  expect(curlSnippet).toBeTruthy();
+
+  const endpointMatch = curlSnippet!.match(/curl -X POST (\S+)/);
+  const clientIdMatch = curlSnippet!.match(/client_id=([^\s"\\]+)/);
+  const clientSecretMatch = curlSnippet!.match(/client_secret=([^\s"\\]+)/);
+
+  expect(endpointMatch).toBeTruthy();
+  expect(clientIdMatch).toBeTruthy();
+  expect(clientSecretMatch).toBeTruthy();
+
+  savedCredentials = {
+    tokenEndpoint: endpointMatch![1],
+    clientId: clientIdMatch![1],
+    clientSecret: clientSecretMatch![1],
+  };
+
+  // Close the modal
+  const doneButton = page.locator('button:has-text("Done")');
+  if (await doneButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await doneButton.click();
+    await page.waitForLoadState('networkidle');
+  }
+});
+
+When('I exchange my consumer credentials for an access token', async ({ request }) => {
+  expect(savedCredentials).not.toBeNull();
+
+  const { clientId, clientSecret, tokenEndpoint } = savedCredentials!;
+
+  // OAuth2 client_credentials grant against Keycloak
+  const tokenResponse = await request.fetch(tokenEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    data: `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`,
+  });
+
+  expect(tokenResponse.ok()).toBeTruthy();
+  const tokenData = await tokenResponse.json();
+  consumerAccessToken = tokenData.access_token;
+  expect(consumerAccessToken).toBeTruthy();
+});
+
+Then('I receive a valid consumer access token', async () => {
+  expect(consumerAccessToken).not.toBeNull();
+  // JWT tokens have 3 dot-separated base64 segments
+  const parts = consumerAccessToken!.split('.');
+  expect(parts.length).toBe(3);
+});
+
+When('I call the gateway with my consumer token', async ({ request }) => {
+  expect(consumerAccessToken).not.toBeNull();
+
+  try {
+    const response = await request.fetch(`${URLS.gateway}/v1/tools`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${consumerAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    gatewayResponse = {
+      status: response.status(),
+      body: await response.json().catch(() => ({})),
+    };
+  } catch (error) {
+    gatewayResponse = { status: 500, body: { error: String(error) } };
+  }
+});
+
+Then('the gateway accepts my consumer token', async () => {
+  expect(gatewayResponse).not.toBeNull();
+  // The token should pass auth — we expect anything except 401/403
+  expect([401, 403]).not.toContain(gatewayResponse!.status);
+});

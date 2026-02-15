@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 9 — ADR-043 + Linear ticket audit CAB-1176→1181)
+> Dernière MAJ: 2026-02-15 (session 10 — Track 2 Community Infra done, PR #525)
 
 ## ✅ DONE
 
@@ -61,11 +61,14 @@
 - CAB-1150: Demo Narrative + Speaker Notes (8 pts) — PR #501 (6-act timing, 10 FAQ, benchmarks, slides outline)
 - CAB-1129: Demo Script — Design Partner Pitch 5min (5 pts) — PR #506 (word-for-word, 10 objections, 3 client profiles)
 - CAB-1175: Status Page MVP Upptime (8 pts) — stoa-platform/status repo, 7/7 monitors UP, status.gostoa.dev live
-- ADR-043: Kafka → MCP Event Bridge Architecture — stoa-docs PR #42 (263 LOC, CAB-1176)
-  - Fixed ADR number collision (was ADR-007), corrected Related ADRs (005/024/041), added content compliance
+- ADR-043: Kafka → MCP Event Bridge Architecture — stoa-docs PRs #42, #43 (CAB-1176)
+  - PR #42: initial publication (263 LOC), fixed ADR-007 collision, Related ADRs (005/024/041), compliance
+  - PR #43: Value Proposition section (gateway cost reduction via Kafka fan-out, onboarding 5→1 steps), Phase 1 fix 5→8 topic families. Council 8.50/10
   - Linear audit: 7 anomalies fixed on CAB-1176→1181 (labels, descriptions, relations)
 - CAB-1075: Demo Day Ready — Freeze + Plan B/C (5 pts) — PR #513
 - CAB-1130: Demo Slides — Design Partner Presentation (8 pts) — PR #509
+- CAB-1152: Community Infrastructure EPIC (8 pts) — PR #525 (Discussions, FUNDING, badges, 10 good-first-issues)
+- CAB-1182: CONTRIBUTING + templates (3 pts) — PR #525 (pre-existing, URLs fixed, legacy .md removed)
 
 ## 🔴 IN PROGRESS
 
@@ -83,9 +86,9 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - CAB-1151: Dress Rehearsal (3 pts, P0)
 - CAB-710: n8n + STOA "ESB is Dead" demo (3 pts, P1)
 
-### Track 2 — Community Infrastructure (11 pts, P0)
-- CAB-1152: EPIC (8 pts) — Discussions, DocSearch, Badges, Funding, Labels, Announcement Bar
-- CAB-1182: CONTRIBUTING.md + PR/Issue templates (3 pts)
+### Track 2 — Community Infrastructure (11 pts, P0) — DONE ✅
+- ~~CAB-1152~~ + ~~CAB-1182~~ — PR #525 merged
+- Remaining for stoa-docs: Algolia DocSearch, Announcement bar (separate repo)
 
 ### Track 3 — DX Remediation (14 pts, fixes CAB-1035)
 - CAB-1170: Keycloak self-registration (5 pts, P0 CRITICAL)

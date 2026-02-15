@@ -126,7 +126,7 @@ describe('TenantDashboard', () => {
 
   it('falls back to user tenant_id when localStorage is empty', async () => {
     renderComponent();
-    expect(await screen.findByText('oasis-gunters')).toBeInTheDocument();
+    expect(await screen.findByText('gregarious-games')).toBeInTheDocument();
   });
 
   it('shows time range selector buttons', async () => {

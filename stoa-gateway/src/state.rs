@@ -16,6 +16,7 @@ use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
 use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
+use crate::proxy::CredentialStore;
 use crate::quota::{ConsumerRateLimiter, QuotaManager, QuotaManagerConfig, RateLimiterConfig};
 use crate::rate_limit::RateLimiter;
 use crate::resilience::{
@@ -59,6 +60,8 @@ pub struct AppState {
     pub consumer_rate_limiter: Arc<ConsumerRateLimiter>,
     /// Daily/monthly quota manager (CAB-1121 P4)
     pub quota_manager: Arc<QuotaManager>,
+    /// BYOK credential store for backend API auth (CAB-1250)
+    pub credential_store: Arc<CredentialStore>,
 }
 
 impl AppState {
@@ -241,6 +244,9 @@ impl AppState {
             config.fallback_timeout_ms,
         );
 
+        // Initialize BYOK credential store (CAB-1250)
+        let credential_store = Arc::new(CredentialStore::new());
+
         // Initialize mTLS stats (CAB-864)
         let mtls_stats = Arc::new(MtlsStats::new());
         if config.mtls.enabled {
@@ -274,6 +280,7 @@ impl AppState {
             mtls_stats,
             consumer_rate_limiter,
             quota_manager,
+            credential_store,
         }
     }
 

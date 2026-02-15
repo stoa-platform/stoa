@@ -32,6 +32,7 @@ from .routers import (
     apis,
     applications,  # noqa: F401
     audit,
+    backend_apis,
     business,
     catalog_admin,
     certificates,
@@ -485,6 +486,10 @@ app.include_router(quotas.router)
 
 # Audit Trail (CAB-307)
 app.include_router(audit.router)
+
+# Backend APIs — SaaS self-service (CAB-1188)
+app.include_router(backend_apis.router)
+app.include_router(backend_apis.keys_router)
 
 # Public — Portal email capture (no auth)
 app.include_router(access_requests.router)

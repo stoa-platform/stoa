@@ -1,3 +1,4 @@
+from .backend_api import BackendApi, BackendApiAuthType, BackendApiStatus
 from .catalog import (
     APICatalog,
     CatalogSyncStatus,
@@ -42,6 +43,7 @@ from .mcp_subscription import (
 from .plan import Plan, PlanStatus
 from .prospect_event import EventType, ProspectEvent
 from .prospect_feedback import ProspectFeedback
+from .saas_api_key import SaasApiKey, SaasApiKeyStatus
 from .subscription import Subscription, SubscriptionStatus
 from .tenant import Tenant, TenantStatus
 from .traces import PipelineTrace, TraceStatus, TraceStep, trace_store

@@ -84,6 +84,12 @@
             ],
             "title": "Expires At"
           },
+          "status": {
+            "default": "pending",
+            "description": "Subscription status after creation",
+            "title": "Status",
+            "type": "string"
+          },
           "subscription_id": {
             "format": "uuid",
             "title": "Subscription Id",
@@ -921,6 +927,369 @@
         ],
         "title": "AuthTypeEnum",
         "type": "string"
+      },
+      "BackendApiAuthTypeEnum": {
+        "description": "Authentication type for the backend API.",
+        "enum": [
+          "none",
+          "api_key",
+          "bearer",
+          "basic",
+          "oauth2_cc"
+        ],
+        "title": "BackendApiAuthTypeEnum",
+        "type": "string"
+      },
+      "BackendApiCreate": {
+        "description": "Schema for registering a new backend API.",
+        "example": {
+          "auth_config": {
+            "header_name": "X-API-Key",
+            "header_value": "secret123"
+          },
+          "auth_type": "api_key",
+          "backend_url": "https://petstore.swagger.io/v2",
+          "description": "Sample Petstore backend",
+          "display_name": "Petstore API",
+          "name": "petstore-api",
+          "openapi_spec_url": "https://petstore.swagger.io/v2/swagger.json"
+        },
+        "properties": {
+          "auth_config": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Backend credentials (api_key, bearer token, basic user/pass, oauth2 client_id/secret+token_url)",
+            "title": "Auth Config"
+          },
+          "auth_type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BackendApiAuthTypeEnum"
+              }
+            ],
+            "default": "none"
+          },
+          "backend_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Backend Url",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "openapi_spec_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openapi Spec Url"
+          }
+        },
+        "required": [
+          "name",
+          "backend_url"
+        ],
+        "title": "BackendApiCreate",
+        "type": "object"
+      },
+      "BackendApiListResponse": {
+        "description": "Schema for paginated backend API list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BackendApiResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "BackendApiListResponse",
+        "type": "object"
+      },
+      "BackendApiResponse": {
+        "description": "Schema for backend API response.",
+        "properties": {
+          "auth_type": {
+            "$ref": "#/components/schemas/BackendApiAuthTypeEnum"
+          },
+          "backend_url": {
+            "title": "Backend Url",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "has_credentials": {
+            "description": "Whether backend credentials are configured",
+            "title": "Has Credentials",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "openapi_spec_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openapi Spec Url"
+          },
+          "spec_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Hash"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BackendApiStatusEnum"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tool_count": {
+            "title": "Tool Count",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "display_name",
+          "description",
+          "backend_url",
+          "openapi_spec_url",
+          "auth_type",
+          "has_credentials",
+          "status",
+          "tool_count",
+          "spec_hash",
+          "last_synced_at",
+          "created_at",
+          "updated_at",
+          "created_by"
+        ],
+        "title": "BackendApiResponse",
+        "type": "object"
+      },
+      "BackendApiStatusEnum": {
+        "description": "Backend API lifecycle status.",
+        "enum": [
+          "draft",
+          "active",
+          "disabled"
+        ],
+        "title": "BackendApiStatusEnum",
+        "type": "string"
+      },
+      "BackendApiUpdate": {
+        "description": "Schema for updating a backend API.",
+        "properties": {
+          "auth_config": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Config"
+          },
+          "auth_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendApiAuthTypeEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "backend_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Url"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "openapi_spec_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openapi Spec Url"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendApiStatusEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "BackendApiUpdate",
+        "type": "object"
       },
       "BackendState": {
         "description": "Backend service state at time of error.",
@@ -7757,6 +8126,30 @@
         "title": "PaginatedResponse[GatewayApplicationResponse]",
         "type": "object"
       },
+      "PersonalTenantResponse": {
+        "description": "Response for personal tenant provisioning.",
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "display_name",
+          "created"
+        ],
+        "title": "PersonalTenantResponse",
+        "type": "object"
+      },
       "PlanCreate": {
         "description": "Schema for creating a new subscription plan.",
         "example": {
@@ -10046,6 +10439,273 @@
         },
         "title": "RoutingInfo",
         "type": "object"
+      },
+      "SaasApiKeyCreate": {
+        "description": "Schema for creating a scoped API key.",
+        "example": {
+          "allowed_backend_api_ids": [
+            "550e8400-e29b-41d4-a716-446655440000"
+          ],
+          "name": "my-agent-key",
+          "rate_limit_rpm": 60
+        },
+        "properties": {
+          "allowed_backend_api_ids": {
+            "description": "Backend API IDs this key can access",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Allowed Backend Api Ids",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "rate_limit_rpm": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Requests per minute",
+            "title": "Rate Limit Rpm"
+          }
+        },
+        "required": [
+          "name",
+          "allowed_backend_api_ids"
+        ],
+        "title": "SaasApiKeyCreate",
+        "type": "object"
+      },
+      "SaasApiKeyCreatedResponse": {
+        "description": "Schema returned once at creation \u2014 includes the plaintext key.",
+        "example": {
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "key": "stoa_saas_a1b2_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "key_prefix": "stoa_saas_a1b2",
+          "name": "my-agent-key"
+        },
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "description": "Plaintext API key \u2014 shown only once",
+            "title": "Key",
+            "type": "string"
+          },
+          "key_prefix": {
+            "title": "Key Prefix",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "key",
+          "key_prefix"
+        ],
+        "title": "SaasApiKeyCreatedResponse",
+        "type": "object"
+      },
+      "SaasApiKeyListResponse": {
+        "description": "Schema for paginated API key list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SaasApiKeyResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "SaasApiKeyListResponse",
+        "type": "object"
+      },
+      "SaasApiKeyResponse": {
+        "description": "Schema for API key response (without the key itself).",
+        "properties": {
+          "allowed_backend_api_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Allowed Backend Api Ids",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "key_prefix": {
+            "title": "Key Prefix",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rate_limit_rpm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Rpm"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SaasApiKeyStatusEnum"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "description",
+          "key_prefix",
+          "allowed_backend_api_ids",
+          "rate_limit_rpm",
+          "status",
+          "created_at",
+          "updated_at",
+          "expires_at",
+          "last_used_at",
+          "created_by"
+        ],
+        "title": "SaasApiKeyResponse",
+        "type": "object"
+      },
+      "SaasApiKeyStatusEnum": {
+        "description": "API key lifecycle status.",
+        "enum": [
+          "active",
+          "revoked",
+          "expired"
+        ],
+        "title": "SaasApiKeyStatusEnum",
+        "type": "string"
       },
       "SearchResponse": {
         "description": "Search response model.",
@@ -22104,6 +22764,33 @@
         ]
       }
     },
+    "/v1/me/tenant": {
+      "post": {
+        "description": "Provision a personal tenant for a self-registered user.\n\nNo permission required \u2014 any authenticated user without a tenant can call this.\nIdempotent: returns existing tenant if user already has one.",
+        "operationId": "provision_personal_tenant_v1_me_tenant_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalTenantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Provision Personal Tenant",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
     "/v1/monitoring/transactions": {
       "get": {
         "description": "List recent API transactions.\n\nReturns transaction summaries for efficient list display.",
@@ -25781,6 +26468,324 @@
         ]
       }
     },
+    "/v1/tenants/{tenant_id}/backend-apis": {
+      "get": {
+        "description": "List backend APIs for a tenant.",
+        "operationId": "list_backend_apis_v1_tenants__tenant_id__backend_apis_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by status",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendApiListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Backend Apis",
+        "tags": [
+          "Backend APIs"
+        ]
+      },
+      "post": {
+        "description": "Register a new backend API for MCP exposure.",
+        "operationId": "create_backend_api_v1_tenants__tenant_id__backend_apis_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackendApiCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Backend Api",
+        "tags": [
+          "Backend APIs"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/backend-apis/{api_id}": {
+      "delete": {
+        "description": "Delete a backend API.",
+        "operationId": "delete_backend_api_v1_tenants__tenant_id__backend_apis__api_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Api Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Backend Api",
+        "tags": [
+          "Backend APIs"
+        ]
+      },
+      "get": {
+        "description": "Get a backend API by ID.",
+        "operationId": "get_backend_api_v1_tenants__tenant_id__backend_apis__api_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Api Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Backend Api",
+        "tags": [
+          "Backend APIs"
+        ]
+      },
+      "patch": {
+        "description": "Update a backend API.",
+        "operationId": "update_backend_api_v1_tenants__tenant_id__backend_apis__api_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "api_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Api Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackendApiUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Backend Api",
+        "tags": [
+          "Backend APIs"
+        ]
+      }
+    },
     "/v1/tenants/{tenant_id}/deployments": {
       "get": {
         "description": "List deployment history",
@@ -26820,6 +27825,240 @@
         "summary": "Get Tree",
         "tags": [
           "Git"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/saas-keys": {
+      "get": {
+        "description": "List scoped API keys for a tenant.",
+        "operationId": "list_saas_api_keys_v1_tenants__tenant_id__saas_keys_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaasApiKeyListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Saas Api Keys",
+        "tags": [
+          "SaaS API Keys"
+        ]
+      },
+      "post": {
+        "description": "Create a scoped API key. The plaintext key is returned only once.",
+        "operationId": "create_saas_api_key_v1_tenants__tenant_id__saas_keys_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaasApiKeyCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaasApiKeyCreatedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Saas Api Key",
+        "tags": [
+          "SaaS API Keys"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/saas-keys/{key_id}": {
+      "delete": {
+        "description": "Revoke a scoped API key.",
+        "operationId": "revoke_saas_api_key_v1_tenants__tenant_id__saas_keys__key_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Saas Api Key",
+        "tags": [
+          "SaaS API Keys"
+        ]
+      },
+      "get": {
+        "description": "Get a scoped API key by ID.",
+        "operationId": "get_saas_api_key_v1_tenants__tenant_id__saas_keys__key_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaasApiKeyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Saas Api Key",
+        "tags": [
+          "SaaS API Keys"
         ]
       }
     },

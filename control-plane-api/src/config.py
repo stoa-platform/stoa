@@ -180,6 +180,9 @@ class Settings(BaseSettings):
     LOG_MASKING_ENABLED: bool = True
     LOG_MASKING_PATTERNS: str = '["password", "secret", "token", "api_key", "authorization"]'
 
+    # Backend API encryption (Fernet key for BYOK credential storage — CAB-1188)
+    BACKEND_ENCRYPTION_KEY: str = ""
+
     # Database (PostgreSQL)
     DATABASE_URL: str = "postgresql+asyncpg://stoa:stoa@localhost:5432/stoa"
     DATABASE_POOL_SIZE: int = 5

@@ -3,10 +3,10 @@
 ## 🎯 KPIs Démo
 | Métrique | Cible | Status |
 |----------|-------|--------|
-| Consumer flow E2E | Portal→Subscribe→Token→Call | 🔴 CAB-1121 |
-| mTLS use case client | 100+ certs, RFC 8705 | 🟢 CAB-864 (Phase 2 done, E2E remains) |
-| OpenAPI→MCP bridge | stoactl bridge demo | 🟡 CAB-1137 |
-| Error Snapshot | Provoquer + investiguer en live | 🔴 CAB-550 |
+| Consumer flow E2E | Portal→Subscribe→Token→Call | ✅ CAB-1121 (PR #423 + E2E #450) |
+| mTLS use case client | 100+ certs, RFC 8705 | ✅ CAB-864 + CAB-872 (PR #453) |
+| OpenAPI→MCP bridge | stoactl bridge demo | ✅ CAB-1137 (stoactl PR #6, stoa PR #436) |
+| Error Snapshot | Provoquer + investiguer en live | ✅ CAB-550 (PR #448) |
 | Dry run 2x sans bug | 5 min chrono | 🔴 CAB-802 |
 | Plan SI post-démo | Arbre décision + roadmap | ✅ CAB-1031 |
 | Docs site | Complet, 0 placeholder | ✅ DONE |
@@ -14,16 +14,8 @@
 ## Semaine 7 (13-16 fév) — CODE CRITIQUE
 Focus: Finir les 2 gros MEGAs code
 
-- [ ] CAB-1121: Consumer Onboarding & Token Exchange (35 pts)
-  - Session 1: Identity model + Keycloak clients + DB schema
-  - Session 2: Portal UI consumer registration + approval flow
-  - Session 3: Token Exchange endpoint + gateway enforcement
-  - Session 4: E2E test Portal→Subscribe→Token→API call
-  ⚠️ C'est LE parcours démo. Doit être bulletproof.
-
-- [ ] CAB-1137: OpenAPI → MCP Auto-Bridge (8 pts)
-  - Session unique: Parser OpenAPI 3.0/3.1 → génère MCP tool definitions
-  - Démo: `stoactl bridge petstore.yaml` → 5 tools créés en 3 secondes
+- [x] CAB-1121: Consumer Onboarding & Token Exchange (35 pts) — DONE (PR #423 + E2E PR #450)
+- [x] CAB-1137: OpenAPI → MCP Auto-Bridge (8 pts) — DONE (stoactl PR #6, stoa PR #436)
 
 - [~] CAB-864: mTLS + OAuth2 Certificate Binding (34 pts)
   - ✅ Session 1: Certificate management API + Keycloak cert-bound tokens (already implemented)
@@ -34,7 +26,7 @@ Focus: Finir les 2 gros MEGAs code
     - PR #427: Portal CertificateUploader → SubscribeModal wiring
     - PR #428: Gateway mTLS Prometheus metrics (3 counters/gauges)
     - PR #429: Grafana mTLS dashboard (7 panels) + 3 alerting rules
-  - [ ] Session 5: E2E test cert→token→API avec mTLS enforced (→ CAB-872)
+  - [x] Session 5: E2E validation script + @wip tags (→ CAB-872, PR #453)
 
 ## Semaine 8 (17-21 fév) — POLISH + DRY RUN
 Focus: Intégration, script démo, répétitions
@@ -46,13 +38,12 @@ Focus: Intégration, script démo, répétitions
   - ✅ Council 8.5/10 — 3 adjustments applied
   - Document: stoa-strategy/execution/PLAN-ACTION-SI-POST-DEMO.md (private)
 
-- [ ] CAB-550: Error Snapshot Scenario (3 pts)
-  - Setup données démo: 3 erreurs pré-générées
-  - Script: provoquer timeout → snapshot → investigation dashboard
+- [x] CAB-550: Error Snapshot Scenario (3 pts) — DONE (PR #448)
 
-- [ ] CAB-872: mTLS Integration E2E (3 pts)
-  - Assembler les composants CAB-864
-  - Flow complet sans friction
+- [x] CAB-872: mTLS Integration E2E (3 pts) — DONE (PR #453)
+  - validate-mtls-flow.sh: automated pre-flight (token + cnf + 3 scenarios)
+  - mtls-demo-commands.sh --validate flag
+  - DEMO-SCRIPT.md updated with mTLS pre-flight step
 
 - [ ] CAB-802: Dry Run + Script + Video (3 pts)
   - Répétition #1 (mercredi 19) — timer 5 min
@@ -73,10 +64,12 @@ Focus: Intégration, script démo, répétitions
 
 ## Post-démo (semaine 9+)
 - [ ] CAB-1133: Portal Test Suite (34 pts)
-- [ ] CAB-1134: ADR-040 Born GitOps (5 pts)
+- [x] CAB-1134: ADR-040 Born GitOps (5 pts) — DONE (stoa-docs PR #17, ADR published)
 - [ ] CAB-1138: GitOps Operator (21 pts)
 - [ ] CAB-1030: Kit onboarding Cédric (privé)
 - [ ] CAB-353: Go/No-Go Checklist
+- [x] Arena k6 Migration L1+L2 (PRs #438, #444, #447, #449) — DONE
+- [ ] Arena k6 Migration L3: ramp-up + CI95 error bars + CPU pinning
 
 ## Règles Countdown
 1. ZERO nouveau ticket jusqu'au 24/02

@@ -259,18 +259,21 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Weekly backlog stock check — scan the codebase for ticket candidates.
+            Weekly backlog stock check — scan the codebase for MEGA ticket candidates.
 
             Run the `/generate-backlog --scan` skill:
             1. Inventory current Linear backlog depth (issues with no cycle, state Backlog/Todo)
             2. Scan 6 sources: TODO/FIXME, test coverage gaps, roadmap files, DX gaps, lint suppressions, content roadmap
-            3. Deduplicate against existing Linear issues
-            4. Estimate points using heuristics
-            5. Report candidate count and total points
+            3. GROUP findings by component/theme into MEGA tickets (21-34 pts each, with phases and binary DoD)
+            4. Deduplicate against existing Linear issues
+            5. Report MEGA count and total points
+
+            IMPORTANT: Generate MEGA tickets (20-40 pts), NOT micro-tickets (3-8 pts).
+            Each MEGA groups related findings by component into a meaningful improvement arc.
 
             After the scan, evaluate backlog health:
             - If backlog < 400 pts: create a GitHub issue titled "Backlog Stock Alert — YYYY-MM-DD"
-              with label "daily-digest" containing the full scan report and recommendation
+              with label "daily-digest" containing the full MEGA scan report and recommendation
               to run `/generate-backlog --create`
             - If backlog >= 400 pts: create a GitHub issue titled "Backlog Stock OK — YYYY-MM-DD"
               with label "daily-digest" containing a brief summary

@@ -183,7 +183,6 @@ export function CreateKeyModal({ tenantId, onClose, onCreated }: CreateKeyModalP
           <button
             type="submit"
             disabled={loading}
-            onClick={handleSubmit}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? 'Creating...' : 'Create Key'}

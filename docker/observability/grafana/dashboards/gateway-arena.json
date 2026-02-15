@@ -55,7 +55,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Composite Arena Score per gateway (0-100). Higher is better. Weights: 15% base latency, 25% burst50, 25% burst100, 15% availability, 10% error rate, 10% consistency.",
+      "description": "Composite Arena Score per gateway (0-100). Higher is better. Weights: 10% base latency, 20% burst50, 20% burst100, 15% availability, 10% error rate, 10% consistency, 15% ramp-up capacity.",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "thresholds"},
@@ -172,7 +172,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 1},
+      "gridPos": {"h": 5, "w": 4, "x": 18, "y": 1},
       "id": 14,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
       "targets": [
@@ -183,6 +183,40 @@
         }
       ],
       "title": "Valid Runs",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Max sustained request rate during ramp-up scenario (req/s). Higher is better — measures throughput capacity under increasing load.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 30},
+              {"color": "green", "value": 60}
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "reqps",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 2, "x": 22, "y": 1},
+      "id": 17,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [
+        {
+          "expr": "gateway_arena_ramp_rate{gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Ramp Rate",
       "type": "stat"
     },
     {
@@ -341,14 +375,23 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "description": "Latency percentiles over time for the selected scenario",
+      "description": "Latency percentiles over time with CI95 confidence bounds (dashed lines)",
       "fieldConfig": {
         "defaults": {
           "color": {"mode": "palette-classic"},
           "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": true},
           "unit": "s"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": "CI95"},
+            "properties": [
+              {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [10, 5]}},
+              {"id": "custom.lineWidth", "value": 1},
+              {"id": "custom.fillOpacity", "value": 0}
+            ]
+          }
+        ]
       },
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22},
       "id": 6,
@@ -363,9 +406,29 @@
           "expr": "gateway_arena_p95_seconds{scenario=~\"$scenario\",gateway=~\"$gateway\"}",
           "legendFormat": "{{gateway}} P95 ({{scenario}})",
           "refId": "B"
+        },
+        {
+          "expr": "gateway_arena_p50_ci_lower_seconds{scenario=~\"$scenario\",gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} P50 CI95 lower",
+          "refId": "C"
+        },
+        {
+          "expr": "gateway_arena_p50_ci_upper_seconds{scenario=~\"$scenario\",gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} P50 CI95 upper",
+          "refId": "D"
+        },
+        {
+          "expr": "gateway_arena_p95_ci_lower_seconds{scenario=~\"$scenario\",gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} P95 CI95 lower",
+          "refId": "E"
+        },
+        {
+          "expr": "gateway_arena_p95_ci_upper_seconds{scenario=~\"$scenario\",gateway=~\"$gateway\"}",
+          "legendFormat": "{{gateway}} P95 CI95 upper",
+          "refId": "F"
         }
       ],
-      "title": "Latency Trend (P50 + P95)",
+      "title": "Latency Trend (P50 + P95 \u00b1 CI95)",
       "type": "timeseries"
     },
     {

@@ -4,6 +4,10 @@ description: Crash recovery protocol — detect crashed sessions, recover from c
 
 # Crash Recovery Protocol
 
+> **HEGEMON Foundation**: Universal crash recovery protocol lives in `hegemon/rules/crash-recovery.md`.
+> This file contains STOA-specific extensions (checkpoint schema, detailed recovery table, log rotation).
+> When hegemon is loaded as additional working dir, both rule sets apply.
+
 ## Overview
 
 File-only traceability system for AI Factory sessions. No external server required.

@@ -1,11 +1,10 @@
-@console @gateway @wip
+@console @gateway
 Feature: Console - Gateway CRUD
 
   As a platform admin,
   I want to manage gateway instances
   So that I can control the data plane.
 
-  @wip
   Scenario: Admin creates a new gateway instance
     Given I am logged in to Console as "anorak" platform admin
     And the STOA Console is accessible
@@ -15,7 +14,6 @@ Feature: Console - Gateway CRUD
     And I submit the gateway form
     Then the gateway "e2e-test-gw" appears in the gateway list
 
-  @wip
   Scenario: Admin lists all gateway instances
     Given I am logged in to Console as "anorak" platform admin
     And the STOA Console is accessible
@@ -23,7 +21,6 @@ Feature: Console - Gateway CRUD
     Then the gateway list page loads successfully
     And the gateway list contains at least one entry
 
-  @wip
   Scenario: Admin views gateway details with status badge
     Given I am logged in to Console as "anorak" platform admin
     And the STOA Console is accessible
@@ -32,7 +29,6 @@ Feature: Console - Gateway CRUD
     Then the gateway detail page loads
     And the gateway status badge is visible
 
-  @wip
   Scenario: Admin updates gateway configuration
     Given I am logged in to Console as "anorak" platform admin
     And the STOA Console is accessible
@@ -43,7 +39,6 @@ Feature: Console - Gateway CRUD
     And I save the gateway changes
     Then I see the updated gateway name "e2e-test-gw-updated"
 
-  @wip
   Scenario: Admin deletes a gateway instance
     Given I am logged in to Console as "anorak" platform admin
     And the STOA Console is accessible
@@ -53,7 +48,7 @@ Feature: Console - Gateway CRUD
     And I confirm the gateway deletion
     Then the gateway "e2e-test-gw-updated" is no longer in the gateway list
 
-  @wip @security
+  @security
   Scenario: Viewer cannot create or delete gateways
     Given I am logged in to Console as "aech" from team "high-five"
     And the STOA Console is accessible

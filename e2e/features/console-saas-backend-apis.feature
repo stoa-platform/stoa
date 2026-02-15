@@ -1,4 +1,4 @@
-@console @saas @wip
+@console @saas
 Feature: Console - Backend APIs Management
 
   As a tenant admin,

@@ -1,4 +1,4 @@
-@console @saas @wip
+@console @saas
 Feature: Console - SaaS API Keys Management
 
   As a tenant admin,

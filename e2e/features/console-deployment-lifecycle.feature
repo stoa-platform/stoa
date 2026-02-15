@@ -1,11 +1,10 @@
-@console @deployment @wip
+@console @deployment
 Feature: Console - Deployment Lifecycle
 
   As a devops user,
   I want to deploy APIs to gateways and manage their lifecycle
   So that they are available to consumers.
 
-  @wip
   Scenario: DevOps creates a new deployment
     Given I am logged in to Console as "parzival" from team "high-five"
     And the STOA Console is accessible
@@ -16,7 +15,6 @@ Feature: Console - Deployment Lifecycle
     And I submit the deployment form
     Then the deployment is created with status "pending" or "synced"
 
-  @wip
   Scenario: DevOps views deployment list with status badges
     Given I am logged in to Console as "parzival" from team "high-five"
     And the STOA Console is accessible
@@ -24,7 +22,6 @@ Feature: Console - Deployment Lifecycle
     Then the deployments dashboard loads with sync status cards
     And the deployment list contains entries or an empty state
 
-  @wip
   Scenario: DevOps views deployment detail with sync status
     Given I am logged in to Console as "parzival" from team "high-five"
     And the STOA Console is accessible
@@ -33,7 +30,6 @@ Feature: Console - Deployment Lifecycle
     Then the deployment detail page loads
     And the deployment sync status is visible
 
-  @wip
   Scenario: DevOps promotes deployment to staging
     Given I am logged in to Console as "parzival" from team "high-five"
     And the STOA Console is accessible
@@ -43,7 +39,7 @@ Feature: Console - Deployment Lifecycle
     And I confirm the promotion to "staging"
     Then the deployment target environment shows "staging"
 
-  @wip @security
+  @security
   Scenario: Viewer cannot create or promote deployments
     Given I am logged in to Console as "aech" from team "high-five"
     And the STOA Console is accessible

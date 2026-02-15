@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 11 — CAB-1172 Auto-approve free-tier, PR #534)
+> Dernière MAJ: 2026-02-15 (session 12 — Security P0+P1: password policy + rotation, PRs #533/#536/#543)
 
 ## ✅ DONE
 
@@ -70,6 +70,14 @@
 - CAB-1152: Community Infrastructure EPIC (8 pts) — PR #525 (Discussions, FUNDING, badges, 10 good-first-issues)
 - CAB-1182: CONTRIBUTING + templates (3 pts) — PR #525 (pre-existing, URLs fixed, legacy .md removed)
 - CAB-1172: Auto-approve free-tier subscriptions (3 pts) — PR #534 (Council 8.50/10)
+- Security: Password Rotation P0+P1 — PRs #533, #536, #543
+  - KC password policy (NIST 800-63B + DORA) applied to staging + prod
+  - KC brute-force hardened (5 attempts, 15 min lockout)
+  - KC admin rotated (staging + prod), stored in Infisical
+  - 7 E2E persona passwords rotated (KC + Infisical + GitHub Secrets)
+  - OIDC client secrets: 3 already non-default, 1 public client (no-op)
+  - OpenSearch admin rotated (securityadmin.sh + Infisical)
+  - `rotate-secrets.sh` fixed for self-hosted Infisical (CLI-first)
 
 ## 🔴 IN PROGRESS
 

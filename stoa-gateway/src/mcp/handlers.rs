@@ -490,7 +490,21 @@ pub async fn mcp_tools_call(
 
     // Execute tool (measure backend time separately)
     let t_backend_start = Instant::now();
-    match tool.execute(arguments, &ctx).await {
+    let primary_result = tool.execute(arguments.clone(), &ctx).await;
+
+    // CAB-708: Fallback chain — try alternate providers if primary failed
+    let result = crate::resilience::execute_or_direct(
+        &state.fallback_chain,
+        &state.circuit_breakers,
+        &state.tool_registry,
+        &request.name,
+        arguments,
+        &ctx,
+        primary_result,
+    )
+    .await;
+
+    match result {
         Ok(result) => {
             let duration = start.elapsed();
             let duration_secs = duration.as_secs_f64();

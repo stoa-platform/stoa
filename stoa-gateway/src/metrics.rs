@@ -187,6 +187,28 @@ pub static GUARDRAILS_INJECTION_BLOCKED: Lazy<CounterVec> = Lazy::new(|| {
     .expect("Failed to create stoa_guardrails_injection_blocked_total metric")
 });
 
+// === Fallback Metrics (CAB-708) ===
+
+/// Counter of fallback chain attempts (primary tool failed, trying fallbacks).
+pub static FALLBACK_ATTEMPTS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_fallback_attempts_total",
+        "Total fallback chain attempts (primary tool failed)",
+        &["tool"]
+    )
+    .expect("Failed to create stoa_fallback_attempts_total metric")
+});
+
+/// Counter of exhausted fallback chains (all providers failed).
+pub static FALLBACK_EXHAUSTED: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "stoa_fallback_exhausted_total",
+        "Total fallback chains exhausted (all providers failed)",
+        &["tool"]
+    )
+    .expect("Failed to create stoa_fallback_exhausted_total metric")
+});
+
 // === Upstream Latency Metrics ===
 
 /// Histogram of upstream (backend) response times in seconds.
@@ -288,6 +310,18 @@ pub fn record_guardrails_injection(tool: &str) {
         .inc();
 }
 
+// === Fallback metrics helpers ===
+
+/// Record a fallback chain attempt for a tool.
+pub fn record_fallback_attempt(tool: &str) {
+    FALLBACK_ATTEMPTS.with_label_values(&[tool]).inc();
+}
+
+/// Record an exhausted fallback chain for a tool.
+pub fn record_fallback_exhausted(tool: &str) {
+    FALLBACK_EXHAUSTED.with_label_values(&[tool]).inc();
+}
+
 // === Upstream latency helpers ===
 
 /// Record upstream (backend) response latency.
@@ -372,6 +406,8 @@ pub fn init_all_metrics() {
     Lazy::force(&QUOTA_REMAINING);
     Lazy::force(&GUARDRAILS_PII_DETECTED);
     Lazy::force(&GUARDRAILS_INJECTION_BLOCKED);
+    Lazy::force(&FALLBACK_ATTEMPTS);
+    Lazy::force(&FALLBACK_EXHAUSTED);
     Lazy::force(&UPSTREAM_LATENCY);
     Lazy::force(&MTLS_VALIDATIONS_TOTAL);
     Lazy::force(&MTLS_BINDING_CHECKS_TOTAL);

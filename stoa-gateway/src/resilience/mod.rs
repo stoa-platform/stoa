@@ -19,10 +19,12 @@
 //! Note: Infrastructure prepared for NativeTool integration (Phase 7).
 
 mod circuit_breaker;
+pub mod fallback;
 mod retry;
 
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
 pub use circuit_breaker::{CircuitBreakerRegistry, CircuitBreakerStatsEntry};
 #[allow(unused_imports)]
 pub use circuit_breaker::{CircuitBreakerStats, CircuitState};
+pub use fallback::{execute_or_direct, FallbackChain};
 pub use retry::{retry_with_backoff, RetryConfig};

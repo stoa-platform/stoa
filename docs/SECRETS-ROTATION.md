@@ -329,13 +329,13 @@ All secret operations are logged in Infisical audit log (accessible via UI at `v
 | 2026-02-15 | OIDC opensearch-dashboards | Public client — no secret to rotate | — |
 | 2026-02-15 | E2E personas (7) | Rotated in KC + stored in Infisical + GitHub Secrets | #543 |
 | 2026-02-15 | OpenSearch admin | Rotated via securityadmin.sh + stored in Infisical | — |
+| 2026-02-15 | Arena VPS token | Rotated on VPS + stored in Infisical | — |
 
 ### Known Issues
 
 - **`opensearch-dashboards`** is `publicClient: true` in production KC — no client secret needed for OIDC flow. JWKS token validation only.
 - **OpenSearch securityadmin.sh** requires HTTP TLS enabled. Production runs with HTTP TLS disabled. Procedure: temporarily enable TLS, run securityadmin, revert, restart.
 - **Infisical self-hosted v3 API** requires encrypted fields for REST API writes. Use `infisical secrets set` CLI instead (handles encryption transparently). PR #543 fixed `store_infisical()`.
-- **Arena VPS token** (`arena-admin-token-2026`) still hardcoded on VPS. Requires SSH access to rotate.
 
 ## References
 

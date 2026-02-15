@@ -77,50 +77,24 @@ jobs:
 
           echo "Execution file: $EXEC_FILE"
 
-          # Parse execution output (JSONL) — extract text from assistant messages
+          # Parse execution output — JSON array: [system, assistant, result]
           if [ -f "$EXEC_FILE" ]; then
             echo "File exists ($(wc -c < "$EXEC_FILE") bytes)"
 
-            # Strategy 1: JSONL with assistant message events
-            jq -rs '
-              [ .[] | select(.type == "assistant") |
-                .message.content[]? // .content[]? |
-                select(.type == "text") | .text
-              ] | join("\n")
-            ' "$EXEC_FILE" > council-body.md 2>/dev/null || true
+            # Primary: extract .result field from the result object
+            jq -r '.[] | select(.type == "result") | .result // empty' \
+              "$EXEC_FILE" > council-body.md 2>/dev/null || true
 
-            # Strategy 2: If empty, try tool_use content (Write tool)
+            # Fallback: extract text from assistant message content
             if [ ! -s council-body.md ]; then
-              jq -rs '
-                [ .[] | .. | objects |
-                  select(.tool_name == "Write" or .name == "Write") |
-                  .input.content // .content // empty
-                ] | first // empty
-              ' "$EXEC_FILE" > council-body.md 2>/dev/null || true
+              jq -r '[.[] | select(.type == "assistant") | .message.content[] | select(.type == "text") | .text] | join("\n")' \
+                "$EXEC_FILE" > council-body.md 2>/dev/null || true
             fi
 
-            # Strategy 3: If empty, try Bash tool heredoc content
-            if [ ! -s council-body.md ]; then
-              jq -rs '
-                [ .[] | .. | objects |
-                  select((.tool_name == "Bash" or .name == "Bash") and (.input.command // .command | test("council-body"))) |
-                  .input.command // .command // empty
-                ] | first // empty |
-                split("\n") | .[1:-1] | join("\n")
-              ' "$EXEC_FILE" > council-body.md 2>/dev/null || true
-            fi
-
-            # Debug: show what jq found
             if [ -s council-body.md ]; then
               echo "Extracted $(wc -l < council-body.md | tr -d ' ') lines from execution output"
             else
-              echo "jq extraction failed, dumping structure..."
-              echo "Top-level type: $(jq -c 'type' "$EXEC_FILE" 2>/dev/null)"
-              echo "Length: $(jq -c 'length' "$EXEC_FILE" 2>/dev/null)"
-              echo "Element types: $(jq -c '[.[] | .type // type]' "$EXEC_FILE" 2>/dev/null)"
-              echo "Element keys: $(jq -c '[.[] | (keys_unsorted | join(","))]' "$EXEC_FILE" 2>/dev/null)"
-              echo "First 200 chars of each element:"
-              jq -c '.[] | tostring[:200]' "$EXEC_FILE" 2>/dev/null || true
+              echo "Extraction failed. Element types: $(jq -c '[.[] | .type]' "$EXEC_FILE" 2>/dev/null)"
             fi
           else
             echo "::warning::Execution file not found at $EXEC_FILE"

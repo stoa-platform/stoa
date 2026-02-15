@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 8 — CAB-1150 + CAB-1129 demo scripts)
+> Dernière MAJ: 2026-02-15 (session 9 — CAB-1130 slides + CAB-1075 countdown)
 
 ## ✅ DONE
 
@@ -61,6 +61,8 @@
 - CAB-1150: Demo Narrative + Speaker Notes (8 pts) — PR #501 (6-act timing, 10 FAQ, benchmarks, slides outline)
 - CAB-1129: Demo Script — Design Partner Pitch 5min (5 pts) — PR #506 (word-for-word, 10 objections, 3 client profiles)
 - CAB-1175: Status Page MVP Upptime (8 pts) — stoa-platform/status repo, 7/7 monitors UP, status.gostoa.dev live
+- CAB-1130: Demo Slides — Design Partner Presentation (8 pts) — PR #509 (10 Marp slides, PPTX+PDF export)
+- CAB-1075: Demo Day Ready (5 pts) — PR #513 (countdown, witness scorecard, Plan B/C)
 
 ## 🔴 IN PROGRESS
 
@@ -74,7 +76,6 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 
 ## 📋 NEXT (post-démo)
 
-- CAB-1075: Demo Day Ready — Freeze + Dry Run Témoin + Plan B/C (5 pts)
 - CAB-1170: Enable Keycloak self-registration (CRITICAL, 5 pts)
 - CAB-1171: Quick Start rewrite — single golden path (3 pts)
 - CAB-1172: Auto-approve free-tier subscriptions (3 pts)

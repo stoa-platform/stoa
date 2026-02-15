@@ -51,6 +51,7 @@
   - Secrets docs rewritten for Infisical (0 Vault refs), 3 Vault runbooks archived
   - ArgoCD + Operator runbooks created, onboarding kit (5 files) for Cédric
 - CAB-353: Go/No-Go Checklist 3 Months — PR #482 (9.00/10 → GO verdict)
+- CAB-1035: Persona Alex DX Test (2 pts) — PR #488 (NO-GO, TTFTC=infinite, 4 tickets created)
 
 ## 🔴 IN PROGRESS
 
@@ -65,7 +66,10 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 ## 📋 NEXT (post-démo)
 
 - CAB-1075: Demo Day Ready — Freeze + Dry Run Témoin + Plan B/C (5 pts)
-- CAB-1035: DX Persona Alex test onboarding MCP (2 pts)
+- CAB-1170: Enable Keycloak self-registration (CRITICAL, 5 pts)
+- CAB-1171: Quick Start rewrite — single golden path (3 pts)
+- CAB-1172: Auto-approve free-tier subscriptions (3 pts)
+- CAB-1173: MCP guide for devs — zero kubectl (3 pts)
 - Arena k6 L3 CPU pinning VPS (deferred post-demo)
 - SEO adjustments Council: D1 Early Access disclaimer, relecture humaine, endpoints quickstart
 

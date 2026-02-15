@@ -5,7 +5,7 @@
 
 ## Cycle 7 (Feb 9–15) — CLOSED
 
-**Scope**: 463 pts | **Done**: 434 pts (94%) | **Velocity**: 31 issues closed
+**Scope**: 463 pts | **Done**: 436 pts (94%) | **Velocity**: 32 issues closed
 **Theme**: Code critique + Polish + AI Factory v2
 
 ### Done (31 issues)
@@ -27,6 +27,7 @@
 - [x] Arena k6 Migration L1+L2+L3 — PRs #438, #444, #447, #449, #480 (ramp-up + CI95 bars)
 - [x] CAB-353: Go/No-Go Checklist 3 Months — PR #482 (9.00/10 → GO)
 - [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (2 pts) — PR #484
+- [x] CAB-1035: Persona Alex DX Test (2 pts) — PR #488 (NO-GO, TTFTC=infinite, 4 friction tickets)
 
 ---
 
@@ -70,7 +71,6 @@
 ### Backlog (parked in cycle, not committed)
 
 - CAB-1162: SEO Tracking — Looker Studio + Search Console archive (3 pts, P3)
-- CAB-1035: Persona Alex — Test manuel onboarding MCP Gateway (2 pts, P2)
 - CAB-362: GW2-10 Circuit Breaker + Session Management (5 pts, P2)
 - CAB-1128: Design Partner Communication — Client A Beta Access (3 pts, P2)
 - CAB-601: Status Page (P2)

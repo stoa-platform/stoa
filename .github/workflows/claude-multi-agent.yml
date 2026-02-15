@@ -1,0 +1,160 @@
+# Level 5: Multi-Agent Dispatch — parallel Claude instances on independent scopes
+# Triggered via workflow_dispatch with comma-separated ticket IDs.
+# Each ticket gets its own Claude agent running in parallel.
+# Council validates the batch plan before execution starts.
+
+name: Claude Code Multi-Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      tickets:
+        description: "Comma-separated ticket IDs (e.g., CAB-1200,CAB-1201,CAB-1202)"
+        required: true
+        type: string
+      skip_council:
+        description: "Skip Council validation (for Ship-mode changes only)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: claude-multi-${{ github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  # ----- Phase 0: Council Batch Validation -----
+  council-batch:
+    if: ${{ !inputs.skip_council }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      approved: ${{ steps.council.outputs.approved }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Council Batch Validation
+        id: council
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Multi-Agent Council Validation.
+
+            Tickets to implement in parallel: ${{ inputs.tickets }}
+
+            For each ticket:
+            1. Search GitHub issues for the ticket ID
+            2. Read the issue description
+            3. Run a QUICK Council validation (2-sentence per persona, score only)
+            4. Classify as Ship/Show/Ask
+            5. Identify the component scope (api, ui, portal, gateway, docs, operator)
+
+            Then validate the BATCH:
+            - Are there any dependency conflicts between tickets?
+            - Can they safely run in parallel? (different component scopes = safe)
+            - Any shared files that would cause merge conflicts?
+
+            Output as a GitHub issue titled "Multi-Agent Batch — YYYY-MM-DD":
+            | Ticket | Score | Verdict | Scope | Ship/Show/Ask |
+            |--------|-------|---------|-------|--------------|
+            | CAB-XXXX | X.X | Go | api | Ship |
+            | CAB-YYYY | X.X | Go | ui | Show |
+
+            **Parallel Safety**: Safe / Conflict Risk
+            **Estimated Total LOC**: XXX
+
+            Comment "/go-batch" to start parallel execution.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
+
+      - name: Notify Slack — Batch Council
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"blocks\": [
+                {\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"Multi-Agent Council: ${{ inputs.tickets }}\",\"emoji\":true}},
+                {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"Batch validation complete. Review on GitHub and approve to start parallel execution.\"}}
+              ]
+            }"
+
+  # ----- Phase 1: Parallel Implementation -----
+  # Uses a matrix strategy to run each ticket as a separate job.
+  # GitHub Actions matrix can be dynamic via fromJSON.
+  parse-tickets:
+    needs: [council-batch]
+    if: |
+      always() &&
+      (needs.council-batch.result == 'success' || needs.council-batch.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.parse.outputs.matrix }}
+    steps:
+      - name: Parse ticket list into matrix
+        id: parse
+        run: |
+          TICKETS="${{ inputs.tickets }}"
+          # Convert "CAB-1200,CAB-1201,CAB-1202" to JSON array
+          JSON=$(echo "$TICKETS" | tr ',' '\n' | jq -R -s 'split("\n") | map(select(length > 0))' | jq -c '{ticket: .}')
+          echo "matrix=$JSON" >> "$GITHUB_OUTPUT"
+
+  implement:
+    needs: [parse-tickets]
+    if: needs.parse-tickets.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-tickets.outputs.matrix) }}
+      max-parallel: 3  # Max 3 parallel agents (cost control)
+      fail-fast: false  # Don't cancel other agents if one fails
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Implement ticket: ${{ matrix.ticket }}
+
+            Find the GitHub issue matching this ticket ID.
+            Read the issue description for requirements.
+            Follow CLAUDE.md and all .claude/rules/.
+
+            Steps:
+            1. Create branch: feat/${{ matrix.ticket }}-<slug>
+            2. Implement the feature/fix
+            3. Run quality gates
+            4. Commit with conventional messages including ticket ID
+            5. Create PR referencing the issue
+            6. If Ship mode: merge after CI green
+            7. If Show/Ask: leave PR open
+
+            IMPORTANT: This is running in parallel with other agents.
+            Only modify files in your component scope.
+            Do NOT modify shared files (memory.md, plan.md, CLAUDE.md).
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 25"
+
+      - name: Notify Slack — Agent Complete
+        if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          STATUS="${{ job.status }}"
+          TICKET="${{ matrix.ticket }}"
+          if [ "$STATUS" = "success" ]; then
+            MSG=":white_check_mark: *${TICKET}* — Agent complete, PR created"
+          else
+            MSG=":x: *${TICKET}* — Agent failed, check logs"
+          fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"${MSG}\"}"

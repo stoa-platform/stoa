@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 2)
+> Dernière MAJ: 2026-02-15 (session 3)
 
 ## ✅ DONE
 
@@ -46,6 +46,7 @@
 - Arena k6 Migration L1+L2 — PRs #438, #444, #447, #449
 - SEO Batch 6: 5 articles (O2, A2, D1, O4, M6) — stoa-docs PR #41, 32 total published
 - CAB-1138 Phase 6: Console drift UI — PR #472 (654 LOC, 13 tests)
+- CAB-1169: AI Factory v2 — PRs #474, #476 (stop hook, /ci-fix skill, metrics.log, Council 8.00/10)
 
 ## 🔴 IN PROGRESS
 

@@ -74,7 +74,7 @@ Focus: Intégration, script démo, répétitions
 - [ ] CAB-353: Go/No-Go Checklist
 - [x] Arena k6 Migration L1+L2 (PRs #438, #444, #447, #449) — DONE
 - [ ] Arena k6 Migration L3: ramp-up + CI95 error bars + CPU pinning
-- [ ] CAB-1169: AI Factory v2 — hooks, /ci-fix, observability (13 pts) — Council 7.25/10
+- [x] CAB-1169: AI Factory v2 — hooks, /ci-fix, observability (13 pts) — DONE (PRs #474, #476, Council 8.00/10)
 
 ## Règles Countdown
 1. ZERO nouveau ticket jusqu'au 24/02

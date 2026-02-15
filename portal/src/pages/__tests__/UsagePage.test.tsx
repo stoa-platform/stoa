@@ -5,7 +5,7 @@
  */
 
 import { screen, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '../../test/helpers';
+import { renderWithProviders, createAuthMock, type PersonaRole } from '../../test/helpers';
 import { UsagePage } from '../usage/UsagePage';
 
 // Mock AuthContext at module level
@@ -63,12 +63,7 @@ vi.mock('../../components/usage', () => ({
 describe('UsagePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAuth.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
-      accessToken: 'mock-token',
-      user: { email: 'test@example.com' },
-    });
+    mockAuth.mockReturnValue(createAuthMock('tenant-admin'));
   });
 
   it('renders the Usage Dashboard heading', async () => {
@@ -294,18 +289,10 @@ describe('UsagePage', () => {
     });
   });
 
-  it('all four personas can access the usage page', async () => {
-    const personas = ['cpi-admin', 'tenant-admin', 'devops', 'viewer'] as const;
+  describe('Persona-based Tests', () => {
+    const personas: PersonaRole[] = ['cpi-admin', 'tenant-admin', 'devops', 'viewer'];
 
-    for (const persona of personas) {
-      vi.clearAllMocks();
-      mockAuth.mockReturnValue({
-        isAuthenticated: true,
-        isLoading: false,
-        accessToken: `mock-token-${persona}`,
-        user: { email: `${persona}@example.com` },
-      });
-
+    const setupUsageMocks = () => {
       mockGetSummary.mockResolvedValue({
         today: {
           period: 'today',
@@ -336,14 +323,17 @@ describe('UsagePage', () => {
       });
       mockGetCalls.mockResolvedValue({ calls: [] });
       mockGetActiveSubscriptions.mockResolvedValue([]);
+    };
 
-      const { unmount } = renderWithProviders(<UsagePage />);
+    it.each(personas)('%s can access the usage page (stoa:metrics:read)', async (persona) => {
+      mockAuth.mockReturnValue(createAuthMock(persona));
+      setupUsageMocks();
+
+      renderWithProviders(<UsagePage />);
 
       await waitFor(() => {
         expect(screen.getByText('Usage Dashboard')).toBeInTheDocument();
       });
-
-      unmount();
-    }
+    });
   });
 });

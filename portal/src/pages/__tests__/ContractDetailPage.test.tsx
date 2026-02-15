@@ -229,6 +229,44 @@ describe('ContractDetailPage', () => {
     });
   });
 
+  describe('Persona-based Tests', () => {
+    const personas: import('../../test/helpers').PersonaRole[] = [
+      'cpi-admin',
+      'tenant-admin',
+      'devops',
+      'viewer',
+    ];
+
+    it.each(personas)('%s can view contract detail (stoa:catalog:read)', async (persona) => {
+      mockAuth.mockReturnValue(createAuthMock(persona));
+      mockUseContract.mockReturnValue({
+        data: {
+          id: 'contract-1',
+          tenant_id: 'oasis-gunters',
+          name: 'orders-api',
+          display_name: 'Orders API',
+          description: 'Order management service',
+          version: '1.0.0',
+          status: 'published',
+          openapi_spec_url: null,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-02-01T00:00:00Z',
+          created_by: 'user-parzival',
+          bindings: [],
+        },
+        isLoading: false,
+        error: null,
+      });
+
+      renderWithProviders(<ContractDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Orders API')).toBeInTheDocument();
+        expect(screen.getByText('v1.0.0')).toBeInTheDocument();
+      });
+    });
+  });
+
   it('shows message when no bindings are enabled', async () => {
     mockUseContract.mockReturnValue({
       data: {

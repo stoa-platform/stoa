@@ -64,6 +64,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 
 const ROLE_SCOPES: Record<string, string[]> = {
   'cpi-admin': [
+    'stoa:admin',
     'stoa:platform:read',
     'stoa:platform:write',
     'stoa:catalog:read',

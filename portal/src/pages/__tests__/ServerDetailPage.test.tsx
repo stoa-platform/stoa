@@ -443,4 +443,26 @@ describe('ServerDetailPage', () => {
       expect(screen.getByRole('button', { name: /Revoke Subscription/i })).toBeInTheDocument();
     });
   });
+
+  describe('Persona-based Tests', () => {
+    const personas: import('../../test/helpers').PersonaRole[] = [
+      'cpi-admin',
+      'tenant-admin',
+      'devops',
+      'viewer',
+    ];
+
+    it.each(personas)('%s can view server detail (stoa:catalog:read)', async (persona) => {
+      mockAuth.mockReturnValue(createAuthMock(persona));
+      const server = createMockServer();
+      mockGetServer.mockResolvedValue(server);
+
+      renderWithRoute();
+
+      await waitFor(() => {
+        expect(screen.getByText('STOA Platform Tools')).toBeInTheDocument();
+        expect(screen.getByText('Core STOA administration tools')).toBeInTheDocument();
+      });
+    });
+  });
 });

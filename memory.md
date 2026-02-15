@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 5 — cycle 7 close)
+> Dernière MAJ: 2026-02-15 (session 6 — freeze day: CAB-1146 + CAB-1145 + CAB-1147)
 
 ## ✅ DONE
 
@@ -52,6 +52,9 @@
   - ArgoCD + Operator runbooks created, onboarding kit (5 files) for Cédric
 - CAB-353: Go/No-Go Checklist 3 Months — PR #482 (9.00/10 → GO verdict)
 - CAB-1035: Persona Alex DX Test (2 pts) — PR #488 (NO-GO, TTFTC=infinite, 4 tickets created)
+- CAB-1146: Baseline PROD — 16-section snapshot before freeze — PR #484
+- CAB-1145: Smoke test PROD — 23/23 GO, Prometheus 21/23 UP — PR #486
+- CAB-1147: Benchmarks Freeze — VPS 97.25 vs Kong 94.41, K8s latency tables — PR #491
 
 ## 🔴 IN PROGRESS
 

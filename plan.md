@@ -33,7 +33,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 92 pts | **Done**: 3 pts (3%) | **Velocity**: 1 issue closed
+**Scope**: 92 pts | **Done**: 5 pts (5%) | **Velocity**: 2 issues closed
 **Theme**: Demo prep, staging freerun, narrative
 
 ### Done
@@ -61,7 +61,7 @@
 - [ ] CAB-710: n8n + STOA AI Gateway — Demo "ESB is Dead" (3 pts, P2)
 - [ ] CAB-1129: Demo Script — Design Partner Pitch 5min (5 pts, P2)
 - [ ] CAB-1130: Demo Slides — Design Partner Presentation (8 pts, P2)
-- [ ] CAB-1147: Benchmarks Freeze — Capturer resultats STOA vs Kong vs Gravitee (2 pts, P2)
+- [x] CAB-1147: Benchmarks Freeze — Capturer resultats STOA vs Kong vs Gravitee (2 pts, P2) — PR #491
 
 ### Todo — Tier 3: Staging Freerun (39 pts, Mon-Wed only)
 

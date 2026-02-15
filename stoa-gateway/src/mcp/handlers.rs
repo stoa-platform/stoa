@@ -352,6 +352,43 @@ pub async fn mcp_tools_call(
             .into_response();
     }
 
+    // CAB-707: Guardrails check (PII + prompt injection)
+    let guardrails_cfg = crate::guardrails::GuardrailsConfig {
+        pii_enabled: state.config.guardrails_pii_enabled,
+        pii_redact: state.config.guardrails_pii_redact,
+        injection_enabled: state.config.guardrails_injection_enabled,
+    };
+    let arguments = match crate::guardrails::check_request(
+        &guardrails_cfg,
+        &request.name,
+        &request.arguments,
+    ) {
+        crate::guardrails::GuardrailsOutcome::Pass => request.arguments.clone(),
+        crate::guardrails::GuardrailsOutcome::Redacted(redacted) => {
+            metrics::record_guardrails_pii("redacted");
+            warn!(tool = %request.name, "PII detected and redacted in arguments");
+            redacted
+        }
+        crate::guardrails::GuardrailsOutcome::Blocked(reason) => {
+            if reason.contains("injection") {
+                metrics::record_guardrails_injection(&request.name);
+            } else {
+                metrics::record_guardrails_pii("blocked");
+            }
+            warn!(tool = %request.name, reason = %reason, "Guardrails blocked request");
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ToolsCallResponse {
+                    content: vec![ToolContent::Text {
+                        text: format!("Request blocked: {reason}"),
+                    }],
+                    is_error: Some(true),
+                }),
+            )
+                .into_response();
+        }
+    };
+
     // Build tool context with real JWT claims (Phase 1)
     let ctx = ToolContext {
         tenant_id: auth.tenant_id.clone(),
@@ -453,7 +490,21 @@ pub async fn mcp_tools_call(
 
     // Execute tool (measure backend time separately)
     let t_backend_start = Instant::now();
-    match tool.execute(request.arguments.clone(), &ctx).await {
+    let primary_result = tool.execute(arguments.clone(), &ctx).await;
+
+    // CAB-708: Fallback chain — try alternate providers if primary failed
+    let result = crate::resilience::execute_or_direct(
+        &state.fallback_chain,
+        &state.circuit_breakers,
+        &state.tool_registry,
+        &request.name,
+        arguments,
+        &ctx,
+        primary_result,
+    )
+    .await;
+
+    match result {
         Ok(result) => {
             let duration = start.elapsed();
             let duration_secs = duration.as_secs_f64();

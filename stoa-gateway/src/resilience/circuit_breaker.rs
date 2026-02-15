@@ -360,6 +360,17 @@ impl CircuitBreakerRegistry {
         cb
     }
 
+    /// Check if the circuit breaker for the given name is open (fast-failing).
+    ///
+    /// Returns false if no circuit breaker exists for the name (optimistic).
+    pub fn is_open(&self, name: &str) -> bool {
+        let breakers = self.breakers.read();
+        match breakers.get(name) {
+            Some(cb) => !cb.allow_request(),
+            None => false, // No breaker = healthy (optimistic)
+        }
+    }
+
     /// Get stats for all circuit breakers.
     pub fn stats_all(&self) -> Vec<CircuitBreakerStatsEntry> {
         let breakers = self.breakers.read();

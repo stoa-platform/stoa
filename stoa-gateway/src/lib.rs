@@ -10,6 +10,7 @@ pub mod control_plane;
 pub mod federation;
 pub mod git;
 pub mod governance;
+pub mod guardrails;
 pub mod handlers;
 pub mod k8s;
 pub mod mcp;

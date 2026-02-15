@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 3)
+> Dernière MAJ: 2026-02-15 (session 4)
 
 ## ✅ DONE
 
@@ -47,6 +47,9 @@
 - SEO Batch 6: 5 articles (O2, A2, D1, O4, M6) — stoa-docs PR #41, 32 total published
 - CAB-1138 Phase 6: Console drift UI — PR #472 (654 LOC, 13 tests)
 - CAB-1169: AI Factory v2 — PRs #474, #476 (stop hook, /ci-fix skill, metrics.log, Council 8.00/10)
+- CAB-1030: Admin Guide & Onboarding Ops Ready (13 pts) — stoa PR #475, stoa-strategy PR #1
+  - Secrets docs rewritten for Infisical (0 Vault refs), 3 Vault runbooks archived
+  - ArgoCD + Operator runbooks created, onboarding kit (5 files) for Cédric
 
 ## 🔴 IN PROGRESS
 
@@ -61,7 +64,6 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 ## 📋 NEXT (post-démo)
 
 - CAB-1075: Demo Day Ready — Freeze + Dry Run Témoin + Plan B/C (5 pts)
-- CAB-1030: Admin Guide Onboarding Ops Cédric (13 pts)
 - CAB-1035: DX Persona Alex test onboarding MCP (2 pts)
 - CAB-353: Go/No-Go Checklist 3 Months
 - Arena k6 Migration L3: ramp-up + CI95 error bars + CPU pinning

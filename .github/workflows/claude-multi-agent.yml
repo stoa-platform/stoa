@@ -26,6 +26,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  id-token: write
 
 jobs:
   # ----- Phase 0: Council Batch Validation -----

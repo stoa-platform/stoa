@@ -31,7 +31,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Council validation for a Linear ticket dispatched for autonomous implementation.
+            Council validation for a Linear ticket.
 
             Ticket: ${{ github.event.client_payload.ticket_id }}
             Title: ${{ github.event.client_payload.ticket_title }}
@@ -39,22 +39,66 @@ jobs:
             Priority: ${{ github.event.client_payload.ticket_priority }}
             Estimate: ${{ github.event.client_payload.ticket_estimate }} pts
 
-            INSTRUCTIONS — follow these steps in order, be concise:
+            INSTRUCTIONS — do these 2 things, then stop:
 
-            Step 1: Run 4-persona Council (2-3 sentences each, score /10):
-            - Chucky (risk), OSS Killer (value), Archi 50x50 (architecture), Better Call Saul (legal)
-            - Compute average score. Classify as Ship/Show/Ask.
+            1. Run a CONCISE 4-persona Council validation (2-3 sentences per persona, score /10):
+               Chucky (risk), OSS Killer (value), Archi 50x50 (architecture), Better Call Saul (legal).
+               Compute average. Classify as Ship/Show/Ask.
 
-            Step 2: Write report to file using echo/printf (NOT heredoc):
-            printf '%s\n' "# Council: ${{ github.event.client_payload.ticket_id }}" "" "Score: X.X/10 — GO/FIX/REDO" "" "[persona reports]" "" "## Plan" "[files, LOC, phases]" "" "## DoD" "- [ ] criteria" "" "Comment /go to start." > /tmp/council-body.md
+            2. Write the report to a file called council-body.md in the current directory.
+               Use the Write tool (NOT Bash) to create the file.
+               Format:
+               ```
+               # Council: TICKET_ID — TITLE
+               **Score: X.X/10 — GO/FIX/REDO**
+               ## Personas
+               **Chucky**: X/10 — summary
+               **OSS Killer**: X/10 — summary
+               **Archi 50x50**: X/10 — summary
+               **Better Call Saul**: X/10 — summary
+               ## Ship/Show/Ask: MODE
+               ## Plan
+               scope, files, LOC estimate
+               ## DoD
+               - [ ] criteria
+               ---
+               Comment /go to start implementation.
+               ```
 
-            Step 3: Create label + issue (two commands):
-            gh label create "${{ github.event.client_payload.ticket_id }}" --color "0075ca" --description "Linear ticket" --force
-            gh issue create --title "Council: ${{ github.event.client_payload.ticket_id }} — ${{ github.event.client_payload.ticket_title }}" --label "council-review" --label "${{ github.event.client_payload.ticket_id }}" --body-file /tmp/council-body.md
+            STOP after writing the file. Do NOT create GitHub issues or labels.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 6"
 
-            CRITICAL: Do NOT implement anything. Only validate and create the issue.
-            CRITICAL: Keep persona reviews SHORT (2-3 sentences each). Do NOT write verbose reports.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"
+      # Create label + issue from Claude's report file
+      - name: Create Council Issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TICKET="${{ github.event.client_payload.ticket_id }}"
+          TITLE="${{ github.event.client_payload.ticket_title }}"
+
+          # Check if Claude wrote the report file
+          if [ ! -f council-body.md ]; then
+            echo "::warning::council-body.md not found, creating fallback"
+            echo "# Council: ${TICKET} — ${TITLE}" > council-body.md
+            echo "" >> council-body.md
+            echo "Council validation ran but report file was not generated." >> council-body.md
+            echo "Check the workflow logs for the full Council analysis." >> council-body.md
+            echo "" >> council-body.md
+            echo "Comment /go to start implementation." >> council-body.md
+          fi
+
+          # Create label (idempotent)
+          gh label create "${TICKET}" --color "0075ca" --description "Linear ticket" --force 2>/dev/null || true
+
+          # Create GitHub issue
+          ISSUE_URL=$(gh issue create \
+            --title "Council: ${TICKET} — ${TITLE}" \
+            --label "council-review" \
+            --label "${TICKET}" \
+            --body-file council-body.md)
+
+          echo "Created issue: ${ISSUE_URL}"
+          echo "ISSUE_URL=${ISSUE_URL}" >> "$GITHUB_ENV"
 
       # Post Council report to Slack
       - name: Slack Council Report
@@ -65,7 +109,7 @@ jobs:
           if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
           TICKET="${{ github.event.client_payload.ticket_id }}"
           TITLE="${{ github.event.client_payload.ticket_title }}"
-          REPO_URL="https://github.com/stoa-platform/stoa/issues?q=is%3Aissue+Council+${TICKET}+is%3Aopen"
+          ISSUE="${ISSUE_URL:-https://github.com/stoa-platform/stoa/issues?q=is%3Aissue+Council+${TICKET}+is%3Aopen}"
           curl -s -X POST "$SLACK_WEBHOOK" \
             -H 'Content-Type: application/json' \
             -d "{
@@ -83,7 +127,7 @@ jobs:
                   \"accessory\": {
                     \"type\": \"button\",
                     \"text\": {\"type\": \"plain_text\", \"text\": \"Review & Approve\"},
-                    \"url\": \"${REPO_URL}\"
+                    \"url\": \"${ISSUE}\"
                   }
                 },
                 {

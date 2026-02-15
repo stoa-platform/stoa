@@ -6,9 +6,15 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/stoa-platform/stoa/actions/workflows/security-scan.yml"><img src="https://github.com/stoa-platform/stoa/actions/workflows/security-scan.yml/badge.svg" alt="Security Scan"></a>
+  <a href="https://github.com/stoa-platform/stoa/stargazers"><img src="https://img.shields.io/github/stars/stoa-platform/stoa?style=social" alt="GitHub Stars"></a>
+  <a href="https://discord.gg/j8tHSSes"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://status.gostoa.dev"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/stoa-platform/status/master/api/stoa-api-gateway/uptime.json" alt="Uptime"></a>
+</p>
+<p align="center">
   <a href="https://docs.gostoa.dev"><img src="https://img.shields.io/badge/docs-docs.gostoa.dev-green.svg" alt="Documentation"></a>
   <img src="https://img.shields.io/badge/Rust-Gateway-orange.svg" alt="Rust Gateway">
   <img src="https://img.shields.io/badge/MCP-Compatible-purple.svg" alt="MCP Compatible">
+  <a href="https://github.com/stoa-platform/stoa/discussions"><img src="https://img.shields.io/github/discussions/stoa-platform/stoa?logo=github" alt="GitHub Discussions"></a>
 </p>
 
 ---
@@ -167,11 +173,22 @@ stoa/
 
 ## Contributing
 
-We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 - **Commits**: `type(scope): description` (commitlint enforced)
 - **PRs**: Squash merge to main, < 300 LOC per PR
-- **License**: Apache 2.0 with DCO sign-off
+- **License**: Apache 2.0 with [DCO sign-off](CLA.md)
+
+<a href="https://github.com/stoa-platform/stoa/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=stoa-platform/stoa" alt="Contributors" />
+</a>
+
+## Community
+
+- [GitHub Discussions](https://github.com/stoa-platform/stoa/discussions) — questions, ideas, show & tell
+- [Discord](https://discord.gg/j8tHSSes) — real-time chat
+- [Documentation](https://docs.gostoa.dev) — guides, ADRs, API reference
+- [Status Page](https://status.gostoa.dev) — platform uptime monitoring
 
 ## License
 

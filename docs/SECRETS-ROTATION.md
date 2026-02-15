@@ -48,7 +48,7 @@ K8s Secrets (envFrom / secretKeyRef) → Pods
 |-----|------|--------|---------|----------|--------|
 | `prod` | `/keycloak/clients` | `CONTROL_PLANE_API_CLIENT_SECRET` | CP API OIDC client | 90 days | `rotate-secrets.sh oidc-clients` |
 | `prod` | `/keycloak/clients` | `MCP_GATEWAY_CLIENT_SECRET` | MCP Gateway OIDC client | 90 days | `rotate-secrets.sh oidc-clients` |
-| `prod` | `/keycloak/clients` | `OPENSEARCH_DASHBOARDS_CLIENT_SECRET` | OpenSearch Dashboards OIDC | 90 days | `rotate-secrets.sh oidc-clients` |
+| `prod` | `/keycloak/clients` | `OPENSEARCH_DASHBOARDS_CLIENT_SECRET` | OpenSearch Dashboards OIDC | N/A (public client) | N/A |
 | `prod` | `/keycloak/clients` | `OBSERVABILITY_CLIENT_SECRET` | Grafana/Prometheus OIDC | 90 days | `rotate-secrets.sh oidc-clients` |
 | `prod` | `/opensearch` | `ADMIN_PASSWORD` | OpenSearch admin | 90 days | `rotate-secrets.sh opensearch` |
 | `prod` | `/gateway/arena` | `ADMIN_API_TOKEN` | VPS Arena gateway admin | 90 days | `rotate-secrets.sh arena-token` |
@@ -316,6 +316,26 @@ kubectl exec -n stoa-system deploy/control-plane-api -- env | grep -c "DATABASE_
 All secret operations are logged in Infisical audit log (accessible via UI at `vault.gostoa.dev`). K8s secret mutations are visible in:
 - K8s events: `kubectl get events -n stoa-system`
 - Infisical audit: Settings → Audit Logs in web UI
+
+## Rotation History
+
+| Date | Credential | Action | PRs |
+|------|-----------|--------|-----|
+| 2026-02-15 | KC password policy | Applied NIST 800-63B + DORA (staging + prod) | #533 |
+| 2026-02-15 | KC brute-force | Hardened (5 attempts, 15 min lockout, both realms) | #533 |
+| 2026-02-15 | KC admin (staging) | Rotated to random 32 chars, stored in Infisical | #536 |
+| 2026-02-15 | KC admin (prod) | Rotated to random 32 chars, stored in Infisical | #536 |
+| 2026-02-15 | OIDC clients (3) | Verified already non-default (not `*-dev-secret`) | — |
+| 2026-02-15 | OIDC opensearch-dashboards | Public client — no secret to rotate | — |
+| 2026-02-15 | E2E personas (7) | Rotated in KC + stored in Infisical + GitHub Secrets | #543 |
+| 2026-02-15 | OpenSearch admin | Rotated via securityadmin.sh + stored in Infisical | — |
+
+### Known Issues
+
+- **`opensearch-dashboards`** is `publicClient: true` in production KC — no client secret needed for OIDC flow. JWKS token validation only.
+- **OpenSearch securityadmin.sh** requires HTTP TLS enabled. Production runs with HTTP TLS disabled. Procedure: temporarily enable TLS, run securityadmin, revert, restart.
+- **Infisical self-hosted v3 API** requires encrypted fields for REST API writes. Use `infisical secrets set` CLI instead (handles encryption transparently). PR #543 fixed `store_infisical()`.
+- **Arena VPS token** (`arena-admin-token-2026`) still hardcoded on VPS. Requires SSH access to rotate.
 
 ## References
 

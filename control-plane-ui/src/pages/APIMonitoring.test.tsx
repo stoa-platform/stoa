@@ -1,6 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { createAuthMock } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
+import type { PersonaRole } from '../test/helpers';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -17,23 +20,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: vi.fn(() => ({
-    user: {
-      id: 'user-admin',
-      email: 'parzival@oasis.gg',
-      name: 'Parzival',
-      roles: ['cpi-admin'],
-      tenant_id: 'oasis-gunters',
-      permissions: ['tenants:read', 'apis:read', 'apps:read', 'audit:read', 'admin:servers'],
-    },
-    isAuthenticated: true,
-    isLoading: false,
-    isReady: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    hasPermission: vi.fn(() => true),
-    hasRole: vi.fn(() => true),
-  })),
+  useAuth: vi.fn(),
 }));
 
 vi.mock('../services/api', () => ({
@@ -85,6 +72,11 @@ function renderAPIMonitoring() {
 }
 
 describe('APIMonitoring', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+  });
+
   it('renders the page heading', async () => {
     renderAPIMonitoring();
     expect(await screen.findByText('API Monitoring')).toBeInTheDocument();
@@ -133,4 +125,16 @@ describe('APIMonitoring', () => {
     renderAPIMonitoring();
     expect(await screen.findByText('Open in Grafana')).toBeInTheDocument();
   });
+
+  // 4-persona coverage
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderAPIMonitoring();
+        expect(await screen.findByText('API Monitoring')).toBeInTheDocument();
+      });
+    }
+  );
 });

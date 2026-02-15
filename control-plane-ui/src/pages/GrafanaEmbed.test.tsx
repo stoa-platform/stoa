@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { createAuthMock } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
+import type { PersonaRole } from '../test/helpers';
 import { GrafanaEmbed } from './GrafanaEmbed';
+
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: vi.fn(),
+}));
 
 vi.mock('../config', () => ({
   config: {
@@ -27,6 +34,8 @@ vi.mock('../hooks/useServiceHealth', () => ({
 
 describe('GrafanaEmbed', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
     vi.spyOn(window, 'open').mockImplementation(() => null);
     mockSearchParams.delete('url');
   });
@@ -105,4 +114,16 @@ describe('GrafanaEmbed', () => {
     const iframe = screen.getByTitle('STOA Observability - Grafana');
     expect(iframe).toHaveAttribute('src', 'https://grafana.gostoa.dev/d/custom-dashboard');
   });
+
+  // 4-persona coverage
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        render(<GrafanaEmbed />);
+        expect(screen.getByRole('heading', { name: 'STOA Observability' })).toBeInTheDocument();
+      });
+    }
+  );
 });

@@ -1,7 +1,10 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createAuthMock } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
+import type { PersonaRole } from '../test/helpers';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -17,23 +20,7 @@ vi.mock('../contexts/EnvironmentContext', () => ({
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: vi.fn(() => ({
-    user: {
-      id: 'user-admin',
-      email: 'admin@gostoa.dev',
-      name: 'Admin',
-      roles: ['cpi-admin'],
-      tenant_id: 'tenant-1',
-      permissions: ['consumers:read', 'consumers:write'],
-    },
-    isAuthenticated: true,
-    isLoading: false,
-    isReady: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    hasPermission: vi.fn(() => true),
-    hasRole: vi.fn(() => true),
-  })),
+  useAuth: vi.fn(),
 }));
 
 const mockGetConsumers = vi.fn().mockResolvedValue([
@@ -146,6 +133,11 @@ function renderConsumers() {
 // ---------------------------------------------------------------------------
 
 describe('Consumers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -255,4 +247,18 @@ describe('Consumers', () => {
       expect(screen.getByText(/Revoke Selected/)).toBeInTheDocument();
     });
   });
+
+  // 4-persona coverage
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderConsumers();
+        await waitFor(() => {
+          expect(screen.getByText('Consumers')).toBeInTheDocument();
+        });
+      });
+    }
+  );
 });

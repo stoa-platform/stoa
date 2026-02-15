@@ -64,10 +64,10 @@ function LoadingScreen() {
   return <StoaLoader variant="fullscreen" />;
 }
 
-// Login screen with email capture + SSO
+// Login screen — registration-first design with enterprise access fallback
 function LoginScreen() {
-  const { login } = useAuth();
-  const [activeTab, setActiveTab] = useState<'request' | 'signin'>('request');
+  const { login, register } = useAuth();
+  const [showEnterprise, setShowEnterprise] = useState(false);
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -133,178 +133,182 @@ function LoginScreen() {
           </a>
         </div>
 
-        {/* Right panel — tabs */}
+        {/* Right panel — registration-first */}
         <div className="p-8 md:w-1/2">
           <div className="mx-auto mb-6">
             <StoaLogo size="lg" />
           </div>
 
-          {/* Tab switcher */}
-          <div className="flex border-b border-gray-200 dark:border-neutral-700 mb-6">
-            <button
-              onClick={() => setActiveTab('request')}
-              className={`flex-1 pb-2 text-sm font-medium transition-colors ${
-                activeTab === 'request'
-                  ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-600 dark:border-primary-400'
-                  : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300'
-              }`}
+          {/* Primary: Create account */}
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Create your free developer account
+          </h3>
+          <ul className="text-sm text-gray-600 dark:text-neutral-400 space-y-1 mb-4">
+            <li>&#x2713; Instant access to the API &amp; MCP catalog</li>
+            <li>&#x2713; Personal workspace with API keys</li>
+            <li>&#x2713; Free tier &mdash; no credit card required</li>
+          </ul>
+          <button
+            onClick={register}
+            className="w-full py-3 px-4 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors"
+          >
+            Create Free Account
+          </button>
+          <p className="text-xs text-gray-500 dark:text-neutral-500 mt-2 text-center">
+            By creating an account, you agree to our{' '}
+            <a
+              href="https://docs.gostoa.dev/legal/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-600 dark:text-primary-400 hover:underline"
             >
-              Request Access
-            </button>
-            <button
-              onClick={() => setActiveTab('signin')}
-              className={`flex-1 pb-2 text-sm font-medium transition-colors ${
-                activeTab === 'signin'
-                  ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-600 dark:border-primary-400'
-                  : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300'
-              }`}
-            >
-              Sign In
-            </button>
-          </div>
+              Terms of Service
+            </a>
+          </p>
 
-          {activeTab === 'request' && (
-            <>
-              {submitState === 'success' ? (
-                <div className="text-center py-6">
-                  <div className="text-3xl mb-2">&#x2705;</div>
-                  <p className="text-gray-900 dark:text-white font-medium">
-                    Thank you! We&apos;ll reach out shortly.
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400 mt-2">
-                    Already have credentials?{' '}
-                    <button
-                      onClick={() => setActiveTab('signin')}
-                      className="text-primary-600 dark:text-primary-400 hover:underline"
-                    >
-                      Sign in
-                    </button>
-                  </p>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label
-                        htmlFor="firstName"
-                        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
-                      >
-                        First name *
-                      </label>
-                      <input
-                        id="firstName"
-                        type="text"
-                        required
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        placeholder="Jane"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="lastName"
-                        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
-                      >
-                        Last name *
-                      </label>
-                      <input
-                        id="lastName"
-                        type="text"
-                        required
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        placeholder="Doe"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="email"
-                      className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
-                    >
-                      Work email *
-                    </label>
-                    <input
-                      id="email"
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@company.com"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="company"
-                      className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
-                    >
-                      Company
-                    </label>
-                    <input
-                      id="company"
-                      type="text"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      placeholder="Acme Corp (or Freelance)"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="role"
-                      className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
-                    >
-                      Role
-                    </label>
-                    <select
-                      id="role"
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-                    >
-                      <option value="">Select your role...</option>
-                      <option value="developer">Developer</option>
-                      <option value="architect">Architect</option>
-                      <option value="devops">DevOps / SRE</option>
-                      <option value="tech-lead">Tech Lead / CTO</option>
-                      <option value="freelance">Freelance</option>
-                      <option value="student">Student</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={submitState === 'submitting'}
-                    className="w-full py-3 px-4 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors"
-                  >
-                    {submitState === 'submitting' ? 'Submitting...' : 'Request Early Access'}
-                  </button>
-                  {submitState === 'error' && (
-                    <p className="text-sm text-red-600 dark:text-red-400 text-center">
-                      Something went wrong. Please try again.
+          {/* Sign in link */}
+          <p className="text-sm text-gray-500 dark:text-neutral-400 text-center mt-4">
+            Already have an account?{' '}
+            <button
+              onClick={login}
+              className="text-primary-600 dark:text-primary-400 hover:underline font-medium"
+            >
+              Sign in
+            </button>
+          </p>
+
+          {/* Divider */}
+          <div className="border-t border-gray-200 dark:border-neutral-700 mt-6 pt-4">
+            {/* Enterprise access toggle */}
+            <button
+              onClick={() => setShowEnterprise(!showEnterprise)}
+              className="text-sm text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 w-full text-center"
+            >
+              Need enterprise access?{' '}
+              <span className="text-primary-600 dark:text-primary-400 hover:underline">
+                Request here
+              </span>
+            </button>
+
+            {showEnterprise && (
+              <div className="mt-4">
+                {submitState === 'success' ? (
+                  <div className="text-center py-4">
+                    <div className="text-2xl mb-2">&#x2705;</div>
+                    <p className="text-gray-900 dark:text-white font-medium text-sm">
+                      Thank you! We&apos;ll reach out shortly.
                     </p>
-                  )}
-                </form>
-              )}
-            </>
-          )}
-
-          {activeTab === 'signin' && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-500 dark:text-neutral-400 text-center">
-                Already have an account? Sign in with your organization SSO.
-              </p>
-              <button
-                onClick={login}
-                className="w-full py-3 px-4 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors"
-              >
-                Sign in with SSO
-              </button>
-            </div>
-          )}
+                  </div>
+                ) : (
+                  <form onSubmit={handleSubmit} className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label
+                          htmlFor="firstName"
+                          className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                        >
+                          First name *
+                        </label>
+                        <input
+                          id="firstName"
+                          type="text"
+                          required
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          placeholder="Jane"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="lastName"
+                          className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                        >
+                          Last name *
+                        </label>
+                        <input
+                          id="lastName"
+                          type="text"
+                          required
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          placeholder="Doe"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="email"
+                        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                      >
+                        Work email *
+                      </label>
+                      <input
+                        id="email"
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@company.com"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="company"
+                        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                      >
+                        Company *
+                      </label>
+                      <input
+                        id="company"
+                        type="text"
+                        required
+                        value={company}
+                        onChange={(e) => setCompany(e.target.value)}
+                        placeholder="Acme Corp"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="role"
+                        className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
+                      >
+                        Role
+                      </label>
+                      <select
+                        id="role"
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                      >
+                        <option value="">Select your role...</option>
+                        <option value="developer">Developer</option>
+                        <option value="architect">Architect</option>
+                        <option value="devops">DevOps / SRE</option>
+                        <option value="tech-lead">Tech Lead / CTO</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={submitState === 'submitting'}
+                      className="w-full py-2.5 px-4 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors text-sm"
+                    >
+                      {submitState === 'submitting' ? 'Submitting...' : 'Request Enterprise Access'}
+                    </button>
+                    {submitState === 'error' && (
+                      <p className="text-sm text-red-600 dark:text-red-400 text-center">
+                        Something went wrong. Please try again.
+                      </p>
+                    )}
+                  </form>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

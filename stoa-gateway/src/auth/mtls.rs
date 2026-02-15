@@ -328,6 +328,27 @@ fn extract_client_ip(request: &Request<Body>) -> Option<IpAddr> {
         .map(|ci| ci.0.ip())
 }
 
+/// Check if a path should bypass mTLS entirely.
+///
+/// OAuth/MCP/discovery/health paths manage their own auth (Bearer tokens, public access).
+/// These MUST NOT be blocked by mTLS even when `required_routes` includes `/mcp/*`.
+/// Hardcoded intentionally: a config mistake must not break the OAuth flow.
+fn is_mtls_bypass_path(path: &str) -> bool {
+    const BYPASS_PREFIXES: &[&str] = &[
+        "/.well-known/",
+        "/oauth/",
+        "/mcp/sse",
+        "/mcp/tools/",
+        "/mcp/v1/",
+        "/health",
+        "/ready",
+        "/metrics",
+    ];
+    const BYPASS_EXACT: &[&str] = &["/mcp", "/mcp/capabilities", "/mcp/health"];
+
+    BYPASS_PREFIXES.iter().any(|p| path.starts_with(p)) || BYPASS_EXACT.contains(&path)
+}
+
 /// Check if a request path matches any of the required routes patterns.
 fn is_required_route(path: &str, required_routes: &[String]) -> bool {
     if required_routes.is_empty() {
@@ -369,6 +390,12 @@ pub async fn mtls_extraction_middleware(
     }
 
     let path = request.uri().path().to_string();
+
+    // OAuth/MCP/discovery paths bypass mTLS — they handle their own auth
+    if is_mtls_bypass_path(&path) {
+        return Ok(next.run(request).await);
+    }
+
     let route_required = is_required_route(&path, &config.required_routes);
 
     // Check trusted proxy if configured
@@ -627,6 +654,12 @@ pub async fn mtls_binding_middleware(
     next: Next,
 ) -> Response {
     if !config.enabled || !config.require_binding {
+        return next.run(request).await;
+    }
+
+    // OAuth/MCP/discovery paths bypass mTLS binding — they use Bearer auth
+    let path = request.uri().path().to_string();
+    if is_mtls_bypass_path(&path) {
         return next.run(request).await;
     }
 
@@ -1040,5 +1073,50 @@ mod tests {
     fn test_hex_decode_invalid() {
         assert!(hex::decode("zz").is_err());
         assert!(hex::decode("abc").is_err()); // odd length
+    }
+
+    // -------------------------------------------------------------------------
+    // mTLS bypass paths (OAuth/MCP/discovery coexistence)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_bypass_oauth_paths() {
+        assert!(is_mtls_bypass_path("/.well-known/oauth-protected-resource"));
+        assert!(is_mtls_bypass_path(
+            "/.well-known/oauth-authorization-server"
+        ));
+        assert!(is_mtls_bypass_path("/oauth/register"));
+        assert!(is_mtls_bypass_path("/oauth/token"));
+        assert!(is_mtls_bypass_path("/oauth/authorize"));
+    }
+
+    #[test]
+    fn test_bypass_mcp_paths() {
+        assert!(is_mtls_bypass_path("/mcp"));
+        assert!(is_mtls_bypass_path("/mcp/sse"));
+        assert!(is_mtls_bypass_path("/mcp/sse?session=abc"));
+        assert!(is_mtls_bypass_path("/mcp/capabilities"));
+        assert!(is_mtls_bypass_path("/mcp/health"));
+        assert!(is_mtls_bypass_path("/mcp/tools/list"));
+        assert!(is_mtls_bypass_path("/mcp/v1/sse"));
+    }
+
+    #[test]
+    fn test_bypass_infra_paths() {
+        assert!(is_mtls_bypass_path("/health"));
+        assert!(is_mtls_bypass_path("/health/live"));
+        assert!(is_mtls_bypass_path("/ready"));
+        assert!(is_mtls_bypass_path("/metrics"));
+        assert!(is_mtls_bypass_path("/metrics/prometheus"));
+    }
+
+    #[test]
+    fn test_no_bypass_api_proxy_paths() {
+        assert!(!is_mtls_bypass_path("/api/v1/payments"));
+        assert!(!is_mtls_bypass_path("/api/v1/users/123"));
+        assert!(!is_mtls_bypass_path("/proxy/backend"));
+        assert!(!is_mtls_bypass_path("/admin/apis"));
+        assert!(!is_mtls_bypass_path("/admin/health"));
+        assert!(!is_mtls_bypass_path("/"));
     }
 }

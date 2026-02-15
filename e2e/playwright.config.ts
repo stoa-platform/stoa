@@ -84,6 +84,18 @@ export default defineConfig({
       testMatch: /console/,
     },
 
+    // Demo showcase (portal browse + gateway HTTP)
+    {
+      name: 'demo',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: process.env.STOA_PORTAL_URL || 'https://portal.gostoa.dev',
+        storageState: 'fixtures/.auth/art3mis.json',
+      },
+      dependencies: ['auth-setup'],
+      testMatch: /demo-showcase/,
+    },
+
     // Gateway API tests (no browser, just HTTP)
     // testMatch must NOT match console-gateways — those are browser tests needing auth
     {

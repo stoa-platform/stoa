@@ -157,7 +157,7 @@ fi
 # Token issuance (art3mis — used throughout)
 TOKEN_START=$(date +%s%N)
 TOKEN_RESPONSE=$(curl -s -X POST "${AUTH_URL}/realms/stoa/protocol/openid-connect/token" \
-    -d "grant_type=password&client_id=control-plane-ui&username=art3mis&password=demo" \
+    -d "grant_type=password&client_id=control-plane-ui&username=art3mis&password=samantha2045" \
     --max-time 10 2>/dev/null || echo '{}')
 TOKEN_END=$(date +%s%N)
 TOKEN_MS=$(( (TOKEN_END - TOKEN_START) / 1000000 ))

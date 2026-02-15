@@ -96,6 +96,7 @@ Key rules for AI Factory workflow:
 ### Skills (`.claude/skills/`)
 - 8 legacy: `implement-feature`, `fix-bug`, `review-pr`, `audit-component`, `create-adr`, `e2e-test`, `refactor`, `update-memory`
 - 2 modernes: `/ci-debug [PR|run-url]` (fork), `/parallel-review [PR|path]` (inline)
+- 3 MCP-powered: `/council` (4-persona validation → Linear), `/sync-plan` (plan.md ↔ Linear), `/decompose` (MEGA → component-scoped sub-issues + DAG)
 
 ### Agent Teams (experimental)
 Prerequis: `brew install tmux` + `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`

@@ -313,6 +313,45 @@ Usage: tout contenu public avec mentions concurrents, reglementations ou clients
 ```
 Usage: all new features. Objective: test-first + quality parity with human code.
 
+### Pattern 8: Decompose + Parallel Instances (multi-Claude)
+
+Prerequis: MEGA ticket (>= 21 pts) touching >= 2 components.
+Trigger: `/decompose CAB-XXXX` skill.
+
+```
+1.  [Inline] /decompose CAB-XXXX → creates N component-scoped sub-issues on Linear
+2.  [Inline] Review the DAG and execution plan
+3.  User launches N Claude Code instances (terminals or worktrees)
+
+    Phase 1 (parallel — no dependencies):
+4a. [Instance 1] CAB-XXXX-API: branch → code → tests → PR → merge
+4b. [Instance 2] CAB-XXXX-GW:  branch → code → tests → PR → merge
+4c. [Instance 3] CAB-XXXX-DOCS: branch → write → PR → merge (stoa-docs repo)
+
+    Phase 2 (parallel — after Phase 1 merges):
+5a. [Instance 1] CAB-XXXX-UI:    branch → code → tests → PR → merge
+5b. [Instance 2] CAB-XXXX-PORTAL: branch → code → tests → PR → merge
+
+    Phase 3 (sequential — after Phase 2):
+6.  [Instance 1] CAB-XXXX-E2E:   branch → tests → PR → merge
+
+7.  [Inline] Update parent ticket on Linear (Done)
+8.  [Inline] Update state files (memory.md, plan.md)
+```
+
+Key rules:
+- Each instance works in its own worktree: `git worktree add ../<name> feat/<branch>`
+- Each sub-issue = 1 PR, < 300 LOC, independently deployable
+- API always Phase 1 (upstream data provider)
+- UI always Phase 2 (depends on API endpoints)
+- E2E always last (needs all components)
+- docs always Phase 1 (separate repo, zero code coupling)
+- Worktrees share git history but isolate file changes
+- **Dropbox gotcha**: create worktrees OUTSIDE Dropbox folder to avoid sync conflicts
+
+Usage: MEGA features (>= 21 pts), cross-component work. Gain: 1.5-2x speedup.
+See `/decompose` skill for full DAG generation and Linear integration.
+
 ## Contraintes
 
 - **Maximum 3-4 subagents actifs simultanement** (au-dela, le cout explose et le temps de review aussi)

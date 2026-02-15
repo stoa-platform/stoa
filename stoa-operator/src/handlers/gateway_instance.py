@@ -7,8 +7,9 @@ from datetime import UTC, datetime
 import httpx
 import kopf
 
+from src.config import settings
 from src.cp_client import cp_client
-from src.metrics import RESOURCES_MANAGED, record_reconciliation
+from src.metrics import DRIFT_DETECTED_TOTAL, RESOURCES_MANAGED, record_reconciliation
 
 logger = logging.getLogger(__name__)
 
@@ -247,5 +248,50 @@ async def on_gwi_resume(
         logger.error("GWI resume failed for %s: %s", name, msg)
         patch.status["error"] = msg
         record_reconciliation("gwi", "resume", "error", time.monotonic() - start)
+    finally:
+        await cp_client.close()
+
+
+@kopf.on.timer(GROUP, VERSION, PLURAL, interval=settings.RECONCILE_INTERVAL_SECONDS)
+async def on_gwi_timer(
+    spec: dict,
+    status: dict,
+    name: str,
+    namespace: str,
+    patch: kopf.Patch,
+    **_kwargs: object,
+) -> None:
+    """Periodic health check for GatewayInstance resources."""
+    start = time.monotonic()
+    gw_id = status.get("cpGatewayId", "")
+    if not gw_id:
+        logger.debug("GWI timer %s/%s: no cpGatewayId, skipping", namespace, name)
+        return
+
+    previous_phase = status.get("phase", "unknown")
+
+    try:
+        await cp_client.connect()
+        health = await cp_client.health_check_gateway(gw_id)
+        current_phase = health.get("status", "offline")
+
+        if previous_phase == "online" and current_phase != "online":
+            logger.warning(
+                "GWI drift: %s/%s phase %s → %s", namespace, name, previous_phase, current_phase
+            )
+            DRIFT_DETECTED_TOTAL.labels(kind="gwi", drift_type="health_degraded").inc()
+        elif previous_phase != "online" and current_phase == "online":
+            logger.info("GWI recovery: %s/%s phase %s → online", namespace, name, previous_phase)
+
+        patch.status["phase"] = current_phase
+        patch.status["lastHealthCheck"] = datetime.now(UTC).isoformat()
+        patch.status["error"] = ""
+        record_reconciliation("gwi", "timer", "success", time.monotonic() - start)
+
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        msg = f"Timer health check failed: {exc}"
+        logger.warning("GWI timer error for %s/%s: %s", namespace, name, msg)
+        patch.status["error"] = msg
+        record_reconciliation("gwi", "timer", "error", time.monotonic() - start)
     finally:
         await cp_client.close()

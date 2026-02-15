@@ -189,6 +189,12 @@ Same as operations.log: `YYYY-MM-DDTHH:MM | EVENT | key=value ...`
 - **CI fix** — `/ci-fix` skill appends `CI-FIX` automatically (see skill prompt)
 - **State drift** — `stop-state-lint.sh` hook appends `STATE-DRIFT` automatically
 
+### Log Rotation
+- Keep `metrics.log` under **500 lines** (same policy as operations.log)
+- When over 500 lines: move oldest entries to `metrics.log.1`
+- Keep `metrics.log.1` for 90 days, then delete
+- Clean up during session-end (Step 8 of session-startup.md)
+
 ### Usage
 Periodically review `metrics.log` to identify:
 - Average branch lifetime (PR-MERGED entries)

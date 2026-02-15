@@ -92,6 +92,16 @@ const TokenOptimizer = lazy(() =>
 const Policies = lazy(() => import('./pages/Policies').then((m) => ({ default: m.Policies })));
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })));
 
+// CAB-1251: SaaS Self-Service pages
+const backendApisModule = () => import('./pages/BackendApis');
+const saasApiKeysModule = () => import('./pages/SaasApiKeys');
+const BackendApisList = lazy(() =>
+  backendApisModule().then((m) => ({ default: m.BackendApisList }))
+);
+const SaasApiKeysList = lazy(() =>
+  saasApiKeysModule().then((m) => ({ default: m.SaasApiKeysList }))
+);
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -376,6 +386,9 @@ function ProtectedRoutes() {
                 <Route path="/token-optimizer" element={<TokenOptimizer />} />
                 <Route path="/policies" element={<Policies />} />
                 <Route path="/audit-log" element={<AuditLog />} />
+                {/* CAB-1251: SaaS Self-Service */}
+                <Route path="/backend-apis" element={<BackendApisList />} />
+                <Route path="/saas-api-keys" element={<SaasApiKeysList />} />
               </Routes>
             </Suspense>
           )}

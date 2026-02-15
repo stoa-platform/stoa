@@ -46,7 +46,7 @@ jobs:
                Compute average. Classify as Ship/Show/Ask.
 
             2. Write the report to a file called council-body.md in the current directory.
-               Use the Write tool (NOT Bash) to create the file.
+               Use the Bash tool (NOT the Write tool) to create the file with cat <<'REPORT' > council-body.md
                Format:
                ```
                # Council: TICKET_ID — TITLE

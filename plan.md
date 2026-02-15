@@ -65,7 +65,7 @@ Focus: Intégration, script démo, répétitions
 
 ## Post-démo (semaine 9+)
 - [~] CAB-1066: Landing + Pricing refonte (21 pts) — Phase 1 DONE (stoa-web PR #7: SocialProof, Book a Demo, Privacy Policy)
-- [~] CAB-1133: Portal Test Suite (34 pts)
+- [x] CAB-1133: Portal Test Suite (34 pts) — DONE (PR #461, 505 tests, 17 routes × 4 personas)
 - [x] CAB-1134: ADR-040 Born GitOps (5 pts) — DONE (stoa-docs PR #17, ADR published)
 - [x] CAB-1138: GitOps Operator P1-P5 (21 pts) — DONE (PRs #415, #418, #442-#446, #454, deployed 0.3.0)
 - [ ] CAB-1030: Kit onboarding Cédric (privé)

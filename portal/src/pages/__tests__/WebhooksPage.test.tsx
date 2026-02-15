@@ -5,7 +5,7 @@
  */
 
 import { screen, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '../../test/helpers';
+import { renderWithProviders, createAuthMock, type PersonaRole } from '../../test/helpers';
 import { WebhooksPage } from '../webhooks/WebhooksPage';
 
 // Mock AuthContext at module level
@@ -415,5 +415,35 @@ describe('WebhooksPage', () => {
         expect(historyButton).toBeInTheDocument();
       });
     });
+  });
+
+  describe('Persona-based Tests', () => {
+    it.each(['cpi-admin', 'tenant-admin'] as PersonaRole[])(
+      '%s can access webhooks page (stoa:subscriptions:write)',
+      async (persona) => {
+        const auth = createAuthMock(persona);
+        mockAuth.mockReturnValue(auth);
+        mockUseWebhooks.mockReturnValue({
+          data: { items: [] },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        });
+
+        renderWithProviders(<WebhooksPage />);
+
+        await waitFor(() => {
+          expect(screen.getByText('Webhook Notifications')).toBeInTheDocument();
+        });
+      }
+    );
+
+    it.each(['devops', 'viewer'] as PersonaRole[])(
+      '%s does not have stoa:subscriptions:write scope',
+      (persona) => {
+        const auth = createAuthMock(persona);
+        expect(auth.hasScope('stoa:subscriptions:write')).toBe(false);
+      }
+    );
   });
 });

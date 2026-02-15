@@ -1,27 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createAuthMock } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
+import type { PersonaRole } from '../../test/helpers';
 
 // Mock AuthContext
-vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: vi.fn(() => ({
-    user: {
-      id: 'user-admin',
-      email: 'parzival@oasis.gg',
-      name: 'Parzival',
-      roles: ['cpi-admin'],
-      tenant_id: 'oasis-gunters',
-      permissions: ['tenants:read'],
-    },
-    isAuthenticated: true,
-    isLoading: false,
-    isReady: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    hasPermission: vi.fn(() => true),
-    hasRole: vi.fn(() => true),
-  })),
-}));
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 // Mock shared components
 vi.mock('@stoa/shared/components/Skeleton', () => ({
@@ -114,6 +99,7 @@ function renderComponent() {
 describe('TenantDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
     localStorage.clear();
 
     // Default: return instant result for most queries, top tools for topk query
@@ -253,4 +239,15 @@ describe('TenantDashboard', () => {
     expect(await screen.findByText('default')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'My Usage' })).toBeInTheDocument();
   });
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderComponent();
+        expect(await screen.findByRole('heading', { name: 'My Usage' })).toBeInTheDocument();
+      });
+    }
+  );
 });

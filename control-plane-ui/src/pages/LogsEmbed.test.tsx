@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { LogsEmbed } from './LogsEmbed';
+import { createAuthMock } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
+import type { PersonaRole } from '../test/helpers';
 
 vi.mock('../config', () => ({
   config: {
@@ -16,8 +19,12 @@ vi.mock('../hooks/useServiceHealth', () => ({
   useServiceHealth: () => ({ status: 'available', retry: vi.fn() }),
 }));
 
+vi.mock('../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
+
 describe('LogsEmbed', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
     vi.spyOn(window, 'open').mockImplementation(() => null);
   });
 
@@ -88,4 +95,15 @@ describe('LogsEmbed', () => {
     );
     expect(iframe).toHaveAttribute('referrerPolicy', 'no-referrer-when-downgrade');
   });
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        render(<LogsEmbed />);
+        expect(screen.getByRole('heading', { name: 'STOA Logs' })).toBeInTheDocument();
+      });
+    }
+  );
 });

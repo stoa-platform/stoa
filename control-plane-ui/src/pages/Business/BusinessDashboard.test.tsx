@@ -1,27 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { createAuthMock } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
+import type { PersonaRole } from '../../test/helpers';
 
 // Mock AuthContext
-vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: vi.fn(() => ({
-    user: {
-      id: 'user-admin',
-      email: 'parzival@oasis.gg',
-      name: 'Parzival',
-      roles: ['cpi-admin'],
-      tenant_id: 'oasis-gunters',
-      permissions: ['tenants:read'],
-    },
-    isAuthenticated: true,
-    isLoading: false,
-    isReady: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    hasPermission: vi.fn((p: string) => p === 'tenants:read'),
-    hasRole: vi.fn(() => true),
-  })),
-}));
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 // Mock api service
 vi.mock('../../services/api', () => ({
@@ -83,6 +68,7 @@ function renderComponent() {
 describe('BusinessDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   });
 
   it('renders the heading', async () => {
@@ -160,25 +146,23 @@ describe('BusinessDashboard', () => {
   });
 
   it('denies access to non-admin users', async () => {
-    const { useAuth } = await import('../../contexts/AuthContext');
-    vi.mocked(useAuth).mockReturnValue({
-      user: {
-        id: 'user-viewer',
-        email: 'viewer@oasis.gg',
-        name: 'Viewer',
-        roles: ['viewer'],
-        tenant_id: 'oasis-gunters',
-        permissions: ['apis:read'],
-      },
-      isAuthenticated: true,
-      isLoading: false,
-      isReady: true,
-      login: vi.fn(),
-      logout: vi.fn(),
-      hasPermission: vi.fn(() => false),
-      hasRole: vi.fn(() => false),
-    });
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('viewer'));
     renderComponent();
     expect(await screen.findByText(/don't have permission/)).toBeInTheDocument();
   });
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page or denies access', async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderComponent();
+        if (role === 'cpi-admin') {
+          expect(await screen.findByRole('heading', { name: 'Business Analytics' })).toBeInTheDocument();
+        } else {
+          expect(await screen.findByText(/don't have permission/)).toBeInTheDocument();
+        }
+      });
+    }
+  );
 });

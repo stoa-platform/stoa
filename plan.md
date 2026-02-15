@@ -7,7 +7,7 @@
 | mTLS use case client | 100+ certs, RFC 8705 | ✅ CAB-864 + CAB-872 (PR #453) |
 | OpenAPI→MCP bridge | stoactl bridge demo | ✅ CAB-1137 (stoactl PR #6, stoa PR #436) |
 | Error Snapshot | Provoquer + investiguer en live | ✅ CAB-550 (PR #448) |
-| Dry run 2x sans bug | 5 min chrono | 🔴 CAB-802 |
+| Dry run 2x sans bug | 5 min chrono | 🟡 CAB-802 (script done PR #456, rehearsals pending) |
 | Plan SI post-démo | Arbre décision + roadmap | ✅ CAB-1031 |
 | Docs site | Complet, 0 placeholder | ✅ DONE |
 
@@ -45,10 +45,11 @@ Focus: Intégration, script démo, répétitions
   - mtls-demo-commands.sh --validate flag
   - DEMO-SCRIPT.md updated with mTLS pre-flight step
 
-- [ ] CAB-802: Dry Run + Script + Video (3 pts)
-  - Répétition #1 (mercredi 19) — timer 5 min
-  - Répétition #2 (vendredi 21) — avec Cédric comme témoin
-  - Video backup filmée
+- [~] CAB-802: Dry Run + Script + Video (3 pts)
+  - ✅ demo-dry-run.sh rewritten: 8 acts, 24 checks, per-act timing, GO/NO-GO (PR #456)
+  - [ ] Répétition #1 (mercredi 19) — timer 5 min
+  - [ ] Répétition #2 (vendredi 21) — avec Cédric comme témoin
+  - [ ] Video backup filmée
 
 ## Dimanche 23 fév — FREEZE
 - [ ] CAB-1075: Demo Day Ready (5 pts)
@@ -65,7 +66,7 @@ Focus: Intégration, script démo, répétitions
 ## Post-démo (semaine 9+)
 - [ ] CAB-1133: Portal Test Suite (34 pts)
 - [x] CAB-1134: ADR-040 Born GitOps (5 pts) — DONE (stoa-docs PR #17, ADR published)
-- [ ] CAB-1138: GitOps Operator (21 pts)
+- [x] CAB-1138: GitOps Operator P1-P5 (21 pts) — DONE (PRs #415, #418, #442-#446, #454, deployed 0.3.0)
 - [ ] CAB-1030: Kit onboarding Cédric (privé)
 - [ ] CAB-353: Go/No-Go Checklist
 - [x] Arena k6 Migration L1+L2 (PRs #438, #444, #447, #449) — DONE

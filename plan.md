@@ -68,7 +68,8 @@ Focus: Intégration, script démo, répétitions
 - [x] CAB-1066: Landing + Pricing refonte (21 pts) — DONE (stoa-web PRs #5, #6, #7)
 - [x] CAB-1133: Portal Test Suite (34 pts) — DONE (PR #461, 505 tests, 17 routes × 4 personas)
 - [x] CAB-1134: ADR-040 Born GitOps (5 pts) — DONE (stoa-docs PR #17, ADR published)
-- [x] CAB-1138: GitOps Operator P1-P5 (21 pts) — DONE (PRs #415, #418, #442-#446, #454, deployed 0.3.0)
+- [x] CAB-1138: GitOps Operator P1-P6 (21 pts) — DONE (PRs #415, #418, #442-#446, #454, #472, deployed 0.3.0)
+  - P6: Console Drift Detection UI — PR #472 merged (6 files, 13 tests, /drift page)
 - [ ] CAB-1030: Kit onboarding Cédric (privé)
 - [ ] CAB-353: Go/No-Go Checklist
 - [x] Arena k6 Migration L1+L2 (PRs #438, #444, #447, #449) — DONE

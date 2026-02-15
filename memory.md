@@ -43,7 +43,7 @@
 - CAB-1138: GitOps Operator P1-P5 (21 pts) — PRs #415-#446, #454, deployed 0.3.0
 - CAB-1066: Landing + Pricing (34 pts) — stoa-web PRs #5, #6, #7
 - Portal mTLS Self-Service — PRs #426-#429
-- Arena k6 Migration L1+L2 — PRs #438, #444, #447, #449
+- Arena k6 Migration L1+L2+L3 — PRs #438, #444, #447, #449, #480 (ramp-up + CI95 bars)
 - SEO Batch 6: 5 articles (O2, A2, D1, O4, M6) — stoa-docs PR #41, 32 total published
 - CAB-1138 Phase 6: Console drift UI — PR #472 (654 LOC, 13 tests)
 - CAB-1169: AI Factory v2 — PRs #474, #476 (stop hook, /ci-fix skill, metrics.log, Council 8.00/10)
@@ -66,7 +66,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - CAB-1075: Demo Day Ready — Freeze + Dry Run Témoin + Plan B/C (5 pts)
 - CAB-1035: DX Persona Alex test onboarding MCP (2 pts)
 - CAB-353: Go/No-Go Checklist 3 Months
-- Arena k6 Migration L3: ramp-up + CI95 error bars + CPU pinning
+- Arena k6 L3 CPU pinning VPS (deferred post-demo)
 - SEO adjustments Council: D1 Early Access disclaimer, relecture humaine, endpoints quickstart
 
 ## 🚫 BLOCKED

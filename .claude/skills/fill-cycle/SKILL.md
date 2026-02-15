@@ -15,7 +15,7 @@ Target: $ARGUMENTS
 
 | Label | ID |
 |-------|-----|
-| `roadmap` (parent) | `922e1f2d-c839-4b8b-9eba-6c2ba4365a8c` |
+| `roadmap` (parent group — NOT assignable to issues) | `922e1f2d-c839-4b8b-9eba-6c2ba4365a8c` |
 | `roadmap:gateway` | `82e07bcd-69fa-4fc5-a2e1-d4d7fa0fad70` |
 | `roadmap:dx` | `9f4356e1-f3bc-49a5-b28a-fa1077a6e326` |
 | `roadmap:platform` | `c819ff92-c9cf-453d-a0f9-451840f6f8cc` |

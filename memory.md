@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 10 — Track 2 Community Infra done, PR #525)
+> Dernière MAJ: 2026-02-15 (session 11 — CAB-1172 Auto-approve free-tier, PR #534)
 
 ## ✅ DONE
 
@@ -69,6 +69,7 @@
 - CAB-1130: Demo Slides — Design Partner Presentation (8 pts) — PR #509
 - CAB-1152: Community Infrastructure EPIC (8 pts) — PR #525 (Discussions, FUNDING, badges, 10 good-first-issues)
 - CAB-1182: CONTRIBUTING + templates (3 pts) — PR #525 (pre-existing, URLs fixed, legacy .md removed)
+- CAB-1172: Auto-approve free-tier subscriptions (3 pts) — PR #534 (Council 8.50/10)
 
 ## 🔴 IN PROGRESS
 
@@ -91,9 +92,8 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - Remaining for stoa-docs: Algolia DocSearch, Announcement bar (separate repo)
 
 ### Track 3 — DX Remediation (14 pts, fixes CAB-1035)
-- CAB-1170: Keycloak self-registration (5 pts, P0 CRITICAL)
+- ~~CAB-1170~~ ✅ (PRs #529+#530), ~~CAB-1172~~ ✅ (PR #534)
 - CAB-1171: Quick Start rewrite (3 pts)
-- CAB-1172: Auto-approve subscriptions (3 pts)
 - CAB-1173: MCP guide zero kubectl (3 pts)
 
 ### Track 4 — Staging V1++ (39 pts)

@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-15
+> Last sync: 2026-02-16
 
 ## Cycle 7 (Feb 9–15) — CLOSED
 
@@ -46,15 +46,16 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 147 pts | **Done**: 10 pts (7%) | **Velocity**: 3 issues closed
+**Scope**: 166 pts | **Done**: 13 pts (8%) | **Velocity**: 4 issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep
-**Fill-cycle**: +13 Quick Wins promoted, +7 items estimated (2026-02-15)
+**Fill-cycle**: +13 Quick Wins promoted, +7 items estimated (2026-02-15); +3 auto-promoted (2026-02-15)
 
-### Done (3 issues)
+### Done (4 issues)
 
 - [x] CAB-353: Go/No-Go Checklist 3 Months (5 pts) — PR #482 (9.00/10 → GO)
 - [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (P1)
 - [x] CAB-1170: [DX] Enable Keycloak self-registration (5 pts) — PRs #529, #530 (Council 8.50/10)
+- [x] CAB-1172: [DX] Auto-approve free-tier subscriptions (3 pts) — PR #534 (Council 8.50/10)
 
 ### In Progress
 
@@ -84,7 +85,7 @@
 
 - [x] CAB-1170: [DX] Enable Keycloak self-registration (5 pts, P1) — PRs #529, #530 (Council 8.50/10)
 - CAB-1171: [DX] Quick Start rewrite — single golden path (3 pts, P2)
-- CAB-1172: [DX] Auto-approve free-tier subscriptions (3 pts, P2)
+- [x] CAB-1172: [DX] Auto-approve free-tier subscriptions (3 pts, P2) — PR #534 (Council 8.50/10)
 - CAB-1173: [DX] MCP guide for developers — zero kubectl (3 pts, P2)
 
 ### Backlog — Community Infrastructure (CAB-1152 sub-tickets)
@@ -98,12 +99,18 @@
 
 ### Backlog — Promoted by /fill-cycle (2026-02-15)
 
-- CAB-1177: [Phase 1] Kafka Central Nervous System — 8 Topic Families & Sinks (8 pts, P2)
-- CAB-1178: [Phase 2] Kafka → SSE Bridge — Consumer Adapter Multi-Tenant (5 pts, P2)
-- CAB-1179: [Phase 3] MCP Notifications — Agent Push & Subscription Model (5 pts, P2)
-- CAB-1180: [Phase 4] Event-Driven Governance — CQRS, Sagas & Policy Propagation (8 pts, P3)
+- CAB-1177: [Phase 1] Kafka Central Nervous System — 8 Topic Families & Sinks (8 pts, P2) — Council 7.50/10
+- CAB-1178: [Phase 2] Kafka → SSE Bridge — Consumer Adapter Multi-Tenant (5 pts, P2) — blocked by CAB-1177
+- CAB-1179: [Phase 3] MCP Notifications — Agent Push & Subscription Model (5 pts, P2) — blocked by CAB-1178
+- ~~CAB-1180: [Phase 4] Event-Driven Governance — CQRS, Sagas & Policy Propagation (8 pts, P3) — deferred to Cycle 10+ per Council~~
 - CAB-1124: [Business] Modele ESN Partner — Structure Commerciale via Partenaires (5 pts, P2)
 - CAB-1125: [Comm] Video Punchline AI Factory — Velocite + Branding Communaute (8 pts, P2)
+
+### Backlog — Auto-promoted by /fill-cycle --auto (2026-02-15)
+
+- CAB-1132: [Strategic] Business Model Validation — Post Demo Feb 24 (8 pts, P1)
+- CAB-758: Simulation Architecte — Entrainement Q/R (3 pts)
+- CAB-760: MVP n8n — Spaced Repetition Personnel (8 pts)
 - CAB-1126: [Comm] Demo Video Courte STOA — Self-Service API Management (8 pts, P2)
 - CAB-1127: [Comm] Dual-Track Content — Demo Client + Communaute Landing Page (5 pts, P2)
 - CAB-1163: ADR-043 — Strategic Positioning: Meta-Gateway for Agentic Infra (5 pts, P4)

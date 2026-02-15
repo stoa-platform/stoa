@@ -609,7 +609,11 @@ fn extract_cnf_from_jwt(token: &str) -> Option<String> {
     }
     let bytes = URL_SAFE_NO_PAD.decode(parts[1]).ok()?;
     let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    value.get("cnf")?.get("x5t#S256")?.as_str().map(|s| s.to_string())
+    value
+        .get("cnf")?
+        .get("x5t#S256")?
+        .as_str()
+        .map(|s| s.to_string())
 }
 
 /// Middleware: verify RFC 8705 certificate-token binding.

@@ -46,7 +46,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 166 pts | **Done**: 13 pts (8%) | **Velocity**: 4 issues closed
+**Scope**: 161 pts | **Done**: 5 pts (3%) | **Velocity**: 2 issues closed (Linear) | 4 locally done
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep
 **Fill-cycle**: +13 Quick Wins promoted, +7 items estimated (2026-02-15); +3 auto-promoted (2026-02-15)
 

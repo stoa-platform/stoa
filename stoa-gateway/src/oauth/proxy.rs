@@ -570,6 +570,172 @@ mod tests {
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
+    /// Verify that the `scope` field is stripped from DCR payload before forwarding to Keycloak.
+    ///
+    /// When Claude.ai sends `scope: "openid profile stoa:read..."` in DCR,
+    /// Keycloak REPLACES all realm defaults with ONLY those scopes —
+    /// losing profile, email, roles, etc. Stripping scope preserves Keycloak defaults.
+    /// Regression guard for PR #541 (CAB-1094).
+    #[tokio::test]
+    async fn test_register_proxy_strips_scope_from_dcr_payload() {
+        let mock_server = MockServer::start().await;
+
+        // DCR endpoint — we'll inspect the request body it receives
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/clients-registrations/openid-connect"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "client_id": "scope-test-client",
+                "client_secret": "secret",
+                "registration_access_token": "rat"
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        // Admin token for public client patch
+        Mock::given(method("POST"))
+            .and(path("/realms/master/protocol/openid-connect/token"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"access_token": "admin-jwt"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/admin/realms/stoa/clients"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
+                "id": "internal-uuid",
+                "clientId": "scope-test-client"
+            }])))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("PUT"))
+            .and(path("/admin/realms/stoa/clients/internal-uuid"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+
+        // Send DCR with scope field (as Claude.ai does)
+        let payload = json!({
+            "client_name": "claude-mcp-test",
+            "redirect_uris": ["https://claude.ai/oauth/callback"],
+            "grant_types": ["authorization_code"],
+            "scope": "openid profile email stoa:read stoa:write"
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // Verify the scope field was stripped from the forwarded request
+        let requests = mock_server.received_requests().await.unwrap();
+        let dcr_request = requests
+            .iter()
+            .find(|r| r.url.path() == "/realms/stoa/clients-registrations/openid-connect")
+            .expect("DCR request should have been sent");
+
+        let forwarded_body: Value =
+            serde_json::from_slice(&dcr_request.body).expect("DCR body should be valid JSON");
+
+        assert!(
+            forwarded_body.get("scope").is_none(),
+            "scope field must be stripped from DCR payload (PR #541 regression)"
+        );
+        // Other fields must be preserved
+        assert_eq!(forwarded_body["client_name"], "claude-mcp-test");
+        assert!(forwarded_body["redirect_uris"].is_array());
+    }
+
+    /// Verify that DCR payloads without `scope` are forwarded unchanged.
+    #[tokio::test]
+    async fn test_register_proxy_preserves_payload_without_scope() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/realms/stoa/clients-registrations/openid-connect"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "client_id": "no-scope-client",
+                "registration_access_token": "rat"
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/realms/master/protocol/openid-connect/token"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"access_token": "admin-jwt"})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/admin/realms/stoa/clients"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
+                "id": "internal-uuid-2",
+                "clientId": "no-scope-client"
+            }])))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("PUT"))
+            .and(path("/admin/realms/stoa/clients/internal-uuid-2"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let state = test_state_with_keycloak(Some(&mock_server.uri()));
+        let app = build_oauth_router(state);
+
+        // Send DCR WITHOUT scope field
+        let payload = json!({
+            "client_name": "normal-client",
+            "redirect_uris": ["https://example.com/callback"],
+            "grant_types": ["authorization_code"],
+            "token_endpoint_auth_method": "none"
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/oauth/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // Verify the payload was forwarded with all original fields intact
+        let requests = mock_server.received_requests().await.unwrap();
+        let dcr_request = requests
+            .iter()
+            .find(|r| r.url.path() == "/realms/stoa/clients-registrations/openid-connect")
+            .expect("DCR request should have been sent");
+
+        let forwarded_body: Value = serde_json::from_slice(&dcr_request.body).unwrap();
+        assert_eq!(forwarded_body["client_name"], "normal-client");
+        assert_eq!(forwarded_body["token_endpoint_auth_method"], "none");
+        assert!(forwarded_body.get("scope").is_none());
+    }
+
     #[tokio::test]
     async fn test_register_proxy_keycloak_unreachable() {
         let state = test_state_with_keycloak(Some("http://127.0.0.1:1"));

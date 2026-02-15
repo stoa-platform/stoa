@@ -28,9 +28,13 @@
 - [ ] CAB-1128: Design Partner Communication — Client A Beta Access (P2)
 - [ ] CAB-1130: Demo Slides — Design Partner Presentation (P2)
 - [ ] CAB-1035: Persona Alex — Test manuel onboarding MCP Gateway (2 pts, P2)
+- [ ] CAB-709: UAC for LLM — Contrats unifies pour backends IA (5 pts, P2)
+- [ ] CAB-707: Guardrails — PII Detection & Prompt Injection Protection (5 pts, P2)
+- [ ] CAB-710: n8n + STOA AI Gateway — Demo "ESB is Dead" (3 pts, P2)
+- [ ] CAB-708: Fallback Chain — Resilience multi-provider (3 pts, P2)
 - [ ] CAB-362: GW2-10 Circuit Breaker + Session Management (5 pts, P2) — deferred post-demo
 
-### Done (24+ issues)
+### Done (29 issues)
 
 - [x] CAB-1121: Consumer Onboarding & Token Exchange (35 pts) — PR #423 + E2E PR #450
 - [x] CAB-1137: OpenAPI → MCP Auto-Bridge (8 pts) — stoactl PR #6, stoa PR #436

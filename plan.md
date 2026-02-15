@@ -33,7 +33,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 92 pts | **Done**: 34 pts (37%) | **Velocity**: 7 issues closed
+**Scope**: 92 pts | **Done**: 55 pts (60%) | **Velocity**: 10 issues closed
 **Theme**: Demo prep, staging freerun, narrative
 
 ### Done (7 issues)
@@ -45,6 +45,9 @@
 - [x] CAB-1148: Staging Freerun — AI Guardrails + Fallback Chain (13 pts, P3) — PR #495
 - [x] CAB-707: Guardrails — PII Detection & Prompt Injection Protection (5 pts, P2) — PR #495
 - [x] CAB-708: Fallback Chain — Resilience multi-provider (3 pts, P2) — PR #495
+- [x] CAB-1150: Preparation Demo 24/02 — narrative + speaker notes (8 pts, P1) — PR #501
+- [x] CAB-1129: Demo Script — Design Partner Pitch 5min (5 pts, P2) — PR #506
+- [x] CAB-1175: Platform Trust & Reliability — Status Page MVP Upptime (8 pts, P2) — stoa-platform/status repo, Council 8.50/10
 
 ### In Progress
 
@@ -59,13 +62,11 @@
 ### Todo — Tier 1: Demo Blockers (16 pts)
 
 - [ ] CAB-1075: Demo Day Ready — Freeze + Dry Run Temoin + Plan B/C (5 pts, P1)
-- [ ] CAB-1150: Preparation Demo 24/02 — narrative + speaker notes (8 pts, P1)
 - [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts, P1)
 
 ### Todo — Tier 2: Demo Narrative & Assets (16 pts)
 
 - [ ] CAB-710: n8n + STOA AI Gateway — Demo "ESB is Dead" (3 pts, P2)
-- [ ] CAB-1129: Demo Script — Design Partner Pitch 5min (5 pts, P2)
 - [ ] CAB-1130: Demo Slides — Design Partner Presentation (8 pts, P2)
 
 ### Todo — Tier 3: Staging Freerun (18 pts, Mon-Wed only)
@@ -81,7 +82,7 @@
 
 ### Backlog (parked in cycle, not committed)
 
-- CAB-1175: Platform Trust & Reliability — Status Page MVP Upptime (8 pts, P2) — Council 8.50/10
+- ~~CAB-1175: Status Page MVP~~ → DONE (moved to Done)
 - ~~CAB-601: Status Page~~ → superseded by CAB-1175
 - CAB-571: Error Snapshot Network/TLS (P2)
 - CAB-570: Error Snapshot Backend (P2)

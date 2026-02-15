@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 6 — freeze day: CAB-1146 + CAB-1145 + CAB-1147)
+> Dernière MAJ: 2026-02-15 (session 8 — CAB-1150 + CAB-1129 demo scripts)
 
 ## ✅ DONE
 
@@ -58,6 +58,9 @@
 - CAB-1146: Baseline PROD — 16-section snapshot before freeze — PR #484
 - CAB-1145: Smoke test PROD — 23/23 GO, Prometheus 21/23 UP — PR #486
 - CAB-1147: Benchmarks Freeze — VPS 97.25 vs Kong 94.41, K8s latency tables — PR #491
+- CAB-1150: Demo Narrative + Speaker Notes (8 pts) — PR #501 (6-act timing, 10 FAQ, benchmarks, slides outline)
+- CAB-1129: Demo Script — Design Partner Pitch 5min (5 pts) — PR #506 (word-for-word, 10 objections, 3 client profiles)
+- CAB-1175: Status Page MVP Upptime (8 pts) — stoa-platform/status repo, 7/7 monitors UP, status.gostoa.dev live
 
 ## 🔴 IN PROGRESS
 

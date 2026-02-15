@@ -67,7 +67,9 @@ Personal Tenant Auto-Provisioning — **DONE** (PR #451)
 - ✅ 6 unit tests (happy path, idempotent, sanitization, collision, KC failure, existing tenant)
 - Follow-up: TTL cleanup worker, SMTP email verification, welcome email
 
-CAB-802: Dry Run + Script + Video Backup (3 pts) — Todo, due 23/02
+CAB-802: Dry Run + Script + Video Backup (3 pts) — **Script DONE** (PR #456)
+- ✅ demo-dry-run.sh: 8 acts validated end-to-end (24 checks, GO/NO-GO verdict)
+- Remaining: manual rehearsals (Wed 19, Fri 21) + video backup filming
 CAB-872: mTLS Integration E2E + Script Démo (3 pts) — **DONE** (PR #453)
 CAB-1075: Demo Day Ready — Freeze + Dry Run Témoin + Plan B/C (5 pts) — Backlog
 
@@ -97,7 +99,11 @@ CAB-1031: Plan d'Action SI Post-Démo — Arbre de Décision (21 pts) — **DONE
 
 CAB-1133: Portal Functional Test Suite 17 routes × 4 personas (34 pts) — In Progress
 CAB-1134: ADR-040 Born GitOps Multi-Env (5 pts) — **DONE** (stoa-docs PR #17 merged, ADR-040 published, 5 claims sourced)
-CAB-1138: GitOps Reconciliation Operator AWX → K8s (21 pts) — Backlog
+CAB-1138: GitOps Reconciliation Operator AWX → K8s (21 pts) — **Phase 5 DONE**
+- ✅ P1-P4: AWX cleanup, CRD schemas, kopf scaffold, reconcilers, Prometheus metrics (PRs #415, #418, #442, #443, #445, #446)
+- ✅ P5: Drift detection timer — PR #454 merged, deployed to staging + prod (image 0.3.0)
+  - `@kopf.on.timer()` for GWI health + GWB sync, auto-remediation, 2 drift metrics
+  - 55 tests (72.79% coverage)
 CAB-1030: Admin Guide Onboarding Ops Cédric (13 pts) — Todo (docs publiques faites, reste kit privé)
 CAB-1035: DX Persona Alex test onboarding MCP (2 pts) — Todo
 CAB-353: Go/No-Go Checklist 3 Months — Todo

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 9 — CAB-1130 slides + CAB-1075 countdown)
+> Dernière MAJ: 2026-02-15 (session 9 — ADR-043 + Linear ticket audit CAB-1176→1181)
 
 ## ✅ DONE
 
@@ -61,8 +61,11 @@
 - CAB-1150: Demo Narrative + Speaker Notes (8 pts) — PR #501 (6-act timing, 10 FAQ, benchmarks, slides outline)
 - CAB-1129: Demo Script — Design Partner Pitch 5min (5 pts) — PR #506 (word-for-word, 10 objections, 3 client profiles)
 - CAB-1175: Status Page MVP Upptime (8 pts) — stoa-platform/status repo, 7/7 monitors UP, status.gostoa.dev live
-- CAB-1130: Demo Slides — Design Partner Presentation (8 pts) — PR #509 (10 Marp slides, PPTX+PDF export)
-- CAB-1075: Demo Day Ready (5 pts) — PR #513 (countdown, witness scorecard, Plan B/C)
+- ADR-043: Kafka → MCP Event Bridge Architecture — stoa-docs PR #42 (263 LOC, CAB-1176)
+  - Fixed ADR number collision (was ADR-007), corrected Related ADRs (005/024/041), added content compliance
+  - Linear audit: 7 anomalies fixed on CAB-1176→1181 (labels, descriptions, relations)
+- CAB-1075: Demo Day Ready — Freeze + Plan B/C (5 pts) — PR #513
+- CAB-1130: Demo Slides — Design Partner Presentation (8 pts) — PR #509
 
 ## 🔴 IN PROGRESS
 
@@ -74,14 +77,35 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - [ ] Video backup filmée
 - Known: API creation requires GitLab → use Console UI; rate limiting not configured; httpbin flaky
 
-## 📋 NEXT (post-démo)
+## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped
 
-- CAB-1170: Enable Keycloak self-registration (CRITICAL, 5 pts)
-- CAB-1171: Quick Start rewrite — single golden path (3 pts)
-- CAB-1172: Auto-approve free-tier subscriptions (3 pts)
-- CAB-1173: MCP guide for devs — zero kubectl (3 pts)
-- Arena k6 L3 CPU pinning VPS (deferred post-demo)
-- SEO adjustments Council: D1 Early Access disclaimer, relecture humaine, endpoints quickstart
+### Track 1 — Demo Finale (6 pts)
+- CAB-1151: Dress Rehearsal (3 pts, P0)
+- CAB-710: n8n + STOA "ESB is Dead" demo (3 pts, P1)
+
+### Track 2 — Community Infrastructure (11 pts, P0)
+- CAB-1152: EPIC (8 pts) — Discussions, DocSearch, Badges, Funding, Labels, Announcement Bar
+- CAB-1182: CONTRIBUTING.md + PR/Issue templates (3 pts)
+
+### Track 3 — DX Remediation (14 pts, fixes CAB-1035)
+- CAB-1170: Keycloak self-registration (5 pts, P0 CRITICAL)
+- CAB-1171: Quick Start rewrite (3 pts)
+- CAB-1172: Auto-approve subscriptions (3 pts)
+- CAB-1173: MCP guide zero kubectl (3 pts)
+
+### Track 4 — Staging V1++ (39 pts)
+- CAB-1183: Sidecar Mode P1 ext_authz (8 pts, NEW)
+- CAB-1184: Apigee Adapter P1 (5 pts, NEW)
+- CAB-1185: Portal Try-It validation (3 pts, NEW)
+- CAB-1186: E2E Demo Showcase unskip (3 pts, NEW)
+- CAB-1149: Staging Freerun V1++ (13 pts)
+- CAB-362: Circuit Breaker (5 pts)
+- CAB-709: UAC for LLM (5 pts)
+
+### Track 5 — SEO + Content (16 pts)
+- CAB-1187: Blog Batch 7 (8 pts, NEW)
+- CAB-1181: Interactive Diagrams MDX (5 pts)
+- CAB-1162: SEO Tracking (3 pts)
 
 ## 🚫 BLOCKED
 
@@ -90,6 +114,9 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 ## 📝 NOTES
 - Demo MVP: mardi 24 février 2026
 - Présentation "ESB is Dead" même jour
-- docs.gostoa.dev = 32 articles, 0 "Coming Soon", all 10 PLAN-SEO recommended done
-- Velocity avec Claude: estimation ÷10, 107 pts docs en 1 soirée
-- Portal 2FA for cert upload: user requirement from Council session — use Keycloak TOTP step-up
+- docs.gostoa.dev = 32 articles, 0 "Coming Soon"
+- ADR numbering: stoa-docs owns numbers (001-043). Next: **ADR-044**
+- Velocity C7: 436 pts / 32 issues / 22 PRs en 7 jours = 62 pts/jour
+- Velocity C8 target: 160 pts (5 tracks parallèles, AI Factory optimized)
+- Portal 2FA for cert upload: user requirement from Council — use Keycloak TOTP step-up
+- New Linear tickets: CAB-1182 → CAB-1187 (6 tickets created for C8)

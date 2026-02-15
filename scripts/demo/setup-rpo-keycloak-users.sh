@@ -152,21 +152,24 @@ echo "Creating Ready Player One Users"
 echo "=============================================="
 
 # Parzival (Wade Watts) - High Five tenant admin
-create_user "parzival" "parzival@highfive.oasis" "Wade" "Watts" "***DEMO_PASSWORD_REMOVED***" "high-five"
+PARZIVAL_PWD="${PARZIVAL_PASSWORD:-***DEMO_PASSWORD_REMOVED***}"
+create_user "parzival" "parzival@highfive.oasis" "Wade" "Watts" "$PARZIVAL_PWD" "high-five"
 USER_ID=$(get_user_id "parzival")
 if [ -n "$USER_ID" ]; then
     assign_role "$USER_ID" "tenant-admin"
 fi
 
 # Sorrento (Nolan Sorrento) - IOI tenant admin
-create_user "sorrento" "sorrento@ioi.corp" "Nolan" "Sorrento" "***DEMO_PASSWORD_REMOVED***" "ioi"
+SORRENTO_PWD="${SORRENTO_PASSWORD:-***DEMO_PASSWORD_REMOVED***}"
+create_user "sorrento" "sorrento@ioi.corp" "Nolan" "Sorrento" "$SORRENTO_PWD" "ioi"
 USER_ID=$(get_user_id "sorrento")
 if [ -n "$USER_ID" ]; then
     assign_role "$USER_ID" "tenant-admin"
 fi
 
 # Halliday (James Halliday) - Platform admin
-create_user "halliday" "halliday@oasis.admin" "James" "Halliday" "***DEMO_PASSWORD_REMOVED***" "oasis"
+HALLIDAY_PWD="${HALLIDAY_PASSWORD:-***DEMO_PASSWORD_REMOVED***}"
+create_user "halliday" "halliday@oasis.admin" "James" "Halliday" "$HALLIDAY_PWD" "oasis"
 USER_ID=$(get_user_id "halliday")
 if [ -n "$USER_ID" ]; then
     assign_role "$USER_ID" "cpi-admin"
@@ -181,13 +184,13 @@ echo "=============================================="
 echo "Ready Player One Demo - Setup Complete"
 echo "=============================================="
 echo ""
-echo "Demo Credentials:"
-echo "  parzival / ***DEMO_PASSWORD_REMOVED***   - High Five (resistance)"
-echo "  sorrento / ***DEMO_PASSWORD_REMOVED***    - IOI (corporation)"
-echo "  halliday / ***DEMO_PASSWORD_REMOVED*** - OASIS (platform admin)"
+echo "Demo Credentials (passwords from env vars or defaults):"
+echo "  parzival / \$PARZIVAL_PASSWORD - High Five (resistance)"
+echo "  sorrento / \$SORRENTO_PASSWORD - IOI (corporation)"
+echo "  halliday / \$HALLIDAY_PASSWORD - OASIS (platform admin)"
 echo ""
 echo "Test login:"
 echo "  curl -X POST '${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token' \\"
 echo "    -d 'client_id=control-plane-ui' -d 'username=parzival' \\"
-echo "    -d 'password=***DEMO_PASSWORD_REMOVED***' -d 'grant_type=password'"
+echo "    -d 'password=\$PARZIVAL_PASSWORD' -d 'grant_type=password'"
 echo ""

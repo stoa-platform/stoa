@@ -43,7 +43,7 @@ reflect real feature overhead rather than synthetic benchmarks.
 | `--duration <sec>` | 30 | Seconds per concurrency level |
 | `--output <dir>` | `./benchmark-results` | Output directory |
 
-Environment variable `STOA_ADMIN_TOKEN` overrides the admin API token (default: `arena-admin-token-2026`).
+Environment variable `STOA_ADMIN_TOKEN` (or `STOA_ADMIN_API_TOKEN`) provides the admin API token. Get it from Infisical: `prod/gateway/arena/ADMIN_API_TOKEN`.
 
 ## Output
 

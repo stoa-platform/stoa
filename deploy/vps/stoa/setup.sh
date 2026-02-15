@@ -8,7 +8,7 @@
 set -euo pipefail
 
 GW_URL="${1:-http://localhost:8080}"
-ADMIN_TOKEN="arena-admin-token-2026"
+ADMIN_TOKEN="${STOA_ADMIN_API_TOKEN:?Set STOA_ADMIN_API_TOKEN from Infisical prod/gateway/arena/ADMIN_API_TOKEN}"
 
 echo "==> Checking gateway health..."
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "${GW_URL}/health")

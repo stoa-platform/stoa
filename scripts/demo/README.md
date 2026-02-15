@@ -52,7 +52,7 @@ make demo-federation-live   # Run 2-min federation demo
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENSEARCH_URL` | `https://localhost:9200` | OpenSearch endpoint |
-| `OPENSEARCH_AUTH` | `admin:admin` | OpenSearch credentials |
+| `OPENSEARCH_AUTH` | `admin:$OPENSEARCH_ADMIN_PASSWORD` | OpenSearch credentials (prod: from Infisical) |
 | `GRAFANA_URL` | `http://localhost:3001` | Grafana endpoint |
 | `CONTROL_PLANE_URL` | `http://localhost:8000` | Control Plane API |
 | `KEYCLOAK_URL` | `http://localhost:8080` | Keycloak endpoint |
@@ -64,5 +64,5 @@ make demo-federation-live   # Run 2-min federation demo
 
 - **OpenSearch cold start**: First boot takes 30-60s. Use `check-health.sh --wait`.
 - **Self-signed certs**: OpenSearch uses self-signed TLS. Scripts use `-k` (insecure) flag.
-- **Default password**: OpenSearch admin password is `StOa_Admin_2026!` in docker-compose (overridden by `OPENSEARCH_AUTH=admin:admin` after security init).
+- **Default password**: OpenSearch admin password for local dev defaults to `admin:admin` after security init. Production password is in Infisical (`prod/opensearch/ADMIN_PASSWORD`).
 - **Grafana datasource**: Provisioned automatically via `deploy/docker-compose/config/grafana/provisioning/`.

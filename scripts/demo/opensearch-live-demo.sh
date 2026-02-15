@@ -28,8 +28,13 @@ for arg in "$@"; do
   case $arg in
     --prod)
       OPENSEARCH_URL="https://opensearch.gostoa.dev"
-      OPENSEARCH_AUTH="admin:StoaAdmin2026Prod"
+      OPENSEARCH_AUTH="${OPENSEARCH_AUTH:-admin:${OPENSEARCH_ADMIN_PASSWORD:-}}"
       GATEWAY_URL="https://mcp.gostoa.dev"
+      if [ -z "${OPENSEARCH_ADMIN_PASSWORD:-}" ] && [ "${OPENSEARCH_AUTH}" = "admin:" ]; then
+        echo -e "${RED}Error: OPENSEARCH_ADMIN_PASSWORD not set for --prod mode${NC}"
+        echo "Get it from Infisical: infisical secrets get ADMIN_PASSWORD --env=prod --path=/opensearch --plain"
+        exit 1
+      fi
       ;;
     --cleanup)
       CLEANUP=true

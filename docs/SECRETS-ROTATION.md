@@ -36,15 +36,46 @@ K8s Secrets (envFrom / secretKeyRef) → Pods
 
 ## Secret Inventory
 
-| Env | Path | Secret | Purpose | Rotation |
-|-----|------|--------|---------|----------|
-| `prod` | `/cloudflare` | `API_TOKEN` | Cloudflare DNS API (DNS Edit scope) | 90 days |
-| `prod` | `/hetzner` | `HCLOUD_TOKEN` | Hetzner Cloud API | 90 days |
-| `prod` | `/ovh` | `OVH_APPLICATION_KEY` | OVH API key | 90 days |
-| `prod` | `/ovh` | `OVH_APPLICATION_SECRET` | OVH API secret | 90 days |
-| `prod` | `/ovh` | `OVH_CONSUMER_KEY` | OVH consumer key | 90 days |
-| `prod` | `/ovh` | `OVH_CLOUD_PROJECT_ID` | OVH project ID | Never (static) |
-| `prod` | `/ovh` | `OVH_OPENSTACK_PASSWORD` | OVH OpenStack password | 90 days |
+### Tier 0 — IAM & Platform Admin
+
+| Env | Path | Secret | Purpose | Rotation | Script |
+|-----|------|--------|---------|----------|--------|
+| `prod` | `/keycloak` | `ADMIN_PASSWORD` | Keycloak admin (master realm) | 90 days | `rotate-secrets.sh keycloak-admin` |
+
+### Tier 1 — Service-to-Service
+
+| Env | Path | Secret | Purpose | Rotation | Script |
+|-----|------|--------|---------|----------|--------|
+| `prod` | `/keycloak/clients` | `CONTROL_PLANE_API_CLIENT_SECRET` | CP API OIDC client | 90 days | `rotate-secrets.sh oidc-clients` |
+| `prod` | `/keycloak/clients` | `MCP_GATEWAY_CLIENT_SECRET` | MCP Gateway OIDC client | 90 days | `rotate-secrets.sh oidc-clients` |
+| `prod` | `/keycloak/clients` | `OPENSEARCH_DASHBOARDS_CLIENT_SECRET` | OpenSearch Dashboards OIDC | 90 days | `rotate-secrets.sh oidc-clients` |
+| `prod` | `/keycloak/clients` | `OBSERVABILITY_CLIENT_SECRET` | Grafana/Prometheus OIDC | 90 days | `rotate-secrets.sh oidc-clients` |
+| `prod` | `/opensearch` | `ADMIN_PASSWORD` | OpenSearch admin | 90 days | `rotate-secrets.sh opensearch` |
+| `prod` | `/gateway/arena` | `ADMIN_API_TOKEN` | VPS Arena gateway admin | 90 days | `rotate-secrets.sh arena-token` |
+
+### Tier 2 — E2E Personas (Test Users)
+
+| Env | Path | Secret | Purpose | Rotation | Script |
+|-----|------|--------|---------|----------|--------|
+| `prod` | `/e2e-personas` | `PARZIVAL_PASSWORD` | E2E persona (tenant-admin) | On demand | `rotate-secrets.sh personas` |
+| `prod` | `/e2e-personas` | `ART3MIS_PASSWORD` | E2E persona (devops) | On demand | `rotate-secrets.sh personas` |
+| `prod` | `/e2e-personas` | `AECH_PASSWORD` | E2E persona (viewer) | On demand | `rotate-secrets.sh personas` |
+| `prod` | `/e2e-personas` | `SORRENTO_PASSWORD` | E2E persona (tenant-admin) | On demand | `rotate-secrets.sh personas` |
+| `prod` | `/e2e-personas` | `I_R0K_PASSWORD` | E2E persona (viewer) | On demand | `rotate-secrets.sh personas` |
+| `prod` | `/e2e-personas` | `ANORAK_PASSWORD` | E2E persona (cpi-admin) | On demand | `rotate-secrets.sh personas` |
+| `prod` | `/e2e-personas` | `ALEX_PASSWORD` | E2E persona (viewer) | On demand | `rotate-secrets.sh personas` |
+
+### Tier 3 — Infrastructure
+
+| Env | Path | Secret | Purpose | Rotation | Script |
+|-----|------|--------|---------|----------|--------|
+| `prod` | `/cloudflare` | `API_TOKEN` | Cloudflare DNS API (DNS Edit scope) | 90 days | Manual |
+| `prod` | `/hetzner` | `HCLOUD_TOKEN` | Hetzner Cloud API | 90 days | Manual |
+| `prod` | `/ovh` | `OVH_APPLICATION_KEY` | OVH API key | 90 days | Manual |
+| `prod` | `/ovh` | `OVH_APPLICATION_SECRET` | OVH API secret | 90 days | Manual |
+| `prod` | `/ovh` | `OVH_CONSUMER_KEY` | OVH consumer key | 90 days | Manual |
+| `prod` | `/ovh` | `OVH_CLOUD_PROJECT_ID` | OVH project ID | Never (static) | N/A |
+| `prod` | `/ovh` | `OVH_OPENSTACK_PASSWORD` | OVH OpenStack password | 90 days | Manual |
 
 ## Authentication
 
@@ -94,6 +125,58 @@ infisical run --env=prod --path=/cloudflare -- curl -H "Authorization: Bearer $A
 # Direct API (without CLI)
 curl -s "https://vault.gostoa.dev/api/v3/secrets/raw?workspaceId=97972ffc-990b-4d28-9c4d-0664d217f03b&environment=prod&secretPath=/cloudflare" \
   -H "Authorization: Bearer $INFISICAL_TOKEN"
+```
+
+## Automated Rotation Scripts
+
+All rotation scripts are in `scripts/ops/`. They are idempotent and support `--dry-run`.
+
+### Quick Reference
+
+```bash
+# Setup: get Infisical token first
+eval $(infisical-token)
+
+# Rotate Keycloak admin password
+KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh keycloak-admin
+
+# Rotate E2E persona passwords (also updates GitHub Secrets)
+KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh personas
+
+# Rotate OIDC client secrets (causes brief service interruption)
+KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh oidc-clients
+
+# Rotate OpenSearch admin (semi-manual — stores in Infisical, prints manual steps)
+./scripts/ops/rotate-secrets.sh opensearch
+
+# Rotate VPS arena gateway token (stores in Infisical, prints manual steps)
+./scripts/ops/rotate-secrets.sh arena-token
+
+# Rotate everything
+KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh all
+
+# Dry run (show what would change)
+KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh all --dry-run
+```
+
+### Keycloak Password Policy
+
+Configured via `scripts/ops/configure-keycloak-policy.sh`. Policy (NIST 800-63B + DORA Art.9):
+
+| Parameter | Value | Justification |
+|-----------|-------|---------------|
+| `length` | 12 | NIST SP 800-63B minimum |
+| `upperCase/lowerCase/digits/specialChars` | 1 each | DORA "strong authentication" |
+| `notUsername` | yes | Prevent trivial passwords |
+| `passwordHistory` | 5 | DORA "credential rotation" |
+| `maxLength` | 128 | Support passphrases |
+| No forced expiration | - | NIST 800-63B recommends against it |
+
+Brute-force protection: 5 attempts, 15-min progressive lockout, 1-hour max.
+
+```bash
+KC_ADMIN_PASSWORD=<current> ./scripts/ops/configure-keycloak-policy.sh
+KC_ADMIN_PASSWORD=<current> ./scripts/ops/configure-keycloak-policy.sh --dry-run
 ```
 
 ## Rotation Procedures
@@ -223,8 +306,10 @@ kubectl exec -n stoa-system deploy/control-plane-api -- env | grep -c "DATABASE_
 |--------|----------|---------|
 | `infisical-token` | `~/.local/bin/` | Get fresh access token (24h TTL) |
 | `infisical-rotate-secret` | `~/.local/bin/` | Rotate Machine Identity client secret |
+| `rotate-secrets.sh` | `scripts/ops/` | Multi-component secret rotation (KC, personas, OIDC, OS, arena) |
+| `configure-keycloak-policy.sh` | `scripts/ops/` | Password policy + brute-force hardening |
 
-Both scripts use macOS Keychain for secure secret storage.
+`infisical-*` scripts use macOS Keychain. `scripts/ops/` scripts use Infisical API + Keycloak Admin API.
 
 ## Audit
 

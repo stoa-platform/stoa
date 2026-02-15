@@ -14,6 +14,8 @@ on:
     - cron: "0 8 * * 1"
     # Weekly Monday 09:30 UTC — Capacity check
     - cron: "30 9 * * 1"
+    # Weekly Monday 10:00 UTC — Backlog stock check
+    - cron: "0 10 * * 1"
   workflow_dispatch:
     inputs:
       task:
@@ -26,6 +28,7 @@ on:
           - weekly-audit
           - weekly-digest
           - weekly-capacity-check
+          - weekly-backlog-stock
           - self-improve
 
 permissions:
@@ -241,3 +244,46 @@ jobs:
           curl -s -X POST "$SLACK_WEBHOOK" \
             -H 'Content-Type: application/json' \
             -d '{"text":":chart_with_upwards_trend: *Weekly Capacity Check Complete* — check GitHub issues for cycle health report"}'
+
+  # ----- Weekly: Backlog Stock Check -----
+  weekly-backlog-stock:
+    if: |
+      (github.event.schedule == '0 10 * * 1') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-backlog-stock')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Weekly backlog stock check — scan the codebase for ticket candidates.
+
+            Run the `/generate-backlog --scan` skill:
+            1. Inventory current Linear backlog depth (issues with no cycle, state Backlog/Todo)
+            2. Scan 6 sources: TODO/FIXME, test coverage gaps, roadmap files, DX gaps, lint suppressions, content roadmap
+            3. Deduplicate against existing Linear issues
+            4. Estimate points using heuristics
+            5. Report candidate count and total points
+
+            After the scan, evaluate backlog health:
+            - If backlog < 400 pts: create a GitHub issue titled "Backlog Stock Alert — YYYY-MM-DD"
+              with label "daily-digest" containing the full scan report and recommendation
+              to run `/generate-backlog --create`
+            - If backlog >= 400 pts: create a GitHub issue titled "Backlog Stock OK — YYYY-MM-DD"
+              with label "daily-digest" containing a brief summary
+
+            This is a READ-ONLY check. Do NOT create any Linear tickets.
+            Do NOT run `/generate-backlog --create`.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d '{"text":":card_file_box: *Weekly Backlog Stock Check Complete* — check GitHub issues for scan report"}'

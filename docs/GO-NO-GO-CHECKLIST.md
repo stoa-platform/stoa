@@ -137,7 +137,7 @@ This document evaluates STOA Platform's readiness for a **Design Partner** engag
 - [x] **TLS** — Let's Encrypt wildcard cert, auto-renewal via cert-manager
 - [x] **Observability** — kube-prometheus-stack, 29 Grafana dashboards, SLO PrometheusRule, Prometheus ingress
 - [x] **Keycloak** — 7 realms, 4 OIDC clients (opensearch, api, argocd, console), HTTPS only
-- [x] **OpenSearch** — OIDC working, `opensearch.gostoa.dev`, Dashboards HTTP, admin pwd `StoaAdmin2026Prod`
+- [x] **OpenSearch** — OIDC working, `opensearch.gostoa.dev`, Dashboards HTTP, admin pwd in Infisical `prod/opensearch`
 - [x] **ArgoCD** — `argocd.gostoa.dev`, Keycloak SSO, stoa-gateway managed (auto-sync + self-heal)
 
 **Status**: ✅ **PASS** — Production-hardened, cost-optimized, ArgoCD + observability operational

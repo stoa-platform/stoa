@@ -19,7 +19,7 @@ services:
       STOA_PORT: "8080"
       STOA_HOST: "0.0.0.0"
       STOA_GATEWAY_MODE: "edge-mcp"
-      STOA_ADMIN_API_TOKEN: "arena-admin-token-2026"
+      STOA_ADMIN_API_TOKEN: "${STOA_ADMIN_API_TOKEN:?Set STOA_ADMIN_API_TOKEN from Infisical prod/gateway/arena/ADMIN_API_TOKEN}"
       # Disable all optional features — pure proxy benchmark
       STOA_POLICY_ENABLED: "false"
       STOA_ZOMBIE_DETECTION_ENABLED: "false"

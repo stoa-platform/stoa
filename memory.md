@@ -72,7 +72,10 @@ CAB-802: Dry Run + Script + Video Backup (3 pts) — **Script DONE** (PRs #456, 
 - ✅ PR #463: 7 production fixes (arithmetic, KC path, Grafana URL, consumer, gateway 401, mTLS, MCP auth)
 - ✅ Production validated: **23/23 PASS, GO verdict in 3.5s**
 - Remaining: manual rehearsals (Wed 19, Fri 21) + video backup filming
-CAB-872: mTLS Integration E2E + Script Démo (3 pts) — **DONE** (PR #453)
+CAB-872: mTLS Integration E2E + Script Démo (3 pts) — **DONE** (PR #452)
+- ✅ --validate flag on mtls-demo-commands.sh (6-check automated pre-flight)
+- ✅ Wire mTLS binding middleware (Stage 3) into gateway router — was dead code
+- ✅ Prod validated: ALL 6 CHECKS PASSED (correct cert→200, wrong cert→403, no cert→401)
 CAB-1075: Demo Day Ready — Freeze + Dry Run Témoin + Plan B/C (5 pts) — Backlog
 
 ### P0 — Strategy (livrable de la démo, pas prérequis technique)
@@ -99,7 +102,10 @@ CAB-1031: Plan d'Action SI Post-Démo — Arbre de Décision (21 pts) — **DONE
 - ✅ Gateway mTLS Prometheus metrics (PR #428, ~50 LOC Rust) — validations_total, binding_checks_total, certs_expiring_soon
 - ✅ Grafana mTLS dashboard + 3 alerts (PR #429, ~120 LOC) — 7 panels, StoaMtlsHighFailureRate/BindingMismatch/CertsExpiringSoon
 
-CAB-1133: Portal Functional Test Suite 17 routes × 4 personas (34 pts) — In Progress
+CAB-1133: Portal Functional Test Suite 17 routes × 4 personas (34 pts) — **DONE** (PR #461)
+- ✅ 505 tests (+66), 12 files, all 17 routes × 4 personas covered
+- ✅ Fix: added stoa:admin to cpi-admin scopes in helpers.tsx
+- ✅ 4 new test files + 7 migrated to createAuthMock + 1 helper fix
 CAB-1134: ADR-040 Born GitOps Multi-Env (5 pts) — **DONE** (stoa-docs PR #17 merged, ADR-040 published, 5 claims sourced)
 CAB-1138: GitOps Reconciliation Operator AWX → K8s (21 pts) — **Phase 5 DONE**
 - ✅ P1-P4: AWX cleanup, CRD schemas, kopf scaffold, reconcilers, Prometheus metrics (PRs #415, #418, #442, #443, #445, #446)

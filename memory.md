@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 4)
+> Dernière MAJ: 2026-02-15 (session 5 — cycle 7 close)
 
 ## ✅ DONE
 
@@ -50,6 +50,7 @@
 - CAB-1030: Admin Guide & Onboarding Ops Ready (13 pts) — stoa PR #475, stoa-strategy PR #1
   - Secrets docs rewritten for Infisical (0 Vault refs), 3 Vault runbooks archived
   - ArgoCD + Operator runbooks created, onboarding kit (5 files) for Cédric
+- CAB-353: Go/No-Go Checklist 3 Months — PR #482 (9.00/10 → GO verdict)
 
 ## 🔴 IN PROGRESS
 
@@ -65,7 +66,6 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 
 - CAB-1075: Demo Day Ready — Freeze + Dry Run Témoin + Plan B/C (5 pts)
 - CAB-1035: DX Persona Alex test onboarding MCP (2 pts)
-- CAB-353: Go/No-Go Checklist 3 Months
 - Arena k6 L3 CPU pinning VPS (deferred post-demo)
 - SEO adjustments Council: D1 Early Access disclaimer, relecture humaine, endpoints quickstart
 

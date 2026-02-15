@@ -123,12 +123,14 @@ infisical secrets set MY_SECRET=value --env=prod --path=/my-service
 When touching secrets, env vars, or credentials:
 
 1. **Never hardcode** — use Infisical + K8s Secret reference
-2. **New secret?** → Add to Infisical (correct env + path) + reference in K8s manifest
-3. **K8s manifest** → Use `envFrom: secretRef` or `env.valueFrom.secretKeyRef`
-4. **Non-critical secret** → Set `optional: true` on the secretRef to avoid pod crash
-5. **CI/CD secret** → Add to GitHub repo/org secrets, reference as `${{ secrets.NAME }}`
-6. **Local dev** → Use `infisical run` to inject, or `.env` file (gitignored)
-7. **Retrieve programmatically** → `infisical secrets get <NAME> --env=prod --path=/<service>`
+2. **NEVER reset/change/rotate passwords or credentials autonomously** — see `security.md` Password Reset Prohibition
+3. **New secret?** → Add to Infisical (correct env + path) + reference in K8s manifest
+4. **K8s manifest** → Use `envFrom: secretRef` or `env.valueFrom.secretKeyRef`
+5. **Non-critical secret** → Set `optional: true` on the secretRef to avoid pod crash
+6. **CI/CD secret** → Add to GitHub repo/org secrets, reference as `${{ secrets.NAME }}`
+7. **Local dev** → Use `infisical run` to inject, or `.env` file (gitignored)
+8. **Retrieve programmatically** → `infisical secrets get <NAME> --env=prod --path=/<service>`
+9. **Rotation scripts are human-only** — `rotate-secrets.sh`, `infisical-rotate-secret` must be run by a human, never by an agent
 
 ## Anti-Patterns
 
@@ -141,6 +143,9 @@ When touching secrets, env vars, or credentials:
 | Secret in GitHub Actions workflow file | Committed to git | Use GitHub Secrets (`${{ secrets.X }}`) |
 | `.env` file committed | Plaintext in repo history forever | `.gitignore` + `infisical run` for shared secrets |
 | Token in MEMORY.md / rules | AI context = potential leak | Reference path only, never values |
+| Agent runs `rotate-secrets.sh` | Uncoordinated password change breaks service chain | Human-only operation, agent must ask first |
+| Agent calls KC `reset-password` API | Changes live credential, may lose new password | Agent reads only, human rotates |
+| Agent runs `infisical secrets set` on passwords | Overwrites production credential | Agent references path, human sets value |
 
 ## Rotation Procedures
 

@@ -98,7 +98,7 @@ generate_password() {
   suffix="A"
   suffix+="z"
   suffix+="$(( RANDOM % 10 ))"
-  suffix+="!"
+  suffix+="@"
   echo "${base}${suffix}"
 }
 

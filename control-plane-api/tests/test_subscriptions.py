@@ -42,19 +42,24 @@ class TestSubscriptionsRouter:
         self, app_with_tenant_admin, mock_db_session, sample_subscription_data
     ):
         """Test successful subscription creation returns API key."""
-        from src.auth.dependencies import get_current_user
-        from src.database import get_db
-
         mock_sub = self._create_mock_subscription(sample_subscription_data)
+        mock_sub.status = SubscriptionStatus.PENDING
+
+        mock_approved = self._create_mock_subscription(sample_subscription_data)
+        mock_approved.status = SubscriptionStatus.ACTIVE
 
         with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
              patch("src.routers.subscriptions.APIKeyService") as MockKeyService, \
-             patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock):
+             patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock), \
+             patch("src.routers.subscriptions.emit_subscription_approved", new_callable=AsyncMock), \
+             patch("src.routers.subscriptions.provision_on_approval", new_callable=AsyncMock):
 
             # Configure mocks
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
             mock_repo_instance.create = AsyncMock(return_value=mock_sub)
+            # plan_id="basic" is not a valid UUID → auto-approve
+            mock_repo_instance.update_status = AsyncMock(return_value=mock_approved)
 
             MockKeyService.generate_key.return_value = (
                 "stoa_sk_test1234567890abcdef12345678",
@@ -83,6 +88,158 @@ class TestSubscriptionsRouter:
             assert data["api_key"].startswith("stoa_sk_")
             assert "subscription_id" in data
             assert data["api_key_prefix"] == "stoa_sk_tes"
+            assert data["status"] == "active"
+
+    def test_create_subscription_auto_approve_no_plan(
+        self, app_with_tenant_admin, mock_db_session, sample_subscription_data
+    ):
+        """Test subscription without plan_id is auto-approved (CAB-1172)."""
+        mock_sub = self._create_mock_subscription(sample_subscription_data)
+        mock_sub.status = SubscriptionStatus.PENDING
+
+        mock_approved = self._create_mock_subscription(sample_subscription_data)
+        mock_approved.status = SubscriptionStatus.ACTIVE
+
+        with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
+             patch("src.routers.subscriptions.APIKeyService") as MockKeyService, \
+             patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock), \
+             patch("src.routers.subscriptions.emit_subscription_approved", new_callable=AsyncMock), \
+             patch("src.routers.subscriptions.provision_on_approval", new_callable=AsyncMock):
+
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
+            mock_repo_instance.create = AsyncMock(return_value=mock_sub)
+            mock_repo_instance.update_status = AsyncMock(return_value=mock_approved)
+
+            MockKeyService.generate_key.return_value = (
+                "stoa_sk_test1234567890abcdef12345678",
+                "hashed_key_test_123",
+                "stoa_sk_tes",
+            )
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.post(
+                    "/v1/subscriptions",
+                    json={
+                        "application_id": "app-test-123",
+                        "application_name": "Test Application",
+                        "api_id": "api-weather-456",
+                        "api_name": "Weather API",
+                        "api_version": "1.0",
+                        "tenant_id": "acme",
+                    },
+                )
+
+            assert response.status_code == 201
+            data = response.json()
+            assert data["status"] == "active"
+            mock_repo_instance.update_status.assert_called_once()
+
+    def test_create_subscription_auto_approve_plan_no_approval_required(
+        self, app_with_tenant_admin, mock_db_session, sample_subscription_data
+    ):
+        """Test plan with requires_approval=False is auto-approved (CAB-1172)."""
+        mock_sub = self._create_mock_subscription(sample_subscription_data)
+        mock_sub.status = SubscriptionStatus.PENDING
+
+        mock_approved = self._create_mock_subscription(sample_subscription_data)
+        mock_approved.status = SubscriptionStatus.ACTIVE
+
+        mock_plan = MagicMock()
+        mock_plan.requires_approval = False
+        mock_plan.auto_approve_roles = None
+
+        with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
+             patch("src.routers.subscriptions.PlanRepository") as MockPlanRepo, \
+             patch("src.routers.subscriptions.APIKeyService") as MockKeyService, \
+             patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock), \
+             patch("src.routers.subscriptions.emit_subscription_approved", new_callable=AsyncMock), \
+             patch("src.routers.subscriptions.provision_on_approval", new_callable=AsyncMock):
+
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
+            mock_repo_instance.create = AsyncMock(return_value=mock_sub)
+            mock_repo_instance.update_status = AsyncMock(return_value=mock_approved)
+
+            mock_plan_repo_instance = MockPlanRepo.return_value
+            mock_plan_repo_instance.get_by_id = AsyncMock(return_value=mock_plan)
+
+            MockKeyService.generate_key.return_value = (
+                "stoa_sk_test1234567890abcdef12345678",
+                "hashed_key_test_123",
+                "stoa_sk_tes",
+            )
+
+            plan_uuid = str(uuid4())
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.post(
+                    "/v1/subscriptions",
+                    json={
+                        "application_id": "app-test-123",
+                        "application_name": "Test Application",
+                        "api_id": "api-weather-456",
+                        "api_name": "Weather API",
+                        "api_version": "1.0",
+                        "tenant_id": "acme",
+                        "plan_id": plan_uuid,
+                        "plan_name": "Free Plan",
+                    },
+                )
+
+            assert response.status_code == 201
+            data = response.json()
+            assert data["status"] == "active"
+            mock_repo_instance.update_status.assert_called_once()
+
+    def test_create_subscription_pending_plan_requires_approval(
+        self, app_with_tenant_admin, mock_db_session, sample_subscription_data
+    ):
+        """Test plan with requires_approval=True stays PENDING (CAB-1172)."""
+        mock_sub = self._create_mock_subscription(sample_subscription_data)
+        mock_sub.status = SubscriptionStatus.PENDING
+
+        mock_plan = MagicMock()
+        mock_plan.requires_approval = True
+        mock_plan.auto_approve_roles = ["cpi-admin"]  # tenant-admin not in list
+
+        with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
+             patch("src.routers.subscriptions.PlanRepository") as MockPlanRepo, \
+             patch("src.routers.subscriptions.APIKeyService") as MockKeyService, \
+             patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock):
+
+            mock_repo_instance = MockRepo.return_value
+            mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
+            mock_repo_instance.create = AsyncMock(return_value=mock_sub)
+
+            mock_plan_repo_instance = MockPlanRepo.return_value
+            mock_plan_repo_instance.get_by_id = AsyncMock(return_value=mock_plan)
+
+            MockKeyService.generate_key.return_value = (
+                "stoa_sk_test1234567890abcdef12345678",
+                "hashed_key_test_123",
+                "stoa_sk_tes",
+            )
+
+            plan_uuid = str(uuid4())
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.post(
+                    "/v1/subscriptions",
+                    json={
+                        "application_id": "app-test-123",
+                        "application_name": "Test Application",
+                        "api_id": "api-weather-456",
+                        "api_name": "Weather API",
+                        "api_version": "1.0",
+                        "tenant_id": "acme",
+                        "plan_id": plan_uuid,
+                        "plan_name": "Enterprise Plan",
+                    },
+                )
+
+            assert response.status_code == 201
+            data = response.json()
+            assert data["status"] == "pending"
+            mock_repo_instance.update_status.assert_not_called()
 
     def test_create_subscription_duplicate_409(
         self, app_with_tenant_admin, mock_db_session, sample_subscription_data
@@ -700,14 +857,21 @@ class TestSubscriptionsRouter:
     ):
         """Test create succeeds but webhook emission fails gracefully."""
         mock_sub = self._create_mock_subscription(sample_subscription_data)
+        mock_sub.status = SubscriptionStatus.PENDING
+
+        mock_approved = self._create_mock_subscription(sample_subscription_data)
+        mock_approved.status = SubscriptionStatus.ACTIVE
 
         with patch("src.routers.subscriptions.SubscriptionRepository") as MockRepo, \
              patch("src.routers.subscriptions.APIKeyService") as MockKeyService, \
-             patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock) as mock_emit:
+             patch("src.routers.subscriptions.emit_subscription_created", new_callable=AsyncMock) as mock_emit, \
+             patch("src.routers.subscriptions.emit_subscription_approved", new_callable=AsyncMock), \
+             patch("src.routers.subscriptions.provision_on_approval", new_callable=AsyncMock):
 
             mock_repo_instance = MockRepo.return_value
             mock_repo_instance.get_by_application_and_api = AsyncMock(return_value=None)
             mock_repo_instance.create = AsyncMock(return_value=mock_sub)
+            mock_repo_instance.update_status = AsyncMock(return_value=mock_approved)
 
             MockKeyService.generate_key.return_value = (
                 "stoa_sk_test1234567890abcdef12345678",

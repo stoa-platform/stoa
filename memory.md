@@ -62,7 +62,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - CAB-1035: DX Persona Alex test onboarding MCP (2 pts)
 - CAB-353: Go/No-Go Checklist 3 Months
 - Arena k6 Migration L3: ramp-up + CI95 error bars + CPU pinning
-- CAB-1138 Phase 6: Console drift UI (stretch)
+- CAB-1138 Phase 6: Console drift UI — ✅ DONE PR #472 (6 files, 654 LOC, 13 tests)
 
 ## 🚫 BLOCKED
 

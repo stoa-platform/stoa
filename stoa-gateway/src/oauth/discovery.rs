@@ -23,15 +23,19 @@ pub async fn protected_resource_metadata(State(state): State<AppState>) -> Json<
         .as_deref()
         .unwrap_or("http://localhost:8080");
 
-    let keycloak_url = config.keycloak_url.as_deref().unwrap_or("");
-    let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
-    let issuer = format!("{}/realms/{}", keycloak_url.trim_end_matches('/'), realm);
+    // RFC 9728: authorization_servers MUST point to where the client can discover
+    // OAuth metadata via /.well-known/oauth-authorization-server.
+    // We point to the gateway itself (not Keycloak) because:
+    // 1. Gateway serves curated metadata with token_endpoint_auth_methods: ["none"] (public clients)
+    // 2. Gateway proxies token/register endpoints (adding PKCE, Trusted Hosts bypass, etc.)
+    // 3. Keycloak's metadata doesn't advertise "none" auth method, breaking public MCP clients
+    let gateway_url_trimmed = gateway_url.trim_end_matches('/');
 
-    debug!(resource = %gateway_url, issuer = %issuer, "Serving protected resource metadata");
+    debug!(resource = %gateway_url, authorization_server = %gateway_url_trimmed, "Serving protected resource metadata");
 
     Json(json!({
         "resource": gateway_url,
-        "authorization_servers": [issuer],
+        "authorization_servers": [gateway_url_trimmed],
         "scopes_supported": [
             "openid",
             "profile",
@@ -184,6 +188,8 @@ mod tests {
         let Json(meta) = protected_resource_metadata(State(state)).await;
         assert_eq!(meta["resource"], "http://localhost:8080");
         assert!(meta["authorization_servers"].is_array());
+        // authorization_servers points to the gateway itself
+        assert_eq!(meta["authorization_servers"][0], "http://localhost:8080");
         assert!(meta["scopes_supported"].is_array());
         assert_eq!(meta["bearer_methods_supported"][0], "header");
     }
@@ -196,9 +202,11 @@ mod tests {
         );
         let Json(meta) = protected_resource_metadata(State(state)).await;
         assert_eq!(meta["resource"], "https://mcp.gostoa.dev");
+        // RFC 9728: authorization_servers points to the gateway (not Keycloak)
+        // so clients discover our curated metadata with public client support
         assert_eq!(
             meta["authorization_servers"][0],
-            "https://auth.gostoa.dev/realms/test-realm"
+            "https://mcp.gostoa.dev"
         );
     }
 

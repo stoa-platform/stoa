@@ -16,7 +16,7 @@ TARGET_URL=""
 ADMIN_URL=""
 DURATION=30
 CONCURRENCY_LEVELS=(1 10 50 100 500)
-ADMIN_TOKEN="${STOA_ADMIN_TOKEN:-arena-admin-token-2026}"
+ADMIN_TOKEN="${STOA_ADMIN_TOKEN:-${STOA_ADMIN_API_TOKEN:-}}"
 OUTPUT_DIR="./benchmark-results"
 PROXY_PATH="/httpbin/get"
 
@@ -41,7 +41,7 @@ Options:
   --help             Show this help
 
 Environment:
-  STOA_ADMIN_TOKEN   Admin API token (default: arena-admin-token-2026)
+  STOA_ADMIN_TOKEN   Admin API token (from Infisical: prod/gateway/arena/ADMIN_API_TOKEN)
 
 Examples:
   # Local Docker Compose

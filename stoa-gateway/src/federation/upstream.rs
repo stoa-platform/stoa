@@ -278,6 +278,7 @@ fn parse_tool_definition(json: &Value) -> Option<ToolDefinition> {
         },
         output_schema: json.get("outputSchema").cloned(),
         annotations: None, // TODO: Parse annotations from upstream
+        tenant_id: None,   // Upstream tools are global
     })
 }
 

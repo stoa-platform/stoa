@@ -150,6 +150,9 @@ pub struct ToolDefinition {
     /// Tool behavior hints for clients (MCP 2025-03-26)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<ToolAnnotations>,
+    /// Owning tenant (None = global tool visible to all tenants)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
 }
 
 /// Result of tool execution
@@ -243,6 +246,7 @@ pub trait Tool: Send + Sync {
             input_schema: self.input_schema(),
             output_schema: self.output_schema(),
             annotations: Some(annotations),
+            tenant_id: None, // Tools are global by default; set per-tenant via admin API
         }
     }
 }
@@ -291,10 +295,26 @@ impl ToolRegistry {
         self.tools.read().get(name).cloned()
     }
 
-    /// List all tools (optionally filtered by tenant)
-    pub fn list(&self, _tenant_id: Option<&str>) -> Vec<ToolDefinition> {
-        // TODO: Add tenant filtering based on subscriptions
-        self.tools.read().values().map(|t| t.definition()).collect()
+    /// List all tools, optionally filtered by tenant.
+    ///
+    /// When `tenant_id` is Some, returns:
+    /// - Global tools (tenant_id = None in definition)
+    /// - Tenant-specific tools whose tenant_id matches
+    ///
+    /// When `tenant_id` is None, returns all tools.
+    pub fn list(&self, tenant_id: Option<&str>) -> Vec<ToolDefinition> {
+        self.tools
+            .read()
+            .values()
+            .map(|t| t.definition())
+            .filter(|def| match tenant_id {
+                None => true, // No filter: return all
+                Some(tid) => match &def.tenant_id {
+                    None => true,        // Global tool: visible to all
+                    Some(t) => t == tid, // Tenant tool: must match
+                },
+            })
+            .collect()
     }
 
     /// Get tool count
@@ -592,5 +612,46 @@ mod tests {
         let names = registry.names();
         assert_eq!(names.len(), 1);
         assert!(names.contains(&"stoa_create_api".to_string()));
+    }
+
+    // === Tenant Filtering Tests (CAB-1250) ===
+
+    #[test]
+    fn test_list_no_filter_returns_all() {
+        let registry = ToolRegistry::new();
+        let tool = Arc::new(StoaCreateApiTool::new(
+            Arc::new(()),
+            Arc::new(()),
+            Arc::new(()),
+        ));
+        registry.register(tool);
+        // No tenant filter → returns all
+        let tools = registry.list(None);
+        assert_eq!(tools.len(), 1);
+    }
+
+    #[test]
+    fn test_list_global_tool_visible_to_all_tenants() {
+        let registry = ToolRegistry::new();
+        // StoaCreateApiTool has no tenant_id override → global tool (tenant_id = None)
+        let tool = Arc::new(StoaCreateApiTool::new(
+            Arc::new(()),
+            Arc::new(()),
+            Arc::new(()),
+        ));
+        registry.register(tool);
+
+        // Any tenant should see global tools
+        let tools = registry.list(Some("acme"));
+        assert_eq!(tools.len(), 1);
+        let tools = registry.list(Some("other-tenant"));
+        assert_eq!(tools.len(), 1);
+    }
+
+    #[test]
+    fn test_tool_definition_tenant_id_none_by_default() {
+        let tool = StoaCreateApiTool::new(Arc::new(()), Arc::new(()), Arc::new(()));
+        let def = tool.definition();
+        assert!(def.tenant_id.is_none());
     }
 }

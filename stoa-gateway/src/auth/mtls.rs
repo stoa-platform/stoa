@@ -598,6 +598,66 @@ pub fn verify_binding(
 }
 
 // =============================================================================
+// Stage 3 Middleware: Certificate-Token Binding Verification (RFC 8705)
+// =============================================================================
+
+/// Extract cnf.x5t#S256 from a raw JWT token (base64 decode only, no signature check).
+fn extract_cnf_from_jwt(token: &str) -> Option<String> {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let bytes = URL_SAFE_NO_PAD.decode(parts[1]).ok()?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    value
+        .get("cnf")?
+        .get("x5t#S256")?
+        .as_str()
+        .map(|s| s.to_string())
+}
+
+/// Middleware: verify RFC 8705 certificate-token binding.
+///
+/// Runs after Stage 1 (extraction). Compares cert fingerprint from X-SSL-* headers
+/// with cnf.x5t#S256 from the JWT. Returns 403 on mismatch (stolen token detection).
+pub async fn mtls_binding_middleware(
+    config: MtlsConfig,
+    stats: std::sync::Arc<MtlsStats>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    if !config.enabled || !config.require_binding {
+        return next.run(request).await;
+    }
+
+    // Check if cert info was extracted by Stage 1
+    let cert_info = request.extensions().get::<ClientCertInfo>().cloned();
+    let Some(cert) = cert_info else {
+        // No cert: Stage 1 already handled (passed for non-required routes, rejected for required)
+        return next.run(request).await;
+    };
+
+    // Extract cnf from JWT Authorization header
+    let cnf_thumbprint = request
+        .headers()
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|auth| auth.strip_prefix("Bearer "))
+        .and_then(extract_cnf_from_jwt);
+
+    if let Err(err) = verify_binding(
+        &cert,
+        cnf_thumbprint.as_deref(),
+        config.require_binding,
+        &stats,
+    ) {
+        return err.into_response();
+    }
+
+    next.run(request).await
+}
+
+// =============================================================================
 // Forward Headers (downstream)
 // =============================================================================
 

@@ -53,6 +53,9 @@ const GatewayModes = lazy(() =>
 const GatewayDeployments = lazy(() =>
   import('./pages/GatewayDeployments').then((m) => ({ default: m.GatewayDeploymentsDashboard }))
 );
+const DriftDetection = lazy(() =>
+  import('./pages/DriftDetection').then((m) => ({ default: m.DriftDetection }))
+);
 const GatewayObservability = lazy(() =>
   import('./pages/GatewayObservability').then((m) => ({ default: m.GatewayObservabilityDashboard }))
 );
@@ -354,6 +357,7 @@ function ProtectedRoutes() {
                 <Route path="/gateways/modes" element={<GatewayModes />} />
                 <Route path="/gateways" element={<GatewayRegistry />} />
                 <Route path="/gateway-deployments" element={<GatewayDeployments />} />
+                <Route path="/drift" element={<DriftDetection />} />
                 <Route path="/gateway-observability" element={<GatewayObservability />} />
                 <Route path="/operations" element={<OperationsDashboard />} />
                 <Route path="/my-usage" element={<TenantDashboard />} />

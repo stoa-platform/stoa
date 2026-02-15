@@ -18,6 +18,7 @@ const routeLabels: Record<string, string> = {
   gateway: 'Gateway',
   gateways: 'Gateway Registry',
   'gateway-deployments': 'Gateway Deployments',
+  drift: 'Drift Detection',
   'gateway-observability': 'Observability',
   applications: 'Applications',
   deployments: 'Deployments',

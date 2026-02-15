@@ -1,0 +1,185 @@
+# Level 2: Claude Code Scheduled Tasks — autonomous daily/weekly maintenance
+# Runs Claude on a schedule for triage, sync, audit, and health checks.
+# Each task posts results to Slack.
+
+name: Claude Code Scheduled Tasks
+
+on:
+  schedule:
+    # Daily 07:00 UTC — Issue triage + plan sync
+    - cron: "0 7 * * *"
+    # Daily 21:00 UTC — CI health check + auto-fix
+    - cron: "0 21 * * *"
+    # Weekly Monday 08:00 UTC — Dependency audit + rule improvement
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Task to run"
+        required: true
+        type: choice
+        options:
+          - daily-triage
+          - daily-ci-health
+          - weekly-audit
+          - weekly-digest
+          - self-improve
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  # ----- Daily: Issue Triage + Plan Sync -----
+  daily-triage:
+    if: |
+      (github.event.schedule == '0 7 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'daily-triage')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Daily triage task. Analyze the repository state:
+
+            1. List all open issues — label unlabeled ones (bug, feature, docs, chore)
+            2. Check open PRs — flag stale ones (>3 days without activity)
+            3. Read plan.md — identify any drift from Linear cycle
+            4. Read memory.md — check for stale IN_PROGRESS items
+            5. Generate a summary comment on the most recent open issue tagged "daily-digest"
+               or create a new issue titled "Daily Digest — YYYY-MM-DD" with tag "daily-digest"
+
+            Post the digest as an issue comment with:
+            - Open issues count + new since yesterday
+            - Open PRs count + stale PRs
+            - Plan drift: any [~] items that should be [x] or vice versa
+            - Recommendations: top 3 priorities for today
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d '{"text":":sunrise: *Daily Triage Complete* — check GitHub issues for digest"}'
+
+  # ----- Daily: CI Health Check + Auto-Fix -----
+  daily-ci-health:
+    if: |
+      (github.event.schedule == '0 21 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'daily-ci-health')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            CI Health Check task. Analyze recent CI runs on main:
+
+            1. Run: gh run list --branch main --limit 10 --json status,conclusion,name
+            2. Identify any failed workflows in the last 24h
+            3. For each failure:
+               a. Read the logs: gh run view <id> --log-failed
+               b. Diagnose the root cause
+               c. If auto-fixable (lint, format, type error): create a fix PR
+               d. If not auto-fixable: create an issue labeled "ci-failure" with diagnosis
+            4. Check if any required checks are flaky (passed then failed or vice versa)
+
+            Report summary format:
+            - Total runs: X, Passed: Y, Failed: Z
+            - Auto-fixed: N (PR #xxx)
+            - Needs human: M (issues created)
+            - Flaky checks: [list]
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d '{"text":":stethoscope: *CI Health Check Complete* — check GitHub for results"}'
+
+  # ----- Weekly: Dependency Audit + Security -----
+  weekly-audit:
+    if: |
+      (github.event.schedule == '0 8 * * 1') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-audit')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Weekly audit task:
+
+            1. Dependency audit:
+               - Run pip-audit in control-plane-api/ and stoa-operator/
+               - Run npm audit in control-plane-ui/ and portal/
+               - Run cargo audit in stoa-gateway/ (if cargo-audit is available)
+               - For each vulnerability found: assess severity, check if fix exists
+
+            2. If safe upgrades are available (patch/minor, no breaking):
+               - Create a single PR with all safe upgrades
+               - Title: "chore(deps): weekly dependency update YYYY-MM-DD"
+               - Run quality gates before committing
+
+            3. Coverage check:
+               - Read coverage thresholds from ci-quality-gates.md
+               - Run test suites and check if coverage dropped
+               - If dropped: create issue with "coverage-drop" label
+
+            4. Stale branch cleanup:
+               - List branches older than 14 days
+               - Report which ones can be safely deleted
+
+            Generate a weekly report as a GitHub issue titled
+            "Weekly Audit — YYYY-MM-DD" with label "weekly-audit".
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 20"
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d '{"text":":shield: *Weekly Audit Complete* — check GitHub issues for full report"}'
+
+  # ----- Weekly Digest -----
+  weekly-digest:
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-digest')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Generate a weekly digest of the STOA AI Factory:
+
+            1. Read memory.md — extract all DONE items from this week
+            2. Read plan.md — calculate cycle progress (% done)
+            3. Count PRs merged this week: gh pr list --state merged --base main --json number,title,mergedAt
+            4. Count issues closed: gh issue list --state closed --json number,title,closedAt
+            5. Read metrics.log if it exists — extract PR-MERGED and CI-FIX counts
+
+            Format as a Slack-friendly summary and post it.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5"

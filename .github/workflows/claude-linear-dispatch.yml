@@ -1,0 +1,109 @@
+# Level 3: Linear → n8n → GitHub Actions → Council → Claude → PR
+# Receives repository_dispatch from n8n when a Linear ticket moves to "In Progress".
+# Runs Council validation, posts to Slack, waits for /go before implementing.
+
+name: Claude Code Linear Dispatch
+
+on:
+  repository_dispatch:
+    types: [linear-ticket-started]
+
+concurrency:
+  group: claude-linear-${{ github.event.client_payload.ticket_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  # ----- Phase 1: Council Gate -----
+  council:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Council Validation
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            A Linear ticket has been moved to "In Progress" and dispatched for autonomous implementation.
+
+            Ticket: ${{ github.event.client_payload.ticket_id }}
+            Title: ${{ github.event.client_payload.ticket_title }}
+            Description: ${{ github.event.client_payload.ticket_description }}
+            Priority: ${{ github.event.client_payload.ticket_priority }}
+            Estimate: ${{ github.event.client_payload.ticket_estimate }} pts
+
+            Run a full 4-persona Council validation:
+            1. Chucky (Devil's Advocate) — risk, complexity, edge cases
+            2. OSS Killer (VC Skeptique) — value, differentiation, ROI
+            3. Archi 50x50 (Architecte Veteran) — architecture, patterns, debt
+            4. Better Call Saul (Legal/IP) — security, compliance, licenses
+
+            Score each /10, compute average.
+            Produce an implementation plan (files, LOC estimate, phases).
+            Classify as Ship/Show/Ask.
+
+            Create a GitHub issue titled:
+            "Council: ${{ github.event.client_payload.ticket_id }} — ${{ github.event.client_payload.ticket_title }}"
+
+            With labels: council-review, ${{ github.event.client_payload.ticket_id }}
+
+            The issue body MUST contain:
+            1. Full Council report (4 personas)
+            2. Implementation plan
+            3. Ship/Show/Ask classification
+            4. Instructions: "Comment `/go` to start implementation"
+
+            Include a **Binary DoD** (Definition of Done) checklist:
+            - [ ] All modified files listed in plan
+            - [ ] Each change independently testable
+            - [ ] Total LOC < 300 (or split into micro-PRs)
+            - [ ] No new `any` types, `todo!()`, or `// TODO`
+            - [ ] Component quality gate passes
+            - [ ] CI green
+            - [ ] State files updated (memory.md, plan.md)
+
+            Do NOT implement anything. Only validate and plan.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
+
+      # Post Council report to Slack
+      - name: Slack Council Report
+        if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          TICKET="${{ github.event.client_payload.ticket_id }}"
+          TITLE="${{ github.event.client_payload.ticket_title }}"
+          REPO_URL="https://github.com/stoa-platform/stoa/issues?q=is%3Aissue+label%3A${TICKET}+is%3Aopen"
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"blocks\": [
+                {
+                  \"type\": \"header\",
+                  \"text\": {\"type\": \"plain_text\", \"text\": \"Council Report: ${TICKET}\", \"emoji\": true}
+                },
+                {
+                  \"type\": \"section\",
+                  \"text\": {
+                    \"type\": \"mrkdwn\",
+                    \"text\": \"*${TITLE}*\n\nCouncil validation complete. Review the implementation plan and approve.\n\n:point_right: Comment \`/go\` on the GitHub issue to start autonomous implementation.\n:point_right: Comment \`/adjust <feedback>\` to request changes.\"
+                  },
+                  \"accessory\": {
+                    \"type\": \"button\",
+                    \"text\": {\"type\": \"plain_text\", \"text\": \"Review & Approve\"},
+                    \"url\": \"${REPO_URL}\"
+                  }
+                },
+                {
+                  \"type\": \"context\",
+                  \"elements\": [{\"type\": \"mrkdwn\", \"text\": \"STOA AI Factory | Linear Pipeline | $(date -u +%H:%M) UTC\"}]
+                }
+              ]
+            }"

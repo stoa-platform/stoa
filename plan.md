@@ -70,7 +70,7 @@ Focus: Intégration, script démo, répétitions
 - [x] CAB-1134: ADR-040 Born GitOps (5 pts) — DONE (stoa-docs PR #17, ADR published)
 - [x] CAB-1138: GitOps Operator P1-P6 (21 pts) — DONE (PRs #415, #418, #442-#446, #454, #472, deployed 0.3.0)
   - P6: Console Drift Detection UI — PR #472 merged (6 files, 13 tests, /drift page)
-- [ ] CAB-1030: Kit onboarding Cédric (privé)
+- [x] CAB-1030: Admin Guide & Onboarding Ops Ready (13 pts) — DONE (stoa PR #475, stoa-strategy PR #1)
 - [ ] CAB-353: Go/No-Go Checklist
 - [x] Arena k6 Migration L1+L2 (PRs #438, #444, #447, #449) — DONE
 - [ ] Arena k6 Migration L3: ramp-up + CI95 error bars + CPU pinning

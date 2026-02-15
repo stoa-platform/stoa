@@ -37,6 +37,7 @@
 //! - **AWS API Gateway**: Lambda authorizer format
 
 use super::{DecisionFormat, SidecarSettings};
+use crate::quota::ConsumerRateLimiter;
 use axum::{
     body::Body,
     extract::State,
@@ -255,16 +256,34 @@ impl AuthzResponse {
 pub struct SidecarService {
     /// Configuration
     settings: SidecarSettings,
-    // TODO: Add these when wiring up:
-    // policy_engine: Arc<PolicyEngine>,
-    // rate_limiter: Arc<RateLimiter>,
-    // metrics: Arc<SidecarMetrics>,
+
+    /// Optional consumer rate limiter (wired from AppState)
+    rate_limiter: Option<Arc<ConsumerRateLimiter>>,
+
+    /// Required scopes for authorization (if set, user must have at least one)
+    required_scopes: Vec<String>,
 }
 
 impl SidecarService {
-    /// Create a new sidecar service
+    /// Create a new sidecar service (backward-compatible, no services wired)
     pub fn new(settings: SidecarSettings) -> Self {
-        Self { settings }
+        Self {
+            settings,
+            rate_limiter: None,
+            required_scopes: Vec::new(),
+        }
+    }
+
+    /// Attach a consumer rate limiter
+    pub fn with_rate_limiter(mut self, limiter: Arc<ConsumerRateLimiter>) -> Self {
+        self.rate_limiter = Some(limiter);
+        self
+    }
+
+    /// Set required scopes for authorization
+    pub fn with_required_scopes(mut self, scopes: Vec<String>) -> Self {
+        self.required_scopes = scopes;
+        self
     }
 
     /// Handle authorization request
@@ -298,25 +317,43 @@ impl SidecarService {
             }
         };
 
-        // 3. Check rate limit (placeholder)
-        // let rate_limit_result = self.rate_limiter.check(tenant_id, &user.id).await;
-        // if let Some(state) = rate_limit_result.exceeded() {
-        //     return AuthzResponse::rate_limited(state);
-        // }
+        // 3. Check rate limit (if rate limiter is wired)
+        if let Some(ref limiter) = self.rate_limiter {
+            let consumer_key = format!("{}:{}", tenant_id, user.id);
+            if let Err(e) = limiter.check_rate_limit(&consumer_key) {
+                warn!(
+                    request_id = %request_id,
+                    consumer = %consumer_key,
+                    error = %e,
+                    "Rate limit exceeded"
+                );
+                return AuthzResponse::rate_limited(RateLimitState {
+                    current: 0,
+                    limit: 0,
+                    reset_at: 0,
+                    remaining: 0,
+                })
+                .with_policy("consumer_rate_limit");
+            }
+        }
 
-        // 4. Evaluate OPA policy (placeholder)
-        // let policy_input = PolicyInput {
-        //     user: user.clone(),
-        //     tenant_id: tenant_id.clone(),
-        //     method: request.method.clone(),
-        //     path: request.path.clone(),
-        //     scopes: user.scopes.clone(),
-        // };
-        // let policy_result = self.policy_engine.evaluate(&policy_input).await;
-        // if !policy_result.allowed {
-        //     return AuthzResponse::deny(policy_result.reason)
-        //         .with_policy(policy_result.policy_name);
-        // }
+        // 4. Check required scopes (if configured)
+        if !self.required_scopes.is_empty() {
+            let has_scope = self.required_scopes.iter().any(|s| user.scopes.contains(s));
+            if !has_scope {
+                warn!(
+                    request_id = %request_id,
+                    user_scopes = ?user.scopes,
+                    required = ?self.required_scopes,
+                    "Insufficient scopes"
+                );
+                return AuthzResponse::deny(format!(
+                    "Insufficient scopes: requires one of [{}]",
+                    self.required_scopes.join(", ")
+                ))
+                .with_policy("scope_enforcement");
+            }
+        }
 
         let evaluation_time = start.elapsed().as_micros() as u64;
 
@@ -755,5 +792,143 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(health());
         assert_eq!(result, "OK");
+    }
+
+    // === Rate limiter integration tests ===
+
+    #[tokio::test]
+    async fn test_authorize_rate_limited_by_consumer_limiter() {
+        use crate::quota::{ConsumerRateLimiter, PlanQuota, RateLimiterConfig};
+
+        let limiter = Arc::new(ConsumerRateLimiter::new(RateLimiterConfig {
+            default_rate_per_minute: 1,
+            ..Default::default()
+        }));
+        // Set a quota of 1 req/min for the consumer
+        limiter.set_plan_quota(
+            "acme:user-456",
+            PlanQuota {
+                rate_limit_per_minute: 1,
+                ..Default::default()
+            },
+        );
+
+        let service = SidecarService::new(SidecarSettings {
+            decision_format: DecisionFormat::JsonBody,
+            ..Default::default()
+        })
+        .with_rate_limiter(limiter);
+
+        let user = make_user(vec!["admin"], vec!["read"]);
+
+        // First request: allowed
+        let req1 = make_authz_request(Some(user.clone()), Some("acme"));
+        let resp1 = service.authorize(req1).await;
+        assert!(resp1.allowed);
+
+        // Second request: rate limited
+        let req2 = make_authz_request(Some(user), Some("acme"));
+        let resp2 = service.authorize(req2).await;
+        assert!(!resp2.allowed);
+        assert_eq!(resp2.status_code, Some(429));
+        assert_eq!(
+            resp2.denied_by_policy,
+            Some("consumer_rate_limit".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_authorize_no_rate_limiter_allows() {
+        let service = make_sidecar(DecisionFormat::JsonBody);
+        let user = make_user(vec!["admin"], vec!["read"]);
+        let request = make_authz_request(Some(user), Some("acme"));
+
+        let response = service.authorize(request).await;
+        assert!(response.allowed);
+    }
+
+    // === Scope enforcement tests ===
+
+    #[tokio::test]
+    async fn test_authorize_scope_denied() {
+        let service = SidecarService::new(SidecarSettings {
+            decision_format: DecisionFormat::JsonBody,
+            ..Default::default()
+        })
+        .with_required_scopes(vec!["stoa:admin".to_string()]);
+
+        let user = make_user(vec!["viewer"], vec!["stoa:read"]);
+        let request = make_authz_request(Some(user), Some("acme"));
+
+        let response = service.authorize(request).await;
+        assert!(!response.allowed);
+        assert_eq!(response.status_code, Some(403));
+        assert_eq!(
+            response.denied_by_policy,
+            Some("scope_enforcement".to_string())
+        );
+        assert!(response
+            .denial_reason
+            .as_ref()
+            .unwrap()
+            .contains("stoa:admin"));
+    }
+
+    #[tokio::test]
+    async fn test_authorize_scope_allowed() {
+        let service = SidecarService::new(SidecarSettings {
+            decision_format: DecisionFormat::JsonBody,
+            ..Default::default()
+        })
+        .with_required_scopes(vec!["stoa:read".to_string(), "stoa:write".to_string()]);
+
+        let user = make_user(vec!["devops"], vec!["stoa:write"]);
+        let request = make_authz_request(Some(user), Some("acme"));
+
+        let response = service.authorize(request).await;
+        assert!(response.allowed);
+    }
+
+    #[tokio::test]
+    async fn test_authorize_no_required_scopes_allows_all() {
+        let service = make_sidecar(DecisionFormat::JsonBody);
+        let user = make_user(vec![], vec![]);
+        let request = make_authz_request(Some(user), Some("acme"));
+
+        let response = service.authorize(request).await;
+        assert!(response.allowed);
+    }
+
+    #[tokio::test]
+    async fn test_authorize_combined_rate_limit_and_scope() {
+        use crate::quota::{ConsumerRateLimiter, RateLimiterConfig};
+
+        let limiter = Arc::new(ConsumerRateLimiter::new(RateLimiterConfig {
+            default_rate_per_minute: 100,
+            ..Default::default()
+        }));
+
+        let service = SidecarService::new(SidecarSettings {
+            decision_format: DecisionFormat::JsonBody,
+            ..Default::default()
+        })
+        .with_rate_limiter(limiter)
+        .with_required_scopes(vec!["stoa:read".to_string()]);
+
+        // User with correct scope: allowed
+        let user_ok = make_user(vec!["viewer"], vec!["stoa:read"]);
+        let req = make_authz_request(Some(user_ok), Some("acme"));
+        let resp = service.authorize(req).await;
+        assert!(resp.allowed);
+
+        // User without scope: denied by scope enforcement
+        let user_no_scope = make_user(vec!["viewer"], vec!["other:scope"]);
+        let req2 = make_authz_request(Some(user_no_scope), Some("acme"));
+        let resp2 = service.authorize(req2).await;
+        assert!(!resp2.allowed);
+        assert_eq!(
+            resp2.denied_by_policy,
+            Some("scope_enforcement".to_string())
+        );
     }
 }

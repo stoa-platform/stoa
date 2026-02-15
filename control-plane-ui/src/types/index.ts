@@ -829,6 +829,103 @@ export interface ProspectsFilters {
 }
 
 // =============================================================================
+// Backend API Types (CAB-1188 — SaaS Self-Service)
+// =============================================================================
+
+export type BackendApiAuthType = 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth2_cc';
+export type BackendApiStatus = 'draft' | 'active' | 'disabled';
+
+export interface BackendApi {
+  id: string;
+  tenant_id: string;
+  name: string;
+  display_name: string | null;
+  description: string | null;
+  backend_url: string;
+  openapi_spec_url: string | null;
+  auth_type: BackendApiAuthType;
+  has_credentials: boolean;
+  status: BackendApiStatus;
+  tool_count: number;
+  spec_hash: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface BackendApiCreate {
+  name: string;
+  display_name?: string;
+  description?: string;
+  backend_url: string;
+  openapi_spec_url?: string;
+  auth_type: BackendApiAuthType;
+  auth_config?: Record<string, string>;
+}
+
+export interface BackendApiUpdate {
+  display_name?: string;
+  description?: string;
+  backend_url?: string;
+  openapi_spec_url?: string;
+  auth_type?: BackendApiAuthType;
+  auth_config?: Record<string, string>;
+  status?: BackendApiStatus;
+}
+
+export interface BackendApiListResponse {
+  items: BackendApi[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// =============================================================================
+// Scoped API Key Types (CAB-1188 — SaaS Self-Service)
+// =============================================================================
+
+export type SaasApiKeyStatus = 'active' | 'revoked' | 'expired';
+
+export interface SaasApiKey {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  key_prefix: string;
+  allowed_backend_api_ids: string[];
+  rate_limit_rpm: number | null;
+  status: SaasApiKeyStatus;
+  created_at: string;
+  updated_at: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_by: string | null;
+}
+
+export interface SaasApiKeyCreate {
+  name: string;
+  description?: string;
+  allowed_backend_api_ids: string[];
+  rate_limit_rpm?: number;
+  expires_at?: string;
+}
+
+export interface SaasApiKeyCreatedResponse {
+  id: string;
+  name: string;
+  key: string;
+  key_prefix: string;
+}
+
+export interface SaasApiKeyListResponse {
+  items: SaasApiKey[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// =============================================================================
 // Gateway Instance Types (Control Plane Agnostique)
 // =============================================================================
 

@@ -45,6 +45,7 @@ import {
   Check,
   Lock,
   Users,
+  KeyRound,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -128,6 +129,23 @@ const navigationSections: NavSection[] = [
         icon: Users,
         permission: 'consumers:read',
         shortcut: ['g', 'c'],
+      },
+    ],
+  },
+  {
+    title: 'SaaS',
+    items: [
+      {
+        name: 'Backend APIs',
+        href: '/backend-apis',
+        icon: Server,
+        permission: 'apis:read',
+      },
+      {
+        name: 'API Keys',
+        href: '/saas-api-keys',
+        icon: KeyRound,
+        permission: 'apis:read',
       },
     ],
   },

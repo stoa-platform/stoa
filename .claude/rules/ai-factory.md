@@ -14,6 +14,21 @@ description: Multi-agent workflow patterns, subagent delegation, cost awareness,
 | `docs-writer` | sonnet | Read, Grep, Glob, Write, Edit | ADRs, guides, runbooks, memory updates |
 | `content-reviewer` | sonnet | Read, Grep, Glob, Bash (RO) | Audit contenu public: concurrents, prix, clients, reglementations |
 
+## MCP Integrations (Claude.ai Native)
+
+External services connected via Claude.ai MCP servers — no local config needed.
+Full reference: `.claude/rules/mcp-integrations.md`
+
+| Service | Key Actions | When |
+|---------|-------------|------|
+| **Linear** | `get_issue`, `update_issue`, `create_comment` | Session start (fetch DoD), PR merge (close ticket), blocked (update status) |
+| **Cloudflare** | `search_cloudflare_documentation` | DNS troubleshooting, Cloudflare docs |
+| **Vercel** | `list_deployments`, `get_deployment_build_logs` | stoa-web/stoa-docs deploy verification |
+| **Notion** | `notion-search`, `notion-fetch` | Cross-workspace knowledge search |
+| **n8n** | `execute_workflow` | Trigger automation workflows |
+
+**Rule**: Use MCP for **state changes** (Linear status, Vercel deploy check). Use local files for **context** (memory.md, plan.md, CLAUDE.md). MCP calls are free but add latency — batch reads, minimize writes.
+
 ## Cost Awareness
 
 | Task Type | Model | Rationale |

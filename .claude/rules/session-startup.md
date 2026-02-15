@@ -40,6 +40,11 @@ Private memory (`~/.claude/projects/.../memory/MEMORY.md`) is auto-loaded by Cla
 2. If no active tickets → check `plan.md` for NEXT/PENDING items
 3. If user says "what next?" → summarize what's available, recommend highest priority
 4. If user gives a specific task → use that (skip queue)
+5. If task has **CAB-XXXX** ID → fetch from Linear MCP for full DoD + description:
+   ```
+   linear.get_issue("CAB-XXXX", includeRelations=true)
+   ```
+   This replaces manually copying ticket details from the browser.
 
 ## Step 3 — Context Budget
 
@@ -60,13 +65,17 @@ Follow the appropriate pattern from `ai-factory.md` (Pattern 3/5/7 for features,
 
 1. Update `memory.md` with results (PR merged, decisions, issues found)
 2. Update `plan.md` if task status changed
-3. **Learning loop**: if a CI failure, bug, or gotcha was encountered during this session:
+3. **Linear MCP sync** (if task has CAB-XXXX ID):
+   - PR merged → `linear.update_issue(status="Done")` + `linear.create_comment` with PR link
+   - Blocked → `linear.update_issue(status="Blocked")` + comment with reason
+   - Paused → leave as "In Progress" (no change needed)
+4. **Learning loop**: if a CI failure, bug, or gotcha was encountered during this session:
    - Check if it's already in `~/.claude/projects/.../memory/gotchas.md`
    - If not → add it (one-liner: trigger, fix, prevention)
    - If it's a recurring pattern (seen 2+ times) → add to `.claude/rules/` as a permanent rule
-4. **Log session end**:
+5. **Log session end**:
    Append `SESSION-END | task=<TASK> status=<success|paused> pr=<NUMBER>` to operations.log
-5. **Clean old checkpoints** (older than 7 days):
+6. **Clean old checkpoints** (older than 7 days):
    Delete `.json` files in `checkpoints/` with mtime > 7d
 
 ## Quick Reference

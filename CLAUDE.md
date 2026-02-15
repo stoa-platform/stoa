@@ -77,8 +77,20 @@ Gateway: Rust (primary, replaced Python MCP Gateway Feb 2026). 4 modes (ADR-024)
 | `docs-writer` | ADRs, guides, runbooks, memory | No Bash |
 | `content-reviewer` | Contenu public, concurrents, compliance | Read-only (plan) |
 
+### MCP Integrations (Claude.ai Native)
+| Service | Use For | Key Actions |
+|---------|---------|-------------|
+| **Linear** | Ticket lifecycle | `get_issue` (DoD), `update_issue` (Done), `create_comment` (PR link) |
+| **Cloudflare** | DNS, Workers, KV | `search_cloudflare_documentation` |
+| **Vercel** | stoa-web/docs deploys | `list_deployments`, `get_deployment_build_logs` |
+| **Notion** | Knowledge search | `notion-search`, `notion-fetch` |
+| **n8n** | Workflow automation | `execute_workflow` |
+
+Full reference: `.claude/rules/mcp-integrations.md`
+
 ### Rules (`.claude/rules/`)
 Key rules for AI Factory workflow:
+- `mcp-integrations.md` — Linear, Cloudflare, Vercel, Notion, n8n MCP usage patterns
 - `seo-content.md` — SEO content generation, blog templates, hub & spoke model, editorial calendar integration
 
 ### Skills (`.claude/skills/`)

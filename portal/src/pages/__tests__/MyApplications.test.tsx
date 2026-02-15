@@ -5,7 +5,12 @@
  */
 
 import { screen, waitFor } from '@testing-library/react';
-import { renderWithProviders, createAuthMock, mockApplication, type PersonaRole } from '../../test/helpers';
+import {
+  renderWithProviders,
+  createAuthMock,
+  mockApplication,
+  type PersonaRole,
+} from '../../test/helpers';
 import { MyApplications } from '../apps/MyApplications';
 
 // Mock AuthContext at module level

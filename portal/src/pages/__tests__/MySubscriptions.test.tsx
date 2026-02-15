@@ -5,7 +5,12 @@
  */
 
 import { screen, waitFor } from '@testing-library/react';
-import { renderWithProviders, createAuthMock, mockServerSubscription, type PersonaRole } from '../../test/helpers';
+import {
+  renderWithProviders,
+  createAuthMock,
+  mockServerSubscription,
+  type PersonaRole,
+} from '../../test/helpers';
 import { MySubscriptions } from '../subscriptions/MySubscriptions';
 
 // Mock AuthContext at module level
@@ -46,7 +51,11 @@ vi.mock('../../hooks/useSubscriptions', () => ({
 // Mock shared components
 vi.mock('@stoa/shared/components/ConfirmDialog', () => ({
   ConfirmDialog: ({ open, onCancel }: { open: boolean; onCancel: () => void }) =>
-    open ? <div data-testid="confirm-dialog"><button onClick={onCancel}>Cancel</button></div> : null,
+    open ? (
+      <div data-testid="confirm-dialog">
+        <button onClick={onCancel}>Cancel</button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('@stoa/shared/components/Toast', () => ({
@@ -59,17 +68,29 @@ vi.mock('@stoa/shared/components/Toast', () => ({
 // Mock subscription components
 vi.mock('../../components/subscriptions/RevealKeyModal', () => ({
   RevealKeyModal: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? <div data-testid="reveal-key-modal"><button onClick={onClose}>Close</button></div> : null,
+    isOpen ? (
+      <div data-testid="reveal-key-modal">
+        <button onClick={onClose}>Close</button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('../../components/subscriptions/RotateKeyModal', () => ({
   RotateKeyModal: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? <div data-testid="rotate-key-modal"><button onClick={onClose}>Close</button></div> : null,
+    isOpen ? (
+      <div data-testid="rotate-key-modal">
+        <button onClick={onClose}>Close</button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('../../components/subscriptions/ExportConfigModal', () => ({
   ExportConfigModal: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? <div data-testid="export-config-modal"><button onClick={onClose}>Close</button></div> : null,
+    isOpen ? (
+      <div data-testid="export-config-modal">
+        <button onClick={onClose}>Close</button>
+      </div>
+    ) : null,
 }));
 
 // Mock skeletons

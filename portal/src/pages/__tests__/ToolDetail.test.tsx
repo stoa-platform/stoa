@@ -59,7 +59,11 @@ vi.mock('../../services/tools', () => ({
 // Mock tool components
 vi.mock('../../components/tools', () => ({
   SubscribeToToolModal: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? <div data-testid="subscribe-modal"><button onClick={onClose}>Close</button></div> : null,
+    isOpen ? (
+      <div data-testid="subscribe-modal">
+        <button onClick={onClose}>Close</button>
+      </div>
+    ) : null,
   SchemaViewer: ({ schema }: { schema: unknown }) => (
     <div data-testid="schema-viewer">{JSON.stringify(schema)}</div>
   ),
@@ -72,7 +76,11 @@ vi.mock('../../components/tools', () => ({
 // Mock subscriptions components
 vi.mock('../../components/subscriptions/ApiKeyModal', () => ({
   ApiKeyModal: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? <div data-testid="api-key-modal"><button onClick={onClose}>Close</button></div> : null,
+    isOpen ? (
+      <div data-testid="api-key-modal">
+        <button onClick={onClose}>Close</button>
+      </div>
+    ) : null,
 }));
 
 // Mock config

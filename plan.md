@@ -34,7 +34,7 @@
 - [ ] CAB-708: Fallback Chain — Resilience multi-provider (3 pts, P2)
 - [ ] CAB-362: GW2-10 Circuit Breaker + Session Management (5 pts, P2) — deferred post-demo
 
-### Done (29 issues)
+### Done (30 issues)
 
 - [x] CAB-1121: Consumer Onboarding & Token Exchange (35 pts) — PR #423 + E2E PR #450
 - [x] CAB-1137: OpenAPI → MCP Auto-Bridge (8 pts) — stoactl PR #6, stoa PR #436
@@ -51,6 +51,7 @@
 - [x] CAB-1135: AWS Decommissioning (P2) — OVH+Hetzner live, 92% cost reduction
 - [x] CAB-1166: 4-Persona Test Parity (29 pts) — PRs #467, #468
 - [x] Arena k6 Migration L1+L2+L3 — PRs #438, #444, #447, #449, #480 (ramp-up + CI95 bars)
+- [x] CAB-353: Go/No-Go Checklist 3 Months — PR #482 (9.00/10 → GO)
 
 ---
 

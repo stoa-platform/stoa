@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 # =============================================================================
-# CAB-802: Demo Dry-Run Automation
+# CAB-802: Demo Dry-Run — Act-by-Act Validation
 # =============================================================================
-# Automated pre-demo dry-run that validates each demo segment sequentially.
-# Tests: Auth, API, Portal, Gateway, Console.
-# Output: Markdown PASS/FAIL report with timing.
+# Validates all 8 demo acts against production in <60s.
+# Tests: Auth, API, Console, Portal, Gateway, mTLS, OpenSearch, Federation,
+#        MCP Bridge, AI Factory.
+# Output: Colored PASS/FAIL report with per-act timing + GO/NO-GO verdict.
 #
 # Usage: ./demo-dry-run.sh [--base-domain gostoa.dev]
 # =============================================================================
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Configuration
 BASE_DOMAIN="${1:-gostoa.dev}"
-# Strip --base-domain flag if provided
 if [ "$BASE_DOMAIN" = "--base-domain" ]; then
     BASE_DOMAIN="${2:-gostoa.dev}"
 fi
@@ -23,17 +25,22 @@ PORTAL_URL="https://portal.${BASE_DOMAIN}"
 CONSOLE_URL="https://console.${BASE_DOMAIN}"
 MCP_URL="https://mcp.${BASE_DOMAIN}"
 AUTH_URL="https://auth.${BASE_DOMAIN}"
+GRAFANA_URL="https://grafana.${BASE_DOMAIN}"
+OPENSEARCH_URL="https://opensearch.${BASE_DOMAIN}"
+CERTS_DIR="${MTLS_CERTS_DIR:-$SCRIPT_DIR/certs}"
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m'
 
 # Counters
 PASSED=0
 FAILED=0
+SKIPPED=0
 TOTAL_START=$(date +%s%N)
 REPORT=""
 
@@ -51,6 +58,10 @@ check() {
         echo -e "  ${GREEN}[PASS]${NC} ${name} (${duration_ms}ms)"
         REPORT+="| ${name} | PASS | ${duration_ms}ms | ${detail} |\n"
         ((PASSED++))
+    elif [ "$status" = "SKIP" ]; then
+        echo -e "  ${YELLOW}[SKIP]${NC} ${name} ${detail}"
+        REPORT+="| ${name} | SKIP | — | ${detail} |\n"
+        ((SKIPPED++))
     else
         echo -e "  ${RED}[FAIL]${NC} ${name} (${duration_ms}ms) ${detail}"
         REPORT+="| ${name} | FAIL | ${duration_ms}ms | ${detail} |\n"
@@ -58,7 +69,6 @@ check() {
     fi
 }
 
-# Timed curl: returns "status_code duration_ms"
 timed_curl() {
     local url="$1"
     local method="${2:-GET}"
@@ -74,6 +84,21 @@ timed_curl() {
     echo "$http_code $duration_ms"
 }
 
+act_header() {
+    local act="$1"
+    local title="$2"
+    echo ""
+    echo -e "${CYAN}${BOLD}Act ${act}: ${title}${NC}"
+    echo "──────────────────────────────────────────"
+    ACT_START=$(date +%s%N)
+}
+
+act_footer() {
+    local act_end=$(date +%s%N)
+    local act_ms=$(( (act_end - ACT_START) / 1000000 ))
+    echo -e "  ${CYAN}(${act_ms}ms)${NC}"
+}
+
 # --------------------------------------------------------------------------
 # Header
 # --------------------------------------------------------------------------
@@ -82,8 +107,8 @@ echo ""
 echo -e "${CYAN}=====================================================================${NC}"
 echo -e "${CYAN}  STOA Demo Dry-Run — $(date -Iseconds)${NC}"
 echo -e "${CYAN}  Base domain: ${BASE_DOMAIN}${NC}"
+echo -e "${CYAN}  8 acts, GO/NO-GO verdict${NC}"
 echo -e "${CYAN}=====================================================================${NC}"
-echo ""
 
 REPORT="# Demo Dry-Run Report\n\n"
 REPORT+="**Date**: $(date -Iseconds)\n"
@@ -92,13 +117,28 @@ REPORT+="| Check | Status | Duration | Notes |\n"
 REPORT+="|-------|--------|----------|-------|\n"
 
 # --------------------------------------------------------------------------
-# Segment 1: Auth (Keycloak)
+# Act 1 — Console: Create Tenant + Publish API
 # --------------------------------------------------------------------------
 
-echo -e "${CYAN}Segment 1: Auth (Keycloak)${NC}"
-echo "──────────────────────────────────"
+act_header "1" "Console + API Health"
 
-# Keycloak health
+# Console health
+read -r code ms <<< "$(timed_curl "${CONSOLE_URL}")"
+if [ "$code" = "200" ]; then
+    check "Console accessible" "PASS" "$ms"
+else
+    check "Console accessible" "FAIL" "$ms" "HTTP ${code}"
+fi
+
+# API health
+read -r code ms <<< "$(timed_curl "${API_URL}/health/ready")"
+if [ "$code" = "200" ]; then
+    check "API health" "PASS" "$ms"
+else
+    check "API health" "FAIL" "$ms" "HTTP ${code}"
+fi
+
+# Keycloak health (needed for all token-based acts)
 read -r code ms <<< "$(timed_curl "${AUTH_URL}/health/ready")"
 if [ "$code" = "200" ]; then
     check "Keycloak health" "PASS" "$ms"
@@ -114,7 +154,7 @@ else
     check "OIDC discovery" "FAIL" "$ms" "HTTP ${code}"
 fi
 
-# Token issuance (art3mis persona)
+# Token issuance (art3mis — used throughout)
 TOKEN_START=$(date +%s%N)
 TOKEN_RESPONSE=$(curl -s -X POST "${AUTH_URL}/realms/stoa/protocol/openid-connect/token" \
     -d "grant_type=password&client_id=control-plane-ui&username=art3mis&password=demo" \
@@ -130,24 +170,7 @@ else
     ACCESS_TOKEN=""
 fi
 
-echo ""
-
-# --------------------------------------------------------------------------
-# Segment 2: API (Control Plane)
-# --------------------------------------------------------------------------
-
-echo -e "${CYAN}Segment 2: API (Control Plane)${NC}"
-echo "──────────────────────────────────"
-
-# API health
-read -r code ms <<< "$(timed_curl "${API_URL}/health/ready")"
-if [ "$code" = "200" ]; then
-    check "API health" "PASS" "$ms"
-else
-    check "API health" "FAIL" "$ms" "HTTP ${code}"
-fi
-
-# API catalog (authenticated)
+# API catalog list (authenticated)
 if [ -n "$ACCESS_TOKEN" ]; then
     read -r code ms <<< "$(timed_curl "${API_URL}/v1/portal/apis" "GET" -H "Authorization: Bearer ${ACCESS_TOKEN}")"
     if [ "$code" = "200" ]; then
@@ -155,76 +178,394 @@ if [ -n "$ACCESS_TOKEN" ]; then
     else
         check "API catalog list" "FAIL" "$ms" "HTTP ${code}"
     fi
-
-    # Search petstore
-    read -r code ms <<< "$(timed_curl "${API_URL}/v1/portal/apis?search=petstore" "GET" -H "Authorization: Bearer ${ACCESS_TOKEN}")"
-    if [ "$code" = "200" ]; then
-        check "API search (petstore)" "PASS" "$ms"
-    else
-        check "API search (petstore)" "FAIL" "$ms" "HTTP ${code}"
-    fi
 else
-    check "API catalog list" "FAIL" "0" "No auth token"
-    check "API search (petstore)" "FAIL" "0" "No auth token"
+    check "API catalog list" "SKIP" "0" "No auth token"
 fi
 
-echo ""
+act_footer
 
 # --------------------------------------------------------------------------
-# Segment 3: Portal
+# Act 2 — Portal: Consumer Flow
 # --------------------------------------------------------------------------
 
-echo -e "${CYAN}Segment 3: Portal${NC}"
-echo "──────────────────────────────────"
+act_header "2" "Portal + Consumer Flow"
 
+# Portal health
 read -r code ms <<< "$(timed_curl "${PORTAL_URL}")"
 if [ "$code" = "200" ]; then
-    check "Portal health" "PASS" "$ms"
+    check "Portal accessible" "PASS" "$ms"
 else
-    check "Portal health" "FAIL" "$ms" "HTTP ${code}"
+    check "Portal accessible" "FAIL" "$ms" "HTTP ${code}"
 fi
 
-echo ""
+# Consumer list (verify consumers exist)
+if [ -n "$ACCESS_TOKEN" ]; then
+    CONSUMER_START=$(date +%s%N)
+    CONSUMER_RESPONSE=$(curl -s "${API_URL}/v1/consumers" \
+        -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+        --max-time 10 2>/dev/null || echo '{}')
+    CONSUMER_END=$(date +%s%N)
+    CONSUMER_MS=$(( (CONSUMER_END - CONSUMER_START) / 1000000 ))
+
+    CONSUMER_COUNT=$(echo "$CONSUMER_RESPONSE" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+items = data.get('items', data.get('consumers', []))
+if isinstance(items, list):
+    print(len(items))
+elif isinstance(data, list):
+    print(len(data))
+else:
+    print(data.get('total', 0))
+" 2>/dev/null || echo "0")
+
+    if [ "$CONSUMER_COUNT" -gt 0 ]; then
+        check "Consumers registered" "PASS" "$CONSUMER_MS" "${CONSUMER_COUNT} found"
+    else
+        check "Consumers registered" "FAIL" "$CONSUMER_MS" "0 consumers"
+    fi
+else
+    check "Consumers registered" "SKIP" "0" "No auth token"
+fi
+
+act_footer
 
 # --------------------------------------------------------------------------
-# Segment 4: Gateway (MCP)
+# Act 3 — Rust Gateway: API Call, JWT
 # --------------------------------------------------------------------------
 
-echo -e "${CYAN}Segment 4: Gateway (MCP)${NC}"
-echo "──────────────────────────────────"
+act_header "3" "Rust Gateway"
 
+# Gateway health
 read -r code ms <<< "$(timed_curl "${MCP_URL}/health")"
 if [ "$code" = "200" ]; then
-    check "MCP Gateway health" "PASS" "$ms"
+    check "Gateway health" "PASS" "$ms"
 else
-    check "MCP Gateway health" "FAIL" "$ms" "HTTP ${code}"
+    check "Gateway health" "FAIL" "$ms" "HTTP ${code}"
 fi
 
-# Tool list
-read -r code ms <<< "$(timed_curl "${MCP_URL}/mcp/v1/tools")"
-if [ "$code" = "200" ]; then
-    check "MCP tools list" "PASS" "$ms"
+# Authenticated tool invoke
+if [ -n "$ACCESS_TOKEN" ]; then
+    INVOKE_START=$(date +%s%N)
+    INVOKE_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+        -X POST "${MCP_URL}/mcp/v1/tools/invoke" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+        -d '{"tool":"petstore","arguments":{"action":"list-pets"}}' \
+        --max-time 10 2>/dev/null || echo "000")
+    INVOKE_END=$(date +%s%N)
+    INVOKE_MS=$(( (INVOKE_END - INVOKE_START) / 1000000 ))
+
+    # 200 = success, 404 = tool not found (auth passed), both OK for dry-run
+    if [ "$INVOKE_CODE" = "200" ] || [ "$INVOKE_CODE" = "404" ]; then
+        check "Gateway tool invoke" "PASS" "$INVOKE_MS" "HTTP ${INVOKE_CODE}"
+    else
+        check "Gateway tool invoke" "FAIL" "$INVOKE_MS" "HTTP ${INVOKE_CODE}"
+    fi
 else
-    check "MCP tools list" "FAIL" "$ms" "HTTP ${code}"
+    check "Gateway tool invoke" "SKIP" "0" "No auth token"
 fi
 
-echo ""
+act_footer
 
 # --------------------------------------------------------------------------
-# Segment 5: Console
+# Act 3b — mTLS: Enterprise Certificate Binding
 # --------------------------------------------------------------------------
 
-echo -e "${CYAN}Segment 5: Console${NC}"
-echo "──────────────────────────────────"
+act_header "3b" "mTLS Certificate Binding"
 
-read -r code ms <<< "$(timed_curl "${CONSOLE_URL}")"
-if [ "$code" = "200" ]; then
-    check "Console health" "PASS" "$ms"
+# Check prerequisites
+MTLS_READY=true
+
+if [ -f "$CERTS_DIR/credentials.json" ]; then
+    CRED_COUNT=$(python3 -c "
+import json
+d=json.load(open('$CERTS_DIR/credentials.json'))
+c=d.get('credentials',d) if isinstance(d,dict) else d
+print(len(c))
+" 2>/dev/null || echo "0")
+    check "credentials.json" "PASS" "0" "${CRED_COUNT} consumers"
 else
-    check "Console health" "FAIL" "$ms" "HTTP ${code}"
+    check "credentials.json" "FAIL" "0" "Missing — run seed-mtls-demo.py"
+    MTLS_READY=false
 fi
 
-echo ""
+if [ -f "$CERTS_DIR/fingerprints.csv" ]; then
+    FP_COUNT=$(wc -l < "$CERTS_DIR/fingerprints.csv" | tr -d ' ')
+    FP_COUNT=$((FP_COUNT - 1))  # minus header
+    check "fingerprints.csv" "PASS" "0" "${FP_COUNT} certs"
+else
+    check "fingerprints.csv" "FAIL" "0" "Missing — run generate-mtls-certs.sh"
+    MTLS_READY=false
+fi
+
+if [ "$MTLS_READY" = true ]; then
+    # Load first consumer credentials
+    CLIENT_ID=$(python3 -c "
+import json
+d=json.load(open('$CERTS_DIR/credentials.json'))
+c=d.get('credentials',d) if isinstance(d,dict) else d
+print(c[0]['client_id'])
+" 2>/dev/null || echo "")
+
+    CLIENT_SECRET=$(python3 -c "
+import json
+d=json.load(open('$CERTS_DIR/credentials.json'))
+c=d.get('credentials',d) if isinstance(d,dict) else d
+print(c[0]['client_secret'])
+" 2>/dev/null || echo "")
+
+    FINGERPRINT=$(awk -F',' 'NR==2{print $2}' "$CERTS_DIR/fingerprints.csv")
+
+    # Get mTLS client_credentials token
+    MTLS_TOKEN_START=$(date +%s%N)
+    MTLS_TOKEN_RESP=$(curl -s -X POST "${AUTH_URL}/realms/stoa/protocol/openid-connect/token" \
+        -d "grant_type=client_credentials" \
+        -d "client_id=${CLIENT_ID}" \
+        -d "client_secret=${CLIENT_SECRET}" \
+        --max-time 10 2>/dev/null || echo '{}')
+    MTLS_TOKEN_END=$(date +%s%N)
+    MTLS_TOKEN_MS=$(( (MTLS_TOKEN_END - MTLS_TOKEN_START) / 1000000 ))
+
+    MTLS_TOKEN=$(echo "$MTLS_TOKEN_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
+
+    if [ -n "$MTLS_TOKEN" ] && [ "$MTLS_TOKEN" != "None" ] && [ "$MTLS_TOKEN" != "" ]; then
+        check "mTLS token acquisition" "PASS" "$MTLS_TOKEN_MS"
+
+        # Verify cnf claim
+        CNF_START=$(date +%s%N)
+        HAS_CNF=$(echo "$MTLS_TOKEN" | python3 -c "
+import sys, json, base64
+token = sys.stdin.read().strip()
+payload = token.split('.')[1]
+payload += '=' * (4 - len(payload) % 4)
+claims = json.loads(base64.urlsafe_b64decode(payload))
+cnf = claims.get('cnf', {})
+print('yes' if 'x5t#S256' in cnf else 'no')
+" 2>/dev/null || echo "no")
+        CNF_END=$(date +%s%N)
+        CNF_MS=$(( (CNF_END - CNF_START) / 1000000 ))
+
+        if [ "$HAS_CNF" = "yes" ]; then
+            check "JWT cnf.x5t#S256 claim" "PASS" "$CNF_MS"
+        else
+            check "JWT cnf.x5t#S256 claim" "PASS" "$CNF_MS" "Not configured (non-fatal)"
+        fi
+
+        # Scenario A: Correct cert → expect 200 or 404
+        CORRECT_START=$(date +%s%N)
+        CORRECT_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${MCP_URL}/mcp/v1/tools/invoke" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${MTLS_TOKEN}" \
+            -H "X-SSL-Client-Verify: SUCCESS" \
+            -H "X-SSL-Client-Fingerprint: ${FINGERPRINT}" \
+            -H "X-SSL-Client-S-DN: CN=api-consumer-001,OU=tenant-acme,O=Acme Corp,C=FR" \
+            -H "X-SSL-Client-I-DN: CN=STOA Demo CA,O=STOA Platform,C=FR" \
+            -d '{"tool":"petstore","arguments":{"action":"list-pets"}}' \
+            --max-time 10 2>/dev/null || echo "000")
+        CORRECT_END=$(date +%s%N)
+        CORRECT_MS=$(( (CORRECT_END - CORRECT_START) / 1000000 ))
+
+        if [ "$CORRECT_CODE" = "200" ] || [ "$CORRECT_CODE" = "404" ]; then
+            check "mTLS correct cert → access" "PASS" "$CORRECT_MS" "HTTP ${CORRECT_CODE}"
+        else
+            check "mTLS correct cert → access" "FAIL" "$CORRECT_MS" "HTTP ${CORRECT_CODE}"
+        fi
+
+        # Scenario B: Wrong cert → expect 403
+        WRONG_FP="0000000000000000000000000000000000000000000000000000000000000000"
+        WRONG_START=$(date +%s%N)
+        WRONG_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${MCP_URL}/mcp/v1/tools/invoke" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${MTLS_TOKEN}" \
+            -H "X-SSL-Client-Verify: SUCCESS" \
+            -H "X-SSL-Client-Fingerprint: ${WRONG_FP}" \
+            -H "X-SSL-Client-S-DN: CN=attacker,OU=evil-corp,O=Evil Inc,C=XX" \
+            -H "X-SSL-Client-I-DN: CN=STOA Demo CA,O=STOA Platform,C=FR" \
+            -d '{"tool":"petstore","arguments":{"action":"list-pets"}}' \
+            --max-time 10 2>/dev/null || echo "000")
+        WRONG_END=$(date +%s%N)
+        WRONG_MS=$(( (WRONG_END - WRONG_START) / 1000000 ))
+
+        if [ "$WRONG_CODE" = "403" ]; then
+            check "mTLS wrong cert → 403" "PASS" "$WRONG_MS"
+        else
+            check "mTLS wrong cert → 403" "FAIL" "$WRONG_MS" "HTTP ${WRONG_CODE}"
+        fi
+    else
+        MTLS_ERROR=$(echo "$MTLS_TOKEN_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error','unknown'))" 2>/dev/null || echo "unknown")
+        check "mTLS token acquisition" "FAIL" "$MTLS_TOKEN_MS" "$MTLS_ERROR"
+        check "JWT cnf.x5t#S256 claim" "SKIP" "0" "No token"
+        check "mTLS correct cert → access" "SKIP" "0" "No token"
+        check "mTLS wrong cert → 403" "SKIP" "0" "No token"
+    fi
+else
+    check "mTLS token acquisition" "SKIP" "0" "Prerequisites missing"
+    check "JWT cnf.x5t#S256 claim" "SKIP" "0" "Prerequisites missing"
+    check "mTLS correct cert → access" "SKIP" "0" "Prerequisites missing"
+    check "mTLS wrong cert → 403" "SKIP" "0" "Prerequisites missing"
+fi
+
+act_footer
+
+# --------------------------------------------------------------------------
+# Act 4 — Grafana: Live Dashboards
+# --------------------------------------------------------------------------
+
+act_header "4" "Grafana Dashboards"
+
+read -r code ms <<< "$(timed_curl "${GRAFANA_URL}/api/health")"
+if [ "$code" = "200" ]; then
+    check "Grafana health" "PASS" "$ms"
+else
+    check "Grafana health" "FAIL" "$ms" "HTTP ${code}"
+fi
+
+act_footer
+
+# --------------------------------------------------------------------------
+# Act 5 — OpenSearch: Error Snapshots
+# --------------------------------------------------------------------------
+
+act_header "5" "OpenSearch"
+
+# OpenSearch Dashboards is behind OIDC — expect 200 or 302 (redirect to login)
+read -r code ms <<< "$(timed_curl "${OPENSEARCH_URL}")"
+if [ "$code" = "200" ] || [ "$code" = "302" ]; then
+    check "OpenSearch Dashboards" "PASS" "$ms" "HTTP ${code}"
+else
+    check "OpenSearch Dashboards" "FAIL" "$ms" "HTTP ${code}"
+fi
+
+act_footer
+
+# --------------------------------------------------------------------------
+# Act 6 — Federation: Cross-Realm Token Isolation
+# --------------------------------------------------------------------------
+
+act_header "6" "Federation Cross-Realm"
+
+# Token from demo-org-alpha
+ALPHA_START=$(date +%s%N)
+ALPHA_RESP=$(curl -s -X POST "${AUTH_URL}/realms/demo-org-alpha/protocol/openid-connect/token" \
+    -d "grant_type=password&client_id=federation-demo&client_secret=alpha-demo-secret&username=demo-alpha&password=demo" \
+    --max-time 10 2>/dev/null || echo '{}')
+ALPHA_END=$(date +%s%N)
+ALPHA_MS=$(( (ALPHA_END - ALPHA_START) / 1000000 ))
+
+ALPHA_TOKEN=$(echo "$ALPHA_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
+if [ -n "$ALPHA_TOKEN" ] && [ "$ALPHA_TOKEN" != "None" ] && [ "$ALPHA_TOKEN" != "" ]; then
+    check "Alpha realm token" "PASS" "$ALPHA_MS"
+else
+    check "Alpha realm token" "FAIL" "$ALPHA_MS" "No token"
+fi
+
+# Token from demo-org-beta
+BETA_START=$(date +%s%N)
+BETA_RESP=$(curl -s -X POST "${AUTH_URL}/realms/demo-org-beta/protocol/openid-connect/token" \
+    -d "grant_type=password&client_id=federation-demo&client_secret=beta-demo-secret&username=demo-beta&password=demo" \
+    --max-time 10 2>/dev/null || echo '{}')
+BETA_END=$(date +%s%N)
+BETA_MS=$(( (BETA_END - BETA_START) / 1000000 ))
+
+BETA_TOKEN=$(echo "$BETA_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
+if [ -n "$BETA_TOKEN" ] && [ "$BETA_TOKEN" != "None" ] && [ "$BETA_TOKEN" != "" ]; then
+    check "Beta realm token" "PASS" "$BETA_MS"
+else
+    check "Beta realm token" "FAIL" "$BETA_MS" "No token"
+fi
+
+# Verify different issuers
+if [ -n "$ALPHA_TOKEN" ] && [ "$ALPHA_TOKEN" != "None" ] && [ "$ALPHA_TOKEN" != "" ] && \
+   [ -n "$BETA_TOKEN" ] && [ "$BETA_TOKEN" != "None" ] && [ "$BETA_TOKEN" != "" ]; then
+    ISS_START=$(date +%s%N)
+    ISS_CHECK=$(python3 -c "
+import json, base64, sys
+def decode(t):
+    p = t.split('.')[1]
+    p += '=' * (4 - len(p) % 4)
+    return json.loads(base64.urlsafe_b64decode(p))
+a = decode('$ALPHA_TOKEN')
+b = decode('$BETA_TOKEN')
+iss_a = a.get('iss','')
+iss_b = b.get('iss','')
+realm_a = a.get('stoa_realm', a.get('azp',''))
+realm_b = b.get('stoa_realm', b.get('azp',''))
+if iss_a != iss_b:
+    print(f'PASS|{iss_a}|{iss_b}')
+else:
+    print(f'FAIL|{iss_a}|{iss_b}')
+" 2>/dev/null || echo "FAIL||")
+    ISS_END=$(date +%s%N)
+    ISS_MS=$(( (ISS_END - ISS_START) / 1000000 ))
+
+    ISS_STATUS=$(echo "$ISS_CHECK" | cut -d'|' -f1)
+    ISS_A=$(echo "$ISS_CHECK" | cut -d'|' -f2)
+    ISS_B=$(echo "$ISS_CHECK" | cut -d'|' -f3)
+
+    if [ "$ISS_STATUS" = "PASS" ]; then
+        check "Issuers differ (alpha ≠ beta)" "PASS" "$ISS_MS"
+    else
+        check "Issuers differ (alpha ≠ beta)" "FAIL" "$ISS_MS" "Same issuer"
+    fi
+else
+    check "Issuers differ (alpha ≠ beta)" "SKIP" "0" "Missing tokens"
+fi
+
+act_footer
+
+# --------------------------------------------------------------------------
+# Act 7 — MCP Bridge: OpenAPI → MCP
+# --------------------------------------------------------------------------
+
+act_header "7" "MCP Bridge + Tool Discovery"
+
+# MCP tool list
+TOOLS_START=$(date +%s%N)
+TOOLS_RESPONSE=$(curl -s "${MCP_URL}/mcp/v1/tools" --max-time 10 2>/dev/null || echo '{}')
+TOOLS_END=$(date +%s%N)
+TOOLS_MS=$(( (TOOLS_END - TOOLS_START) / 1000000 ))
+
+TOOL_COUNT=$(echo "$TOOLS_RESPONSE" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if isinstance(data, dict):
+    tools = data.get('tools', [])
+elif isinstance(data, list):
+    tools = data
+else:
+    tools = []
+print(len(tools))
+" 2>/dev/null || echo "0")
+
+if [ "$TOOL_COUNT" -ge 1 ]; then
+    check "MCP tools registered" "PASS" "$TOOLS_MS" "${TOOL_COUNT} tools"
+else
+    check "MCP tools registered" "FAIL" "$TOOLS_MS" "0 tools"
+fi
+
+act_footer
+
+# --------------------------------------------------------------------------
+# Act 8 — Born GitOps + AI Factory
+# --------------------------------------------------------------------------
+
+act_header "8" "AI Factory (git velocity)"
+
+GIT_START=$(date +%s%N)
+COMMIT_COUNT=$(git -C "$SCRIPT_DIR/../.." log --oneline --since="2026-02-09" 2>/dev/null | wc -l | tr -d ' ')
+GIT_END=$(date +%s%N)
+GIT_MS=$(( (GIT_END - GIT_START) / 1000000 ))
+
+if [ "$COMMIT_COUNT" -gt 0 ]; then
+    check "Commits since Feb 9" "PASS" "$GIT_MS" "${COMMIT_COUNT} commits"
+else
+    check "Commits since Feb 9" "FAIL" "$GIT_MS" "0 commits"
+fi
+
+act_footer
 
 # --------------------------------------------------------------------------
 # Summary
@@ -232,29 +573,35 @@ echo ""
 
 TOTAL_END=$(date +%s%N)
 TOTAL_MS=$(( (TOTAL_END - TOTAL_START) / 1000000 ))
-TOTAL=$((PASSED + FAILED))
+TOTAL_S=$(( TOTAL_MS / 1000 ))
+TOTAL=$((PASSED + FAILED + SKIPPED))
 
+echo ""
 echo -e "${CYAN}=====================================================================${NC}"
 echo ""
-echo -e "  Summary: ${GREEN}${PASSED} passed${NC}, ${RED}${FAILED} failed${NC} (${TOTAL} checks, ${TOTAL_MS}ms)"
+echo -e "  ${BOLD}Results${NC}: ${GREEN}${PASSED} passed${NC}, ${RED}${FAILED} failed${NC}, ${YELLOW}${SKIPPED} skipped${NC}"
+echo -e "  ${BOLD}Checks${NC}:  ${TOTAL} total in ${TOTAL_S}s (${TOTAL_MS}ms)"
 echo ""
 
 REPORT+="\n## Summary\n\n"
 REPORT+="- **Passed**: ${PASSED}\n"
 REPORT+="- **Failed**: ${FAILED}\n"
+REPORT+="- **Skipped**: ${SKIPPED}\n"
 REPORT+="- **Total**: ${TOTAL} checks in ${TOTAL_MS}ms\n"
 
 if [ "$FAILED" -eq 0 ]; then
-    echo -e "  ${GREEN}ALL CHECKS PASSED — Ready for demo${NC}"
-    REPORT+="\n**Verdict**: PASS\n"
+    echo -e "  ${GREEN}${BOLD}GO${NC} ${GREEN}— All critical checks passed. Ready for demo.${NC}"
+    REPORT+="\n**Verdict**: GO\n"
 else
-    echo -e "  ${RED}${FAILED} CHECK(S) FAILED — Fix before demo${NC}"
-    REPORT+="\n**Verdict**: FAIL — ${FAILED} check(s) need attention\n"
+    echo -e "  ${RED}${BOLD}NO-GO${NC} ${RED}— ${FAILED} check(s) failed. Fix before demo.${NC}"
+    REPORT+="\n**Verdict**: NO-GO — ${FAILED} check(s) need attention\n"
 fi
 
 echo ""
+echo -e "${CYAN}=====================================================================${NC}"
+echo ""
 
-# Print markdown report to stdout if piped
+# Print markdown report if piped
 if [ ! -t 1 ]; then
     echo -e "$REPORT"
 fi

@@ -1,8 +1,6 @@
 # STOA Platform - Operational Runbooks
 
-> **Linear Issue**: CAB-107 (APIM-9504)
-> **Phase**: 9.5 - Production Readiness
-> **Last Updated**: 2024-12-28
+> **Last Updated**: 2026-02-15
 
 This directory contains operational procedures for incident management on the STOA platform.
 
@@ -14,16 +12,17 @@ This directory contains operational procedures for incident management on the ST
 
 | Runbook | Description | Impact |
 |---------|-------------|--------|
-| [Vault Sealed](critical/vault-sealed.md) | HashiCorp Vault in sealed state | Secrets inaccessible, authentication down |
-| [Vault Restore](critical/vault-restore.md) | Vault restore from S3 snapshot | Secrets recovery |
+| [ArgoCD Out of Sync](critical/argocd-out-of-sync.md) | ArgoCD application OutOfSync or Degraded | Deployment stale, new code not deployed |
 | [AWX Restore](critical/awx-restore.md) | AWX restore from S3 backup | Configuration recovery |
-| [Gateway Down](critical/gateway-down.md) | webMethods API Gateway unavailable | All APIs down |
-| [Database Connection](critical/database-connection.md) | PostgreSQL/RDS connection issues | Keycloak and services down |
+| [Gateway Down](critical/gateway-down.md) | API Gateway unavailable | All APIs down |
+| [Database Connection](critical/database-connection.md) | PostgreSQL connection issues | Keycloak and services down |
+| [PostgreSQL Restore](critical/postgresql-restore.md) | PostgreSQL restore from backup | Data recovery |
 
 ### High (Resolution within the hour)
 
 | Runbook | Description | Impact |
 |---------|-------------|--------|
+| [Operator Reconciliation Failed](high/operator-reconciliation-failed.md) | STOA operator drift/reconciliation errors | Gateway config stale |
 | [Gateway High Latency](high/gateway-high-latency.md) | High latency on Gateway | Latency SLA compromised |
 | [Gateway Registration Failed](high/gateway-registration-failed.md) | Gateway auto-registration issues | Gateway not orchestrated by CP |
 | [Kafka Lag](high/kafka-lag.md) | High consumer lag on Redpanda | Deployments delayed |
@@ -36,6 +35,15 @@ This directory contains operational procedures for incident management on the ST
 | [Jenkins Pipeline Stuck](medium/jenkins-pipeline-stuck.md) | CI/CD pipeline stuck | Builds and deployments blocked |
 | [AWX Unreachable](medium/awx-unreachable.md) | AWX (Ansible Tower) inaccessible | Deployment automation down |
 | [API Rollback](medium/api-rollback.md) | API rollback procedure | Restore previous version |
+| [MCP Gateway Migration](mcp-gateway-migration.md) | Python → Rust gateway migration | Gateway transition |
+
+### Archived (Obsolete — do not use)
+
+| Runbook | Reason | Replacement |
+|---------|--------|-------------|
+| [Vault Sealed](../archive/vault-sealed.md) | Vault decommissioned Feb 2026 | Infisical (`vault.gostoa.dev`) |
+| [Vault Restore](../archive/vault-restore.md) | Vault decommissioned Feb 2026 | Infisical (`vault.gostoa.dev`) |
+| [Vault Emergency Unseal](../archive/vault-emergency-unseal.md) | Vault decommissioned Feb 2026 | Infisical (`vault.gostoa.dev`) |
 
 ---
 
@@ -55,21 +63,24 @@ kubectl logs -n <namespace> deploy/<deployment> --tail=100
 
 # CPU/Memory metrics
 kubectl top pods -A | sort -k3 -h -r | head -20
+
+# ArgoCD application status
+kubectl get applications -n argocd -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status'
+
+# STOA operator metrics
+kubectl port-forward -n stoa-system deploy/stoa-operator 8000:8000 &
+curl -s http://localhost:8000/metrics | grep stoa_
 ```
 
 ### STOA Namespaces
 
 | Namespace | Services |
 |-----------|----------|
-| `stoa` | API Gateway, Developer Portal |
-| `stoa-system` | Control-Plane API/UI |
+| `stoa-system` | Control-Plane API/UI, Portal, Gateway, Operator |
 | `keycloak` | Keycloak IdP |
-| `vault` | HashiCorp Vault |
-| `kafka` / `redpanda` | Redpanda (Kafka) |
-| `awx` | AWX (Ansible Tower) |
-| `jenkins` | Jenkins CI/CD |
-| `monitoring` | Prometheus, Grafana |
+| `redpanda` | Redpanda (Kafka) |
 | `argocd` | ArgoCD GitOps |
+| `monitoring` | Prometheus, Grafana, Pushgateway |
 | `cert-manager` | Certificate management |
 
 ### Main URLs
@@ -77,16 +88,22 @@ kubectl top pods -A | sort -k3 -h -r | head -20
 | Service | URL | Description |
 |---------|-----|-------------|
 | Console UI | https://console.gostoa.dev | API Provider interface |
-| **Developer Portal** | https://portal.gostoa.dev | API Consumer portal |
-| API Gateway Runtime | https://apis.gostoa.dev | APIs via Gateway |
-| Gateway Admin | https://gateway.gostoa.dev | Gateway console |
+| Developer Portal | https://portal.gostoa.dev | API Consumer portal |
 | MCP Gateway | https://mcp.gostoa.dev | AI-Native MCP endpoint |
 | Control Plane API | https://api.gostoa.dev | REST API backend |
 | Keycloak | https://auth.gostoa.dev | Identity Provider |
 | Grafana | https://grafana.gostoa.dev | Monitoring |
-| AWX | https://awx.gostoa.dev | Automation |
+| Prometheus | https://prometheus.gostoa.dev | Metrics |
 | ArgoCD | https://argocd.gostoa.dev | GitOps CD |
-| Vault | https://vault.gostoa.dev | Secrets management |
+| Infisical | https://vault.gostoa.dev | Secrets management |
+
+---
+
+## Secrets Management
+
+Secrets are managed via **Infisical** (self-hosted at `vault.gostoa.dev`). HashiCorp Vault, AWS Secrets Manager, and External Secrets Operator are decommissioned.
+
+See `docs/SECRETS-ROTATION.md` for rotation procedures.
 
 ---
 
@@ -142,3 +159,4 @@ To add or modify a runbook:
 |------|--------------|
 | 2024-12-28 | Initial creation - 9 runbooks |
 | 2026-02-06 | Added Gateway Registration Failed runbook (ADR-028) |
+| 2026-02-15 | Archived 3 Vault runbooks, added ArgoCD + Operator runbooks, updated for Infisical (CAB-1030) |

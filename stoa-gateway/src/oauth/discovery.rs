@@ -204,10 +204,7 @@ mod tests {
         assert_eq!(meta["resource"], "https://mcp.gostoa.dev");
         // RFC 9728: authorization_servers points to the gateway (not Keycloak)
         // so clients discover our curated metadata with public client support
-        assert_eq!(
-            meta["authorization_servers"][0],
-            "https://mcp.gostoa.dev"
-        );
+        assert_eq!(meta["authorization_servers"][0], "https://mcp.gostoa.dev");
     }
 
     #[tokio::test]

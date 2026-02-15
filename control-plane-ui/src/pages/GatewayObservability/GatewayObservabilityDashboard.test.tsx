@@ -20,8 +20,6 @@ vi.mock('react-router-dom', async () => {
 });
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
-  })),
-}));
 
 vi.mock('../../services/api', () => ({
   apiService: {

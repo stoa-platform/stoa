@@ -50,7 +50,7 @@ ANORAK_PASSWORD=readyplayerone ../../scripts/demo/seed-all.sh --federation
 | Gateway | `curl -s http://localhost:8081/health` | 200 JSON |
 | Keycloak | `curl -s http://localhost/auth/realms/stoa` | 200 JSON |
 | Grafana | `curl -s http://localhost/grafana/api/health` | 200 |
-| OpenSearch | `curl -sfk https://localhost:9200 -u admin:StOa_Admin_2026!` | 200 |
+| OpenSearch | `curl -sfk https://localhost:9200 -u admin:${OPENSEARCH_ADMIN_PASSWORD}` | 200 |
 | Federation GW | `curl -s http://localhost:9000/health` | 200 |
 
 - [ ] All services respond 200
@@ -89,7 +89,7 @@ ANORAK_PASSWORD=readyplayerone ../../scripts/demo/seed-all.sh --federation
    - [ ] STOA Platform Overview dashboard loads
    - [ ] Navigate to STOA Gateway Metrics — verify data exists
 
-4. **OpenSearch (Tab 5)** — Login as admin / StOa_Admin_2026!
+4. **OpenSearch (Tab 5)** — Login as admin (password from Infisical: `prod/opensearch/ADMIN_PASSWORD`)
    - [ ] Discover page shows stoa-errors-* index
 
 5. **Keycloak (Tab 6)** — Login as admin / admin

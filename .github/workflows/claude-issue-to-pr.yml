@@ -1,0 +1,166 @@
+# Level 1: Claude Code Issue-to-PR — assigns issue to Claude, creates a PR
+# Triggered when an issue is labeled "claude-implement" or assigned to claude bot.
+# Runs Council validation first, posts report, waits for approval.
+
+name: Claude Code Issue-to-PR
+
+on:
+  issues:
+    types: [labeled, assigned]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: claude-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  # ----- Phase 1: Council Validation (runs on label or assignment) -----
+  council-validate:
+    if: |
+      (github.event_name == 'issues' && github.event.label.name == 'claude-implement') ||
+      (github.event_name == 'issues' && github.event.action == 'assigned')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the STOA Council Gate. Read the issue description and run a 4-persona
+            Council validation (Chucky, OSS Killer, Archi, Better Call Saul).
+
+            Issue title: ${{ github.event.issue.title }}
+            Issue body: ${{ github.event.issue.body }}
+
+            Follow the Council format from .claude/skills/council/SKILL.md.
+            Score each persona /10, compute the average.
+
+            Then post a structured comment on this issue with:
+            1. The full Council report (4 personas, scores, verdicts)
+            2. The global verdict (Go/Fix/Redo) and average score
+            3. An implementation plan (files to modify, LOC estimate, phases)
+            4. Ship/Show/Ask classification
+
+            End the comment with:
+            ---
+            **Council Score: X.XX/10 — [Go|Fix|Redo]**
+            React with :white_check_mark: to approve, or comment "adjust: <feedback>" to revise.
+
+            Include a **Binary DoD** (Definition of Done) checklist in the comment:
+            - [ ] All modified files listed
+            - [ ] Each change is independently testable
+            - [ ] Total LOC < 300
+            - [ ] No new `any` types, `todo!()`, or `// TODO`
+            - [ ] Component quality gate passes
+            - [ ] CI green
+            - [ ] State files updated
+
+            IMPORTANT: Do NOT implement anything yet. Only validate and plan.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
+
+      # Notify Slack with Council report
+      - name: Notify Slack — Council Report
+        if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then
+            echo "SLACK_WEBHOOK_URL not set, skipping notification"
+            exit 0
+          fi
+          ISSUE_URL="${{ github.event.issue.html_url }}"
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"blocks\": [
+                {
+                  \"type\": \"header\",
+                  \"text\": {
+                    \"type\": \"plain_text\",
+                    \"text\": \"Council Validation: #${ISSUE_NUM}\",
+                    \"emoji\": true
+                  }
+                },
+                {
+                  \"type\": \"section\",
+                  \"text\": {
+                    \"type\": \"mrkdwn\",
+                    \"text\": \"*${ISSUE_TITLE}*\nCouncil has validated the implementation plan.\nReview and approve on GitHub to start autonomous implementation.\"
+                  },
+                  \"accessory\": {
+                    \"type\": \"button\",
+                    \"text\": {\"type\": \"plain_text\", \"text\": \"Review & Approve\"},
+                    \"url\": \"${ISSUE_URL}\",
+                    \"action_id\": \"council-review\"
+                  }
+                }
+              ]
+            }"
+
+  # ----- Phase 2: Implementation (runs on approval comment) -----
+  implement:
+    if: |
+      github.event_name == 'issue_comment' &&
+      (
+        github.event.comment.body == '/approve' ||
+        github.event.comment.body == '/go' ||
+        startsWith(github.event.comment.body, '/go ') ||
+        startsWith(github.event.comment.body, '/approve ')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Implement the feature described in issue #${{ github.event.issue.number }}.
+
+            Read the issue description and the Council validation comment (posted earlier).
+            Follow the implementation plan from the Council comment.
+            Follow all rules in CLAUDE.md and .claude/rules/.
+
+            Steps:
+            1. Create a feature branch: feat/issue-${{ github.event.issue.number }}-<slug>
+            2. Implement the code following the plan
+            3. Run quality gates (lint, test, format)
+            4. Commit with conventional messages
+            5. Create a PR referencing the issue
+
+            Use Ship/Show/Ask classification from the Council comment.
+            If Ship or Show: merge after CI green.
+            If Ask: leave PR open for human review.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 30"
+
+      # Notify Slack on completion
+      - name: Notify Slack — Implementation Done
+        if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          STATUS="${{ job.status }}"
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          if [ "$STATUS" = "success" ]; then
+            EMOJI="white_check_mark"
+            MSG="Implementation complete for #${ISSUE_NUM}. PR created."
+          else
+            EMOJI="x"
+            MSG="Implementation failed for #${ISSUE_NUM}. Check GitHub Actions logs."
+          fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\":${EMOJI}: ${MSG}\"}"

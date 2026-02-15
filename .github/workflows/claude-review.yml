@@ -1,0 +1,54 @@
+# Level 1: Claude Code Auto-Review — reviews every PR automatically
+# Runs /review skill on PR open/sync. Posts review as PR comment.
+
+name: Claude Code Auto-Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    # Skip Dependabot PRs and self-authored PRs (Claude's own PRs)
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      github.actor != 'claude[bot]' &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this PR following CLAUDE.md and .claude/rules/ci-quality-gates.md.
+
+            Check for:
+            1. Code quality: naming, patterns, no over-engineering
+            2. Security: OWASP top 10, secrets, injection, XSS
+            3. Tests: coverage maintained, new code has tests
+            4. CI compatibility: will this pass lint/format/type checks?
+            5. Ship/Show/Ask classification: suggest the appropriate mode
+
+            Output format:
+            ## Auto-Review
+
+            **Classification**: Ship | Show | Ask
+            **Risk**: Low | Medium | High
+
+            ### Findings
+            - <finding 1>
+            - <finding 2>
+
+            ### Verdict
+            <Go | Fix | Redo> — <1 sentence summary>
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5"

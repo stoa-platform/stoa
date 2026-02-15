@@ -17,7 +17,7 @@ Focus: Finir les 2 gros MEGAs code
 - [x] CAB-1121: Consumer Onboarding & Token Exchange (35 pts) — DONE (PR #423 + E2E PR #450)
 - [x] CAB-1137: OpenAPI → MCP Auto-Bridge (8 pts) — DONE (stoactl PR #6, stoa PR #436)
 
-- [~] CAB-864: mTLS + OAuth2 Certificate Binding (34 pts)
+- [x] CAB-864: mTLS + OAuth2 Certificate Binding (34 pts) — DONE (PRs #425-#429, #453)
   - ✅ Session 1: Certificate management API + Keycloak cert-bound tokens (already implemented)
   - ✅ Session 2: F5/Gateway integration + rotation automatique (already implemented)
   - ✅ Session 3: Demo scenario scripts (generate-mtls-certs.sh, seed-mtls-demo.py, mtls-demo-commands.sh, DEMO-SCRIPT Act 3b, seed-all.sh integration) — Done 13/02
@@ -65,10 +65,11 @@ Focus: Intégration, script démo, répétitions
 - Plan d'Action SI distribué
 
 ## Post-démo (semaine 9+)
-- [~] CAB-1066: Landing + Pricing refonte (21 pts) — Phase 1 DONE (stoa-web PR #7: SocialProof, Book a Demo, Privacy Policy)
+- [x] CAB-1066: Landing + Pricing refonte (21 pts) — DONE (stoa-web PRs #5, #6, #7)
 - [x] CAB-1133: Portal Test Suite (34 pts) — DONE (PR #461, 505 tests, 17 routes × 4 personas)
 - [x] CAB-1134: ADR-040 Born GitOps (5 pts) — DONE (stoa-docs PR #17, ADR published)
-- [x] CAB-1138: GitOps Operator P1-P5 (21 pts) — DONE (PRs #415, #418, #442-#446, #454, deployed 0.3.0)
+- [x] CAB-1138: GitOps Operator P1-P6 (21 pts) — DONE (PRs #415, #418, #442-#446, #454, #472, deployed 0.3.0)
+  - P6: Console Drift Detection UI — PR #472 merged (6 files, 13 tests, /drift page)
 - [ ] CAB-1030: Kit onboarding Cédric (privé)
 - [ ] CAB-353: Go/No-Go Checklist
 - [x] Arena k6 Migration L1+L2 (PRs #438, #444, #447, #449) — DONE

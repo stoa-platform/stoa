@@ -563,7 +563,7 @@ git shortlog --since="2026-02-09" -sn
 | art3mis | Portal | samantha2045 | Developer |
 | admin | Grafana | admin / admin | Monitoring |
 | admin | OpenSearch | admin / StoaAdmin2026Prod | Logs |
-| admin | Keycloak | admin / admin | Auth Admin |
+| admin | Keycloak | admin / demo | Auth Admin |
 | demo-alpha | Federation (alpha) | demo | Demo Org Alpha user |
 | demo-beta | Federation (beta) | demo | Demo Org Beta user |
 

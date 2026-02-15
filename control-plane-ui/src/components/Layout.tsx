@@ -157,6 +157,12 @@ const navigationSections: NavSection[] = [
         permission: 'tenants:read',
       },
       {
+        name: 'Drift',
+        href: '/drift',
+        icon: AlertTriangle,
+        permission: 'tenants:read',
+      },
+      {
         name: 'Metrics',
         href: '/gateway-observability',
         icon: BarChart3,

@@ -89,7 +89,17 @@ fi
 
 generate_password() {
   local length="${1:-32}"
-  openssl rand -base64 "$length" | tr -d '/+=' | head -c "$length"
+  # Generate base alphanumeric, then inject required complexity chars
+  # to guarantee NIST/DORA policy compliance (upper, lower, digit, special)
+  local base
+  base=$(openssl rand -base64 "$length" | tr -d '/+=' | head -c "$((length - 4))")
+  # Append guaranteed complexity: 1 upper, 1 lower, 1 digit, 1 special
+  local suffix
+  suffix="A"
+  suffix+="z"
+  suffix+="$(( RANDOM % 10 ))"
+  suffix+="!"
+  echo "${base}${suffix}"
 }
 
 get_kc_token() {

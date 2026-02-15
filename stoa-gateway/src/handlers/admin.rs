@@ -23,6 +23,7 @@ use axum::{
 use serde::Serialize;
 use tracing::warn;
 
+use crate::proxy::credentials::BackendCredential;
 use crate::routes::{ApiRoute, PolicyEntry};
 use crate::state::AppState;
 
@@ -356,6 +357,46 @@ pub async fn reset_consumer_quota(
 }
 
 // =============================================================================
+// Backend Credentials CRUD (CAB-1250: BYOK)
+// =============================================================================
+
+/// POST /admin/backend-credentials — upsert a backend credential
+pub async fn upsert_backend_credential(
+    State(state): State<AppState>,
+    Json(cred): Json<BackendCredential>,
+) -> impl IntoResponse {
+    let route_id = cred.route_id.clone();
+    let existed = state.credential_store.upsert(cred).is_some();
+    let status = if existed {
+        StatusCode::OK
+    } else {
+        StatusCode::CREATED
+    };
+    (
+        status,
+        Json(serde_json::json!({"route_id": route_id, "status": "ok"})),
+    )
+}
+
+/// GET /admin/backend-credentials — list all backend credentials
+pub async fn list_backend_credentials(
+    State(state): State<AppState>,
+) -> Json<Vec<BackendCredential>> {
+    Json(state.credential_store.list())
+}
+
+/// DELETE /admin/backend-credentials/:route_id — remove a credential
+pub async fn delete_backend_credential(
+    State(state): State<AppState>,
+    Path(route_id): Path<String>,
+) -> impl IntoResponse {
+    match state.credential_store.remove(&route_id) {
+        Some(_) => StatusCode::NO_CONTENT.into_response(),
+        None => (StatusCode::NOT_FOUND, "Credential not found").into_response(),
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -557,6 +598,14 @@ mod tests {
             )
             .route("/mtls/config", get(mtls_config))
             .route("/mtls/stats", get(mtls_stats))
+            .route(
+                "/backend-credentials",
+                get(list_backend_credentials).post(upsert_backend_credential),
+            )
+            .route(
+                "/backend-credentials/:route_id",
+                delete(delete_backend_credential),
+            )
             .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
             .with_state(state)
     }
@@ -841,6 +890,100 @@ mod tests {
         let app = build_full_admin_router(state);
         let response = app.oneshot(auth_req("GET", "/mtls/stats")).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // === Backend Credentials (CAB-1250) ===
+
+    #[tokio::test]
+    async fn test_upsert_and_list_backend_credentials() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        let cred = serde_json::json!({
+            "route_id": "r1",
+            "auth_type": "bearer",
+            "header_name": "Authorization",
+            "header_value": "Bearer test-token"
+        });
+
+        let response = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/backend-credentials", cred))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let response = app
+            .oneshot(auth_req("GET", "/backend-credentials"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0]["route_id"], "r1");
+    }
+
+    #[tokio::test]
+    async fn test_upsert_backend_credential_update() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        let cred = serde_json::json!({
+            "route_id": "r1", "auth_type": "bearer",
+            "header_name": "Authorization", "header_value": "Bearer v1"
+        });
+        let _ = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/backend-credentials", cred))
+            .await
+            .unwrap();
+
+        let cred2 = serde_json::json!({
+            "route_id": "r1", "auth_type": "api_key",
+            "header_name": "X-API-Key", "header_value": "key-v2"
+        });
+        let response = app
+            .oneshot(auth_json_req("POST", "/backend-credentials", cred2))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK); // update, not create
+    }
+
+    #[tokio::test]
+    async fn test_delete_backend_credential() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        let cred = serde_json::json!({
+            "route_id": "r1", "auth_type": "bearer",
+            "header_name": "Authorization", "header_value": "Bearer t"
+        });
+        let _ = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/backend-credentials", cred))
+            .await
+            .unwrap();
+
+        let response = app
+            .clone()
+            .oneshot(auth_req("DELETE", "/backend-credentials/r1"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_delete_backend_credential_not_found() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("DELETE", "/backend-credentials/ghost"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

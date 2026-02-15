@@ -91,6 +91,15 @@ pub fn build_router(state: AppState) -> Router {
             "/quotas/:consumer_id/reset",
             post(admin::reset_consumer_quota),
         )
+        // CAB-1250: BYOK backend credentials
+        .route(
+            "/backend-credentials",
+            get(admin::list_backend_credentials).post(admin::upsert_backend_credential),
+        )
+        .route(
+            "/backend-credentials/:route_id",
+            delete(admin::delete_backend_credential),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

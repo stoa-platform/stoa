@@ -116,8 +116,11 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         "Dynamic proxy: forwarding request"
     );
 
+    // BYOK credential injection (CAB-1250): look up stored credential for this route
+    let credential = state.credential_store.get(&route.id);
+
     let upstream_start = std::time::Instant::now();
-    let response = forward_request(request, &method, &target_url).await;
+    let response = forward_request(request, &method, &target_url, credential.as_ref()).await;
     let upstream_duration = upstream_start.elapsed().as_secs_f64();
 
     // Record upstream latency metric
@@ -138,7 +141,15 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
 }
 
 /// Forward request to the backend, reusing the webMethods proxy pattern.
-async fn forward_request(request: Request<Body>, method: &Method, target_url: &str) -> Response {
+///
+/// When a `BackendCredential` is provided, its header is injected into the
+/// outgoing request (BYOK credential proxy — CAB-1250).
+async fn forward_request(
+    request: Request<Body>,
+    method: &Method,
+    target_url: &str,
+    credential: Option<&super::credentials::BackendCredential>,
+) -> Response {
     let client = get_proxy_client();
     let headers = request.headers().clone();
 
@@ -167,6 +178,21 @@ async fn forward_request(request: Request<Body>, method: &Method, target_url: &s
     // This allows downstream services (Control-Plane API, backends) to
     // correlate their spans with the gateway's trace.
     req_builder = inject_traceparent(req_builder);
+
+    // BYOK: inject backend credential header (CAB-1250)
+    if let Some(cred) = credential {
+        if let (Ok(name), Ok(value)) = (
+            reqwest::header::HeaderName::from_bytes(cred.header_name.as_bytes()),
+            reqwest::header::HeaderValue::from_str(&cred.header_value),
+        ) {
+            req_builder = req_builder.header(name, value);
+        } else {
+            warn!(
+                route_id = %cred.route_id,
+                "BYOK: invalid credential header name/value — skipping injection"
+            );
+        }
+    }
 
     // Forward body as a stream for methods that support it (zero-copy)
     if matches!(*method, Method::POST | Method::PUT | Method::PATCH) {

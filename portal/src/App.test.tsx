@@ -22,6 +22,7 @@ const mockAuth = {
   hasScope: vi.fn().mockReturnValue(true),
   login: vi.fn(),
   logout: vi.fn(),
+  register: vi.fn(),
   refreshPermissions: vi.fn(),
 };
 
@@ -144,20 +145,54 @@ describe('App', () => {
       renderApp('/');
 
       expect(screen.getByText('Discover AI-powered APIs')).toBeInTheDocument();
-      expect(screen.getByText('Request Access')).toBeInTheDocument();
-      expect(screen.getByText('Sign In')).toBeInTheDocument();
+      expect(screen.getByText('Create your free developer account')).toBeInTheDocument();
     });
 
-    it('should show profile fields in request access form', () => {
+    it('should show Create Free Account button by default', () => {
       mockAuth.isAuthenticated = false;
 
       renderApp('/');
 
+      expect(screen.getByText('Create Free Account')).toBeInTheDocument();
+    });
+
+    it('should call register when Create Free Account is clicked', () => {
+      mockAuth.isAuthenticated = false;
+
+      renderApp('/');
+
+      screen.getByText('Create Free Account').click();
+      expect(mockAuth.register).toHaveBeenCalledOnce();
+    });
+
+    it('should show Sign in link', () => {
+      mockAuth.isAuthenticated = false;
+
+      renderApp('/');
+
+      expect(screen.getByText('Sign in')).toBeInTheDocument();
+    });
+
+    it('should show enterprise access as expandable section', () => {
+      mockAuth.isAuthenticated = false;
+
+      renderApp('/');
+
+      expect(screen.getByText(/Need enterprise access/)).toBeInTheDocument();
+      // Form fields are hidden by default
+      expect(screen.queryByLabelText('Work email *')).not.toBeInTheDocument();
+    });
+
+    it('should expand enterprise form when clicked', () => {
+      mockAuth.isAuthenticated = false;
+
+      renderApp('/');
+
+      screen.getByText(/Need enterprise access/).click();
       expect(screen.getByLabelText('First name *')).toBeInTheDocument();
       expect(screen.getByLabelText('Last name *')).toBeInTheDocument();
       expect(screen.getByLabelText('Work email *')).toBeInTheDocument();
-      expect(screen.getByLabelText('Company')).toBeInTheDocument();
-      expect(screen.getByLabelText('Role')).toBeInTheDocument();
+      expect(screen.getByLabelText('Company *')).toBeInTheDocument();
     });
 
     it('should show loading screen while authenticating', () => {

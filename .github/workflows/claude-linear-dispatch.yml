@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Council Validation
+        id: council
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -39,53 +40,58 @@ jobs:
             Priority: ${{ github.event.client_payload.ticket_priority }}
             Estimate: ${{ github.event.client_payload.ticket_estimate }} pts
 
-            INSTRUCTIONS — do these 2 things, then stop:
+            Run a CONCISE 4-persona Council validation (2-3 sentences per persona, score /10):
+            Chucky (risk), OSS Killer (value), Archi 50x50 (architecture), Better Call Saul (legal).
+            Compute average. Classify as Ship/Show/Ask.
 
-            1. Run a CONCISE 4-persona Council validation (2-3 sentences per persona, score /10):
-               Chucky (risk), OSS Killer (value), Archi 50x50 (architecture), Better Call Saul (legal).
-               Compute average. Classify as Ship/Show/Ask.
+            Format your response EXACTLY as markdown (this text will become a GitHub issue body):
 
-            2. Write the report to a file called council-body.md in the current directory.
-               Use the Bash tool (NOT the Write tool) to create the file with cat <<'REPORT' > council-body.md
-               Format:
-               ```
-               # Council: TICKET_ID — TITLE
-               **Score: X.X/10 — GO/FIX/REDO**
-               ## Personas
-               **Chucky**: X/10 — summary
-               **OSS Killer**: X/10 — summary
-               **Archi 50x50**: X/10 — summary
-               **Better Call Saul**: X/10 — summary
-               ## Ship/Show/Ask: MODE
-               ## Plan
-               scope, files, LOC estimate
-               ## DoD
-               - [ ] criteria
-               ---
-               Comment /go to start implementation.
-               ```
+            # Council: TICKET_ID — TITLE
+            **Score: X.X/10 — GO/FIX/REDO**
+            ## Personas
+            **Chucky**: X/10 — summary
+            **OSS Killer**: X/10 — summary
+            **Archi 50x50**: X/10 — summary
+            **Better Call Saul**: X/10 — summary
+            ## Ship/Show/Ask: MODE
+            ## Plan
+            scope, files, LOC estimate
+            ## DoD
+            - [ ] criteria
+            ---
+            Comment /go to start implementation.
 
-            STOP after writing the file. Do NOT create GitHub issues or labels.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 6"
+            IMPORTANT: Do NOT write any files. Do NOT create issues or labels. Just output the report text above.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 3"
 
-      # Create label + issue from Claude's report file
+      # Extract Claude's report and create GitHub issue
       - name: Create Council Issue
         env:
           GH_TOKEN: ${{ github.token }}
+          COUNCIL_RESULT: ${{ steps.council.outputs.result }}
         run: |
           TICKET="${{ github.event.client_payload.ticket_id }}"
           TITLE="${{ github.event.client_payload.ticket_title }}"
 
-          # Check if Claude wrote the report file
-          if [ ! -f council-body.md ]; then
-            echo "::warning::council-body.md not found, creating fallback"
-            echo "# Council: ${TICKET} — ${TITLE}" > council-body.md
-            echo "" >> council-body.md
-            echo "Council validation ran but report file was not generated." >> council-body.md
-            echo "Check the workflow logs for the full Council analysis." >> council-body.md
-            echo "" >> council-body.md
-            echo "Comment /go to start implementation." >> council-body.md
+          # Use Claude's text output (passed safely via env var)
+          if [ -n "$COUNCIL_RESULT" ]; then
+            echo "Extracted Council report from action output (${#COUNCIL_RESULT} chars)"
+            printf '%s\n' "$COUNCIL_RESULT" > council-body.md
+          else
+            echo "::warning::No Council output, using fallback"
+            printf '%s\n' \
+              "# Council: ${TICKET} — ${TITLE}" \
+              "" \
+              "Council validation ran but no report was captured." \
+              "Check the [workflow logs](https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}) for details." \
+              "" \
+              "---" \
+              "Comment /go to start implementation." > council-body.md
           fi
+
+          echo "=== Council body preview ==="
+          head -10 council-body.md
+          echo "=== ($(wc -l < council-body.md | tr -d ' ') lines total) ==="
 
           # Create label (idempotent)
           gh label create "${TICKET}" --color "0075ca" --description "Linear ticket" --force 2>/dev/null || true

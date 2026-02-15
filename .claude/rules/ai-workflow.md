@@ -168,6 +168,33 @@ Missing `SESSION-END` = crash indicator (see `crash-recovery.md`).
 `~/.claude/projects/.../memory/checkpoints/` — JSON files created before risky operations.
 See `crash-recovery.md` for checkpoint schema and lifecycle.
 
+## Session Metrics (Observability)
+
+### Log Location
+`~/.claude/projects/.../memory/metrics.log` — append-only, structured events for factory performance tracking.
+
+### Events
+
+| Event | When | Fields |
+|-------|------|--------|
+| `PR-MERGED` | After successful merge | `task`, `pr`, `branch_lifetime_min` (optional) |
+| `CI-FIX` | After `/ci-fix` skill runs | `task`, `check`, `auto_fixed` (true/false) |
+| `STATE-DRIFT` | Stop hook detects misplaced items | `items_misplaced` (count) |
+
+### Format
+Same as operations.log: `YYYY-MM-DDTHH:MM | EVENT | key=value ...`
+
+### When to Append
+- **PR merged** — append `PR-MERGED` in the same step as STEP-DONE step=merged
+- **CI fix** — `/ci-fix` skill appends `CI-FIX` automatically (see skill prompt)
+- **State drift** — `stop-state-lint.sh` hook appends `STATE-DRIFT` automatically
+
+### Usage
+Periodically review `metrics.log` to identify:
+- Average branch lifetime (PR-MERGED entries)
+- Most frequent CI failure types (CI-FIX entries)
+- State drift frequency (STATE-DRIFT entries)
+
 ## Anti-Drift Rules
 - **1 thing at a time** — never mix feature + refactor + fix
 - **Never code without a validated plan**

@@ -139,7 +139,7 @@ All pull requests are automatically checked for DCO compliance. If your PR fails
 
 If you have questions about the DCO or contribution process:
 
-- Open a [GitHub Discussion](https://github.com/PotoMitan/stoa/discussions)
+- Open a [GitHub Discussion](https://github.com/stoa-platform/stoa/discussions)
 - Email us at [hello@gostoa.dev](mailto:hello@gostoa.dev)
 
 ---

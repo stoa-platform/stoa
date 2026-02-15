@@ -49,10 +49,14 @@ jobs:
             Produce an implementation plan (files, LOC estimate, phases).
             Classify as Ship/Show/Ask.
 
-            Create a GitHub issue titled:
-            "Council: ${{ github.event.client_payload.ticket_id }} — ${{ github.event.client_payload.ticket_title }}"
+            Create a GitHub issue:
 
-            With labels: council-review, ${{ github.event.client_payload.ticket_id }}
+            IMPORTANT — Issue creation steps (follow exactly):
+            1. First, create the ticket label if it doesn't exist:
+               gh label create "${{ github.event.client_payload.ticket_id }}" --color "0075ca" --description "Linear ticket" --force
+            2. Then create the issue using --body-file with a temp file (NOT inline --body):
+               Write the full report to /tmp/council-body.md first, then:
+               gh issue create --title "Council: ${{ github.event.client_payload.ticket_id }} — ${{ github.event.client_payload.ticket_title }}" --label "council-review" --label "${{ github.event.client_payload.ticket_id }}" --body-file /tmp/council-body.md
 
             The issue body MUST contain:
             1. Full Council report (4 personas)
@@ -81,7 +85,7 @@ jobs:
           if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
           TICKET="${{ github.event.client_payload.ticket_id }}"
           TITLE="${{ github.event.client_payload.ticket_title }}"
-          REPO_URL="https://github.com/stoa-platform/stoa/issues?q=is%3Aissue+label%3A${TICKET}+is%3Aopen"
+          REPO_URL="https://github.com/stoa-platform/stoa/issues?q=is%3Aissue+Council+${TICKET}+is%3Aopen"
           curl -s -X POST "$SLACK_WEBHOOK" \
             -H 'Content-Type: application/json' \
             -d "{

@@ -64,6 +64,9 @@ Focus: Intégration, script démo, répétitions
 - Présentation "ESB is Dead"
 - Plan d'Action SI distribué
 
+## Pre-démo — Manuel
+- [ ] CAB-1035: Persona Alex — Test manuel onboarding MCP Gateway (2 pts, 1h chrono)
+
 ## Post-démo (semaine 9+)
 - [x] CAB-1066: Landing + Pricing refonte (21 pts) — DONE (stoa-web PRs #5, #6, #7)
 - [x] CAB-1133: Portal Test Suite (34 pts) — DONE (PR #461, 505 tests, 17 routes × 4 personas)

@@ -1,11 +1,11 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-15
+> Last sync: 2026-02-15 (22h)
 
 ## Cycle 7 (Feb 9–15) — CURRENT
 
-**Scope**: 445 pts | **Done**: 330+ pts | **Velocity**: ~28 issues closed
+**Scope**: 463 pts | **Done**: 432 pts (93%) | **Velocity**: 29 issues closed
 **Theme**: Code critique + Polish + AI Factory v2
 
 ### In Progress

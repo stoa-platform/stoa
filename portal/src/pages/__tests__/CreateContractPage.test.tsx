@@ -125,6 +125,40 @@ describe('CreateContractPage', () => {
     });
   });
 
+  describe('Persona-based Tests', () => {
+    const allowedPersonas: import('../../test/helpers').PersonaRole[] = [
+      'cpi-admin',
+      'tenant-admin',
+      'devops',
+    ];
+
+    it.each(allowedPersonas)(
+      '%s can access create contract form (stoa:catalog:write)',
+      async (persona) => {
+        mockAuth.mockReturnValue(createAuthMock(persona));
+        mockUsePublishContract.mockReturnValue({ mutate: vi.fn(), isPending: false });
+
+        renderWithProviders(<CreateContractPage />);
+
+        await waitFor(() => {
+          expect(screen.getByLabelText(/Contract Name/)).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: /Publish Contract/ })).toBeInTheDocument();
+        });
+      }
+    );
+
+    it('viewer can render the form (route guard handles access)', async () => {
+      mockAuth.mockReturnValue(createAuthMock('viewer'));
+      mockUsePublishContract.mockReturnValue({ mutate: vi.fn(), isPending: false });
+
+      renderWithProviders(<CreateContractPage />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Contract Name/)).toBeInTheDocument();
+      });
+    });
+  });
+
   it('calls mutate with form data on submit', async () => {
     const user = userEvent.setup();
     const mutateMock = vi.fn();

@@ -1,5 +1,12 @@
+/**
+ * GatewaysPage Tests - CAB-1133
+ *
+ * Tests for the gateway instances admin page.
+ * Route guard: scope="stoa:admin" — only cpi-admin has access.
+ */
+
 import { screen, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '../../test/helpers';
+import { renderWithProviders, createAuthMock, type PersonaRole } from '../../test/helpers';
 import { GatewaysPage } from '../gateways/GatewaysPage';
 
 // Mock gatewaysService
@@ -12,23 +19,15 @@ vi.mock('../../services/gateways', () => ({
 }));
 
 // Mock AuthContext
+const mockAuth = vi.fn();
 vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: () => ({
-    isAuthenticated: true,
-    isLoading: false,
-    isReady: true,
-    user: { id: '1', roles: ['cpi-admin'], permissions: [], effective_scopes: [] },
-    hasPermission: () => true,
-    hasRole: () => true,
-    hasScope: () => true,
-    hasAnyPermission: () => true,
-    hasAllPermissions: () => true,
-  }),
+  useAuth: () => mockAuth(),
 }));
 
 describe('GatewaysPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAuth.mockReturnValue(createAuthMock('cpi-admin'));
   });
 
   it('renders table when gateways exist', async () => {
@@ -73,5 +72,26 @@ describe('GatewaysPage', () => {
     await waitFor(() => {
       expect(screen.getByText('No gateways registered')).toBeInTheDocument();
     });
+  });
+
+  describe('Persona-based Tests', () => {
+    it('cpi-admin can access gateways page (stoa:admin)', async () => {
+      mockAuth.mockReturnValue(createAuthMock('cpi-admin'));
+      mockListGateways.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 });
+
+      renderWithProviders(<GatewaysPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('No gateways registered')).toBeInTheDocument();
+      });
+    });
+
+    it.each(['tenant-admin', 'devops', 'viewer'] as PersonaRole[])(
+      '%s does not have stoa:admin scope',
+      (persona) => {
+        const auth = createAuthMock(persona);
+        expect(auth.hasScope('stoa:admin')).toBe(false);
+      }
+    );
   });
 });

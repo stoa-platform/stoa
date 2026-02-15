@@ -6,7 +6,7 @@
 
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithProviders } from '../../test/helpers';
+import { renderWithProviders, createAuthMock, type PersonaRole } from '../../test/helpers';
 import { ConsumerRegistrationPage } from '../consumers/ConsumerRegistrationPage';
 
 // Mock AuthContext at module level
@@ -280,5 +280,30 @@ describe('ConsumerRegistrationPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/No tenant assigned/)).toBeInTheDocument();
     });
+  });
+
+  describe('Persona-based Tests', () => {
+    it.each(['cpi-admin', 'tenant-admin'] as PersonaRole[])(
+      '%s can access consumer registration (stoa:subscriptions:write)',
+      async (persona) => {
+        const auth = createAuthMock(persona);
+        mockAuth.mockReturnValue(auth);
+
+        renderWithProviders(<ConsumerRegistrationPage />);
+
+        await waitFor(() => {
+          expect(screen.getByText('Register as Consumer')).toBeInTheDocument();
+          expect(screen.getByLabelText(/Consumer Name/)).toBeInTheDocument();
+        });
+      }
+    );
+
+    it.each(['devops', 'viewer'] as PersonaRole[])(
+      '%s does not have stoa:subscriptions:write scope',
+      (persona) => {
+        const auth = createAuthMock(persona);
+        expect(auth.hasScope('stoa:subscriptions:write')).toBe(false);
+      }
+    );
   });
 });

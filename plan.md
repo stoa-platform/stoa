@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-16
+> Last sync: 2026-02-15
 
 ## Cycle 7 (Feb 9–15) — CLOSED
 
@@ -33,12 +33,18 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 92 pts | **Done**: 5 pts (5%) | **Velocity**: 2 issues closed
+**Scope**: 92 pts | **Done**: 34 pts (37%) | **Velocity**: 7 issues closed
 **Theme**: Demo prep, staging freerun, narrative
 
-### Done
+### Done (7 issues)
 
+- [x] CAB-353: Go/No-Go Checklist 3 Months (5 pts) — PR #482 (9.00/10 → GO)
 - [x] CAB-1145: Smoke test complet parcours demo PROD (3 pts, P1) — PR #486
+- [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (2 pts) — PR #484
+- [x] CAB-1147: Benchmarks Freeze — Capturer resultats STOA vs Kong vs Gravitee (2 pts, P2) — PR #491
+- [x] CAB-1148: Staging Freerun — AI Guardrails + Fallback Chain (13 pts, P3) — PR #495
+- [x] CAB-707: Guardrails — PII Detection & Prompt Injection Protection (5 pts, P2) — PR #495
+- [x] CAB-708: Fallback Chain — Resilience multi-provider (3 pts, P2) — PR #495
 
 ### In Progress
 
@@ -56,20 +62,16 @@
 - [ ] CAB-1150: Preparation Demo 24/02 — narrative + speaker notes (8 pts, P1)
 - [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts, P1)
 
-### Todo — Tier 2: Demo Narrative & Assets (18 pts)
+### Todo — Tier 2: Demo Narrative & Assets (16 pts)
 
 - [ ] CAB-710: n8n + STOA AI Gateway — Demo "ESB is Dead" (3 pts, P2)
 - [ ] CAB-1129: Demo Script — Design Partner Pitch 5min (5 pts, P2)
 - [ ] CAB-1130: Demo Slides — Design Partner Presentation (8 pts, P2)
-- [x] CAB-1147: Benchmarks Freeze — Capturer resultats STOA vs Kong vs Gravitee (2 pts, P2) — PR #491
 
-### Todo — Tier 3: Staging Freerun (39 pts, Mon-Wed only)
+### Todo — Tier 3: Staging Freerun (18 pts, Mon-Wed only)
 
-- [ ] CAB-1148: Staging Freerun — Features V1++ lundi (13 pts, P3)
 - [ ] CAB-1149: Staging Freerun — V1++ suite mardi-mercredi (13 pts, P3)
 - [ ] CAB-709: UAC for LLM — Contrats unifies pour backends IA (5 pts, P2)
-- [ ] CAB-707: Guardrails — PII Detection & Prompt Injection Protection (5 pts, P2)
-- [ ] CAB-708: Fallback Chain — Resilience multi-provider (3 pts, P2)
 
 ### Todo — Tier 4: Promoted from Backlog (11 pts)
 
@@ -79,15 +81,16 @@
 
 ### Backlog (parked in cycle, not committed)
 
-- CAB-601: Status Page (P2)
+- CAB-1175: Platform Trust & Reliability — Status Page MVP Upptime (8 pts, P2) — Council 8.50/10
+- ~~CAB-601: Status Page~~ → superseded by CAB-1175
 - CAB-571: Error Snapshot Network/TLS (P2)
 - CAB-570: Error Snapshot Backend (P2)
-- CAB-392: API Key Rotation (P3)
-- CAB-252: Gateway Monitoring Dashboard (P3)
-- CAB-251: Rate Limiting Advanced (P3)
-- CAB-153: API Versioning Strategy (P3)
-- CAB-151: Webhook Support (P3)
-- CAB-149: API Analytics Dashboard (P3)
+- CAB-392: Community Contrib Value Program (P3)
+- CAB-252: STOA Gateway v2 — Linux Native (P3)
+- CAB-251: Portal Full E2E Testing (P3)
+- CAB-153: REST Protocol Binder (P3)
+- CAB-151: Contract Transformer (OpenAPI/AsyncAPI ↔ UAC) (P3)
+- CAB-149: Specification UAC v1.0 (R&D) (P3)
 - CAB-3: Initial Platform Setup (P4)
 
 ---

@@ -52,6 +52,9 @@
   - ArgoCD + Operator runbooks created, onboarding kit (5 files) for Cédric
 - CAB-353: Go/No-Go Checklist 3 Months — PR #482 (9.00/10 → GO verdict)
 - CAB-1035: Persona Alex DX Test (2 pts) — PR #488 (NO-GO, TTFTC=infinite, 4 tickets created)
+- CAB-1148: AI Guardrails + Fallback Chain (13 pts) — PR #495 (Council 8.25/10, 2 phases, ~485 LOC)
+  - CAB-707: PII detection + prompt injection guardrails (regex, URL/UUID allowlist, redact/reject)
+  - CAB-708: Multi-provider fallback chain (JSON config, circuit breaker integration, per-provider timeout)
 - CAB-1146: Baseline PROD — 16-section snapshot before freeze — PR #484
 - CAB-1145: Smoke test PROD — 23/23 GO, Prometheus 21/23 UP — PR #486
 - CAB-1147: Benchmarks Freeze — VPS 97.25 vs Kong 94.41, K8s latency tables — PR #491

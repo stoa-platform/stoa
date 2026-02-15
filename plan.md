@@ -1,14 +1,14 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-16 (Cycle 8 planning)
+> Last sync: 2026-02-16
 
 ## Cycle 7 (Feb 9–15) — CLOSED
 
 **Scope**: 463 pts | **Done**: 436 pts (94%) | **Velocity**: 32 issues closed
 **Theme**: Code critique + Polish + AI Factory v2
 
-### Done (31 issues)
+### Done (32 issues)
 
 - [x] CAB-1121: Consumer Onboarding & Token Exchange (35 pts) — PR #423 + E2E PR #450
 - [x] CAB-1137: OpenAPI → MCP Auto-Bridge (8 pts) — stoactl PR #6, stoa PR #436
@@ -33,8 +33,12 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 92 pts | **Done**: 0 pts (0%) | **Velocity**: 0 issues closed
+**Scope**: 92 pts | **Done**: 3 pts (3%) | **Velocity**: 1 issue closed
 **Theme**: Demo prep, staging freerun, narrative
+
+### Done
+
+- [x] CAB-1145: Smoke test complet parcours demo PROD (3 pts, P1) — PR #486
 
 ### In Progress
 
@@ -46,10 +50,9 @@
   - [ ] Repetition #2 (vendredi 21) — avec Cedric comme temoin
   - [ ] Video backup filmee
 
-### Todo — Tier 1: Demo Blockers (19 pts)
+### Todo — Tier 1: Demo Blockers (16 pts)
 
 - [ ] CAB-1075: Demo Day Ready — Freeze + Dry Run Temoin + Plan B/C (5 pts, P1)
-- [ ] CAB-1145: Smoke test complet parcours demo PROD (3 pts, P1)
 - [ ] CAB-1150: Preparation Demo 24/02 — narrative + speaker notes (8 pts, P1)
 - [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts, P1)
 
@@ -68,13 +71,24 @@
 - [ ] CAB-707: Guardrails — PII Detection & Prompt Injection Protection (5 pts, P2)
 - [ ] CAB-708: Fallback Chain — Resilience multi-provider (3 pts, P2)
 
+### Todo — Tier 4: Promoted from Backlog (11 pts)
+
+- [ ] CAB-1162: SEO Tracking — Looker Studio + Search Console archive (3 pts, P3)
+- [ ] CAB-362: GW2-10 Circuit Breaker + Session Management (5 pts, P2)
+- [ ] CAB-1128: Design Partner Communication — Client A Beta Access (3 pts, P2)
+
 ### Backlog (parked in cycle, not committed)
 
-- CAB-1162: SEO Tracking — Looker Studio + Search Console archive (3 pts, P3)
-- CAB-362: GW2-10 Circuit Breaker + Session Management (5 pts, P2)
-- CAB-1128: Design Partner Communication — Client A Beta Access (3 pts, P2)
 - CAB-601: Status Page (P2)
 - CAB-571: Error Snapshot Network/TLS (P2)
+- CAB-570: Error Snapshot Backend (P2)
+- CAB-392: API Key Rotation (P3)
+- CAB-252: Gateway Monitoring Dashboard (P3)
+- CAB-251: Rate Limiting Advanced (P3)
+- CAB-153: API Versioning Strategy (P3)
+- CAB-151: Webhook Support (P3)
+- CAB-149: API Analytics Dashboard (P3)
+- CAB-3: Initial Platform Setup (P4)
 
 ---
 

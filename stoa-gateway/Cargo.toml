@@ -48,6 +48,9 @@ subtle = "2"                                 # Timing-safe comparison for finger
 base64 = "0.22"                              # Base64url decode for RFC 8705 thumbprints
 ipnet = "2"                                  # CIDR matching for trusted proxies
 
+# === Guardrails: PII + Injection Detection (CAB-707) ===
+regex = "1"
+
 # === Phase 2 OPA: Embedded Policy Engine (CAB-1094) ===
 regorus = "0.9"                              # Pure Rust OPA evaluator (no sidecar)
 

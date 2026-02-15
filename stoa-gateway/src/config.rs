@@ -234,6 +234,22 @@ pub struct Config {
     #[serde(default = "default_access_log_enabled")]
     pub access_log_enabled: bool,
 
+    // === Guardrails (CAB-707) ===
+    /// Enable PII detection in tool call arguments
+    /// Env: STOA_GUARDRAILS_PII_ENABLED
+    #[serde(default)]
+    pub guardrails_pii_enabled: bool,
+
+    /// Redact PII (true) or reject request (false) when PII is found
+    /// Env: STOA_GUARDRAILS_PII_REDACT
+    #[serde(default = "default_guardrails_pii_redact")]
+    pub guardrails_pii_redact: bool,
+
+    /// Enable prompt injection detection in tool call arguments
+    /// Env: STOA_GUARDRAILS_INJECTION_ENABLED
+    #[serde(default)]
+    pub guardrails_injection_enabled: bool,
+
     // === Per-Upstream Circuit Breaker (CAB-362) ===
     /// Failure threshold before opening circuit (default: 5)
     /// Env: STOA_CB_FAILURE_THRESHOLD
@@ -456,6 +472,10 @@ fn default_access_log_enabled() -> bool {
     true // Enabled by default — structured access logs for observability
 }
 
+fn default_guardrails_pii_redact() -> bool {
+    true // Redact by default (safer than rejecting)
+}
+
 fn default_cb_failure_threshold() -> u32 {
     5
 }
@@ -518,6 +538,9 @@ impl Default for Config {
             quota_default_rate_per_minute: default_quota_rate_per_minute(),
             quota_default_daily_limit: default_quota_daily_limit(),
             access_log_enabled: default_access_log_enabled(),
+            guardrails_pii_enabled: false,
+            guardrails_pii_redact: default_guardrails_pii_redact(),
+            guardrails_injection_enabled: false,
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),
@@ -693,6 +716,14 @@ mod tests {
             config.gateway_external_url,
             Some("http://localhost:8080".to_string())
         );
+    }
+
+    #[test]
+    fn test_default_guardrails_disabled() {
+        let config = Config::default();
+        assert!(!config.guardrails_pii_enabled);
+        assert!(config.guardrails_pii_redact); // redact by default when enabled
+        assert!(!config.guardrails_injection_enabled);
     }
 
     #[test]

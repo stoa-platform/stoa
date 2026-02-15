@@ -161,6 +161,11 @@ gh pr merge <number> --squash --delete-branch
 After successful merge:
 - Delete checkpoint file
 - Log: `STEP-DONE | step=merged task=<TASK> pr=<NUMBER> sha=<MERGE_SHA>`
+- **Linear MCP sync** (if task has CAB-XXXX ID):
+  ```
+  linear.update_issue("CAB-XXXX", state="Done")
+  linear.create_comment(issueId, body="Completed in PR #XXX ...")
+  ```
 
 - If strict branch protection blocks merge:
   ```bash

@@ -75,13 +75,17 @@ Follow the appropriate pattern from `ai-factory.md` (Pattern 3/5/7 for features,
    - PR merged → `linear.update_issue(status="Done")` + `linear.create_comment` with PR link
    - Blocked → `linear.update_issue(status="Blocked")` + comment with reason
    - Paused → leave as "In Progress" (no change needed)
-5. **Learning loop**: if a CI failure, bug, or gotcha was encountered during this session:
+5. **Metrics** — if a PR was merged or CI was fixed this session:
+   - Append `PR-MERGED | task=<T> pr=<N>` to `~/.claude/projects/.../memory/metrics.log`
+   - `/ci-fix` skill auto-appends `CI-FIX` entries (no manual step needed)
+   - See `ai-workflow.md` → "Session Metrics" for full event list
+6. **Learning loop**: if a CI failure, bug, or gotcha was encountered during this session:
    - Check if it's already in `~/.claude/projects/.../memory/gotchas.md`
    - If not → add it (one-liner: trigger, fix, prevention)
    - If it's a recurring pattern (seen 2+ times) → add to `.claude/rules/` as a permanent rule
-6. **Log session end**:
+7. **Log session end**:
    Append `SESSION-END | task=<TASK> status=<success|paused> pr=<NUMBER>` to operations.log
-7. **Clean old checkpoints** (older than 7 days):
+8. **Clean old checkpoints** (older than 7 days):
    Delete `.json` files in `checkpoints/` with mtime > 7d
 
 ## Quick Reference

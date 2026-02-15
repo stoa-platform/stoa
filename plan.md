@@ -1,40 +1,14 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-15 (22h)
+> Last sync: 2026-02-16 (Cycle 8 planning)
 
-## Cycle 7 (Feb 9–15) — CURRENT
+## Cycle 7 (Feb 9–15) — CLOSED
 
-**Scope**: 463 pts | **Done**: 432 pts (93%) | **Velocity**: 29 issues closed
+**Scope**: 463 pts | **Done**: 434 pts (94%) | **Velocity**: 31 issues closed
 **Theme**: Code critique + Polish + AI Factory v2
 
-### In Progress
-
-- [~] CAB-802: Dry Run + Script + Video (3 pts, P1)
-  - ✅ demo-dry-run.sh rewritten: 8 acts, 23 checks, GO/NO-GO (PR #456)
-  - ✅ 7 production fixes: 23/23 PASS, GO in 3.5s (PR #463)
-  - ✅ Credential fixes (PR #469)
-  - [ ] Repetition #1 (mercredi 19) — timer 5 min
-  - [ ] Repetition #2 (vendredi 21) — avec Cedric comme temoin
-  - [ ] Video backup filmee
-
-### Todo
-
-- [ ] CAB-1075: Demo Day Ready — Freeze + Dry Run Temoin + Plan B/C (5 pts, P1)
-- [ ] CAB-1145: Smoke test complet parcours demo PROD (3 pts, P1)
-- [ ] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (2 pts, P1)
-- [ ] CAB-1147: Benchmarks Freeze — Capturer resultats STOA vs Kong vs Gravitee (2 pts, P2)
-- [ ] CAB-1129: Demo Script — Design Partner Pitch 5min (P2)
-- [ ] CAB-1128: Design Partner Communication — Client A Beta Access (P2)
-- [ ] CAB-1130: Demo Slides — Design Partner Presentation (P2)
-- [ ] CAB-1035: Persona Alex — Test manuel onboarding MCP Gateway (2 pts, P2)
-- [ ] CAB-709: UAC for LLM — Contrats unifies pour backends IA (5 pts, P2)
-- [ ] CAB-707: Guardrails — PII Detection & Prompt Injection Protection (5 pts, P2)
-- [ ] CAB-710: n8n + STOA AI Gateway — Demo "ESB is Dead" (3 pts, P2)
-- [ ] CAB-708: Fallback Chain — Resilience multi-provider (3 pts, P2)
-- [ ] CAB-362: GW2-10 Circuit Breaker + Session Management (5 pts, P2) — deferred post-demo
-
-### Done (30 issues)
+### Done (31 issues)
 
 - [x] CAB-1121: Consumer Onboarding & Token Exchange (35 pts) — PR #423 + E2E PR #450
 - [x] CAB-1137: OpenAPI → MCP Auto-Bridge (8 pts) — stoactl PR #6, stoa PR #436
@@ -52,28 +26,55 @@
 - [x] CAB-1166: 4-Persona Test Parity (29 pts) — PRs #467, #468
 - [x] Arena k6 Migration L1+L2+L3 — PRs #438, #444, #447, #449, #480 (ramp-up + CI95 bars)
 - [x] CAB-353: Go/No-Go Checklist 3 Months — PR #482 (9.00/10 → GO)
+- [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (2 pts) — PR #484
 
 ---
 
-## Cycle 8 (Feb 15–22) — NEXT
+## Cycle 8 (Feb 16–22) — CURRENT
 
+**Scope**: 92 pts | **Done**: 0 pts (0%) | **Velocity**: 0 issues closed
 **Theme**: Demo prep, staging freerun, narrative
 
-### Todo
+### In Progress
 
-- [ ] CAB-1150: Preparation Demo 24/02 — narrative + speaker notes (P1)
-- [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (P1)
-- [ ] CAB-1148: Staging Freerun — Features V1++ lundi (P3)
-- [ ] CAB-1149: Staging Freerun — V1++ suite mardi-mercredi (P3)
-- [ ] CAB-1162: SEO Tracking — Looker Studio + Search Console archive (3 pts, P3)
+- [~] CAB-802: Dry Run + Script + Video (3 pts, P1)
+  - ✅ demo-dry-run.sh rewritten: 8 acts, 23 checks, GO/NO-GO (PR #456)
+  - ✅ 7 production fixes: 23/23 PASS, GO in 3.5s (PR #463)
+  - ✅ Credential fixes (PR #469)
+  - [ ] Repetition #1 (mercredi 19) — timer 5 min
+  - [ ] Repetition #2 (vendredi 21) — avec Cedric comme temoin
+  - [ ] Video backup filmee
+
+### Todo — Tier 1: Demo Blockers (19 pts)
+
+- [ ] CAB-1075: Demo Day Ready — Freeze + Dry Run Temoin + Plan B/C (5 pts, P1)
+- [ ] CAB-1145: Smoke test complet parcours demo PROD (3 pts, P1)
+- [ ] CAB-1150: Preparation Demo 24/02 — narrative + speaker notes (8 pts, P1)
+- [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts, P1)
+
+### Todo — Tier 2: Demo Narrative & Assets (18 pts)
+
+- [ ] CAB-710: n8n + STOA AI Gateway — Demo "ESB is Dead" (3 pts, P2)
+- [ ] CAB-1129: Demo Script — Design Partner Pitch 5min (5 pts, P2)
+- [ ] CAB-1130: Demo Slides — Design Partner Presentation (8 pts, P2)
+- [ ] CAB-1147: Benchmarks Freeze — Capturer resultats STOA vs Kong vs Gravitee (2 pts, P2)
+
+### Todo — Tier 3: Staging Freerun (39 pts, Mon-Wed only)
+
+- [ ] CAB-1148: Staging Freerun — Features V1++ lundi (13 pts, P3)
+- [ ] CAB-1149: Staging Freerun — V1++ suite mardi-mercredi (13 pts, P3)
+- [ ] CAB-709: UAC for LLM — Contrats unifies pour backends IA (5 pts, P2)
+- [ ] CAB-707: Guardrails — PII Detection & Prompt Injection Protection (5 pts, P2)
+- [ ] CAB-708: Fallback Chain — Resilience multi-provider (3 pts, P2)
 
 ### Backlog (parked in cycle, not committed)
 
+- CAB-1162: SEO Tracking — Looker Studio + Search Console archive (3 pts, P3)
+- CAB-1035: Persona Alex — Test manuel onboarding MCP Gateway (2 pts, P2)
+- CAB-362: GW2-10 Circuit Breaker + Session Management (5 pts, P2)
+- CAB-1128: Design Partner Communication — Client A Beta Access (3 pts, P2)
 - CAB-601: Status Page (P2)
 - CAB-571: Error Snapshot Network/TLS (P2)
-- CAB-252: Gateway v2 Linux Native
-- CAB-392: Community Contrib Value Program
-- _+ 8 Duplicate/Canceled items (old UAC/AWX tickets)_
 
 ---
 

@@ -78,6 +78,61 @@ Update private `MEMORY.md` when:
 - **Never delete DONE items** from memory.md — they serve as audit trail
 - **Archive** items older than 2 sprints to reduce noise
 
+### Item State Machine (MANDATORY)
+
+Every trackable item follows this lifecycle — no exceptions, no shortcuts:
+
+```
+PENDING ──→ IN_PROGRESS ──→ DONE ──→ ARCHIVED
+   │              │
+   └── BLOCKED ◄──┘
+```
+
+#### Markers by File
+
+| State | plan.md | memory.md text | memory.md section |
+|-------|---------|----------------|-------------------|
+| PENDING | `[ ]` | No bold marker | `📋 NEXT` |
+| IN_PROGRESS | `[~]` | Sub-items may be ✅ but parent has `[ ]` remaining | `🔴 IN PROGRESS` |
+| DONE | `[x]` | `— DONE` suffix or all sub-items ✅ | `✅ DONE` |
+| BLOCKED | `[!]` | `— BLOCKED` suffix + reason | `🚫 BLOCKED` |
+
+#### Structural Invariants (must be true at ALL times)
+
+These 5 rules are non-negotiable. Violating any one = state file drift.
+
+1. **No DONE in active sections** — if an item text contains `**DONE**`, `— DONE`, or has ALL sub-items marked ✅ with zero `[ ]` remaining, it MUST be in `✅ DONE` section. Never leave a completed item in `🔴 IN PROGRESS` or `📋 NEXT`.
+2. **Checkbox ↔ section parity** — `[x]` in plan.md = item in `✅ DONE` in memory.md. `[~]` = `🔴 IN PROGRESS`. `[ ]` = `📋 NEXT`. No cross-state mismatches.
+3. **Single home rule** — an item appears in exactly ONE section of memory.md. Duplicates across sections are forbidden.
+4. **Partial completion** — if a parent task has both ✅ and `[ ]` sub-items, the parent stays `[~]` in `🔴 IN PROGRESS`. Promote to `[x]` + `✅ DONE` only when ALL sub-items are complete.
+5. **Strikethrough = moved** — `~~item~~` in a section means it was relocated. Remove the strikethrough entry within 1 session to avoid clutter.
+
+#### Atomic State Transitions
+
+When an item changes state, perform ALL updates in a **single edit pass** — never split across separate tool calls or "I'll do it later":
+
+| Transition | plan.md | memory.md | MEMORY.md (private) |
+|------------|---------|-----------|---------------------|
+| Start work | `[ ]` → `[~]` | Move from `📋 NEXT` → `🔴 IN PROGRESS` | Update Active Tickets |
+| Complete | `[~]` → `[x]` | Add `— DONE (PR #N)` + move from `🔴 IN PROGRESS` → `✅ DONE` | Update Active Tickets |
+| Block | `[~]` → `[!]` | Move to `🚫 BLOCKED` + add reason | Update Active Tickets |
+| Unblock | `[!]` → `[~]` | Move back to `🔴 IN PROGRESS` | Update Active Tickets |
+
+**Root cause of past drift**: sessions marked items as `**DONE**` in the text but never moved them to the `✅ DONE` section. The text marker and the section move MUST happen together — always.
+
+### Session-End State Lint (MANDATORY before SESSION-END log)
+
+Before logging `SESSION-END`, run these 4 checks mentally. If any fails, fix it before ending.
+
+| # | Check | Scan target | Pass criteria |
+|---|-------|-------------|---------------|
+| 1 | No DONE in IN_PROGRESS | `🔴 IN PROGRESS` section of memory.md | Zero items with `**DONE**`, `— DONE`, or all-✅ sub-items |
+| 2 | No DONE in NEXT | `📋 NEXT` section of memory.md | Zero items with `**DONE**`, `— DONE`, or `~~strikethrough~~` |
+| 3 | Stale `[~]` check | plan.md | Every `[~]` item has at least one `[ ]` sub-item remaining |
+| 4 | Cross-file parity | plan.md vs memory.md | Each `[x]` in plan.md → matching entry in `✅ DONE`. Each `[~]` → in `🔴 IN PROGRESS` |
+
+**Enforcement**: failing this lint is equivalent to pushing code with broken tests. Fix before SESSION-END — no exceptions.
+
 ## Operation Logging (Traceability)
 
 ### Log Location
@@ -120,3 +175,5 @@ See `crash-recovery.md` for checkpoint schema and lifecycle.
 - **If > 10 min structuring manually** -> STOP, use Claude Code
 - **State files are mandatory** — skipping memory.md update is a workflow violation
 - **Operation log is mandatory** — every session MUST have SESSION-START and SESSION-END entries
+- **Atomic transitions only** — marking an item `**DONE**` without moving it to the `✅ DONE` section is forbidden (see Item State Machine above)
+- **Session-End State Lint** — run the 4-check lint before every SESSION-END. Inconsistent state files = workflow violation equivalent to broken tests on main

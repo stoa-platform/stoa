@@ -47,7 +47,7 @@ description: AI-native development workflow, session management, context managem
 
 ### What Are State Files
 - `memory.md` (repo root) — session state, ticket tracker, CI status, decisions, known issues
-- `plan.md` (repo root) — sprint scoreboard, remaining tasks, DoD matrix
+- `plan.md` (repo root) — cycle-driven sprint view (synced from Linear via `/sync-plan`)
 - `~/.claude/projects/.../memory/MEMORY.md` — private persistent memory across conversations
 - `~/.claude/projects/.../memory/operations.log` — append-only session traceability log
 
@@ -62,9 +62,37 @@ Update `memory.md` when:
 6. **Before session end** — always, even if no trigger above
 
 Update `plan.md` when:
-1. **PR merged** — mark as merged in scoreboard
-2. **New task added to sprint** — add row to scoreboard
-3. **Task blocked/unblocked** — update blocker column
+1. **PR merged** — mark ticket as `[x]` in the correct cycle section
+2. **`/sync-plan` run** — cycle-driven sync from Linear (adds missing tickets, updates markers)
+3. **Task blocked/unblocked** — update marker `[~]` ↔ `[!]`
+4. **Cycle rollover** — when a new cycle starts, current becomes historical, next becomes current
+
+### plan.md Structure (Cycle-Driven)
+
+plan.md is a **view** of Linear cycles, NOT a manually curated document. Structure:
+
+```
+# Sprint Plan — STOA Platform
+> Last sync: YYYY-MM-DD
+
+## Cycle N (dates) — CURRENT
+### In Progress    → [~] tickets with sub-items
+### Todo           → [ ] tickets ordered by priority
+### Done (N)       → [x] tickets with PR references
+
+## Cycle N+1 (dates) — NEXT
+### Todo           → [ ] planned tickets
+### Backlog        → parked items (no checkbox)
+
+## Milestones      → manually maintained
+## KPIs Demo       → manually maintained
+## Regles          → manually maintained
+```
+
+**Key rules**:
+- Linear is source of truth; plan.md is a read-only view (except sub-items under `[~]` which are manual)
+- `/sync-plan` discovers ALL tickets in a cycle — tickets added in Linear appear automatically
+- Milestones, KPIs, Regles sections are preserved across syncs (not from Linear)
 
 Update private `MEMORY.md` when:
 1. **New ticket completed** — add to relevant section

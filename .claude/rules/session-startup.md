@@ -30,14 +30,14 @@ Before reading state files, check for crashed sessions and log this session:
 Read these 2 files **in this order** to understand current context:
 
 1. **`memory.md`** (repo root) — active sprint, CI status, decisions, known issues
-2. **`plan.md`** (repo root) — deliverables, execution phases, task status
+2. **`plan.md`** (repo root) — cycle-driven sprint view (synced from Linear via `/sync-plan`)
 
 Private memory (`~/.claude/projects/.../memory/MEMORY.md`) is auto-loaded by Claude Code.
 
 ## Step 2 — Pick Your Task
 
 1. Check **Active Tickets** in `MEMORY.md` → pick highest priority unclaimed task
-2. If no active tickets → check `plan.md` for NEXT/PENDING items
+2. If no active tickets → check `plan.md` current cycle "In Progress" and "Todo" sections
 3. If user says "what next?" → summarize what's available, recommend highest priority
 4. If user gives a specific task → use that (skip queue)
 5. If task has **CAB-XXXX** ID → fetch from Linear MCP for full DoD + description:

@@ -30,15 +30,16 @@ CAP_BASE = 0.4
 CAP_BURST50 = 2.5
 CAP_BURST100 = 4.0
 
-# Weights
-W_BASE = 0.15
-W_BURST50 = 0.25
-W_BURST100 = 0.25
+# Weights (updated for ramp_up scenario)
+W_BASE = 0.10
+W_BURST50 = 0.20
+W_BURST100 = 0.20
 W_AVAIL = 0.15
 W_ERROR = 0.10
 W_CONSIST = 0.10
+W_RAMP = 0.15
 
-SCENARIOS = ["health", "sequential", "burst_10", "burst_50", "burst_100", "sustained"]
+SCENARIOS = ["health", "sequential", "burst_10", "burst_50", "burst_100", "sustained", "ramp_up"]
 
 
 def t_critical(df: int) -> float:
@@ -51,6 +52,20 @@ def t_critical(df: int) -> float:
         if k >= df:
             return T_TABLE[k]
     return 1.96  # fallback to z-score for large df
+
+
+def t_ci95(values: list[float]) -> tuple[float, float, float]:
+    """Compute mean and CI95 bounds for a list of values."""
+    n = len(values)
+    if n < 2:
+        v = values[0] if values else 0.0
+        return v, v, v
+    mean = sum(values) / n
+    variance = sum((x - mean) ** 2 for x in values) / (n - 1)
+    stddev = math.sqrt(max(0, variance))
+    stderr = stddev / math.sqrt(n)
+    t_val = t_critical(n - 1)
+    return mean, max(0, mean - t_val * stderr), mean + t_val * stderr
 
 
 def extract_pct(json_path: Path, key: str) -> float:
@@ -76,6 +91,37 @@ def extract_checks(json_path: Path, field: str) -> int:
         return 0
 
 
+def extract_ramp_metrics(json_path: Path) -> dict:
+    """Extract ramp-up throughput metrics from k6 JSON summary."""
+    if not json_path.exists():
+        return {"rate": 0.0, "success_rate": 1.0, "p99": 0.0}
+    try:
+        data = json.loads(json_path.read_text())
+        metrics = data.get("metrics", {})
+        rate = metrics.get("http_reqs", {}).get("values", {}).get("rate", 0.0)
+        p99 = metrics.get("http_req_duration", {}).get("values", {}).get("p(99)", 0.0) / 1000.0
+        checks = metrics.get("checks", {}).get("values", {})
+        passes = checks.get("passes", 0)
+        fails = checks.get("fails", 0)
+        total = passes + fails
+        success_rate = passes / total if total > 0 else 1.0
+        return {"rate": rate, "success_rate": success_rate, "p99": p99}
+    except (json.JSONDecodeError, KeyError, ValueError, ZeroDivisionError):
+        return {"rate": 0.0, "success_rate": 1.0, "p99": 0.0}
+
+
+def ramp_score(rate: float, success_rate: float, p99: float) -> float:
+    """Score ramp-up: effective throughput capped at 100 req/s.
+
+    effective_rate = rate * success_rate, with penalty if p99 > 2s.
+    Score = min(100, effective_rate).
+    """
+    effective = rate * success_rate
+    if p99 > 2.0:
+        effective *= max(0.5, 1.0 - (p99 - 2.0) / 8.0)
+    return max(0.0, min(100.0, effective))
+
+
 def median(values: list[float]) -> float:
     """Compute median of a list."""
     if not values:
@@ -90,7 +136,8 @@ def latency_score(p95: float, cap: float) -> float:
     return max(0.0, min(100.0, 100.0 * (1.0 - p95 / cap)))
 
 
-def compute_gateway_score(scenario_medians: dict, total_ok: int, total_req: int) -> float:
+def compute_gateway_score(scenario_medians: dict, total_ok: int, total_req: int,
+                          ramp_val: float = 0.0) -> float:
     """Compute composite arena score from median values."""
     base = latency_score(scenario_medians.get("sequential", {}).get("p95", 0), CAP_BASE)
     b50 = latency_score(scenario_medians.get("burst_50", {}).get("p95", 0), CAP_BURST50)
@@ -108,7 +155,9 @@ def compute_gateway_score(scenario_medians: dict, total_ok: int, total_req: int)
     else:
         consist = 100.0
 
-    score = W_BASE * base + W_BURST50 * b50 + W_BURST100 * b100 + W_AVAIL * avail + W_ERROR * error + W_CONSIST * consist
+    score = (W_BASE * base + W_BURST50 * b50 + W_BURST100 * b100 +
+             W_AVAIL * avail + W_ERROR * error + W_CONSIST * consist +
+             W_RAMP * ramp_val)
     return max(0.0, min(100.0, score))
 
 
@@ -134,6 +183,13 @@ def main():
         "gateway_arena_p50_seconds": [],
         "gateway_arena_p95_seconds": [],
         "gateway_arena_p99_seconds": [],
+        "gateway_arena_p50_ci_lower_seconds": [],
+        "gateway_arena_p50_ci_upper_seconds": [],
+        "gateway_arena_p95_ci_lower_seconds": [],
+        "gateway_arena_p95_ci_upper_seconds": [],
+        "gateway_arena_p99_ci_lower_seconds": [],
+        "gateway_arena_p99_ci_upper_seconds": [],
+        "gateway_arena_ramp_rate": [],
         "gateway_arena_requests_total": [],
     }
     family_meta = {
@@ -146,6 +202,13 @@ def main():
         "gateway_arena_p50_seconds": ("gauge", "P50 latency"),
         "gateway_arena_p95_seconds": ("gauge", "P95 latency"),
         "gateway_arena_p99_seconds": ("gauge", "P99 latency"),
+        "gateway_arena_p50_ci_lower_seconds": ("gauge", "P50 latency CI95 lower bound"),
+        "gateway_arena_p50_ci_upper_seconds": ("gauge", "P50 latency CI95 upper bound"),
+        "gateway_arena_p95_ci_lower_seconds": ("gauge", "P95 latency CI95 lower bound"),
+        "gateway_arena_p95_ci_upper_seconds": ("gauge", "P95 latency CI95 upper bound"),
+        "gateway_arena_p99_ci_lower_seconds": ("gauge", "P99 latency CI95 lower bound"),
+        "gateway_arena_p99_ci_upper_seconds": ("gauge", "P99 latency CI95 upper bound"),
+        "gateway_arena_ramp_rate": ("gauge", "Ramp-up max sustained req/s"),
         "gateway_arena_requests_total": ("gauge", "Total requests by status"),
     }
 
@@ -159,6 +222,7 @@ def main():
 
         # Collect per-scenario per-run data
         scenario_run_data: dict[str, list[dict]] = {s: [] for s in SCENARIOS}
+        ramp_run_data: list[dict] = []
 
         for run in valid_runs:
             for scenario in SCENARIOS:
@@ -172,6 +236,9 @@ def main():
                     "ok": extract_checks(jf, "passes"),
                     "fail": extract_checks(jf, "fails"),
                 })
+            # Ramp-up specific metrics
+            ramp_jf = gw_dir / f"run-{run}" / "ramp_up.json"
+            ramp_run_data.append(extract_ramp_metrics(ramp_jf))
 
         # Compute medians per scenario
         scenario_medians = {}
@@ -205,8 +272,35 @@ def main():
                 families["gateway_arena_requests_total"].append(
                     f'gateway_arena_requests_total{{gateway="{name}",scenario="{scenario}",status="error"}} {fail_sum}')
 
+            # CI95 per-scenario latency
+            p50_vals = [r["p50"] for r in runs]
+            p95_vals = [r["p95"] for r in runs]
+            p99_vals = [r["p99"] for r in runs]
+            _, p50_lo, p50_hi = t_ci95(p50_vals)
+            _, p95_lo, p95_hi = t_ci95(p95_vals)
+            _, p99_lo, p99_hi = t_ci95(p99_vals)
+            families["gateway_arena_p50_ci_lower_seconds"].append(
+                f'gateway_arena_p50_ci_lower_seconds{{gateway="{name}",scenario="{scenario}"}} {p50_lo:.6f}')
+            families["gateway_arena_p50_ci_upper_seconds"].append(
+                f'gateway_arena_p50_ci_upper_seconds{{gateway="{name}",scenario="{scenario}"}} {p50_hi:.6f}')
+            families["gateway_arena_p95_ci_lower_seconds"].append(
+                f'gateway_arena_p95_ci_lower_seconds{{gateway="{name}",scenario="{scenario}"}} {p95_lo:.6f}')
+            families["gateway_arena_p95_ci_upper_seconds"].append(
+                f'gateway_arena_p95_ci_upper_seconds{{gateway="{name}",scenario="{scenario}"}} {p95_hi:.6f}')
+            families["gateway_arena_p99_ci_lower_seconds"].append(
+                f'gateway_arena_p99_ci_lower_seconds{{gateway="{name}",scenario="{scenario}"}} {p99_lo:.6f}')
+            families["gateway_arena_p99_ci_upper_seconds"].append(
+                f'gateway_arena_p99_ci_upper_seconds{{gateway="{name}",scenario="{scenario}"}} {p99_hi:.6f}')
+
+        # Ramp-up scoring: median effective rate across runs
+        ramp_scores = [ramp_score(r["rate"], r["success_rate"], r["p99"]) for r in ramp_run_data]
+        median_ramp = median(ramp_scores)
+        median_rate = median([r["rate"] for r in ramp_run_data])
+        families["gateway_arena_ramp_rate"].append(
+            f'gateway_arena_ramp_rate{{gateway="{name}"}} {median_rate:.2f}')
+
         # Composite score (median)
-        score = compute_gateway_score(scenario_medians, total_ok, total_req)
+        score = compute_gateway_score(scenario_medians, total_ok, total_req, median_ramp)
 
         # Per-run scores for stddev + CI95
         run_scores = []
@@ -215,7 +309,7 @@ def main():
             for scenario in SCENARIOS:
                 rd = scenario_run_data[scenario][i]
                 run_medians[scenario] = rd
-            rs = compute_gateway_score(run_medians, total_ok, total_req)
+            rs = compute_gateway_score(run_medians, total_ok, total_req, ramp_scores[i])
             run_scores.append(rs)
 
         # Stddev
@@ -246,9 +340,9 @@ def main():
         families["gateway_arena_runs"].append(f'gateway_arena_runs{{gateway="{name}"}} {n}')
 
         leaderboard.append({"gateway": name, "score": round(score, 2), "stddev": round(stddev, 4),
-                            "ci95": f"[{ci_lower:.2f}, {ci_upper:.2f}]"})
+                            "ci95": f"[{ci_lower:.2f}, {ci_upper:.2f}]", "ramp_rate": round(median_rate, 2)})
 
-        print(f'{{"gateway":"{name}","score":{score:.2f},"stddev":{stddev:.4f},"ci95":[{ci_lower:.2f},{ci_upper:.2f}]}}',
+        print(f'{{"gateway":"{name}","score":{score:.2f},"stddev":{stddev:.4f},"ci95":[{ci_lower:.2f},{ci_upper:.2f}],"ramp_rate":{median_rate:.2f}}}',
               file=sys.stderr)
 
     # Output metrics to stdout — grouped by metric family (Prometheus requirement)

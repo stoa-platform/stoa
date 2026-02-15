@@ -67,11 +67,16 @@ Personal Tenant Auto-Provisioning — **DONE** (PR #451)
 - ✅ 6 unit tests (happy path, idempotent, sanitization, collision, KC failure, existing tenant)
 - Follow-up: TTL cleanup worker, SMTP email verification, welcome email
 
-CAB-802: Dry Run + Script + Video Backup (3 pts) — **Script DONE** (PRs #456, #463)
+CAB-802: Dry Run + Script + Video Backup (3 pts) — **Script DONE** (PRs #456, #463, #469)
 - ✅ demo-dry-run.sh: 8 acts, 23 checks, GO/NO-GO verdict
 - ✅ PR #463: 7 production fixes (arithmetic, KC path, Grafana URL, consumer, gateway 401, mTLS, MCP auth)
-- ✅ Production validated: **23/23 PASS, GO verdict in 3.5s**
+- ✅ PR #469: art3mis password fix (demo→samantha2045) + KC admin creds fix (admin/admin→admin/demo)
+- ✅ Full Acts 1-8 rehearsal validated on prod (15/02): all endpoints, federation, mTLS, MCP tools
+- ✅ Production validated: **23/23 PASS, GO verdict in 5s**
+- ✅ Parzival brute force lock cleared on prod KC
+- ✅ Acme Corp tenant created on prod (demo prerequisite)
 - Remaining: manual rehearsals (Wed 19, Fri 21) + video backup filming
+- Known: API creation requires GitLab (decommissioned) → use Console UI; rate limiting not configured; httpbin flaky
 CAB-872: mTLS Integration E2E + Script Démo (3 pts) — **DONE** (PR #452)
 - ✅ --validate flag on mtls-demo-commands.sh (6-check automated pre-flight)
 - ✅ Wire mTLS binding middleware (Stage 3) into gateway router — was dead code

@@ -31,7 +31,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            A Linear ticket has been moved to "In Progress" and dispatched for autonomous implementation.
+            Council validation for a Linear ticket dispatched for autonomous implementation.
 
             Ticket: ${{ github.event.client_payload.ticket_id }}
             Title: ${{ github.event.client_payload.ticket_title }}
@@ -39,42 +39,22 @@ jobs:
             Priority: ${{ github.event.client_payload.ticket_priority }}
             Estimate: ${{ github.event.client_payload.ticket_estimate }} pts
 
-            Run a full 4-persona Council validation:
-            1. Chucky (Devil's Advocate) — risk, complexity, edge cases
-            2. OSS Killer (VC Skeptique) — value, differentiation, ROI
-            3. Archi 50x50 (Architecte Veteran) — architecture, patterns, debt
-            4. Better Call Saul (Legal/IP) — security, compliance, licenses
+            INSTRUCTIONS — follow these steps in order, be concise:
 
-            Score each /10, compute average.
-            Produce an implementation plan (files, LOC estimate, phases).
-            Classify as Ship/Show/Ask.
+            Step 1: Run 4-persona Council (2-3 sentences each, score /10):
+            - Chucky (risk), OSS Killer (value), Archi 50x50 (architecture), Better Call Saul (legal)
+            - Compute average score. Classify as Ship/Show/Ask.
 
-            Create a GitHub issue:
+            Step 2: Write report to file using echo/printf (NOT heredoc):
+            printf '%s\n' "# Council: ${{ github.event.client_payload.ticket_id }}" "" "Score: X.X/10 — GO/FIX/REDO" "" "[persona reports]" "" "## Plan" "[files, LOC, phases]" "" "## DoD" "- [ ] criteria" "" "Comment /go to start." > /tmp/council-body.md
 
-            IMPORTANT — Issue creation steps (follow exactly):
-            1. First, create the ticket label if it doesn't exist:
-               gh label create "${{ github.event.client_payload.ticket_id }}" --color "0075ca" --description "Linear ticket" --force
-            2. Then create the issue using --body-file with a temp file (NOT inline --body):
-               Write the full report to /tmp/council-body.md first, then:
-               gh issue create --title "Council: ${{ github.event.client_payload.ticket_id }} — ${{ github.event.client_payload.ticket_title }}" --label "council-review" --label "${{ github.event.client_payload.ticket_id }}" --body-file /tmp/council-body.md
+            Step 3: Create label + issue (two commands):
+            gh label create "${{ github.event.client_payload.ticket_id }}" --color "0075ca" --description "Linear ticket" --force
+            gh issue create --title "Council: ${{ github.event.client_payload.ticket_id }} — ${{ github.event.client_payload.ticket_title }}" --label "council-review" --label "${{ github.event.client_payload.ticket_id }}" --body-file /tmp/council-body.md
 
-            The issue body MUST contain:
-            1. Full Council report (4 personas)
-            2. Implementation plan
-            3. Ship/Show/Ask classification
-            4. Instructions: "Comment `/go` to start implementation"
-
-            Include a **Binary DoD** (Definition of Done) checklist:
-            - [ ] All modified files listed in plan
-            - [ ] Each change independently testable
-            - [ ] Total LOC < 300 (or split into micro-PRs)
-            - [ ] No new `any` types, `todo!()`, or `// TODO`
-            - [ ] Component quality gate passes
-            - [ ] CI green
-            - [ ] State files updated (memory.md, plan.md)
-
-            Do NOT implement anything. Only validate and plan.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
+            CRITICAL: Do NOT implement anything. Only validate and create the issue.
+            CRITICAL: Keep persona reviews SHORT (2-3 sentences each). Do NOT write verbose reports.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"
 
       # Post Council report to Slack
       - name: Slack Council Report

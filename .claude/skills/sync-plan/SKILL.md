@@ -1,14 +1,16 @@
-# Skill: /sync-plan — Bidirectional plan.md ↔ Linear Sync
+---
+name: sync-plan
+description: Bidirectional sync between plan.md and Linear tickets. Detects drift, updates markers, reorders by priority.
+argument-hint: "[CAB-XXXX for single ticket, or empty for full sync]"
+---
 
-## When to Use
+# Plan ↔ Linear Sync
 
-Synchronize `plan.md` with Linear ticket statuses. Can be run at session start, after merging PRs, or on-demand.
+Synchronize plan.md with Linear ticket statuses.
 
-**Invoke**: `/sync-plan` (full sync) or `/sync-plan CAB-XXXX` (single ticket)
+Target: $ARGUMENTS
 
-## Workflow
-
-### Step 1: Parse plan.md
+## Step 1: Parse plan.md
 
 Read `plan.md` and extract all `CAB-XXXX` references with their current markers:
 
@@ -21,15 +23,14 @@ Read `plan.md` and extract all `CAB-XXXX` references with their current markers:
 
 Extract ticket IDs using pattern: `CAB-\d{3,4}`
 
-### Step 2: Fetch Linear Statuses
+## Step 2: Fetch Linear Statuses
 
-For each extracted `CAB-XXXX`, fetch current status from Linear:
-
+If single ticket ($ARGUMENTS = CAB-XXXX):
 ```
 linear.get_issue("CAB-XXXX") → status, priority, estimate, assignee
 ```
 
-**Batch optimization**: Use `list_issues` with project filter if >5 tickets to sync:
+If full sync (no argument or >5 tickets):
 ```
 linear.list_issues(
   project: "227427af-6844-484d-bb4a-dedeffc68825",
@@ -37,7 +38,9 @@ linear.list_issues(
 )
 ```
 
-### Step 3: Detect Drift
+For <= 5 tickets, use individual `get_issue` calls.
+
+## Step 3: Detect Drift
 
 Compare plan.md markers vs Linear statuses:
 
@@ -51,23 +54,22 @@ Compare plan.md markers vs Linear statuses:
 | `[~]` | Todo | Yes | Update Linear → In Progress |
 | Not in plan | Exists in Linear | — | Report: "CAB-XXXX exists in Linear but not in plan.md" |
 
-### Step 4: Apply Updates
+## Step 4: Apply Updates
 
-#### Direction: Linear → plan.md (default)
+### Direction: Linear → plan.md (default)
 
 Update plan.md markers to match Linear reality:
 - `Done` in Linear → `[x]` in plan.md
 - `In Progress` in Linear → `[~]` in plan.md
 - `Canceled` in Linear → strikethrough in plan.md
 
-#### Direction: plan.md → Linear (on explicit request)
+### Direction: plan.md → Linear (when user says `--push`)
 
-When user says `/sync-plan --push`:
 - `[x]` in plan.md → `linear.update_issue(status="Done")`
 - `[~]` in plan.md → `linear.update_issue(status="In Progress")`
 - `[ ]` with priority change → `linear.update_issue(priority=N)`
 
-### Step 5: Priority Reorder
+## Step 5: Priority Reorder
 
 After sync, reorder plan.md sections by Linear priority:
 1. P0 (Urgent) items first
@@ -77,9 +79,7 @@ After sync, reorder plan.md sections by Linear priority:
 
 Only reorder within the same section (don't move items between sections).
 
-### Step 6: Report
-
-Present sync results:
+## Step 6: Report
 
 ```
 Sync Results:
@@ -97,22 +97,12 @@ Changes:
 plan.md updated. Review changes with `git diff plan.md`.
 ```
 
-## Single Ticket Mode
-
-`/sync-plan CAB-XXXX` — sync only one ticket:
-
-1. `linear.get_issue("CAB-XXXX")` → fetch full details
-2. Find `CAB-XXXX` in plan.md
-3. If not found → ask user where to add it (which section)
-4. If found → update marker to match Linear status
-5. Report the single change
-
 ## Rules
 
 - **Never delete lines** from plan.md — only update markers and add new entries
 - **Preserve formatting** — keep existing indentation, bullet style, section headers
 - **Log sync** in operations.log: `MCP-CALL | service=linear action=sync-plan tickets=N`
-- **Conflict resolution**: if plan.md and Linear disagree, **Linear wins** by default (source of truth for status)
+- **Conflict resolution**: if plan.md and Linear disagree, **Linear wins** by default
 - **Rate limiting**: max 20 `get_issue` calls per sync (use `list_issues` batch for larger sets)
 - **No auto-commit** — show diff to user, let them decide whether to commit
 - **Cycle awareness**: when listing issues, filter by current cycle if available

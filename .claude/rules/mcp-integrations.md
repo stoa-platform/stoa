@@ -32,6 +32,8 @@ Connected via Claude.ai account settings (not local `.claude/settings.json`).
 | **Sub-task discovered** | Create child issue | `create_issue(title, parentId, team)` |
 | **Need cycle context** | Get current sprint issues | `list_cycles(teamId, type="current")` + `list_issues` |
 | **DoD verification** | Read issue description for acceptance criteria | `get_issue(id)` |
+| **Council validation** | Auto-create ticket on score >= 8/10 | `/council` skill → `create_issue` |
+| **Plan sync** | Drift detection plan.md ↔ Linear | `/sync-plan` skill → batch `get_issue` |
 
 ### When NOT to Use Linear MCP
 

@@ -38,6 +38,17 @@ Given(
 );
 
 Given(
+  'I am logged in as {string} from tenant {string}',
+  async ({ authSession }, personaName: string, _tenant: string) => {
+    const persona = PERSONAS[personaName as PersonaKey];
+    if (!persona) {
+      throw new Error(`Unknown persona: ${personaName}`);
+    }
+    await authSession.switchPersona(personaName as PersonaKey);
+  },
+);
+
+Given(
   'I am logged in to Console as {string} from team {string}',
   async ({ authSession }, personaName: string, _team: string) => {
     const persona = PERSONAS[personaName as PersonaKey];

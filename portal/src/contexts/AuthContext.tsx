@@ -8,6 +8,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { useAuth as useOidcAuth, hasAuthParams } from 'react-oidc-context';
 import type { User, UserPermissionsResponse } from '../types';
 import { apiClient, setAccessToken } from '../services/api';
+import { config } from '../config';
 
 interface AuthContextType {
   user: User | null;
@@ -26,6 +27,7 @@ interface AuthContextType {
   // Actions
   login: () => void;
   logout: () => void;
+  register: () => void;
   refreshPermissions: () => Promise<void>;
 }
 
@@ -323,6 +325,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
+  const register = useCallback(() => {
+    const { keycloak } = config;
+    const registrationUrl =
+      `${keycloak.authority}/protocol/openid-connect/registrations` +
+      `?client_id=${encodeURIComponent(keycloak.clientId)}` +
+      `&response_type=code` +
+      `&redirect_uri=${encodeURIComponent(window.location.origin)}` +
+      `&scope=openid`;
+    window.location.href = registrationUrl;
+  }, []);
+
   const value: AuthContextType = {
     user,
     isAuthenticated: oidc.isAuthenticated,
@@ -340,6 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Actions
     login: () => oidc.signinRedirect(),
     logout: () => oidc.signoutRedirect(),
+    register,
     refreshPermissions: fetchUserPermissions,
   };
 

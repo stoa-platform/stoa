@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -161,7 +161,7 @@ describe('App', () => {
 
       renderApp('/');
 
-      screen.getByText('Create Free Account').click();
+      fireEvent.click(screen.getByText('Create Free Account'));
       expect(mockAuth.register).toHaveBeenCalledOnce();
     });
 
@@ -188,7 +188,7 @@ describe('App', () => {
 
       renderApp('/');
 
-      screen.getByText(/Need enterprise access/).click();
+      fireEvent.click(screen.getByText(/Need enterprise access/));
       expect(screen.getByLabelText('First name *')).toBeInTheDocument();
       expect(screen.getByLabelText('Last name *')).toBeInTheDocument();
       expect(screen.getByLabelText('Work email *')).toBeInTheDocument();

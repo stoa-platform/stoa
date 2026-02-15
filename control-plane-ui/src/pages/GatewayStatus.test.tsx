@@ -206,17 +206,22 @@ describe('GatewayStatus', () => {
       it('renders the page', async () => {
         // Re-import and restore hook mocks (previous tests may have overridden them)
         const hooks = await import('../hooks/useGatewayStatus');
-        vi.mocked(hooks.useGatewayStatus).mockReturnValue({
-          data: {
-            health: { status: 'healthy', proxy_mode: false },
-            apis: [{ id: 'api-1', apiName: 'Payment API', apiVersion: '1.0.0', isActive: true }],
-            applications: [{ id: 'app-1', name: 'Mobile App' }],
-          },
-          isLoading: false,
-          error: null,
-          refetch: mockRefetch,
-          dataUpdatedAt: Date.now(),
-        } as any);
+        vi.mocked(hooks.useGatewayStatus).mockImplementation(
+          () =>
+            ({
+              data: {
+                health: { status: 'healthy', proxy_mode: false },
+                apis: [
+                  { id: 'api-1', apiName: 'Payment API', apiVersion: '1.0.0', isActive: true },
+                ],
+                applications: [{ id: 'app-1', name: 'Mobile App' }],
+              },
+              isLoading: false,
+              error: null,
+              refetch: mockRefetch,
+              dataUpdatedAt: Date.now(),
+            }) as ReturnType<typeof hooks.useGatewayStatus>
+        );
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderComponent();
         expect(screen.getByText('Gateway Adapters')).toBeInTheDocument();

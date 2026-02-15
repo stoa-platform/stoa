@@ -22,7 +22,7 @@ RUNS="${RUNS:-5}"
 DISCARD_FIRST="${DISCARD_FIRST:-1}"
 TIMEOUT="${TIMEOUT:-5}"
 SCRIPT_PATH="${SCRIPT_PATH:-/scripts/benchmark.js}"
-SCENARIOS="health sequential burst_10 burst_50 burst_100 sustained"
+SCENARIOS="health sequential burst_10 burst_50 burst_100 sustained ramp_up"
 WORK_DIR="/tmp/arena"
 
 log_json() {

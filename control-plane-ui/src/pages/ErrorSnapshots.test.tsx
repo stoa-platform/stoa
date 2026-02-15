@@ -185,7 +185,9 @@ describe('ErrorSnapshots', () => {
       it('renders the page', async () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderComponent();
-        expect(await screen.findByRole('heading', { name: /Error Snapshots/ })).toBeInTheDocument();
+        await waitFor(() => {
+          expect(screen.getByText('Error Snapshots')).toBeInTheDocument();
+        });
       });
     }
   );

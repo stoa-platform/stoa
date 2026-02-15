@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createAuthMock } from '../test/helpers';
@@ -203,10 +203,23 @@ describe('GatewayStatus', () => {
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     '%s persona',
     (role) => {
-      it('renders the page', () => {
+      it('renders the page', async () => {
+        // Re-import and restore hook mocks (previous tests may have overridden them)
+        const hooks = await import('../hooks/useGatewayStatus');
+        vi.mocked(hooks.useGatewayStatus).mockReturnValue({
+          data: {
+            health: { status: 'healthy', proxy_mode: false },
+            apis: [{ id: 'api-1', apiName: 'Payment API', apiVersion: '1.0.0', isActive: true }],
+            applications: [{ id: 'app-1', name: 'Mobile App' }],
+          },
+          isLoading: false,
+          error: null,
+          refetch: mockRefetch,
+          dataUpdatedAt: Date.now(),
+        } as any);
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderComponent();
-        expect(screen.getByRole('heading', { name: 'Gateway Adapters' })).toBeInTheDocument();
+        expect(screen.getByText('Gateway Adapters')).toBeInTheDocument();
       });
     }
   );

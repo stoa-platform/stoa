@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15
+> Dernière MAJ: 2026-02-15 (session 2)
 
 ## ✅ DONE
 
@@ -44,6 +44,8 @@
 - CAB-1066: Landing + Pricing (34 pts) — stoa-web PRs #5, #6, #7
 - Portal mTLS Self-Service — PRs #426-#429
 - Arena k6 Migration L1+L2 — PRs #438, #444, #447, #449
+- SEO Batch 6: 5 articles (O2, A2, D1, O4, M6) — stoa-docs PR #41, 32 total published
+- CAB-1138 Phase 6: Console drift UI — PR #472 (654 LOC, 13 tests)
 
 ## 🔴 IN PROGRESS
 
@@ -62,7 +64,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - CAB-1035: DX Persona Alex test onboarding MCP (2 pts)
 - CAB-353: Go/No-Go Checklist 3 Months
 - Arena k6 Migration L3: ramp-up + CI95 error bars + CPU pinning
-- CAB-1138 Phase 6: Console drift UI — ✅ DONE PR #472 (6 files, 654 LOC, 13 tests)
+- SEO adjustments Council: D1 Early Access disclaimer, relecture humaine, endpoints quickstart
 
 ## 🚫 BLOCKED
 
@@ -71,6 +73,6 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 ## 📝 NOTES
 - Demo MVP: mardi 24 février 2026
 - Présentation "ESB is Dead" même jour
-- docs.gostoa.dev = complet, 0 "Coming Soon", build green
+- docs.gostoa.dev = 32 articles, 0 "Coming Soon", all 10 PLAN-SEO recommended done
 - Velocity avec Claude: estimation ÷10, 107 pts docs en 1 soirée
 - Portal 2FA for cert upload: user requirement from Council session — use Keycloak TOTP step-up

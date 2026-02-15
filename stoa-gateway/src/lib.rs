@@ -106,14 +106,22 @@ pub fn build_router(state: AppState) -> Router {
         // HTTP metrics middleware: records method, path, status, duration for ALL requests
         .layer(axum::middleware::from_fn(http_metrics_middleware));
 
-    // Build mTLS extraction layer (CAB-864)
-    // Stage 1: runs BEFORE JWT auth — extracts cert info from headers
-    let mtls_config = state.config.mtls.clone();
-    let mtls_stats = state.mtls_stats.clone();
-    let mtls_layer = axum::middleware::from_fn(move |request, next| {
-        let config = mtls_config.clone();
-        let stats = mtls_stats.clone();
+    // Build mTLS layers (CAB-864)
+    // Stage 1: extraction — runs first, extracts cert info from X-SSL-* headers
+    let mtls_config_s1 = state.config.mtls.clone();
+    let mtls_stats_s1 = state.mtls_stats.clone();
+    let mtls_extraction_layer = axum::middleware::from_fn(move |request, next| {
+        let config = mtls_config_s1.clone();
+        let stats = mtls_stats_s1.clone();
         auth::mtls::mtls_extraction_middleware(config, stats, request, next)
+    });
+    // Stage 3: binding — runs after extraction, verifies cert ↔ JWT cnf.x5t#S256
+    let mtls_config_s3 = state.config.mtls.clone();
+    let mtls_stats_s3 = state.mtls_stats.clone();
+    let mtls_binding_layer = axum::middleware::from_fn(move |request, next| {
+        let config = mtls_config_s3.clone();
+        let stats = mtls_stats_s3.clone();
+        auth::mtls::mtls_binding_middleware(config, stats, request, next)
     });
 
     let mode_router = match state.config.gateway_mode {
@@ -159,8 +167,10 @@ pub fn build_router(state: AppState) -> Router {
                     state.clone(),
                     quota::quota_middleware,
                 ))
-                // mTLS extraction: Stage 1 runs before JWT auth (CAB-864)
-                .layer(mtls_layer)
+                // mTLS Stage 3: binding verification (RFC 8705 — cert ↔ JWT cnf)
+                .layer(mtls_binding_layer)
+                // mTLS Stage 1: extraction (cert info from X-SSL-* headers)
+                .layer(mtls_extraction_layer)
                 .with_state(state)
         }
         GatewayMode::Sidecar => {

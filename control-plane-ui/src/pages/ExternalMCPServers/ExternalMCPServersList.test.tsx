@@ -183,7 +183,9 @@ describe('ExternalMCPServersList', () => {
       it('renders the page', async () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderComponent();
-        expect(await screen.findByRole('heading', { name: 'External MCP Servers' })).toBeInTheDocument();
+        expect(
+          await screen.findByRole('heading', { name: 'External MCP Servers' })
+        ).toBeInTheDocument();
       });
     }
   );

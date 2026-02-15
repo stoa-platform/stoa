@@ -198,7 +198,9 @@ describe('OperationsDashboard', () => {
       it('renders the page', async () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderComponent();
-        expect(await screen.findByRole('heading', { name: 'Operations Dashboard' })).toBeInTheDocument();
+        expect(
+          await screen.findByRole('heading', { name: 'Operations Dashboard' })
+        ).toBeInTheDocument();
       });
     }
   );

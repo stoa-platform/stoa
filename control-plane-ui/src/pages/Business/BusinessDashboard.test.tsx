@@ -158,7 +158,9 @@ describe('BusinessDashboard', () => {
         vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
         renderComponent();
         if (role === 'cpi-admin') {
-          expect(await screen.findByRole('heading', { name: 'Business Analytics' })).toBeInTheDocument();
+          expect(
+            await screen.findByRole('heading', { name: 'Business Analytics' })
+          ).toBeInTheDocument();
         } else {
           expect(await screen.findByText(/don't have permission/)).toBeInTheDocument();
         }

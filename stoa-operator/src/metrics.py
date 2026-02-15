@@ -45,6 +45,20 @@ OPERATOR_UP = Gauge(
     "1 when operator is running",
 )
 
+# --- Drift detection metrics ---
+
+DRIFT_DETECTED_TOTAL = Counter(
+    "stoa_operator_drift_detected_total",
+    "Drift events detected during periodic checks",
+    ["kind", "drift_type"],
+)
+
+DRIFT_REMEDIATED_TOTAL = Counter(
+    "stoa_operator_drift_remediated_total",
+    "Successful auto-remediations after drift detection",
+    ["kind"],
+)
+
 
 def record_reconciliation(kind: str, action: str, result: str, duration: float) -> None:
     """Record a reconciliation event with timing."""

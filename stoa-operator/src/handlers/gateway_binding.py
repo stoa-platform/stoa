@@ -7,8 +7,14 @@ from datetime import UTC, datetime
 import httpx
 import kopf
 
+from src.config import settings
 from src.cp_client import cp_client
-from src.metrics import RESOURCES_MANAGED, record_reconciliation
+from src.metrics import (
+    DRIFT_DETECTED_TOTAL,
+    DRIFT_REMEDIATED_TOTAL,
+    RESOURCES_MANAGED,
+    record_reconciliation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -281,5 +287,66 @@ async def on_gwb_resume(
         logger.error("GWB resume failed for %s: %s", name, msg)
         patch.status["syncError"] = msg
         record_reconciliation("gwb", "resume", "error", time.monotonic() - start)
+    finally:
+        await cp_client.close()
+
+
+@kopf.on.timer(GROUP, VERSION, PLURAL, interval=settings.RECONCILE_INTERVAL_SECONDS)
+async def on_gwb_timer(
+    spec: dict,
+    status: dict,
+    name: str,
+    namespace: str,
+    patch: kopf.Patch,
+    **_kwargs: object,
+) -> None:
+    """Periodic sync check and auto-remediation for GatewayBinding resources."""
+    start = time.monotonic()
+    deployment_id = status.get("gatewayResourceId", "")
+    if not deployment_id:
+        logger.debug("GWB timer %s/%s: no gatewayResourceId, skipping", namespace, name)
+        return
+
+    previous_sync = status.get("syncStatus", "unknown")
+
+    try:
+        await cp_client.connect()
+        dep = await cp_client.get_deployment(deployment_id)
+        cp_sync_status = dep.get("sync_status", "unknown")
+
+        if cp_sync_status in ("drifted", "error") and previous_sync == "synced":
+            logger.warning(
+                "GWB drift: %s/%s sync %s → %s", namespace, name, previous_sync, cp_sync_status
+            )
+            DRIFT_DETECTED_TOTAL.labels(kind="gwb", drift_type="sync_drifted").inc()
+
+            # Auto-remediate
+            try:
+                await cp_client.force_sync_deployment(deployment_id)
+                logger.info("GWB auto-remediated: %s/%s force-synced", namespace, name)
+                DRIFT_REMEDIATED_TOTAL.labels(kind="gwb").inc()
+                patch.status["syncStatus"] = "synced"
+                patch.status["syncError"] = ""
+            except (httpx.HTTPStatusError, httpx.RequestError) as sync_exc:
+                msg = f"Auto-remediation failed: {sync_exc}"
+                logger.warning("GWB remediation error for %s/%s: %s", namespace, name, msg)
+                patch.status["syncStatus"] = "error"
+                patch.status["syncError"] = msg
+
+        elif cp_sync_status == "synced" and previous_sync == "error":
+            logger.info("GWB recovery: %s/%s sync error → synced", namespace, name)
+            patch.status["syncStatus"] = "synced"
+            patch.status["syncError"] = ""
+        else:
+            patch.status["syncStatus"] = cp_sync_status
+
+        patch.status["lastSyncAttempt"] = datetime.now(UTC).isoformat()
+        record_reconciliation("gwb", "timer", "success", time.monotonic() - start)
+
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        msg = f"Timer sync check failed: {exc}"
+        logger.warning("GWB timer error for %s/%s: %s", namespace, name, msg)
+        patch.status["syncError"] = msg
+        record_reconciliation("gwb", "timer", "error", time.monotonic() - start)
     finally:
         await cp_client.close()

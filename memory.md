@@ -77,6 +77,7 @@
   - 7 E2E persona passwords rotated (KC + Infisical + GitHub Secrets)
   - OIDC client secrets: 3 already non-default, 1 public client (no-op)
   - OpenSearch admin rotated (securityadmin.sh + Infisical)
+  - Arena VPS token rotated (SSH + Infisical `prod/gateway/arena/ADMIN_API_TOKEN`)
   - `rotate-secrets.sh` fixed for self-hosted Infisical (CLI-first)
 
 ## 🔴 IN PROGRESS

@@ -145,7 +145,21 @@ store_infisical() {
     return
   fi
 
-  # Try to create, fall back to update
+  # Use Infisical CLI (handles encryption for self-hosted instances)
+  if command -v infisical &>/dev/null; then
+    if infisical secrets set "${key}=${value}" \
+      --env=prod \
+      --path="$path" \
+      --projectId="$INFISICAL_PROJECT_ID" \
+      --token="$INFISICAL_TOKEN" >/dev/null 2>&1; then
+      echo -e "    ${GREEN}[OK] Infisical ${path}/${key}${NC}"
+    else
+      echo -e "    ${RED}[FAIL] Infisical ${path}/${key}${NC}"
+    fi
+    return
+  fi
+
+  # Fallback: curl API (works with Infisical Cloud, not self-hosted)
   local http_code
   http_code=$(curl -sf -o /dev/null -w '%{http_code}' \
     -X POST "https://vault.gostoa.dev/api/v3/secrets/raw" \

@@ -46,7 +46,8 @@ Focus: Intégration, script démo, répétitions
   - DEMO-SCRIPT.md updated with mTLS pre-flight step
 
 - [~] CAB-802: Dry Run + Script + Video (3 pts)
-  - ✅ demo-dry-run.sh rewritten: 8 acts, 24 checks, per-act timing, GO/NO-GO (PR #456)
+  - ✅ demo-dry-run.sh rewritten: 8 acts, 23 checks, GO/NO-GO (PR #456)
+  - ✅ 7 production fixes: 23/23 PASS, GO in 3.5s (PR #463)
   - [ ] Répétition #1 (mercredi 19) — timer 5 min
   - [ ] Répétition #2 (vendredi 21) — avec Cédric comme témoin
   - [ ] Video backup filmée

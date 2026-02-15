@@ -7,7 +7,7 @@
  * Env vars:
  *   TARGET_URL   — URL to benchmark (proxy or health endpoint)
  *   HEALTH_URL   — Health check URL (used only by warmup scenario)
- *   SCENARIO     — One of: warmup, health, sequential, burst_10, burst_50, burst_100, sustained
+ *   SCENARIO     — One of: warmup, health, sequential, burst_10, burst_50, burst_100, sustained, ramp_up
  *   HEADERS      — JSON object of extra headers (optional)
  *   TIMEOUT      — Request timeout in seconds (default: 5)
  */
@@ -70,6 +70,21 @@ const scenarios = {
     vus: 1,
     iterations: 100,
     maxDuration: '60s',
+  },
+  ramp_up: {
+    executor: 'ramping-arrival-rate',
+    startRate: 10,
+    timeUnit: '1s',
+    preAllocatedVUs: 50,
+    maxVUs: 100,
+    stages: [
+      { duration: '5s', target: 10 },    // warm
+      { duration: '10s', target: 30 },   // ramp
+      { duration: '10s', target: 60 },   // push
+      { duration: '10s', target: 100 },  // peak
+      { duration: '15s', target: 100 },  // sustain at peak
+      { duration: '10s', target: 10 },   // cool down
+    ],
   },
 };
 

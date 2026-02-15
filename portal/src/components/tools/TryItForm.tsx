@@ -32,6 +32,54 @@ interface TryItFormProps {
   className?: string;
 }
 
+export function validateField(
+  value: unknown,
+  property: MCPPropertySchema,
+  isRequired: boolean
+): string | undefined {
+  const strVal = typeof value === 'string' ? value : '';
+  const isEmpty = value === undefined || value === '' || value === null;
+
+  if (isRequired && isEmpty) {
+    return 'This field is required';
+  }
+  if (isEmpty) return undefined;
+
+  if (property.type === 'string' && typeof value === 'string') {
+    if (property.minLength !== undefined && value.length < property.minLength) {
+      return `Minimum length is ${property.minLength}`;
+    }
+    if (property.maxLength !== undefined && value.length > property.maxLength) {
+      return `Maximum length is ${property.maxLength}`;
+    }
+    if (property.pattern) {
+      try {
+        if (!new RegExp(property.pattern).test(value)) {
+          return `Must match pattern: ${property.pattern}`;
+        }
+      } catch {
+        // Invalid regex in schema — skip validation
+      }
+    }
+    if (property.enum && !property.enum.includes(value)) {
+      return `Must be one of: ${property.enum.join(', ')}`;
+    }
+  }
+
+  if (property.type === 'number' || property.type === 'integer') {
+    const numVal = typeof value === 'number' ? value : Number(strVal);
+    if (isNaN(numVal)) return 'Must be a valid number';
+    if (property.minimum !== undefined && numVal < property.minimum) {
+      return `Minimum value is ${property.minimum}`;
+    }
+    if (property.maximum !== undefined && numVal > property.maximum) {
+      return `Maximum value is ${property.maximum}`;
+    }
+  }
+
+  return undefined;
+}
+
 interface FormFieldProps {
   name: string;
   property: MCPPropertySchema;
@@ -326,6 +374,7 @@ export function TryItForm({
   className = '',
 }: TryItFormProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
   const [response, setResponse] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const [showResponse, setShowResponse] = useState(true);
@@ -344,6 +393,7 @@ export function TryItForm({
         value={formData[name]}
         onChange={(value) => handleFieldChange(name, value)}
         isRequired={requiredFields.includes(name)}
+        error={fieldErrors[name]}
       />
     ));
   };
@@ -360,12 +410,19 @@ export function TryItForm({
     setError(null);
     setResponse(null);
 
-    // Validate required fields
-    const missingRequired = requiredFields.filter(
-      (field) => formData[field] === undefined || formData[field] === ''
-    );
-    if (missingRequired.length > 0) {
-      setError(`Missing required fields: ${missingRequired.join(', ')}`);
+    // Validate all fields
+    const errors: Record<string, string | undefined> = {};
+    let hasErrors = false;
+    for (const [name, property] of Object.entries(properties)) {
+      const fieldError = validateField(formData[name], property, requiredFields.includes(name));
+      if (fieldError) {
+        errors[name] = fieldError;
+        hasErrors = true;
+      }
+    }
+    setFieldErrors(errors);
+    if (hasErrors) {
+      setError('Please fix the validation errors above');
       return;
     }
 

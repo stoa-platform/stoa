@@ -63,6 +63,7 @@ jobs:
 
             IMPORTANT: Do NOT write any files. Do NOT create issues or labels. Just output the report text above.
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 3"
+          show_full_output: true
 
       # Extract Claude's report from execution log and create GitHub issue
       - name: Create Council Issue
@@ -113,9 +114,13 @@ jobs:
             if [ -s council-body.md ]; then
               echo "Extracted $(wc -l < council-body.md | tr -d ' ') lines from execution output"
             else
-              echo "jq extraction failed, showing file structure..."
-              jq -c 'keys_unsorted // type' "$EXEC_FILE" 2>/dev/null | head -5 || true
-              jq -rs '.[0] | keys_unsorted // type' "$EXEC_FILE" 2>/dev/null || true
+              echo "jq extraction failed, dumping structure..."
+              echo "Top-level type: $(jq -c 'type' "$EXEC_FILE" 2>/dev/null)"
+              echo "Length: $(jq -c 'length' "$EXEC_FILE" 2>/dev/null)"
+              echo "Element types: $(jq -c '[.[] | .type // type]' "$EXEC_FILE" 2>/dev/null)"
+              echo "Element keys: $(jq -c '[.[] | (keys_unsorted | join(","))]' "$EXEC_FILE" 2>/dev/null)"
+              echo "First 200 chars of each element:"
+              jq -c '.[] | tostring[:200]' "$EXEC_FILE" 2>/dev/null || true
             fi
           else
             echo "::warning::Execution file not found at $EXEC_FILE"

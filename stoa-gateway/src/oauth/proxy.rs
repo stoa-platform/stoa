@@ -125,6 +125,19 @@ pub async fn register_proxy(State(state): State<AppState>, Json(payload): Json<V
 
     debug!(url = %dcr_url, "Proxying DCR request to Keycloak");
 
+    // Strip `scope` from DCR payload before forwarding.
+    // When Keycloak receives `scope` in DCR, it replaces the realm default scopes
+    // with ONLY the requested ones — losing profile, email, roles, etc.
+    // By removing it, Keycloak assigns ALL realm defaults + makes optionals available.
+    // Claude.ai can then request any scope during the authorization step.
+    let mut cleaned_payload = payload;
+    if let Some(obj) = cleaned_payload.as_object_mut() {
+        if obj.contains_key("scope") {
+            debug!("Stripping 'scope' from DCR payload to preserve Keycloak realm defaults");
+            obj.remove("scope");
+        }
+    }
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .build()
@@ -134,7 +147,7 @@ pub async fn register_proxy(State(state): State<AppState>, Json(payload): Json<V
     let dcr_resp = match client
         .post(&dcr_url)
         .header("content-type", "application/json")
-        .json(&payload)
+        .json(&cleaned_payload)
         .send()
         .await
     {

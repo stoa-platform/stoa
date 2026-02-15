@@ -6,8 +6,11 @@ metadata:
   labels:
     app: pushgateway
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-production
-    nginx.ingress.kubernetes.io/whitelist-source-range: "51.83.45.13/32,54.36.209.237/32,51.255.201.17/32"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Basic auth instead of IP whitelist (OVH LB strips client IP)
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: pushgateway-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Arena Pushgateway"
 spec:
   ingressClassName: nginx
   tls:

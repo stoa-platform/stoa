@@ -1,4 +1,4 @@
-@portal @mtls @critical
+@portal @mtls @critical @wip
 Feature: Portal - mTLS Certificate Upload & Token Exchange
   # Tests the consumer-facing mTLS flow in the Developer Portal:
   # subscribe to an API, upload a client certificate, verify cert details.

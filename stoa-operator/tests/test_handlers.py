@@ -1,6 +1,6 @@
 """Tests for kopf handlers — GatewayInstance and GatewayBinding."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import kopf
@@ -9,12 +9,14 @@ from src.handlers.gateway_binding import (
     on_gwb_create,
     on_gwb_delete,
     on_gwb_resume,
+    on_gwb_timer,
     on_gwb_update,
 )
 from src.handlers.gateway_instance import (
     on_gwi_create,
     on_gwi_delete,
     on_gwi_resume,
+    on_gwi_timer,
     on_gwi_update,
 )
 
@@ -440,3 +442,187 @@ async def test_gwb_resume_recreates_on_404(mock_cp):
     assert patch.status["gatewayResourceId"] == "dep-new"
     assert patch.status["syncStatus"] == "synced"
     mock_cp.create_deployment.assert_awaited_once()
+
+
+# --- GatewayInstance timer tests ---
+
+
+@pytest.mark.asyncio
+@patch("src.handlers.gateway_instance.cp_client")
+async def test_gwi_timer_updates_health(mock_cp):
+    mock_cp.connect = AsyncMock()
+    mock_cp.close = AsyncMock()
+    mock_cp.health_check_gateway = AsyncMock(return_value={"status": "online"})
+
+    p = FakePatch()
+    await on_gwi_timer(
+        spec={"gatewayType": "stoa"},
+        status={"cpGatewayId": "gw-1", "phase": "online"},
+        name="stoa-gw",
+        namespace="stoa-system",
+        patch=p,
+    )
+    assert p.status["phase"] == "online"
+    assert p.status["error"] == ""
+    assert "lastHealthCheck" in p.status
+    mock_cp.health_check_gateway.assert_awaited_once_with("gw-1")
+
+
+@pytest.mark.asyncio
+@patch("src.handlers.gateway_instance.DRIFT_DETECTED_TOTAL")
+@patch("src.handlers.gateway_instance.cp_client")
+async def test_gwi_timer_detects_degradation(mock_cp, mock_drift):
+    mock_cp.connect = AsyncMock()
+    mock_cp.close = AsyncMock()
+    mock_cp.health_check_gateway = AsyncMock(return_value={"status": "offline"})
+    mock_counter = MagicMock()
+    mock_drift.labels.return_value = mock_counter
+
+    p = FakePatch()
+    await on_gwi_timer(
+        spec={"gatewayType": "stoa"},
+        status={"cpGatewayId": "gw-1", "phase": "online"},
+        name="stoa-gw",
+        namespace="stoa-system",
+        patch=p,
+    )
+    assert p.status["phase"] == "offline"
+    mock_drift.labels.assert_called_once_with(kind="gwi", drift_type="health_degraded")
+    mock_counter.inc.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("src.handlers.gateway_instance.cp_client")
+async def test_gwi_timer_skips_without_id(mock_cp):
+    p = FakePatch()
+    await on_gwi_timer(
+        spec={"gatewayType": "stoa"},
+        status={},
+        name="stoa-gw",
+        namespace="stoa-system",
+        patch=p,
+    )
+    mock_cp.connect.assert_not_called()
+    assert p.status == {}
+
+
+@pytest.mark.asyncio
+@patch("src.handlers.gateway_instance.cp_client")
+async def test_gwi_timer_handles_api_error(mock_cp):
+    mock_cp.connect = AsyncMock()
+    mock_cp.close = AsyncMock()
+    mock_cp.health_check_gateway = AsyncMock(
+        side_effect=httpx.RequestError(
+            "Connection refused", request=httpx.Request("POST", "http://test")
+        )
+    )
+
+    p = FakePatch()
+    await on_gwi_timer(
+        spec={"gatewayType": "stoa"},
+        status={"cpGatewayId": "gw-1", "phase": "online"},
+        name="stoa-gw",
+        namespace="stoa-system",
+        patch=p,
+    )
+    assert "Timer health check failed" in p.status["error"]
+    # Timer should NOT raise — it must keep running
+
+
+# --- GatewayBinding timer tests ---
+
+
+@pytest.mark.asyncio
+@patch("src.handlers.gateway_binding.cp_client")
+async def test_gwb_timer_confirms_sync(mock_cp):
+    mock_cp.connect = AsyncMock()
+    mock_cp.close = AsyncMock()
+    mock_cp.get_deployment = AsyncMock(return_value={"id": "dep-1", "sync_status": "synced"})
+
+    p = FakePatch()
+    await on_gwb_timer(
+        spec={"apiRef": {"name": "petstore"}, "gatewayRef": {"name": "kong-prod"}},
+        status={"gatewayResourceId": "dep-1", "syncStatus": "synced"},
+        name="petstore-kong",
+        namespace="stoa-system",
+        patch=p,
+    )
+    assert p.status["syncStatus"] == "synced"
+    assert "lastSyncAttempt" in p.status
+    mock_cp.force_sync_deployment.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("src.handlers.gateway_binding.DRIFT_REMEDIATED_TOTAL")
+@patch("src.handlers.gateway_binding.DRIFT_DETECTED_TOTAL")
+@patch("src.handlers.gateway_binding.cp_client")
+async def test_gwb_timer_detects_and_remediates_drift(mock_cp, mock_drift, mock_remediated):
+    mock_cp.connect = AsyncMock()
+    mock_cp.close = AsyncMock()
+    mock_cp.get_deployment = AsyncMock(return_value={"id": "dep-1", "sync_status": "drifted"})
+    mock_cp.force_sync_deployment = AsyncMock(return_value={"id": "dep-1"})
+    mock_drift_counter = MagicMock()
+    mock_drift.labels.return_value = mock_drift_counter
+    mock_rem_counter = MagicMock()
+    mock_remediated.labels.return_value = mock_rem_counter
+
+    p = FakePatch()
+    await on_gwb_timer(
+        spec={"apiRef": {"name": "petstore"}, "gatewayRef": {"name": "kong-prod"}},
+        status={"gatewayResourceId": "dep-1", "syncStatus": "synced"},
+        name="petstore-kong",
+        namespace="stoa-system",
+        patch=p,
+    )
+    assert p.status["syncStatus"] == "synced"
+    assert p.status["syncError"] == ""
+    mock_drift.labels.assert_called_once_with(kind="gwb", drift_type="sync_drifted")
+    mock_drift_counter.inc.assert_called_once()
+    mock_cp.force_sync_deployment.assert_awaited_once_with("dep-1")
+    mock_remediated.labels.assert_called_once_with(kind="gwb")
+    mock_rem_counter.inc.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("src.handlers.gateway_binding.cp_client")
+async def test_gwb_timer_skips_without_deployment_id(mock_cp):
+    p = FakePatch()
+    await on_gwb_timer(
+        spec={"apiRef": {"name": "petstore"}, "gatewayRef": {"name": "kong-prod"}},
+        status={},
+        name="petstore-kong",
+        namespace="stoa-system",
+        patch=p,
+    )
+    mock_cp.connect.assert_not_called()
+    assert p.status == {}
+
+
+@pytest.mark.asyncio
+@patch("src.handlers.gateway_binding.DRIFT_DETECTED_TOTAL")
+@patch("src.handlers.gateway_binding.cp_client")
+async def test_gwb_timer_handles_remediation_failure(mock_cp, mock_drift):
+    mock_cp.connect = AsyncMock()
+    mock_cp.close = AsyncMock()
+    mock_cp.get_deployment = AsyncMock(return_value={"id": "dep-1", "sync_status": "drifted"})
+    mock_cp.force_sync_deployment = AsyncMock(
+        side_effect=httpx.HTTPStatusError(
+            "Server Error",
+            request=httpx.Request("POST", "http://test"),
+            response=httpx.Response(500, text="Internal Server Error"),
+        )
+    )
+    mock_drift_counter = MagicMock()
+    mock_drift.labels.return_value = mock_drift_counter
+
+    p = FakePatch()
+    await on_gwb_timer(
+        spec={"apiRef": {"name": "petstore"}, "gatewayRef": {"name": "kong-prod"}},
+        status={"gatewayResourceId": "dep-1", "syncStatus": "synced"},
+        name="petstore-kong",
+        namespace="stoa-system",
+        patch=p,
+    )
+    assert p.status["syncStatus"] == "error"
+    assert "Auto-remediation failed" in p.status["syncError"]
+    mock_drift_counter.inc.assert_called_once()

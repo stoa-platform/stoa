@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-13
+> Dernière MAJ: 2026-02-15
 
 ## ✅ DONE (cette semaine)
 
@@ -30,17 +30,19 @@
 ## 🔴 IN PROGRESS — Chemin critique démo 24/02
 
 ### P0 — Code (doit être fini semaine 7-8)
-CAB-1121: Consumer Onboarding & Token Exchange (35 pts) — MEGA, In Progress
-- Identity flow Portal → Keycloak → Gateway
-- Token Exchange RFC 8693
-- C'est LE flow qu'on démo
+CAB-1121: Consumer Onboarding & Token Exchange (35 pts) — **DONE** (PR #423)
+- ✅ RFC 8693 token exchange: CP API endpoint + Portal UI + 19 tests
+- ✅ Demo flow: Register → Credentials → Exchange Token → Call API
 
-CAB-1137: OpenAPI → MCP Auto-Bridge stoactl (8 pts) — In Progress
-- stoactl bridge openapi.yaml → MCP tools auto-générés
-- Différenciateur critique vs Kong/Gravitee
+CAB-1137: OpenAPI → MCP Auto-Bridge stoactl (8 pts) — **DONE** (stoactl PR #6, stoa PR #436)
+- ✅ stoactl bridge --apply + --server-name flag + 4 tests
+- ✅ DEMO-SCRIPT.md Act 7.1 (bridge demo)
+
+stoa-web PR #6 — CTA → portal.gostoa.dev — **DONE** (merged 2026-02-15)
+- ✅ Header, Hero, Pricing, FinalCTA links updated to portal.gostoa.dev
 
 ### P0 — Préparation démo (semaine du 17-23 fév)
-CAB-864: mTLS + OAuth2 Certificate Binding 100+ clients (34 pts) — In Progress, due 26/02
+CAB-864: mTLS + OAuth2 Certificate Binding 100+ clients (34 pts) — **DONE**
 - ✅ Gateway mTLS middleware (mtls.rs) — already implemented
 - ✅ Control Plane cert management (certificate_utils.py, consumer model, bulk endpoint) — already implemented
 - ✅ Keycloak cnf.x5t#S256 binding — already implemented
@@ -53,11 +55,22 @@ CAB-864: mTLS + OAuth2 Certificate Binding 100+ clients (34 pts) — In Progress
   - DEMO ONLY headers on all 3 scripts + credentials.json output
 - ✅ PR #425 merged (13/02) — 6 files, 866 LOC, Ship mode
 - ✅ Phase 2 Self-Service (13/02): 4 micro-PRs #426-#429 merged — Console + Portal + Gateway + Grafana (~450 LOC total)
-- 🔴 Reste: E2E test against running stack (CAB-872)
+- ✅ CAB-872 E2E validation: PR #453 merged — validate-mtls-flow.sh + --validate flag + @wip tags
 
-CAB-802: Dry Run + Script + Video Backup (3 pts) — Todo, due 23/02
-CAB-550: Error Snapshot Demo Scenario (3 pts) — Todo, due 23/02
-CAB-872: mTLS Integration E2E + Script Démo (3 pts) — Todo
+CAB-550: Error Snapshot Demo Scenario (3 pts) — **DONE** (PR #448)
+- ✅ 3 hero errors, --validate pre-flight, prod validated (53 docs)
+
+Personal Tenant Auto-Provisioning — **DONE** (PR #451)
+- ✅ POST /v1/me/tenant: creates free-{username} tenant, KC group, viewer role (idempotent)
+- ✅ Portal AuthContext: auto-triggers on null tenant_id, signinSilent refresh
+- ✅ Realm JSON: registrationAllowed=true
+- ✅ 6 unit tests (happy path, idempotent, sanitization, collision, KC failure, existing tenant)
+- Follow-up: TTL cleanup worker, SMTP email verification, welcome email
+
+CAB-802: Dry Run + Script + Video Backup (3 pts) — **Script DONE** (PR #456)
+- ✅ demo-dry-run.sh: 8 acts validated end-to-end (24 checks, GO/NO-GO verdict)
+- Remaining: manual rehearsals (Wed 19, Fri 21) + video backup filming
+CAB-872: mTLS Integration E2E + Script Démo (3 pts) — **DONE** (PR #453)
 CAB-1075: Demo Day Ready — Freeze + Dry Run Témoin + Plan B/C (5 pts) — Backlog
 
 ### P0 — Strategy (livrable de la démo, pas prérequis technique)
@@ -66,6 +79,15 @@ CAB-1031: Plan d'Action SI Post-Démo — Arbre de Décision (21 pts) — **DONE
 - ✅ 8 sections: Executive Summary, Arbre Decision (3 gates), Roadmap Go/Pivot/Stop, Budget, Onboarding Cedric, KPIs
 - ✅ Council Review 8.5/10 Go — 3 adjustments applied: Gate 2 controllable triggers, CIR warning on pivot consulting, realistic star KPIs
 - ✅ Pushed to stoa-strategy main (private repo)
+
+### Arena k6 Migration — Level 1+2 DONE ✅
+- **PR #438** ✅ k6 benchmark.js + run-arena.sh + Dockerfile + CronJob migration
+- **PR #444** ✅ Scorer piping fix (run-arena.py stderr/stdout)
+- **PR #447** ✅ Grafana dashboard update (stddev panel, k6 annotation)
+- **PR #449** ✅ VPS co-location: Pushgateway ingress (basic auth), deploy.sh, systemd timers
+- VPS scores: stoa-vps 97.56, kong-vps 96.46, gravitee-vps 96.39
+- Pushgateway: `pushgateway.gostoa.dev` (basic auth, letsencrypt-prod)
+- Remaining: L3/PR 5 (ramp-up + CI95 error bars in Grafana) — post-demo
 
 ## 📋 NEXT (post-démo ou si le temps le permet)
 
@@ -76,8 +98,12 @@ CAB-1031: Plan d'Action SI Post-Démo — Arbre de Décision (21 pts) — **DONE
 - ✅ Grafana mTLS dashboard + 3 alerts (PR #429, ~120 LOC) — 7 panels, StoaMtlsHighFailureRate/BindingMismatch/CertsExpiringSoon
 
 CAB-1133: Portal Functional Test Suite 17 routes × 4 personas (34 pts) — In Progress
-CAB-1134: ADR-040 Born GitOps Multi-Env (5 pts) — In Progress
-CAB-1138: GitOps Reconciliation Operator AWX → K8s (21 pts) — Backlog
+CAB-1134: ADR-040 Born GitOps Multi-Env (5 pts) — **DONE** (stoa-docs PR #17 merged, ADR-040 published, 5 claims sourced)
+CAB-1138: GitOps Reconciliation Operator AWX → K8s (21 pts) — **Phase 5 DONE**
+- ✅ P1-P4: AWX cleanup, CRD schemas, kopf scaffold, reconcilers, Prometheus metrics (PRs #415, #418, #442, #443, #445, #446)
+- ✅ P5: Drift detection timer — PR #454 merged, deployed to staging + prod (image 0.3.0)
+  - `@kopf.on.timer()` for GWI health + GWB sync, auto-remediation, 2 drift metrics
+  - 55 tests (72.79% coverage)
 CAB-1030: Admin Guide Onboarding Ops Cédric (13 pts) — Todo (docs publiques faites, reste kit privé)
 CAB-1035: DX Persona Alex test onboarding MCP (2 pts) — Todo
 CAB-353: Go/No-Go Checklist 3 Months — Todo

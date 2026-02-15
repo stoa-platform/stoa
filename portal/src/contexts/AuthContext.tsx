@@ -189,6 +189,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
 
+  // Auto-provision personal tenant for users without one
+  const provisionPersonalTenant = useCallback(async () => {
+    try {
+      await apiClient.post('/v1/me/tenant');
+      // Force token refresh to get new tenant_id claim
+      await oidc.signinSilent();
+    } catch (error) {
+      console.error('[AuthContext] Tenant provisioning failed', error);
+    }
+  }, [oidc]);
+
   // Fetch permissions from backend (single source of truth)
   const fetchUserPermissions = useCallback(async (): Promise<void> => {
     if (!oidc.user?.access_token) {
@@ -256,6 +267,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsReady(false);
     }
   }, [oidc.user, fetchUserPermissions]);
+
+  // Auto-provision personal tenant for self-registered users without one
+  useEffect(() => {
+    if (isReady && user && !user.tenant_id) {
+      provisionPersonalTenant().then(() => fetchUserPermissions());
+    }
+  }, [isReady, user?.tenant_id, provisionPersonalTenant, fetchUserPermissions]);
 
   // Auto-login if we have auth params in URL (callback from Keycloak)
   useEffect(() => {

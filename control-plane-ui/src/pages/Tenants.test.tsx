@@ -1,31 +1,16 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createAuthMock } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
+import type { PersonaRole } from '../test/helpers';
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../contexts/AuthContext', () => ({
-  useAuth: vi.fn(() => ({
-    user: {
-      id: 'user-admin',
-      email: 'parzival@oasis.gg',
-      name: 'Parzival',
-      roles: ['cpi-admin'],
-      tenant_id: 'oasis-gunters',
-      permissions: ['tenants:read', 'apis:read', 'apps:read', 'audit:read', 'admin:servers'],
-    },
-    isAuthenticated: true,
-    isLoading: false,
-    isReady: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    hasPermission: vi.fn(() => true),
-    hasRole: vi.fn(() => true),
-  })),
-}));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 vi.mock('../services/api', () => ({
   apiService: {
@@ -92,6 +77,11 @@ function renderTenants() {
 }
 
 describe('Tenants', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+  });
+
   it('renders the page heading', async () => {
     renderTenants();
     expect(await screen.findByText('Tenants')).toBeInTheDocument();
@@ -134,4 +124,15 @@ describe('Tenants', () => {
     renderTenants();
     expect(await screen.findByText('No tenants found')).toBeInTheDocument();
   });
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderTenants();
+        expect(await screen.findByText('Tenants')).toBeInTheDocument();
+      });
+    }
+  );
 });

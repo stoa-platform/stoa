@@ -1,7 +1,15 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createAuthMock } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
+import type { PersonaRole } from '../test/helpers';
+
+// Mock AuthContext
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: vi.fn(),
+}));
 
 // Mock useGatewayStatus hooks
 const mockRefetch = vi.fn();
@@ -73,6 +81,11 @@ function renderComponent() {
 }
 
 describe('GatewayStatus', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+  });
+
   it('renders the heading', () => {
     renderComponent();
     expect(screen.getByRole('heading', { name: 'Gateway Adapters' })).toBeInTheDocument();
@@ -185,4 +198,34 @@ describe('GatewayStatus', () => {
     expect(screen.getByText('Failed to load gateway status')).toBeInTheDocument();
     expect(screen.getByText('Network error')).toBeInTheDocument();
   });
+
+  // 4-persona coverage
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', async () => {
+        // Re-import and restore hook mocks (previous tests may have overridden them)
+        const hooks = await import('../hooks/useGatewayStatus');
+        vi.mocked(hooks.useGatewayStatus).mockImplementation(
+          () =>
+            ({
+              data: {
+                health: { status: 'healthy', proxy_mode: false },
+                apis: [
+                  { id: 'api-1', apiName: 'Payment API', apiVersion: '1.0.0', isActive: true },
+                ],
+                applications: [{ id: 'app-1', name: 'Mobile App' }],
+              },
+              isLoading: false,
+              error: null,
+              refetch: mockRefetch,
+              dataUpdatedAt: Date.now(),
+            }) as ReturnType<typeof hooks.useGatewayStatus>
+        );
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderComponent();
+        expect(screen.getByText('Gateway Adapters')).toBeInTheDocument();
+      });
+    }
+  );
 });

@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { createAuthMock } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
+import type { PersonaRole } from '../../test/helpers';
+
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 // Mock mcpGatewayService
 const mockGetTools = vi.fn().mockResolvedValue({
@@ -71,6 +76,7 @@ function renderComponent() {
 describe('ToolCatalog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   });
 
   it('renders the heading', async () => {
@@ -134,4 +140,15 @@ describe('ToolCatalog', () => {
       });
     });
   });
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderComponent();
+        expect(await screen.findByRole('heading', { name: 'AI Tool Catalog' })).toBeInTheDocument();
+      });
+    }
+  );
 });

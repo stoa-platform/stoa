@@ -1,26 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createAuthMock } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
+import type { PersonaRole } from '../test/helpers';
 
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: vi.fn(() => ({
-    user: {
-      id: 'user-admin',
-      email: 'parzival@oasis.gg',
-      name: 'Parzival',
-      roles: ['cpi-admin'],
-      tenant_id: 'oasis-gunters',
-      permissions: ['tenants:read', 'apis:read', 'apps:read', 'audit:read', 'admin:servers'],
-    },
-    isAuthenticated: true,
-    isLoading: false,
-    isReady: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    hasPermission: vi.fn(() => true),
-    hasRole: vi.fn(() => true),
-  })),
+  useAuth: vi.fn(),
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -96,6 +83,11 @@ function renderApp(route = '/') {
 }
 
 describe('Dashboard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+  });
+
   it('renders the Dashboard heading', async () => {
     renderApp('/');
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
@@ -108,12 +100,12 @@ describe('Dashboard', () => {
 
   it('greets the authenticated user by name', async () => {
     renderApp('/');
-    expect(await screen.findByText('Hello, Parzival!')).toBeInTheDocument();
+    expect(await screen.findByText('Hello, James Halliday!')).toBeInTheDocument();
   });
 
   it('shows the user email', async () => {
     renderApp('/');
-    expect(await screen.findByText('parzival@oasis.gg')).toBeInTheDocument();
+    expect(await screen.findByText('halliday@gregarious-games.com')).toBeInTheDocument();
   });
 
   it('renders the four quick action card descriptions', async () => {
@@ -133,4 +125,16 @@ describe('Dashboard', () => {
     renderApp('/');
     expect(await screen.findByText('Quick Links')).toBeInTheDocument();
   });
+
+  // 4-persona coverage
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderApp('/');
+        expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+      });
+    }
+  );
 });

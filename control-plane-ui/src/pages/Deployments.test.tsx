@@ -1,26 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { createAuthMock } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
+import type { PersonaRole } from '../test/helpers';
 
 // Mock AuthContext
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: vi.fn(() => ({
-    user: {
-      id: 'user-admin',
-      email: 'parzival@oasis.gg',
-      name: 'Parzival',
-      roles: ['cpi-admin'],
-      tenant_id: 'oasis-gunters',
-      permissions: ['tenants:read', 'apis:read'],
-    },
-    isAuthenticated: true,
-    isLoading: false,
-    isReady: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    hasPermission: vi.fn(() => true),
-    hasRole: vi.fn(() => true),
-  })),
+  useAuth: vi.fn(),
 }));
 
 // Mock api service
@@ -104,6 +91,7 @@ function renderComponent() {
 describe('Deployments', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
     mockGetTraces.mockResolvedValue({ traces: [] });
     mockGetTraceStats.mockResolvedValue({
       total: 42,
@@ -173,4 +161,16 @@ describe('Deployments', () => {
     renderComponent();
     expect(await screen.findByText('Refresh')).toBeInTheDocument();
   });
+
+  // 4-persona coverage
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderComponent();
+        expect(screen.getByRole('heading', { name: 'Deployments' })).toBeInTheDocument();
+      });
+    }
+  );
 });

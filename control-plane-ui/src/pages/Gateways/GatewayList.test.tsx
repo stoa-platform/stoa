@@ -1,7 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createAuthMock } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
+import type { PersonaRole } from '../../test/helpers';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -53,25 +56,7 @@ const { mockGateways } = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: vi.fn(() => ({
-    user: {
-      id: 'user-admin',
-      email: 'parzival@oasis.gg',
-      name: 'Parzival',
-      roles: ['cpi-admin'],
-      tenant_id: 'oasis-gunters',
-      permissions: ['tenants:read', 'apis:read', 'apps:read', 'audit:read', 'admin:servers'],
-    },
-    isAuthenticated: true,
-    isLoading: false,
-    isReady: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    hasPermission: vi.fn(() => true),
-    hasRole: vi.fn(() => true),
-  })),
-}));
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 vi.mock('../../services/api', () => ({
   apiService: {
@@ -131,6 +116,11 @@ function renderGatewayList() {
 }
 
 describe('GatewayList', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+  });
+
   it('renders gateway display names', async () => {
     renderGatewayList();
     expect(await screen.findByText('STOA Edge MCP Gateway')).toBeInTheDocument();
@@ -225,4 +215,15 @@ describe('GatewayList', () => {
     // gw-2 has error_rate: 0.08 (> 0.05) -> should show degraded badge
     expect(screen.getByText(/degraded \(error rate/)).toBeInTheDocument();
   });
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderGatewayList();
+        expect(await screen.findByText('STOA Edge MCP Gateway')).toBeInTheDocument();
+      });
+    }
+  );
 });

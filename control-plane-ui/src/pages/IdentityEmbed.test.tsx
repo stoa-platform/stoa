@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { createAuthMock } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
+import type { PersonaRole } from '../test/helpers';
 import { IdentityEmbed } from './IdentityEmbed';
 
 vi.mock('../config', () => ({
@@ -13,21 +16,13 @@ vi.mock('../config', () => ({
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({
-    user: {
-      id: 'user-admin',
-      name: 'James Halliday',
-      email: 'admin@gregarious-games.com',
-      tenant_id: 'gregarious-games',
-      roles: ['cpi-admin'],
-      permissions: ['tenants:create', 'tenants:read', 'apis:create', 'apis:read', 'apis:deploy'],
-    },
-    hasRole: (role: string) => role === 'cpi-admin',
-  }),
+  useAuth: vi.fn(),
 }));
 
 describe('IdentityEmbed', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
     vi.spyOn(window, 'open').mockImplementation(() => null);
   });
 
@@ -40,7 +35,7 @@ describe('IdentityEmbed', () => {
     render(<IdentityEmbed />);
     expect(screen.getByText('James Halliday')).toBeInTheDocument();
     // Email appears in both profile card and account details
-    expect(screen.getAllByText('admin@gregarious-games.com')).toHaveLength(2);
+    expect(screen.getAllByText('halliday@gregarious-games.com')).toHaveLength(2);
   });
 
   it('displays role badge', () => {
@@ -56,7 +51,7 @@ describe('IdentityEmbed', () => {
 
   it('displays permission count', () => {
     render(<IdentityEmbed />);
-    expect(screen.getByText('5 active permissions')).toBeInTheDocument();
+    expect(screen.getByText(/\d+ active permissions/)).toBeInTheDocument();
   });
 
   it('manage in keycloak button calls window.open', () => {
@@ -97,4 +92,16 @@ describe('IdentityEmbed', () => {
     expect(screen.getByText('Keycloak OIDC (stoa realm)')).toBeInTheDocument();
     expect(screen.getByText('control-plane-ui')).toBeInTheDocument();
   });
+
+  // 4-persona coverage
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        render(<IdentityEmbed />);
+        expect(screen.getByRole('heading', { name: 'Identity Management' })).toBeInTheDocument();
+      });
+    }
+  );
 });

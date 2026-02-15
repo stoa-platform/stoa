@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { createAuthMock } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
+import type { PersonaRole } from '../../test/helpers';
+
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 vi.mock('../../services/api', () => ({
   apiService: {
@@ -17,6 +22,7 @@ describe('GatewayRegistrationForm', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   });
 
   it('renders the heading', () => {
@@ -51,4 +57,15 @@ describe('GatewayRegistrationForm', () => {
     expect(screen.getByRole('button', { name: /Register Gateway/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the form', () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        render(<GatewayRegistrationForm onCreated={onCreated} onCancel={onCancel} />);
+        expect(screen.getByRole('heading', { name: /Register Gateway/i })).toBeInTheDocument();
+      });
+    }
+  );
 });

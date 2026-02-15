@@ -1,7 +1,10 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createAuthMock } from '../test/helpers';
+import { useAuth } from '../contexts/AuthContext';
+import type { PersonaRole } from '../test/helpers';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -21,23 +24,7 @@ vi.mock('../contexts/EnvironmentContext', () => ({
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: vi.fn(() => ({
-    user: {
-      id: 'user-admin',
-      email: 'parzival@oasis.gg',
-      name: 'Parzival',
-      roles: ['cpi-admin'],
-      tenant_id: 'oasis-gunters',
-      permissions: ['tenants:read', 'apis:read', 'apps:read', 'audit:read', 'admin:servers'],
-    },
-    isAuthenticated: true,
-    isLoading: false,
-    isReady: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    hasPermission: vi.fn(() => true),
-    hasRole: vi.fn(() => true),
-  })),
+  useAuth: vi.fn(),
 }));
 
 vi.mock('../services/api', () => ({
@@ -165,6 +152,11 @@ function renderAPIs() {
 }
 
 describe('APIs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+  });
+
   afterEach(() => {
     mockUseEnvironmentMode.mockReturnValue({
       canCreate: true,
@@ -249,4 +241,18 @@ describe('APIs', () => {
     expect(screen.queryByText('Deploy DEV')).not.toBeInTheDocument();
     expect(screen.queryByText('Deploy STG')).not.toBeInTheDocument();
   });
+
+  // 4-persona coverage
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        renderAPIs();
+        expect(
+          await screen.findByText('Manage API definitions and deployments')
+        ).toBeInTheDocument();
+      });
+    }
+  );
 });

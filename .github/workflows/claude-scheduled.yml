@@ -12,6 +12,8 @@ on:
     - cron: "0 21 * * *"
     # Weekly Monday 08:00 UTC — Dependency audit + rule improvement
     - cron: "0 8 * * 1"
+    # Weekly Monday 09:30 UTC — Capacity check
+    - cron: "30 9 * * 1"
   workflow_dispatch:
     inputs:
       task:
@@ -23,6 +25,7 @@ on:
           - daily-ci-health
           - weekly-audit
           - weekly-digest
+          - weekly-capacity-check
           - self-improve
 
 permissions:
@@ -184,3 +187,57 @@ jobs:
 
             Format as a Slack-friendly summary and post it.
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5"
+
+  # ----- Weekly: Capacity Check -----
+  weekly-capacity-check:
+    if: |
+      (github.event.schedule == '30 9 * * 1') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-capacity-check')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Weekly capacity check — read-only analysis of cycle health.
+
+            1. Fetch the current Linear cycle for team CAB-ING (624a9948-a160-4e47-aba5-7f9404d23506):
+               - list_cycles to find current cycle
+               - list_issues for that cycle to get committed points and done points
+
+            2. Compute velocity baseline:
+               - Read velocity.json if it exists in memory/
+               - If not available, use the last closed cycle's data from plan.md
+               - rolling_avg_pts_per_day from velocity.json or fallback: compute from plan.md Cycle 7 data (505 pts / 7 days = 72.1)
+
+            3. Compute capacity gap:
+               - capacity = rolling_avg_pts_per_day × cycle_days
+               - target = capacity × 0.80 (80% utilization target)
+               - gap = target - pts_committed
+               - utilization_pct = pts_committed / target × 100
+
+            4. Generate a capacity health report:
+               - Cycle name + dates
+               - Committed vs target vs capacity
+               - Utilization percentage
+               - Gap in points
+               - Top 5 backlog items from BACKLOG.md that could fill the gap (read file, extract CAB-XXXX entries)
+
+            5. Create a GitHub issue titled "Weekly Capacity Check — YYYY-MM-DD" with label "daily-digest"
+               containing the full report.
+
+            This is a READ-ONLY check. Do NOT modify any Linear issues or promote backlog items.
+            Suggest running `/fill-cycle` if utilization is below 70%.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d '{"text":":chart_with_upwards_trend: *Weekly Capacity Check Complete* — check GitHub issues for cycle health report"}'

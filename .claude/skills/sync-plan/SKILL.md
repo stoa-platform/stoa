@@ -1,7 +1,7 @@
 ---
 name: sync-plan
 description: "Cycle-aware bidirectional sync between plan.md and Linear. Discovers all cycle tickets, detects drift, updates markers."
-argument-hint: "[CAB-XXXX | --push | --cycles | empty for full sync]"
+argument-hint: "[CAB-XXXX | --push | --cycles | --velocity | empty for full sync]"
 ---
 
 # Plan ↔ Linear Sync (Cycle-Aware)
@@ -18,6 +18,7 @@ Target: $ARGUMENTS
 | `CAB-XXXX` | **Single ticket** | Fetch one ticket, update plan.md marker |
 | `--push` | **Push to Linear** | Push plan.md markers → Linear statuses |
 | `--cycles` | **Cycle discovery** | Show current + next cycle summary only |
+| `--velocity` | **Velocity report** | Show velocity history table + trend + capacity forecast |
 
 ## Step 1: Fetch Linear Cycles
 
@@ -167,7 +168,7 @@ plan.md follows this exact structure:
 - When adding a new ticket, format: `- [ ] CAB-XXXX: <title> (<estimate> pts, P<priority>)`
 - Done tickets with PR references: preserve the `— PR #N` suffix
 
-## Step 7: Compute Metrics
+## Step 7: Compute Metrics + Velocity Tracking
 
 Calculate and display:
 - **Scope**: sum of all estimates in current cycle
@@ -175,6 +176,67 @@ Calculate and display:
 - **Velocity**: count of Done issues
 - **Completion %**: Done / Scope
 - **Burn rate**: issues completed per day (based on cycle start date)
+
+### 7a. Auto-Update velocity.json on Cycle Close
+
+After computing metrics, check if the current cycle should be recorded:
+
+**Trigger**: cycle completion is 100% OR today > cycle end date.
+
+If triggered AND this cycle is not already in velocity.json:
+
+1. Read `~/.claude/projects/-Users-torpedo-hlfh-repos-stoa/memory/velocity.json`
+2. Append new cycle entry:
+   ```json
+   {
+     "id": <cycle_number>,
+     "name": "<cycle_name>",
+     "start": "<start_date>",
+     "end": "<end_date>",
+     "days": <duration_days>,
+     "points_committed": <scope>,
+     "points_done": <done_pts>,
+     "issues_total": <total_issues>,
+     "issues_done": <done_issues>,
+     "prs_merged": <count from gh pr list if available, else null>,
+     "pts_per_day": <done_pts / days>,
+     "completion_pct": <done_pts / scope * 100>
+   }
+   ```
+3. Recompute `rolling_avg_3`:
+   - Take last 3 cycle entries (or fewer if < 3 exist)
+   - `pts_per_day` = average of cycle pts_per_day values
+   - `issues_per_day` = average of (issues_done / days) values
+   - `completion_pct` = average of cycle completion_pct values
+4. Write updated velocity.json
+
+**Rules**:
+- velocity.json is **append-only** for cycle entries — never modify historical data
+- Only append when cycle ID is not already present (idempotent)
+- `prs_merged` can be null if PR count isn't available (optional enrichment)
+
+### 7b. Velocity Report (--velocity mode)
+
+If mode is `--velocity`, read velocity.json and display:
+
+```
+Velocity History — STOA Platform
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| Cycle | Dates | Pts | Done | Velocity | Completion |
+|-------|-------|-----|------|----------|------------|
+| C7    | Feb 9-15 | 505 | 505 | 72.1/day | 100% |
+| C8    | Feb 16-22 | 86 | 5 | ... | 6% |
+
+Rolling 3-cycle avg: XX.X pts/day
+Target utilization: 80%
+Capacity forecast (next cycle, 7 days): XXX pts target
+
+Trend: [↑|↓|→] <description>
+```
+
+Then exit (no sync needed).
+
 
 ## Step 8: Report
 
@@ -200,6 +262,32 @@ Updates applied: N (Linear → plan.md)
 Updates pushed: N (plan.md → Linear) [only if --push]
 
 plan.md updated. Review changes with `git diff plan.md`.
+```
+
+### 8a. Capacity Utilization Warning
+
+After every sync (all modes except `--velocity`), compute utilization:
+
+1. Read `~/.claude/projects/-Users-torpedo-hlfh-repos-stoa/memory/velocity.json`
+2. Compute: `capacity = rolling_avg_3.pts_per_day × cycle_days`
+3. Compute: `target = capacity × target_utilization`
+4. Compute: `utilization = pts_committed / target × 100`
+
+If utilization < 70%:
+```
+⚠️  Cycle under-loaded: XXX/YYY pts (ZZ% of target capacity)
+    Run `/fill-cycle` to analyze backlog and propose fill plan.
+```
+
+If utilization 70-100%:
+```
+✅  Cycle healthy: XXX/YYY pts (ZZ% of target capacity)
+```
+
+If utilization > 100%:
+```
+🔴  Cycle over-loaded: XXX/YYY pts (ZZ% of target capacity)
+    Consider deferring lower-priority items to next cycle.
 ```
 
 ## Rules

@@ -4,6 +4,10 @@ description: AI-native development workflow, session management, context managem
 
 # AI Workflow Rules
 
+> **HEGEMON Foundation**: Universal state files protocol and session lifecycle live in `hegemon/rules/state-files.md` + `hegemon/rules/session-lifecycle.md`.
+> This file contains STOA-specific extensions (feature dev patterns, context management, operation logging).
+> When hegemon is loaded as additional working dir, both rule sets apply.
+
 ## Session Lifecycle
 1. Read `memory.md` for current state
 2. Read `plan.md` for priorities

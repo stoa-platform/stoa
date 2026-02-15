@@ -4,6 +4,10 @@ description: Multi-agent workflow patterns, subagent delegation, cost awareness,
 
 # AI Factory — Multi-Agent Workflow
 
+> **HEGEMON Foundation**: Universal AI Factory rules live in `hegemon/rules/ai-factory.md`.
+> This file contains STOA-specific extensions (subagents, MCP integrations, delegation patterns).
+> When hegemon is loaded as additional working dir, both rule sets apply.
+
 ## Subagents disponibles
 
 | Agent | Model | Outils | Quand utiliser |

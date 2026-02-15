@@ -79,13 +79,19 @@ Follow the appropriate pattern from `ai-factory.md` (Pattern 3/5/7 for features,
    - Append `PR-MERGED | task=<T> pr=<N>` to `~/.claude/projects/.../memory/metrics.log`
    - `/ci-fix` skill auto-appends `CI-FIX` entries (no manual step needed)
    - See `ai-workflow.md` → "Session Metrics" for full event list
-6. **Learning loop**: if a CI failure, bug, or gotcha was encountered during this session:
+6. **HEGEMON EXTRACT (MANDATORY)** — if this session produced deliverables (PR merged, design decision, or gotcha):
+   - Ask: "What did I learn that applies beyond this project?"
+   - If a reusable pattern was identified → run `/extract <pattern name>` to capture it in HEGEMON
+   - If nothing new → log "No new pattern" (acceptable, but be honest)
+   - If a human override occurred → log in `hegemon/metrics/override-log.md`
+   - See `hegemon/rules/session-lifecycle.md` for the full EXTRACT protocol
+7. **Learning loop**: if a CI failure, bug, or gotcha was encountered during this session:
    - Check if it's already in `~/.claude/projects/.../memory/gotchas.md`
    - If not → add it (one-liner: trigger, fix, prevention)
    - If it's a recurring pattern (seen 2+ times) → add to `.claude/rules/` as a permanent rule
-7. **Log session end**:
+8. **Log session end**:
    Append `SESSION-END | task=<TASK> status=<success|paused> pr=<NUMBER>` to operations.log
-8. **Clean old checkpoints** (older than 7 days):
+9. **Clean old checkpoints** (older than 7 days):
    Delete `.json` files in `checkpoints/` with mtime > 7d
 
 ## Quick Reference
@@ -97,8 +103,8 @@ Follow the appropriate pattern from `ai-factory.md` (Pattern 3/5/7 for features,
 | Context at 50% | Delegate research to subagents (Step 3) |
 | Context at 70% | `/compact` then continue (Step 3) |
 | Context at 80% | Wrap up, commit, fresh session (Step 3) |
-| PR merged | Update memory.md + plan.md |
-| CI failure / bug found | Add to gotchas.md (Step 5) |
+| PR merged | Update memory.md + plan.md + EXTRACT |
+| CI failure / bug found | Add to gotchas.md + consider EXTRACT (Step 5) |
 | Before merge/deploy | Create checkpoint (crash-recovery.md) |
 | After merge/deploy | Log STEP-DONE, delete checkpoint |
 | Session end | Step 5 |

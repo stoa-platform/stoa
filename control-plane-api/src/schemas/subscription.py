@@ -1,4 +1,5 @@
 """Pydantic schemas for subscription endpoints"""
+
 from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
@@ -8,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class SubscriptionStatusEnum(StrEnum):
     """Subscription status enum for API responses"""
+
     PENDING = "pending"
     ACTIVE = "active"
     SUSPENDED = "suspended"
@@ -17,6 +19,7 @@ class SubscriptionStatusEnum(StrEnum):
 
 class ProvisioningStatusEnum(StrEnum):
     """Gateway provisioning status for API responses (CAB-800)"""
+
     NONE = "none"
     PENDING = "pending"
     PROVISIONING = "provisioning"
@@ -28,6 +31,7 @@ class ProvisioningStatusEnum(StrEnum):
 
 class SubscriptionCreate(BaseModel):
     """Schema for creating a new subscription request"""
+
     application_id: str = Field(..., min_length=1, max_length=255)
     application_name: str = Field(..., min_length=1, max_length=255)
     api_id: str = Field(..., min_length=1, max_length=255)
@@ -47,7 +51,7 @@ class SubscriptionCreate(BaseModel):
                 "api_version": "1.0",
                 "tenant_id": "acme",
                 "plan_id": "basic",
-                "plan_name": "Basic Plan"
+                "plan_name": "Basic Plan",
             }
         }
     )
@@ -55,6 +59,7 @@ class SubscriptionCreate(BaseModel):
 
 class SubscriptionResponse(BaseModel):
     """Schema for subscription response"""
+
     id: UUID
     application_id: str
     application_name: str
@@ -88,6 +93,7 @@ class SubscriptionResponse(BaseModel):
 
 class SubscriptionListResponse(BaseModel):
     """Schema for paginated subscription list"""
+
     items: list[SubscriptionResponse]
     total: int
     page: int
@@ -97,39 +103,28 @@ class SubscriptionListResponse(BaseModel):
 
 class SubscriptionApprove(BaseModel):
     """Schema for approving a subscription"""
-    expires_at: datetime | None = Field(
-        None,
-        description="Optional expiration date for the subscription"
-    )
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "expires_at": "2025-12-31T23:59:59Z"
-            }
-        }
-    )
+    expires_at: datetime | None = Field(None, description="Optional expiration date for the subscription")
+
+    model_config = ConfigDict(json_schema_extra={"example": {"expires_at": "2025-12-31T23:59:59Z"}})
 
 
 class SubscriptionRevoke(BaseModel):
     """Schema for revoking a subscription"""
+
     reason: str = Field(..., min_length=1, max_length=500)
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "reason": "Violation of terms of service"
-            }
-        }
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"reason": "Violation of terms of service"}})
 
 
 class APIKeyResponse(BaseModel):
     """Schema for API key response (only shown once at creation)"""
+
     subscription_id: UUID
     api_key: str = Field(..., description="Full API key - shown only once!")
     api_key_prefix: str = Field(..., description="Key prefix for reference")
     expires_at: datetime | None
+    status: str = Field("pending", description="Subscription status after creation")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -137,7 +132,7 @@ class APIKeyResponse(BaseModel):
                 "subscription_id": "550e8400-e29b-41d4-a716-446655440000",
                 "api_key": "stoa_sk_abcd1234efgh5678ijkl9012mnop3456",
                 "api_key_prefix": "stoa_sk_",
-                "expires_at": "2025-12-31T23:59:59Z"
+                "expires_at": "2025-12-31T23:59:59Z",
             }
         }
     )
@@ -145,6 +140,7 @@ class APIKeyResponse(BaseModel):
 
 class SubscriptionStats(BaseModel):
     """Schema for subscription statistics"""
+
     total: int
     by_status: dict[str, int]
     by_tenant: dict[str, int]
@@ -153,26 +149,20 @@ class SubscriptionStats(BaseModel):
 
 # ============== Key Rotation Schemas (CAB-314) ==============
 
+
 class KeyRotationRequest(BaseModel):
     """Schema for requesting API key rotation"""
+
     grace_period_hours: int = Field(
-        default=24,
-        ge=1,
-        le=168,  # Max 7 days
-        description="Number of hours the old key remains valid (1-168)"
+        default=24, ge=1, le=168, description="Number of hours the old key remains valid (1-168)"  # Max 7 days
     )
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "grace_period_hours": 24
-            }
-        }
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"grace_period_hours": 24}})
 
 
 class KeyRotationResponse(BaseModel):
     """Schema for key rotation response"""
+
     subscription_id: UUID
     new_api_key: str = Field(..., description="New API key - shown only once!")
     new_api_key_prefix: str = Field(..., description="New key prefix for reference")
@@ -188,7 +178,7 @@ class KeyRotationResponse(BaseModel):
                 "new_api_key_prefix": "stoa_sk_",
                 "old_key_expires_at": "2026-01-10T16:00:00Z",
                 "grace_period_hours": 24,
-                "rotation_count": 1
+                "rotation_count": 1,
             }
         }
     )
@@ -196,21 +186,12 @@ class KeyRotationResponse(BaseModel):
 
 class SubscriptionWithRotationInfo(SubscriptionResponse):
     """Extended subscription response with rotation info"""
-    previous_key_expires_at: datetime | None = Field(
-        None,
-        description="If set, old key is still valid until this time"
-    )
-    last_rotated_at: datetime | None = Field(
-        None,
-        description="When the key was last rotated"
-    )
-    rotation_count: int = Field(
-        default=0,
-        description="Number of times the key has been rotated"
-    )
+
+    previous_key_expires_at: datetime | None = Field(None, description="If set, old key is still valid until this time")
+    last_rotated_at: datetime | None = Field(None, description="When the key was last rotated")
+    rotation_count: int = Field(default=0, description="Number of times the key has been rotated")
     has_active_grace_period: bool = Field(
-        default=False,
-        description="True if old key is still valid during grace period"
+        default=False, description="True if old key is still valid during grace period"
     )
 
     model_config = ConfigDict(from_attributes=True)

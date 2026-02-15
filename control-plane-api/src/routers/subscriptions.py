@@ -1,4 +1,5 @@
 """Subscriptions router - API subscription management"""
+
 import asyncio
 import logging
 import math
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import User, get_current_user
 from ..database import get_db
 from ..models.subscription import Subscription, SubscriptionStatus
+from ..repositories.plan import PlanRepository
 from ..repositories.subscription import SubscriptionRepository
 from ..schemas.subscription import (
     APIKeyResponse,
@@ -56,9 +58,11 @@ def _has_tenant_access(user: User, tenant_id: str) -> bool:
 
 # ============== Subscriber Endpoints (Developer Portal) ==============
 
+
 @router.post("", response_model=APIKeyResponse, status_code=201)
 async def create_subscription(
     request: SubscriptionCreate,
+    raw_request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -74,14 +78,11 @@ async def create_subscription(
     repo = SubscriptionRepository(db)
 
     # Check for existing subscription
-    existing = await repo.get_by_application_and_api(
-        request.application_id,
-        request.api_id
-    )
+    existing = await repo.get_by_application_and_api(request.application_id, request.api_id)
     if existing:
         raise HTTPException(
             status_code=409,
-            detail=f"Subscription already exists for this application and API (status: {existing.status.value})"
+            detail=f"Subscription already exists for this application and API (status: {existing.status.value})",
         )
 
     # Generate API key
@@ -121,12 +122,51 @@ async def create_subscription(
         logger.error(f"Failed to create subscription: {e}")
         raise HTTPException(status_code=500, detail="Failed to create subscription")
 
+    # Auto-approve logic (CAB-1172): free/standard plans skip admin approval
+    should_auto_approve = False
+    if request.plan_id:
+        try:
+            plan_uuid = UUID(request.plan_id)
+            plan_repo = PlanRepository(db)
+            plan = await plan_repo.get_by_id(plan_uuid)
+            if plan is None or not plan.requires_approval:
+                should_auto_approve = True
+            elif plan.auto_approve_roles:
+                should_auto_approve = any(role in plan.auto_approve_roles for role in user.roles)
+        except (ValueError, AttributeError):
+            # Invalid UUID or lookup error → treat as free tier
+            should_auto_approve = True
+    else:
+        # No plan = free/default → auto-approve
+        should_auto_approve = True
+
+    if should_auto_approve:
+        try:
+            subscription = await repo.update_status(
+                subscription,
+                SubscriptionStatus.ACTIVE,
+                actor_id="system:auto-approve",
+            )
+            logger.info(f"Subscription {subscription.id} auto-approved (CAB-1172)")
+
+            try:
+                await emit_subscription_approved(db, subscription)
+            except Exception as e:
+                logger.warning(f"Failed to emit subscription.approved webhook: {e}")
+
+            correlation_id = str(uuid_mod.uuid4())
+            auth_token = _extract_auth_token(raw_request)
+            asyncio.create_task(provision_on_approval(db, subscription, auth_token, correlation_id))
+        except Exception as e:
+            logger.warning(f"Auto-approve failed, subscription stays PENDING: {e}")
+
     # Return API key (shown only once!)
     return APIKeyResponse(
         subscription_id=subscription.id,
         api_key=api_key,
         api_key_prefix=api_key_prefix,
         expires_at=subscription.expires_at,
+        status=subscription.status.value,
     )
 
 
@@ -204,10 +244,7 @@ async def cancel_subscription(
         raise HTTPException(status_code=403, detail="Access denied")
 
     if subscription.status not in [SubscriptionStatus.PENDING, SubscriptionStatus.ACTIVE]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel subscription in {subscription.status.value} status"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot cancel subscription in {subscription.status.value} status")
 
     await repo.update_status(
         subscription,
@@ -220,6 +257,7 @@ async def cancel_subscription(
 
 
 # ============== Key Rotation Endpoint (CAB-314) ==============
+
 
 @router.post("/{subscription_id}/rotate-key", response_model=KeyRotationResponse)
 async def rotate_api_key(
@@ -251,16 +289,16 @@ async def rotate_api_key(
     # Can only rotate active subscriptions
     if subscription.status != SubscriptionStatus.ACTIVE:
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot rotate key for subscription in {subscription.status.value} status"
+            status_code=400, detail=f"Cannot rotate key for subscription in {subscription.status.value} status"
         )
 
     # Check if there's already an active grace period
     from datetime import datetime
+
     if subscription.previous_key_expires_at and subscription.previous_key_expires_at > datetime.utcnow():
         raise HTTPException(
             status_code=400,
-            detail=f"A key rotation is already in progress. Previous key expires at {subscription.previous_key_expires_at.isoformat()}. Wait for the grace period to end before rotating again."
+            detail=f"A key rotation is already in progress. Previous key expires at {subscription.previous_key_expires_at.isoformat()}. Wait for the grace period to end before rotating again.",
         )
 
     # Generate new API key
@@ -272,7 +310,7 @@ async def rotate_api_key(
             subscription=subscription,
             new_api_key_hash=new_api_key_hash,
             new_api_key_prefix=new_api_key_prefix,
-            grace_period_hours=request.grace_period_hours
+            grace_period_hours=request.grace_period_hours,
         )
 
         logger.info(
@@ -289,7 +327,7 @@ async def rotate_api_key(
                 application_name=subscription.application_name,
                 new_api_key=new_api_key,
                 old_key_expires_at=subscription.previous_key_expires_at,
-                grace_period_hours=request.grace_period_hours
+                grace_period_hours=request.grace_period_hours,
             )
         except Exception as e:
             # Log but don't fail the rotation if email fails
@@ -307,7 +345,7 @@ async def rotate_api_key(
             new_api_key_prefix=new_api_key_prefix,
             old_key_expires_at=subscription.previous_key_expires_at,
             grace_period_hours=request.grace_period_hours,
-            rotation_count=subscription.rotation_count
+            rotation_count=subscription.rotation_count,
         )
 
     except Exception as e:
@@ -338,9 +376,9 @@ async def get_subscription_rotation_info(
 
     # Check if there's an active grace period
     from datetime import datetime
+
     has_active_grace_period = (
-        subscription.previous_key_expires_at is not None
-        and subscription.previous_key_expires_at > datetime.utcnow()
+        subscription.previous_key_expires_at is not None and subscription.previous_key_expires_at > datetime.utcnow()
     )
 
     response = SubscriptionWithRotationInfo.model_validate(subscription)
@@ -350,6 +388,7 @@ async def get_subscription_rotation_info(
 
 
 # ============== Admin Endpoints (Control Plane) ==============
+
 
 @router.get("/tenant/{tenant_id}", response_model=SubscriptionListResponse)
 async def list_tenant_subscriptions(
@@ -444,8 +483,7 @@ async def approve_subscription(
 
     if subscription.status != SubscriptionStatus.PENDING:
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot approve subscription in {subscription.status.value} status"
+            status_code=400, detail=f"Cannot approve subscription in {subscription.status.value} status"
         )
 
     # Set expiration if provided
@@ -473,9 +511,7 @@ async def approve_subscription(
     # Auto-provision gateway application (CAB-800)
     correlation_id = str(uuid_mod.uuid4())
     auth_token = _extract_auth_token(raw_request)
-    asyncio.create_task(
-        provision_on_approval(db, subscription, auth_token, correlation_id)
-    )
+    asyncio.create_task(provision_on_approval(db, subscription, auth_token, correlation_id))
 
     return SubscriptionResponse.model_validate(subscription)
 
@@ -512,10 +548,7 @@ async def revoke_subscription(
         actor_id=user.id,
     )
 
-    logger.info(
-        f"Subscription {subscription_id} revoked by {user.email} "
-        f"reason={request.reason}"
-    )
+    logger.info(f"Subscription {subscription_id} revoked by {user.email} " f"reason={request.reason}")
 
     # Emit webhook event (CAB-315)
     try:
@@ -526,9 +559,7 @@ async def revoke_subscription(
     # Auto-deprovision gateway application (CAB-800)
     correlation_id = str(uuid_mod.uuid4())
     auth_token = _extract_auth_token(raw_request)
-    asyncio.create_task(
-        deprovision_on_revocation(db, subscription, auth_token, correlation_id)
-    )
+    asyncio.create_task(deprovision_on_revocation(db, subscription, auth_token, correlation_id))
 
     return SubscriptionResponse.model_validate(subscription)
 
@@ -555,8 +586,7 @@ async def suspend_subscription(
 
     if subscription.status != SubscriptionStatus.ACTIVE:
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot suspend subscription in {subscription.status.value} status"
+            status_code=400, detail=f"Cannot suspend subscription in {subscription.status.value} status"
         )
 
     subscription = await repo.update_status(
@@ -591,8 +621,7 @@ async def reactivate_subscription(
 
     if subscription.status != SubscriptionStatus.SUSPENDED:
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot reactivate subscription in {subscription.status.value} status"
+            status_code=400, detail=f"Cannot reactivate subscription in {subscription.status.value} status"
         )
 
     subscription = await repo.update_status(
@@ -608,6 +637,7 @@ async def reactivate_subscription(
 
 
 # ============== API Key Validation Endpoint (Gateway) ==============
+
 
 @router.post("/validate-key")
 async def validate_api_key(
@@ -650,13 +680,11 @@ async def validate_api_key(
 
     # Check status
     if subscription.status != SubscriptionStatus.ACTIVE:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Subscription is {subscription.status.value}"
-        )
+        raise HTTPException(status_code=403, detail=f"Subscription is {subscription.status.value}")
 
     # Check subscription expiration
     from datetime import datetime
+
     now = datetime.utcnow()
 
     if subscription.expires_at and now > subscription.expires_at:

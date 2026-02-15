@@ -52,7 +52,7 @@ echo ""
 # --- Step 2: Register echo route on STOA gateway ---
 # Uses Docker container name (echo-local) — SSRF blocklist blocks localhost
 echo "=== Configuring STOA route → echo ==="
-STOA_ADMIN_TOKEN="arena-admin-token-2026"
+STOA_ADMIN_TOKEN="${STOA_ADMIN_API_TOKEN:?Set STOA_ADMIN_API_TOKEN from Infisical prod/gateway/arena/ADMIN_API_TOKEN}"
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://$VPS_KONG_STOA:8080/admin/apis" \
   -H "Authorization: Bearer $STOA_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \

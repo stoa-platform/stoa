@@ -558,14 +558,14 @@ git shortlog --since="2026-02-09" -sn
 
 | Persona | URL | Credentials | Role |
 |---------|-----|-------------|------|
-| halliday | Console | readyplayerone | Platform Admin |
-| parzival | Console | copperkeystart | Tenant Admin (OASIS Gunters) |
-| art3mis | Portal | samantha2045 | Developer |
-| admin | Grafana | admin / admin | Monitoring |
-| admin | OpenSearch | admin / StoaAdmin2026Prod | Logs |
-| admin | Keycloak | admin / demo | Auth Admin |
-| demo-alpha | Federation (alpha) | demo | Demo Org Alpha user |
-| demo-beta | Federation (beta) | demo | Demo Org Beta user |
+| halliday | Console | _(see realm JSON)_ | Platform Admin |
+| parzival | Console | _(see realm JSON)_ | Tenant Admin (OASIS Gunters) |
+| art3mis | Portal | _(see realm JSON)_ | Developer |
+| admin | Grafana | _(OIDC SSO)_ | Monitoring |
+| admin | OpenSearch | _(Infisical `prod/opensearch`)_ | Logs |
+| admin | Keycloak | _(Infisical `prod/keycloak`)_ | Auth Admin |
+| demo-alpha | Federation (alpha) | _(see federation realm)_ | Demo Org Alpha user |
+| demo-beta | Federation (beta) | _(see federation realm)_ | Demo Org Beta user |
 
 ---
 

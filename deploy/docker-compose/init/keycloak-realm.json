@@ -2,6 +2,7 @@
   "realm": "stoa",
   "enabled": true,
   "sslRequired": "none",
+  "passwordPolicy": "length(12) and lowerCase(1) and upperCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5) and maxLength(128)",
   "displayName": "STOA Identity",
   "displayNameHtml": "<div class=\"kc-logo-text\"><span>STOA Identity</span></div>",
   "loginTheme": "stoa",
@@ -13,6 +14,12 @@
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 900,
+  "maxFailureWaitSeconds": 3600,
+  "maxDeltaTimeSeconds": 43200,
+  "minimumQuickLoginWaitSeconds": 60,
   "browserSecurityHeaders": {
     "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self' http://localhost:* https://console.gostoa.dev; object-src 'none';",
     "xFrameOptions": "",
@@ -289,7 +296,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "readyplayerone",
+          "value": "ReadyPlayer1!rpo",
           "temporary": false
         }
       ],
@@ -311,7 +318,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "ogdensmcguffin",
+          "value": "OgdenMcGuffin1!",
           "temporary": false
         }
       ],
@@ -333,7 +340,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "copperkeystart",
+          "value": "CopperKey2045!s",
           "temporary": false
         }
       ],
@@ -355,7 +362,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "samantha2045",
+          "value": "Samantha2045!a3",
           "temporary": false
         }
       ],
@@ -377,7 +384,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "helen2045",
+          "value": "HelenHarris45!h",
           "temporary": false
         }
       ],
@@ -399,7 +406,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "ioi101",
+          "value": "IoiSixer2045!ns",
           "temporary": false
         }
       ],
@@ -421,7 +428,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "loyalty2045",
+          "value": "Loyalty2045!s42",
           "temporary": false
         }
       ],

@@ -66,7 +66,7 @@ The script runs 6 phases automatically:
 
 **[Switch: browser — OpenSearch Dashboards at https://opensearch.gostoa.dev]**
 
-1. Open **Discover** tab (pre-authenticated as `admin:StoaAdmin2026Prod`)
+1. Open **Discover** tab (pre-authenticated — see `OPENSEARCH_AUTH` env var)
 2. Select index pattern `stoa-errors-*`
 3. Filter by last 15 minutes → 50+ errors visible
 
@@ -98,15 +98,15 @@ The script runs 6 phases automatically:
 
 ### Prerequisites
 
-- OpenSearch Dashboards accessible at `https://opensearch.gostoa.dev` (auth: `admin:StoaAdmin2026Prod`)
+- OpenSearch Dashboards accessible at `https://opensearch.gostoa.dev` (auth: `$OPENSEARCH_AUTH` from Infisical `prod/opensearch`)
 - Gateway accessible at `https://mcp.gostoa.dev`
 - Index pattern `stoa-errors-*` (created automatically by the seed script)
 
 ### Pre-Demo Setup
 
 ```bash
-# Verify OpenSearch is up
-curl -sk -u admin:StoaAdmin2026Prod https://opensearch.gostoa.dev/_cluster/health | python3 -m json.tool
+# Verify OpenSearch is up (get password from Infisical: prod/opensearch/ADMIN_PASSWORD)
+curl -sk -u "admin:${OPENSEARCH_ADMIN_PASSWORD}" https://opensearch.gostoa.dev/_cluster/health | python3 -m json.tool
 
 # Verify gateway is up
 curl -sk https://mcp.gostoa.dev/health
@@ -114,7 +114,7 @@ curl -sk https://mcp.gostoa.dev/health
 # Optional: dry run the seed script first
 python3 scripts/demo/seed-error-snapshot.py --seed-opensearch \
   --opensearch-url https://opensearch.gostoa.dev \
-  --opensearch-auth admin:StoaAdmin2026Prod --count 5
+  --opensearch-auth "admin:${OPENSEARCH_ADMIN_PASSWORD}" --count 5
 
 # Pre-open OpenSearch Dashboards in a browser tab
 ```

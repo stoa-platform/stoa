@@ -18,7 +18,9 @@ use crate::metering::{KafkaConfig, MeteringProducer, MeteringProducerConfig};
 use crate::policy::{PolicyDecision, PolicyEngine, PolicyEngineConfig, PolicyInput};
 use crate::quota::{ConsumerRateLimiter, QuotaManager, QuotaManagerConfig, RateLimiterConfig};
 use crate::rate_limit::RateLimiter;
-use crate::resilience::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry};
+use crate::resilience::{
+    CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry, FallbackChain,
+};
 use crate::routes::{PolicyRegistry, RouteRegistry};
 use crate::uac::Action;
 
@@ -49,6 +51,8 @@ pub struct AppState {
     pub zombie_detector: Option<Arc<ZombieDetector>>,
     /// Per-upstream circuit breaker registry (CAB-362)
     pub circuit_breakers: Arc<CircuitBreakerRegistry>,
+    /// Fallback chain config for tool execution (CAB-708)
+    pub fallback_chain: FallbackChain,
     /// mTLS validation stats (CAB-864)
     pub mtls_stats: Arc<MtlsStats>,
     /// Per-consumer rate limiter (CAB-1121 P4)
@@ -230,6 +234,13 @@ impl AppState {
             reset_check_interval_secs: config.quota_sync_interval_secs,
         }));
 
+        // Initialize fallback chain (CAB-708)
+        let fallback_chain = FallbackChain::new(
+            config.fallback_enabled,
+            config.fallback_chains.as_deref(),
+            config.fallback_timeout_ms,
+        );
+
         // Initialize mTLS stats (CAB-864)
         let mtls_stats = Arc::new(MtlsStats::new());
         if config.mtls.enabled {
@@ -259,6 +270,7 @@ impl AppState {
             metering_producer,
             zombie_detector,
             circuit_breakers,
+            fallback_chain,
             mtls_stats,
             consumer_rate_limiter,
             quota_manager,

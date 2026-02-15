@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PlatformMetricsDashboard } from './PlatformMetricsDashboard';
+import { createAuthMock } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
+import type { PersonaRole } from '../../test/helpers';
 
 // Mock dependencies
-vi.mock('../../contexts/AuthContext', () => ({
-  useAuth: vi.fn(() => ({ isReady: true })),
-}));
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 vi.mock('../../services/api', () => ({
   apiService: {
@@ -45,6 +46,7 @@ vi.mock('../../components/charts/SparklineChart', () => ({
 describe('PlatformMetricsDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   });
 
   it('renders the page title', () => {
@@ -147,4 +149,15 @@ describe('PlatformMetricsDashboard', () => {
     const timeElements = screen.getAllByText(/:/);
     expect(timeElements.length).toBeGreaterThan(0);
   });
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the page', () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        render(<PlatformMetricsDashboard />);
+        expect(screen.getByText('Platform Metrics')).toBeInTheDocument();
+      });
+    }
+  );
 });

@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { createAuthMock } from '../../test/helpers';
+import { useAuth } from '../../contexts/AuthContext';
+import type { PersonaRole } from '../../test/helpers';
+
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 
 const mockGetCatalogEntries = vi
   .fn()
@@ -37,6 +42,7 @@ describe('DeployAPIDialog', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
   });
 
   it('renders the dialog title', async () => {
@@ -63,4 +69,15 @@ describe('DeployAPIDialog', () => {
       expect(screen.getByText(/failed/i)).toBeInTheDocument();
     });
   });
+
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona',
+    (role) => {
+      it('renders the dialog', async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        render(<DeployAPIDialog onClose={onClose} onDeployed={onDeployed} />);
+        expect(await screen.findByText(/Deploy API to Gateways/i)).toBeInTheDocument();
+      });
+    }
+  );
 });

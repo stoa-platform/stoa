@@ -19,6 +19,8 @@ import type {
   GatewayInstance,
   GatewayDeployment,
   ExternalMCPServer,
+  BackendApi,
+  SaasApiKey,
 } from '../types';
 
 // ============ Role-based Permissions (mirrors AuthContext.tsx L31-71) ============
@@ -256,5 +258,42 @@ export const mockExternalMCPServer = (
   tool_prefix: 'linear',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-02-01T00:00:00Z',
+  ...overrides,
+});
+
+export const mockBackendApi = (overrides: Partial<BackendApi> = {}): BackendApi => ({
+  id: 'bapi-1',
+  tenant_id: 'oasis-gunters',
+  name: 'petstore-api',
+  display_name: 'Petstore API',
+  description: 'Sample Petstore backend',
+  backend_url: 'https://petstore.swagger.io/v2',
+  openapi_spec_url: 'https://petstore.swagger.io/v2/swagger.json',
+  auth_type: 'api_key',
+  has_credentials: true,
+  status: 'active',
+  tool_count: 5,
+  spec_hash: 'abc123',
+  last_synced_at: '2026-02-10T00:00:00Z',
+  created_at: '2026-01-15T00:00:00Z',
+  updated_at: '2026-02-01T00:00:00Z',
+  created_by: 'user-parzival',
+  ...overrides,
+});
+
+export const mockSaasApiKey = (overrides: Partial<SaasApiKey> = {}): SaasApiKey => ({
+  id: 'skey-1',
+  tenant_id: 'oasis-gunters',
+  name: 'my-agent-key',
+  description: 'Key for AI agent access',
+  key_prefix: 'stoa_saas_a1b2',
+  allowed_backend_api_ids: ['bapi-1'],
+  rate_limit_rpm: 60,
+  status: 'active',
+  created_at: '2026-02-01T00:00:00Z',
+  updated_at: '2026-02-01T00:00:00Z',
+  expires_at: '2026-08-01T00:00:00Z',
+  last_used_at: '2026-02-14T10:30:00Z',
+  created_by: 'user-parzival',
   ...overrides,
 });

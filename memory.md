@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-16 (session 14 — CAB-1162 SEO Tracking + CAB-1187 Blog Batch 7)
+> Dernière MAJ: 2026-02-16 (session 16 — CAB-374 MEGA COMPLETE + CAB-1291 + CAB-1154)
 
 ## ✅ DONE
 
@@ -109,6 +109,24 @@
   - PR #57: GitOpsArchitecture (ADR-040, 4 tabs) + MigrationArchitecture (ADR-034, 3 tabs) + ADR-001 Mermaid
   - PR #58: ADR-039 (mTLS pipeline), ADR-004 (adapter pattern), ADR-006 (mixin composition) — all Mermaid
   - Total: 4 JSX components + 7 Mermaid conversions across 10 ADRs + 4 concept pages
+- CAB-1154: Algolia DocSearch LIVE (1 pt) — stoa-docs PR #49 (`Stoa Blog` index, 7274 entries)
+- CAB-1291: API Test Coverage & Quality (34 pts) — PR #576 (142 tests across 14 modules)
+- CAB-374: Deployment Lifecycle MEGA (34 pts) — 3 phases across 3 repos
+  - CAB-1353: Deployment Lifecycle API (8 pts) — PR #570 (model+repo+service+router+Alembic 026+26 tests)
+  - CAB-1354: Deploy Event Notifications (5 pts) — PR #570 (Kafka events + webhook dispatch)
+  - CAB-1352: ADR-045 Deployment Lifecycle Architecture (5 pts) — stoa-docs PR #56
+  - CAB-1355: Console UI Deployment Dashboard (8 pts) — PR #573 (history table, filters, rollback, RBAC)
+  - CAB-1356: stoactl deploy commands (5 pts) — stoactl PR #7 (deploy+rollback+promote+list+events)
+  - CAB-1357: E2E BDD Deployment Lifecycle (3 pts) — PR #574 (5 scenarios, @wip tagged)
+- CAB-1154: Algolia DocSearch LIVE (1 pt) — stoa-docs PR #49 (`Stoa Blog` index, 7274 entries)
+- CAB-1291: API Test Coverage & Quality (34 pts) — PR #576 (142 tests across 14 modules)
+- CAB-374: Deployment Lifecycle MEGA (34 pts) — 3 phases across 3 repos
+  - CAB-1353: Deployment Lifecycle API (8 pts) — PR #570 (model+repo+service+router+Alembic 026+26 tests)
+  - CAB-1354: Deploy Event Notifications (5 pts) — PR #570 (Kafka events + webhook dispatch)
+  - CAB-1352: ADR-045 Deployment Lifecycle Architecture (5 pts) — stoa-docs PR #56
+  - CAB-1355: Console UI Deployment Dashboard (8 pts) — PR #573 (history table, filters, rollback, RBAC)
+  - CAB-1356: stoactl deploy commands (5 pts) — stoactl PR #7 (deploy/rollback/promote/list/events)
+  - CAB-1357: E2E BDD Deployment Lifecycle (3 pts) — PR #574 (5 scenarios, @wip tagged)
 
 ## 🔴 IN PROGRESS
 
@@ -120,7 +138,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - [ ] Video backup filmée
 - Known: API creation requires GitLab → use Console UI; rate limiting not configured; httpbin flaky
 
-## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 197 pts (28 issues)
+## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 339 pts scoped | Done: 266 pts (37 issues)
 
 ### Track 1 — Demo Finale (6 pts)
 - CAB-1151: Dress Rehearsal (3 pts, P0)
@@ -128,7 +146,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 
 ### Track 2 — Community Infrastructure (11 pts, P0) — DONE ✅
 - ~~CAB-1152~~ + ~~CAB-1182~~ — PR #525 merged
-- Remaining for stoa-docs: Algolia DocSearch, Announcement bar (separate repo)
+- ~~CAB-1154~~ ✅ Algolia DocSearch LIVE (stoa-docs PR #49), Announcement bar (separate repo)
 
 ### Track 3 — DX Remediation (14 pts, fixes CAB-1035) ✅ — ALL DONE
 - ~~CAB-1170~~ ✅ (PRs #529+#530), ~~CAB-1172~~ ✅ (PR #534)
@@ -152,7 +170,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - Demo MVP: mardi 24 février 2026
 - Présentation "ESB is Dead" même jour
 - docs.gostoa.dev = 37 articles, 0 "Coming Soon"
-- ADR numbering: stoa-docs owns numbers (001-043). Next: **ADR-044**
+- ADR numbering: stoa-docs owns numbers (001-045). Next: **ADR-046**
 - Velocity C7: 436 pts / 32 issues / 22 PRs en 7 jours = 62 pts/jour
 - Velocity C8 target: 160 pts (5 tracks parallèles, AI Factory optimized)
 - Portal 2FA for cert upload: user requirement from Council — use Keycloak TOTP step-up

@@ -559,7 +559,7 @@ class KeycloakService:
         client_id: str,
         client_secret: str,
         subject_token: str,
-        subject_token_type: str = "urn:ietf:params:oauth:token-type:access_token",  # noqa: S107
+        subject_token_type: str = "urn:ietf:params:oauth:token-type:access_token",  # noqa: S107 — token type URN, not a secret
         audience: str | None = None,
         scope: str | None = None,
     ) -> dict:

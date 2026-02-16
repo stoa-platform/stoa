@@ -30,7 +30,7 @@ from .routers import (
     access_requests,
     admin_prospects,
     apis,
-    applications,  # noqa: F401
+    applications,  # noqa: F401 — router registered via import side-effect
     audit,
     backend_apis,
     business,

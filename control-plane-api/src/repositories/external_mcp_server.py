@@ -67,7 +67,7 @@ class ExternalMCPServerRepository:
             )
 
         if enabled_only:
-            query = query.where(ExternalMCPServer.enabled == True)  # noqa: E712
+            query = query.where(ExternalMCPServer.enabled == True)  # noqa: E712 — SQLAlchemy filter requires == True
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
@@ -88,7 +88,7 @@ class ExternalMCPServerRepository:
         result = await self.session.execute(
             select(ExternalMCPServer)
             .options(selectinload(ExternalMCPServer.tools))
-            .where(ExternalMCPServer.enabled == True)  # noqa: E712
+            .where(ExternalMCPServer.enabled == True)  # noqa: E712 — SQLAlchemy filter requires == True
             .order_by(ExternalMCPServer.name)
         )
         return list(result.scalars().all())
@@ -235,7 +235,7 @@ class ExternalMCPServerToolRepository:
         )
 
         if enabled_only:
-            query = query.where(ExternalMCPServerTool.enabled == True)  # noqa: E712
+            query = query.where(ExternalMCPServerTool.enabled == True)  # noqa: E712 — SQLAlchemy filter requires == True
 
         query = query.order_by(ExternalMCPServerTool.name)
 

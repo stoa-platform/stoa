@@ -1,6 +1,7 @@
 # Level 2: Claude Code Scheduled Tasks — autonomous daily/weekly maintenance
 # Runs Claude on a schedule for triage, sync, audit, and health checks.
 # Each task posts results to Slack.
+# Kill-switch: set DISABLE_L2_SCHEDULED=true in repo variables to disable ALL scheduled tasks.
 
 name: Claude Code Scheduled Tasks
 
@@ -29,7 +30,6 @@ on:
           - weekly-digest
           - weekly-capacity-check
           - weekly-backlog-stock
-          - self-improve
 
 permissions:
   contents: write
@@ -41,14 +41,18 @@ jobs:
   # ----- Daily: Issue Triage + Plan Sync -----
   daily-triage:
     if: |
-      (github.event.schedule == '0 7 * * *') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'daily-triage')
+      vars.DISABLE_L2_SCHEDULED != 'true' &&
+      (
+        (github.event.schedule == '0 7 * * *') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'daily-triage')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - uses: anthropics/claude-code-action@v1
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -69,6 +73,7 @@ jobs:
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
 
       - name: Notify Slack
+        if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
@@ -80,14 +85,18 @@ jobs:
   # ----- Daily: CI Health Check + Auto-Fix -----
   daily-ci-health:
     if: |
-      (github.event.schedule == '0 21 * * *') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'daily-ci-health')
+      vars.DISABLE_L2_SCHEDULED != 'true' &&
+      (
+        (github.event.schedule == '0 21 * * *') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'daily-ci-health')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - uses: anthropics/claude-code-action@v1
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -110,6 +119,7 @@ jobs:
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"
 
       - name: Notify Slack
+        if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
@@ -121,23 +131,27 @@ jobs:
   # ----- Weekly: Dependency Audit + Security -----
   weekly-audit:
     if: |
-      (github.event.schedule == '0 8 * * 1') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-audit')
+      vars.DISABLE_L2_SCHEDULED != 'true' &&
+      (
+        (github.event.schedule == '0 8 * * 1') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-audit')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - uses: anthropics/claude-code-action@v1
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             Weekly audit task:
 
             1. Dependency audit:
-               - Run pip-audit in control-plane-api/ and stoa-operator/
+               - Run pip-audit in control-plane-api/ (install pip-audit first: pip install pip-audit)
                - Run npm audit in control-plane-ui/ and portal/
-               - Run cargo audit in stoa-gateway/ (if cargo-audit is available)
+               - Run cargo audit in stoa-gateway/ (if cargo-audit is available, install with: cargo install cargo-audit)
                - For each vulnerability found: assess severity, check if fix exists
 
             2. If safe upgrades are available (patch/minor, no breaking):
@@ -146,19 +160,20 @@ jobs:
                - Run quality gates before committing
 
             3. Coverage check:
-               - Read coverage thresholds from ci-quality-gates.md
-               - Run test suites and check if coverage dropped
-               - If dropped: create issue with "coverage-drop" label
+               - Read coverage thresholds from .claude/rules/ci-quality-gates.md
+               - Check latest CI runs for coverage data (do NOT run full test suites)
+               - If coverage dropped: create issue with "coverage-drop" label
 
             4. Stale branch cleanup:
-               - List branches older than 14 days
-               - Report which ones can be safely deleted
+               - List branches older than 14 days: gh api repos/{owner}/{repo}/branches --paginate --jq '.[].name'
+               - Report which ones can be safely deleted (already merged or abandoned)
 
             Generate a weekly report as a GitHub issue titled
             "Weekly Audit — YYYY-MM-DD" with label "weekly-audit".
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 20"
 
       - name: Notify Slack
+        if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
@@ -170,6 +185,7 @@ jobs:
   # ----- Weekly Digest -----
   weekly-digest:
     if: |
+      vars.DISABLE_L2_SCHEDULED != 'true' &&
       (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-digest')
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -177,6 +193,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: anthropics/claude-code-action@v1
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -194,30 +211,33 @@ jobs:
   # ----- Weekly: Capacity Check -----
   weekly-capacity-check:
     if: |
-      (github.event.schedule == '30 9 * * 1') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-capacity-check')
+      vars.DISABLE_L2_SCHEDULED != 'true' &&
+      (
+        (github.event.schedule == '30 9 * * 1') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-capacity-check')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - uses: anthropics/claude-code-action@v1
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             Weekly capacity check — read-only analysis of cycle health.
 
-            1. Fetch the current Linear cycle for team CAB-ING (624a9948-a160-4e47-aba5-7f9404d23506):
-               - list_cycles to find current cycle
-               - list_issues for that cycle to get committed points and done points
+            1. Read plan.md to find the current cycle section (marked "CURRENT").
+               Extract: cycle number, dates, scope (pts), done (pts), done percentage.
 
             2. Compute velocity baseline:
-               - Read velocity.json if it exists in memory/
-               - If not available, use the last closed cycle's data from plan.md
-               - rolling_avg_pts_per_day from velocity.json or fallback: compute from plan.md Cycle 7 data (505 pts / 7 days = 72.1)
+               - From plan.md, read the previous closed cycle's data
+               - Cycle 7 reference: 505 pts / 7 days = 72.1 pts/day
+               - Use this as the baseline if no other data available
 
             3. Compute capacity gap:
-               - capacity = rolling_avg_pts_per_day × cycle_days
+               - capacity = pts_per_day × cycle_days (typically 7)
                - target = capacity × 0.80 (80% utilization target)
                - gap = target - pts_committed
                - utilization_pct = pts_committed / target × 100
@@ -227,16 +247,17 @@ jobs:
                - Committed vs target vs capacity
                - Utilization percentage
                - Gap in points
-               - Top 5 backlog items from BACKLOG.md that could fill the gap (read file, extract CAB-XXXX entries)
+               - Top 5 backlog items from plan.md Backlog sections that could fill the gap
 
             5. Create a GitHub issue titled "Weekly Capacity Check — YYYY-MM-DD" with label "daily-digest"
                containing the full report.
 
-            This is a READ-ONLY check. Do NOT modify any Linear issues or promote backlog items.
+            This is a READ-ONLY check. Do NOT modify any files.
             Suggest running `/fill-cycle` if utilization is below 70%.
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
 
       - name: Notify Slack
+        if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
@@ -248,41 +269,47 @@ jobs:
   # ----- Weekly: Backlog Stock Check -----
   weekly-backlog-stock:
     if: |
-      (github.event.schedule == '0 10 * * 1') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-backlog-stock')
+      vars.DISABLE_L2_SCHEDULED != 'true' &&
+      (
+        (github.event.schedule == '0 10 * * 1') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-backlog-stock')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - uses: anthropics/claude-code-action@v1
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Weekly backlog stock check — scan the codebase for MEGA ticket candidates.
+            Weekly backlog stock check — scan the codebase for improvement opportunities.
 
-            Run the `/generate-backlog --scan` skill:
-            1. Inventory current Linear backlog depth (issues with no cycle, state Backlog/Todo)
-            2. Scan 6 sources: TODO/FIXME, test coverage gaps, roadmap files, DX gaps, lint suppressions, content roadmap
-            3. GROUP findings by component/theme into MEGA tickets (21-34 pts each, with phases and binary DoD)
-            4. Deduplicate against existing Linear issues
-            5. Report MEGA count and total points
+            Step 1: Count current backlog items from plan.md.
+            Read plan.md and count items in "Backlog" sections that are NOT [x] (done).
+            Estimate total backlog points from the parenthesized estimates (e.g., "34 pts").
 
-            IMPORTANT: Generate MEGA tickets (20-40 pts), NOT micro-tickets (3-8 pts).
-            Each MEGA groups related findings by component into a meaningful improvement arc.
+            Step 2: Scan the codebase for improvement signals (do NOT use skills, just run commands):
+            - Count TODO/FIXME comments: grep -r "TODO\|FIXME" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.rs" -c src/ control-plane-api/ control-plane-ui/ portal/ stoa-gateway/src/ 2>/dev/null || true
+            - Check test coverage thresholds vs current in .claude/rules/ci-quality-gates.md
+            - Count lint suppressions: grep -r "noqa\|eslint-disable\|#\[allow" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.rs" -c 2>/dev/null || true
+            - List files with no corresponding test file in control-plane-ui/src/ and portal/src/
 
-            After the scan, evaluate backlog health:
-            - If backlog < 400 pts: create a GitHub issue titled "Backlog Stock Alert — YYYY-MM-DD"
-              with label "daily-digest" containing the full MEGA scan report and recommendation
-              to run `/generate-backlog --create`
-            - If backlog >= 400 pts: create a GitHub issue titled "Backlog Stock OK — YYYY-MM-DD"
-              with label "daily-digest" containing a brief summary
+            Step 3: Generate a report grouping findings by component (api, ui, portal, gateway).
+            For each component, suggest MEGA-sized improvements (20-40 pts) NOT micro-tickets.
 
-            This is a READ-ONLY check. Do NOT create any Linear tickets.
-            Do NOT run `/generate-backlog --create`.
+            Step 4: Evaluate backlog health.
+            - If estimated backlog < 400 pts: recommend running `/generate-backlog` to create new MEGAs
+            - If backlog >= 400 pts: report "Backlog stock healthy"
+
+            Create a GitHub issue titled "Backlog Stock Check — YYYY-MM-DD" with label "daily-digest".
+
+            IMPORTANT: This is a READ-ONLY check. Do NOT create Linear tickets or modify files.
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"
 
       - name: Notify Slack
+        if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |

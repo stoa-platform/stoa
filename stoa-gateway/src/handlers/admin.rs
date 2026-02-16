@@ -26,6 +26,7 @@ use tracing::warn;
 use crate::proxy::credentials::BackendCredential;
 use crate::routes::{ApiRoute, PolicyEntry};
 use crate::state::AppState;
+use crate::uac::binders::{rest::RestBinder, ProtocolBinder};
 use crate::uac::UacContractSpec;
 
 // =============================================================================
@@ -420,7 +421,18 @@ pub async fn upsert_contract(
     contract.refresh_policies();
 
     let key = format!("{}:{}", contract.tenant_id, contract.name);
-    let existed = state.contract_registry.upsert(contract).is_some();
+    let existed = state.contract_registry.upsert(contract.clone()).is_some();
+
+    // Auto-generate REST routes from contract (CAB-1299 PR3)
+    let rest_binder = RestBinder::new(state.route_registry.clone());
+    let routes_count = match rest_binder.bind(&contract).await {
+        Ok(_) => contract.endpoints.len(),
+        Err(e) => {
+            warn!(error = %e, contract = %key, "REST binder failed");
+            0
+        }
+    };
+
     let status = if existed {
         StatusCode::OK
     } else {
@@ -428,7 +440,7 @@ pub async fn upsert_contract(
     };
     (
         status,
-        Json(serde_json::json!({"key": key, "status": "ok"})),
+        Json(serde_json::json!({"key": key, "status": "ok", "routes_generated": routes_count})),
     )
         .into_response()
 }
@@ -450,12 +462,23 @@ pub async fn get_contract(
 }
 
 /// DELETE /admin/contracts/:key — remove a UAC contract by key (tenant_id:name)
+///
+/// Cascade-deletes all REST routes generated from this contract.
 pub async fn delete_contract(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> impl IntoResponse {
     match state.contract_registry.remove(&key) {
-        Some(_) => StatusCode::NO_CONTENT.into_response(),
+        Some(_) => {
+            // Cascade-delete generated routes (CAB-1299 PR3)
+            let rest_binder = RestBinder::new(state.route_registry.clone());
+            let removed = rest_binder.unbind(&key).await.unwrap_or(0);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"status": "deleted", "routes_removed": removed})),
+            )
+                .into_response()
+        }
         None => (StatusCode::NOT_FOUND, "Contract not found").into_response(),
     }
 }
@@ -1253,7 +1276,12 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["status"], "deleted");
 
         // Verify gone
         let response = app
@@ -1342,5 +1370,143 @@ mod tests {
         let policies = data["required_policies"].as_array().unwrap();
         assert!(policies.contains(&serde_json::json!("mtls")));
         assert!(policies.contains(&serde_json::json!("audit-logging")));
+    }
+
+    // =========================================================================
+    // REST Binder integration tests (CAB-1299 PR3)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_contract_upsert_generates_routes() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state.clone());
+
+        let response = app
+            .oneshot(auth_json_req("POST", "/contracts", sample_contract_json()))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["routes_generated"], 1); // 1 endpoint in sample_contract_json
+
+        // Verify route is in the route registry
+        assert_eq!(state.route_registry.count(), 1);
+        let route = state.route_registry.get("uac:acme:payment-api:0");
+        assert!(route.is_some());
+        let route = route.unwrap();
+        assert_eq!(route.path_prefix, "/apis/acme/payment-api/payments/{id}");
+        assert_eq!(route.contract_key.as_deref(), Some("acme:payment-api"));
+    }
+
+    #[tokio::test]
+    async fn test_contract_delete_cascades_routes() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state.clone());
+
+        // Create contract → generates route
+        let _ = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/contracts", sample_contract_json()))
+            .await
+            .unwrap();
+        assert_eq!(state.route_registry.count(), 1);
+
+        // Delete contract → cascades route removal
+        let response = app
+            .oneshot(auth_req("DELETE", "/contracts/acme:payment-api"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["routes_removed"], 1);
+        assert_eq!(state.route_registry.count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_contract_re_upsert_replaces_routes() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state.clone());
+
+        // Create with 1 endpoint
+        let _ = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/contracts", sample_contract_json()))
+            .await
+            .unwrap();
+        assert_eq!(state.route_registry.count(), 1);
+
+        // Re-upsert with 2 endpoints
+        let two_endpoints = serde_json::json!({
+            "name": "payment-api",
+            "version": "2.0.0",
+            "tenant_id": "acme",
+            "classification": "H",
+            "endpoints": [
+                {
+                    "path": "/payments",
+                    "methods": ["GET", "POST"],
+                    "backend_url": "https://backend.acme.com/v2/payments"
+                },
+                {
+                    "path": "/payments/{id}",
+                    "methods": ["GET", "DELETE"],
+                    "backend_url": "https://backend.acme.com/v2/payments"
+                }
+            ],
+            "status": "published"
+        });
+
+        let response = app
+            .oneshot(auth_json_req("POST", "/contracts", two_endpoints))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["routes_generated"], 2);
+
+        // Old route should be gone, 2 new routes present
+        assert_eq!(state.route_registry.count(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_contract_routes_have_classification() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state.clone());
+
+        let vh_contract = serde_json::json!({
+            "name": "sensitive-api",
+            "version": "1.0.0",
+            "tenant_id": "acme",
+            "classification": "VH",
+            "endpoints": [{
+                "path": "/data",
+                "methods": ["GET"],
+                "backend_url": "https://backend.acme.com/data"
+            }],
+            "status": "draft"
+        });
+
+        let _ = app
+            .oneshot(auth_json_req("POST", "/contracts", vh_contract))
+            .await
+            .unwrap();
+
+        let route = state
+            .route_registry
+            .get("uac:acme:sensitive-api:0")
+            .unwrap();
+        assert_eq!(route.classification, Some(crate::uac::Classification::VH));
     }
 }

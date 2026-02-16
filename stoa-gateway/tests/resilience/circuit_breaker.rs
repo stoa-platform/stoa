@@ -24,6 +24,8 @@ fn failing_route(id: &str, prefix: &str) -> ApiRoute {
         methods: vec![],
         spec_hash: "abc".to_string(),
         activated: true,
+        classification: None,
+        contract_key: None,
     }
 }
 
@@ -188,6 +190,8 @@ async fn test_method_not_allowed_does_not_trip_cb() {
         methods: vec!["POST".to_string()],
         spec_hash: "abc".to_string(),
         activated: true,
+        classification: None,
+        contract_key: None,
     });
     let router = stoa_gateway::build_router(state.clone());
 

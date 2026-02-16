@@ -2,6 +2,7 @@
 //!
 //! Defines actions and permissions for API access control.
 
+pub mod binders;
 pub mod cache;
 pub mod classifications;
 pub mod enforcer;

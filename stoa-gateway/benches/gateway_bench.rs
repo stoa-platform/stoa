@@ -228,6 +228,8 @@ fn bench_route_matching(c: &mut Criterion) {
             methods: vec![],
             spec_hash: String::new(),
             activated: true,
+            classification: None,
+            contract_key: None,
         });
     }
 
@@ -249,6 +251,8 @@ fn bench_route_matching(c: &mut Criterion) {
         methods: vec!["GET".to_string(), "POST".to_string()],
         spec_hash: String::new(),
         activated: true,
+        classification: None,
+        contract_key: None,
     });
 
     c.bench_function("route_match_deep_prefix", |b| {

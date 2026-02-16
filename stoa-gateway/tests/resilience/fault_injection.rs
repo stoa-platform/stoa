@@ -118,6 +118,8 @@ async fn test_proxy_timeout() {
         methods: vec![],
         spec_hash: "abc".to_string(),
         activated: true,
+        classification: None,
+        contract_key: None,
     });
     let router = stoa_gateway::build_router(state);
 
@@ -154,6 +156,8 @@ async fn test_deactivated_route_returns_503() {
         methods: vec![],
         spec_hash: "abc".to_string(),
         activated: false,
+        classification: None,
+        contract_key: None,
     });
     let router = stoa_gateway::build_router(state);
 

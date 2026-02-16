@@ -7,6 +7,8 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::uac::Classification;
+
 /// An API route managed by the Control Plane.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRoute {
@@ -26,6 +28,12 @@ pub struct ApiRoute {
     pub spec_hash: String,
     /// Whether the route is active
     pub activated: bool,
+    /// UAC classification (if generated from a contract)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub classification: Option<Classification>,
+    /// UAC contract key (tenant_id:name) that generated this route
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contract_key: Option<String>,
 }
 
 /// Thread-safe in-memory registry of API routes.
@@ -72,6 +80,15 @@ impl RouteRegistry {
         self.routes.read().len()
     }
 
+    /// Remove all routes generated from a specific contract key.
+    /// Returns the number of routes removed.
+    pub fn remove_by_contract(&self, contract_key: &str) -> usize {
+        let mut routes = self.routes.write();
+        let before = routes.len();
+        routes.retain(|_, r| r.contract_key.as_deref() != Some(contract_key));
+        before - routes.len()
+    }
+
     /// Find the best matching route for a request path.
     ///
     /// Uses longest-prefix matching: if multiple routes match,
@@ -106,6 +123,8 @@ mod tests {
             methods: vec!["GET".to_string(), "POST".to_string()],
             spec_hash: "abc123".to_string(),
             activated: true,
+            classification: None,
+            contract_key: None,
         }
     }
 

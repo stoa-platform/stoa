@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-16 (session 13 — CAB-1185 Portal Schema Validation, PR #557)
+> Dernière MAJ: 2026-02-16 (session 14 — CAB-1162 SEO Tracking + CAB-1187 Blog Batch 7)
 
 ## ✅ DONE
 
@@ -98,6 +98,8 @@
   - Added Legal sidebar category in stoa-docs
   - Self-registered users default to `viewer` role (Portal + API fallback)
   - Keycloak `default-roles-stoa` updated: `viewer` added to composites
+- CAB-1162: SEO Tracking (3 pts) — PR #564 (sitemap verified, 32/32 meta descriptions compliant, SEO-TRACKING.md)
+- CAB-1187: Blog Batch 7 (8 pts) — stoa-docs PR #48 (5 articles: A3 MCP tools, O8 circuit breaker, D2 stoactl, A5 rate limiting, D3 Docker Compose)
 
 ## 🔴 IN PROGRESS
 
@@ -109,7 +111,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - [ ] Video backup filmée
 - Known: API creation requires GitLab → use Console UI; rate limiting not configured; httpbin flaky
 
-## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 113 pts (23 issues)
+## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 124 pts (25 issues)
 
 ### Track 1 — Demo Finale (6 pts)
 - CAB-1151: Dress Rehearsal (3 pts, P0)
@@ -129,10 +131,9 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - ~~CAB-362~~ ✅ (PR #558), ~~CAB-1149~~ ✅ (meta-ticket, closed)
 - CAB-709: UAC for LLM (5 pts) — DEFERRED (archived, no impl target)
 
-### Track 5 — SEO + Content (16 pts)
-- CAB-1187: Blog Batch 7 (8 pts, NEW)
+### Track 5 — SEO + Content (16 pts) — 11/16 pts done
+- ~~CAB-1187~~ ✅ (stoa-docs PR #48), ~~CAB-1162~~ ✅ (PR #564)
 - CAB-1181: Interactive Diagrams MDX (5 pts)
-- CAB-1162: SEO Tracking (3 pts)
 
 ## 🚫 BLOCKED
 
@@ -141,7 +142,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 ## 📝 NOTES
 - Demo MVP: mardi 24 février 2026
 - Présentation "ESB is Dead" même jour
-- docs.gostoa.dev = 32 articles, 0 "Coming Soon"
+- docs.gostoa.dev = 37 articles, 0 "Coming Soon"
 - ADR numbering: stoa-docs owns numbers (001-043). Next: **ADR-044**
 - Velocity C7: 436 pts / 32 issues / 22 PRs en 7 jours = 62 pts/jour
 - Velocity C8 target: 160 pts (5 tracks parallèles, AI Factory optimized)

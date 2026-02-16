@@ -46,12 +46,12 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) | **Done**: 89 pts (26%) | **Velocity**: 23 issues closed
+**Scope**: 339 pts (active) | **Done**: 100 pts (29%) | **Velocity**: 25 issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
 
-### Done (23 issues)
+### Done (25 issues)
 
 - [x] CAB-353: Go/No-Go Checklist 3 Months (5 pts) — PR #482 (9.00/10 → GO)
 - [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (P1)
@@ -76,6 +76,8 @@
 - [x] CAB-1184: [Adapter] Apigee Gateway Adapter P1 — Google Cloud CRUD (5 pts) — PR #556
 - [x] CAB-362: GW2-10 Circuit Breaker + Retry (5 pts) — PR #558
 - [x] CAB-1149: Staging Freerun — V1++ (13 pts) — meta-ticket, 5 sub-PRs merged
+- [x] CAB-1162: SEO Tracking — Looker Studio + Search Console archive (3 pts) — PR #564
+- [x] CAB-1187: [SEO] Blog Batch 7 — 5 Articles Week of Feb 17 (8 pts) — stoa-docs PR #48
 
 ### In Progress
 
@@ -93,8 +95,6 @@
 - [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts, P1)
 - [ ] CAB-1128: Design Partner Communication — Client A Beta Access (3 pts, P2)
 - [ ] CAB-709: UAC for LLM — Contrats unifies pour backends IA (5 pts, P2) — DEFERRED (archived)
-- [ ] CAB-1162: SEO Tracking — Looker Studio + Search Console archive (3 pts, P3)
-- [ ] CAB-1187: [SEO] Blog Batch 7 — 5 Articles Week of Feb 17 (8 pts, P3)
 
 ### Backlog — DX Remediation (from CAB-1035 friction analysis) ✅ ALL DONE
 

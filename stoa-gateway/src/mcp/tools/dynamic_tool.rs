@@ -114,6 +114,10 @@ impl Tool for DynamicTool {
         self.action
     }
 
+    fn tenant_id(&self) -> Option<&str> {
+        Some(&self.tenant_id)
+    }
+
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         // Tenant isolation: CRD namespace must match caller tenant
         // Public tools (catalog API bridge) skip this check

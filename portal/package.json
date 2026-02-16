@@ -18,6 +18,8 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.20",
+    "ajv": "^8.18.0",
+    "ajv-formats": "^3.0.1",
     "axios": "^1.6.5",
     "clsx": "^2.1.0",
     "lucide-react": "^0.475.0",

@@ -18,4 +18,12 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     'react-hooks/set-state-in-effect': 'warn',
   },
+  overrides: [
+    {
+      files: ['**/*.test.ts', '**/*.test.tsx'],
+      rules: {
+        '@typescript-eslint/no-explicit-any': 'off',
+      },
+    },
+  ],
 }

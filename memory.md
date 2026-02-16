@@ -120,6 +120,8 @@
   - CAB-1356: stoactl deploy commands (5 pts) — stoactl PR #7 (deploy+rollback+promote+list+events)
   - CAB-1357: E2E BDD Deployment Lifecycle (3 pts) — PR #574 (5 scenarios, @wip tagged)
 - CAB-1297: DX Developer Experience — READMEs, .env.example, Onboarding (13 pts) — PR #577 (5 READMEs, 4 .env.examples, DEVELOPMENT.md, Makefile dev targets)
+- CAB-1295: Console Test Coverage (21 pts) — PR #590 + PR #592 (24 test files, 959 total tests, ESLint override for test `as any`)
+- CAB-1358: AI Factory H24 Autonomous Activation (8 pts) — PR #589 (7 workflows hardened: kill-switches, continue-on-error, Ask mode for rules, fallback issue creation)
 
 ## 🔴 IN PROGRESS
 

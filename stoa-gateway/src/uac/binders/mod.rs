@@ -6,8 +6,10 @@
 //!
 //! "Define Once, Expose Everywhere."
 
+pub mod mcp;
 pub mod rest;
 
+use crate::mcp::tools::ToolDefinition;
 use crate::routes::ApiRoute;
 use crate::uac::schema::UacContractSpec;
 
@@ -16,7 +18,8 @@ use crate::uac::schema::UacContractSpec;
 pub enum BindingOutput {
     /// REST routes generated from a contract.
     Routes(Vec<ApiRoute>),
-    // Future: Tools(Vec<ToolDefinition>), GraphQL schema, gRPC descriptors, etc.
+    /// MCP tool definitions generated from a contract.
+    Tools(Vec<ToolDefinition>),
 }
 
 /// Protocol binder trait — transforms contracts into protocol artifacts.

@@ -103,7 +103,7 @@ export default defineConfig({
       use: {
         baseURL: process.env.STOA_GATEWAY_URL || 'https://api.gostoa.dev',
       },
-      testMatch: /gateway-(access|mtls)/,
+      testMatch: /gateway-(access|mtls|uac)/,
     },
   ],
 

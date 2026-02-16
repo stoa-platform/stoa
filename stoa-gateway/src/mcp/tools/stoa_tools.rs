@@ -433,3 +433,105 @@ pub fn register_static_tools(registry: &ToolRegistry, cp: Arc<ToolProxyClient>) 
         "Static STOA tools registered (LEGACY: proxy mode)"
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::control_plane::tool_proxy::{RemoteToolDef, RemoteToolSchema};
+    use crate::mcp::tools::ToolRegistry;
+    use std::sync::Arc;
+
+    // ─── infer_action ──────────────────────────────────────────
+
+    #[test]
+    fn infer_action_security() {
+        assert_eq!(infer_action("stoa_security"), Action::ViewAudit);
+        assert_eq!(infer_action("audit_log"), Action::ViewAudit);
+    }
+
+    #[test]
+    fn infer_action_logs() {
+        assert_eq!(infer_action("stoa_logs"), Action::ViewLogs);
+    }
+
+    #[test]
+    fn infer_action_metrics() {
+        assert_eq!(infer_action("stoa_metrics"), Action::ViewMetrics);
+    }
+
+    #[test]
+    fn infer_action_create() {
+        assert_eq!(infer_action("create_api"), Action::Create);
+    }
+
+    #[test]
+    fn infer_action_update() {
+        assert_eq!(infer_action("update_policy"), Action::Update);
+    }
+
+    #[test]
+    fn infer_action_delete() {
+        assert_eq!(infer_action("delete_subscription"), Action::Delete);
+    }
+
+    #[test]
+    fn infer_action_default_read() {
+        assert_eq!(infer_action("stoa_catalog"), Action::Read);
+        assert_eq!(infer_action("unknown_tool"), Action::Read);
+    }
+
+    // ─── register_remote_tool ──────────────────────────────────
+
+    fn make_remote_def(name: &str) -> RemoteToolDef {
+        RemoteToolDef {
+            name: name.to_string(),
+            description: format!("Remote {}", name),
+            input_schema: RemoteToolSchema {
+                schema_type: "object".to_string(),
+                properties: Default::default(),
+                required: vec![],
+            },
+        }
+    }
+
+    #[test]
+    fn register_remote_tool_skips_native() {
+        let registry = ToolRegistry::new();
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "http://localhost:8000",
+            None,
+        ));
+        let def = make_remote_def("stoa_catalog"); // native tool
+        register_remote_tool(&registry, &def, &cp);
+        assert_eq!(registry.count(), 0); // should NOT register
+    }
+
+    #[test]
+    fn register_remote_tool_registers_non_native() {
+        let registry = ToolRegistry::new();
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "http://localhost:8000",
+            None,
+        ));
+        let def = make_remote_def("custom_weather_api");
+        register_remote_tool(&registry, &def, &cp);
+        assert_eq!(registry.count(), 1);
+        assert!(registry.get("custom_weather_api").is_some());
+    }
+
+    #[test]
+    fn register_remote_tool_copies_schema() {
+        let registry = ToolRegistry::new();
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "http://localhost:8000",
+            None,
+        ));
+        let mut def = make_remote_def("my_tool");
+        def.input_schema.required = vec!["action".to_string()];
+        register_remote_tool(&registry, &def, &cp);
+
+        let tool = registry.get("my_tool").unwrap();
+        let schema = tool.input_schema();
+        assert_eq!(schema.required, vec!["action".to_string()]);
+    }
+}

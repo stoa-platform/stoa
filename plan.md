@@ -46,7 +46,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) | **Done**: 100 pts (29%) | **Velocity**: 25 issues closed
+**Scope**: 339 pts (active) | **Done**: 134 pts (40%) | **Velocity**: 26 issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
@@ -78,6 +78,7 @@
 - [x] CAB-1149: Staging Freerun — V1++ (13 pts) — meta-ticket, 5 sub-PRs merged
 - [x] CAB-1162: SEO Tracking — Looker Studio + Search Console archive (3 pts) — PR #564
 - [x] CAB-1187: [SEO] Blog Batch 7 — 5 Articles Week of Feb 17 (8 pts) — stoa-docs PR #48
+- [x] CAB-1289: [MEGA] Gateway Test Coverage & Quality (34 pts) — PR #566 (106 tests, -620 LOC dead code)
 
 ### In Progress
 
@@ -131,7 +132,7 @@
 
 ### Backlog — Council-Validated MEGAs (2026-02-16)
 
-- [ ] CAB-1289: [MEGA] Gateway Test Coverage & Quality — 27 Untested Modules (34 pts, P3) — Council 8.75/10
+- [x] CAB-1289: [MEGA] Gateway Test Coverage & Quality — 27 Untested Modules (34 pts, P3) — PR #566 (Council 8.75/10)
 - [ ] CAB-1297: [MEGA] DX: Developer Experience — READMEs, .env.example, Onboarding (13 pts, P3) — Council 8.50/10
 - [ ] CAB-1291: [MEGA] Platform: API Test Coverage & Quality — 44 Untested Modules (34 pts, P3) — Council 8.00/10
 - [ ] CAB-1294: [MEGA] DX: Portal Test Coverage & UX Completion — 26 Untested Modules (21 pts, P3) — Council 8.00/10

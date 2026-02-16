@@ -46,11 +46,11 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 161 pts (+34 SaaS) | **Done**: 59 pts (30%) | **Velocity**: 12 issues closed
-**Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep
+**Scope**: 195 pts (+8 new) | **Done**: 62 pts (31%) | **Velocity**: 18 issues closed
+**Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted, +7 items estimated (2026-02-15); +3 auto-promoted (2026-02-15)
 
-### Done (12 issues)
+### Done (18 issues)
 
 - [x] CAB-353: Go/No-Go Checklist 3 Months (5 pts) — PR #482 (9.00/10 → GO)
 - [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (P1)
@@ -60,10 +60,16 @@
 - [x] CAB-1186: [E2E] Unskip Demo Showcase Feature (3 pts) — PR #553
 - [x] CAB-1171: [DX] Quick Start rewrite — single golden path (3 pts) — stoa-docs PR #46
 - [x] CAB-1173: [DX] MCP guide for developers — zero kubectl (3 pts) — stoa-docs PR #46
-- [x] CAB-1249: [API] BackendApi + SaasApiKey models+CRUD (13 pts) — PR #545
-- [x] CAB-1250: [Gateway] BYOK credential proxy + tenant tools (8 pts) — PR #549
-- [x] CAB-1251: [UI] Console SaaS Backend APIs + API Keys (10 pts) — PR #550
-- [x] CAB-1252: [E2E] SaaS BDD tests (3 pts) — PR #551
+- [x] CAB-1188: [SaaS] MCP SaaS Self-Service MVP (34 pts) — PRs #545, #549, #550, #551
+  - [x] CAB-1249: [API] BackendApi + SaasApiKey models+CRUD (13 pts) — PR #545
+  - [x] CAB-1250: [Gateway] BYOK credential proxy + tenant tools (8 pts) — PR #549
+  - [x] CAB-1251: [UI] Console SaaS Backend APIs + API Keys (10 pts) — PR #550
+  - [x] CAB-1252: [E2E] SaaS BDD tests (3 pts) — PR #551
+- [x] CAB-1153: Activer GitHub Discussions (1 pt)
+- [x] CAB-1155: FUNDING.yml — Activer GitHub Sponsors
+- [x] CAB-1156: Labelliser 10 issues "good first issue" (1 pt)
+- [x] CAB-1157: Announcement Bar Docusaurus
+- [x] CAB-1158: README Badges + Contributors Wall (1 pt)
 
 ### In Progress
 
@@ -74,10 +80,12 @@
   - [ ] Repetition #1 (mercredi 19) — timer 5 min
   - [ ] Repetition #2 (vendredi 21) — avec Cedric comme temoin
   - [ ] Video backup filmee
+- [~] CAB-1154: Algolia DocSearch — Soumettre candidature (1 pt, P1)
 
 ### Todo
 
 - [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts, P1)
+- [ ] CAB-1321: [Portal] Fix Terms of Service link (3 pts, P2)
 - [ ] CAB-1183: [Gateway] Sidecar Mode P1 — ext_authz Enforcement Layer (8 pts, P2)
 - [ ] CAB-1184: [Adapter] Apigee Gateway Adapter P1 — Google Cloud CRUD (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A Beta Access (3 pts, P2)
@@ -94,14 +102,14 @@
 - [x] CAB-1172: [DX] Auto-approve free-tier subscriptions (3 pts, P2) — PR #534 (Council 8.50/10)
 - [x] CAB-1173: [DX] MCP guide for developers — zero kubectl (3 pts, P2) — stoa-docs PR #46
 
-### Backlog — Community Infrastructure (CAB-1152 sub-tickets)
+### Backlog — Community Infrastructure (CAB-1152 sub-tickets) — 5/6 Done
 
-- CAB-1153: Activer GitHub Discussions (1 pts, P1)
-- CAB-1154: Algolia DocSearch — Soumettre candidature (1 pts, P1)
-- CAB-1156: Labelliser 10 issues "good first issue" (1 pts, P1)
-- CAB-1158: README Badges + Contributors Wall (1 pts, P1)
-- CAB-1155: FUNDING.yml — Activer GitHub Sponsors (P2)
-- CAB-1157: Announcement Bar Docusaurus (P2)
+- [x] CAB-1153: Activer GitHub Discussions (1 pt, P1)
+- [~] CAB-1154: Algolia DocSearch — Soumettre candidature (1 pt, P1)
+- [x] CAB-1155: FUNDING.yml — Activer GitHub Sponsors (P2)
+- [x] CAB-1156: Labelliser 10 issues "good first issue" (1 pt, P1)
+- [x] CAB-1157: Announcement Bar Docusaurus (P2)
+- [x] CAB-1158: README Badges + Contributors Wall (1 pt, P1)
 
 ### Backlog — Promoted by /fill-cycle (2026-02-15)
 

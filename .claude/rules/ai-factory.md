@@ -319,6 +319,8 @@ Usage: all new features. Objective: test-first + quality parity with human code.
 
 ### Pattern 8: Decompose + Parallel Instances (multi-Claude)
 
+Uses Phase Ownership claims for cross-session coordination. See Pattern 9 and `phase-ownership.md`.
+
 Prerequis: MEGA ticket (>= 21 pts) touching >= 2 components.
 Trigger: `/decompose CAB-XXXX` skill.
 
@@ -355,6 +357,32 @@ Key rules:
 
 Usage: MEGA features (>= 21 pts), cross-component work. Gain: 1.5-2x speedup.
 See `/decompose` skill for full DAG generation and Linear integration.
+
+### Pattern 9: Phase Ownership (multi-session coordination)
+
+Prerequis: Any MEGA ticket OR multi-terminal workflow.
+Coordination: `.claude/claims/<ID>.json` + `phase-ownership.md`.
+
+```
+1. [Any instance] /decompose CAB-XXXX → creates sub-issues + claim file
+   OR: manually create claim file for existing MEGA phases
+2. [Instance 1] session-startup Step 2 → claims Phase 1 (e.g., API)
+3. [Instance 2] session-startup Step 2 → sees Phase 1 claimed → claims Phase 2 (e.g., Gateway)
+4. [Instance 3] session-startup Step 2 → claims Phase 3 (e.g., Docs, stoa-docs repo)
+5. Each instance executes its phase end-to-end (Pattern 3/5/7 inside the phase)
+6. On phase completion → release claim → check for next unblocked phase
+7. When all phases done → update parent MEGA on Linear → state files
+```
+
+Regles:
+- Une instance qui prend une phase la **TERMINE** (pas de switch mid-phase)
+- Si crash → next session detects stale claim via `phase-ownership.md` protocol
+- Max **3 instances paralleles** (cost control)
+- Chaque phase <300 LOC, 1 PR (Stripe micro-PR standard)
+- Claim file is the single source of truth for ownership — plan.md `[owner: X]` is a view
+
+3 execution modes: Sequential (1 terminal), Multi-instance (N terminals), Multi-subagent (Agent Teams lead + N).
+See `phase-ownership.md` for full protocol, claim schemas, and conflict resolution.
 
 ## Contraintes
 

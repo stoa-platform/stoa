@@ -436,7 +436,7 @@ mod tests {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
             Some("admin".into()), Some("admin@test.com".into()), "tenant-1", "stoa_security",
-            Action::ManagePolicies, vec!["stoa:admin".into()], vec!["cpi-admin".into()],
+            Action::ManageContracts, vec!["stoa:admin".into()], vec!["cpi-admin".into()],
         );
         assert!(result.is_ok());
     }

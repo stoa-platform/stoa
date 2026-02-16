@@ -1472,7 +1472,7 @@ mod tests {
 
     mod http {
         use super::*;
-        use wiremock::matchers::{method, path, path_regex, query_param};
+        use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         async fn make_mock_tool(mock: &MockServer, name: &str) -> NativeTool {

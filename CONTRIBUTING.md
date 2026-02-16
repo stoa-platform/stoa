@@ -104,8 +104,11 @@ Issues that don't meet the Marchemalo Standard will be labeled `needs-triage` an
 
 - Python 3.11+
 - Node.js 20+
+- Rust stable toolchain
 - Docker & Docker Compose
 - kubectl (for K8s development)
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup instructions per component.
 
 ### Local Development
 
@@ -114,13 +117,15 @@ Issues that don't meet the Marchemalo Standard will be labeled `needs-triage` an
 git clone https://github.com/YOUR_USERNAME/stoa.git
 cd stoa
 
-# Install dependencies
-make install
+# Install dependencies for all components
+make setup
 
-# Start local environment
-make dev
+# Start the API, UI, and Gateway (each in a separate terminal)
+make run-api
+make run-ui
+make run-gateway
 
-# Run tests
+# Run all tests
 make test
 ```
 
@@ -189,13 +194,12 @@ This adds a `Signed-off-by: Your Name <email>` line to your commit. See [CLA.md]
 # Run all tests
 make test
 
-# Run specific test suite
-make test-unit
-make test-integration
-make test-e2e
-
-# Run with coverage
-make test-coverage
+# Run by component
+make test-api        # pytest (control-plane-api)
+make test-ui         # vitest (console UI)
+make test-portal     # vitest (portal)
+make test-gateway    # cargo test (gateway)
+make test-cli        # pytest (CLI)
 ```
 
 ## Documentation

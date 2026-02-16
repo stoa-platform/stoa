@@ -478,3 +478,82 @@ class TestAddUserToTenant:
         result = await svc.add_user_to_tenant("u1", "acme")
         assert result is True
         svc._admin.group_user_add.assert_not_called()
+
+# ── Remove User From Group ──
+
+
+class TestRemoveUserFromGroup:
+    async def test_removes_from_group(self, svc):
+        svc._admin.get_groups.return_value = [{"name": "acme", "id": "g1"}]
+        result = await svc.remove_user_from_group("u1", "acme")
+        assert result is True
+        svc._admin.group_user_remove.assert_called_once_with("u1", "g1")
+
+    async def test_group_not_found(self, svc):
+        svc._admin.get_groups.return_value = []
+        result = await svc.remove_user_from_group("u1", "missing")
+        assert result is True  # idempotent
+        svc._admin.group_user_remove.assert_not_called()
+
+    async def test_remove_failure_returns_false(self, svc):
+        svc._admin.get_groups.return_value = [{"name": "acme", "id": "g1"}]
+        svc._admin.group_user_remove.side_effect = Exception("KC error")
+        result = await svc.remove_user_from_group("u1", "acme")
+        assert result is False
+
+    async def test_not_connected(self, disconnected_svc):
+        with pytest.raises(RuntimeError, match="not connected"):
+            await disconnected_svc.remove_user_from_group("u1", "acme")
+
+
+# ── Delete Tenant Group ──
+
+
+class TestDeleteTenantGroup:
+    async def test_deletes_group(self, svc):
+        svc._admin.get_groups.return_value = [{"name": "acme", "id": "g1"}]
+        result = await svc.delete_tenant_group("acme")
+        assert result is True
+        svc._admin.delete_group.assert_called_once_with("g1")
+
+    async def test_group_not_found(self, svc):
+        svc._admin.get_groups.return_value = []
+        result = await svc.delete_tenant_group("missing")
+        assert result is True  # idempotent
+
+    async def test_delete_failure_returns_false(self, svc):
+        svc._admin.get_groups.return_value = [{"name": "acme", "id": "g1"}]
+        svc._admin.delete_group.side_effect = Exception("KC error")
+        result = await svc.delete_tenant_group("acme")
+        assert result is False
+
+    async def test_not_connected(self, disconnected_svc):
+        with pytest.raises(RuntimeError, match="not connected"):
+            await disconnected_svc.delete_tenant_group("acme")
+
+
+# ── Get User Roles ──
+
+
+class TestGetUserRoles:
+    async def test_returns_non_system_roles(self, svc):
+        svc._admin.get_realm_roles_of_user.return_value = [
+            {"name": "admin"},
+            {"name": "viewer"},
+            {"name": "default-roles-stoa"},
+            {"name": "offline_access"},
+            {"name": "uma_authorization"},
+        ]
+        roles = await svc.get_user_roles("u1")
+        assert sorted(roles) == ["admin", "viewer"]
+
+    async def test_empty_roles(self, svc):
+        svc._admin.get_realm_roles_of_user.return_value = [
+            {"name": "default-roles-stoa"},
+        ]
+        roles = await svc.get_user_roles("u1")
+        assert roles == []
+
+    async def test_not_connected(self, disconnected_svc):
+        with pytest.raises(RuntimeError, match="not connected"):
+            await disconnected_svc.get_user_roles("u1")

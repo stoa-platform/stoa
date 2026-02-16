@@ -22,7 +22,12 @@ import {
   Trash2,
   Info,
 } from 'lucide-react';
+import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
 import type { MCPInputSchema, MCPPropertySchema } from '../../types';
+
+const ajv = new Ajv({ allErrors: true, coerceTypes: true });
+addFormats(ajv);
 
 interface TryItFormProps {
   schema: MCPInputSchema | null | undefined;
@@ -30,6 +35,54 @@ interface TryItFormProps {
   onInvoke?: (args: Record<string, unknown>) => Promise<unknown>;
   isLoading?: boolean;
   className?: string;
+}
+
+export function validateField(
+  value: unknown,
+  property: MCPPropertySchema,
+  isRequired: boolean
+): string | undefined {
+  const strVal = typeof value === 'string' ? value : '';
+  const isEmpty = value === undefined || value === '' || value === null;
+
+  if (isRequired && isEmpty) {
+    return 'This field is required';
+  }
+  if (isEmpty) return undefined;
+
+  if (property.type === 'string' && typeof value === 'string') {
+    if (property.minLength !== undefined && value.length < property.minLength) {
+      return `Minimum length is ${property.minLength}`;
+    }
+    if (property.maxLength !== undefined && value.length > property.maxLength) {
+      return `Maximum length is ${property.maxLength}`;
+    }
+    if (property.pattern) {
+      try {
+        if (!new RegExp(property.pattern).test(value)) {
+          return `Must match pattern: ${property.pattern}`;
+        }
+      } catch {
+        // Invalid regex in schema — skip validation
+      }
+    }
+    if (property.enum && !property.enum.includes(value)) {
+      return `Must be one of: ${property.enum.join(', ')}`;
+    }
+  }
+
+  if (property.type === 'number' || property.type === 'integer') {
+    const numVal = typeof value === 'number' ? value : Number(strVal);
+    if (isNaN(numVal)) return 'Must be a valid number';
+    if (property.minimum !== undefined && numVal < property.minimum) {
+      return `Minimum value is ${property.minimum}`;
+    }
+    if (property.maximum !== undefined && numVal > property.maximum) {
+      return `Maximum value is ${property.maximum}`;
+    }
+  }
+
+  return undefined;
 }
 
 interface FormFieldProps {
@@ -326,6 +379,7 @@ export function TryItForm({
   className = '',
 }: TryItFormProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
   const [response, setResponse] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const [showResponse, setShowResponse] = useState(true);
@@ -344,6 +398,7 @@ export function TryItForm({
         value={formData[name]}
         onChange={(value) => handleFieldChange(name, value)}
         isRequired={requiredFields.includes(name)}
+        error={fieldErrors[name]}
       />
     ));
   };
@@ -353,6 +408,12 @@ export function TryItForm({
       ...prev,
       [fieldName]: value,
     }));
+    setFieldErrors((prev) => {
+      if (!prev[fieldName]) return prev;
+      const next = { ...prev };
+      delete next[fieldName];
+      return next;
+    });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -360,19 +421,31 @@ export function TryItForm({
     setError(null);
     setResponse(null);
 
-    // Validate required fields
-    const missingRequired = requiredFields.filter(
-      (field) => formData[field] === undefined || formData[field] === ''
-    );
-    if (missingRequired.length > 0) {
-      setError(`Missing required fields: ${missingRequired.join(', ')}`);
-      return;
-    }
-
     // Filter out empty values
     const cleanedData = Object.fromEntries(
       Object.entries(formData).filter(([, v]) => v !== undefined && v !== '')
     );
+
+    // Validate against JSON Schema using ajv
+    if (schema) {
+      const valid = ajv.validate(schema, cleanedData);
+      if (!valid && ajv.errors) {
+        const errors: Record<string, string | undefined> = {};
+        for (const err of ajv.errors) {
+          const field =
+            err.keyword === 'required'
+              ? (err.params as { missingProperty: string }).missingProperty
+              : err.instancePath.replace(/^\//, '');
+          if (field && !errors[field]) {
+            errors[field] = err.message ?? 'Invalid value';
+          }
+        }
+        setFieldErrors(errors);
+        setError('Validation failed — check highlighted fields above');
+        return;
+      }
+    }
+    setFieldErrors({});
 
     if (onInvoke) {
       try {
@@ -407,6 +480,7 @@ export function TryItForm({
 
   const handleReset = () => {
     setFormData({});
+    setFieldErrors({});
     setResponse(null);
     setError(null);
   };

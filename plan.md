@@ -46,16 +46,24 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 161 pts | **Done**: 5 pts (3%) | **Velocity**: 2 issues closed (Linear) | 4 locally done
+**Scope**: 161 pts (+34 SaaS) | **Done**: 59 pts (30%) | **Velocity**: 12 issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep
 **Fill-cycle**: +13 Quick Wins promoted, +7 items estimated (2026-02-15); +3 auto-promoted (2026-02-15)
 
-### Done (4 issues)
+### Done (12 issues)
 
 - [x] CAB-353: Go/No-Go Checklist 3 Months (5 pts) — PR #482 (9.00/10 → GO)
 - [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (P1)
 - [x] CAB-1170: [DX] Enable Keycloak self-registration (5 pts) — PRs #529, #530 (Council 8.50/10)
 - [x] CAB-1172: [DX] Auto-approve free-tier subscriptions (3 pts) — PR #534 (Council 8.50/10)
+- [x] CAB-1185: [Portal] Try-It Form Schema Validation (3 pts) — PR #557 (Council 8.25/10)
+- [x] CAB-1186: [E2E] Unskip Demo Showcase Feature (3 pts) — PR #553
+- [x] CAB-1171: [DX] Quick Start rewrite — single golden path (3 pts) — stoa-docs PR #46
+- [x] CAB-1173: [DX] MCP guide for developers — zero kubectl (3 pts) — stoa-docs PR #46
+- [x] CAB-1249: [API] BackendApi + SaasApiKey models+CRUD (13 pts) — PR #545
+- [x] CAB-1250: [Gateway] BYOK credential proxy + tenant tools (8 pts) — PR #549
+- [x] CAB-1251: [UI] Console SaaS Backend APIs + API Keys (10 pts) — PR #550
+- [x] CAB-1252: [E2E] SaaS BDD tests (3 pts) — PR #551
 
 ### In Progress
 
@@ -69,11 +77,9 @@
 
 ### Todo
 
-- [ ] CAB-1186: [E2E] Unskip Demo Showcase Feature — Automated Demo Validation (3 pts, P1)
 - [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts, P1)
 - [ ] CAB-1183: [Gateway] Sidecar Mode P1 — ext_authz Enforcement Layer (8 pts, P2)
 - [ ] CAB-1184: [Adapter] Apigee Gateway Adapter P1 — Google Cloud CRUD (5 pts, P2)
-- [ ] CAB-1185: [Portal] Try-It Form Schema Validation (3 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A Beta Access (3 pts, P2)
 - [ ] CAB-362: GW2-10 Circuit Breaker + Session Management (5 pts, P2)
 - [ ] CAB-709: UAC for LLM — Contrats unifies pour backends IA (5 pts, P2)
@@ -81,12 +87,12 @@
 - [ ] CAB-1162: SEO Tracking — Looker Studio + Search Console archive (3 pts, P3)
 - [ ] CAB-1187: [SEO] Blog Batch 7 — 5 Articles Week of Feb 17 (8 pts, P3)
 
-### Backlog — DX Remediation (from CAB-1035 friction analysis)
+### Backlog — DX Remediation (from CAB-1035 friction analysis) ✅ ALL DONE
 
 - [x] CAB-1170: [DX] Enable Keycloak self-registration (5 pts, P1) — PRs #529, #530 (Council 8.50/10)
-- CAB-1171: [DX] Quick Start rewrite — single golden path (3 pts, P2)
+- [x] CAB-1171: [DX] Quick Start rewrite — single golden path (3 pts, P2) — stoa-docs PR #46
 - [x] CAB-1172: [DX] Auto-approve free-tier subscriptions (3 pts, P2) — PR #534 (Council 8.50/10)
-- CAB-1173: [DX] MCP guide for developers — zero kubectl (3 pts, P2)
+- [x] CAB-1173: [DX] MCP guide for developers — zero kubectl (3 pts, P2) — stoa-docs PR #46
 
 ### Backlog — Community Infrastructure (CAB-1152 sub-tickets)
 
@@ -114,6 +120,21 @@
 - CAB-1126: [Comm] Demo Video Courte STOA — Self-Service API Management (8 pts, P2)
 - CAB-1127: [Comm] Dual-Track Content — Demo Client + Communaute Landing Page (5 pts, P2)
 - CAB-1163: ADR-043 — Strategic Positioning: Meta-Gateway for Agentic Infra (5 pts, P4)
+
+### Backlog — Council-Validated MEGAs (2026-02-16)
+
+- [ ] CAB-1289: [MEGA] Gateway Test Coverage & Quality — 27 Untested Modules (34 pts, P3) — Council 8.75/10
+- [ ] CAB-1297: [MEGA] DX: Developer Experience — READMEs, .env.example, Onboarding (13 pts, P3) — Council 8.50/10
+- [ ] CAB-1291: [MEGA] Platform: API Test Coverage & Quality — 44 Untested Modules (34 pts, P3) — Council 8.00/10
+- [ ] CAB-1294: [MEGA] DX: Portal Test Coverage & UX Completion — 26 Untested Modules (21 pts, P3) — Council 8.00/10
+- [ ] CAB-1290: [MEGA] Gateway: Live-Code Feature Completion — MCP Protocol + Observability (13 pts, P3) — Council 7.75/10
+- [ ] CAB-1299: [MEGA] Roadmap: UAC Spec + Protocol Binders + Dynamic Routing (34 pts, P3) — Council 7.75/10
+- [ ] CAB-1292: [MEGA] Platform: API Auth Completion — KC Clients, IAM Sync, Security Fix (21 pts, P3) — Council 7.50/10
+- [ ] CAB-1295: [MEGA] DX: Console Test Coverage & UX Completion — 23 Untested Modules (21 pts, P3) — Council 7.50/10
+- [ ] CAB-1300: [MEGA] Platform: API Runtime Completion — Events, Deployments, Contracts, MCP RBAC (13 pts, P3) — Council 7.50/10
+- [ ] CAB-1293: [MEGA] Platform: K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts, P3) — Council 7.25/10
+- [ ] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts, P3) — Council 7.25/10
+- ~~CAB-1296: [MEGA] DX: E2E Test Expansion — Canceled (Council 5.50/10, fictional scope)~~
 
 ### Backlog — Long-term (parked in cycle, not committed)
 

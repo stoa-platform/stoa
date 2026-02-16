@@ -59,6 +59,9 @@ spec:
             # Configure ext_authz to point to STOA sidecar
             - name: EXT_AUTHZ_URL
               value: "http://localhost:8081/authz"
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
           resources:
             {{- toYaml .Values.stoaSidecar.mainGateway.resources | nindent 12 }}
         {{- end }}
@@ -141,8 +144,23 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
           resources:
             {{- toYaml .Values.stoaSidecar.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
       {{- with .Values.stoaSidecar.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

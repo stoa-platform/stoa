@@ -1,8 +1,8 @@
-# CAB-945: Network Policy for Control Plane isolation
+# CAB-945 + CAB-1293: Network Policies for STOA Platform isolation
 # Apply with: kubectl apply -f k8s/networkpolicy-control-plane.yaml
 #
-# Restricts traffic to/from the control plane pods.
-# NOTE: Adjust the CIDR if your cluster uses a different IP range.
+# Restricts traffic to/from the control plane, gateway, portal, and console pods.
+# CIDR 10.0.0.0/8 covers OVH MKS (10.2.x) + Hetzner K3s (10.43.x) pod networks.
 
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -15,20 +15,20 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/component: control-plane
+      app: stoa-control-plane-api
   policyTypes:
     - Ingress
     - Egress
 
   ingress:
-    # Allow from MCP Gateway
+    # Allow from STOA Gateway (Rust)
     - from:
         - podSelector:
             matchLabels:
-              app: stoa-mcp-gateway
+              app: stoa-gateway
       ports:
         - protocol: TCP
-          port: 8080
+          port: 8000
 
     # Allow from Portal
     - from:
@@ -37,7 +37,16 @@ spec:
               app: stoa-portal
       ports:
         - protocol: TCP
-          port: 8080
+          port: 8000
+
+    # Allow from Console UI (nginx proxies to API)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: control-plane-ui
+      ports:
+        - protocol: TCP
+          port: 8000
 
     # Allow from Ingress controller
     - from:
@@ -46,16 +55,16 @@ spec:
               kubernetes.io/metadata.name: ingress-nginx
       ports:
         - protocol: TCP
-          port: 8080
+          port: 8000
 
-    # CAB-945 (Chucky fix): Health checks restricted to cluster network
-    # NOTE: Adjust CIDR to match your cluster's pod network (e.g., 10.100.0.0/16)
+    # Health checks from cluster network
+    # Covers OVH MKS (10.2.x) + Hetzner K3s (10.43.x)
     - from:
         - ipBlock:
-            cidr: 10.0.0.0/8  # EKS cluster CIDR (adjust if needed)
+            cidr: 10.0.0.0/8
       ports:
         - protocol: TCP
-          port: 8080
+          port: 8000
 
   egress:
     # Allow to PostgreSQL
@@ -118,11 +127,11 @@ spec:
         - protocol: TCP
           port: 443
 ---
-# Network Policy for MCP Gateway
+# Network Policy for STOA Gateway (Rust)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: stoa-mcp-gateway-isolation
+  name: stoa-gateway-isolation
   namespace: stoa-system
   labels:
     app.kubernetes.io/part-of: stoa-platform
@@ -130,7 +139,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: stoa-mcp-gateway
+      app: stoa-gateway
   policyTypes:
     - Ingress
     - Egress
@@ -145,7 +154,8 @@ spec:
         - protocol: TCP
           port: 8080
 
-    # Allow health checks from cluster network
+    # Health checks from cluster network
+    # Covers OVH MKS (10.2.x) + Hetzner K3s (10.43.x)
     - from:
         - ipBlock:
             cidr: 10.0.0.0/8
@@ -158,10 +168,10 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/component: control-plane
+              app: stoa-control-plane-api
       ports:
         - protocol: TCP
-          port: 8080
+          port: 8000
 
     # Allow to Keycloak (for token validation)
     - to:
@@ -232,7 +242,8 @@ spec:
         - protocol: TCP
           port: 8080
 
-    # Allow health checks from cluster network
+    # Health checks from cluster network
+    # Covers OVH MKS (10.2.x) + Hetzner K3s (10.43.x)
     - from:
         - ipBlock:
             cidr: 10.0.0.0/8
@@ -243,6 +254,64 @@ spec:
   egress:
     # Portal only serves static files, minimal egress needed
     # Allow DNS for any dynamic config
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Network Policy for Console UI (control-plane-ui)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stoa-control-plane-ui-isolation
+  namespace: stoa-system
+  labels:
+    app.kubernetes.io/part-of: stoa-platform
+    security.stoa.dev/policy: cab-1293
+spec:
+  podSelector:
+    matchLabels:
+      app: control-plane-ui
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow from Ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Health checks from cluster network
+    # Covers OVH MKS (10.2.x) + Hetzner K3s (10.43.x)
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  egress:
+    # Allow to Control Plane API (nginx proxy_pass)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: stoa-control-plane-api
+      ports:
+        - protocol: TCP
+          port: 80
+
+    # Allow DNS
     - to:
         - namespaceSelector: {}
           podSelector:

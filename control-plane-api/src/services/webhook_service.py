@@ -327,6 +327,74 @@ class WebhookService:
                     await self.db.commit()
                     logger.error(f"Webhook {webhook.id} failed after {delivery.max_attempts} attempts for delivery {delivery.id}")
 
+    # ============ Deployment Event Dispatching (CAB-1354) ============
+
+    async def dispatch_deployment_event(
+        self,
+        event_type: str,
+        deployment,
+        additional_data: dict | None = None,
+    ) -> list[WebhookDelivery]:
+        """Dispatch a deployment event to all matching webhooks for the tenant."""
+        webhooks = await self.list_webhooks(deployment.tenant_id, enabled_only=True)
+        matching_webhooks = [w for w in webhooks if w.matches_event(event_type)]
+
+        if not matching_webhooks:
+            logger.debug(f"No webhooks for event {event_type} in tenant {deployment.tenant_id}")
+            return []
+
+        payload = self._build_deployment_payload(event_type, deployment, additional_data)
+
+        deliveries = []
+        for webhook in matching_webhooks:
+            delivery = WebhookDelivery(
+                webhook_id=webhook.id,
+                event_type=event_type,
+                payload=payload,
+                status=WebhookDeliveryStatus.PENDING.value,
+            )
+            self.db.add(delivery)
+            await self.db.flush()
+            deliveries.append(delivery)
+            asyncio.create_task(self._deliver_webhook(webhook, delivery))
+
+        logger.info(f"Dispatched {event_type} to {len(deliveries)} webhooks for deployment {deployment.id}")
+        return deliveries
+
+    def _build_deployment_payload(
+        self,
+        event_type: str,
+        deployment,
+        additional_data: dict | None = None,
+    ) -> dict:
+        """Build the webhook payload for deployment events."""
+        payload = {
+            "event": event_type,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "data": {
+                "deployment_id": str(deployment.id),
+                "api_id": deployment.api_id,
+                "api_name": deployment.api_name,
+                "tenant_id": deployment.tenant_id,
+                "environment": deployment.environment,
+                "version": deployment.version,
+                "status": deployment.status,
+                "deployed_by": deployment.deployed_by,
+            },
+        }
+
+        if event_type == WebhookEventType.DEPLOYMENT_FAILED.value:
+            payload["data"]["error_message"] = deployment.error_message
+
+        if event_type == WebhookEventType.DEPLOYMENT_ROLLED_BACK.value:
+            payload["data"]["rollback_of"] = str(deployment.rollback_of) if deployment.rollback_of else None
+            payload["data"]["rollback_version"] = deployment.rollback_version
+
+        if additional_data:
+            payload["data"].update(additional_data)
+
+        return payload
+
     # ============ Delivery History ============
 
     async def get_delivery_history(
@@ -372,7 +440,7 @@ class WebhookService:
         return delivery
 
 
-# ============ Event Emission Helpers ============
+# ============ Subscription Event Emission Helpers ============
 
 async def emit_subscription_created(db: AsyncSession, subscription: Subscription) -> None:
     """Emit subscription.created event"""
@@ -412,4 +480,38 @@ async def emit_subscription_key_rotated(
         WebhookEventType.SUBSCRIPTION_KEY_ROTATED.value,
         subscription,
         additional_data={"grace_period_hours": grace_period_hours},
+    )
+
+
+# ============ Deployment Event Emission Helpers (CAB-1354) ============
+
+async def emit_deployment_started(db: AsyncSession, deployment) -> None:
+    """Emit deployment.started event"""
+    service = WebhookService(db)
+    await service.dispatch_deployment_event(
+        WebhookEventType.DEPLOYMENT_STARTED.value, deployment,
+    )
+
+
+async def emit_deployment_succeeded(db: AsyncSession, deployment) -> None:
+    """Emit deployment.succeeded event"""
+    service = WebhookService(db)
+    await service.dispatch_deployment_event(
+        WebhookEventType.DEPLOYMENT_SUCCEEDED.value, deployment,
+    )
+
+
+async def emit_deployment_failed(db: AsyncSession, deployment) -> None:
+    """Emit deployment.failed event"""
+    service = WebhookService(db)
+    await service.dispatch_deployment_event(
+        WebhookEventType.DEPLOYMENT_FAILED.value, deployment,
+    )
+
+
+async def emit_deployment_rolled_back(db: AsyncSession, deployment) -> None:
+    """Emit deployment.rolled_back event"""
+    service = WebhookService(db)
+    await service.dispatch_deployment_event(
+        WebhookEventType.DEPLOYMENT_ROLLED_BACK.value, deployment,
     )

@@ -1,4 +1,5 @@
 """Kafka service for event-driven architecture"""
+
 import json
 import logging
 import uuid
@@ -8,27 +9,40 @@ from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import KafkaError
 
 from ..config import settings
+from ..core.pii.masker import MaskingContext, get_masker
 
 logger = logging.getLogger(__name__)
 
-# Kafka topics
+EVENT_SOURCE = "control-plane-api"
+EVENT_VERSION = "1.0"
+
+
+# Kafka topics — stoa.X.Y naming convention
 class Topics:
-    API_EVENTS = "api-events"           # api-created, api-updated, api-deleted
-    DEPLOY_REQUESTS = "deploy-requests"  # Deployment requests for gateway adapters
-    DEPLOY_RESULTS = "deploy-results"    # Deployment results from gateway adapters
-    APP_EVENTS = "app-events"           # Application lifecycle events
-    TENANT_EVENTS = "tenant-events"     # Tenant lifecycle events
-    AUDIT_LOG = "audit-log"             # Audit trail
+    API_EVENTS = "stoa.api.lifecycle"
+    DEPLOY_REQUESTS = "stoa.deploy.requests"
+    DEPLOY_RESULTS = "stoa.deploy.results"
+    APP_EVENTS = "stoa.app.lifecycle"
+    TENANT_EVENTS = "stoa.tenant.lifecycle"
+    AUDIT_LOG = "stoa.audit.trail"
 
     # MCP GitOps events
-    MCP_SERVER_EVENTS = "mcp-server-events"     # MCP server catalog changes
-    MCP_SYNC_REQUESTS = "mcp-sync-requests"     # Manual sync trigger requests
-    MCP_SYNC_RESULTS = "mcp-sync-results"       # Sync completion results
+    MCP_SERVER_EVENTS = "stoa.mcp.servers"
+    MCP_SYNC_REQUESTS = "stoa.mcp.sync.requests"
+    MCP_SYNC_RESULTS = "stoa.mcp.sync.results"
 
-    # Gateway orchestration events (Control Plane Agnostique)
-    GATEWAY_SYNC_REQUESTS = "gateway-sync-requests"   # Trigger sync for specific deployments
-    GATEWAY_SYNC_RESULTS = "gateway-sync-results"     # Results of sync operations
-    GATEWAY_EVENTS = "gateway-events"                 # Health changes, drift detected
+    # Gateway orchestration events
+    GATEWAY_SYNC_REQUESTS = "stoa.gateway.sync.requests"
+    GATEWAY_SYNC_RESULTS = "stoa.gateway.sync.results"
+    GATEWAY_EVENTS = "stoa.gateway.events"
+
+    # New CNS topics
+    SECURITY_ALERTS = "stoa.security.alerts"
+    GATEWAY_METRICS = "stoa.gateway.metrics"
+    DEPLOYMENT_EVENTS = "stoa.deployment.events"
+    RESOURCE_LIFECYCLE = "stoa.resource.lifecycle"
+    METERING_EVENTS = "stoa.metering.events"
+
 
 class KafkaService:
     """Service for Kafka/Redpanda message handling"""
@@ -44,6 +58,7 @@ class KafkaService:
             return
 
         import time
+
         max_retries = 5
         retry_delay = 2
 
@@ -80,19 +95,15 @@ class KafkaService:
 
         logger.info("Kafka connections closed")
 
-    def _create_event(
-        self,
-        event_type: str,
-        tenant_id: str,
-        payload: dict,
-        user_id: str | None = None
-    ) -> dict:
-        """Create a standardized event envelope"""
+    def _create_event(self, event_type: str, tenant_id: str, payload: dict, user_id: str | None = None) -> dict:
+        """Create a standardized event envelope with canonical fields."""
         return {
             "id": str(uuid.uuid4()),
             "type": event_type,
+            "source": EVENT_SOURCE,
             "tenant_id": tenant_id,
             "timestamp": datetime.utcnow().isoformat() + "Z",
+            "version": EVENT_VERSION,
             "user_id": user_id,
             "payload": payload,
         }
@@ -104,7 +115,7 @@ class KafkaService:
         tenant_id: str,
         payload: dict,
         user_id: str | None = None,
-        key: str | None = None
+        key: str | None = None,
     ) -> str:
         """
         Publish an event to a Kafka topic.
@@ -127,7 +138,12 @@ class KafkaService:
         if not self._producer:
             raise RuntimeError("Kafka producer not initialized")
 
-        event = self._create_event(event_type, tenant_id, payload, user_id)
+        masker = get_masker()
+        masked_payload = masker.mask_dict(
+            payload,
+            context=MaskingContext(tenant_id=tenant_id, source="kafka-publish"),
+        )
+        event = self._create_event(event_type, tenant_id, masked_payload, user_id)
         partition_key = key or tenant_id
 
         try:
@@ -142,41 +158,18 @@ class KafkaService:
     # Convenience methods for common events
     async def emit_api_created(self, tenant_id: str, api_data: dict, user_id: str) -> str:
         """Emit api-created event"""
-        return await self.publish(
-            Topics.API_EVENTS,
-            "api-created",
-            tenant_id,
-            api_data,
-            user_id
-        )
+        return await self.publish(Topics.API_EVENTS, "api-created", tenant_id, api_data, user_id)
 
     async def emit_api_updated(self, tenant_id: str, api_data: dict, user_id: str) -> str:
         """Emit api-updated event"""
-        return await self.publish(
-            Topics.API_EVENTS,
-            "api-updated",
-            tenant_id,
-            api_data,
-            user_id
-        )
+        return await self.publish(Topics.API_EVENTS, "api-updated", tenant_id, api_data, user_id)
 
     async def emit_api_deleted(self, tenant_id: str, api_id: str, user_id: str) -> str:
         """Emit api-deleted event"""
-        return await self.publish(
-            Topics.API_EVENTS,
-            "api-deleted",
-            tenant_id,
-            {"api_id": api_id},
-            user_id
-        )
+        return await self.publish(Topics.API_EVENTS, "api-deleted", tenant_id, {"api_id": api_id}, user_id)
 
     async def emit_deploy_request(
-        self,
-        tenant_id: str,
-        api_id: str,
-        environment: str,
-        version: str,
-        user_id: str
+        self, tenant_id: str, api_id: str, environment: str, version: str, user_id: str
     ) -> str:
         """Emit deployment request for gateway adapter to process"""
         return await self.publish(
@@ -189,7 +182,7 @@ class KafkaService:
                 "version": version,
                 "requested_by": user_id,
             },
-            user_id
+            user_id,
         )
 
     async def emit_audit_event(
@@ -199,7 +192,7 @@ class KafkaService:
         resource_type: str,
         resource_id: str,
         user_id: str,
-        details: dict | None = None
+        details: dict | None = None,
     ) -> str:
         """Emit audit log event"""
         return await self.publish(
@@ -212,15 +205,45 @@ class KafkaService:
                 "resource_id": resource_id,
                 "details": details or {},
             },
-            user_id
+            user_id,
         )
 
-    def create_consumer(
+    async def emit_security_alert(
         self,
-        topics: list[str],
-        group_id: str,
-        tenant_filter: str | None = None
-    ) -> KafkaConsumer:
+        tenant_id: str,
+        event_type: str,
+        severity: str,
+        details: dict,
+        source: str = EVENT_SOURCE,
+    ) -> str:
+        """Emit a security alert to the security alerts topic."""
+        return await self.publish(
+            Topics.SECURITY_ALERTS,
+            event_type,
+            tenant_id,
+            {
+                "severity": severity,
+                "source": source,
+                "details": details,
+            },
+        )
+
+    async def emit_subscription_event(
+        self,
+        tenant_id: str,
+        subscription_data: dict,
+        user_id: str,
+    ) -> str:
+        """Emit a subscription lifecycle event."""
+        return await self.publish(
+            Topics.RESOURCE_LIFECYCLE,
+            "subscription-changed",
+            tenant_id,
+            subscription_data,
+            user_id,
+        )
+
+    def create_consumer(self, topics: list[str], group_id: str, tenant_filter: str | None = None) -> KafkaConsumer:
         """
         Create a Kafka consumer for the specified topics.
 
@@ -246,6 +269,7 @@ class KafkaService:
 
         logger.info(f"Created consumer {consumer_id} for topics: {topics}")
         return consumer
+
 
 # Global instance
 kafka_service = KafkaService()

@@ -126,6 +126,11 @@ metadata:
     app.kubernetes.io/name: opensearch-sync
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: opensearch-sync
@@ -144,6 +149,17 @@ spec:
               mountPath: /deps
             - name: code
               mountPath: /code
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
       containers:
         - name: sync
           image: python:3.12-slim
@@ -181,11 +197,30 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "200m"
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
           volumeMounts:
             - name: deps
               mountPath: /deps
+            - name: tmp
+              mountPath: /tmp
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1000
       volumes:
         - name: deps
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}
         - name: code
           configMap:

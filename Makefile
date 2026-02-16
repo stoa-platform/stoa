@@ -1,7 +1,101 @@
 # STOA Platform — Developer Makefile
 # Usage: make <target>
 
-.PHONY: seed-demo test-demo demo-federation-setup demo-federation-test demo-federation-live demo-federation-cleanup demo-opensearch-seed demo-opensearch-test demo-opensearch-live migrate-kong migrate-kong-dry-run test-migrate-kong test-migrate-kong-integration help
+.PHONY: setup test lint run-api run-ui run-portal run-gateway \
+	test-api test-ui test-portal test-gateway test-cli \
+	lint-api lint-ui lint-portal lint-gateway lint-cli \
+	check-docs \
+	seed-demo test-demo demo-federation-setup demo-federation-test \
+	demo-federation-live demo-federation-cleanup demo-opensearch-seed \
+	demo-opensearch-test demo-opensearch-live \
+	migrate-kong migrate-kong-dry-run test-migrate-kong test-migrate-kong-integration \
+	help
+
+# ── Setup ────────────────────────────────────────────────────────────────────
+
+setup: ## Install dependencies for all components
+	@echo "==> Setting up control-plane-api..."
+	cd control-plane-api && pip install -r requirements.txt
+	@echo "==> Setting up control-plane-ui..."
+	cd control-plane-ui && npm install
+	@echo "==> Setting up portal..."
+	cd portal && npm install
+	@echo "==> Setting up stoa-gateway..."
+	cd stoa-gateway && cargo check
+	@echo "==> Setting up cli..."
+	cd cli && pip install -e ".[dev]"
+	@echo "✓ All components installed"
+
+# ── Run ──────────────────────────────────────────────────────────────────────
+
+run-api: ## Start Control Plane API (port 8000)
+	cd control-plane-api && uvicorn src.main:app --reload --port 8000
+
+run-ui: ## Start Console UI dev server (port 5173)
+	cd control-plane-ui && npm start
+
+run-portal: ## Start Developer Portal dev server (port 5174)
+	cd portal && npm run dev
+
+run-gateway: ## Start STOA Gateway (port 8080)
+	cd stoa-gateway && cargo run
+
+# ── Test ─────────────────────────────────────────────────────────────────────
+
+test: test-api test-ui test-portal test-gateway test-cli ## Run all tests
+
+test-api: ## Run control-plane-api tests
+	cd control-plane-api && pytest tests/ --cov=src --cov-fail-under=53 --ignore=tests/test_opensearch.py -q
+
+test-ui: ## Run console UI tests
+	cd control-plane-ui && npm run test -- --run
+
+test-portal: ## Run portal tests
+	cd portal && npm run test -- --run
+
+test-gateway: ## Run gateway tests
+	cd stoa-gateway && cargo test
+
+test-cli: ## Run CLI tests
+	cd cli && pytest tests/ -q
+
+# ── Lint ─────────────────────────────────────────────────────────────────────
+
+lint: lint-api lint-ui lint-portal lint-gateway lint-cli ## Run all linters
+
+lint-api: ## Lint control-plane-api (ruff + black)
+	cd control-plane-api && ruff check . && black --check .
+
+lint-ui: ## Lint console UI (eslint + prettier + tsc)
+	cd control-plane-ui && npm run lint && npm run format:check && npx tsc -p tsconfig.app.json --noEmit
+
+lint-portal: ## Lint portal (eslint + prettier + tsc)
+	cd portal && npm run lint && npm run format:check && npx tsc -p tsconfig.app.json --noEmit
+
+lint-gateway: ## Lint gateway (clippy + fmt)
+	cd stoa-gateway && cargo fmt --check && cargo clippy --all-targets -- -D warnings
+
+lint-cli: ## Lint CLI (ruff)
+	cd cli && ruff check .
+
+# ── Docs Validation ──────────────────────────────────────────────────────────
+
+check-docs: ## Validate README Quick Start commands are consistent
+	@echo "==> Checking component README files..."
+	@for dir in control-plane-api control-plane-ui portal stoa-gateway cli; do \
+		if [ ! -f "$$dir/README.md" ]; then \
+			echo "FAIL: $$dir/README.md missing"; exit 1; \
+		fi; \
+	done
+	@echo "==> Checking .env.example files..."
+	@for dir in control-plane-api control-plane-ui portal stoa-gateway; do \
+		if [ ! -f "$$dir/.env.example" ]; then \
+			echo "FAIL: $$dir/.env.example missing"; exit 1; \
+		fi; \
+	done
+	@echo "==> Checking DEVELOPMENT.md..."
+	@test -f DEVELOPMENT.md || (echo "FAIL: DEVELOPMENT.md missing"; exit 1)
+	@echo "✓ All documentation files present"
 
 # ── Demo Data ──────────────────────────────────────────────────────────────
 
@@ -60,6 +154,6 @@ test-migrate-kong-integration: ## Run Kong migration integration tests (requires
 # ── Help ───────────────────────────────────────────────────────────────────
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 .DEFAULT_GOAL := help

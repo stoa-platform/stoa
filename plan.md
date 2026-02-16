@@ -183,7 +183,7 @@
 
 ### Backlog — Long-term (parked in cycle, not committed)
 
-- CAB-1181: [Docs] Interactive React Diagrams in Docusaurus (5 pts, P2)
+- ~~CAB-1181: [Docs] Interactive React Diagrams in Docusaurus (5 pts, P2) — DONE (stoa-docs PRs #52-#58)~~
 - CAB-601: Status Page — superseded by CAB-1175
 - CAB-571: Error Snapshot Network/TLS (P2)
 - CAB-570: Error Snapshot Backend/NetworkPolicy (P2)

@@ -101,6 +101,14 @@
 - CAB-1162: SEO Tracking (3 pts) — PR #564 (sitemap verified, 32/32 meta descriptions compliant, SEO-TRACKING.md)
 - CAB-1187: Blog Batch 7 (8 pts) — stoa-docs PR #48 (5 articles: A3 MCP tools, O8 circuit breaker, D2 stoactl, A5 rate limiting, D3 Docker Compose)
 - CAB-1289: Gateway Test Coverage & Quality (34 pts) — PR #566 (106 new tests, -620 LOC dead code, 12 #[allow] removed, 754 total gateway tests)
+- CAB-1181: Interactive Mermaid Diagrams (5 pts) — stoa-docs PRs #52-#55, #57, #58
+  - PR #52: 5 ASCII→Mermaid in concept pages (gateway, mcp-gateway, uac, gitops)
+  - PR #53: KafkaMCPArchitecture JSX component for ADR-043 (interactive tabs, theme-aware)
+  - PR #54: height fix attempt (minHeight — didn't work)
+  - PR #55: CSS Grid overlay fix + GatewayModesArchitecture JSX component for ADR-024
+  - PR #57: GitOpsArchitecture (ADR-040, 4 tabs) + MigrationArchitecture (ADR-034, 3 tabs) + ADR-001 Mermaid
+  - PR #58: ADR-039 (mTLS pipeline), ADR-004 (adapter pattern), ADR-006 (mixin composition) — all Mermaid
+  - Total: 4 JSX components + 7 Mermaid conversions across 10 ADRs + 4 concept pages
 
 ## 🔴 IN PROGRESS
 
@@ -112,7 +120,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - [ ] Video backup filmée
 - Known: API creation requires GitLab → use Console UI; rate limiting not configured; httpbin flaky
 
-## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 192 pts (27 issues)
+## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 197 pts (28 issues)
 
 ### Track 1 — Demo Finale (6 pts)
 - CAB-1151: Dress Rehearsal (3 pts, P0)
@@ -132,9 +140,9 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - ~~CAB-362~~ ✅ (PR #558), ~~CAB-1149~~ ✅ (meta-ticket, closed)
 - CAB-709: UAC for LLM (5 pts) — DEFERRED (archived, no impl target)
 
-### Track 5 — SEO + Content (16 pts) — 11/16 pts done
+### Track 5 — SEO + Content (16 pts) ✅ — ALL DONE (16/16 pts)
 - ~~CAB-1187~~ ✅ (stoa-docs PR #48), ~~CAB-1162~~ ✅ (PR #564)
-- CAB-1181: Interactive Diagrams MDX (5 pts)
+- ~~CAB-1181~~ ✅ (stoa-docs PRs #52-#58) — 4 JSX components + 7 Mermaid conversions across 10 ADRs
 
 ## 🚫 BLOCKED
 

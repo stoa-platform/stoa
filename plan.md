@@ -1,7 +1,7 @@
 # Sprint Plan — STOA Platform
 
 > Auto-synced with Linear via `/sync-plan`. Source of truth: Linear cycles.
-> Last sync: 2026-02-16
+> Last sync: 2026-02-16 (23:00 UTC — pushed 6 items to Linear Done)
 
 ## Cycle 7 (Feb 9–15) — CLOSED
 
@@ -46,12 +46,12 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 376 pts (42 issues) | **Velocity**: 38+ issues closed
+**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 397 pts (43 issues) | **Velocity**: 39+ issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
 
-### Done (38 issues)
+### Done (39 issues)
 
 - [x] CAB-353: Go/No-Go Checklist 3 Months (5 pts) — PR #482 (9.00/10 → GO)
 - [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (P1)
@@ -81,7 +81,7 @@
 - [x] CAB-1289: [MEGA] Gateway Test Coverage & Quality (34 pts) — PR #566 (106 tests, -620 LOC dead code)
 - [x] CAB-1154: Algolia DocSearch LIVE (1 pt) — stoa-docs PR #49 (`Stoa Blog` index, 7274 entries)
 - [x] CAB-1181: [Docs] Interactive Mermaid Diagrams (5 pts) — stoa-docs PRs #52-#58 (4 JSX + 7 Mermaid)
-- [x] CAB-1291: [MEGA] API Test Coverage & Quality (34 pts) — PR #576 (142 tests, 14 modules)
+- [x] CAB-1291: [MEGA] API Test Coverage & Quality (34 pts) — PRs #576 + #582 (528 tests, 53%→72%)
 - [x] CAB-374: [MEGA] Deployment Lifecycle (34 pts) — 3 phases, 3 repos
   - [x] CAB-1353: [API] Deployment Lifecycle API (8 pts) — PR #570
   - [x] CAB-1354: [API] Deploy Event Notifications (5 pts) — PR #570
@@ -101,6 +101,7 @@
   - [x] PR #588: Classification-OPA integration + soft-mode enforcement
   - [x] PR #591: UAC transformer + contract adapter
 - [x] CAB-1358: [CI] AI Factory H24 Autonomous Activation (8 pts) — PR #589 (7 workflows hardened)
+- [x] CAB-1292: [MEGA] API Auth Completion — KC Clients, IAM Sync, Security Fix (21 pts) — PR #594 (auth fixes + RBAC/JWT tests)
 
 ### In Progress
 
@@ -158,7 +159,7 @@
 - [x] CAB-1294: [MEGA] DX: Portal Test Coverage & UX Completion — 26 Untested Modules (21 pts, P3) — PR #580 (Council 8.00/10)
 - [x] CAB-1290: [MEGA] Gateway: Live-Code Feature Completion — MCP Protocol + Observability (13 pts, P3) — PR #585 (Council 7.75/10)
 - [x] CAB-1299: [MEGA] Roadmap: UAC Spec + Protocol Binders + Dynamic Routing (34 pts, P3) — PRs #581-#591, 6 micro-PRs (Council 7.75/10)
-- [ ] CAB-1292: [MEGA] Platform: API Auth Completion — KC Clients, IAM Sync, Security Fix (21 pts, P3) — Council 7.50/10
+- [x] CAB-1292: [MEGA] Platform: API Auth Completion — KC Clients, IAM Sync, Security Fix (21 pts, P3) — PR #594 (Council 7.50/10)
 - [x] CAB-1295: [MEGA] DX: Console Test Coverage & UX Completion — 23 Untested Modules (21 pts, P3) — PR #590 (Council 7.50/10)
 - [ ] CAB-1300: [MEGA] Platform: API Runtime Completion — Events, Deployments, Contracts, MCP RBAC (13 pts, P3) — Council 7.50/10
 - [ ] CAB-1293: [MEGA] Platform: K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts, P3) — Council 7.25/10

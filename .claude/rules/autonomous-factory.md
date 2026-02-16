@@ -11,13 +11,42 @@ Council validation is the gate between "detecting work" and "doing work".
 
 ## Levels
 
-| Level | Name | Trigger | Human Input | Status |
-|-------|------|---------|-------------|--------|
-| L1 | Interactive | `@claude` mention | Per-request | Active |
-| L2 | Scheduled | Cron (daily/weekly) | Review digests | Active |
-| L3 | Linear Pipeline | Ticket → In Progress | Go/No-Go on Slack | Active |
-| L4 | Self-Improving | Weekly retrospective | Approve improvement PRs | Active |
-| L5 | Multi-Agent | workflow_dispatch | Batch approval | Active |
+| Level | Name | Trigger | Human Input | Status | Kill-Switch |
+|-------|------|---------|-------------|--------|-------------|
+| L1 | Interactive | `@claude` mention | Per-request | Active | `DISABLE_L1_INTERACTIVE` |
+| L1 | Auto-Review | PR open/sync | Async | Active (hardened) | `DISABLE_L1_REVIEW` |
+| L1 | Issue-to-PR | `claude-implement` label | `/go` on issue | Active (hardened) | `DISABLE_L1_IMPLEMENT` |
+| L2 | Scheduled | Cron (daily/weekly) | Review digests | Active (hardened) | `DISABLE_L2_SCHEDULED` |
+| L3 | Linear Pipeline | Ticket → In Progress | Go/No-Go on Slack | Active (hardened) | `DISABLE_L3_LINEAR` |
+| L4 | Self-Improving | Weekly Friday 18:00 | Label `claude-implement` | Active (hardened) | `DISABLE_L4_SELF_IMPROVE` |
+| L5 | Multi-Agent | workflow_dispatch | Batch approval | Ready (manual only) | `DISABLE_L5_MULTI_AGENT` |
+
+## Kill-Switches
+
+Every level has a kill-switch via GitHub repository variables (`Settings → Secrets and Variables → Actions → Variables`). Set any variable to `true` to disable that level without code changes.
+
+| Variable | Scope | Effect |
+|----------|-------|--------|
+| `DISABLE_L1_INTERACTIVE` | L1 Interactive | Stops `@claude` mention responses |
+| `DISABLE_L1_REVIEW` | L1 Auto-Review | Stops PR auto-review on open/sync |
+| `DISABLE_L1_IMPLEMENT` | L1 Issue-to-PR | Stops Council + `/go` implementation flow |
+| `DISABLE_L2_SCHEDULED` | L2 Scheduled | Stops all daily/weekly cron tasks |
+| `DISABLE_L3_LINEAR` | L3 Linear Pipeline | Stops Linear → Council → PR pipeline |
+| `DISABLE_L4_SELF_IMPROVE` | L4 Self-Improving | Stops weekly retrospective analysis |
+| `DISABLE_L5_MULTI_AGENT` | L5 Multi-Agent | Stops parallel ticket implementation |
+
+To disable ALL autonomous activity at once, set each variable to `true`. There is no single master switch — this is intentional so levels can be toggled independently.
+
+## Hardening (H24)
+
+All workflows include these safety measures:
+- **`continue-on-error: true`** on all Claude Code Action steps — failures are non-blocking
+- **Fallback comments** — if Claude fails, a fallback issue/comment is posted with a link to workflow logs
+- **Diff truncation** (L1 Review) — PR diffs are truncated to 500 lines to prevent context overflow
+- **Council gate** (L1 Issue-to-PR) — `council-validated` label required before `/go` triggers implementation
+- **Ask mode enforcement** — rule changes (`.claude/rules/`) are always Ask mode, never auto-merged
+- **Timeouts** — every job has an explicit `timeout-minutes` (15-60)
+- **Concurrency groups** — prevent parallel runs on the same issue/PR
 
 ## Council Gate — Mandatory Validation
 

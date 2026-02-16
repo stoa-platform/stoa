@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { createAuthMock } from '../test/helpers';
+import { createAuthMock, mockDeployment } from '../test/helpers';
 import { useAuth } from '../contexts/AuthContext';
 import type { PersonaRole } from '../test/helpers';
 
@@ -29,7 +29,12 @@ const mockGetTenants = vi.fn().mockResolvedValue([
   },
 ]);
 const mockGetApis = vi.fn().mockResolvedValue([]);
-const mockGetDeployments = vi.fn().mockResolvedValue([]);
+const mockListDeployments = vi.fn().mockResolvedValue({
+  items: [],
+  total: 0,
+  page: 1,
+  page_size: 20,
+});
 
 vi.mock('../services/api', () => ({
   apiService: {
@@ -40,7 +45,7 @@ vi.mock('../services/api', () => ({
     getTrace: vi.fn().mockResolvedValue(null),
     getTenants: (...args: unknown[]) => mockGetTenants(...args),
     getApis: (...args: unknown[]) => mockGetApis(...args),
-    getDeployments: (...args: unknown[]) => mockGetDeployments(...args),
+    listDeployments: (...args: unknown[]) => mockListDeployments(...args),
     rollbackDeployment: vi.fn().mockResolvedValue({}),
   },
 }));
@@ -98,6 +103,12 @@ describe('Deployments', () => {
       success_rate: 95.2,
       avg_duration_ms: 1250,
       by_status: { success: 40, failed: 2, pending: 0, in_progress: 0, skipped: 0 },
+    });
+    mockListDeployments.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 20,
     });
   });
 
@@ -162,7 +173,7 @@ describe('Deployments', () => {
     expect(await screen.findByText('Refresh')).toBeInTheDocument();
   });
 
-  // 4-persona coverage
+  // 4-persona coverage for page render
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
     '%s persona',
     (role) => {
@@ -173,4 +184,171 @@ describe('Deployments', () => {
       });
     }
   );
+});
+
+describe('DeploymentHistoryTab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue(createAuthMock('cpi-admin'));
+    mockGetTraces.mockResolvedValue({ traces: [] });
+    mockGetTraceStats.mockResolvedValue({
+      total: 0,
+      success_rate: 0,
+      avg_duration_ms: 0,
+      by_status: {},
+    });
+    mockListDeployments.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 20,
+    });
+  });
+
+  async function switchToHistoryTab() {
+    renderComponent();
+    fireEvent.click(screen.getByText('Deployment History'));
+    await waitFor(() => {
+      expect(mockGetTenants).toHaveBeenCalled();
+    });
+  }
+
+  it('calls listDeployments with tenant id', async () => {
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(mockListDeployments).toHaveBeenCalledWith('oasis-gunters', {
+        api_id: undefined,
+        environment: undefined,
+        status: undefined,
+        page: 1,
+        page_size: 20,
+      });
+    });
+  });
+
+  it('shows empty state when no deployments', async () => {
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    });
+  });
+
+  it('renders deployment rows with API name and environment badge', async () => {
+    mockListDeployments.mockResolvedValue({
+      items: [
+        mockDeployment({ api_name: 'Customer API', environment: 'production', status: 'success' }),
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('Customer API')).toBeInTheDocument();
+    });
+    expect(screen.getByText('PRODUCTION')).toBeInTheDocument();
+  });
+
+  it('shows rollback info for rollback deployments', async () => {
+    mockListDeployments.mockResolvedValue({
+      items: [
+        mockDeployment({
+          status: 'success',
+          rollback_of: 'deploy-old',
+          rollback_version: '0.9.0',
+        }),
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText(/rollback → v0.9.0/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows error message for failed deployments', async () => {
+    mockListDeployments.mockResolvedValue({
+      items: [
+        mockDeployment({
+          status: 'failed',
+          error_message: 'Gateway timeout during sync',
+        }),
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('Gateway timeout during sync')).toBeInTheDocument();
+    });
+  });
+
+  it('renders pagination when multiple pages', async () => {
+    mockListDeployments.mockResolvedValue({
+      items: Array.from({ length: 20 }, (_, i) =>
+        mockDeployment({ id: `deploy-${i}`, api_name: `API ${i}` })
+      ),
+      total: 45,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('1 / 3')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Previous')).toBeInTheDocument();
+    expect(screen.getByText('Next')).toBeInTheDocument();
+  });
+
+  // 4-persona RBAC: rollback button visibility
+  describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
+    '%s persona — rollback button',
+    (role) => {
+      it(`${['cpi-admin', 'tenant-admin', 'devops'].includes(role) ? 'shows' : 'hides'} rollback button`, async () => {
+        vi.mocked(useAuth).mockReturnValue(createAuthMock(role));
+        mockListDeployments.mockResolvedValue({
+          items: [mockDeployment({ status: 'success' })],
+          total: 1,
+          page: 1,
+          page_size: 20,
+        });
+        await switchToHistoryTab();
+        await waitFor(() => {
+          expect(screen.getByText('Payment API')).toBeInTheDocument();
+        });
+        if (['cpi-admin', 'tenant-admin', 'devops'].includes(role)) {
+          expect(screen.getByText('Rollback')).toBeInTheDocument();
+        } else {
+          expect(screen.queryByText('Rollback')).not.toBeInTheDocument();
+        }
+      });
+    }
+  );
+
+  it('does not show rollback for non-success deployments', async () => {
+    mockListDeployments.mockResolvedValue({
+      items: [mockDeployment({ status: 'failed' })],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('Payment API')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Rollback')).not.toBeInTheDocument();
+  });
+
+  it('renders filter dropdowns', async () => {
+    await switchToHistoryTab();
+    await waitFor(() => {
+      expect(screen.getByText('Tenant')).toBeInTheDocument();
+    });
+    expect(screen.getByText('API')).toBeInTheDocument();
+    expect(screen.getByText('Environment')).toBeInTheDocument();
+    expect(screen.getByText('Status')).toBeInTheDocument();
+  });
 });

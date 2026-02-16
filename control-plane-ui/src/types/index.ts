@@ -142,7 +142,7 @@ export interface EnvironmentConfig {
   color: 'green' | 'amber' | 'red';
 }
 
-// Deployment types
+// Deployment types (CAB-1353 lifecycle API)
 export type DeploymentStatus = 'pending' | 'in_progress' | 'success' | 'failed' | 'rolled_back';
 
 export interface Deployment {
@@ -150,20 +150,49 @@ export interface Deployment {
   tenant_id: string;
   api_id: string;
   api_name: string;
-  environment: Environment;
+  environment: string;
   version: string;
   status: DeploymentStatus;
-  started_at: string;
-  completed_at?: string;
   deployed_by: string;
-  awx_job_id?: string;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
   error_message?: string;
+  rollback_of?: string;
+  rollback_version?: string;
+  gateway_id?: string;
+  spec_hash?: string;
+  commit_sha?: string;
+  attempt_count: number;
 }
 
-export interface DeploymentRequest {
+export interface DeploymentCreate {
   api_id: string;
-  environment: Environment;
+  environment: string;
+  api_name?: string;
   version?: string;
+  gateway_id?: string;
+}
+
+export interface DeploymentListResponse {
+  items: Deployment[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface EnvironmentStatusDeployment {
+  api_id: string;
+  api_name: string;
+  version: string;
+  status: string;
+  deployed_at?: string;
+}
+
+export interface EnvironmentStatusResponse {
+  environment: string;
+  healthy: boolean;
+  deployments: EnvironmentStatusDeployment[];
 }
 
 // Event types

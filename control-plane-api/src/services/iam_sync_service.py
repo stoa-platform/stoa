@@ -238,7 +238,35 @@ class IAMSyncService:
                 })
                 report["in_sync"] = False
 
-            # TODO: Check role assignments
+            # Check role assignments for shared users
+            for email in gitops_emails & kc_user_emails:
+                gitops_roles = set(gitops_users[email].get("roles", ["viewer"]))
+                kc_user = next(u for u in kc_users if u.get("email") == email)
+                try:
+                    kc_roles = set(await keycloak_service.get_user_roles(kc_user["id"]))
+                except Exception as e:
+                    logger.warning(f"Failed to get roles for {email}: {e}")
+                    continue
+
+                missing_roles = gitops_roles - kc_roles
+                for role in missing_roles:
+                    report["drift"].append({
+                        "type": "missing_role",
+                        "email": email,
+                        "role": role,
+                        "message": f"Role {role} defined in GitOps but not assigned in Keycloak for {email}",
+                    })
+                    report["in_sync"] = False
+
+                extra_roles = kc_roles - gitops_roles
+                for role in extra_roles:
+                    report["drift"].append({
+                        "type": "extra_role",
+                        "email": email,
+                        "role": role,
+                        "message": f"Role {role} assigned in Keycloak but not in GitOps for {email}",
+                    })
+                    report["in_sync"] = False
 
             logger.info(f"Reconciliation for {tenant_id}: in_sync={report['in_sync']}")
             return report
@@ -267,9 +295,26 @@ class IAMSyncService:
             await self.sync_tenant(tenant_id)
 
         elif event_type == "tenant-deleted":
-            # Clean up Keycloak resources
-            # TODO: Implement cleanup (delete group, users, clients)
-            pass
+            # Clean up Keycloak resources: clients -> users -> group
+            try:
+                clients = await keycloak_service.get_clients(tenant_id)
+                for client in clients:
+                    try:
+                        await keycloak_service.delete_client(client["id"])
+                    except Exception as e:
+                        logger.warning(f"Failed to delete client {client.get('clientId')}: {e}")
+
+                users = await keycloak_service.get_users(tenant_id)
+                for user in users:
+                    try:
+                        await keycloak_service.remove_user_from_group(user["id"], tenant_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to remove user {user['id']} from group: {e}")
+
+                await keycloak_service.delete_tenant_group(tenant_id)
+                logger.info(f"Cleaned up Keycloak resources for deleted tenant {tenant_id}")
+            except Exception as e:
+                logger.error(f"Partial failure cleaning up tenant {tenant_id}: {e}")
 
         elif event_type == "user-added":
             # Sync user to Keycloak
@@ -283,9 +328,13 @@ class IAMSyncService:
                 users = await keycloak_service.get_users(tenant_id)
                 user = next((u for u in users if u.get("email") == user_email), None)
                 if user:
-                    # Remove from tenant group (don't delete user)
-                    # TODO: Implement group removal
-                    pass
+                    try:
+                        await keycloak_service.remove_user_from_group(user["id"], tenant_id)
+                        logger.info(f"Removed user {user_email} from tenant {tenant_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to remove user {user_email} from tenant {tenant_id}: {e}")
+                else:
+                    logger.warning(f"User {user_email} not found in tenant {tenant_id}")
 
     async def create_application_client(
         self,

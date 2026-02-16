@@ -1,4 +1,4 @@
-"""Tests for IAMSyncService (CAB-1291)"""
+"""Tests for IAMSyncService (CAB-1291 + CAB-1292)"""
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,7 +15,6 @@ class TestInit:
 class TestHandleTenantEvent:
     async def test_missing_tenant_id(self):
         svc = IAMSyncService()
-        # Should not raise, just log warning
         await svc.handle_tenant_event({"type": "tenant-created"})
 
     async def test_tenant_created_calls_sync(self):
@@ -23,11 +22,6 @@ class TestHandleTenantEvent:
         svc.sync_tenant = AsyncMock(return_value={"actions": [], "errors": []})
         await svc.handle_tenant_event({"type": "tenant-created", "tenant_id": "acme"})
         svc.sync_tenant.assert_called_once_with("acme")
-
-    async def test_tenant_deleted_noop(self):
-        svc = IAMSyncService()
-        # Should not raise (TODO: cleanup not implemented)
-        await svc.handle_tenant_event({"type": "tenant-deleted", "tenant_id": "acme"})
 
     async def test_user_added_calls_sync_user(self):
         svc = IAMSyncService()
@@ -39,23 +33,96 @@ class TestHandleTenantEvent:
         })
         svc._sync_user.assert_called_once_with("acme", {"email": "alice@acme.com", "roles": ["admin"]})
 
-    async def test_user_removed_looks_up_user(self):
+    async def test_unknown_event_type(self):
+        svc = IAMSyncService()
+        await svc.handle_tenant_event({"type": "unknown", "tenant_id": "acme"})
+
+
+class TestHandleTenantEventDeleted:
+    async def test_full_cleanup(self):
+        svc = IAMSyncService()
+        with patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
+            mock_kc.get_clients = AsyncMock(return_value=[
+                {"id": "c1", "clientId": "acme-app1"},
+            ])
+            mock_kc.delete_client = AsyncMock()
+            mock_kc.get_users = AsyncMock(return_value=[
+                {"id": "u1", "email": "alice@acme.com"},
+            ])
+            mock_kc.remove_user_from_group = AsyncMock(return_value=True)
+            mock_kc.delete_tenant_group = AsyncMock(return_value=True)
+
+            await svc.handle_tenant_event({"type": "tenant-deleted", "tenant_id": "acme"})
+
+            mock_kc.delete_client.assert_called_once_with("c1")
+            mock_kc.remove_user_from_group.assert_called_once_with("u1", "acme")
+            mock_kc.delete_tenant_group.assert_called_once_with("acme")
+
+    async def test_partial_failure_continues(self):
+        svc = IAMSyncService()
+        with patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
+            mock_kc.get_clients = AsyncMock(return_value=[
+                {"id": "c1", "clientId": "acme-app1"},
+            ])
+            mock_kc.delete_client = AsyncMock(side_effect=Exception("client error"))
+            mock_kc.get_users = AsyncMock(return_value=[])
+            mock_kc.delete_tenant_group = AsyncMock(return_value=True)
+
+            # Should not raise despite client deletion failure
+            await svc.handle_tenant_event({"type": "tenant-deleted", "tenant_id": "acme"})
+            mock_kc.delete_tenant_group.assert_called_once_with("acme")
+
+    async def test_empty_tenant(self):
+        svc = IAMSyncService()
+        with patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
+            mock_kc.get_clients = AsyncMock(return_value=[])
+            mock_kc.get_users = AsyncMock(return_value=[])
+            mock_kc.delete_tenant_group = AsyncMock(return_value=True)
+
+            await svc.handle_tenant_event({"type": "tenant-deleted", "tenant_id": "acme"})
+            mock_kc.delete_tenant_group.assert_called_once_with("acme")
+
+
+class TestHandleTenantEventUserRemoved:
+    async def test_removes_user_from_group(self):
         svc = IAMSyncService()
         with patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
             mock_kc.get_users = AsyncMock(return_value=[
                 {"id": "u1", "email": "alice@acme.com"},
             ])
+            mock_kc.remove_user_from_group = AsyncMock(return_value=True)
+
             await svc.handle_tenant_event({
                 "type": "user-removed",
                 "tenant_id": "acme",
                 "payload": {"email": "alice@acme.com"},
             })
-            mock_kc.get_users.assert_called_once_with("acme")
+            mock_kc.remove_user_from_group.assert_called_once_with("u1", "acme")
 
-    async def test_unknown_event_type(self):
+    async def test_user_not_found(self):
         svc = IAMSyncService()
-        # Should not raise
-        await svc.handle_tenant_event({"type": "unknown", "tenant_id": "acme"})
+        with patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
+            mock_kc.get_users = AsyncMock(return_value=[])
+            # Should not raise
+            await svc.handle_tenant_event({
+                "type": "user-removed",
+                "tenant_id": "acme",
+                "payload": {"email": "unknown@acme.com"},
+            })
+
+    async def test_kc_failure_logged(self):
+        svc = IAMSyncService()
+        with patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
+            mock_kc.get_users = AsyncMock(return_value=[
+                {"id": "u1", "email": "alice@acme.com"},
+            ])
+            mock_kc.remove_user_from_group = AsyncMock(side_effect=Exception("KC error"))
+            # Should not raise, just log error
+            await svc.handle_tenant_event({
+                "type": "user-removed",
+                "tenant_id": "acme",
+                "payload": {"email": "alice@acme.com"},
+            })
 
 
 class TestSyncTenant:
@@ -84,7 +151,6 @@ class TestSyncTenant:
              patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
             mock_git.get_tenant = AsyncMock(return_value={"display_name": "ACME"})
             mock_kc.setup_tenant_group = AsyncMock()
-            # _get_tenant_users_config reads from git
             mock_git.get_file = AsyncMock(
                 return_value="users:\n  - email: alice@acme.com\n    roles: [admin]"
             )
@@ -173,9 +239,12 @@ class TestReconcileTenant:
         with patch("src.services.iam_sync_service.git_service") as mock_git, \
              patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
             mock_git.get_file = AsyncMock(
-                return_value="users:\n  - email: alice@acme.com"
+                return_value="users:\n  - email: alice@acme.com\n    roles: [viewer]"
             )
-            mock_kc.get_users = AsyncMock(return_value=[{"email": "alice@acme.com"}])
+            mock_kc.get_users = AsyncMock(return_value=[
+                {"id": "u1", "email": "alice@acme.com"},
+            ])
+            mock_kc.get_user_roles = AsyncMock(return_value=["viewer"])
             result = await svc.reconcile_tenant("acme")
         assert result["in_sync"] is True
         assert result["drift"] == []
@@ -188,21 +257,72 @@ class TestReconcileTenant:
                 return_value="users:\n  - email: alice@acme.com\n  - email: bob@acme.com"
             )
             mock_kc.get_users = AsyncMock(return_value=[
-                {"email": "alice@acme.com"},
-                {"email": "charlie@acme.com"},
+                {"id": "u1", "email": "alice@acme.com"},
+                {"id": "u3", "email": "charlie@acme.com"},
             ])
+            mock_kc.get_user_roles = AsyncMock(return_value=["viewer"])
             result = await svc.reconcile_tenant("acme")
         assert result["in_sync"] is False
         drift_types = {d["type"] for d in result["drift"]}
-        assert "missing_user" in drift_types  # bob missing from KC
-        assert "extra_user" in drift_types  # charlie not in Git
+        assert "missing_user" in drift_types
+        assert "extra_user" in drift_types
+
+
+class TestReconcileTenantRoleDrift:
+    async def test_missing_role(self):
+        svc = IAMSyncService()
+        with patch("src.services.iam_sync_service.git_service") as mock_git, \
+             patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
+            mock_git.get_file = AsyncMock(
+                return_value="users:\n  - email: alice@acme.com\n    roles: [admin, viewer]"
+            )
+            mock_kc.get_users = AsyncMock(return_value=[
+                {"id": "u1", "email": "alice@acme.com"},
+            ])
+            mock_kc.get_user_roles = AsyncMock(return_value=["viewer"])
+            result = await svc.reconcile_tenant("acme")
+        assert result["in_sync"] is False
+        missing = [d for d in result["drift"] if d["type"] == "missing_role"]
+        assert len(missing) == 1
+        assert missing[0]["role"] == "admin"
+
+    async def test_extra_role(self):
+        svc = IAMSyncService()
+        with patch("src.services.iam_sync_service.git_service") as mock_git, \
+             patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
+            mock_git.get_file = AsyncMock(
+                return_value="users:\n  - email: alice@acme.com\n    roles: [viewer]"
+            )
+            mock_kc.get_users = AsyncMock(return_value=[
+                {"id": "u1", "email": "alice@acme.com"},
+            ])
+            mock_kc.get_user_roles = AsyncMock(return_value=["viewer", "admin"])
+            result = await svc.reconcile_tenant("acme")
+        assert result["in_sync"] is False
+        extra = [d for d in result["drift"] if d["type"] == "extra_role"]
+        assert len(extra) == 1
+        assert extra[0]["role"] == "admin"
+
+    async def test_roles_in_sync(self):
+        svc = IAMSyncService()
+        with patch("src.services.iam_sync_service.git_service") as mock_git, \
+             patch("src.services.iam_sync_service.keycloak_service") as mock_kc:
+            mock_git.get_file = AsyncMock(
+                return_value="users:\n  - email: alice@acme.com\n    roles: [admin, viewer]"
+            )
+            mock_kc.get_users = AsyncMock(return_value=[
+                {"id": "u1", "email": "alice@acme.com"},
+            ])
+            mock_kc.get_user_roles = AsyncMock(return_value=["admin", "viewer"])
+            result = await svc.reconcile_tenant("acme")
+        assert result["in_sync"] is True
+        assert result["drift"] == []
 
 
 class TestCreateApplicationClient:
     async def test_creates_and_emits(self):
         svc = IAMSyncService()
-        with patch("src.services.iam_sync_service.keycloak_service") as mock_kc, \
-             patch("src.services.iam_sync_service.kafka_service") as mock_kafka:
+        with patch("src.services.iam_sync_service.keycloak_service") as mock_kc,              patch("src.services.iam_sync_service.kafka_service") as mock_kafka:
             mock_kc.create_client = AsyncMock(return_value={
                 "client_id": "acme-myapp",
                 "client_secret": "secret123",
@@ -225,8 +345,7 @@ class TestCreateApplicationClient:
 class TestRotateClientSecret:
     async def test_rotates_and_emits(self):
         svc = IAMSyncService()
-        with patch("src.services.iam_sync_service.keycloak_service") as mock_kc, \
-             patch("src.services.iam_sync_service.kafka_service") as mock_kafka:
+        with patch("src.services.iam_sync_service.keycloak_service") as mock_kc,              patch("src.services.iam_sync_service.kafka_service") as mock_kafka:
             mock_kc.get_client = AsyncMock(return_value={"id": "uuid-1"})
             mock_kc.regenerate_client_secret = AsyncMock(return_value="new-secret")
             mock_kafka.publish = AsyncMock()

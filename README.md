@@ -135,7 +135,7 @@ helm install stoa-platform ./charts/stoa-platform \
   -f charts/stoa-platform/values.yaml
 ```
 
-See [deployment docs](https://docs.gostoa.dev/docs/deployment/hybrid) for production setup with ArgoCD.
+See [deployment docs](https://docs.gostoa.dev/deployment/hybrid-deployment) for production setup with ArgoCD.
 
 ## Repository Structure
 
@@ -167,9 +167,9 @@ stoa/
 ## Documentation
 
 - **Docs**: [docs.gostoa.dev](https://docs.gostoa.dev)
-- **Architecture Decisions**: [ADRs](https://docs.gostoa.dev/docs/architecture/adr/)
-- **API Reference**: [Control Plane API](https://docs.gostoa.dev/docs/api/control-plane)
-- **Guides**: [Quick Start](https://docs.gostoa.dev/docs/guides/quickstart)
+- **Architecture Decisions**: [ADRs](https://docs.gostoa.dev/architecture/adr/)
+- **API Reference**: [Control Plane API](https://docs.gostoa.dev/api/control-plane/)
+- **Guides**: [Quick Start](https://docs.gostoa.dev/guides/quick-start/)
 
 ## Contributing
 

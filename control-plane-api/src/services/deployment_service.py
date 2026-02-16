@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.deployment import Deployment, DeploymentStatus, Environment
+from src.models.deployment import Deployment, DeploymentStatus
 from src.repositories.deployment import DeploymentRepository
 from src.services.kafka_service import Topics, kafka_service
 

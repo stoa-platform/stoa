@@ -339,7 +339,7 @@ class TestDeploymentServiceUpdateStatus:
             mock_emit.return_value = None
 
             svc = DeploymentService(mock_db)
-            result = await svc.update_status("oasis", dep.id, "success")
+            await svc.update_status("oasis", dep.id, "success")
             mock_emit.assert_called_once()
 
     @pytest.mark.asyncio
@@ -357,7 +357,7 @@ class TestDeploymentServiceUpdateStatus:
             mock_emit.return_value = None
 
             svc = DeploymentService(mock_db)
-            result = await svc.update_status("oasis", dep.id, "failed", error_message="crash")
+            await svc.update_status("oasis", dep.id, "failed", error_message="crash")
             mock_emit.assert_called_once()
 
 

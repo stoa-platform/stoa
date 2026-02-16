@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-15 (session 12 — Security P0+P1: password policy + rotation, PRs #533/#536/#543)
+> Dernière MAJ: 2026-02-16 (session 13 — CAB-1185 Portal Schema Validation, PR #557)
 
 ## ✅ DONE
 
@@ -80,6 +80,16 @@
   - Arena VPS token rotated (SSH + Infisical `prod/gateway/arena/ADMIN_API_TOKEN`)
   - `rotate-secrets.sh` fixed for self-hosted Infisical (CLI-first)
 
+### Cycle 8 (Feb 16-22)
+- CAB-1185: Portal Try-It Schema Validation (3 pts) — PR #557 (Council 8.25/10, ajv + per-field errors)
+- CAB-1186: E2E Demo Showcase unskip (3 pts) — PR #553 (7 feature files with full step coverage)
+- CAB-1171: Quick Start rewrite — single golden path (3 pts) — stoa-docs PR #46
+- CAB-1173: MCP guide zero kubectl (3 pts) — stoa-docs PR #46 (Claude.ai, Python, TS)
+- CAB-1249: BackendApi + SaasApiKey models+CRUD (13 pts) — PR #545 (encryption, Alembic 025)
+- CAB-1250: Gateway BYOK credential proxy (8 pts) — PR #549 (tenant-scoped tools, admin CRUD)
+- CAB-1251: Console SaaS Backend APIs + API Keys (10 pts) — PR #550 (30 tests, 4-persona RBAC)
+- CAB-1252: E2E SaaS BDD tests (3 pts) — PR #551 (9 scenarios, @wip tagged)
+
 ## 🔴 IN PROGRESS
 
 CAB-802: Dry Run + Script + Video Backup (3 pts)
@@ -90,7 +100,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - [ ] Video backup filmée
 - Known: API creation requires GitLab → use Console UI; rate limiting not configured; httpbin flaky
 
-## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped
+## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 59 pts (12 issues)
 
 ### Track 1 — Demo Finale (6 pts)
 - CAB-1151: Dress Rehearsal (3 pts, P0)
@@ -100,16 +110,14 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - ~~CAB-1152~~ + ~~CAB-1182~~ — PR #525 merged
 - Remaining for stoa-docs: Algolia DocSearch, Announcement bar (separate repo)
 
-### Track 3 — DX Remediation (14 pts, fixes CAB-1035)
+### Track 3 — DX Remediation (14 pts, fixes CAB-1035) ✅ — ALL DONE
 - ~~CAB-1170~~ ✅ (PRs #529+#530), ~~CAB-1172~~ ✅ (PR #534)
-- CAB-1171: Quick Start rewrite (3 pts)
-- CAB-1173: MCP guide zero kubectl (3 pts)
+- ~~CAB-1171~~ ✅ (stoa-docs PR #46), ~~CAB-1173~~ ✅ (stoa-docs PR #46)
 
 ### Track 4 — Staging V1++ (39 pts)
 - CAB-1183: Sidecar Mode P1 ext_authz (8 pts, NEW)
 - CAB-1184: Apigee Adapter P1 (5 pts, NEW)
-- CAB-1185: Portal Try-It validation (3 pts, NEW)
-- CAB-1186: E2E Demo Showcase unskip (3 pts, NEW)
+- ~~CAB-1185~~ ✅ (PR #557), ~~CAB-1186~~ ✅ (PR #553)
 - CAB-1149: Staging Freerun V1++ (13 pts)
 - CAB-362: Circuit Breaker (5 pts)
 - CAB-709: UAC for LLM (5 pts)

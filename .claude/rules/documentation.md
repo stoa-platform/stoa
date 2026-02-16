@@ -77,7 +77,7 @@ Is it user-facing (customers, developers, partners)?
 ## ADR Numbering Rules
 
 - **stoa-docs owns ADR numbers** — never create an ADR number in stoa repo
-- Current range: ADR-001 through ADR-039. **Next available: ADR-040**
+- Current range: ADR-001 through ADR-044. **Next available: ADR-045**
 - Filename format: `adr-NNN-short-description.md`
 - Draft ADRs can live temporarily in stoa repo but MUST be renumbered when moved to stoa-docs
 - Always check `stoa-docs/docs/architecture/adr/` for the latest number before creating
@@ -95,6 +95,61 @@ Is it user-facing (customers, developers, partners)?
 1. Check highest ADR number in `stoa-docs/docs/architecture/adr/`
 2. Create ADR with next number in **stoa-docs** directly
 3. Reference ADR by URL in stoa code: `https://docs.gostoa.dev/architecture/adr/adr-NNN-*`
+
+## Interactive Diagram Strategy (stoa-docs)
+
+### Decision Tree: Which Diagram Type?
+
+| Diagram Type | When to Use | Effort | Example |
+|-------------|------------|--------|---------|
+| **Inline Mermaid** | Simple flows, sequence diagrams, ER diagrams | Low (~10 LOC) | ADR-001, concept pages |
+| **Interactive JSX** | Multi-tab content, clickable elements, data-rich | High (~500-700 LOC) | ADR-040, ADR-043, ADR-024, ADR-034 |
+| **ASCII art** | Never for new content | N/A | Legacy only — convert on touch |
+
+### When Interactive JSX > Mermaid
+
+Use interactive JSX (React component in `src/components/`) when:
+1. Content has **3+ logical sections** that benefit from tabs (architecture + details + roadmap)
+2. Diagram needs **clickable/interactive** elements (mode selector, phase picker)
+3. Content includes **data tables + visual layout** combined (topic lists, competitive grids)
+4. The page is **showcase-worthy** (customer-facing ADRs, core architecture)
+
+### Interactive JSX Component Pattern
+
+Components live in `stoa-docs/src/components/<Name>/index.tsx`. Key patterns:
+
+- **Theme-aware**: use `useColorMode()` from `@docusaurus/theme-common`, two color palettes
+- **CSS Grid overlay for tabs**: render ALL tabs simultaneously, `visibility: hidden` on inactive — zero layout shift
+- **Docusaurus fonts**: `var(--ifm-font-family-base)`, `var(--ifm-font-family-monospace)` — no external fonts
+- **No viewport styles**: no `minHeight: 100vh`, no body background
+- **Import in MDX**: `import Component from '@site/src/components/<Name>';` after frontmatter
+
+### Existing Interactive Components
+
+| Component | ADR | Tabs | Description |
+|-----------|-----|------|-------------|
+| `KafkaMCPArchitecture` | ADR-043 | Architecture, Kafka Topics, Roadmap, Use Cases | Kafka → MCP Event Bridge |
+| `GatewayModesArchitecture` | ADR-024 | Architecture, Mode Details, Migration, Roadmap | 4 gateway deployment modes |
+| `GitOpsArchitecture` | ADR-040 | Architecture, Promotion, Multi-Tenant, Roadmap | Born GitOps multi-env |
+| `MigrationArchitecture` | ADR-034 | Timeline, Shadow Validation, Feature Parity | Python → Rust migration |
+
+### Mermaid Conversions (Batch 1 — PR #57, Batch 2 — PR #58)
+
+| ADR | Diagram Type | PR |
+|-----|-------------|-----|
+| ADR-001 | 3 flowcharts (architecture, facade, dependencies) | #57 |
+| ADR-039 | Middleware pipeline flow (6 stages, color-coded) | #58 |
+| ADR-004 | Adapter pattern architecture (registry → adapters → gateways) | #58 |
+| ADR-006 | Mixin composition graph (8 modules, semantic colors) | #58 |
+
+**ADR-003** (Monorepo): Skipped — directory trees are optimal as code blocks.
+
+### Remaining Candidates
+
+ADRs with notable ASCII diagrams not yet converted:
+- ADR-027 (X509 Headers) — auth flow
+- ADR-028 (RFC 8705 Binding) — fingerprint normalization flow
+- ADR-012 (MCP RBAC) — policy evaluation chain
 
 ## Anti-Duplication Checklist
 

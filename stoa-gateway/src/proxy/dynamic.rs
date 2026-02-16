@@ -68,6 +68,33 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
             .into_response();
     }
 
+    // Soft-mode classification enforcement (CAB-1299)
+    // If a route has a classification (from a UAC contract), log the enforcement
+    // decision but do NOT deny — this is observability-only until graduation.
+    if let (Some(classification), Some(ref enforcer)) =
+        (route.classification, &state.classification_enforcer)
+    {
+        let ctx = crate::uac::enforcer::EnforcementContext::new(
+            &route.tenant_id,
+            "anonymous", // TODO: extract from JWT when wired
+        );
+        let decision = enforcer.enforce(classification, &route.methods, &ctx);
+        if decision.is_allowed() {
+            debug!(
+                route_id = %route.id,
+                classification = %classification,
+                policy_version = ?decision.policy_version(),
+                "Classification enforcement: ALLOW (soft mode)"
+            );
+        } else {
+            warn!(
+                route_id = %route.id,
+                classification = %classification,
+                "Classification enforcement: DENY logged (soft mode — not blocking)"
+            );
+        }
+    }
+
     // Per-upstream circuit breaker (CAB-362)
     let cb = state.circuit_breakers.get_or_create(&route.id);
     if !cb.allow_request() {

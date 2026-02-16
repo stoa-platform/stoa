@@ -266,6 +266,12 @@ pub struct Config {
     #[serde(default = "default_fallback_timeout_ms")]
     pub fallback_timeout_ms: u64,
 
+    // === Classification Enforcement (CAB-1299) ===
+    /// Enable classification-based enforcement for contract routes (soft mode: log only).
+    /// Env: STOA_CLASSIFICATION_ENFORCEMENT_ENABLED
+    #[serde(default)]
+    pub classification_enforcement_enabled: bool,
+
     // === Per-Upstream Circuit Breaker (CAB-362) ===
     /// Failure threshold before opening circuit (default: 5)
     /// Env: STOA_CB_FAILURE_THRESHOLD
@@ -564,6 +570,7 @@ impl Default for Config {
             fallback_enabled: false,
             fallback_chains: None,
             fallback_timeout_ms: default_fallback_timeout_ms(),
+            classification_enforcement_enabled: false,
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),
@@ -714,6 +721,12 @@ mod tests {
         assert_eq!(config.quota_sync_interval_secs, 60);
         assert_eq!(config.quota_default_rate_per_minute, 60);
         assert_eq!(config.quota_default_daily_limit, 10_000);
+    }
+
+    #[test]
+    fn test_default_classification_enforcement_disabled() {
+        let config = Config::default();
+        assert!(!config.classification_enforcement_enabled);
     }
 
     #[test]

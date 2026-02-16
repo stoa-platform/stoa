@@ -6,8 +6,10 @@ pub mod cache;
 pub mod classifications;
 pub mod enforcer;
 pub mod safe_mode;
+pub mod schema;
 
 pub use classifications::Classification;
+pub use schema::{ContractStatus, UacContractSpec, UacEndpoint};
 
 use serde::{Deserialize, Serialize};
 

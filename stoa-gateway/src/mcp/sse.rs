@@ -815,11 +815,21 @@ async fn handle_tools_call(
     }
 }
 
-async fn handle_resources_list(_state: &AppState, request: &JsonRpcRequest) -> JsonRpcResponse {
-    // TODO: Implement resource listing
-    let result = json!({
-        "resources": []
-    });
+async fn handle_resources_list(state: &AppState, request: &JsonRpcRequest) -> JsonRpcResponse {
+    // Map registered tools to MCP resources (each tool is also a resource)
+    let tools = state.tool_registry.list(None);
+    let resources: Vec<serde_json::Value> = tools
+        .iter()
+        .map(|t| {
+            json!({
+                "uri": format!("stoa://tools/{}", t.name),
+                "name": t.name,
+                "description": t.description,
+                "mimeType": "application/json"
+            })
+        })
+        .collect();
+    let result = json!({ "resources": resources });
     JsonRpcResponse::success(request.id.clone(), result)
 }
 
@@ -833,7 +843,9 @@ fn extract_tenant(headers: &HeaderMap) -> Option<String> {
         return tenant.to_str().ok().map(|s| s.to_string());
     }
 
-    // TODO: Extract from JWT token
+    // JWT-based tenant extraction happens at the SSE POST handler layer
+    // (lines 254-306) where the full auth context is available.
+    // This fallback returns None when no X-Tenant-ID header is present.
     None
 }
 

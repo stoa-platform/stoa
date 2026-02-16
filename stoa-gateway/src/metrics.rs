@@ -232,8 +232,8 @@ pub static UPSTREAM_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 pub fn record_tool_call(tool: &str, tenant: &str, status: &str, duration_secs: f64) {
     let histogram = MCP_TOOL_DURATION.with_label_values(&[tool, tenant, status]);
 
-    // TODO: re-enable exemplar support once prometheus crate supports it
-    // (observe_with_exemplar not available in prometheus 0.13)
+    // CAB-1088: exemplar support blocked on prometheus crate 0.14
+    // (observe_with_exemplar not available in 0.13; track upstream PR)
     histogram.observe(duration_secs);
 
     MCP_TOOL_CALLS_TOTAL

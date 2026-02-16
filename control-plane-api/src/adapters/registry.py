@@ -79,5 +79,9 @@ def _register_builtin_adapters() -> None:
 
     AdapterRegistry.register("gravitee", GraviteeGatewayAdapter)
 
+    from .apigee import ApigeeGatewayAdapter
+
+    AdapterRegistry.register("apigee", ApigeeGatewayAdapter)
+
 
 _register_builtin_adapters()

@@ -232,6 +232,11 @@ pub trait Tool: Send + Sync {
         Action::Read
     }
 
+    /// Owning tenant ID (None = global tool visible to all tenants)
+    fn tenant_id(&self) -> Option<&str> {
+        None
+    }
+
     /// Execute the tool with given arguments
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError>;
 
@@ -246,7 +251,7 @@ pub trait Tool: Send + Sync {
             input_schema: self.input_schema(),
             output_schema: self.output_schema(),
             annotations: Some(annotations),
-            tenant_id: None, // Tools are global by default; set per-tenant via admin API
+            tenant_id: self.tenant_id().map(|s| s.to_string()),
         }
     }
 }
@@ -344,6 +349,16 @@ impl ToolRegistry {
     #[allow(dead_code)] // Used by k8s::CrdWatcher when k8s feature enabled
     pub fn names(&self) -> Vec<String> {
         self.tools.read().keys().cloned().collect()
+    }
+
+    /// Remove all tools whose name starts with a given prefix.
+    /// Used by MCP protocol binder to remove contract-generated tools.
+    /// Returns the number of tools removed.
+    pub fn remove_by_prefix(&self, prefix: &str) -> usize {
+        let mut tools = self.tools.write();
+        let before = tools.len();
+        tools.retain(|name, _| !name.starts_with(prefix));
+        before - tools.len()
     }
 }
 

@@ -26,7 +26,7 @@ use tracing::warn;
 use crate::proxy::credentials::BackendCredential;
 use crate::routes::{ApiRoute, PolicyEntry};
 use crate::state::AppState;
-use crate::uac::binders::{rest::RestBinder, ProtocolBinder};
+use crate::uac::binders::{mcp::McpBinder, rest::RestBinder, ProtocolBinder};
 use crate::uac::UacContractSpec;
 
 // =============================================================================
@@ -433,6 +433,16 @@ pub async fn upsert_contract(
         }
     };
 
+    // Auto-generate MCP tools from contract (CAB-1299 PR4)
+    let mcp_binder = McpBinder::new(state.tool_registry.clone());
+    let tools_count = match mcp_binder.bind(&contract).await {
+        Ok(_) => contract.endpoints.len(),
+        Err(e) => {
+            warn!(error = %e, contract = %key, "MCP binder failed");
+            0
+        }
+    };
+
     let status = if existed {
         StatusCode::OK
     } else {
@@ -440,7 +450,12 @@ pub async fn upsert_contract(
     };
     (
         status,
-        Json(serde_json::json!({"key": key, "status": "ok", "routes_generated": routes_count})),
+        Json(serde_json::json!({
+            "key": key,
+            "status": "ok",
+            "routes_generated": routes_count,
+            "tools_generated": tools_count,
+        })),
     )
         .into_response()
 }
@@ -472,10 +487,19 @@ pub async fn delete_contract(
         Some(_) => {
             // Cascade-delete generated routes (CAB-1299 PR3)
             let rest_binder = RestBinder::new(state.route_registry.clone());
-            let removed = rest_binder.unbind(&key).await.unwrap_or(0);
+            let routes_removed = rest_binder.unbind(&key).await.unwrap_or(0);
+
+            // Cascade-delete generated MCP tools (CAB-1299 PR4)
+            let mcp_binder = McpBinder::new(state.tool_registry.clone());
+            let tools_removed = mcp_binder.unbind(&key).await.unwrap_or(0);
+
             (
                 StatusCode::OK,
-                Json(serde_json::json!({"status": "deleted", "routes_removed": removed})),
+                Json(serde_json::json!({
+                    "status": "deleted",
+                    "routes_removed": routes_removed,
+                    "tools_removed": tools_removed,
+                })),
             )
                 .into_response()
         }
@@ -1392,6 +1416,7 @@ mod tests {
             .unwrap();
         let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(data["routes_generated"], 1); // 1 endpoint in sample_contract_json
+        assert_eq!(data["tools_generated"], 1);
 
         // Verify route is in the route registry
         assert_eq!(state.route_registry.count(), 1);
@@ -1400,6 +1425,12 @@ mod tests {
         let route = route.unwrap();
         assert_eq!(route.path_prefix, "/apis/acme/payment-api/payments/{id}");
         assert_eq!(route.contract_key.as_deref(), Some("acme:payment-api"));
+
+        // Verify MCP tool is in the tool registry (no operation_id → fallback name)
+        assert_eq!(state.tool_registry.count(), 1);
+        assert!(state
+            .tool_registry
+            .exists("uac:acme:payment-api:payment-api-0"));
     }
 
     #[tokio::test]
@@ -1427,7 +1458,9 @@ mod tests {
             .unwrap();
         let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(data["routes_removed"], 1);
+        assert_eq!(data["tools_removed"], 1);
         assert_eq!(state.route_registry.count(), 0);
+        assert_eq!(state.tool_registry.count(), 0);
     }
 
     #[tokio::test]
@@ -1508,5 +1541,90 @@ mod tests {
             .get("uac:acme:sensitive-api:0")
             .unwrap();
         assert_eq!(route.classification, Some(crate::uac::Classification::VH));
+    }
+
+    #[tokio::test]
+    async fn test_contract_upsert_generates_mcp_tools() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state.clone());
+
+        let contract = serde_json::json!({
+            "name": "orders",
+            "version": "1.0.0",
+            "tenant_id": "acme",
+            "classification": "H",
+            "endpoints": [
+                {
+                    "path": "/orders",
+                    "methods": ["GET"],
+                    "backend_url": "https://backend.acme.com/orders",
+                    "operation_id": "list_orders"
+                },
+                {
+                    "path": "/orders",
+                    "methods": ["POST"],
+                    "backend_url": "https://backend.acme.com/orders",
+                    "operation_id": "create_order"
+                }
+            ],
+            "status": "published"
+        });
+
+        let response = app
+            .oneshot(auth_json_req("POST", "/contracts", contract))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["tools_generated"], 2);
+
+        // Both tools registered
+        assert_eq!(state.tool_registry.count(), 2);
+        assert!(state.tool_registry.exists("uac:acme:orders:list_orders"));
+        assert!(state.tool_registry.exists("uac:acme:orders:create_order"));
+    }
+
+    #[tokio::test]
+    async fn test_contract_delete_cascades_tools() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state.clone());
+
+        // Create contract → generates tools
+        let _ = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/contracts", sample_contract_json()))
+            .await
+            .unwrap();
+        assert_eq!(state.tool_registry.count(), 1);
+
+        // Delete contract → cascades tool removal
+        let response = app
+            .oneshot(auth_req("DELETE", "/contracts/acme:payment-api"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(state.tool_registry.count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_mcp_tools_visible_via_list() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state.clone());
+
+        let _ = app
+            .oneshot(auth_json_req("POST", "/contracts", sample_contract_json()))
+            .await
+            .unwrap();
+
+        // Tool should be visible in tool registry
+        let tools = state.tool_registry.list(Some("acme"));
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "uac:acme:payment-api:payment-api-0");
+        assert_eq!(tools[0].tenant_id.as_deref(), Some("acme"));
     }
 }

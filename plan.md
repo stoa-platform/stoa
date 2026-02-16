@@ -46,12 +46,12 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) | **Done**: 279 pts (82%) | **Velocity**: 38 issues closed
+**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 376 pts (42 issues) | **Velocity**: 38+ issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
 
-### Done (37 issues)
+### Done (38 issues)
 
 - [x] CAB-353: Go/No-Go Checklist 3 Months (5 pts) — PR #482 (9.00/10 → GO)
 - [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (P1)
@@ -90,6 +90,17 @@
   - [x] CAB-1356: [CLI] stoactl deploy commands (5 pts) — stoactl PR #7
   - [x] CAB-1357: [E2E] Deployment Lifecycle BDD tests (3 pts) — PR #574
 - [x] CAB-1297: [MEGA] DX: Developer Experience (13 pts) — PR #577 (5 READMEs, 4 .env.example, DEVELOPMENT.md, Makefile, Helm chart README)
+- [x] CAB-1294: [MEGA] DX: Portal Test Coverage (21 pts) — PR #580 (24 test files, 680 total tests)
+- [x] CAB-1295: [MEGA] DX: Console Test Coverage (21 pts) — PR #590 (23 test files, 317 new tests, 959 total)
+- [x] CAB-1290: [MEGA] Gateway: Live-Code Feature Completion (13 pts) — PR #585 (9 TODOs resolved)
+- [x] CAB-1299: [MEGA] UAC Spec + Protocol Binders + Dynamic Routing (34 pts) — PRs #581-#591
+  - [x] PR #581: UAC v1 schema types + JSON Schema
+  - [x] PR #583: UAC contract admin API
+  - [x] PR #586: REST protocol binder + route generation
+  - [x] PR #587: MCP protocol binder for UAC contracts
+  - [x] PR #588: Classification-OPA integration + soft-mode enforcement
+  - [x] PR #591: UAC transformer + contract adapter
+- [x] CAB-1358: [CI] AI Factory H24 Autonomous Activation (8 pts) — PR #589 (7 workflows hardened)
 
 ### In Progress
 
@@ -144,11 +155,11 @@
 - [x] CAB-1289: [MEGA] Gateway Test Coverage & Quality — 27 Untested Modules (34 pts, P3) — PR #566 (Council 8.75/10)
 - [x] CAB-1297: [MEGA] DX: Developer Experience — READMEs, .env.example, Onboarding (13 pts, P3) — PR #577 (Council 8.50/10)
 - [x] CAB-1291: [MEGA] Platform: API Test Coverage & Quality — 44 Untested Modules (34 pts, P3) — PR #576 (Council 8.00/10)
-- [ ] CAB-1294: [MEGA] DX: Portal Test Coverage & UX Completion — 26 Untested Modules (21 pts, P3) — Council 8.00/10
-- [ ] CAB-1290: [MEGA] Gateway: Live-Code Feature Completion — MCP Protocol + Observability (13 pts, P3) — Council 7.75/10
-- [ ] CAB-1299: [MEGA] Roadmap: UAC Spec + Protocol Binders + Dynamic Routing (34 pts, P3) — Council 7.75/10
+- [x] CAB-1294: [MEGA] DX: Portal Test Coverage & UX Completion — 26 Untested Modules (21 pts, P3) — PR #580 (Council 8.00/10)
+- [x] CAB-1290: [MEGA] Gateway: Live-Code Feature Completion — MCP Protocol + Observability (13 pts, P3) — PR #585 (Council 7.75/10)
+- [x] CAB-1299: [MEGA] Roadmap: UAC Spec + Protocol Binders + Dynamic Routing (34 pts, P3) — PRs #581-#591, 6 micro-PRs (Council 7.75/10)
 - [ ] CAB-1292: [MEGA] Platform: API Auth Completion — KC Clients, IAM Sync, Security Fix (21 pts, P3) — Council 7.50/10
-- [ ] CAB-1295: [MEGA] DX: Console Test Coverage & UX Completion — 23 Untested Modules (21 pts, P3) — Council 7.50/10
+- [x] CAB-1295: [MEGA] DX: Console Test Coverage & UX Completion — 23 Untested Modules (21 pts, P3) — PR #590 (Council 7.50/10)
 - [ ] CAB-1300: [MEGA] Platform: API Runtime Completion — Events, Deployments, Contracts, MCP RBAC (13 pts, P3) — Council 7.50/10
 - [ ] CAB-1293: [MEGA] Platform: K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts, P3) — Council 7.25/10
 - [ ] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts, P3) — Council 7.25/10

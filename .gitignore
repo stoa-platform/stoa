@@ -138,6 +138,9 @@ journal.md
 *.sqlite3
 backups/
 
+# Phase Ownership claims (ephemeral, machine-local, contain PIDs)
+.claude/claims/*.json
+
 # Infisical
 .infisical.json
 

@@ -19,9 +19,15 @@ Before reading state files, check for crashed sessions and log this session:
    - If checkpoint has `pr_number`, run `gh pr view <pr_number> --json state` — if MERGED, auto-close (not a real crash)
    - Otherwise report to user: "Previous session crashed mid-task [TASK] at step [STEP]. Resume or abandon?"
    - Follow `.claude/rules/crash-recovery.md` protocol
-4. If no crash detected → **log this session immediately**:
+4. **Generate instance identity** (for multi-terminal coordination):
    ```
-   Append to operations.log: SESSION-START | task=<TASK> branch=<BRANCH>
+   Instance ID: t<N> where N = epoch seconds mod 10000
+   Example: t4821
+   ```
+   Generated once per session. Used in claim files and operations.log.
+5. If no crash detected → **log this session immediately**:
+   ```
+   Append to operations.log: SESSION-START | task=<TASK> branch=<BRANCH> instance=<ID>
    ```
    This MUST happen before any other work. It is the anchor for crash recovery.
 
@@ -34,17 +40,33 @@ Read these 2 files **in this order** to understand current context:
 
 Private memory (`~/.claude/projects/.../memory/MEMORY.md`) is auto-loaded by Claude Code.
 
-## Step 2 — Pick Your Task
+## Step 2 — Pick Your Phase
 
-1. Check **Active Tickets** in `MEMORY.md` → pick highest priority unclaimed task
-2. If no active tickets → check `plan.md` current cycle "In Progress" and "Todo" sections
-3. If user says "what next?" → summarize what's available, recommend highest priority
-4. If user gives a specific task → use that (skip queue)
+Phase-aware task selection that prevents multi-instance race conditions.
+See `phase-ownership.md` for full protocol, claim schemas, and conflict resolution.
+
+1. If user gives a specific task → use that (skip to step 5)
+2. Read `plan.md` → identify current cycle items (In Progress + Todo)
+3. **For each MEGA with phases**:
+   a. Read `.claude/claims/<MEGA-ID>.json`
+   b. Find first phase where: `owner == null` AND all deps satisfied (`completed_at != null` for each dep phase)
+   c. If found → claim it:
+      - Write own instance ID + PID + timestamp to claim file
+      - Mark all phase tickets "In Progress" on Linear via MCP batch
+      - Log: `CLAIM | task=<MEGA-ID> phase=<N> instance=<ID> tickets=<list>`
+   d. If all phases claimed or blocked → skip this MEGA
+4. **For standalone tickets** (no phases):
+   a. Check `.claude/claims/<CAB-XXXX>.json` exists
+   b. If exists AND PID alive (`kill -0 $PID`) → skip (claimed by another instance)
+   c. If exists AND PID dead → auto-release stale claim, then claim it
+   d. If not exists → create claim file → Linear "In Progress" → log `CLAIM | task=<CAB-XXXX> instance=<ID>`
 5. If task has **CAB-XXXX** ID → fetch from Linear MCP for full DoD + description:
    ```
    linear.get_issue("CAB-XXXX", includeRelations=true)
    ```
-   This replaces manually copying ticket details from the browser.
+6. If no unclaimed work available:
+   → "All phases/tickets claimed or blocked. Available MEGAs: [list unclaimed MEGAs]"
+   → If user says "what next?" → summarize claim status across all MEGAs
 
 ## Step 3 — Context Budget
 

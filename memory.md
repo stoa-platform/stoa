@@ -116,6 +116,15 @@
   - CAB-1354: Deploy Event Notifications (5 pts) — PR #570 (Kafka events + webhook dispatch)
   - CAB-1352: ADR-045 Deployment Lifecycle Architecture (5 pts) — stoa-docs PR #56
   - CAB-1355: Console UI Deployment Dashboard (8 pts) — PR #573 (history table, filters, rollback, RBAC)
+  - CAB-1356: stoactl deploy commands (5 pts) — stoactl PR #7 (deploy+rollback+promote+list+events)
+  - CAB-1357: E2E BDD Deployment Lifecycle (3 pts) — PR #574 (5 scenarios, @wip tagged)
+- CAB-1154: Algolia DocSearch LIVE (1 pt) — stoa-docs PR #49 (`Stoa Blog` index, 7274 entries)
+- CAB-1291: API Test Coverage & Quality (34 pts) — PR #576 (142 tests across 14 modules)
+- CAB-374: Deployment Lifecycle MEGA (34 pts) — 3 phases across 3 repos
+  - CAB-1353: Deployment Lifecycle API (8 pts) — PR #570 (model+repo+service+router+Alembic 026+26 tests)
+  - CAB-1354: Deploy Event Notifications (5 pts) — PR #570 (Kafka events + webhook dispatch)
+  - CAB-1352: ADR-045 Deployment Lifecycle Architecture (5 pts) — stoa-docs PR #56
+  - CAB-1355: Console UI Deployment Dashboard (8 pts) — PR #573 (history table, filters, rollback, RBAC)
   - CAB-1356: stoactl deploy commands (5 pts) — stoactl PR #7 (deploy/rollback/promote/list/events)
   - CAB-1357: E2E BDD Deployment Lifecycle (3 pts) — PR #574 (5 scenarios, @wip tagged)
 

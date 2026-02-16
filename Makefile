@@ -45,7 +45,7 @@ run-gateway: ## Start STOA Gateway (port 8080)
 test: test-api test-ui test-portal test-gateway test-cli ## Run all tests
 
 test-api: ## Run control-plane-api tests
-	cd control-plane-api && pytest tests/ --cov=src --cov-fail-under=53 --ignore=tests/test_opensearch.py -q
+	cd control-plane-api && pytest tests/ --cov=src --cov-fail-under=58 --ignore=tests/test_opensearch.py -q
 
 test-ui: ## Run console UI tests
 	cd control-plane-ui && npm run test -- --run
@@ -93,6 +93,8 @@ check-docs: ## Validate README Quick Start commands are consistent
 			echo "FAIL: $$dir/.env.example missing"; exit 1; \
 		fi; \
 	done
+	@echo "==> Checking Helm chart README..."
+	@test -f charts/stoa-platform/README.md || (echo "FAIL: charts/stoa-platform/README.md missing"; exit 1)
 	@echo "==> Checking DEVELOPMENT.md..."
 	@test -f DEVELOPMENT.md || (echo "FAIL: DEVELOPMENT.md missing"; exit 1)
 	@echo "✓ All documentation files present"

@@ -1,5 +1,6 @@
 # Level 1: Claude Code Auto-Review — reviews every PR automatically
 # Runs /review skill on PR open/sync. Posts review as PR comment.
+# Kill-switch: set DISABLE_L1_REVIEW=true in repo variables to disable.
 
 name: Claude Code Auto-Review
 
@@ -19,8 +20,9 @@ permissions:
 
 jobs:
   review:
-    # Skip Dependabot PRs and self-authored PRs (Claude's own PRs)
+    # Skip Dependabot PRs, self-authored PRs, and when kill-switch is active
     if: |
+      vars.DISABLE_L1_REVIEW != 'true' &&
       github.actor != 'dependabot[bot]' &&
       github.actor != 'claude[bot]' &&
       github.actor != 'github-actions[bot]'
@@ -28,12 +30,53 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - uses: anthropics/claude-code-action@v1
+      # Pre-check: get diff stats to avoid context overflow on large PRs
+      - name: Get PR diff stats
+        id: diff-stats
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUM="${{ github.event.pull_request.number }}"
+          DIFF_STAT=$(gh pr diff "$PR_NUM" --stat 2>/dev/null || echo "stat unavailable")
+          DIFF_LINES=$(gh pr diff "$PR_NUM" 2>/dev/null | wc -l | tr -d ' ')
+          echo "diff_lines=$DIFF_LINES" >> "$GITHUB_OUTPUT"
+          echo "PR #$PR_NUM: $DIFF_LINES lines changed"
+
+          # Truncate diff to 500 lines for Claude context
+          if [ "$DIFF_LINES" -gt 500 ]; then
+            gh pr diff "$PR_NUM" | head -500 > /tmp/pr-diff-truncated.txt
+            echo "--- TRUNCATED: showing first 500 of $DIFF_LINES lines ---" >> /tmp/pr-diff-truncated.txt
+            echo "truncated=true" >> "$GITHUB_OUTPUT"
+          else
+            gh pr diff "$PR_NUM" > /tmp/pr-diff-truncated.txt 2>/dev/null || echo "diff unavailable" > /tmp/pr-diff-truncated.txt
+            echo "truncated=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Also capture the stat view
+          echo "$DIFF_STAT" > /tmp/pr-diff-stat.txt
+
+      - name: Run Claude Review
+        id: claude-review
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             Review this PR following CLAUDE.md and .claude/rules/ci-quality-gates.md.
+
+            PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}
+            Files changed (stat view):
+            ```
+            $(cat /tmp/pr-diff-stat.txt)
+            ```
+
+            Diff (${{ steps.diff-stats.outputs.truncated == 'true' && 'TRUNCATED to 500 lines' || 'full' }}):
+            ```diff
+            $(cat /tmp/pr-diff-truncated.txt)
+            ```
 
             Check for:
             1. Code quality: naming, patterns, no over-engineering
@@ -55,3 +98,22 @@ jobs:
             ### Verdict
             <Go | Fix | Redo> — <1 sentence summary>
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5"
+
+      # Fallback comment if Claude fails
+      - name: Post fallback on failure
+        if: steps.claude-review.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUM="${{ github.event.pull_request.number }}"
+          gh pr comment "$PR_NUM" --body "$(cat <<'EOF'
+          ## Auto-Review
+
+          Claude Code review could not complete for this PR. This is non-blocking.
+
+          **Possible causes**: PR diff too large, API rate limit, or transient error.
+          **Action**: Manual review recommended.
+
+          _AI Factory L1 | $(date -u +%Y-%m-%dT%H:%M) UTC_
+          EOF
+          )" || true

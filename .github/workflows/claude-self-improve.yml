@@ -1,6 +1,7 @@
 # Level 4: Self-Improving AI Factory — learns from failures and improves rules
 # Analyzes CI failures, metrics, and gotchas to propose rule improvements.
 # Runs weekly or on-demand. Every improvement goes through Council validation.
+# Kill-switch: set DISABLE_L4_SELF_IMPROVE=true in repo variables to disable.
 
 name: Claude Code Self-Improve
 
@@ -29,6 +30,7 @@ permissions:
 
 jobs:
   self-improve:
+    if: vars.DISABLE_L4_SELF_IMPROVE != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -38,6 +40,8 @@ jobs:
 
       # Phase 1: Analyze patterns
       - name: Run Self-Improvement Analysis
+        id: analysis
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -114,7 +118,22 @@ jobs:
               - [ ] Rule change is specific and actionable
               - [ ] No contradiction with existing rules
               - [ ] Verified against 2+ CI failure instances
+            - Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
+            - Label the issue "self-improve". Do NOT label it "claude-implement" automatically.
+              A human must review and explicitly label "claude-implement" to trigger implementation.
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"
+
+      # Fallback comment if Claude fails
+      - name: Post fallback on failure
+        if: steps.analysis.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "AI Factory Self-Improvement — $(date -u +%Y-%m-%d) (failed)" \
+            --label "self-improve" \
+            --body "Self-improvement analysis could not complete. Check [workflow logs](https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }})." \
+            || true
 
       - name: Notify Slack
         if: always()

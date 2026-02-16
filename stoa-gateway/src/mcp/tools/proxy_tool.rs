@@ -131,7 +131,7 @@ mod tests {
     async fn unwraps_single_text_content() {
         let mock = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path("/v1/mcp/tools/call"))
+            .and(path("/v1/mcp/tools/test_tool/invoke"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "content": [{"type": "text", "text": "hello world"}],
                 "isError": false
@@ -151,7 +151,7 @@ mod tests {
     async fn joins_multiple_text_blocks() {
         let mock = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path("/v1/mcp/tools/call"))
+            .and(path("/v1/mcp/tools/test_tool/invoke"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "content": [
                     {"type": "text", "text": "line one"},
@@ -173,7 +173,7 @@ mod tests {
     async fn propagates_is_error_flag() {
         let mock = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path("/v1/mcp/tools/call"))
+            .and(path("/v1/mcp/tools/test_tool/invoke"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "content": [{"type": "text", "text": "oops"}],
                 "isError": true
@@ -190,7 +190,7 @@ mod tests {
     async fn fallback_to_pretty_json_when_no_content_array() {
         let mock = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path("/v1/mcp/tools/call"))
+            .and(path("/v1/mcp/tools/test_tool/invoke"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": "raw response"})))
             .mount(&mock).await;
 
@@ -207,7 +207,7 @@ mod tests {
     async fn content_without_text_fields_yields_empty() {
         let mock = MockServer::start().await;
         Mock::given(method("POST"))
-            .and(path("/v1/mcp/tools/call"))
+            .and(path("/v1/mcp/tools/test_tool/invoke"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "content": [{"type": "image", "data": "abc"}]
             })))

@@ -224,13 +224,7 @@ pub static UPSTREAM_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 
 // === Helper Functions ===
 
-/// Extract the current OTel trace_id from the active tracing span (if any).
-/// TODO: Re-enable once OpenTelemetry deps are stabilized (CAB-1088).
-#[allow(dead_code)]
-fn current_trace_id() -> Option<String> {
-    // Disabled: opentelemetry 0.27 API changes pending resolution
-    None
-}
+
 
 /// Record a tool call with timing and optional trace_id exemplar.
 ///

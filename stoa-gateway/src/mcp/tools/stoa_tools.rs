@@ -7,7 +7,6 @@
 //!   2. Try `GET /v1/mcp/tools` on Control Plane → dynamic registration for unknown tools
 //!   3. Background task refreshes every 60s from CP (only registers non-native tools)
 
-use reqwest::Client;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -181,29 +180,12 @@ pub fn start_tool_refresh_task(
     });
 }
 
-/// Register native tools only (used as fallback when CP is unreachable at startup).
-///
-/// This is the new default behavior: native tools call CP API directly,
-/// bypassing the Python mcp-gateway entirely.
-#[allow(dead_code)]
-pub fn register_native_tools_only(
-    registry: &ToolRegistry,
-    http_client: Client,
-    cp_base_url: &str,
-    registry_ref: Arc<ToolRegistry>,
-) {
-    register_native_tools(registry, http_client, cp_base_url, registry_ref);
-    tracing::info!(
-        tool_count = registry.count(),
-        "Native STOA tools registered (Phase 1: no Python dependency)"
-    );
-}
 
 // ─── Legacy Fallback (kept for compatibility) ─────────────────────
 
-/// Register the 12 STOA tools with ProxyTool (legacy behavior).
-/// DEPRECATED: Use register_native_tools_only() instead.
-#[allow(dead_code)]
+/// Register the 12 STOA tools with ProxyTool (legacy fallback).
+///
+/// Used when `STOA_NATIVE_TOOLS_ENABLED=false` to proxy through Python mcp-gateway.
 pub fn register_static_tools(registry: &ToolRegistry, cp: Arc<ToolProxyClient>) {
     use serde_json::json;
 

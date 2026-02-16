@@ -46,7 +46,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 397 pts (43 issues) | **Velocity**: 39+ issues closed
+**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 418 pts (44 issues) | **Velocity**: 40+ issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
@@ -101,7 +101,7 @@
   - [x] PR #588: Classification-OPA integration + soft-mode enforcement
   - [x] PR #591: UAC transformer + contract adapter
 - [x] CAB-1358: [CI] AI Factory H24 Autonomous Activation (8 pts) — PR #589 (7 workflows hardened)
-- [x] CAB-1292: [MEGA] API Auth Completion — KC Clients, IAM Sync, Security Fix (21 pts) — PR #594 (auth fixes + RBAC/JWT tests)
+- [x] CAB-1292: [MEGA] API Auth Completion — KC Clients, IAM Sync, Security Fix (21 pts) — PRs #594 + #596 (29 RBAC/JWT tests + 3 IAM sync TODOs + 20 KC/IAM tests)
 
 ### In Progress
 

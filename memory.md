@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-17 (session 18 — CAB-1299 PR7 E2E tests)
+> Dernière MAJ: 2026-02-17 (session 19 — CAB-1292 Auth Completion — PRs #594 + #596)
 
 ## ✅ DONE
 
@@ -125,7 +125,10 @@
 - CAB-1299: UAC Spec + Protocol Binders + E2E (34 pts) — PRs #581-#591, #595 (7 micro-PRs: schema, admin API, REST binder, MCP binder, OPA, transformer, E2E tests)
 - CAB-1291 Phase 2: API Test Coverage (34 pts total) — PR #582 (+386 tests, 59%→72%, threshold 70%)
 - CAB-1358: AI Factory H24 Autonomous Activation (8 pts) — PR #589 (7 workflows hardened: kill-switches, continue-on-error, Ask mode for rules, fallback issue creation)
-- CAB-1292 Phase 1: API Auth Security Fixes (21 pts) — PR #594 (RBAC/JWT tests, security hardening)
+- CAB-1292: API Auth Completion — IAM Sync, Security Fix, RBAC Tests (21 pts) — PRs #594 + #596
+  - Phase 2: PR #594 — 20 RBAC tests, 9 JWT tests, legacy audience deprecation warning, 2 pre-existing test fixes
+  - Phase 1: PR #596 — 3 KC helpers (remove_user_from_group, delete_tenant_group, get_user_roles), 3 IAM sync TODOs resolved, 20 new tests
+  - Coverage: 71.88% (above 70% threshold), 130 auth-related tests total
 
 ## 🔴 IN PROGRESS
 

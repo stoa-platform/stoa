@@ -171,6 +171,12 @@ function extractUserFromToken(oidcUser: any): Partial<User> | null {
     }
   }
 
+  // Self-registered users have no STOA role — default to viewer (read-only portal access)
+  const knownRoles = Object.keys(ROLE_PERMISSIONS);
+  if (roles.length === 0 || !roles.some((r) => knownRoles.includes(r))) {
+    roles = ['viewer'];
+  }
+
   const isCpiAdmin = roles.includes('cpi-admin');
 
   return {

@@ -233,6 +233,11 @@ async def get_current_user_info(
     # Filter system roles
     user_roles = filter_system_roles(current_user.roles)
 
+    # Self-registered users have no STOA role — default to viewer (read-only access)
+    known_roles = set(ROLE_TO_SCOPES.keys())
+    if not any(r in known_roles for r in user_roles):
+        user_roles = ["viewer"]
+
     # Calculate permissions from roles
     permissions = get_user_permissions(user_roles)
 

@@ -1,4 +1,5 @@
 """PIIMasker — Service principal. Target: < 5ms pour 10KB."""
+
 import hashlib
 import logging
 from dataclasses import dataclass, field
@@ -49,7 +50,7 @@ class PIIMasker:
             return text
 
         if len(text) > self.config.max_text_length:
-            text = text[:self.config.max_text_length]
+            text = text[: self.config.max_text_length]
 
         pii_found: dict[PIIType, int] = {}
         for pattern in self._patterns:
@@ -60,14 +61,19 @@ class PIIMasker:
                 text = pattern.pattern.sub(lambda m, mf=_mask_func: mf(m.group(0)), text)
 
         if self.config.audit_enabled and pii_found:
-            logger.info("PII masked", extra={
-                "tenant": ctx.tenant_id,
-                "pii": {t.value: c for t, c in pii_found.items()},
-            })
+            logger.info(
+                "PII masked",
+                extra={
+                    "tenant": ctx.tenant_id,
+                    "pii": {t.value: c for t, c in pii_found.items()},
+                },
+            )
 
         return text
 
-    def mask_dict(self, data: dict[str, Any], context: MaskingContext | None = None, recursive: bool = True) -> dict[str, Any]:
+    def mask_dict(
+        self, data: dict[str, Any], context: MaskingContext | None = None, recursive: bool = True
+    ) -> dict[str, Any]:
         if not self.config.enabled:
             return data
         return self._mask_recursive(data, context, recursive)
@@ -98,7 +104,7 @@ class PIIMasker:
     @classmethod
     @lru_cache(maxsize=128)
     def for_tenant(cls, tenant_id: str) -> "PIIMasker":
-        # TODO: Load from UAC
+        # Per-tenant PII patterns deferred — requires UAC v2 tenant config model
         return cls()
 
 

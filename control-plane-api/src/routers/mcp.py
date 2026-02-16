@@ -15,6 +15,7 @@ Rate limits (CAB-298):
 Performance optimizations:
 - API key validation caching (10s TTL) to reduce DB hits
 """
+
 import logging
 import math
 import uuid
@@ -108,6 +109,47 @@ def _convert_server_to_response(server: MCPServer) -> MCPServerResponse:
     )
 
 
+def _is_visible_to_user(
+    server: MCPServer,
+    user_roles: list[str],
+    user_tenant_id: str | None = None,
+) -> bool:
+    """Check if an MCP server is visible to a user based on visibility config.
+
+    Visibility JSON structure: {"public": bool, "roles": [...], "exclude_roles": [...]}
+    - public=True: visible to everyone
+    - roles set: user must have at least one matching role
+    - exclude_roles set: user must NOT have any excluded role
+    - Tenant-specific servers: user must belong to same tenant or be cpi-admin
+    """
+    # cpi-admin always has access
+    if "cpi-admin" in user_roles:
+        return True
+
+    # Tenant-specific server: user must belong to same tenant
+    if server.tenant_id and server.tenant_id != user_tenant_id:
+        return False
+
+    visibility = server.visibility or {"public": True}
+
+    # Check exclude_roles first (deny takes precedence)
+    exclude_roles = visibility.get("exclude_roles") or []
+    if exclude_roles and any(role in exclude_roles for role in user_roles):
+        return False
+
+    # Public servers are visible to all
+    if visibility.get("public", True):
+        return True
+
+    # Role-based access: user must have at least one allowed role
+    allowed_roles = visibility.get("roles") or []
+    if allowed_roles:
+        return any(role in allowed_roles for role in user_roles)
+
+    # Non-public with no roles specified: deny by default
+    return False
+
+
 @servers_router.get(
     "",
     response_model=MCPServerListResponse,
@@ -179,7 +221,9 @@ async def get_server(
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
 
-    # TODO: Check visibility based on user roles
+    # Enforce visibility RBAC (CAB-1300)
+    if not _is_visible_to_user(server, user.roles, user.tenant_id):
+        raise HTTPException(status_code=403, detail="Access denied: server not visible to your role")
 
     return _convert_server_to_response(server)
 
@@ -290,8 +334,7 @@ async def create_subscription(
     existing = await sub_repo.get_by_subscriber_and_server(user.id, body.server_id)
     if existing:
         raise HTTPException(
-            status_code=409,
-            detail=f"Already subscribed to this server (status: {existing.status.value})"
+            status_code=409, detail=f"Already subscribed to this server (status: {existing.status.value})"
         )
 
     # Determine initial status
@@ -339,7 +382,9 @@ async def create_subscription(
 
             # Determine tool access status
             tool_status = MCPToolAccessStatus.ENABLED
-            if (tool.requires_approval and initial_status == MCPSubscriptionStatus.PENDING) or initial_status == MCPSubscriptionStatus.PENDING:
+            if (
+                tool.requires_approval and initial_status == MCPSubscriptionStatus.PENDING
+            ) or initial_status == MCPSubscriptionStatus.PENDING:
                 tool_status = MCPToolAccessStatus.PENDING_APPROVAL
 
             tool_access = MCPToolAccess(
@@ -498,10 +543,7 @@ async def cancel_subscription(
         raise HTTPException(status_code=403, detail="Access denied")
 
     if subscription.status not in [MCPSubscriptionStatus.PENDING, MCPSubscriptionStatus.ACTIVE]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel subscription in {subscription.status.value} status"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot cancel subscription in {subscription.status.value} status")
 
     await repo.update_status(
         subscription,
@@ -553,8 +595,7 @@ async def rotate_api_key(
 
     if subscription.status != MCPSubscriptionStatus.ACTIVE:
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot rotate key for subscription in {subscription.status.value} status"
+            status_code=400, detail=f"Cannot rotate key for subscription in {subscription.status.value} status"
         )
 
     # Check for existing grace period
@@ -562,8 +603,8 @@ async def rotate_api_key(
         raise HTTPException(
             status_code=400,
             detail=f"A key rotation is already in progress. Previous key expires at "
-                   f"{subscription.previous_key_expires_at.isoformat()}. "
-                   f"Wait for the grace period to end before rotating again."
+            f"{subscription.previous_key_expires_at.isoformat()}. "
+            f"Wait for the grace period to end before rotating again.",
         )
 
     # Generate new key
@@ -652,19 +693,14 @@ async def validate_api_key(
         subscription = await repo.get_by_previous_key_hash(api_key_hash)
         if subscription:
             is_previous_key = True
-            logger.info(
-                f"Using previous API key during grace period for MCP subscription {subscription.id}"
-            )
+            logger.info(f"Using previous API key during grace period for MCP subscription {subscription.id}")
 
     if not subscription:
         raise HTTPException(status_code=401, detail="API key not found")
 
     # Check status
     if subscription.status != MCPSubscriptionStatus.ACTIVE:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Subscription is {subscription.status.value}"
-        )
+        raise HTTPException(status_code=403, detail=f"Subscription is {subscription.status.value}")
 
     # Check expiration
     now = datetime.utcnow()
@@ -672,10 +708,7 @@ async def validate_api_key(
         raise HTTPException(status_code=403, detail="Subscription expired")
 
     # Get enabled tools
-    enabled_tools = [
-        ta.tool_name for ta in subscription.tool_access
-        if ta.status == MCPToolAccessStatus.ENABLED
-    ]
+    enabled_tools = [ta.tool_name for ta in subscription.tool_access if ta.status == MCPToolAccessStatus.ENABLED]
 
     # Update usage tracking (async, don't block response)
     await repo.update_usage(subscription)

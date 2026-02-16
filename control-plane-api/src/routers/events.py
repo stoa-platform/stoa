@@ -1,10 +1,11 @@
 """Events router - SSE endpoint for real-time Kafka events"""
+
 import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/v1/events", tags=["Events"])
 
 class DeploymentResult(BaseModel):
     """Deployment result from gateway adapter"""
+
     api_name: str
     api_version: str | None = "1.0"
     api_id: str | None = None
@@ -26,6 +28,7 @@ class DeploymentResult(BaseModel):
     action: str | None = None
     message: str | None = None
     error: str | None = None
+
 
 # Event types that can be streamed
 EVENT_TYPES = [
@@ -43,11 +46,9 @@ EVENT_TYPES = [
     "tenant-updated",
 ]
 
+
 async def event_generator(
-    request: Request,
-    tenant_id: str,
-    user: User,
-    event_types: list[str] | None = None
+    request: Request, tenant_id: str, user: User, event_types: list[str] | None = None
 ) -> AsyncGenerator[dict, None]:
     """
     Generate SSE events from Kafka consumer.
@@ -57,35 +58,17 @@ async def event_generator(
     2. Filters events by tenant_id and event_types
     3. Yields events as SSE messages
     4. Handles client disconnection gracefully
-    """
-    # TODO: Implement with Kafka service
-    # For now, just keep connection alive with heartbeats
 
+    Kafka SSE consumer deferred — requires shared consumer with fan-out (see CAB-1176).
+    Currently sends heartbeats only to keep the connection alive.
+    """
     try:
         while True:
-            # Check if client disconnected
             if await request.is_disconnected():
                 break
 
-            # TODO: Poll Kafka for events
-            # events = await kafka_service.poll_events(
-            #     tenant_id=tenant_id,
-            #     event_types=event_types,
-            #     timeout=1.0
-            # )
-            #
-            # for event in events:
-            #     yield {
-            #         "event": event.type,
-            #         "id": event.id,
-            #         "data": json.dumps(event.payload)
-            #     }
-
             # Heartbeat to keep connection alive
-            yield {
-                "event": "heartbeat",
-                "data": json.dumps({"status": "connected"})
-            }
+            yield {"event": "heartbeat", "data": json.dumps({"status": "connected"})}
 
             await asyncio.sleep(30)  # Heartbeat every 30 seconds
 
@@ -93,13 +76,32 @@ async def event_generator(
         # Client disconnected
         pass
 
+
+@router.get("/stream/global")
+async def stream_global_events(
+    request: Request, event_types: str | None = None, user: User = Depends(get_current_user)
+):
+    """
+    Stream all events (for cpi-admin users only).
+
+    This endpoint streams events from all tenants.
+    Only users with cpi-admin role can access this.
+    """
+    if "cpi-admin" not in user.roles:
+        raise HTTPException(status_code=403, detail="Only cpi-admin can access global event stream")
+
+    types_filter = event_types.split(",") if event_types else None
+
+    return EventSourceResponse(event_generator(request, "*", user, types_filter))
+
+
 @router.get("/stream/{tenant_id}")
 @require_tenant_access
 async def stream_events(
     request: Request,
     tenant_id: str,
     event_types: str | None = None,  # Comma-separated list
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
 ):
     """
     Stream real-time events for a tenant via Server-Sent Events.
@@ -122,47 +124,24 @@ async def stream_events(
     """
     types_filter = event_types.split(",") if event_types else None
 
-    return EventSourceResponse(
-        event_generator(request, tenant_id, user, types_filter)
-    )
+    return EventSourceResponse(event_generator(request, tenant_id, user, types_filter))
 
-@router.get("/stream/global")
-async def stream_global_events(
-    request: Request,
-    event_types: str | None = None,
-    user: User = Depends(get_current_user)
-):
-    """
-    Stream all events (for cpi-admin users only).
-
-    This endpoint streams events from all tenants.
-    Only users with cpi-admin role can access this.
-    """
-    if "cpi-admin" not in user.roles:
-        from fastapi import HTTPException
-        raise HTTPException(
-            status_code=403,
-            detail="Only cpi-admin can access global event stream"
-        )
-
-    types_filter = event_types.split(",") if event_types else None
-
-    return EventSourceResponse(
-        event_generator(request, "*", user, types_filter)
-    )
 
 # REST endpoints for event history
 @router.get("/history/{tenant_id}")
 @require_tenant_access
 async def get_event_history(
-    tenant_id: str,
-    event_type: str | None = None,
-    limit: int = 100,
-    user: User = Depends(get_current_user)
+    tenant_id: str, event_type: str | None = None, limit: int = 100, user: User = Depends(get_current_user)
 ):
-    """Get historical events from database/Kafka"""
-    # TODO: Implement with event store
-    return {"events": []}
+    """Get historical events for a tenant.
+
+    Event store (DB-backed) deferred — Kafka-only audit log has no query API.
+    See deployment history for recent activity.
+    """
+    return {
+        "events": [],
+        "message": "Event store not yet configured. See deployment history for recent activity.",
+    }
 
 
 @router.post("/deployment-result")
@@ -195,14 +174,10 @@ async def receive_deployment_result(result: DeploymentResult):
                     "action": result.action,
                     "message": result.message,
                     "error": result.error,
-                }
+                },
             )
             logger.info(f"Published deployment result to Kafka: {result.api_name}")
     except Exception as e:
         logger.warning(f"Failed to publish to Kafka (non-blocking): {e}")
 
-    return {
-        "status": "received",
-        "api_name": result.api_name,
-        "deployment_status": result.status
-    }
+    return {"status": "received", "api_name": result.api_name, "deployment_status": result.status}

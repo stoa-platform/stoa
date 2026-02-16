@@ -72,19 +72,15 @@ async def _get_or_create_default_bindings(db: AsyncSession, contract: Contract) 
 
 
 async def _get_traffic_24h(binding: ProtocolBinding) -> int | None:
-    """
-    Get traffic count for the last 24 hours.
+    """Get traffic count for the last 24 hours.
 
-    TODO: Integrate with Prometheus/metrics storage for real data.
-    Currently returns mock data for UI development.
+    Returns None until Prometheus integration is available.
+    Prometheus integration deferred — see CAB-1176.
     """
     if not binding.enabled:
         return None
 
-    # Mock implementation - replace with actual metrics query
-    import random
-
-    return random.randint(0, 2000)
+    return None
 
 
 def _generate_endpoint_info(contract: Contract, protocol: ProtocolType) -> dict:

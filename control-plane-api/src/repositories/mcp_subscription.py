@@ -2,6 +2,7 @@
 
 Reference: PLAN-MCP-SUBSCRIPTIONS.md
 """
+
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -20,6 +21,32 @@ from src.models.mcp_subscription import (
 )
 
 
+def _is_visible(server: MCPServer, user_roles: list[str]) -> bool:
+    """Check if server is visible based on visibility JSON and user roles.
+
+    Note: tenant filtering is handled at the DB query level, not here.
+    cpi-admin bypass is handled here for list queries.
+    """
+    if "cpi-admin" in user_roles:
+        return True
+
+    visibility = server.visibility or {"public": True}
+
+    # Check exclude_roles first (deny takes precedence)
+    exclude_roles = visibility.get("exclude_roles") or []
+    if exclude_roles and any(role in exclude_roles for role in user_roles):
+        return False
+
+    if visibility.get("public", True):
+        return True
+
+    allowed_roles = visibility.get("roles") or []
+    if allowed_roles:
+        return any(role in allowed_roles for role in user_roles)
+
+    return False
+
+
 class MCPServerRepository:
     """Repository for MCP Server database operations."""
 
@@ -36,18 +63,14 @@ class MCPServerRepository:
     async def get_by_id(self, server_id: UUID) -> MCPServer | None:
         """Get server by ID with tools."""
         result = await self.session.execute(
-            select(MCPServer)
-            .options(selectinload(MCPServer.tools))
-            .where(MCPServer.id == server_id)
+            select(MCPServer).options(selectinload(MCPServer.tools)).where(MCPServer.id == server_id)
         )
         return result.scalar_one_or_none()
 
     async def get_by_name(self, name: str) -> MCPServer | None:
         """Get server by name."""
         result = await self.session.execute(
-            select(MCPServer)
-            .options(selectinload(MCPServer.tools))
-            .where(MCPServer.name == name)
+            select(MCPServer).options(selectinload(MCPServer.tools)).where(MCPServer.name == name)
         )
         return result.scalar_one_or_none()
 
@@ -59,7 +82,10 @@ class MCPServerRepository:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[MCPServer], int]:
-        """List servers visible to a user based on roles and visibility config."""
+        """List servers visible to a user based on roles and visibility config.
+
+        Python-side visibility filtering — move to SQL JSON query for >1000 servers.
+        """
         query = select(MCPServer).options(selectinload(MCPServer.tools))
 
         # Filter by status (only active)
@@ -78,22 +104,20 @@ class MCPServerRepository:
                 )
             )
 
-        # TODO: Add visibility filtering based on user_roles and server.visibility JSON
-        # This requires JSON querying which varies by database
-
-        # Count total
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await self.session.execute(count_query)
-        total = total_result.scalar_one()
-
-        # Paginate
         query = query.order_by(MCPServer.display_name)
-        query = query.offset((page - 1) * page_size).limit(page_size)
 
+        # Fetch all matching servers, then filter by visibility in Python
         result = await self.session.execute(query)
-        servers = result.scalars().all()
+        all_servers = list(result.scalars().all())
 
-        return list(servers), total
+        filtered = [s for s in all_servers if _is_visible(s, user_roles)]
+        total = len(filtered)
+
+        # Paginate in Python
+        start = (page - 1) * page_size
+        page_servers = filtered[start : start + page_size]
+
+        return page_servers, total
 
     async def list_all(
         self,
@@ -186,7 +210,7 @@ class MCPSubscriptionRepository:
             .where(
                 and_(
                     MCPServerSubscription.previous_api_key_hash == api_key_hash,
-                    MCPServerSubscription.previous_key_expires_at > now
+                    MCPServerSubscription.previous_key_expires_at > now,
                 )
             )
         )
@@ -205,10 +229,7 @@ class MCPSubscriptionRepository:
                 and_(
                     MCPServerSubscription.subscriber_id == subscriber_id,
                     MCPServerSubscription.server_id == server_id,
-                    MCPServerSubscription.status.in_([
-                        MCPSubscriptionStatus.PENDING,
-                        MCPSubscriptionStatus.ACTIVE
-                    ])
+                    MCPServerSubscription.status.in_([MCPSubscriptionStatus.PENDING, MCPSubscriptionStatus.ACTIVE]),
                 )
             )
         )
@@ -222,10 +243,14 @@ class MCPSubscriptionRepository:
         page_size: int = 20,
     ) -> tuple[list[MCPServerSubscription], int]:
         """List subscriptions for a subscriber."""
-        query = select(MCPServerSubscription).options(
-            selectinload(MCPServerSubscription.server).selectinload(MCPServer.tools),
-            selectinload(MCPServerSubscription.tool_access),
-        ).where(MCPServerSubscription.subscriber_id == subscriber_id)
+        query = (
+            select(MCPServerSubscription)
+            .options(
+                selectinload(MCPServerSubscription.server).selectinload(MCPServer.tools),
+                selectinload(MCPServerSubscription.tool_access),
+            )
+            .where(MCPServerSubscription.subscriber_id == subscriber_id)
+        )
 
         if status:
             query = query.where(MCPServerSubscription.status == status)
@@ -252,10 +277,14 @@ class MCPSubscriptionRepository:
         page_size: int = 20,
     ) -> tuple[list[MCPServerSubscription], int]:
         """List subscriptions for a tenant."""
-        query = select(MCPServerSubscription).options(
-            selectinload(MCPServerSubscription.server),
-            selectinload(MCPServerSubscription.tool_access),
-        ).where(MCPServerSubscription.tenant_id == tenant_id)
+        query = (
+            select(MCPServerSubscription)
+            .options(
+                selectinload(MCPServerSubscription.server),
+                selectinload(MCPServerSubscription.tool_access),
+            )
+            .where(MCPServerSubscription.tenant_id == tenant_id)
+        )
 
         if status:
             query = query.where(MCPServerSubscription.status == status)
@@ -281,10 +310,14 @@ class MCPSubscriptionRepository:
         page_size: int = 20,
     ) -> tuple[list[MCPServerSubscription], int]:
         """List pending subscriptions for approval."""
-        query = select(MCPServerSubscription).options(
-            selectinload(MCPServerSubscription.server),
-            selectinload(MCPServerSubscription.tool_access),
-        ).where(MCPServerSubscription.status == MCPSubscriptionStatus.PENDING)
+        query = (
+            select(MCPServerSubscription)
+            .options(
+                selectinload(MCPServerSubscription.server),
+                selectinload(MCPServerSubscription.tool_access),
+            )
+            .where(MCPServerSubscription.status == MCPSubscriptionStatus.PENDING)
+        )
 
         if tenant_id:
             query = query.where(MCPServerSubscription.tenant_id == tenant_id)
@@ -409,10 +442,9 @@ class MCPSubscriptionRepository:
         total = total_result.scalar_one()
 
         # Count by status - single query with GROUP BY instead of N+1
-        status_query = select(
-            MCPServerSubscription.status,
-            func.count(MCPServerSubscription.id)
-        ).group_by(MCPServerSubscription.status)
+        status_query = select(MCPServerSubscription.status, func.count(MCPServerSubscription.id)).group_by(
+            MCPServerSubscription.status
+        )
         if base_conditions:
             status_query = status_query.where(and_(*base_conditions))
         status_result = await self.session.execute(status_query)
@@ -493,9 +525,7 @@ class MCPToolAccessRepository:
     ) -> list[MCPToolAccess]:
         """List all tool access records for a subscription."""
         result = await self.session.execute(
-            select(MCPToolAccess).where(
-                MCPToolAccess.subscription_id == subscription_id
-            )
+            select(MCPToolAccess).where(MCPToolAccess.subscription_id == subscription_id)
         )
         return list(result.scalars().all())
 

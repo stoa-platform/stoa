@@ -1074,3 +1074,697 @@ pub fn register_native_tools(
 
     tracing::info!(tool_count = 12, "Native tools registered");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mcp::tools::{Tool, ToolContext, ToolRegistry, ToolSchema};
+    use serde_json::json;
+    use std::sync::Arc;
+
+    fn make_ctx() -> ToolContext {
+        ToolContext {
+            tenant_id: "test-tenant".to_string(),
+            user_id: Some("user-1".to_string()),
+            user_email: Some("user@test.com".to_string()),
+            request_id: "req-1".to_string(),
+            roles: vec!["viewer".to_string()],
+            scopes: vec!["stoa:read".to_string()],
+            raw_token: None,
+        }
+    }
+
+    fn make_tool(name: &str) -> NativeTool {
+        NativeTool::new(
+            name,
+            "test tool",
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties: Default::default(),
+                required: vec![],
+            },
+            Action::Read,
+            Client::new(),
+            "http://localhost:8000",
+        )
+    }
+
+    // ─── auth_header ───────────────────────────────────────────
+
+    #[test]
+    fn auth_header_none_when_no_token() {
+        let tool = make_tool("test");
+        let ctx = make_ctx();
+        assert!(tool.auth_header(&ctx).is_none());
+    }
+
+    #[test]
+    fn auth_header_formats_bearer_token() {
+        let tool = make_tool("test");
+        let mut ctx = make_ctx();
+        ctx.raw_token = Some("abc123".to_string());
+        assert_eq!(tool.auth_header(&ctx).unwrap(), "Bearer abc123");
+    }
+
+    // ─── has_native_implementation ─────────────────────────────
+
+    #[test]
+    fn has_native_impl_for_all_known_tools() {
+        let known = [
+            "stoa_platform_info",
+            "stoa_platform_health",
+            "stoa_tools",
+            "stoa_tenants",
+            "stoa_catalog",
+            "stoa_api_spec",
+            "stoa_subscription",
+            "stoa_metrics",
+            "stoa_logs",
+            "stoa_alerts",
+            "stoa_uac",
+            "stoa_security",
+        ];
+        for name in &known {
+            assert!(has_native_implementation(name), "{} should be native", name);
+        }
+    }
+
+    #[test]
+    fn has_native_impl_false_for_unknown() {
+        assert!(!has_native_implementation("custom_tool"));
+        assert!(!has_native_implementation(""));
+    }
+
+    // ─── handle_platform_info ──────────────────────────────────
+
+    #[tokio::test]
+    async fn platform_info_returns_valid_json() {
+        let tool = make_tool("stoa_platform_info");
+        let result = tool.handle_platform_info().await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        let v: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["platform"], "STOA");
+        assert_eq!(v["status"], "operational");
+        assert!(v["features"].as_array().unwrap().len() > 5);
+        assert!(!v["version"].as_str().unwrap().is_empty());
+    }
+
+    // ─── handle_platform_health ────────────────────────────────
+
+    #[tokio::test]
+    async fn platform_health_returns_components() {
+        let tool = make_tool("stoa_platform_health");
+        let result = tool.handle_platform_health().await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        let v: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["status"], "healthy");
+        assert!(v["components"]["gateway"]["status"].is_string());
+        assert!(v["timestamp"].is_string());
+    }
+
+    // ─── handle_tools (with real ToolRegistry) ─────────────────
+
+    #[tokio::test]
+    async fn tools_list_action() {
+        let registry = Arc::new(ToolRegistry::new());
+        // Register one tool for testing
+        registry.register(Arc::new(make_tool("test_tool_alpha")));
+
+        let tool = make_tool("stoa_tools").with_registry(registry);
+        let ctx = make_ctx();
+        let args = json!({"action": "list"});
+        let result = tool.handle_tools(&args, &ctx).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        let v: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["count"], 1);
+        assert_eq!(v["tools"][0]["name"], "test_tool_alpha");
+    }
+
+    #[tokio::test]
+    async fn tools_schema_action() {
+        let registry = Arc::new(ToolRegistry::new());
+        registry.register(Arc::new(make_tool("my_tool")));
+
+        let tool = make_tool("stoa_tools").with_registry(registry);
+        let ctx = make_ctx();
+        let args = json!({"action": "schema", "tool_name": "my_tool"});
+        let result = tool.handle_tools(&args, &ctx).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        let v: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["name"], "my_tool");
+    }
+
+    #[tokio::test]
+    async fn tools_schema_not_found() {
+        let registry = Arc::new(ToolRegistry::new());
+        let tool = make_tool("stoa_tools").with_registry(registry);
+        let ctx = make_ctx();
+        let args = json!({"action": "schema", "tool_name": "nonexistent"});
+        let result = tool.handle_tools(&args, &ctx).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        assert!(text.contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn tools_schema_missing_tool_name() {
+        let registry = Arc::new(ToolRegistry::new());
+        let tool = make_tool("stoa_tools").with_registry(registry);
+        let ctx = make_ctx();
+        let args = json!({"action": "schema"});
+        let result = tool.handle_tools(&args, &ctx).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        assert!(text.contains("Missing"));
+    }
+
+    #[tokio::test]
+    async fn tools_search_action() {
+        let registry = Arc::new(ToolRegistry::new());
+        registry.register(Arc::new(make_tool("catalog_tool")));
+        registry.register(Arc::new(make_tool("platform_tool")));
+
+        let tool = make_tool("stoa_tools").with_registry(registry);
+        let ctx = make_ctx();
+        let args = json!({"action": "search", "query": "catalog"});
+        let result = tool.handle_tools(&args, &ctx).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        let v: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["count"], 1);
+    }
+
+    #[tokio::test]
+    async fn tools_no_registry_returns_message() {
+        let tool = make_tool("stoa_tools"); // no registry
+        let ctx = make_ctx();
+        let args = json!({"action": "list"});
+        let result = tool.handle_tools(&args, &ctx).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        assert!(text.contains("not available"));
+    }
+
+    #[tokio::test]
+    async fn tools_unknown_action() {
+        let registry = Arc::new(ToolRegistry::new());
+        let tool = make_tool("stoa_tools").with_registry(registry);
+        let ctx = make_ctx();
+        let args = json!({"action": "delete"});
+        let result = tool.handle_tools(&args, &ctx).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        assert!(text.contains("Unknown action"));
+    }
+
+    // ─── Stub handlers ────────────────────────────────────────
+
+    #[tokio::test]
+    async fn metrics_stub_returns_coming_soon() {
+        let tool = make_tool("stoa_metrics");
+        let args = json!({"action": "usage"});
+        let result = tool.handle_metrics_stub(&args).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        let v: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["status"], "coming_soon");
+        assert_eq!(v["action"], "usage");
+        assert_eq!(v["placeholder"], true);
+    }
+
+    #[tokio::test]
+    async fn logs_stub_returns_coming_soon() {
+        let tool = make_tool("stoa_logs");
+        let args = json!({"action": "search"});
+        let result = tool.handle_logs_stub(&args).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        let v: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["status"], "coming_soon");
+    }
+
+    #[tokio::test]
+    async fn alerts_stub_returns_coming_soon() {
+        let tool = make_tool("stoa_alerts");
+        let args = json!({"action": "list"});
+        let result = tool.handle_alerts_stub(&args).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        let v: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["status"], "coming_soon");
+        assert!(v["alerts"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn uac_stub_returns_coming_soon() {
+        let tool = make_tool("stoa_uac");
+        let args = json!({"action": "list"});
+        let result = tool.handle_uac_stub(&args).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        let v: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["status"], "coming_soon");
+    }
+
+    #[tokio::test]
+    async fn security_stub_returns_coming_soon() {
+        let tool = make_tool("stoa_security");
+        let args = json!({"action": "audit_log"});
+        let result = tool.handle_security_stub(&args).await.unwrap();
+
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        let v: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["status"], "coming_soon");
+        assert_eq!(v["action"], "audit_log");
+    }
+
+    // ─── execute routing ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn execute_routes_to_platform_info() {
+        let tool = make_tool("stoa_platform_info");
+        let ctx = make_ctx();
+        let result = tool.execute(json!({}), &ctx).await.unwrap();
+        let text = match &result.content[0] {
+            crate::mcp::tools::ToolContent::Text { text } => text,
+            _ => panic!("expected text content"),
+        };
+        assert!(text.contains("STOA"));
+    }
+
+    #[tokio::test]
+    async fn execute_unknown_tool_returns_error() {
+        let tool = make_tool("unknown_xyz");
+        let ctx = make_ctx();
+        let result = tool.execute(json!({}), &ctx).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Unknown native tool"));
+    }
+
+    // ─── Tool trait methods ───────────────────────────────────
+
+    #[test]
+    fn trait_name_description() {
+        let tool = make_tool("stoa_catalog");
+        assert_eq!(tool.name(), "stoa_catalog");
+        assert_eq!(tool.description(), "test tool");
+    }
+
+    #[test]
+    fn trait_required_action() {
+        let tool = make_tool("test");
+        assert_eq!(tool.required_action(), Action::Read);
+    }
+
+    #[test]
+    fn output_schema_none_by_default() {
+        let tool = make_tool("test");
+        assert!(tool.output_schema().is_none());
+    }
+
+    #[test]
+    fn output_schema_set_with_builder() {
+        let tool = make_tool("test").with_output_schema(json!({"type": "object"}));
+        assert!(tool.output_schema().is_some());
+    }
+
+    // ─── create_http_client ───────────────────────────────────
+
+    #[test]
+    fn create_http_client_succeeds() {
+        let _client = create_http_client();
+        // Just ensure it doesn't panic
+    }
+
+    // ─── cp_base_url trailing slash ───────────────────────────
+
+    #[test]
+    fn base_url_strips_trailing_slash() {
+        let tool = NativeTool::new(
+            "test",
+            "test",
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties: Default::default(),
+                required: vec![],
+            },
+            Action::Read,
+            Client::new(),
+            "http://localhost:8000/",
+        );
+        assert_eq!(tool.cp_base_url, "http://localhost:8000");
+    }
+
+    // ================================================================
+    // PR2: Wiremock-based HTTP tests
+    // ================================================================
+
+    mod http {
+        use super::*;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        async fn make_mock_tool(mock: &MockServer, name: &str) -> NativeTool {
+            NativeTool::new(
+                name,
+                "test tool",
+                ToolSchema {
+                    schema_type: "object".to_string(),
+                    properties: Default::default(),
+                    required: vec![],
+                },
+                Action::Read,
+                Client::new(),
+                &mock.uri(),
+            )
+        }
+
+        // ─── GET / POST / DELETE helpers ───────────────────────────
+
+        #[tokio::test]
+        async fn get_success() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/test"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let result = tool.get("/v1/test", &ctx).await.unwrap();
+            assert_eq!(result["ok"], true);
+        }
+
+        #[tokio::test]
+        async fn get_error_status() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/fail"))
+                .respond_with(ResponseTemplate::new(404).set_body_string("not found"))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let err = tool.get("/v1/fail", &ctx).await.unwrap_err();
+            assert!(err.to_string().contains("404"));
+        }
+
+        #[tokio::test]
+        async fn post_success() {
+            let mock = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/v1/create"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id": "new-1"})))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let body = json!({"name": "test"});
+            let result = tool.post("/v1/create", &body, &ctx).await.unwrap();
+            assert_eq!(result["id"], "new-1");
+        }
+
+        #[tokio::test]
+        async fn post_error_status() {
+            let mock = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/v1/create"))
+                .respond_with(ResponseTemplate::new(400).set_body_string("bad request"))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let err = tool.post("/v1/create", &json!({}), &ctx).await.unwrap_err();
+            assert!(err.to_string().contains("400"));
+        }
+
+        #[tokio::test]
+        async fn delete_success_with_body() {
+            let mock = MockServer::start().await;
+            Mock::given(method("DELETE"))
+                .and(path("/v1/items/1"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({"deleted": true})))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let result = tool.delete("/v1/items/1", &ctx).await.unwrap();
+            assert_eq!(result["deleted"], true);
+        }
+
+        #[tokio::test]
+        async fn delete_success_empty_body() {
+            let mock = MockServer::start().await;
+            Mock::given(method("DELETE"))
+                .and(path("/v1/items/2"))
+                .respond_with(ResponseTemplate::new(200))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let result = tool.delete("/v1/items/2", &ctx).await.unwrap();
+            assert_eq!(result["status"], "deleted");
+        }
+
+        // ─── handle_tenants ────────────────────────────────────────
+
+        #[tokio::test]
+        async fn tenants_success() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/tenants"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "tenants": [{"id": "t1", "name": "Acme"}]
+                })))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "stoa_tenants").await;
+            let ctx = make_ctx();
+            let result = tool.handle_tenants(&ctx).await.unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            let v: Value = serde_json::from_str(text).unwrap();
+            assert_eq!(v["tenants"][0]["id"], "t1");
+        }
+
+        #[tokio::test]
+        async fn tenants_error() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/tenants"))
+                .respond_with(ResponseTemplate::new(403).set_body_string("forbidden"))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "stoa_tenants").await;
+            let ctx = make_ctx();
+            let err = tool.handle_tenants(&ctx).await.unwrap_err();
+            assert!(err.to_string().contains("403"));
+        }
+
+        // ─── handle_catalog ────────────────────────────────────────
+
+        #[tokio::test]
+        async fn catalog_list() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/portal/apis"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "apis": [{"id": "api1", "name": "My API"}]
+                })))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "stoa_catalog").await;
+            let ctx = make_ctx();
+            let result = tool
+                .handle_catalog(&json!({"action": "list"}), &ctx)
+                .await
+                .unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            let v: Value = serde_json::from_str(text).unwrap();
+            assert!(v["apis"].is_array());
+        }
+
+        #[tokio::test]
+        async fn catalog_get() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/portal/apis/api1"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "id": "api1", "name": "My API"
+                })))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "stoa_catalog").await;
+            let ctx = make_ctx();
+            let result = tool
+                .handle_catalog(&json!({"action": "get", "api_id": "api1"}), &ctx)
+                .await
+                .unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            let v: Value = serde_json::from_str(text).unwrap();
+            assert_eq!(v["id"], "api1");
+        }
+
+        #[tokio::test]
+        async fn catalog_search() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/portal/apis"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "apis": [{"id": "payments", "name": "Payments"}]
+                })))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "stoa_catalog").await;
+            let ctx = make_ctx();
+            let result = tool
+                .handle_catalog(&json!({"action": "search", "query": "pay"}), &ctx)
+                .await
+                .unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            assert!(text.contains("payments") || text.contains("Payments"));
+        }
+
+        // ─── handle_subscription ───────────────────────────────────
+
+        #[tokio::test]
+        async fn subscription_list() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/mcp/subscriptions"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "subscriptions": [{"id": "sub-1"}]
+                })))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "stoa_subscription").await;
+            let ctx = make_ctx();
+            let result = tool
+                .handle_subscription(&json!({"action": "list"}), &ctx)
+                .await
+                .unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            let v: Value = serde_json::from_str(text).unwrap();
+            assert!(v["subscriptions"].is_array());
+        }
+
+        #[tokio::test]
+        async fn subscription_create() {
+            let mock = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/v1/mcp/subscriptions"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "id": "sub-new", "status": "pending"
+                })))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "stoa_subscription").await;
+            let ctx = make_ctx();
+            let result = tool
+                .handle_subscription(
+                    &json!({"action": "create", "api_id": "api1", "plan": "free"}),
+                    &ctx,
+                )
+                .await
+                .unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            let v: Value = serde_json::from_str(text).unwrap();
+            assert_eq!(v["status"], "pending");
+        }
+
+        #[tokio::test]
+        async fn subscription_error() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/mcp/subscriptions"))
+                .respond_with(ResponseTemplate::new(500).set_body_string("server error"))
+                .mount(&mock)
+                .await;
+
+            let tool = make_mock_tool(&mock, "stoa_subscription").await;
+            let ctx = make_ctx();
+            let err = tool
+                .handle_subscription(&json!({"action": "list"}), &ctx)
+                .await
+                .unwrap_err();
+            assert!(err.to_string().contains("500"));
+        }
+    }
+}

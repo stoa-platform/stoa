@@ -7,7 +7,6 @@
 //!   2. Try `GET /v1/mcp/tools` on Control Plane → dynamic registration for unknown tools
 //!   3. Background task refreshes every 60s from CP (only registers non-native tools)
 
-use reqwest::Client;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -181,29 +180,11 @@ pub fn start_tool_refresh_task(
     });
 }
 
-/// Register native tools only (used as fallback when CP is unreachable at startup).
-///
-/// This is the new default behavior: native tools call CP API directly,
-/// bypassing the Python mcp-gateway entirely.
-#[allow(dead_code)]
-pub fn register_native_tools_only(
-    registry: &ToolRegistry,
-    http_client: Client,
-    cp_base_url: &str,
-    registry_ref: Arc<ToolRegistry>,
-) {
-    register_native_tools(registry, http_client, cp_base_url, registry_ref);
-    tracing::info!(
-        tool_count = registry.count(),
-        "Native STOA tools registered (Phase 1: no Python dependency)"
-    );
-}
-
 // ─── Legacy Fallback (kept for compatibility) ─────────────────────
 
-/// Register the 12 STOA tools with ProxyTool (legacy behavior).
-/// DEPRECATED: Use register_native_tools_only() instead.
-#[allow(dead_code)]
+/// Register the 12 STOA tools with ProxyTool (legacy fallback).
+///
+/// Used when `STOA_NATIVE_TOOLS_ENABLED=false` to proxy through Python mcp-gateway.
 pub fn register_static_tools(registry: &ToolRegistry, cp: Arc<ToolProxyClient>) {
     use serde_json::json;
 
@@ -432,4 +413,106 @@ pub fn register_static_tools(registry: &ToolRegistry, cp: Arc<ToolProxyClient>) 
         tool_count = registry.count(),
         "Static STOA tools registered (LEGACY: proxy mode)"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::control_plane::tool_proxy::{RemoteToolDef, RemoteToolSchema};
+    use crate::mcp::tools::ToolRegistry;
+    use std::sync::Arc;
+
+    // ─── infer_action ──────────────────────────────────────────
+
+    #[test]
+    fn infer_action_security() {
+        assert_eq!(infer_action("stoa_security"), Action::ViewAudit);
+        assert_eq!(infer_action("audit_log"), Action::ViewAudit);
+    }
+
+    #[test]
+    fn infer_action_logs() {
+        assert_eq!(infer_action("stoa_logs"), Action::ViewLogs);
+    }
+
+    #[test]
+    fn infer_action_metrics() {
+        assert_eq!(infer_action("stoa_metrics"), Action::ViewMetrics);
+    }
+
+    #[test]
+    fn infer_action_create() {
+        assert_eq!(infer_action("create_api"), Action::Create);
+    }
+
+    #[test]
+    fn infer_action_update() {
+        assert_eq!(infer_action("update_policy"), Action::Update);
+    }
+
+    #[test]
+    fn infer_action_delete() {
+        assert_eq!(infer_action("delete_subscription"), Action::Delete);
+    }
+
+    #[test]
+    fn infer_action_default_read() {
+        assert_eq!(infer_action("stoa_catalog"), Action::Read);
+        assert_eq!(infer_action("unknown_tool"), Action::Read);
+    }
+
+    // ─── register_remote_tool ──────────────────────────────────
+
+    fn make_remote_def(name: &str) -> RemoteToolDef {
+        RemoteToolDef {
+            name: name.to_string(),
+            description: format!("Remote {}", name),
+            input_schema: RemoteToolSchema {
+                schema_type: "object".to_string(),
+                properties: Default::default(),
+                required: vec![],
+            },
+        }
+    }
+
+    #[test]
+    fn register_remote_tool_skips_native() {
+        let registry = ToolRegistry::new();
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "http://localhost:8000",
+            None,
+        ));
+        let def = make_remote_def("stoa_catalog"); // native tool
+        register_remote_tool(&registry, &def, &cp);
+        assert_eq!(registry.count(), 0); // should NOT register
+    }
+
+    #[test]
+    fn register_remote_tool_registers_non_native() {
+        let registry = ToolRegistry::new();
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "http://localhost:8000",
+            None,
+        ));
+        let def = make_remote_def("custom_weather_api");
+        register_remote_tool(&registry, &def, &cp);
+        assert_eq!(registry.count(), 1);
+        assert!(registry.get("custom_weather_api").is_some());
+    }
+
+    #[test]
+    fn register_remote_tool_copies_schema() {
+        let registry = ToolRegistry::new();
+        let cp = Arc::new(crate::control_plane::ToolProxyClient::new(
+            "http://localhost:8000",
+            None,
+        ));
+        let mut def = make_remote_def("my_tool");
+        def.input_schema.required = vec!["action".to_string()];
+        register_remote_tool(&registry, &def, &cp);
+
+        let tool = registry.get("my_tool").unwrap();
+        let schema = tool.input_schema();
+        assert_eq!(schema.required, vec!["action".to_string()]);
+    }
 }

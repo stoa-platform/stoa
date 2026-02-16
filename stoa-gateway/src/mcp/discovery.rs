@@ -150,4 +150,92 @@ mod tests {
     fn test_protocol_version() {
         assert_eq!(MCP_PROTOCOL_VERSION, "2025-03-26");
     }
+
+    #[test]
+    fn test_discovery_response_serialization() {
+        let resp = DiscoveryResponse {
+            server: ServerInfo {
+                name: "STOA Gateway".to_string(),
+                version: "0.1.0".to_string(),
+                protocol_version: MCP_PROTOCOL_VERSION.to_string(),
+            },
+            endpoints: EndpointInfo {
+                sse: "/mcp/sse".to_string(),
+                tools_list: "/mcp/tools/list".to_string(),
+                tools_call: "/mcp/tools/call".to_string(),
+                capabilities: "/mcp/capabilities".to_string(),
+            },
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["server"]["protocolVersion"], "2025-03-26");
+        assert_eq!(json["endpoints"]["sse"], "/mcp/sse");
+        assert_eq!(json["endpoints"]["tools_list"], "/mcp/tools/list");
+        assert_eq!(json["endpoints"]["tools_call"], "/mcp/tools/call");
+        assert_eq!(json["endpoints"]["capabilities"], "/mcp/capabilities");
+    }
+
+    #[test]
+    fn test_capabilities_response_serialization() {
+        let resp = CapabilitiesResponse {
+            protocol_version: MCP_PROTOCOL_VERSION.to_string(),
+            capabilities: Capabilities {
+                tools: ToolsCapability {
+                    list_changed: false,
+                },
+                resources: ResourcesCapability {
+                    subscribe: false,
+                    list_changed: false,
+                },
+                prompts: PromptsCapability {
+                    list_changed: false,
+                },
+                logging: LoggingCapability {},
+            },
+            server_info: ServerInfo {
+                name: "STOA Gateway".to_string(),
+                version: "0.1.0".to_string(),
+                protocol_version: MCP_PROTOCOL_VERSION.to_string(),
+            },
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["protocolVersion"], "2025-03-26");
+        assert_eq!(json["capabilities"]["tools"]["listChanged"], false);
+        assert_eq!(json["capabilities"]["resources"]["subscribe"], false);
+        assert_eq!(json["serverInfo"]["name"], "STOA Gateway");
+    }
+
+    #[test]
+    fn test_server_info_rename_fields() {
+        let info = ServerInfo {
+            name: "test".to_string(),
+            version: "1.0".to_string(),
+            protocol_version: "2025-03-26".to_string(),
+        };
+        let json = serde_json::to_value(&info).unwrap();
+        // protocolVersion is camelCase via #[serde(rename)]
+        assert!(json.get("protocolVersion").is_some());
+        assert!(json.get("protocol_version").is_none());
+    }
+
+    #[test]
+    fn test_capabilities_rename_fields() {
+        let cap = ToolsCapability { list_changed: true };
+        let json = serde_json::to_value(&cap).unwrap();
+        assert!(json.get("listChanged").is_some());
+        assert!(json.get("list_changed").is_none());
+    }
+
+    #[test]
+    fn test_endpoint_info_all_fields() {
+        let endpoints = EndpointInfo {
+            sse: "/a".to_string(),
+            tools_list: "/b".to_string(),
+            tools_call: "/c".to_string(),
+            capabilities: "/d".to_string(),
+        };
+        let json = serde_json::to_value(&endpoints).unwrap();
+        assert_eq!(json.as_object().unwrap().len(), 4);
+    }
 }

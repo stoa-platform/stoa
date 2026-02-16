@@ -11,7 +11,6 @@
 
 mod spans;
 
-#[allow(unused_imports)]
 pub use spans::{ToolSpan, ToolSpanGuard};
 
 use std::sync::OnceLock;

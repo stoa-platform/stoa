@@ -26,7 +26,6 @@
 
 mod token;
 
-#[allow(unused_imports)]
 pub use token::OptimizationLevel;
 pub use token::{OptimizationSettings, TokenOptimizer};
 

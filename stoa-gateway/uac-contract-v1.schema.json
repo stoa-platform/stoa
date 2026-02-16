@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gostoa.dev/schemas/uac-contract-v1.json",
+  "title": "UAC Contract v1",
+  "description": "Universal API Contract specification. Define Once, Expose Everywhere.",
+  "type": "object",
+  "required": ["name", "version", "tenant_id", "classification", "endpoints", "status"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+      "description": "Unique contract name within tenant (kebab-case)"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version (e.g. 1.0.0)"
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Owning tenant identifier"
+    },
+    "display_name": {
+      "type": ["string", "null"],
+      "maxLength": 255,
+      "description": "Human-readable display name"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "Contract description"
+    },
+    "classification": {
+      "$ref": "#/$defs/Classification",
+      "description": "ICT risk classification (DORA-aligned)"
+    },
+    "endpoints": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/UacEndpoint" },
+      "minItems": 1,
+      "description": "API endpoints exposed by this contract"
+    },
+    "required_policies": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Policies derived from classification (auto-populated)"
+    },
+    "status": {
+      "$ref": "#/$defs/ContractStatus"
+    },
+    "source_spec_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "URL of the source OpenAPI spec"
+    },
+    "spec_hash": {
+      "type": ["string", "null"],
+      "description": "SHA-256 hash of the source spec for drift detection"
+    }
+  },
+  "$defs": {
+    "Classification": {
+      "type": "string",
+      "enum": ["H", "VH", "VVH"],
+      "description": "H=High (standard), VH=Very High (sensitive), VVH=Very Very High (critical)"
+    },
+    "ContractStatus": {
+      "type": "string",
+      "enum": ["draft", "published", "deprecated"]
+    },
+    "UacEndpoint": {
+      "type": "object",
+      "required": ["path", "methods", "backend_url"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "URL path pattern (e.g. /payments/{id})"
+        },
+        "methods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+          },
+          "minItems": 1,
+          "description": "Allowed HTTP methods"
+        },
+        "backend_url": {
+          "type": "string",
+          "description": "Backend URL to proxy requests to"
+        },
+        "operation_id": {
+          "type": ["string", "null"],
+          "description": "OpenAPI operationId (used for MCP tool naming)"
+        },
+        "input_schema": {
+          "description": "JSON Schema for request body validation"
+        },
+        "output_schema": {
+          "description": "JSON Schema for response body"
+        }
+      }
+    }
+  }
+}

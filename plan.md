@@ -46,7 +46,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) | **Done**: 266 pts (78%) | **Velocity**: 37 issues closed
+**Scope**: 339 pts (active) | **Done**: 279 pts (82%) | **Velocity**: 38 issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
@@ -89,6 +89,7 @@
   - [x] CAB-1355: [UI] Console Deployment Dashboard (8 pts) — PR #573
   - [x] CAB-1356: [CLI] stoactl deploy commands (5 pts) — stoactl PR #7
   - [x] CAB-1357: [E2E] Deployment Lifecycle BDD tests (3 pts) — PR #574
+- [x] CAB-1297: [MEGA] DX: Developer Experience (13 pts) — PR #577 (5 READMEs, 4 .env.example, DEVELOPMENT.md, Makefile, Helm chart README)
 
 ### In Progress
 
@@ -141,7 +142,7 @@
 ### Backlog — Council-Validated MEGAs (2026-02-16)
 
 - [x] CAB-1289: [MEGA] Gateway Test Coverage & Quality — 27 Untested Modules (34 pts, P3) — PR #566 (Council 8.75/10)
-- [ ] CAB-1297: [MEGA] DX: Developer Experience — READMEs, .env.example, Onboarding (13 pts, P3) — Council 8.50/10
+- [x] CAB-1297: [MEGA] DX: Developer Experience — READMEs, .env.example, Onboarding (13 pts, P3) — PR #577 (Council 8.50/10)
 - [x] CAB-1291: [MEGA] Platform: API Test Coverage & Quality — 44 Untested Modules (34 pts, P3) — PR #576 (Council 8.00/10)
 - [ ] CAB-1294: [MEGA] DX: Portal Test Coverage & UX Completion — 26 Untested Modules (21 pts, P3) — Council 8.00/10
 - [ ] CAB-1290: [MEGA] Gateway: Live-Code Feature Completion — MCP Protocol + Observability (13 pts, P3) — Council 7.75/10

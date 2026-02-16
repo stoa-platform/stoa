@@ -216,6 +216,50 @@ class StoaGatewayAdapter(GatewayAdapterInterface):
     async def list_applications(self, auth_token: str | None = None) -> list[dict]:
         return []
 
+    # --- UAC Contracts (CAB-1299) ---
+
+    async def deploy_contract(self, contract_spec: dict, auth_token: str | None = None) -> AdapterResult:
+        """Deploy a UAC contract to the gateway.
+
+        Posts the full contract spec to /admin/contracts. The gateway
+        generates REST routes and MCP tools from the contract endpoints.
+        """
+        try:
+            payload = mappers.map_uac_to_stoa_contract(contract_spec)
+            resp = await self._client.post("/admin/contracts", json=payload)
+
+            if resp.status_code in (200, 201):
+                data = resp.json()
+                return AdapterResult(
+                    success=True,
+                    resource_id=data.get("name", payload.get("name", "")),
+                    data=data,
+                )
+            return AdapterResult(
+                success=False,
+                error=f"deploy_contract failed: HTTP {resp.status_code} — {resp.text}",
+            )
+        except Exception as e:
+            return AdapterResult(success=False, error=str(e))
+
+    async def delete_contract(self, contract_name: str, auth_token: str | None = None) -> AdapterResult:
+        """Delete a UAC contract from the gateway.
+
+        Deletes the contract and cascades removal of generated routes and tools.
+        """
+        try:
+            resp = await self._client.delete(f"/admin/contracts/{contract_name}")
+            if resp.status_code in (200, 204):
+                return AdapterResult(success=True, resource_id=contract_name)
+            if resp.status_code == 404:
+                return AdapterResult(success=True, resource_id=contract_name)
+            return AdapterResult(
+                success=False,
+                error=f"delete_contract failed: HTTP {resp.status_code}",
+            )
+        except Exception as e:
+            return AdapterResult(success=False, error=str(e))
+
     # --- Auth / OIDC (not supported by stoa-gateway) ---
 
     async def upsert_auth_server(self, auth_spec: dict, auth_token: str | None = None) -> AdapterResult:

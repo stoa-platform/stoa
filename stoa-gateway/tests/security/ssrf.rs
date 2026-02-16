@@ -80,6 +80,8 @@ fn build_router_with_ssrf_route(backend_url: &str) -> (axum::Router, AppState) {
         methods: vec![],
         spec_hash: "abc".to_string(),
         activated: true,
+        classification: None,
+        contract_key: None,
     });
     let router = stoa_gateway::build_router(state.clone());
     (router, state)

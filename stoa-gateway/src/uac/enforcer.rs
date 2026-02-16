@@ -8,8 +8,6 @@
 //! 3. Policy version is logged for audit trail
 //! 4. Safe mode fallback when policies unavailable
 
-#![allow(dead_code)] // Infrastructure for UAC enforcement, wired incrementally
-
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -166,7 +164,7 @@ impl EnforcementDecision {
 /// UAC (Unified Access Control) Enforcer.
 ///
 /// Enforces policies based on classification and validates requirements.
-pub struct UacEnforcer {
+pub struct ClassificationEnforcer {
     /// Policy cache with version checking
     cache: Arc<VersionedPolicyCache>,
 
@@ -174,7 +172,7 @@ pub struct UacEnforcer {
     safe_mode: SafeModeConfig,
 }
 
-impl UacEnforcer {
+impl ClassificationEnforcer {
     /// Create a new enforcer with the given cache.
     pub fn new(cache: Arc<VersionedPolicyCache>) -> Self {
         Self {
@@ -306,10 +304,10 @@ impl UacEnforcer {
 mod tests {
     use super::*;
 
-    fn make_enforcer() -> UacEnforcer {
+    fn make_enforcer() -> ClassificationEnforcer {
         let cache = Arc::new(VersionedPolicyCache::new(3600));
         cache.set_version("test-version-123".to_string());
-        UacEnforcer::new(cache)
+        ClassificationEnforcer::new(cache)
     }
 
     fn make_context() -> EnforcementContext {
@@ -411,7 +409,7 @@ mod tests {
         let cache = Arc::new(VersionedPolicyCache::new(3600));
         // Don't set version - simulates unavailable policy service
 
-        let enforcer = UacEnforcer::new(cache).with_safe_mode(SafeModeConfig {
+        let enforcer = ClassificationEnforcer::new(cache).with_safe_mode(SafeModeConfig {
             mode: SafeMode::DenyAll,
             ..Default::default()
         });
@@ -429,7 +427,7 @@ mod tests {
         let cache = Arc::new(VersionedPolicyCache::new(3600));
         // Don't set version
 
-        let enforcer = UacEnforcer::new(cache).with_safe_mode(SafeModeConfig {
+        let enforcer = ClassificationEnforcer::new(cache).with_safe_mode(SafeModeConfig {
             mode: SafeMode::ForceReview,
             ..Default::default()
         });

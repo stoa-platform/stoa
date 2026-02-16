@@ -238,7 +238,63 @@ Add `needs-split` label removal if it was present:
 linear.update_issue(parentId, removeLabelIds: ["768f96b2-69f0-4ed3-83de-538f657dd001"])
 ```
 
-## Step 9: Report to User
+## Step 9: Initialize Claim File
+
+After creating sub-issues (Steps 5-6) and updating the parent (Step 8), generate the claim file for multi-instance coordination:
+
+Create `.claude/claims/<parent-id>.json`:
+
+```json
+{
+  "mega": "<parent-id>",
+  "title": "<parent title>",
+  "created": "<ISO-timestamp>",
+  "phases": [
+    {
+      "id": 1,
+      "name": "<phase name from DAG, e.g. 'API + Gateway (parallel)'>",
+      "tickets": ["<CAB-AAAA>", "<CAB-BBBB>"],
+      "owner": null,
+      "claimed_at": null,
+      "branch": null,
+      "mode": "parallel",
+      "deps": [],
+      "completed_at": null
+    },
+    {
+      "id": 2,
+      "name": "<phase name, e.g. 'Console + Portal (parallel)'>",
+      "tickets": ["<CAB-DDDD>", "<CAB-EEEE>"],
+      "owner": null,
+      "claimed_at": null,
+      "branch": null,
+      "mode": "parallel",
+      "deps": [1],
+      "completed_at": null
+    },
+    {
+      "id": 3,
+      "name": "<phase name, e.g. 'E2E Integration Tests'>",
+      "tickets": ["<CAB-FFFF>"],
+      "owner": null,
+      "claimed_at": null,
+      "branch": null,
+      "mode": "sequential",
+      "deps": [1, 2],
+      "completed_at": null
+    }
+  ]
+}
+```
+
+**Rules**:
+- One phase per DAG level (Phase 1 = all items with no deps, Phase 2 = depends on Phase 1, etc.)
+- `mode` is `parallel` if multiple tickets in the phase, `sequential` if single ticket
+- `deps` references phase IDs (not ticket IDs)
+- All fields start as `null` — instances claim phases via `session-startup.md` Step 2
+- See `phase-ownership.md` for full claim lifecycle and schemas
+
+## Step 10: Report to User
 
 ```
 Decomposition Complete: CAB-XXXX — <Feature Name>
@@ -259,11 +315,13 @@ Speedup: 2x (3 phases instead of 6 sequential sessions)
 Max concurrent agents: 3
 
 Parent ticket CAB-XXXX updated with decomposition comment.
+Claim file: `.claude/claims/CAB-XXXX.json` — ready for multi-instance coordination.
 
 Next steps:
   1. "go phase 1" → start all Phase 1 sub-issues
   2. Pick a specific sub-issue: "go CAB-AAAA"
-  3. Adjust: "move [docs] to Phase 2" or "merge [portal] and [cp-ui]"
+  3. Open N terminals → each claims a different phase automatically (see phase-ownership.md)
+  4. Adjust: "move [docs] to Phase 2" or "merge [portal] and [cp-ui]"
 ```
 
 ## Rules

@@ -386,3 +386,76 @@ impl UacEnforcer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_disabled_enforcer() -> UacEnforcer {
+        let engine = PolicyEngine::new(PolicyEngineConfig {
+            enabled: false,
+            ..PolicyEngineConfig::default()
+        })
+        .expect("disabled engine");
+        UacEnforcer::new(Arc::new(engine))
+    }
+
+    fn make_enabled_enforcer() -> UacEnforcer {
+        let engine = PolicyEngine::new(PolicyEngineConfig {
+            enabled: true,
+            ..PolicyEngineConfig::default()
+        })
+        .expect("enabled engine");
+        UacEnforcer::new(Arc::new(engine))
+    }
+
+    #[test]
+    fn disabled_enforcer_constructs() {
+        let enforcer = make_disabled_enforcer();
+        let _engine = enforcer.policy_engine();
+    }
+
+    #[test]
+    fn enabled_enforcer_constructs() {
+        let enforcer = make_enabled_enforcer();
+        let _engine = enforcer.policy_engine();
+    }
+
+    #[test]
+    fn disabled_engine_allows_read() {
+        let enforcer = make_disabled_enforcer();
+        let result = enforcer.check_with_context(
+            Some("user-1".into()), None, "tenant-1", "stoa_catalog",
+            Action::Read, vec!["stoa:read".into()], vec!["viewer".into()],
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn disabled_engine_allows_admin() {
+        let enforcer = make_disabled_enforcer();
+        let result = enforcer.check_with_context(
+            Some("admin".into()), Some("admin@test.com".into()), "tenant-1", "stoa_security",
+            Action::ManagePolicies, vec!["stoa:admin".into()], vec!["cpi-admin".into()],
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn disabled_engine_allows_write() {
+        let enforcer = make_disabled_enforcer();
+        let result = enforcer.check_with_context(
+            None, None, "tenant-1", "stoa_subscription",
+            Action::Create, vec![], vec![],
+        );
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn legacy_check_disabled_engine_allows() {
+        let enforcer = make_disabled_enforcer();
+        let result = enforcer.check("tenant-1", Action::Read).await;
+        assert!(result.is_ok());
+    }
+}
+

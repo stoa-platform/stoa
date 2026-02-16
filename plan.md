@@ -115,6 +115,21 @@
 - CAB-1127: [Comm] Dual-Track Content — Demo Client + Communaute Landing Page (5 pts, P2)
 - CAB-1163: ADR-043 — Strategic Positioning: Meta-Gateway for Agentic Infra (5 pts, P4)
 
+### Backlog — Council-Validated MEGAs (2026-02-16)
+
+- [ ] CAB-1289: [MEGA] Gateway Test Coverage & Quality — 27 Untested Modules (34 pts, P3) — Council 8.75/10
+- [ ] CAB-1297: [MEGA] DX: Developer Experience — READMEs, .env.example, Onboarding (13 pts, P3) — Council 8.50/10
+- [ ] CAB-1291: [MEGA] Platform: API Test Coverage & Quality — 44 Untested Modules (34 pts, P3) — Council 8.00/10
+- [ ] CAB-1294: [MEGA] DX: Portal Test Coverage & UX Completion — 26 Untested Modules (21 pts, P3) — Council 8.00/10
+- [ ] CAB-1290: [MEGA] Gateway: Live-Code Feature Completion — MCP Protocol + Observability (13 pts, P3) — Council 7.75/10
+- [ ] CAB-1299: [MEGA] Roadmap: UAC Spec + Protocol Binders + Dynamic Routing (34 pts, P3) — Council 7.75/10
+- [ ] CAB-1292: [MEGA] Platform: API Auth Completion — KC Clients, IAM Sync, Security Fix (21 pts, P3) — Council 7.50/10
+- [ ] CAB-1295: [MEGA] DX: Console Test Coverage & UX Completion — 23 Untested Modules (21 pts, P3) — Council 7.50/10
+- [ ] CAB-1300: [MEGA] Platform: API Runtime Completion — Events, Deployments, Contracts, MCP RBAC (13 pts, P3) — Council 7.50/10
+- [ ] CAB-1293: [MEGA] Platform: K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts, P3) — Council 7.25/10
+- [ ] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts, P3) — Council 7.25/10
+- ~~CAB-1296: [MEGA] DX: E2E Test Expansion — Canceled (Council 5.50/10, fictional scope)~~
+
 ### Backlog — Long-term (parked in cycle, not committed)
 
 - CAB-1181: [Docs] Interactive React Diagrams in Docusaurus (5 pts, P2)

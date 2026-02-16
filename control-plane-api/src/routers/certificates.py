@@ -17,8 +17,10 @@ from pydantic import BaseModel, Field
 try:
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.primitives.serialization import Encoding  # noqa: F401
-    from cryptography.x509.oid import NameOID  # noqa: F401
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,  # noqa: F401 — TYPE_CHECKING import for type hints
+    )
+    from cryptography.x509.oid import NameOID  # noqa: F401 — TYPE_CHECKING import for type hints
 
     CRYPTOGRAPHY_AVAILABLE = True
 except ImportError:

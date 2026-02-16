@@ -180,7 +180,6 @@ pub fn start_tool_refresh_task(
     });
 }
 
-
 // ─── Legacy Fallback (kept for compatibility) ─────────────────────
 
 /// Register the 12 STOA tools with ProxyTool (legacy fallback).

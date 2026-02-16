@@ -224,8 +224,6 @@ pub static UPSTREAM_LATENCY: Lazy<HistogramVec> = Lazy::new(|| {
 
 // === Helper Functions ===
 
-
-
 /// Record a tool call with timing and optional trace_id exemplar.
 ///
 /// When OTel tracing is active, the histogram observation includes

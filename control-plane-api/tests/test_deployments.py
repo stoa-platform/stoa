@@ -11,7 +11,7 @@ def _mock_deployment(**overrides):
     """Create a mock Deployment object with sensible defaults."""
     defaults = {
         "id": uuid4(),
-        "tenant_id": "oasis",
+        "tenant_id": "acme",
         "api_id": "petstore",
         "api_name": "Petstore API",
         "environment": "dev",
@@ -49,7 +49,7 @@ class TestListDeployments:
     async def test_list_empty(self, client_as_tenant_admin):
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.list_deployments = AsyncMock(return_value=([], 0))
-            resp = client_as_tenant_admin.get("/v1/tenants/oasis/deployments")
+            resp = client_as_tenant_admin.get("/v1/tenants/acme/deployments")
         assert resp.status_code == 200
         body = resp.json()
         assert body["items"] == []
@@ -60,7 +60,7 @@ class TestListDeployments:
         dep = _mock_deployment()
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.list_deployments = AsyncMock(return_value=([dep], 1))
-            resp = client_as_tenant_admin.get("/v1/tenants/oasis/deployments")
+            resp = client_as_tenant_admin.get("/v1/tenants/acme/deployments")
         assert resp.status_code == 200
         assert resp.json()["total"] == 1
 
@@ -69,7 +69,7 @@ class TestListDeployments:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.list_deployments = AsyncMock(return_value=([], 0))
             resp = client_as_tenant_admin.get(
-                "/v1/tenants/oasis/deployments?api_id=petstore"
+                "/v1/tenants/acme/deployments?api_id=petstore"
             )
         assert resp.status_code == 200
         MockSvc.return_value.list_deployments.assert_called_once()
@@ -79,7 +79,7 @@ class TestListDeployments:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.list_deployments = AsyncMock(return_value=([], 0))
             resp = client_as_tenant_admin.get(
-                "/v1/tenants/oasis/deployments?page=2&page_size=10"
+                "/v1/tenants/acme/deployments?page=2&page_size=10"
             )
         assert resp.status_code == 200
 
@@ -91,7 +91,7 @@ class TestGetDeployment:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.get_deployment = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.get(
-                f"/v1/tenants/oasis/deployments/{dep.id}"
+                f"/v1/tenants/acme/deployments/{dep.id}"
             )
         assert resp.status_code == 200
         assert resp.json()["api_id"] == "petstore"
@@ -101,7 +101,7 @@ class TestGetDeployment:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.get_deployment = AsyncMock(return_value=None)
             resp = client_as_tenant_admin.get(
-                f"/v1/tenants/oasis/deployments/{uuid4()}"
+                f"/v1/tenants/acme/deployments/{uuid4()}"
             )
         assert resp.status_code == 404
 
@@ -117,7 +117,7 @@ class TestCreateDeployment:
             mock_git.get_api = AsyncMock(return_value=None)
             MockSvc.return_value.create_deployment = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.post(
-                "/v1/tenants/oasis/deployments",
+                "/v1/tenants/acme/deployments",
                 json={"api_id": "petstore", "environment": "dev"},
             )
         assert resp.status_code == 201
@@ -135,7 +135,7 @@ class TestCreateDeployment:
             )
             MockSvc.return_value.create_deployment = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.post(
-                "/v1/tenants/oasis/deployments",
+                "/v1/tenants/acme/deployments",
                 json={"api_id": "petstore", "environment": "dev"},
             )
         assert resp.status_code == 201
@@ -150,7 +150,7 @@ class TestCreateDeployment:
             mock_git.get_api = AsyncMock(side_effect=Exception("git down"))
             MockSvc.return_value.create_deployment = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.post(
-                "/v1/tenants/oasis/deployments",
+                "/v1/tenants/acme/deployments",
                 json={"api_id": "petstore", "environment": "staging"},
             )
         assert resp.status_code == 201
@@ -163,7 +163,7 @@ class TestRollbackDeployment:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.rollback_deployment = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.post(
-                f"/v1/tenants/oasis/deployments/{uuid4()}/rollback",
+                f"/v1/tenants/acme/deployments/{uuid4()}/rollback",
                 json={"target_version": "0.9.0"},
             )
         assert resp.status_code == 201
@@ -174,7 +174,7 @@ class TestRollbackDeployment:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.rollback_deployment = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.post(
-                f"/v1/tenants/oasis/deployments/{uuid4()}/rollback",
+                f"/v1/tenants/acme/deployments/{uuid4()}/rollback",
                 json={},
             )
         assert resp.status_code == 201
@@ -186,7 +186,7 @@ class TestRollbackDeployment:
                 side_effect=ValueError("Deployment not found")
             )
             resp = client_as_tenant_admin.post(
-                f"/v1/tenants/oasis/deployments/{uuid4()}/rollback",
+                f"/v1/tenants/acme/deployments/{uuid4()}/rollback",
                 json={},
             )
         assert resp.status_code == 404
@@ -199,7 +199,7 @@ class TestUpdateStatus:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.update_status = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.patch(
-                f"/v1/tenants/oasis/deployments/{dep.id}/status",
+                f"/v1/tenants/acme/deployments/{dep.id}/status",
                 json={"status": "in_progress"},
             )
         assert resp.status_code == 200
@@ -210,7 +210,7 @@ class TestUpdateStatus:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.update_status = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.patch(
-                f"/v1/tenants/oasis/deployments/{dep.id}/status",
+                f"/v1/tenants/acme/deployments/{dep.id}/status",
                 json={"status": "success", "spec_hash": "abc123"},
             )
         assert resp.status_code == 200
@@ -221,7 +221,7 @@ class TestUpdateStatus:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.update_status = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.patch(
-                f"/v1/tenants/oasis/deployments/{dep.id}/status",
+                f"/v1/tenants/acme/deployments/{dep.id}/status",
                 json={"status": "failed", "error_message": "Pod crash"},
             )
         assert resp.status_code == 200
@@ -233,7 +233,7 @@ class TestUpdateStatus:
                 side_effect=ValueError("not found")
             )
             resp = client_as_tenant_admin.patch(
-                f"/v1/tenants/oasis/deployments/{uuid4()}/status",
+                f"/v1/tenants/acme/deployments/{uuid4()}/status",
                 json={"status": "success"},
             )
         assert resp.status_code == 404
@@ -246,7 +246,7 @@ class TestDeploymentLogs:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.get_deployment = AsyncMock(return_value=dep)
             resp = client_as_tenant_admin.get(
-                f"/v1/tenants/oasis/deployments/{dep.id}/logs"
+                f"/v1/tenants/acme/deployments/{dep.id}/logs"
             )
         assert resp.status_code == 200
         assert "logs" in resp.json()
@@ -256,7 +256,7 @@ class TestDeploymentLogs:
         with patch(SERVICE_PATH) as MockSvc:
             MockSvc.return_value.get_deployment = AsyncMock(return_value=None)
             resp = client_as_tenant_admin.get(
-                f"/v1/tenants/oasis/deployments/{uuid4()}/logs"
+                f"/v1/tenants/acme/deployments/{uuid4()}/logs"
             )
         assert resp.status_code == 404
 
@@ -270,7 +270,7 @@ class TestEnvironmentStatus:
                 return_value=([dep], True)
             )
             resp = client_as_tenant_admin.get(
-                "/v1/tenants/oasis/deployments/environments/dev/status"
+                "/v1/tenants/acme/deployments/environments/dev/status"
             )
         assert resp.status_code == 200
         body = resp.json()
@@ -283,7 +283,7 @@ class TestEnvironmentStatus:
                 return_value=([], True)
             )
             resp = client_as_tenant_admin.get(
-                "/v1/tenants/oasis/deployments/environments/staging/status"
+                "/v1/tenants/acme/deployments/environments/staging/status"
             )
         assert resp.status_code == 200
         assert resp.json()["deployments"] == []
@@ -303,7 +303,7 @@ class TestDeploymentServiceCreate:
         with (
             patch("src.services.deployment_service.DeploymentRepository") as MockRepo,
             patch("src.services.deployment_service.kafka_service") as mock_kafka,
-            patch("src.services.deployment_service.emit_deployment_started") as mock_emit,
+            patch("src.services.webhook_service.emit_deployment_started") as mock_emit,
         ):
             dep = _mock_deployment()
             MockRepo.return_value.create = AsyncMock(return_value=dep)
@@ -313,7 +313,7 @@ class TestDeploymentServiceCreate:
 
             svc = DeploymentService(mock_db)
             result = await svc.create_deployment(
-                "oasis", "petstore", "Petstore API", "dev",
+                "acme", "petstore", "Petstore API", "dev",
                 "1.0.0", "admin", "user-123",
             )
 
@@ -332,14 +332,14 @@ class TestDeploymentServiceUpdateStatus:
         dep = _mock_deployment(status="success")
         with (
             patch("src.services.deployment_service.DeploymentRepository") as MockRepo,
-            patch("src.services.deployment_service.emit_deployment_succeeded") as mock_emit,
+            patch("src.services.webhook_service.emit_deployment_succeeded") as mock_emit,
         ):
             MockRepo.return_value.get_by_id_and_tenant = AsyncMock(return_value=dep)
             MockRepo.return_value.update = AsyncMock(return_value=dep)
             mock_emit.return_value = None
 
             svc = DeploymentService(mock_db)
-            await svc.update_status("oasis", dep.id, "success")
+            await svc.update_status("acme", dep.id, "success")
             mock_emit.assert_called_once()
 
     @pytest.mark.asyncio
@@ -350,14 +350,14 @@ class TestDeploymentServiceUpdateStatus:
         dep = _mock_deployment(status="failed")
         with (
             patch("src.services.deployment_service.DeploymentRepository") as MockRepo,
-            patch("src.services.deployment_service.emit_deployment_failed") as mock_emit,
+            patch("src.services.webhook_service.emit_deployment_failed") as mock_emit,
         ):
             MockRepo.return_value.get_by_id_and_tenant = AsyncMock(return_value=dep)
             MockRepo.return_value.update = AsyncMock(return_value=dep)
             mock_emit.return_value = None
 
             svc = DeploymentService(mock_db)
-            await svc.update_status("oasis", dep.id, "failed", error_message="crash")
+            await svc.update_status("acme", dep.id, "failed", error_message="crash")
             mock_emit.assert_called_once()
 
 
@@ -380,7 +380,7 @@ class TestDeploymentServiceRollback:
 
             svc = DeploymentService(mock_db)
             result = await svc.rollback_deployment(
-                "oasis", original.id, "0.9.0", "admin", "user-123",
+                "acme", original.id, "0.9.0", "admin", "user-123",
             )
             assert result == rollback
 
@@ -395,5 +395,5 @@ class TestDeploymentServiceRollback:
             svc = DeploymentService(mock_db)
             with pytest.raises(ValueError, match="not found"):
                 await svc.rollback_deployment(
-                    "oasis", uuid4(), None, "admin", "user-123",
+                    "acme", uuid4(), None, "admin", "user-123",
                 )

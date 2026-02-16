@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-16 (session 16 — CAB-374 MEGA COMPLETE + CAB-1291 + CAB-1154)
+> Dernière MAJ: 2026-02-16 (session 17 — CAB-1297 DX Developer Experience)
 
 ## ✅ DONE
 
@@ -93,6 +93,7 @@
 - CAB-1184: Apigee Adapter P1 (5 pts) — PR #556 (8 methods, Google Cloud CRUD, 25 tests)
 - CAB-362: Circuit Breaker Retry (5 pts) — PR #558 (retry for 502/503, idempotent methods)
 - CAB-1149: Staging Freerun V1++ (13 pts) — meta-ticket, closed (5 sub-PRs merged)
+- CAB-1297: DX Developer Experience MEGA (13 pts) — PR #577 (5 READMEs, 4 .env.example, DEVELOPMENT.md, Makefile, Helm chart README)
 - CAB-1321: Portal ToS link fix + viewer fallback (3 pts) — PR #561 + stoa-docs PR #47 (Council 7.50/10)
   - Created `docs/legal/terms.md` (Early Access ToS, Apache 2.0, French law)
   - Added Legal sidebar category in stoa-docs

@@ -16,6 +16,10 @@ class WebhookEventType(enum.StrEnum):
     SUBSCRIPTION_REVOKED = "subscription.revoked"
     SUBSCRIPTION_KEY_ROTATED = "subscription.key_rotated"
     SUBSCRIPTION_EXPIRED = "subscription.expired"
+    DEPLOYMENT_STARTED = "deployment.started"
+    DEPLOYMENT_SUCCEEDED = "deployment.succeeded"
+    DEPLOYMENT_FAILED = "deployment.failed"
+    DEPLOYMENT_ROLLED_BACK = "deployment.rolled_back"
 
 
 class WebhookDeliveryStatus(enum.StrEnum):

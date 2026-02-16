@@ -20,7 +20,6 @@ pub mod crds;
 pub mod watcher;
 
 #[cfg(feature = "k8s")]
-#[allow(unused_imports)]
 pub use crds::{Tool, ToolSet, ToolSetSpec, ToolSpec};
 #[cfg(feature = "k8s")]
 pub use watcher::CrdWatcher;
@@ -93,7 +92,6 @@ pub mod stubs {
 }
 
 #[cfg(not(feature = "k8s"))]
-#[allow(unused_imports)]
 pub use stubs::*;
 
 #[cfg(test)]

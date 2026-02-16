@@ -17,6 +17,5 @@
 
 mod semantic;
 
-#[allow(unused_imports)]
 pub use semantic::SemanticCacheStats;
 pub use semantic::{SemanticCache, SemanticCacheConfig};

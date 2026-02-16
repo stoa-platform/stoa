@@ -890,4 +890,85 @@ mod tests {
         assert_eq!(SUPPORTED_VERSIONS[0], "2025-03-26");
         assert!(SUPPORTED_VERSIONS.contains(&"2024-11-05"));
     }
+
+    // === extract_tenant tests ===
+
+    #[test]
+    fn test_extract_tenant_from_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Tenant-ID", "acme-corp".parse().unwrap());
+        assert_eq!(extract_tenant(&headers), Some("acme-corp".to_string()));
+    }
+
+    #[test]
+    fn test_extract_tenant_missing_header() {
+        let headers = HeaderMap::new();
+        assert_eq!(extract_tenant(&headers), None);
+    }
+
+    #[test]
+    fn test_extract_tenant_empty_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Tenant-ID", "".parse().unwrap());
+        assert_eq!(extract_tenant(&headers), Some("".to_string()));
+    }
+
+    // === JsonRpcResponse edge cases ===
+
+    #[test]
+    fn test_json_rpc_response_null_id() {
+        let resp = JsonRpcResponse::success(None, json!({"data": 42}));
+        assert!(resp.id.is_none());
+        assert_eq!(resp.jsonrpc, "2.0");
+    }
+
+    #[test]
+    fn test_json_rpc_response_string_id() {
+        let resp = JsonRpcResponse::success(Some(json!("req-abc")), json!({}));
+        assert_eq!(resp.id.unwrap(), "req-abc");
+    }
+
+    #[test]
+    fn test_json_rpc_error_data_field_is_none() {
+        let resp = JsonRpcResponse::error(Some(json!(1)), INTERNAL_ERROR, "boom");
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, INTERNAL_ERROR);
+        assert_eq!(err.message, "boom");
+        assert!(err.data.is_none());
+    }
+
+    #[test]
+    fn test_json_rpc_response_serialization_skips_none_fields() {
+        let success = JsonRpcResponse::success(Some(json!(1)), json!("ok"));
+        let json = serde_json::to_value(&success).unwrap();
+        assert!(json.get("result").is_some());
+        assert!(json.get("error").is_none()); // skip_serializing_if = None
+
+        let error = JsonRpcResponse::error(Some(json!(1)), -1, "err");
+        let json = serde_json::to_value(&error).unwrap();
+        assert!(json.get("error").is_some());
+        assert!(json.get("result").is_none()); // skip_serializing_if = None
+    }
+
+    // === Protocol negotiation edge cases ===
+
+    #[test]
+    fn test_negotiate_version_empty_string() {
+        let result = negotiate_protocol_version(Some(""));
+        assert_eq!(result, DEFAULT_PROTOCOL_VERSION);
+    }
+
+    // === SseQueryParams deserialization ===
+
+    #[test]
+    fn test_sse_query_params_deserialize_with_session() {
+        let params: SseQueryParams = serde_json::from_str(r#"{"sessionId": "abc-123"}"#).unwrap();
+        assert_eq!(params.session_id, Some("abc-123".to_string()));
+    }
+
+    #[test]
+    fn test_sse_query_params_deserialize_without_session() {
+        let params: SseQueryParams = serde_json::from_str(r#"{}"#).unwrap();
+        assert!(params.session_id.is_none());
+    }
 }

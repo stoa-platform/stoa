@@ -4,8 +4,7 @@
 //!
 //! Note: Infrastructure prepared for NativeTool integration (Phase 7).
 
-// Retry infrastructure prepared for future integration
-#![allow(dead_code)]
+// Retry infrastructure wired to dynamic proxy for transient error recovery (CAB-362)
 
 use std::future::Future;
 use std::time::Duration;

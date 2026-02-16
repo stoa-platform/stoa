@@ -157,7 +157,7 @@ function LoginScreen() {
           <p className="text-xs text-gray-500 dark:text-neutral-500 mt-2 text-center">
             By creating an account, you agree to our{' '}
             <a
-              href="https://docs.gostoa.dev/legal/terms"
+              href={`${config.services.docs.url}/legal/terms`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary-600 dark:text-primary-400 hover:underline"

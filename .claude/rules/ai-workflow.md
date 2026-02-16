@@ -98,6 +98,29 @@ plan.md is a **view** of Linear cycles, NOT a manually curated document. Structu
 - `/sync-plan` discovers ALL tickets in a cycle — tickets added in Linear appear automatically
 - Milestones, KPIs, Regles sections are preserved across syncs (not from Linear)
 
+### Phase-Enriched MEGAs
+
+Decomposed MEGA tickets in plan.md include phase sub-headers with ownership metadata:
+
+```
+- [~] CAB-1290: [MEGA] Gateway Live-Code (13 pts) — 2 phases
+  - **Phase 1** (parallel) [owner: t4821]
+    - [~] CAB-1350 [gateway] Traceparent injection — PR #578
+    - [ ] CAB-1351 [gateway] Resource listing
+  - **Phase 2** (after Phase 1) [owner: —]
+    - [ ] CAB-1352 [e2e] Integration tests
+```
+
+**Phase markers**:
+- `[owner: t4821]` — claimed by instance t4821 (from `.claude/claims/<MEGA-ID>.json`)
+- `[owner: —]` — unclaimed (available for any instance)
+- Phase dependency: `(parallel)`, `(after Phase 1)`, `(after Phase 1+2)`
+
+**Rules**:
+- Phase ownership markers are local metadata, NOT derived from Linear
+- `/sync-plan` MUST preserve `[owner: X]` markers during regeneration
+- See `phase-ownership.md` for claim lifecycle and conflict resolution
+
 Update private `MEMORY.md` when:
 1. **New ticket completed** — add to relevant section
 2. **New gotcha discovered** — add to `gotchas.md`
@@ -115,16 +138,19 @@ Update private `MEMORY.md` when:
 Every trackable item follows this lifecycle — no exceptions, no shortcuts:
 
 ```
-PENDING ──→ IN_PROGRESS ──→ DONE ──→ ARCHIVED
-   │              │
-   └── BLOCKED ◄──┘
+PENDING ──→ CLAIMED ──→ IN_PROGRESS ──→ DONE ──→ ARCHIVED
+   │              │           │
+   └── BLOCKED ◄──┴───────────┘
 ```
+
+**CLAIMED** is a transitional state for multi-instance coordination. An item is CLAIMED when an instance has reserved it (claim file written) but hasn't started producing artifacts yet. In single-instance mode, CLAIMED is implicit and transitions immediately to IN_PROGRESS.
 
 #### Markers by File
 
 | State | plan.md | memory.md text | memory.md section |
 |-------|---------|----------------|-------------------|
 | PENDING | `[ ]` | No bold marker | `📋 NEXT` |
+| CLAIMED | `[owner: tN]` metadata on phase | Claim file has owner | Phase in claimed MEGA |
 | IN_PROGRESS | `[~]` | Sub-items may be ✅ but parent has `[ ]` remaining | `🔴 IN PROGRESS` |
 | DONE | `[x]` | `— DONE` suffix or all sub-items ✅ | `✅ DONE` |
 | BLOCKED | `[!]` | `— BLOCKED` suffix + reason | `🚫 BLOCKED` |
@@ -145,6 +171,8 @@ When an item changes state, perform ALL updates in a **single edit pass** — ne
 
 | Transition | plan.md | memory.md | MEMORY.md (private) |
 |------------|---------|-----------|---------------------|
+| Claim phase | none → `[owner: tN]` | — | Log CLAIM in operations.log |
+| Release phase | `[owner: tN]` → `[owner: —]` | — | Log RELEASE in operations.log |
 | Start work | `[ ]` → `[~]` | Move from `📋 NEXT` → `🔴 IN PROGRESS` | Update Active Tickets |
 | Complete | `[~]` → `[x]` | Add `— DONE (PR #N)` + move from `🔴 IN PROGRESS` → `✅ DONE` | Update Active Tickets |
 | Block | `[~]` → `[!]` | Move to `🚫 BLOCKED` + add reason | Update Active Tickets |
@@ -181,6 +209,8 @@ Before logging `SESSION-END`, run these 4 checks mentally. If any fails, fix it 
 | `CHECKPOINT` | Pre-merge/deploy checkpoint created | `task`, `file` |
 | `ERROR` | Non-fatal error during execution | `task`, `error` |
 | `RECOVERY` | Crash recovery action taken | `task`, `action` |
+| `CLAIM` | Phase or ticket claimed by an instance | `task`, `phase`, `instance`, `tickets` |
+| `RELEASE` | Phase or ticket released (done or abandoned) | `task`, `phase`, `instance`, `reason` |
 
 ### Format Rules
 - Timestamp: ISO 8601 short (`YYYY-MM-DDTHH:MM`)

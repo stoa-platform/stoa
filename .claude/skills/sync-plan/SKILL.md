@@ -92,6 +92,23 @@ For each issue in the cycle that has NO matching `CAB-XXXX` in plan.md:
 
 ### 4c. Orphan in plan.md (ticket in plan.md but NOT in any active cycle)
 
+### 4d. Stale Claims
+
+For each file in `.claude/claims/*.json`:
+  For each phase with `owner != null`:
+    1. Check `claimed_at` > 2 hours ago
+    2. Grep `operations.log` for `SESSION-START` with matching instance ID in last 2h
+    3. Check PID alive: `kill -0 $PID` (same machine only)
+    4. If ALL checks fail → **STALE**
+    5. Report: `CAB-XXXX Phase N: STALE CLAIM (claimed by <instance> at <time>, no activity)`
+    6. Propose: auto-release (clear owner, claimed_at, pid in claim file)
+    7. Log: `RELEASE | task=<ID> phase=<N> instance=<old_owner> reason=stale`
+
+For standalone claims (`.claude/claims/<CAB-XXXX>.json`):
+  Same 3 checks. If stale → report + propose auto-release.
+
+See `phase-ownership.md` for full stale detection protocol.
+
 For each `CAB-XXXX` in plan.md that isn't in current or next cycle:
 - If status is Done → keep in Done section (historical)
 - If status is Todo/In Progress → **Warning**: ticket not assigned to any cycle
@@ -165,6 +182,9 @@ plan.md follows this exact structure:
 **Preservation rules**:
 - NEVER delete sub-items under `[~]` tickets (they contain PR references and manual progress)
 - NEVER delete the Milestones, KPIs Demo, or Regles sections
+- NEVER delete phase metadata (`[owner: X]`) from plan.md during regeneration
+- Phase ownership markers are NOT derived from Linear — preserve them as-is
+- If claim file shows phase complete (`completed_at != null`) → update plan.md marker to `[x]`
 - When adding a new ticket, format: `- [ ] CAB-XXXX: <title> (<estimate> pts, P<priority>)`
 - Done tickets with PR references: preserve the `— PR #N` suffix
 
@@ -257,6 +277,10 @@ Missing from plan.md: N items
 
 Orphans (in plan, not in cycle): N items
   CAB-VVVV: In Done section (OK — historical)
+
+Stale Claims: N
+  CAB-XXXX Phase 2: claimed by t4821 at 14:00, no activity (auto-released)
+  CAB-YYYY: claimed by t9012 at 13:30, PID dead (auto-released)
 
 Updates applied: N (Linear → plan.md)
 Updates pushed: N (plan.md → Linear) [only if --push]

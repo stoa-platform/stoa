@@ -7,8 +7,6 @@
 //! - ForceReview: Allow but require human review (balanced)
 //! - AllowCached: Allow if we have valid cached policies (risk of stale)
 
-#![allow(dead_code)] // Infrastructure for UAC enforcement, wired incrementally
-
 use serde::{Deserialize, Serialize};
 
 // =============================================================================

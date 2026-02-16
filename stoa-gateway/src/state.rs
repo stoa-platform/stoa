@@ -24,6 +24,8 @@ use crate::resilience::{
     CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry, FallbackChain,
 };
 use crate::routes::{PolicyRegistry, RouteRegistry};
+use crate::uac::cache::VersionedPolicyCache;
+use crate::uac::enforcer::ClassificationEnforcer;
 use crate::uac::{Action, ContractRegistry};
 
 /// Application state shared across all handlers
@@ -67,6 +69,9 @@ pub struct AppState {
     pub credential_store: Arc<CredentialStore>,
     /// UAC contract registry (CAB-1299)
     pub contract_registry: Arc<ContractRegistry>,
+    /// Classification-based enforcer for contract routes (CAB-1299)
+    /// None when classification enforcement is disabled.
+    pub classification_enforcer: Option<Arc<ClassificationEnforcer>>,
 }
 
 impl AppState {
@@ -255,6 +260,17 @@ impl AppState {
         // Initialize UAC contract registry (CAB-1299)
         let contract_registry = Arc::new(ContractRegistry::new());
 
+        // Initialize classification enforcer (CAB-1299) — soft mode
+        let classification_enforcer = if config.classification_enforcement_enabled {
+            let policy_cache = Arc::new(VersionedPolicyCache::new(3600));
+            let enforcer = ClassificationEnforcer::new(policy_cache);
+            tracing::info!("Classification enforcement enabled (soft mode — log only)");
+            Some(Arc::new(enforcer))
+        } else {
+            tracing::info!("Classification enforcement disabled");
+            None
+        };
+
         // Initialize mTLS stats (CAB-864)
         let mtls_stats = Arc::new(MtlsStats::new());
         if config.mtls.enabled {
@@ -293,6 +309,7 @@ impl AppState {
             quota_manager,
             credential_store,
             contract_registry,
+            classification_enforcer,
         }
     }
 

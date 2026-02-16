@@ -26,6 +26,7 @@ use tracing::warn;
 use crate::proxy::credentials::BackendCredential;
 use crate::routes::{ApiRoute, PolicyEntry};
 use crate::state::AppState;
+use crate::uac::UacContractSpec;
 
 // =============================================================================
 // Admin Auth Middleware
@@ -397,6 +398,69 @@ pub async fn delete_backend_credential(
 }
 
 // =============================================================================
+// UAC Contract CRUD (CAB-1299)
+// =============================================================================
+
+/// POST /admin/contracts — register or update a UAC contract
+pub async fn upsert_contract(
+    State(state): State<AppState>,
+    Json(mut contract): Json<UacContractSpec>,
+) -> impl IntoResponse {
+    // Validate the contract
+    let errors = contract.validate();
+    if !errors.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"status": "error", "errors": errors})),
+        )
+            .into_response();
+    }
+
+    // Ensure required_policies are up to date with classification
+    contract.refresh_policies();
+
+    let key = format!("{}:{}", contract.tenant_id, contract.name);
+    let existed = state.contract_registry.upsert(contract).is_some();
+    let status = if existed {
+        StatusCode::OK
+    } else {
+        StatusCode::CREATED
+    };
+    (
+        status,
+        Json(serde_json::json!({"key": key, "status": "ok"})),
+    )
+        .into_response()
+}
+
+/// GET /admin/contracts — list all UAC contracts
+pub async fn list_contracts(State(state): State<AppState>) -> Json<Vec<UacContractSpec>> {
+    Json(state.contract_registry.list())
+}
+
+/// GET /admin/contracts/:key — get a single UAC contract by key (tenant_id:name)
+pub async fn get_contract(
+    State(state): State<AppState>,
+    Path(key): Path<String>,
+) -> impl IntoResponse {
+    match state.contract_registry.get(&key) {
+        Some(contract) => Json(contract).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// DELETE /admin/contracts/:key — remove a UAC contract by key (tenant_id:name)
+pub async fn delete_contract(
+    State(state): State<AppState>,
+    Path(key): Path<String>,
+) -> impl IntoResponse {
+    match state.contract_registry.remove(&key) {
+        Some(_) => StatusCode::NO_CONTENT.into_response(),
+        None => (StatusCode::NOT_FOUND, "Contract not found").into_response(),
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -606,6 +670,9 @@ mod tests {
                 "/backend-credentials/:route_id",
                 delete(delete_backend_credential),
             )
+            // CAB-1299: UAC contracts
+            .route("/contracts", get(list_contracts).post(upsert_contract))
+            .route("/contracts/:key", get(get_contract).delete(delete_contract))
             .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
             .with_state(state)
     }
@@ -1050,5 +1117,230 @@ mod tests {
             .unwrap();
         let data: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
         assert_eq!(data.len(), 0);
+    }
+
+    // =========================================================================
+    // Contract CRUD tests (CAB-1299)
+    // =========================================================================
+
+    fn sample_contract_json() -> serde_json::Value {
+        serde_json::json!({
+            "name": "payment-api",
+            "version": "1.0.0",
+            "tenant_id": "acme",
+            "classification": "H",
+            "endpoints": [{
+                "path": "/payments/{id}",
+                "methods": ["GET", "POST"],
+                "backend_url": "https://backend.acme.com/v1/payments"
+            }],
+            "status": "draft"
+        })
+    }
+
+    #[tokio::test]
+    async fn test_contract_upsert_create() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        let response = app
+            .oneshot(auth_json_req("POST", "/contracts", sample_contract_json()))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["key"], "acme:payment-api");
+        assert_eq!(data["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn test_contract_upsert_update() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        // Create
+        let _ = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/contracts", sample_contract_json()))
+            .await
+            .unwrap();
+
+        // Update (same name+tenant = update)
+        let response = app
+            .oneshot(auth_json_req("POST", "/contracts", sample_contract_json()))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_contract_list_empty() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        let response = app.oneshot(auth_req("GET", "/contracts")).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert!(data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_contract_get_by_key() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        // Create
+        let _ = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/contracts", sample_contract_json()))
+            .await
+            .unwrap();
+
+        // Get by key
+        let response = app
+            .oneshot(auth_req("GET", "/contracts/acme:payment-api"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["name"], "payment-api");
+        assert_eq!(data["tenant_id"], "acme");
+        assert_eq!(data["classification"], "H");
+    }
+
+    #[tokio::test]
+    async fn test_contract_get_not_found() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        let response = app
+            .oneshot(auth_req("GET", "/contracts/nope:nada"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_contract_delete() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        // Create
+        let _ = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/contracts", sample_contract_json()))
+            .await
+            .unwrap();
+
+        // Delete
+        let response = app
+            .clone()
+            .oneshot(auth_req("DELETE", "/contracts/acme:payment-api"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // Verify gone
+        let response = app
+            .oneshot(auth_req("GET", "/contracts/acme:payment-api"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_contract_delete_not_found() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        let response = app
+            .oneshot(auth_req("DELETE", "/contracts/unknown:key"))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_contract_validation_error() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        // Contract with empty name
+        let invalid = serde_json::json!({
+            "name": "",
+            "version": "1.0.0",
+            "tenant_id": "acme",
+            "classification": "H",
+            "endpoints": [],
+            "status": "draft"
+        });
+
+        let response = app
+            .oneshot(auth_json_req("POST", "/contracts", invalid))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["status"], "error");
+        assert!(data["errors"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_contract_policies_auto_refreshed() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+
+        let vvh_contract = serde_json::json!({
+            "name": "critical-api",
+            "version": "1.0.0",
+            "tenant_id": "acme",
+            "classification": "VVH",
+            "endpoints": [{
+                "path": "/critical",
+                "methods": ["POST"],
+                "backend_url": "https://backend.acme.com/critical"
+            }],
+            "status": "draft"
+        });
+
+        let _ = app
+            .clone()
+            .oneshot(auth_json_req("POST", "/contracts", vvh_contract))
+            .await
+            .unwrap();
+
+        let response = app
+            .oneshot(auth_req("GET", "/contracts/acme:critical-api"))
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let policies = data["required_policies"].as_array().unwrap();
+        assert!(policies.contains(&serde_json::json!("mtls")));
+        assert!(policies.contains(&serde_json::json!("audit-logging")));
     }
 }

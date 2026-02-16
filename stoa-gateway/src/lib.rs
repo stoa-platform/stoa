@@ -100,6 +100,15 @@ pub fn build_router(state: AppState) -> Router {
             "/backend-credentials/:route_id",
             delete(admin::delete_backend_credential),
         )
+        // CAB-1299: UAC contracts
+        .route(
+            "/contracts",
+            get(admin::list_contracts).post(admin::upsert_contract),
+        )
+        .route(
+            "/contracts/:key",
+            get(admin::get_contract).delete(admin::delete_contract),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

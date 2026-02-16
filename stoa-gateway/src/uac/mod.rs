@@ -5,10 +5,12 @@
 pub mod cache;
 pub mod classifications;
 pub mod enforcer;
+pub mod registry;
 pub mod safe_mode;
 pub mod schema;
 
 pub use classifications::Classification;
+pub use registry::ContractRegistry;
 pub use schema::{ContractStatus, UacContractSpec, UacEndpoint};
 
 use serde::{Deserialize, Serialize};

@@ -23,7 +23,7 @@ use crate::resilience::{
     CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry, FallbackChain,
 };
 use crate::routes::{PolicyRegistry, RouteRegistry};
-use crate::uac::Action;
+use crate::uac::{Action, ContractRegistry};
 
 /// Application state shared across all handlers
 #[derive(Clone)]
@@ -62,6 +62,8 @@ pub struct AppState {
     pub quota_manager: Arc<QuotaManager>,
     /// BYOK credential store for backend API auth (CAB-1250)
     pub credential_store: Arc<CredentialStore>,
+    /// UAC contract registry (CAB-1299)
+    pub contract_registry: Arc<ContractRegistry>,
 }
 
 impl AppState {
@@ -247,6 +249,9 @@ impl AppState {
         // Initialize BYOK credential store (CAB-1250)
         let credential_store = Arc::new(CredentialStore::new());
 
+        // Initialize UAC contract registry (CAB-1299)
+        let contract_registry = Arc::new(ContractRegistry::new());
+
         // Initialize mTLS stats (CAB-864)
         let mtls_stats = Arc::new(MtlsStats::new());
         if config.mtls.enabled {
@@ -281,6 +286,7 @@ impl AppState {
             consumer_rate_limiter,
             quota_manager,
             credential_store,
+            contract_registry,
         }
     }
 

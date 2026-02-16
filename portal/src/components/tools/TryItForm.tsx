@@ -22,7 +22,12 @@ import {
   Trash2,
   Info,
 } from 'lucide-react';
+import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
 import type { MCPInputSchema, MCPPropertySchema } from '../../types';
+
+const ajv = new Ajv({ allErrors: true, coerceTypes: true });
+addFormats(ajv);
 
 interface TryItFormProps {
   schema: MCPInputSchema | null | undefined;
@@ -326,6 +331,7 @@ export function TryItForm({
   className = '',
 }: TryItFormProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
   const [response, setResponse] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const [showResponse, setShowResponse] = useState(true);
@@ -344,6 +350,7 @@ export function TryItForm({
         value={formData[name]}
         onChange={(value) => handleFieldChange(name, value)}
         isRequired={requiredFields.includes(name)}
+        error={fieldErrors[name]}
       />
     ));
   };
@@ -353,6 +360,12 @@ export function TryItForm({
       ...prev,
       [fieldName]: value,
     }));
+    setFieldErrors((prev) => {
+      if (!prev[fieldName]) return prev;
+      const next = { ...prev };
+      delete next[fieldName];
+      return next;
+    });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -360,19 +373,31 @@ export function TryItForm({
     setError(null);
     setResponse(null);
 
-    // Validate required fields
-    const missingRequired = requiredFields.filter(
-      (field) => formData[field] === undefined || formData[field] === ''
-    );
-    if (missingRequired.length > 0) {
-      setError(`Missing required fields: ${missingRequired.join(', ')}`);
-      return;
-    }
-
     // Filter out empty values
     const cleanedData = Object.fromEntries(
       Object.entries(formData).filter(([, v]) => v !== undefined && v !== '')
     );
+
+    // Validate against JSON Schema using ajv
+    if (schema) {
+      const valid = ajv.validate(schema, cleanedData);
+      if (!valid && ajv.errors) {
+        const errors: Record<string, string | undefined> = {};
+        for (const err of ajv.errors) {
+          const field =
+            err.keyword === 'required'
+              ? (err.params as { missingProperty: string }).missingProperty
+              : err.instancePath.replace(/^\//, '');
+          if (field && !errors[field]) {
+            errors[field] = err.message ?? 'Invalid value';
+          }
+        }
+        setFieldErrors(errors);
+        setError('Validation failed — check highlighted fields above');
+        return;
+      }
+    }
+    setFieldErrors({});
 
     if (onInvoke) {
       try {
@@ -407,6 +432,7 @@ export function TryItForm({
 
   const handleReset = () => {
     setFormData({});
+    setFieldErrors({});
     setResponse(null);
     setError(null);
   };

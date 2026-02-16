@@ -13,6 +13,7 @@ use std::net::IpAddr;
 use std::time::Duration;
 use tracing::{debug, error, instrument, warn};
 
+use crate::resilience::RetryConfig;
 use crate::state::AppState;
 
 /// Shared reqwest client for dynamic proxy (created once, reused).
@@ -119,8 +120,39 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
     // BYOK credential injection (CAB-1250): look up stored credential for this route
     let credential = state.credential_store.get(&route.id);
 
+    // Clone headers before consuming the request (needed for potential retry)
+    let saved_headers = request.headers().clone();
+
     let upstream_start = std::time::Instant::now();
-    let response = forward_request(request, &method, &target_url, credential.as_ref()).await;
+    let mut response = forward_request(request, &method, &target_url, credential.as_ref()).await;
+
+    // Retry transient errors on idempotent methods (CAB-362)
+    if is_retryable_status(response.status()) && is_idempotent(&method) {
+        let retry_config = RetryConfig {
+            max_attempts: 2,
+            initial_delay: Duration::from_millis(100),
+            max_delay: Duration::from_secs(1),
+            ..Default::default()
+        };
+        for attempt in 1..=retry_config.max_attempts {
+            let delay = retry_config.delay_for_attempt(attempt);
+            warn!(
+                method = %method,
+                route_id = %route.id,
+                target_url = %target_url,
+                attempt = attempt,
+                status = response.status().as_u16(),
+                "Retrying transient upstream error"
+            );
+            tokio::time::sleep(delay).await;
+            response =
+                retry_forward(&method, &target_url, &saved_headers, credential.as_ref()).await;
+            if !is_retryable_status(response.status()) {
+                break;
+            }
+        }
+    }
+
     let upstream_duration = upstream_start.elapsed().as_secs_f64();
 
     // Record upstream latency metric
@@ -285,6 +317,65 @@ fn convert_response(resp: reqwest::Response) -> Response {
         .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response())
 }
 
+/// Check if an HTTP status code is retryable (transient upstream error).
+fn is_retryable_status(status: StatusCode) -> bool {
+    matches!(status.as_u16(), 502 | 503)
+}
+
+/// Check if an HTTP method is idempotent (safe to retry without side effects).
+fn is_idempotent(method: &Method) -> bool {
+    matches!(
+        *method,
+        Method::GET | Method::HEAD | Method::DELETE | Method::OPTIONS
+    )
+}
+
+/// Simple retry request for idempotent methods (no body).
+///
+/// Rebuilds the outgoing request from saved headers — used when the original
+/// request body has already been consumed by the first attempt.
+async fn retry_forward(
+    method: &Method,
+    target_url: &str,
+    headers: &HeaderMap<HeaderValue>,
+    credential: Option<&super::credentials::BackendCredential>,
+) -> Response {
+    let client = get_proxy_client();
+    let mut builder = match *method {
+        Method::GET => client.get(target_url),
+        Method::HEAD => client.head(target_url),
+        Method::DELETE => client.delete(target_url),
+        _ => {
+            let m = reqwest::Method::from_bytes(method.as_str().as_bytes())
+                .unwrap_or(reqwest::Method::GET);
+            client.request(m, target_url)
+        }
+    };
+    builder = copy_headers(builder, headers);
+    builder = inject_traceparent(builder);
+
+    // BYOK credential injection
+    if let Some(cred) = credential {
+        if let (Ok(name), Ok(value)) = (
+            reqwest::header::HeaderName::from_bytes(cred.header_name.as_bytes()),
+            reqwest::header::HeaderValue::from_str(&cred.header_value),
+        ) {
+            builder = builder.header(name, value);
+        }
+    }
+
+    match builder.send().await {
+        Ok(resp) => convert_response(resp),
+        Err(e) => {
+            if e.is_timeout() {
+                (StatusCode::GATEWAY_TIMEOUT, "Gateway timeout").into_response()
+            } else {
+                (StatusCode::BAD_GATEWAY, "Bad gateway").into_response()
+            }
+        }
+    }
+}
+
 /// Check if a URL targets a private/internal IP range (SSRF protection).
 ///
 /// Blocks RFC 1918 private IPs, loopback, link-local (including AWS metadata
@@ -348,4 +439,51 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
 fn inject_traceparent(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
     // Disabled: opentelemetry crate removed pending API stabilization
     builder
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::{Method, StatusCode};
+
+    use super::*;
+
+    #[test]
+    fn test_is_retryable_status() {
+        assert!(is_retryable_status(StatusCode::BAD_GATEWAY)); // 502
+        assert!(is_retryable_status(StatusCode::SERVICE_UNAVAILABLE)); // 503
+        assert!(!is_retryable_status(StatusCode::OK)); // 200
+        assert!(!is_retryable_status(StatusCode::NOT_FOUND)); // 404
+        assert!(!is_retryable_status(StatusCode::INTERNAL_SERVER_ERROR)); // 500
+        assert!(!is_retryable_status(StatusCode::GATEWAY_TIMEOUT)); // 504
+    }
+
+    #[test]
+    fn test_is_idempotent() {
+        assert!(is_idempotent(&Method::GET));
+        assert!(is_idempotent(&Method::HEAD));
+        assert!(is_idempotent(&Method::DELETE));
+        assert!(is_idempotent(&Method::OPTIONS));
+        assert!(!is_idempotent(&Method::POST));
+        assert!(!is_idempotent(&Method::PUT));
+        assert!(!is_idempotent(&Method::PATCH));
+    }
+
+    #[test]
+    fn test_is_hop_by_hop() {
+        assert!(is_hop_by_hop("connection"));
+        assert!(is_hop_by_hop("transfer-encoding"));
+        assert!(is_hop_by_hop("host"));
+        assert!(!is_hop_by_hop("content-type"));
+        assert!(!is_hop_by_hop("authorization"));
+    }
+
+    #[test]
+    fn test_ssrf_blocked_private_ips() {
+        assert!(is_blocked_url("http://127.0.0.1:8080/api"));
+        assert!(is_blocked_url("http://10.0.0.1/internal"));
+        assert!(is_blocked_url("http://192.168.1.1/api"));
+        assert!(is_blocked_url("http://localhost:3000"));
+        assert!(!is_blocked_url("http://example.com/api"));
+        assert!(!is_blocked_url("http://51.83.45.13:8080/health"));
+    }
 }

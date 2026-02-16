@@ -46,11 +46,12 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 161 pts (+34 SaaS) | **Done**: 59 pts (30%) | **Velocity**: 12 issues closed
-**Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep
-**Fill-cycle**: +13 Quick Wins promoted, +7 items estimated (2026-02-15); +3 auto-promoted (2026-02-15)
+**Scope**: 339 pts (active) | **Done**: 89 pts (26%) | **Velocity**: 23 issues closed
+**Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
+**Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
+**Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
 
-### Done (12 issues)
+### Done (23 issues)
 
 - [x] CAB-353: Go/No-Go Checklist 3 Months (5 pts) — PR #482 (9.00/10 → GO)
 - [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (P1)
@@ -60,10 +61,21 @@
 - [x] CAB-1186: [E2E] Unskip Demo Showcase Feature (3 pts) — PR #553
 - [x] CAB-1171: [DX] Quick Start rewrite — single golden path (3 pts) — stoa-docs PR #46
 - [x] CAB-1173: [DX] MCP guide for developers — zero kubectl (3 pts) — stoa-docs PR #46
-- [x] CAB-1249: [API] BackendApi + SaasApiKey models+CRUD (13 pts) — PR #545
-- [x] CAB-1250: [Gateway] BYOK credential proxy + tenant tools (8 pts) — PR #549
-- [x] CAB-1251: [UI] Console SaaS Backend APIs + API Keys (10 pts) — PR #550
-- [x] CAB-1252: [E2E] SaaS BDD tests (3 pts) — PR #551
+- [x] CAB-1188: [SaaS] MCP SaaS Self-Service MVP (34 pts) — PRs #545, #549, #550, #551
+  - [x] CAB-1249: [API] BackendApi + SaasApiKey models+CRUD (13 pts) — PR #545
+  - [x] CAB-1250: [Gateway] BYOK credential proxy + tenant tools (8 pts) — PR #549
+  - [x] CAB-1251: [UI] Console SaaS Backend APIs + API Keys (10 pts) — PR #550
+  - [x] CAB-1252: [E2E] SaaS BDD tests (3 pts) — PR #551
+- [x] CAB-1153: Activer GitHub Discussions (1 pt)
+- [x] CAB-1155: FUNDING.yml — Activer GitHub Sponsors
+- [x] CAB-1156: Labelliser 10 issues "good first issue" (1 pt)
+- [x] CAB-1157: Announcement Bar Docusaurus
+- [x] CAB-1158: README Badges + Contributors Wall (1 pt)
+- [x] CAB-1321: [Portal] Fix Terms of Service link (3 pts) — PR #561 + stoa-docs PR #47
+- [x] CAB-1183: [Gateway] Sidecar Mode P1 — ext_authz Enforcement Layer (8 pts) — PR #555
+- [x] CAB-1184: [Adapter] Apigee Gateway Adapter P1 — Google Cloud CRUD (5 pts) — PR #556
+- [x] CAB-362: GW2-10 Circuit Breaker + Retry (5 pts) — PR #558
+- [x] CAB-1149: Staging Freerun — V1++ (13 pts) — meta-ticket, 5 sub-PRs merged
 
 ### In Progress
 
@@ -74,16 +86,13 @@
   - [ ] Repetition #1 (mercredi 19) — timer 5 min
   - [ ] Repetition #2 (vendredi 21) — avec Cedric comme temoin
   - [ ] Video backup filmee
+- [~] CAB-1154: Algolia DocSearch — Soumettre candidature (1 pt, P1)
 
 ### Todo
 
 - [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts, P1)
-- [ ] CAB-1183: [Gateway] Sidecar Mode P1 — ext_authz Enforcement Layer (8 pts, P2)
-- [ ] CAB-1184: [Adapter] Apigee Gateway Adapter P1 — Google Cloud CRUD (5 pts, P2)
 - [ ] CAB-1128: Design Partner Communication — Client A Beta Access (3 pts, P2)
-- [ ] CAB-362: GW2-10 Circuit Breaker + Session Management (5 pts, P2)
-- [ ] CAB-709: UAC for LLM — Contrats unifies pour backends IA (5 pts, P2)
-- [ ] CAB-1149: Staging Freerun — V1++ suite mardi-mercredi (13 pts, P3)
+- [ ] CAB-709: UAC for LLM — Contrats unifies pour backends IA (5 pts, P2) — DEFERRED (archived)
 - [ ] CAB-1162: SEO Tracking — Looker Studio + Search Console archive (3 pts, P3)
 - [ ] CAB-1187: [SEO] Blog Batch 7 — 5 Articles Week of Feb 17 (8 pts, P3)
 
@@ -94,14 +103,14 @@
 - [x] CAB-1172: [DX] Auto-approve free-tier subscriptions (3 pts, P2) — PR #534 (Council 8.50/10)
 - [x] CAB-1173: [DX] MCP guide for developers — zero kubectl (3 pts, P2) — stoa-docs PR #46
 
-### Backlog — Community Infrastructure (CAB-1152 sub-tickets)
+### Backlog — Community Infrastructure (CAB-1152 sub-tickets) — 5/6 Done
 
-- CAB-1153: Activer GitHub Discussions (1 pts, P1)
-- CAB-1154: Algolia DocSearch — Soumettre candidature (1 pts, P1)
-- CAB-1156: Labelliser 10 issues "good first issue" (1 pts, P1)
-- CAB-1158: README Badges + Contributors Wall (1 pts, P1)
-- CAB-1155: FUNDING.yml — Activer GitHub Sponsors (P2)
-- CAB-1157: Announcement Bar Docusaurus (P2)
+- [x] CAB-1153: Activer GitHub Discussions (1 pt, P1)
+- [~] CAB-1154: Algolia DocSearch — Soumettre candidature (1 pt, P1)
+- [x] CAB-1155: FUNDING.yml — Activer GitHub Sponsors (P2)
+- [x] CAB-1156: Labelliser 10 issues "good first issue" (1 pt, P1)
+- [x] CAB-1157: Announcement Bar Docusaurus (P2)
+- [x] CAB-1158: README Badges + Contributors Wall (1 pt, P1)
 
 ### Backlog — Promoted by /fill-cycle (2026-02-15)
 
@@ -135,6 +144,42 @@
 - [ ] CAB-1293: [MEGA] Platform: K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts, P3) — Council 7.25/10
 - [ ] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts, P3) — Council 7.25/10
 - ~~CAB-1296: [MEGA] DX: E2E Test Expansion — Canceled (Council 5.50/10, fictional scope)~~
+
+### Backlog — Promoted Strategic + Business (2026-02-16)
+
+- CAB-593: [Epic] Configurable Onboarding Workflows Engine (34 pts, P1)
+- CAB-1068: [MEGA] AI Factory Setup — Claude Code H24 + Orchestration (3 pts, P1)
+- CAB-1176: [MEGA] Kafka → MCP Event Bridge — Event-Driven AI-Native APIM (26 pts, P2)
+
+### Backlog — Promoted MEGA Tickets (2026-02-16) — 18 new, 406 pts
+
+**Platform** (178 pts):
+- CAB-1301: [MEGA] Platform: Cilium Network Foundation — Gateway API + NetworkPolicy (34 pts)
+- CAB-1303: [MEGA] Platform: Multi-Environment STAGING — Promote Workflow (21 pts)
+- CAB-1307: [MEGA] Platform: Ticketing ITSM — Promotion Request Workflow (34 pts)
+- CAB-1308: [MEGA] Platform: Resource Lifecycle Management — Tagging + Cleanup + Alerts (34 pts)
+- CAB-1309: [MEGA] Platform: Resource Lifecycle Advanced — Quotas + Self-Service TTL (34 pts)
+- CAB-1310: [MEGA] Platform: Jenkins Orchestration Layer — JCasC + Pipelines + Kafka (34 pts)
+- CAB-1315: [MEGA] Platform: Automated Tenant Provisioning — "One API Call" Onboarding (21 pts)
+
+**Gateway** (97 pts):
+- CAB-1305: [MEGA] Gateway: Security Jobs Pipeline — Trivy + Gitleaks + CIS Benchmarks (21 pts)
+- CAB-1313: [MEGA] Gateway: Enterprise MCP Federation — Multi-Dev/Agent Master Account (34 pts)
+- CAB-1314: [MEGA] Gateway: MCP Skills System — Context Injection + Agent Integration (21 pts)
+- CAB-1317: [MEGA] Gateway: MCP Proxy Hardening P3 — OAuth Flows + Lazy Discovery + CB (21 pts)
+
+**DX** (47 pts):
+- CAB-1306: [MEGA] DX: Portal Self-Service V2 — Catalog + Subscriptions + Onboarding (34 pts)
+- CAB-1318: [MEGA] DX: Consumer Execution View — Error Taxonomy Dashboard (13 pts)
+
+**Observability** (42 pts):
+- CAB-1302: [MEGA] Observability: OpenSearch Monitoring Stack — Logging + Dashboards (21 pts)
+- CAB-1316: [MEGA] Observability: Self-Diagnostic Engine + Hop Detection — Auto RCA (21 pts)
+
+**Community** (47 pts):
+- CAB-1304: [MEGA] Community: Demo Tenant Automation — Reset + Sample APIs (13 pts)
+- CAB-1311: [MEGA] Community: GTM Strategy & Licensing — Open Core + Repo Structure (13 pts)
+- CAB-1312: [MEGA] Community: GTM Docs + Community Channels + IBM Positioning (21 pts)
 
 ### Backlog — Long-term (parked in cycle, not committed)
 

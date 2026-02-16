@@ -81,7 +81,7 @@
   - `rotate-secrets.sh` fixed for self-hosted Infisical (CLI-first)
 
 ### Cycle 8 (Feb 16-22)
-- CAB-1185: Portal Try-It Schema Validation (3 pts) — PR #557 (Council 8.25/10, ajv + per-field errors)
+- CAB-1185: Portal Try-It Schema Validation (3 pts) — PRs #557+#554 (Council 8.25/10, ajv + per-field errors)
 - CAB-1186: E2E Demo Showcase unskip (3 pts) — PR #553 (7 feature files with full step coverage)
 - CAB-1171: Quick Start rewrite — single golden path (3 pts) — stoa-docs PR #46
 - CAB-1173: MCP guide zero kubectl (3 pts) — stoa-docs PR #46 (Claude.ai, Python, TS)
@@ -89,6 +89,15 @@
 - CAB-1250: Gateway BYOK credential proxy (8 pts) — PR #549 (tenant-scoped tools, admin CRUD)
 - CAB-1251: Console SaaS Backend APIs + API Keys (10 pts) — PR #550 (30 tests, 4-persona RBAC)
 - CAB-1252: E2E SaaS BDD tests (3 pts) — PR #551 (9 scenarios, @wip tagged)
+- CAB-1183: Sidecar Mode P1 ext_authz (8 pts) — PR #555 (rate limiter + scope enforcement)
+- CAB-1184: Apigee Adapter P1 (5 pts) — PR #556 (8 methods, Google Cloud CRUD, 25 tests)
+- CAB-362: Circuit Breaker Retry (5 pts) — PR #558 (retry for 502/503, idempotent methods)
+- CAB-1149: Staging Freerun V1++ (13 pts) — meta-ticket, closed (5 sub-PRs merged)
+- CAB-1321: Portal ToS link fix + viewer fallback (3 pts) — PR #561 + stoa-docs PR #47 (Council 7.50/10)
+  - Created `docs/legal/terms.md` (Early Access ToS, Apache 2.0, French law)
+  - Added Legal sidebar category in stoa-docs
+  - Self-registered users default to `viewer` role (Portal + API fallback)
+  - Keycloak `default-roles-stoa` updated: `viewer` added to composites
 
 ## 🔴 IN PROGRESS
 
@@ -100,11 +109,11 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - [ ] Video backup filmée
 - Known: API creation requires GitLab → use Console UI; rate limiting not configured; httpbin flaky
 
-## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 59 pts (12 issues)
+## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 113 pts (23 issues)
 
 ### Track 1 — Demo Finale (6 pts)
 - CAB-1151: Dress Rehearsal (3 pts, P0)
-- CAB-710: n8n + STOA "ESB is Dead" demo (3 pts, P1)
+- ~~CAB-710~~ ✅ (C7, PR #517)
 
 ### Track 2 — Community Infrastructure (11 pts, P0) — DONE ✅
 - ~~CAB-1152~~ + ~~CAB-1182~~ — PR #525 merged
@@ -114,13 +123,11 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - ~~CAB-1170~~ ✅ (PRs #529+#530), ~~CAB-1172~~ ✅ (PR #534)
 - ~~CAB-1171~~ ✅ (stoa-docs PR #46), ~~CAB-1173~~ ✅ (stoa-docs PR #46)
 
-### Track 4 — Staging V1++ (39 pts)
-- CAB-1183: Sidecar Mode P1 ext_authz (8 pts, NEW)
-- CAB-1184: Apigee Adapter P1 (5 pts, NEW)
-- ~~CAB-1185~~ ✅ (PR #557), ~~CAB-1186~~ ✅ (PR #553)
-- CAB-1149: Staging Freerun V1++ (13 pts)
-- CAB-362: Circuit Breaker (5 pts)
-- CAB-709: UAC for LLM (5 pts)
+### Track 4 — Staging V1++ (39 pts) ✅ — 24 pts delivered (CAB-709 deferred)
+- ~~CAB-1186~~ ✅ (PR #553), ~~CAB-1185~~ ✅ (PRs #557+#554)
+- ~~CAB-1183~~ ✅ (PR #555), ~~CAB-1184~~ ✅ (PR #556)
+- ~~CAB-362~~ ✅ (PR #558), ~~CAB-1149~~ ✅ (meta-ticket, closed)
+- CAB-709: UAC for LLM (5 pts) — DEFERRED (archived, no impl target)
 
 ### Track 5 — SEO + Content (16 pts)
 - CAB-1187: Blog Batch 7 (8 pts, NEW)

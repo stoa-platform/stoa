@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-16 (session 17 — CAB-1297 DX Developer Experience)
+> Dernière MAJ: 2026-02-17 (session 18 — CAB-1299 PR7 E2E tests)
 
 ## ✅ DONE
 
@@ -121,7 +121,11 @@
   - CAB-1357: E2E BDD Deployment Lifecycle (3 pts) — PR #574 (5 scenarios, @wip tagged)
 - CAB-1297: DX Developer Experience — READMEs, .env.example, Onboarding (13 pts) — PR #577 (5 READMEs, 4 .env.examples, DEVELOPMENT.md, Makefile dev targets)
 - CAB-1295: Console Test Coverage (21 pts) — PR #590 + PR #592 (24 test files, 959 total tests, ESLint override for test `as any`)
+- CAB-1290: Gateway Live-Code Feature Completion (13 pts) — PR #585 (9 TODOs: uptime, resource listing, health checks, stoa_create_api, traceparent)
+- CAB-1299: UAC Spec + Protocol Binders + E2E (34 pts) — PRs #581-#591, #595 (7 micro-PRs: schema, admin API, REST binder, MCP binder, OPA, transformer, E2E tests)
+- CAB-1291 Phase 2: API Test Coverage (34 pts total) — PR #582 (+386 tests, 59%→72%, threshold 70%)
 - CAB-1358: AI Factory H24 Autonomous Activation (8 pts) — PR #589 (7 workflows hardened: kill-switches, continue-on-error, Ask mode for rules, fallback issue creation)
+- CAB-1292 Phase 1: API Auth Security Fixes (21 pts) — PR #594 (RBAC/JWT tests, security hardening)
 
 ## 🔴 IN PROGRESS
 
@@ -133,7 +137,11 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - [ ] Video backup filmée
 - Known: API creation requires GitLab → use Console UI; rate limiting not configured; httpbin flaky
 
-## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 339 pts scoped | Done: 279 pts (38 issues)
+CAB-1292: API Auth Completion MEGA (21 pts) — Phase 1 done
+- ✅ PR #594: auth security fixes + RBAC/JWT tests
+- [ ] Phase 2: KC client sync, IAM integration (remaining scope TBD)
+
+## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 339 pts scoped | Done: 376 pts (43 issues)
 
 ### Track 1 — Demo Finale (6 pts)
 - CAB-1151: Dress Rehearsal (3 pts, P0)

@@ -27,9 +27,7 @@ mod rate_limiter;
 
 pub use middleware::quota_middleware;
 pub use quota_manager::{QuotaManager, QuotaManagerConfig};
-#[allow(unused_imports)]
 pub use quota_manager::{QuotaState, QuotaStats};
-#[allow(unused_imports)]
 pub use rate_limiter::PlanQuota;
 pub use rate_limiter::{ConsumerRateLimiter, RateLimiterConfig};
 

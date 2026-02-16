@@ -60,6 +60,20 @@ Options:
 3. Review — show me the changes first
 ```
 
+### Step 2b — Check Active Claims
+
+If the crashed session had an active claim (checkpoint contains `claimed_phase` or `CLAIM` log with no matching `RELEASE`):
+
+1. Read the claim file at `claimed_phase.claim_file`
+2. If **Resume**:
+   - Verify claim is still valid (owner matches crashed instance ID)
+   - If valid → keep claim, continue phase work
+   - If stolen (another instance claimed it) → notify user, pick different work
+3. If **Abandon**:
+   - Release claim: clear `owner`, `claimed_at`, `pid` in claim file
+   - Log: `RELEASE | task=<MEGA-ID> phase=<N> instance=<ID> reason=abandoned`
+   - The phase becomes available for other instances
+
 ### Step 3 — Resume or Abandon
 
 **Resume**:
@@ -109,9 +123,16 @@ Example: `2026-02-12T14-30-task-traceability.json`
     "component": "rules",
     "files_modified": [".claude/rules/ai-workflow.md", ".claude/rules/session-startup.md"],
     "notes": "CI green, ready to merge"
+  },
+  "claimed_phase": {
+    "mega_id": "CAB-1290",
+    "phase_id": 1,
+    "claim_file": ".claude/claims/CAB-1290.json"
   }
 }
 ```
+
+The `claimed_phase` field is optional — only present when the session was working on a phase of a decomposed MEGA ticket. Used during crash recovery to verify and restore claim ownership.
 
 ### When to Create Checkpoints
 
@@ -141,6 +162,8 @@ Example: `2026-02-12T14-30-task-traceability.json`
 | After merge, before CD verify | `STEP-DONE step=merged` | Resume: verify CD |
 | During CD verify | `STEP-DONE step=merged` | Resume: check pod status |
 | After CD verify | `STEP-DONE step=cd-verified` | Resume: update state files + cleanup |
+| During phase work (claim active) | `CLAIM` log + no `SESSION-END` | Resume: verify claim still valid (Step 2b), continue phase |
+| Phase complete, claim not released | `STEP-DONE step=merged` + `CLAIM` | Release claim, move to next unblocked phase |
 
 ## Log Format Reference
 
@@ -155,6 +178,8 @@ All entries in `operations.log` follow: `TIMESTAMP | EVENT | key=value ...`
 | `CHECKPOINT` | `task`, `file` | — | Pre-merge/deploy checkpoint created |
 | `ERROR` | `task`, `error` | `step`, `detail` | Non-fatal error during execution |
 | `RECOVERY` | `task`, `action` | `from_step`, `reason` | Crash recovery action taken |
+| `CLAIM` | `task`, `phase`, `instance`, `tickets` | — | Phase claimed by instance |
+| `RELEASE` | `task`, `phase`, `instance`, `reason` | — | Phase released (done/abandoned/stale) |
 
 ### Timestamp Format
 

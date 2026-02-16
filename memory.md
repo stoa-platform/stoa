@@ -93,6 +93,11 @@
 - CAB-1184: Apigee Adapter P1 (5 pts) — PR #556 (8 methods, Google Cloud CRUD, 25 tests)
 - CAB-362: Circuit Breaker Retry (5 pts) — PR #558 (retry for 502/503, idempotent methods)
 - CAB-1149: Staging Freerun V1++ (13 pts) — meta-ticket, closed (5 sub-PRs merged)
+- CAB-1321: Portal ToS link fix + viewer fallback (3 pts) — PR #561 + stoa-docs PR #47 (Council 7.50/10)
+  - Created `docs/legal/terms.md` (Early Access ToS, Apache 2.0, French law)
+  - Added Legal sidebar category in stoa-docs
+  - Self-registered users default to `viewer` role (Portal + API fallback)
+  - Keycloak `default-roles-stoa` updated: `viewer` added to composites
 
 ## 🔴 IN PROGRESS
 
@@ -104,11 +109,11 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - [ ] Video backup filmée
 - Known: API creation requires GitLab → use Console UI; rate limiting not configured; httpbin flaky
 
-## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 83 pts (16 issues)
+## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 113 pts (23 issues)
 
 ### Track 1 — Demo Finale (6 pts)
 - CAB-1151: Dress Rehearsal (3 pts, P0)
-- CAB-710: n8n + STOA "ESB is Dead" demo (3 pts, P1)
+- ~~CAB-710~~ ✅ (C7, PR #517)
 
 ### Track 2 — Community Infrastructure (11 pts, P0) — DONE ✅
 - ~~CAB-1152~~ + ~~CAB-1182~~ — PR #525 merged

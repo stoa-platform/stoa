@@ -822,6 +822,49 @@ class KeycloakService:
 
         return True
 
+    async def remove_user_from_group(self, user_id: str, tenant_id: str) -> bool:
+        """Remove user from tenant group (idempotent)."""
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        groups = self._admin.get_groups()
+        tenant_group = next((g for g in groups if g["name"] == tenant_id), None)
+        if tenant_group:
+            try:
+                self._admin.group_user_remove(user_id, tenant_group["id"])
+                logger.info(f"Removed user {user_id} from group {tenant_id}")
+            except Exception as e:
+                logger.warning(f"Failed to remove user {user_id} from group {tenant_id}: {e}")
+                return False
+        return True
+
+    async def delete_tenant_group(self, tenant_id: str) -> bool:
+        """Delete tenant group from Keycloak (idempotent)."""
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        groups = self._admin.get_groups()
+        tenant_group = next((g for g in groups if g["name"] == tenant_id), None)
+        if not tenant_group:
+            logger.info(f"Group {tenant_id} not found, nothing to delete")
+            return True
+        try:
+            self._admin.delete_group(tenant_group["id"])
+            logger.info(f"Deleted group for tenant {tenant_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete group {tenant_id}: {e}")
+            return False
+        return True
+
+    async def get_user_roles(self, user_id: str) -> list[str]:
+        """Get realm roles for a user, filtering out system roles."""
+        if not self._admin:
+            raise RuntimeError("Keycloak not connected")
+
+        system_roles = {"default-roles-stoa", "offline_access", "uma_authorization"}
+        roles = self._admin.get_realm_roles_of_user(user_id)
+        return [r["name"] for r in roles if r["name"] not in system_roles]
+
 
 # Global instance
 keycloak_service = KeycloakService()

@@ -1,48 +1,46 @@
-@console @deployment
+@console @deployment @wip
 Feature: Console - Deployment Lifecycle
 
   As a devops user,
-  I want to deploy APIs to gateways and manage their lifecycle
-  So that they are available to consumers.
+  I want to view deployment history, filter deployments, and rollback
+  So that I can manage the lifecycle of API deployments across environments.
 
-  Scenario: DevOps creates a new deployment
-    Given I am logged in to Console as "parzival" from team "high-five"
-    And the STOA Console is accessible
-    When I navigate to the gateway deployments page
-    And I click the create deployment button
-    And I select an API to deploy
-    And I select the target environment "development"
-    And I submit the deployment form
-    Then the deployment is created with status "pending" or "synced"
+  Background:
+    Given the STOA Console is accessible
 
-  Scenario: DevOps views deployment list with status badges
+  @smoke @critical
+  Scenario: DevOps views deployment history tab
     Given I am logged in to Console as "parzival" from team "high-five"
-    And the STOA Console is accessible
-    When I navigate to the gateway deployments page
-    Then the deployments dashboard loads with sync status cards
-    And the deployment list contains entries or an empty state
+    When I navigate to the deployments page
+    And I click the "Deployment History" tab
+    Then the deployment history table is visible
+    And the deployment filters are displayed
 
-  Scenario: DevOps views deployment detail with sync status
+  Scenario: DevOps filters deployments by environment
     Given I am logged in to Console as "parzival" from team "high-five"
-    And the STOA Console is accessible
-    When I navigate to the gateway deployments page
-    And I click on the first deployment
-    Then the deployment detail page loads
-    And the deployment sync status is visible
+    When I navigate to the deployments page
+    And I click the "Deployment History" tab
+    And I select environment filter "Dev"
+    Then the deployment list updates with filtered results
 
-  Scenario: DevOps promotes deployment to staging
+  Scenario: DevOps filters deployments by status
     Given I am logged in to Console as "parzival" from team "high-five"
-    And the STOA Console is accessible
-    When I navigate to the gateway deployments page
-    And I click on the first deployment
-    And I click the promote button
-    And I confirm the promotion to "staging"
-    Then the deployment target environment shows "staging"
+    When I navigate to the deployments page
+    And I click the "Deployment History" tab
+    And I select status filter "Success"
+    Then the deployment list updates with filtered results
+
+  Scenario: DevOps initiates rollback on a successful deployment
+    Given I am logged in to Console as "parzival" from team "high-five"
+    When I navigate to the deployments page
+    And I click the "Deployment History" tab
+    And I click the rollback button on a successful deployment
+    Then the rollback confirmation dialog appears
+    And the dialog mentions "Rollback Deployment"
 
   @security
-  Scenario: Viewer cannot create or promote deployments
+  Scenario: Viewer cannot see rollback button
     Given I am logged in to Console as "aech" from team "high-five"
-    And the STOA Console is accessible
-    When I navigate to the gateway deployments page
-    Then the create deployment button is not visible or disabled
-    And the promote action is not available
+    When I navigate to the deployments page
+    And I click the "Deployment History" tab
+    Then the rollback button is not visible

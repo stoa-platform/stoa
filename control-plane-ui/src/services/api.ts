@@ -11,7 +11,9 @@ import type {
   CertificateExpiryResponse,
   BulkRevokeResponse,
   Deployment,
-  DeploymentRequest,
+  DeploymentCreate,
+  DeploymentListResponse,
+  EnvironmentStatusResponse,
   CommitInfo,
   MergeRequest,
   TraceSummary,
@@ -316,20 +318,27 @@ class ApiService {
     return data;
   }
 
-  // Deployments
-  async getDeployments(
+  // Deployments (CAB-1353 lifecycle API)
+  async listDeployments(
     tenantId: string,
-    apiId?: string,
-    environment?: Environment
-  ): Promise<Deployment[]> {
-    const params: Record<string, string> = {};
-    if (apiId) params.api_id = apiId;
-    if (environment) params.environment = environment;
+    params?: {
+      api_id?: string;
+      environment?: string;
+      status?: string;
+      page?: number;
+      page_size?: number;
+    }
+  ): Promise<DeploymentListResponse> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/deployments`, { params });
     return data;
   }
 
-  async createDeployment(tenantId: string, request: DeploymentRequest): Promise<Deployment> {
+  async getDeployment(tenantId: string, deploymentId: string): Promise<Deployment> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/deployments/${deploymentId}`);
+    return data;
+  }
+
+  async createDeployment(tenantId: string, request: DeploymentCreate): Promise<Deployment> {
     const { data } = await this.client.post(`/v1/tenants/${tenantId}/deployments`, request);
     return data;
   }
@@ -342,6 +351,16 @@ class ApiService {
     const { data } = await this.client.post(
       `/v1/tenants/${tenantId}/deployments/${deploymentId}/rollback`,
       { target_version: targetVersion }
+    );
+    return data;
+  }
+
+  async getEnvironmentStatus(
+    tenantId: string,
+    environment: string
+  ): Promise<EnvironmentStatusResponse> {
+    const { data } = await this.client.get(
+      `/v1/tenants/${tenantId}/deployments/environments/${environment}/status`
     );
     return data;
   }

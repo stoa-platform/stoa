@@ -16,6 +16,7 @@ import type {
   Tenant,
   API,
   Application,
+  Deployment,
   GatewayInstance,
   GatewayDeployment,
   ExternalMCPServer,
@@ -278,6 +279,22 @@ export const mockBackendApi = (overrides: Partial<BackendApi> = {}): BackendApi 
   created_at: '2026-01-15T00:00:00Z',
   updated_at: '2026-02-01T00:00:00Z',
   created_by: 'user-parzival',
+  ...overrides,
+});
+
+export const mockDeployment = (overrides: Partial<Deployment> = {}): Deployment => ({
+  id: 'deploy-1',
+  tenant_id: 'oasis-gunters',
+  api_id: 'api-1',
+  api_name: 'Payment API',
+  environment: 'dev',
+  version: '1.0.0',
+  status: 'success',
+  deployed_by: 'user-parzival',
+  created_at: '2026-02-15T10:00:00Z',
+  updated_at: '2026-02-15T10:05:00Z',
+  completed_at: '2026-02-15T10:05:00Z',
+  attempt_count: 1,
   ...overrides,
 });
 

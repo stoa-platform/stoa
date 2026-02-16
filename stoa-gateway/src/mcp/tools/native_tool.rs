@@ -1465,4 +1465,278 @@ mod tests {
         );
         assert_eq!(tool.cp_base_url, "http://localhost:8000");
     }
+
+    // ================================================================
+    // PR2: Wiremock-based HTTP tests
+    // ================================================================
+
+    mod http {
+        use super::*;
+        use wiremock::matchers::{method, path, path_regex, query_param};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        async fn make_mock_tool(mock: &MockServer, name: &str) -> NativeTool {
+            NativeTool::new(
+                name,
+                "test tool",
+                ToolSchema {
+                    schema_type: "object".to_string(),
+                    properties: Default::default(),
+                    required: vec![],
+                },
+                Action::Read,
+                Client::new(),
+                &mock.uri(),
+            )
+        }
+
+        // ─── GET / POST / DELETE helpers ───────────────────────────
+
+        #[tokio::test]
+        async fn get_success() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/test"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let result = tool.get("/v1/test", &ctx).await.unwrap();
+            assert_eq!(result["ok"], true);
+        }
+
+        #[tokio::test]
+        async fn get_error_status() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/fail"))
+                .respond_with(ResponseTemplate::new(404).set_body_string("not found"))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let err = tool.get("/v1/fail", &ctx).await.unwrap_err();
+            assert!(err.to_string().contains("404"));
+        }
+
+        #[tokio::test]
+        async fn post_success() {
+            let mock = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/v1/create"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id": "new-1"})))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let body = json!({"name": "test"});
+            let result = tool.post("/v1/create", &body, &ctx).await.unwrap();
+            assert_eq!(result["id"], "new-1");
+        }
+
+        #[tokio::test]
+        async fn post_error_status() {
+            let mock = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/v1/create"))
+                .respond_with(ResponseTemplate::new(400).set_body_string("bad request"))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let err = tool.post("/v1/create", &json!({}), &ctx).await.unwrap_err();
+            assert!(err.to_string().contains("400"));
+        }
+
+        #[tokio::test]
+        async fn delete_success_with_body() {
+            let mock = MockServer::start().await;
+            Mock::given(method("DELETE"))
+                .and(path("/v1/items/1"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({"deleted": true})))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let result = tool.delete("/v1/items/1", &ctx).await.unwrap();
+            assert_eq!(result["deleted"], true);
+        }
+
+        #[tokio::test]
+        async fn delete_success_empty_body() {
+            let mock = MockServer::start().await;
+            Mock::given(method("DELETE"))
+                .and(path("/v1/items/2"))
+                .respond_with(ResponseTemplate::new(200))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "test").await;
+            let ctx = make_ctx();
+            let result = tool.delete("/v1/items/2", &ctx).await.unwrap();
+            assert_eq!(result["status"], "deleted");
+        }
+
+        // ─── handle_tenants ────────────────────────────────────────
+
+        #[tokio::test]
+        async fn tenants_success() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/tenants"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "tenants": [{"id": "t1", "name": "Acme"}]
+                })))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "stoa_tenants").await;
+            let ctx = make_ctx();
+            let result = tool.handle_tenants(&ctx).await.unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            let v: Value = serde_json::from_str(text).unwrap();
+            assert_eq!(v["tenants"][0]["id"], "t1");
+        }
+
+        #[tokio::test]
+        async fn tenants_error() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/tenants"))
+                .respond_with(ResponseTemplate::new(403).set_body_string("forbidden"))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "stoa_tenants").await;
+            let ctx = make_ctx();
+            let err = tool.handle_tenants(&ctx).await.unwrap_err();
+            assert!(err.to_string().contains("403"));
+        }
+
+        // ─── handle_catalog ────────────────────────────────────────
+
+        #[tokio::test]
+        async fn catalog_list() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/portal/apis"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "apis": [{"id": "api1", "name": "My API"}]
+                })))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "stoa_catalog").await;
+            let ctx = make_ctx();
+            let result = tool.handle_catalog(&json!({"action": "list"}), &ctx).await.unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            let v: Value = serde_json::from_str(text).unwrap();
+            assert!(v["apis"].is_array());
+        }
+
+        #[tokio::test]
+        async fn catalog_get() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/portal/apis/api1"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "id": "api1", "name": "My API"
+                })))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "stoa_catalog").await;
+            let ctx = make_ctx();
+            let result = tool.handle_catalog(&json!({"action": "get", "api_id": "api1"}), &ctx).await.unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            let v: Value = serde_json::from_str(text).unwrap();
+            assert_eq!(v["id"], "api1");
+        }
+
+        #[tokio::test]
+        async fn catalog_search() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/portal/apis"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "apis": [{"id": "payments", "name": "Payments"}]
+                })))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "stoa_catalog").await;
+            let ctx = make_ctx();
+            let result = tool.handle_catalog(&json!({"action": "search", "query": "pay"}), &ctx).await.unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            assert!(text.contains("payments") || text.contains("Payments"));
+        }
+
+        // ─── handle_subscription ───────────────────────────────────
+
+        #[tokio::test]
+        async fn subscription_list() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/mcp/subscriptions"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "subscriptions": [{"id": "sub-1"}]
+                })))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "stoa_subscription").await;
+            let ctx = make_ctx();
+            let result = tool.handle_subscription(&json!({"action": "list"}), &ctx).await.unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            let v: Value = serde_json::from_str(text).unwrap();
+            assert!(v["subscriptions"].is_array());
+        }
+
+        #[tokio::test]
+        async fn subscription_create() {
+            let mock = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/v1/mcp/subscriptions"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "id": "sub-new", "status": "pending"
+                })))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "stoa_subscription").await;
+            let ctx = make_ctx();
+            let result = tool.handle_subscription(
+                &json!({"action": "create", "api_id": "api1", "plan": "free"}), &ctx
+            ).await.unwrap();
+            let text = match &result.content[0] {
+                crate::mcp::tools::ToolContent::Text { text } => text,
+                _ => panic!("expected text"),
+            };
+            let v: Value = serde_json::from_str(text).unwrap();
+            assert_eq!(v["status"], "pending");
+        }
+
+        #[tokio::test]
+        async fn subscription_error() {
+            let mock = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/mcp/subscriptions"))
+                .respond_with(ResponseTemplate::new(500).set_body_string("server error"))
+                .mount(&mock).await;
+
+            let tool = make_mock_tool(&mock, "stoa_subscription").await;
+            let ctx = make_ctx();
+            let err = tool.handle_subscription(&json!({"action": "list"}), &ctx).await.unwrap_err();
+            assert!(err.to_string().contains("500"));
+        }
+    }
+
 }

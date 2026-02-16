@@ -1,0 +1,146 @@
+# STOA Kafka Topic Policies — Central Nervous System (CNS)
+# Declarative topic configuration for all stoa.* namespaced topics.
+# Reference: ADR-043 (Kafka Event-Driven Architecture)
+#
+# delivery semantics: at_least_once (default) | exactly_once
+# retention_days: -1 for infinite (DORA compliance)
+
+version: "1.0"
+
+topics:
+  # --- API lifecycle ---
+  stoa.api.lifecycle:
+    delivery: at_least_once
+    retention_days: 30
+    partitions: 6
+    key: tenant_id
+    description: API created/updated/deleted events
+
+  # --- Deployment pipeline ---
+  stoa.deploy.requests:
+    delivery: at_least_once
+    retention_days: 7
+    partitions: 6
+    key: tenant_id
+    description: Deployment requests for gateway adapters
+
+  stoa.deploy.results:
+    delivery: at_least_once
+    retention_days: 7
+    partitions: 6
+    key: tenant_id
+    description: Deployment results from gateway adapters
+
+  stoa.deployment.events:
+    delivery: at_least_once
+    retention_days: 30
+    partitions: 6
+    key: tenant_id
+    description: Deployment lifecycle events (started, succeeded, failed, rolled back)
+
+  # --- Application lifecycle ---
+  stoa.app.lifecycle:
+    delivery: at_least_once
+    retention_days: 30
+    partitions: 3
+    key: tenant_id
+    description: Application provisioned/deprovisioned, client created/rotated
+
+  # --- Tenant lifecycle ---
+  stoa.tenant.lifecycle:
+    delivery: at_least_once
+    retention_days: 30
+    partitions: 3
+    key: tenant_id
+    description: Tenant onboarded/suspended/deleted
+
+  # --- Audit ---
+  stoa.audit.trail:
+    delivery: exactly_once
+    retention_days: -1
+    partitions: 6
+    key: tenant_id
+    description: Audit log — immutable, DORA 5yr retention
+
+  # --- MCP GitOps ---
+  stoa.mcp.servers:
+    delivery: at_least_once
+    retention_days: 7
+    partitions: 3
+    key: tenant_id
+    description: MCP server catalog changes
+
+  stoa.mcp.sync.requests:
+    delivery: at_least_once
+    retention_days: 3
+    partitions: 3
+    key: tenant_id
+    description: Manual MCP sync trigger requests
+
+  stoa.mcp.sync.results:
+    delivery: at_least_once
+    retention_days: 3
+    partitions: 3
+    key: tenant_id
+    description: MCP sync completion results
+
+  # --- Gateway orchestration ---
+  stoa.gateway.sync.requests:
+    delivery: at_least_once
+    retention_days: 3
+    partitions: 6
+    key: tenant_id
+    description: Gateway sync trigger for deployments
+
+  stoa.gateway.sync.results:
+    delivery: at_least_once
+    retention_days: 3
+    partitions: 6
+    key: tenant_id
+    description: Gateway sync operation results
+
+  stoa.gateway.events:
+    delivery: at_least_once
+    retention_days: 7
+    partitions: 3
+    key: tenant_id
+    description: Gateway health changes, drift detection
+
+  stoa.gateway.metrics:
+    delivery: at_least_once
+    retention_days: 1
+    partitions: 12
+    key: tenant_id
+    description: Gateway runtime metrics (high-volume, short retention)
+
+  # --- Security ---
+  stoa.security.alerts:
+    delivery: exactly_once
+    retention_days: -1
+    partitions: 3
+    key: tenant_id
+    description: Security alerts — immutable, DORA 5yr retention, sink to PostgreSQL
+
+  # --- Resource lifecycle ---
+  stoa.resource.lifecycle:
+    delivery: at_least_once
+    retention_days: 30
+    partitions: 6
+    key: tenant_id
+    description: Subscription changes, resource provisioning
+
+  # --- Metering ---
+  stoa.metering.events:
+    delivery: at_least_once
+    retention_days: 90
+    partitions: 12
+    key: tenant_id
+    description: API call metering for billing and quotas
+
+  # --- Error snapshots (existing) ---
+  stoa.errors.snapshots:
+    delivery: at_least_once
+    retention_days: 7
+    partitions: 3
+    key: tenant_id
+    description: Gateway error snapshots from webMethods

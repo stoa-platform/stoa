@@ -702,7 +702,7 @@ fn emit_error_snapshot(
         .with_request("/mcp/tools/call".to_string(), "POST".to_string())
         .with_gateway_state(GatewaySnapshot {
             active_sessions: state.session_manager.count() as u64,
-            uptime_secs: 0, // TODO: track gateway uptime
+            uptime_secs: state.start_time.elapsed().as_secs(),
             rate_limit_buckets: 0,
             memory_rss_bytes: None,
         });

@@ -11,6 +11,7 @@ pub mod safe_mode;
 pub mod schema;
 
 pub use classifications::Classification;
+pub use enforcer::ClassificationEnforcer;
 pub use registry::ContractRegistry;
 pub use schema::{ContractStatus, UacContractSpec, UacEndpoint};
 

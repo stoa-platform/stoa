@@ -7,8 +7,6 @@
 //! 2. Invalidating cache when Git version changes
 //! 3. TTL-based expiration for automatic refresh
 
-#![allow(dead_code)] // Infrastructure for UAC enforcement, wired incrementally
-
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -54,7 +52,8 @@ struct CacheEntry {
     /// Git commit hash when this was cached
     git_version: String,
 
-    /// When this entry was cached
+    /// When this entry was cached (audit metadata, not read in logic)
+    #[allow(dead_code)]
     cached_at: DateTime<Utc>,
 
     /// When this entry expires

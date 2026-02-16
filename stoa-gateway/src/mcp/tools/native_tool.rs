@@ -16,6 +16,8 @@ use std::time::Duration;
 use tracing::{debug, warn};
 
 use super::{Tool, ToolContext, ToolError, ToolRegistry, ToolResult, ToolSchema};
+use crate::mcp::session::SessionManager;
+use crate::resilience::CircuitBreakerRegistry;
 use crate::uac::Action;
 
 /// Native tool that calls CP API directly (no Python proxy)
@@ -30,6 +32,10 @@ pub struct NativeTool {
     tool_registry: Option<Arc<ToolRegistry>>,
     /// Optional output schema for structured responses (MCP 2025-03-26)
     output_schema: Option<Value>,
+    /// Optional session manager for health checks
+    session_manager: Option<Arc<SessionManager>>,
+    /// Optional circuit breaker registry for health checks
+    circuit_breakers: Option<Arc<CircuitBreakerRegistry>>,
 }
 
 impl NativeTool {
@@ -50,6 +56,8 @@ impl NativeTool {
             cp_base_url: cp_base_url.trim_end_matches('/').to_string(),
             tool_registry: None,
             output_schema: None,
+            session_manager: None,
+            circuit_breakers: None,
         }
     }
 
@@ -62,6 +70,18 @@ impl NativeTool {
     /// Set output schema for structured responses (MCP 2025-03-26)
     pub fn with_output_schema(mut self, schema: Value) -> Self {
         self.output_schema = Some(schema);
+        self
+    }
+
+    /// Set session manager reference for health checks
+    pub fn with_session_manager(mut self, sm: Arc<SessionManager>) -> Self {
+        self.session_manager = Some(sm);
+        self
+    }
+
+    /// Set circuit breaker registry for health checks
+    pub fn with_circuit_breakers(mut self, cb: Arc<CircuitBreakerRegistry>) -> Self {
+        self.circuit_breakers = Some(cb);
         self
     }
 
@@ -255,14 +275,61 @@ impl NativeTool {
     }
 
     async fn handle_platform_health(&self) -> Result<ToolResult, ToolError> {
-        // TODO: Actually check component health
+        let session_count = self
+            .session_manager
+            .as_ref()
+            .map(|sm| sm.count())
+            .unwrap_or(0);
+
+        let (cb_status, cb_detail) = self
+            .circuit_breakers
+            .as_ref()
+            .map(|cb| {
+                let entries = cb.stats_all();
+                let total = entries.len();
+                let open_count = entries.iter().filter(|e| e.state == "Open").count();
+                let half_open_count = entries.iter().filter(|e| e.state == "HalfOpen").count();
+                let status = if open_count > 0 {
+                    "degraded"
+                } else {
+                    "healthy"
+                };
+                (
+                    status,
+                    json!({
+                        "status": status,
+                        "total": total,
+                        "open": open_count,
+                        "half_open": half_open_count,
+                        "closed": total - open_count - half_open_count,
+                    }),
+                )
+            })
+            .unwrap_or((
+                "healthy",
+                json!({"status": "healthy", "detail": "not configured"}),
+            ));
+
+        let tool_count = self
+            .tool_registry
+            .as_ref()
+            .map(|r| r.list(None).len())
+            .unwrap_or(0);
+
+        let overall = if cb_status == "degraded" {
+            "degraded"
+        } else {
+            "healthy"
+        };
+
         let health = json!({
-            "status": "healthy",
+            "status": overall,
             "components": {
                 "gateway": {"status": "healthy", "version": env!("CARGO_PKG_VERSION")},
                 "mcp_transport": {"status": "healthy"},
-                "session_manager": {"status": "healthy"},
-                "tool_registry": {"status": "healthy"}
+                "session_manager": {"status": "healthy", "active_sessions": session_count},
+                "tool_registry": {"status": "healthy", "registered_tools": tool_count},
+                "circuit_breakers": cb_detail,
             },
             "timestamp": chrono::Utc::now().to_rfc3339()
         });
@@ -801,6 +868,8 @@ pub fn register_native_tools(
     client: Client,
     cp_base_url: &str,
     tool_registry_ref: Arc<ToolRegistry>,
+    session_manager: Option<Arc<SessionManager>>,
+    circuit_breakers: Option<Arc<CircuitBreakerRegistry>>,
 ) {
     use serde_json::json;
 
@@ -838,7 +907,7 @@ pub fn register_native_tools(
     ));
 
     // 2. stoa_platform_health
-    registry.register(Arc::new(NativeTool::new(
+    let mut health_tool = NativeTool::new(
         "stoa_platform_health",
         "Health check all platform components (Gateway, Keycloak, Database, Kafka)",
         schema(
@@ -854,7 +923,14 @@ pub fn register_native_tools(
         Action::Read,
         client.clone(),
         url,
-    )));
+    );
+    if let Some(sm) = session_manager {
+        health_tool = health_tool.with_session_manager(sm);
+    }
+    if let Some(cb) = circuit_breakers {
+        health_tool = health_tool.with_circuit_breakers(cb);
+    }
+    registry.register(Arc::new(health_tool));
 
     // 3. stoa_tools (needs registry reference)
     registry.register(Arc::new(

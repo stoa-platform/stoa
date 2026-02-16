@@ -1,6 +1,7 @@
 # Level 1: Claude Code Interactive — @claude mentions in issues/PRs
 # Responds to @claude in issue comments, PR comments, and PR review comments.
 # Uses CLAUDE.md + .claude/rules/ as the brain.
+# Kill-switch: set DISABLE_L1_INTERACTIVE=true in repo variables to disable.
 
 name: Claude Code Interactive
 
@@ -23,14 +24,18 @@ permissions:
 jobs:
   claude:
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+      vars.DISABLE_L1_INTERACTIVE != 'true' &&
+      (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - uses: anthropics/claude-code-action@v1
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"

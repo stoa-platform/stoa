@@ -2,6 +2,7 @@
 # Triggered via workflow_dispatch with comma-separated ticket IDs.
 # Each ticket gets its own Claude agent running in parallel.
 # Council validates the batch plan before execution starts.
+# Kill-switch: set DISABLE_L5_MULTI_AGENT=true in repo variables to disable.
 
 name: Claude Code Multi-Agent
 
@@ -31,7 +32,7 @@ permissions:
 jobs:
   # ----- Phase 0: Council Batch Validation -----
   council-batch:
-    if: ${{ !inputs.skip_council }}
+    if: ${{ vars.DISABLE_L5_MULTI_AGENT != 'true' && !inputs.skip_council }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -41,6 +42,7 @@ jobs:
 
       - name: Council Batch Validation
         id: council
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -93,7 +95,7 @@ jobs:
   parse-tickets:
     needs: [council-batch]
     if: |
-      always() &&
+      vars.DISABLE_L5_MULTI_AGENT != 'true' &&
       (needs.council-batch.result == 'success' || needs.council-batch.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
@@ -120,6 +122,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: anthropics/claude-code-action@v1
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -141,6 +144,7 @@ jobs:
             IMPORTANT: This is running in parallel with other agents.
             Only modify files in your component scope.
             Do NOT modify shared files (memory.md, plan.md, CLAUDE.md).
+            Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 25"
 
       - name: Notify Slack — Agent Complete

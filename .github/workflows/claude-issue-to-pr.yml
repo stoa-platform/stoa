@@ -1,6 +1,7 @@
 # Level 1: Claude Code Issue-to-PR — assigns issue to Claude, creates a PR
 # Triggered when an issue is labeled "claude-implement" or assigned to claude bot.
 # Runs Council validation first, posts report, waits for approval.
+# Kill-switch: set DISABLE_L1_IMPLEMENT=true in repo variables to disable.
 
 name: Claude Code Issue-to-PR
 
@@ -24,14 +25,20 @@ jobs:
   # ----- Phase 1: Council Validation (runs on label or assignment) -----
   council-validate:
     if: |
-      (github.event_name == 'issues' && github.event.label.name == 'claude-implement') ||
-      (github.event_name == 'issues' && github.event.action == 'assigned')
+      vars.DISABLE_L1_IMPLEMENT != 'true' &&
+      (
+        (github.event_name == 'issues' && github.event.label.name == 'claude-implement') ||
+        (github.event_name == 'issues' && github.event.action == 'assigned')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - uses: anthropics/claude-code-action@v1
+      - name: Run Council Validation
+        id: council
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -53,7 +60,7 @@ jobs:
             End the comment with:
             ---
             **Council Score: X.XX/10 — [Go|Fix|Redo]**
-            React with :white_check_mark: to approve, or comment "adjust: <feedback>" to revise.
+            Comment `/go` to approve and start autonomous implementation.
 
             Include a **Binary DoD** (Definition of Done) checklist in the comment:
             - [ ] All modified files listed
@@ -66,6 +73,15 @@ jobs:
 
             IMPORTANT: Do NOT implement anything yet. Only validate and plan.
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
+
+      # Add council-validated label so implement job can verify
+      - name: Mark Council complete
+        if: steps.council.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "council-validated" --color "0e8a16" --description "Council validation passed" --force 2>/dev/null || true
+          gh issue edit "${{ github.event.issue.number }}" --add-label "council-validated"
 
       # Notify Slack with Council report
       - name: Notify Slack — Council Report
@@ -80,6 +96,12 @@ jobs:
           ISSUE_URL="${{ github.event.issue.html_url }}"
           ISSUE_TITLE="${{ github.event.issue.title }}"
           ISSUE_NUM="${{ github.event.issue.number }}"
+          STATUS="${{ steps.council.outcome }}"
+          if [ "$STATUS" = "success" ]; then
+            EMOJI=":white_check_mark:"
+          else
+            EMOJI=":warning:"
+          fi
           curl -s -X POST "$SLACK_WEBHOOK" \
             -H 'Content-Type: application/json' \
             -d "{
@@ -88,7 +110,7 @@ jobs:
                   \"type\": \"header\",
                   \"text\": {
                     \"type\": \"plain_text\",
-                    \"text\": \"Council Validation: #${ISSUE_NUM}\",
+                    \"text\": \"${EMOJI} Council Validation: #${ISSUE_NUM}\",
                     \"emoji\": true
                   }
                 },
@@ -96,7 +118,7 @@ jobs:
                   \"type\": \"section\",
                   \"text\": {
                     \"type\": \"mrkdwn\",
-                    \"text\": \"*${ISSUE_TITLE}*\nCouncil has validated the implementation plan.\nReview and approve on GitHub to start autonomous implementation.\"
+                    \"text\": \"*${ISSUE_TITLE}*\nCouncil has validated the implementation plan.\nComment \`/go\` on the GitHub issue to start autonomous implementation.\"
                   },
                   \"accessory\": {
                     \"type\": \"button\",
@@ -108,9 +130,10 @@ jobs:
               ]
             }"
 
-  # ----- Phase 2: Implementation (runs on approval comment) -----
+  # ----- Phase 2: Implementation (runs on /go approval comment) -----
   implement:
     if: |
+      vars.DISABLE_L1_IMPLEMENT != 'true' &&
       github.event_name == 'issue_comment' &&
       (
         github.event.comment.body == '/approve' ||
@@ -123,7 +146,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: anthropics/claude-code-action@v1
+      # Guard: verify Council validation ran before implementing
+      - name: Verify Council validation
+        id: verify-council
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+
+          if echo "$LABELS" | grep -q "council-validated"; then
+            echo "Council validation confirmed"
+            echo "validated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No council-validated label found on issue #$ISSUE_NUM"
+            echo "Checking for Council comment as fallback..."
+            COUNCIL_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Council Score"))] | length')
+            if [ "$COUNCIL_COMMENT" -gt 0 ]; then
+              echo "Council comment found"
+              echo "validated=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::No Council validation found. Label the issue 'claude-implement' first."
+              echo "validated=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Abort if no Council
+        if: steps.verify-council.outputs.validated != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" \
+            --body "Implementation aborted: no Council validation found. Please label this issue \`claude-implement\` first, wait for the Council report, then comment \`/go\`."
+          exit 1
+
+      - name: Run Implementation
+        if: steps.verify-council.outputs.validated == 'true'
+        continue-on-error: true
+        id: implement
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -143,6 +204,8 @@ jobs:
             Use Ship/Show/Ask classification from the Council comment.
             If Ship or Show: merge after CI green.
             If Ask: leave PR open for human review.
+
+            IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 30"
 
       # Notify Slack on completion
@@ -152,11 +215,14 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
-          STATUS="${{ job.status }}"
+          STATUS="${{ steps.implement.outcome || 'skipped' }}"
           ISSUE_NUM="${{ github.event.issue.number }}"
           if [ "$STATUS" = "success" ]; then
             EMOJI="white_check_mark"
             MSG="Implementation complete for #${ISSUE_NUM}. PR created."
+          elif [ "$STATUS" = "skipped" ]; then
+            EMOJI="warning"
+            MSG="Implementation skipped for #${ISSUE_NUM}. No Council validation."
           else
             EMOJI="x"
             MSG="Implementation failed for #${ISSUE_NUM}. Check GitHub Actions logs."

@@ -1,6 +1,7 @@
 # Level 3: Linear → n8n → GitHub Actions → Council → Claude → PR
 # Receives repository_dispatch from n8n when a Linear ticket moves to "In Progress".
 # Runs Council validation, posts to Slack, waits for /go before implementing.
+# Kill-switch: set DISABLE_L3_LINEAR=true in repo variables to disable.
 
 name: Claude Code Linear Dispatch
 
@@ -21,6 +22,7 @@ permissions:
 jobs:
   # ----- Phase 1: Council Gate -----
   council:
+    if: vars.DISABLE_L3_LINEAR != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -28,6 +30,7 @@ jobs:
 
       - name: Council Validation
         id: council
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -67,6 +70,7 @@ jobs:
 
       # Extract Claude's report from execution log and create GitHub issue
       - name: Create Council Issue
+        if: steps.council.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

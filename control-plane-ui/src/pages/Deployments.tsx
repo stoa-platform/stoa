@@ -494,16 +494,23 @@ function PipelineTracesTab() {
 // =============================================================================
 
 function DeploymentHistoryTab() {
-  const { isReady } = useAuth();
+  const { isReady, hasPermission } = useAuth();
   const toast = useToastActions();
   const [confirm, ConfirmDialog] = useConfirm();
   const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [apis, setApis] = useState<API[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>('');
   const [selectedApi, setSelectedApi] = useState<string>('');
+  const [selectedEnv, setSelectedEnv] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const canDeploy = hasPermission('apis:deploy');
+  const pageSize = 20;
 
   useEffect(() => {
     if (isReady) loadTenants();
@@ -512,15 +519,15 @@ function DeploymentHistoryTab() {
   useEffect(() => {
     if (selectedTenant) {
       loadApis(selectedTenant);
-      loadDeployments(selectedTenant);
+      setPage(1);
     }
   }, [selectedTenant]);
 
   useEffect(() => {
     if (selectedTenant) {
-      loadDeployments(selectedTenant, selectedApi || undefined);
+      loadDeployments();
     }
-  }, [selectedApi]);
+  }, [selectedTenant, selectedApi, selectedEnv, selectedStatus, page]);
 
   async function loadTenants() {
     try {
@@ -528,8 +535,8 @@ function DeploymentHistoryTab() {
       setTenants(data);
       if (data.length > 0) setSelectedTenant(data[0].id);
       setLoading(false);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load tenants');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load tenants');
       setLoading(false);
     }
   }
@@ -538,20 +545,29 @@ function DeploymentHistoryTab() {
     try {
       const data = await apiService.getApis(tenantId);
       setApis(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load APIs:', err);
     }
   }
 
-  async function loadDeployments(tenantId: string, apiId?: string) {
+  async function loadDeployments() {
+    if (!selectedTenant) return;
     try {
       setLoading(true);
-      const data = await apiService.getDeployments(tenantId, apiId);
-      setDeployments(data);
+      const result = await apiService.listDeployments(selectedTenant, {
+        api_id: selectedApi || undefined,
+        environment: selectedEnv || undefined,
+        status: selectedStatus || undefined,
+        page,
+        page_size: pageSize,
+      });
+      setDeployments(result.items);
+      setTotalCount(result.total);
       setError(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load deployments');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load deployments');
       setDeployments([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
@@ -570,21 +586,29 @@ function DeploymentHistoryTab() {
       try {
         await apiService.rollbackDeployment(selectedTenant, deploymentId);
         toast.success(`Deployment for ${apiName} rolled back successfully`);
-        loadDeployments(selectedTenant, selectedApi || undefined);
-      } catch (err: any) {
-        toast.error(err.message || 'Failed to rollback deployment');
+        loadDeployments();
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to rollback deployment');
       }
     },
-    [selectedTenant, selectedApi, confirm, toast]
+    [selectedTenant, confirm, toast]
   );
 
-  const statusColors: Record<string, string> = {
+  const deployStatusColors: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
     success: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     rolled_back: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
   };
+
+  const envColors: Record<string, string> = {
+    dev: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    staging: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    production: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  };
+
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   if (loading && tenants.length === 0) {
     return (
@@ -613,6 +637,7 @@ function DeploymentHistoryTab() {
               onChange={(e) => {
                 setSelectedTenant(e.target.value);
                 setSelectedApi('');
+                setPage(1);
               }}
               className="w-48 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
@@ -625,11 +650,14 @@ function DeploymentHistoryTab() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
-              API (optional)
+              API
             </label>
             <select
               value={selectedApi}
-              onChange={(e) => setSelectedApi(e.target.value)}
+              onChange={(e) => {
+                setSelectedApi(e.target.value);
+                setPage(1);
+              }}
               className="w-48 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All APIs</option>
@@ -638,6 +666,44 @@ function DeploymentHistoryTab() {
                   {api.display_name || api.name}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              Environment
+            </label>
+            <select
+              value={selectedEnv}
+              onChange={(e) => {
+                setSelectedEnv(e.target.value);
+                setPage(1);
+              }}
+              className="w-40 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All</option>
+              <option value="dev">Dev</option>
+              <option value="staging">Staging</option>
+              <option value="production">Production</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1">
+              Status
+            </label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setPage(1);
+              }}
+              className="w-40 border border-gray-300 dark:border-neutral-600 rounded-lg px-3 py-2 bg-white dark:bg-neutral-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All</option>
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+              <option value="rolled_back">Rolled Back</option>
             </select>
           </div>
         </div>
@@ -675,7 +741,7 @@ function DeploymentHistoryTab() {
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
-                  Started
+                  Created
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                   Deployed By
@@ -695,14 +761,15 @@ function DeploymentHistoryTab() {
                     <div className="text-xs text-gray-500 dark:text-neutral-400 font-mono">
                       {deployment.api_id}
                     </div>
+                    {deployment.rollback_of && (
+                      <div className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
+                        rollback → v{deployment.rollback_version}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
-                      className={`px-2 py-1 text-xs font-medium rounded ${
-                        deployment.environment === 'dev'
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                      }`}
+                      className={`px-2 py-1 text-xs font-medium rounded ${envColors[deployment.environment] || 'bg-gray-100 text-gray-700'}`}
                     >
                       {deployment.environment.toUpperCase()}
                     </span>
@@ -712,7 +779,7 @@ function DeploymentHistoryTab() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
-                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${statusColors[deployment.status]}`}
+                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${deployStatusColors[deployment.status] || ''}`}
                     >
                       {deployment.status.replace('_', ' ')}
                     </span>
@@ -726,32 +793,20 @@ function DeploymentHistoryTab() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-neutral-400">
-                    {new Date(deployment.started_at).toLocaleString()}
+                    {new Date(deployment.created_at).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-neutral-400">
                     {deployment.deployed_by}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div className="flex gap-2">
-                      {deployment.awx_job_id && (
-                        <a
-                          href={config.services.awx.getJobUrl(deployment.awx_job_id)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          View Job
-                        </a>
-                      )}
-                      {deployment.status === 'success' && (
-                        <button
-                          onClick={() => handleRollback(deployment.id, deployment.api_name)}
-                          className="text-orange-600 hover:text-orange-800"
-                        >
-                          Rollback
-                        </button>
-                      )}
-                    </div>
+                    {canDeploy && deployment.status === 'success' && (
+                      <button
+                        onClick={() => handleRollback(deployment.id, deployment.api_name)}
+                        className="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300"
+                      >
+                        Rollback
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -759,6 +814,35 @@ function DeploymentHistoryTab() {
           </table>
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500 dark:text-neutral-400">
+            Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalCount)} of{' '}
+            {totalCount}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-neutral-600 rounded-lg disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-white"
+            >
+              Previous
+            </button>
+            <span className="px-3 py-1.5 text-sm text-gray-700 dark:text-neutral-300">
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-neutral-600 rounded-lg disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-neutral-700 dark:text-white"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {ConfirmDialog}
     </div>

@@ -159,9 +159,11 @@ export const mockDeployments: Deployment[] = [
     environment: 'dev',
     version: '1.0.0',
     status: 'success',
-    started_at: '2024-01-15T10:00:00Z',
-    completed_at: '2024-01-15T10:05:00Z',
     deployed_by: 'parzival',
+    created_at: '2024-01-15T10:00:00Z',
+    updated_at: '2024-01-15T10:05:00Z',
+    completed_at: '2024-01-15T10:05:00Z',
+    attempt_count: 1,
   },
 ];
 

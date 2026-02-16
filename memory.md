@@ -100,6 +100,7 @@
   - Keycloak `default-roles-stoa` updated: `viewer` added to composites
 - CAB-1162: SEO Tracking (3 pts) — PR #564 (sitemap verified, 32/32 meta descriptions compliant, SEO-TRACKING.md)
 - CAB-1187: Blog Batch 7 (8 pts) — stoa-docs PR #48 (5 articles: A3 MCP tools, O8 circuit breaker, D2 stoactl, A5 rate limiting, D3 Docker Compose)
+- CAB-1289: Gateway Test Coverage Phase 1-2 + dead code (34 pts) — PR #566 (72 new tests, -620 LOC dead code, 754 total gateway tests)
 
 ## 🔴 IN PROGRESS
 
@@ -111,7 +112,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - [ ] Video backup filmée
 - Known: API creation requires GitLab → use Console UI; rate limiting not configured; httpbin flaky
 
-## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 124 pts (25 issues)
+## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 160 pts scoped | Done: 158 pts (26 issues)
 
 ### Track 1 — Demo Finale (6 pts)
 - CAB-1151: Dress Rehearsal (3 pts, P0)

@@ -196,4 +196,113 @@ mod tests {
         session.last_activity = Utc::now() - Duration::seconds(10);
         assert!(session.is_expired(short_ttl));
     }
+
+    #[tokio::test]
+    async fn test_update_metadata() {
+        let manager = SessionManager::new(30);
+        let session = Session::new("m-1".into(), "t-1".into());
+        manager.create(session).await;
+
+        assert!(
+            manager
+                .update_metadata("m-1", "key".into(), "val".into())
+                .await
+        );
+        assert!(
+            !manager
+                .update_metadata("nonexistent", "k".into(), "v".into())
+                .await
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_metadata() {
+        let manager = SessionManager::new(30);
+        let session = Session::new("m-2".into(), "t-1".into());
+        manager.create(session).await;
+
+        manager
+            .update_metadata("m-2", "proto".into(), "2025-03-26".into())
+            .await;
+        assert_eq!(
+            manager.get_metadata("m-2", "proto").await,
+            Some("2025-03-26".to_string())
+        );
+        assert_eq!(manager.get_metadata("m-2", "missing").await, None);
+        assert_eq!(manager.get_metadata("nonexistent", "proto").await, None);
+    }
+
+    #[test]
+    fn test_cleanup_expired_sessions() {
+        let manager = SessionManager::new(30);
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            manager
+                .create(Session::new("fresh".into(), "t".into()))
+                .await;
+            let mut old = Session::new("old".into(), "t".into());
+            old.last_activity = Utc::now() - Duration::hours(1);
+            manager.create(old).await;
+
+            assert_eq!(manager.count(), 2);
+            manager.cleanup_expired();
+            assert_eq!(manager.count(), 1);
+            assert!(manager.get("fresh").await.is_some());
+            assert!(manager.get("old").await.is_none());
+        });
+    }
+
+    #[test]
+    fn test_count() {
+        let manager = SessionManager::new(30);
+        assert_eq!(manager.count(), 0);
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            manager.create(Session::new("a".into(), "t".into())).await;
+            assert_eq!(manager.count(), 1);
+            manager.create(Session::new("b".into(), "t".into())).await;
+            assert_eq!(manager.count(), 2);
+            manager.remove("a").await;
+            assert_eq!(manager.count(), 1);
+        });
+    }
+
+    #[test]
+    fn test_default_ttl() {
+        let manager = SessionManager::default();
+        assert_eq!(manager.ttl, Duration::minutes(30));
+    }
+
+    #[test]
+    fn test_clone_shares_state() {
+        let manager = SessionManager::new(30);
+        let clone = manager.clone();
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            manager
+                .create(Session::new("shared".into(), "t".into()))
+                .await;
+            assert!(clone.get("shared").await.is_some());
+        });
+    }
+
+    #[tokio::test]
+    async fn test_get_nonexistent_session() {
+        let manager = SessionManager::new(30);
+        assert!(manager.get("does-not-exist").await.is_none());
+    }
 }

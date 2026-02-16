@@ -24,7 +24,6 @@ mod retry;
 
 pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
 pub use circuit_breaker::{CircuitBreakerRegistry, CircuitBreakerStatsEntry};
-#[allow(unused_imports)]
 pub use circuit_breaker::{CircuitBreakerStats, CircuitState};
 pub use fallback::{execute_or_direct, FallbackChain};
 pub use retry::{retry_with_backoff, retry_with_backoff_if, RetryConfig};

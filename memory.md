@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-16 (session 15 — TLS/HTTPS hardening: status cert + Traefik redirect global)
+> Dernière MAJ: 2026-02-16 (session 14 — CAB-1162 SEO Tracking + CAB-1187 Blog Batch 7)
 
 ## ✅ DONE
 
@@ -148,10 +148,3 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - Velocity C8 target: 160 pts (5 tracks parallèles, AI Factory optimized)
 - Portal 2FA for cert upload: user requirement from Council — use Keycloak TOTP step-up
 - New Linear tickets: CAB-1182 → CAB-1187 (6 tickets created for C8)
-
-## 🔒 TLS & HTTPS Hardening (2026-02-16)
-- **status.gostoa.dev**: Let's Encrypt cert provisioned via GitHub Pages (retrait/remise CNAME + Enforce HTTPS). Expire 2026-05-17
-- **Hetzner K3s Traefik**: global HTTP→HTTPS redirect via `HelmChartConfig` (`ports.web.redirections.entryPoint.to: websecure, permanent: true`)
-  - Corrige: vault.gostoa.dev + 7 staging-*.gostoa.dev (servaient en HTTP sans redirect)
-- **prometheus.gostoa.dev**: DNS déjà supprimé (Cloudflare) + pas d'ingress K8s — accès interne uniquement
-- **21/21 sous-domaines**: certificat Let's Encrypt valide + redirect HTTP→HTTPS confirmé

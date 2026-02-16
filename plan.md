@@ -95,7 +95,6 @@
 - [ ] CAB-1151: Dress Rehearsal — Smoke test final PROD (3 pts, P1)
 - [ ] CAB-1128: Design Partner Communication — Client A Beta Access (3 pts, P2)
 - [ ] CAB-709: UAC for LLM — Contrats unifies pour backends IA (5 pts, P2) — DEFERRED (archived)
-
 ### Backlog — DX Remediation (from CAB-1035 friction analysis) ✅ ALL DONE
 
 - [x] CAB-1170: [DX] Enable Keycloak self-registration (5 pts, P1) — PRs #529, #530 (Council 8.50/10)

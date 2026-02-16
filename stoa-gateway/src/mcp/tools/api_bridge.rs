@@ -200,11 +200,14 @@ mod tests {
                     "version": "1.2"
                 }]
             })))
-            .mount(&mock).await;
+            .mount(&mock)
+            .await;
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client).await.unwrap();
+        let count = discover_api_tools(&registry, &mock.uri(), &client)
+            .await
+            .unwrap();
 
         assert_eq!(count, 1);
         let tool = registry.get("payments").unwrap();
@@ -220,11 +223,14 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "apis": [{"id": "no-backend", "name": "No Backend"}]
             })))
-            .mount(&mock).await;
+            .mount(&mock)
+            .await;
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client).await.unwrap();
+        let count = discover_api_tools(&registry, &mock.uri(), &client)
+            .await
+            .unwrap();
         assert_eq!(count, 0);
         assert!(registry.get("no-backend").is_none());
     }
@@ -241,16 +247,28 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let pre = DynamicTool::new(
-            "existing", "pre-registered", "http://x", "GET",
-            ToolSchema { schema_type: "object".to_string(), properties: Default::default(), required: vec![] },
+            "existing",
+            "pre-registered",
+            "http://x",
+            "GET",
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties: Default::default(),
+                required: vec![],
+            },
             "t1",
         );
         registry.register(Arc::new(pre));
 
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client).await.unwrap();
+        let count = discover_api_tools(&registry, &mock.uri(), &client)
+            .await
+            .unwrap();
         assert_eq!(count, 0);
-        assert_eq!(registry.get("existing").unwrap().description(), "pre-registered");
+        assert_eq!(
+            registry.get("existing").unwrap().description(),
+            "pre-registered"
+        );
     }
 
     #[tokio::test]
@@ -259,11 +277,14 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/v1/internal/catalog/apis"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"apis": []})))
-            .mount(&mock).await;
+            .mount(&mock)
+            .await;
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        let count = discover_api_tools(&registry, &mock.uri(), &client).await.unwrap();
+        let count = discover_api_tools(&registry, &mock.uri(), &client)
+            .await
+            .unwrap();
         assert_eq!(count, 0);
     }
 
@@ -279,7 +300,9 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let client = Client::new();
-        discover_api_tools(&registry, &mock.uri(), &client).await.unwrap();
+        discover_api_tools(&registry, &mock.uri(), &client)
+            .await
+            .unwrap();
 
         let tool = registry.get("simple").unwrap();
         assert_eq!(tool.description(), "Simple");
@@ -292,7 +315,8 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/v1/internal/catalog/apis"))
             .respond_with(ResponseTemplate::new(500).set_body_string("internal error"))
-            .mount(&mock).await;
+            .mount(&mock)
+            .await;
 
         let registry = ToolRegistry::new();
         let client = Client::new();
@@ -307,7 +331,8 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/v1/internal/catalog/apis"))
             .respond_with(ResponseTemplate::new(200).set_body_string("not json"))
-            .mount(&mock).await;
+            .mount(&mock)
+            .await;
 
         let registry = ToolRegistry::new();
         let client = Client::new();
@@ -316,4 +341,3 @@ mod tests {
         assert!(result.unwrap_err().contains("parse"));
     }
 }
-

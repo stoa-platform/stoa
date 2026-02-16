@@ -425,8 +425,13 @@ mod tests {
     fn disabled_engine_allows_read() {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
-            Some("user-1".into()), None, "tenant-1", "stoa_catalog",
-            Action::Read, vec!["stoa:read".into()], vec!["viewer".into()],
+            Some("user-1".into()),
+            None,
+            "tenant-1",
+            "stoa_catalog",
+            Action::Read,
+            vec!["stoa:read".into()],
+            vec!["viewer".into()],
         );
         assert!(result.is_ok());
     }
@@ -435,8 +440,13 @@ mod tests {
     fn disabled_engine_allows_admin() {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
-            Some("admin".into()), Some("admin@test.com".into()), "tenant-1", "stoa_security",
-            Action::ManageContracts, vec!["stoa:admin".into()], vec!["cpi-admin".into()],
+            Some("admin".into()),
+            Some("admin@test.com".into()),
+            "tenant-1",
+            "stoa_security",
+            Action::ManageContracts,
+            vec!["stoa:admin".into()],
+            vec!["cpi-admin".into()],
         );
         assert!(result.is_ok());
     }
@@ -445,8 +455,13 @@ mod tests {
     fn disabled_engine_allows_write() {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check_with_context(
-            None, None, "tenant-1", "stoa_subscription",
-            Action::Create, vec![], vec![],
+            None,
+            None,
+            "tenant-1",
+            "stoa_subscription",
+            Action::Create,
+            vec![],
+            vec![],
         );
         assert!(result.is_ok());
     }
@@ -458,4 +473,3 @@ mod tests {
         assert!(result.is_ok());
     }
 }
-

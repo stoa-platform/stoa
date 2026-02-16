@@ -1145,11 +1145,7 @@ mod tests {
             "stoa_security",
         ];
         for name in &known {
-            assert!(
-                has_native_implementation(name),
-                "{} should be native",
-                name
-            );
+            assert!(has_native_implementation(name), "{} should be native", name);
         }
     }
 
@@ -1498,7 +1494,8 @@ mod tests {
             Mock::given(method("GET"))
                 .and(path("/v1/test"))
                 .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "test").await;
             let ctx = make_ctx();
@@ -1512,7 +1509,8 @@ mod tests {
             Mock::given(method("GET"))
                 .and(path("/v1/fail"))
                 .respond_with(ResponseTemplate::new(404).set_body_string("not found"))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "test").await;
             let ctx = make_ctx();
@@ -1526,7 +1524,8 @@ mod tests {
             Mock::given(method("POST"))
                 .and(path("/v1/create"))
                 .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id": "new-1"})))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "test").await;
             let ctx = make_ctx();
@@ -1541,7 +1540,8 @@ mod tests {
             Mock::given(method("POST"))
                 .and(path("/v1/create"))
                 .respond_with(ResponseTemplate::new(400).set_body_string("bad request"))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "test").await;
             let ctx = make_ctx();
@@ -1555,7 +1555,8 @@ mod tests {
             Mock::given(method("DELETE"))
                 .and(path("/v1/items/1"))
                 .respond_with(ResponseTemplate::new(200).set_body_json(json!({"deleted": true})))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "test").await;
             let ctx = make_ctx();
@@ -1569,7 +1570,8 @@ mod tests {
             Mock::given(method("DELETE"))
                 .and(path("/v1/items/2"))
                 .respond_with(ResponseTemplate::new(200))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "test").await;
             let ctx = make_ctx();
@@ -1587,7 +1589,8 @@ mod tests {
                 .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                     "tenants": [{"id": "t1", "name": "Acme"}]
                 })))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "stoa_tenants").await;
             let ctx = make_ctx();
@@ -1606,7 +1609,8 @@ mod tests {
             Mock::given(method("GET"))
                 .and(path("/v1/tenants"))
                 .respond_with(ResponseTemplate::new(403).set_body_string("forbidden"))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "stoa_tenants").await;
             let ctx = make_ctx();
@@ -1624,11 +1628,15 @@ mod tests {
                 .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                     "apis": [{"id": "api1", "name": "My API"}]
                 })))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "stoa_catalog").await;
             let ctx = make_ctx();
-            let result = tool.handle_catalog(&json!({"action": "list"}), &ctx).await.unwrap();
+            let result = tool
+                .handle_catalog(&json!({"action": "list"}), &ctx)
+                .await
+                .unwrap();
             let text = match &result.content[0] {
                 crate::mcp::tools::ToolContent::Text { text } => text,
                 _ => panic!("expected text"),
@@ -1645,11 +1653,15 @@ mod tests {
                 .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                     "id": "api1", "name": "My API"
                 })))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "stoa_catalog").await;
             let ctx = make_ctx();
-            let result = tool.handle_catalog(&json!({"action": "get", "api_id": "api1"}), &ctx).await.unwrap();
+            let result = tool
+                .handle_catalog(&json!({"action": "get", "api_id": "api1"}), &ctx)
+                .await
+                .unwrap();
             let text = match &result.content[0] {
                 crate::mcp::tools::ToolContent::Text { text } => text,
                 _ => panic!("expected text"),
@@ -1666,11 +1678,15 @@ mod tests {
                 .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                     "apis": [{"id": "payments", "name": "Payments"}]
                 })))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "stoa_catalog").await;
             let ctx = make_ctx();
-            let result = tool.handle_catalog(&json!({"action": "search", "query": "pay"}), &ctx).await.unwrap();
+            let result = tool
+                .handle_catalog(&json!({"action": "search", "query": "pay"}), &ctx)
+                .await
+                .unwrap();
             let text = match &result.content[0] {
                 crate::mcp::tools::ToolContent::Text { text } => text,
                 _ => panic!("expected text"),
@@ -1688,11 +1704,15 @@ mod tests {
                 .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                     "subscriptions": [{"id": "sub-1"}]
                 })))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "stoa_subscription").await;
             let ctx = make_ctx();
-            let result = tool.handle_subscription(&json!({"action": "list"}), &ctx).await.unwrap();
+            let result = tool
+                .handle_subscription(&json!({"action": "list"}), &ctx)
+                .await
+                .unwrap();
             let text = match &result.content[0] {
                 crate::mcp::tools::ToolContent::Text { text } => text,
                 _ => panic!("expected text"),
@@ -1709,13 +1729,18 @@ mod tests {
                 .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                     "id": "sub-new", "status": "pending"
                 })))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "stoa_subscription").await;
             let ctx = make_ctx();
-            let result = tool.handle_subscription(
-                &json!({"action": "create", "api_id": "api1", "plan": "free"}), &ctx
-            ).await.unwrap();
+            let result = tool
+                .handle_subscription(
+                    &json!({"action": "create", "api_id": "api1", "plan": "free"}),
+                    &ctx,
+                )
+                .await
+                .unwrap();
             let text = match &result.content[0] {
                 crate::mcp::tools::ToolContent::Text { text } => text,
                 _ => panic!("expected text"),
@@ -1730,13 +1755,16 @@ mod tests {
             Mock::given(method("GET"))
                 .and(path("/v1/mcp/subscriptions"))
                 .respond_with(ResponseTemplate::new(500).set_body_string("server error"))
-                .mount(&mock).await;
+                .mount(&mock)
+                .await;
 
             let tool = make_mock_tool(&mock, "stoa_subscription").await;
             let ctx = make_ctx();
-            let err = tool.handle_subscription(&json!({"action": "list"}), &ctx).await.unwrap_err();
+            let err = tool
+                .handle_subscription(&json!({"action": "list"}), &ctx)
+                .await
+                .unwrap_err();
             assert!(err.to_string().contains("500"));
         }
     }
-
 }

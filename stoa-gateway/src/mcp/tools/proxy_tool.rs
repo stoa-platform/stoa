@@ -120,7 +120,13 @@ mod tests {
     #[test]
     fn constructor_and_getters() {
         let cp = Arc::new(ToolProxyClient::new("http://localhost:9999", None));
-        let proxy = ProxyTool::new("my_tool", "My description", make_schema(), Action::ViewMetrics, cp);
+        let proxy = ProxyTool::new(
+            "my_tool",
+            "My description",
+            make_schema(),
+            Action::ViewMetrics,
+            cp,
+        );
         assert_eq!(proxy.name(), "my_tool");
         assert_eq!(proxy.description(), "My description");
         assert_eq!(proxy.required_action(), Action::ViewMetrics);
@@ -136,7 +142,8 @@ mod tests {
                 "content": [{"type": "text", "text": "hello world"}],
                 "isError": false
             })))
-            .mount(&mock).await;
+            .mount(&mock)
+            .await;
 
         let cp = Arc::new(ToolProxyClient::new(&mock.uri(), None));
         let proxy = ProxyTool::new("test_tool", "test", make_schema(), Action::Read, cp);
@@ -158,7 +165,8 @@ mod tests {
                     {"type": "text", "text": "line two"}
                 ]
             })))
-            .mount(&mock).await;
+            .mount(&mock)
+            .await;
 
         let cp = Arc::new(ToolProxyClient::new(&mock.uri(), None));
         let proxy = ProxyTool::new("test_tool", "test", make_schema(), Action::Read, cp);
@@ -178,7 +186,8 @@ mod tests {
                 "content": [{"type": "text", "text": "oops"}],
                 "isError": true
             })))
-            .mount(&mock).await;
+            .mount(&mock)
+            .await;
 
         let cp = Arc::new(ToolProxyClient::new(&mock.uri(), None));
         let proxy = ProxyTool::new("test_tool", "test", make_schema(), Action::Read, cp);
@@ -192,7 +201,8 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/v1/mcp/tools/test_tool/invoke"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": "raw response"})))
-            .mount(&mock).await;
+            .mount(&mock)
+            .await;
 
         let cp = Arc::new(ToolProxyClient::new(&mock.uri(), None));
         let proxy = ProxyTool::new("test_tool", "test", make_schema(), Action::Read, cp);
@@ -211,7 +221,8 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "content": [{"type": "image", "data": "abc"}]
             })))
-            .mount(&mock).await;
+            .mount(&mock)
+            .await;
 
         let cp = Arc::new(ToolProxyClient::new(&mock.uri(), None));
         let proxy = ProxyTool::new("test_tool", "test", make_schema(), Action::Read, cp);
@@ -230,4 +241,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-

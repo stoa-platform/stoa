@@ -433,12 +433,17 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
 /// Inject W3C Trace Context `traceparent` header into outgoing request.
 ///
 /// Format: `00-{trace_id}-{span_id}-{flags}`
-/// This propagates the current trace context to downstream services,
+/// where trace_id is 32 hex chars, span_id is 16 hex chars, flags is `01` (sampled).
+/// This propagates a trace context to downstream services,
 /// enabling end-to-end distributed tracing visible in Tempo/Grafana.
-/// TODO: Re-enable traceparent injection once OpenTelemetry deps are stabilized (CAB-1088).
+///
+/// Uses UUID v4 for random trace/span ID generation (no OpenTelemetry dependency).
+/// CAB-1088: migrate to opentelemetry-propagator when OTel API stabilizes.
 fn inject_traceparent(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    // Disabled: opentelemetry crate removed pending API stabilization
-    builder
+    let trace_id = uuid::Uuid::new_v4().as_simple().to_string(); // 32 hex chars
+    let span_id = &uuid::Uuid::new_v4().as_simple().to_string()[..16]; // 16 hex chars
+    let traceparent = format!("00-{}-{}-01", trace_id, span_id);
+    builder.header("traceparent", traceparent)
 }
 
 #[cfg(test)]
@@ -485,5 +490,44 @@ mod tests {
         assert!(is_blocked_url("http://localhost:3000"));
         assert!(!is_blocked_url("http://example.com/api"));
         assert!(!is_blocked_url("http://51.83.45.13:8080/health"));
+    }
+
+    #[test]
+    fn test_traceparent_format() {
+        let client = reqwest::Client::new();
+        let builder = client.get("http://example.com");
+        let builder = inject_traceparent(builder);
+        // Build request to inspect headers
+        let req = builder.build().expect("build request");
+        let tp = req
+            .headers()
+            .get("traceparent")
+            .expect("traceparent header")
+            .to_str()
+            .expect("valid string");
+
+        // Format: 00-{32hex}-{16hex}-01
+        let parts: Vec<&str> = tp.split('-').collect();
+        assert_eq!(parts.len(), 4, "traceparent should have 4 parts");
+        assert_eq!(parts[0], "00", "version should be 00");
+        assert_eq!(parts[1].len(), 32, "trace-id should be 32 hex chars");
+        assert_eq!(parts[2].len(), 16, "span-id should be 16 hex chars");
+        assert_eq!(parts[3], "01", "flags should be 01 (sampled)");
+    }
+
+    #[test]
+    fn test_traceparent_uniqueness() {
+        let client = reqwest::Client::new();
+
+        let b1 = inject_traceparent(client.get("http://example.com"));
+        let b2 = inject_traceparent(client.get("http://example.com"));
+
+        let r1 = b1.build().expect("build");
+        let r2 = b2.build().expect("build");
+
+        let tp1 = r1.headers().get("traceparent").unwrap().to_str().unwrap();
+        let tp2 = r2.headers().get("traceparent").unwrap().to_str().unwrap();
+
+        assert_ne!(tp1, tp2, "each request should get a unique traceparent");
     }
 }

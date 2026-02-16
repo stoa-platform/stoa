@@ -357,25 +357,17 @@ impl Default for ToolRegistry {
 // Example tool implementation
 // ============================================
 
-/// Example: STOA Create API Tool
-#[allow(dead_code)]
+/// STOA Create API Tool — creates APIs in the Control Plane catalog via REST.
 pub struct StoaCreateApiTool {
-    control_plane: Arc<dyn std::any::Any + Send + Sync>,
-    git_sync: Arc<dyn std::any::Any + Send + Sync>,
-    uac_enforcer: Arc<dyn std::any::Any + Send + Sync>,
+    client: reqwest::Client,
+    cp_base_url: String,
 }
 
 impl StoaCreateApiTool {
-    #[allow(dead_code)]
-    pub fn new(
-        control_plane: Arc<dyn std::any::Any + Send + Sync>,
-        git_sync: Arc<dyn std::any::Any + Send + Sync>,
-        uac_enforcer: Arc<dyn std::any::Any + Send + Sync>,
-    ) -> Self {
+    pub fn new(client: reqwest::Client, cp_base_url: String) -> Self {
         Self {
-            control_plane,
-            git_sync,
-            uac_enforcer,
+            client,
+            cp_base_url: cp_base_url.trim_end_matches('/').to_string(),
         }
     }
 }
@@ -441,16 +433,45 @@ impl Tool for StoaCreateApiTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArguments("Missing 'version' field".into()))?;
 
-        // TODO: Actual implementation
-        // 1. Parse OpenAPI spec
-        // 2. Validate against schema
-        // 3. Create API in control plane
-        // 4. Sync to Git
+        let openapi_spec = args
+            .get("openapi_spec")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolError::InvalidArguments("Missing 'openapi_spec' field".into()))?;
 
-        Ok(ToolResult::text(format!(
-            "API '{}' version '{}' created successfully for tenant '{}'",
-            name, version, ctx.tenant_id
-        )))
+        let url = format!("{}/v1/tenants/{}/apis", self.cp_base_url, ctx.tenant_id);
+
+        let payload = serde_json::json!({
+            "name": name,
+            "version": version,
+            "openapi_spec": openapi_spec,
+        });
+
+        let mut req = self.client.post(&url).json(&payload);
+        if let Some(token) = &ctx.raw_token {
+            req = req.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(format!("CP API request failed: {}", e)))?;
+
+        if resp.status().is_success() {
+            let body: Value = resp.json().await.unwrap_or_else(
+                |_| serde_json::json!({"status": "created", "name": name, "version": version}),
+            );
+            Ok(ToolResult::text(
+                serde_json::to_string_pretty(&body)
+                    .unwrap_or_else(|_| format!("API '{}' v{} created", name, version)),
+            ))
+        } else {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            Err(ToolError::ExecutionFailed(format!(
+                "CP API returned {}: {}",
+                status, body
+            )))
+        }
     }
 }
 
@@ -464,9 +485,8 @@ mod tests {
         assert_eq!(registry.count(), 0);
 
         let tool = Arc::new(StoaCreateApiTool::new(
-            Arc::new(()),
-            Arc::new(()),
-            Arc::new(()),
+            reqwest::Client::new(),
+            "http://localhost:8000".to_string(),
         ));
 
         registry.register(tool);
@@ -479,7 +499,8 @@ mod tests {
 
     #[test]
     fn test_tool_definition() {
-        let tool = StoaCreateApiTool::new(Arc::new(()), Arc::new(()), Arc::new(()));
+        let tool =
+            StoaCreateApiTool::new(reqwest::Client::new(), "http://localhost:8000".to_string());
 
         let def = tool.definition();
         assert_eq!(def.name, "stoa_create_api");
@@ -489,7 +510,8 @@ mod tests {
 
     #[test]
     fn test_required_action_override() {
-        let tool = StoaCreateApiTool::new(Arc::new(()), Arc::new(()), Arc::new(()));
+        let tool =
+            StoaCreateApiTool::new(reqwest::Client::new(), "http://localhost:8000".to_string());
 
         // Should override default Read action
         assert_eq!(tool.required_action(), Action::CreateApi);
@@ -531,7 +553,8 @@ mod tests {
 
     #[test]
     fn test_tool_definition_includes_annotations() {
-        let tool = StoaCreateApiTool::new(Arc::new(()), Arc::new(()), Arc::new(()));
+        let tool =
+            StoaCreateApiTool::new(reqwest::Client::new(), "http://localhost:8000".to_string());
         let def = tool.definition();
 
         // CreateApi → not read-only, not destructive
@@ -553,7 +576,8 @@ mod tests {
 
     #[test]
     fn test_tool_definition_serialization_with_annotations() {
-        let tool = StoaCreateApiTool::new(Arc::new(()), Arc::new(()), Arc::new(()));
+        let tool =
+            StoaCreateApiTool::new(reqwest::Client::new(), "http://localhost:8000".to_string());
         let def = tool.definition();
 
         let json = serde_json::to_value(&def).unwrap();
@@ -568,9 +592,8 @@ mod tests {
         let registry = ToolRegistry::new();
 
         let tool = Arc::new(StoaCreateApiTool::new(
-            Arc::new(()),
-            Arc::new(()),
-            Arc::new(()),
+            reqwest::Client::new(),
+            "http://localhost:8000".to_string(),
         ));
 
         registry.register(tool);
@@ -602,9 +625,8 @@ mod tests {
         let registry = ToolRegistry::new();
 
         let tool = Arc::new(StoaCreateApiTool::new(
-            Arc::new(()),
-            Arc::new(()),
-            Arc::new(()),
+            reqwest::Client::new(),
+            "http://localhost:8000".to_string(),
         ));
 
         registry.register(tool);
@@ -620,9 +642,8 @@ mod tests {
     fn test_list_no_filter_returns_all() {
         let registry = ToolRegistry::new();
         let tool = Arc::new(StoaCreateApiTool::new(
-            Arc::new(()),
-            Arc::new(()),
-            Arc::new(()),
+            reqwest::Client::new(),
+            "http://localhost:8000".to_string(),
         ));
         registry.register(tool);
         // No tenant filter → returns all
@@ -635,9 +656,8 @@ mod tests {
         let registry = ToolRegistry::new();
         // StoaCreateApiTool has no tenant_id override → global tool (tenant_id = None)
         let tool = Arc::new(StoaCreateApiTool::new(
-            Arc::new(()),
-            Arc::new(()),
-            Arc::new(()),
+            reqwest::Client::new(),
+            "http://localhost:8000".to_string(),
         ));
         registry.register(tool);
 
@@ -650,7 +670,8 @@ mod tests {
 
     #[test]
     fn test_tool_definition_tenant_id_none_by_default() {
-        let tool = StoaCreateApiTool::new(Arc::new(()), Arc::new(()), Arc::new(()));
+        let tool =
+            StoaCreateApiTool::new(reqwest::Client::new(), "http://localhost:8000".to_string());
         let def = tool.definition();
         assert!(def.tenant_id.is_none());
     }

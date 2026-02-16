@@ -3,6 +3,7 @@
 //! Shared state across all handlers.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use crate::auth::api_key::ApiKeyValidator;
 use crate::auth::jwt::{JwtValidator, JwtValidatorConfig};
@@ -29,6 +30,8 @@ use crate::uac::{Action, ContractRegistry};
 #[derive(Clone)]
 pub struct AppState {
     pub config: Config,
+    /// Timestamp when the gateway process started (for uptime tracking)
+    pub start_time: Instant,
     pub tool_registry: Arc<ToolRegistry>,
     pub session_manager: Arc<SessionManager>,
     pub rate_limiter: Arc<RateLimiter>,
@@ -265,8 +268,11 @@ impl AppState {
             tracing::info!("mTLS disabled (STOA_MTLS_ENABLED=false)");
         }
 
+        let start_time = Instant::now();
+
         Self {
             config,
+            start_time,
             tool_registry,
             session_manager,
             rate_limiter,
@@ -477,5 +483,17 @@ mod tests {
         let enforcer = make_disabled_enforcer();
         let result = enforcer.check("tenant-1", Action::Read).await;
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn start_time_tracks_uptime() {
+        let before = Instant::now();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let state = AppState::new(Config::default());
+        let elapsed = state.start_time.elapsed();
+        // start_time should have been set during AppState::new,
+        // so elapsed should be small (well under 1 second)
+        assert!(elapsed.as_secs() < 1);
+        assert!(state.start_time >= before);
     }
 }

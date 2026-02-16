@@ -14,7 +14,10 @@ use super::native_tool::{create_http_client, has_native_implementation, register
 use super::proxy_tool::ProxyTool;
 use super::{ToolRegistry, ToolSchema};
 use crate::control_plane::{RemoteToolDef, ToolProxyClient};
-use crate::resilience::{retry_with_backoff, CircuitBreaker, CircuitBreakerError, RetryConfig};
+use crate::mcp::session::SessionManager;
+use crate::resilience::{
+    retry_with_backoff, CircuitBreaker, CircuitBreakerError, CircuitBreakerRegistry, RetryConfig,
+};
 use crate::uac::Action;
 
 /// Default refresh interval for tool discovery
@@ -79,12 +82,21 @@ pub async fn discover_and_register(
     registry: Arc<ToolRegistry>,
     cp: &Arc<ToolProxyClient>,
     cb: Arc<CircuitBreaker>,
+    session_manager: Option<Arc<SessionManager>>,
+    circuit_breakers: Option<Arc<CircuitBreakerRegistry>>,
 ) -> Result<usize, String> {
     // First, register all native tools
     let cp_url = cp.base_url();
     let http_client = create_http_client();
     // Pass the actual registry so stoa_tools can introspect it
-    register_native_tools(&registry, http_client, cp_url, registry.clone());
+    register_native_tools(
+        &registry,
+        http_client,
+        cp_url,
+        registry.clone(),
+        session_manager,
+        circuit_breakers,
+    );
 
     tracing::info!("Native tools registered (12 STOA tools, direct CP API calls)");
 

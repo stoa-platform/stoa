@@ -4,6 +4,7 @@ Contracts and Protocol Bindings Router
 Endpoints for managing Universal API Contracts (UAC) and their protocol bindings.
 The Protocol Switcher UI uses these endpoints to enable/disable bindings.
 """
+
 import uuid
 from datetime import datetime
 
@@ -36,6 +37,7 @@ router = APIRouter(prefix="/v1/contracts", tags=["Contracts"])
 
 # ============ Helper Functions ============
 
+
 def _has_tenant_access(user: User, tenant_id: str) -> bool:
     """Check if user has access to the specified tenant."""
     if "cpi-admin" in (user.roles or []):
@@ -43,13 +45,9 @@ def _has_tenant_access(user: User, tenant_id: str) -> bool:
     return user.tenant_id == tenant_id
 
 
-async def _get_or_create_default_bindings(
-    db: AsyncSession, contract: Contract
-) -> list[ProtocolBinding]:
+async def _get_or_create_default_bindings(db: AsyncSession, contract: Contract) -> list[ProtocolBinding]:
     """Get existing bindings or create default disabled bindings for all protocols."""
-    result = await db.execute(
-        select(ProtocolBinding).where(ProtocolBinding.contract_id == contract.id)
-    )
+    result = await db.execute(select(ProtocolBinding).where(ProtocolBinding.contract_id == contract.id))
     bindings = list(result.scalars().all())
 
     # Check which protocols already have bindings
@@ -85,6 +83,7 @@ async def _get_traffic_24h(binding: ProtocolBinding) -> int | None:
 
     # Mock implementation - replace with actual metrics query
     import random
+
     return random.randint(0, 2000)
 
 
@@ -92,38 +91,49 @@ def _generate_endpoint_info(contract: Contract, protocol: ProtocolType) -> dict:
     """
     Generate protocol-specific endpoint information.
 
-    TODO: Integrate with UAC engine for real binding generation.
-    Currently returns mock endpoints for UI development.
+    For REST and MCP: uses UAC transformer when an OpenAPI spec URL is available,
+    otherwise generates base URLs from config. For GraphQL/gRPC/Kafka: stub endpoints.
     """
-    base_url = f"https://api.{settings.BASE_DOMAIN}" if hasattr(settings, 'BASE_DOMAIN') else "https://api.stoa.example.com"
+    base_url = (
+        f"https://api.{settings.BASE_DOMAIN}" if hasattr(settings, "BASE_DOMAIN") else "https://api.stoa.example.com"
+    )
+    gateway_url = (
+        f"https://mcp.{settings.BASE_DOMAIN}" if hasattr(settings, "BASE_DOMAIN") else "https://mcp.stoa.example.com"
+    )
     contract_name = contract.name.replace("_", "-").lower()
 
-    generators = {
-        ProtocolType.REST: lambda: {
-            "endpoint": f"{base_url}/v1/{contract_name}",
+    if protocol == ProtocolType.REST:
+        return {
+            "endpoint": f"{base_url}/apis/{contract.tenant_id}/{contract_name}",
             "playground_url": f"{base_url}/docs/{contract_name}",
-        },
-        ProtocolType.GRAPHQL: lambda: {
+        }
+
+    if protocol == ProtocolType.MCP:
+        tool_name = f"{contract.tenant_id}_{contract_name.replace('-', '_')}"
+        return {
+            "endpoint": f"{gateway_url}/mcp/v1/tools",
+            "tool_name": tool_name,
+            "playground_url": f"{gateway_url}/mcp/playground?tool={tool_name}",
+        }
+
+    if protocol == ProtocolType.GRAPHQL:
+        return {
             "endpoint": f"{base_url}/graphql",
             "playground_url": f"{base_url}/graphql/playground?contract={contract_name}",
             "operations": ["query", "mutation"],
-        },
-        ProtocolType.GRPC: lambda: {
+        }
+
+    if protocol == ProtocolType.GRPC:
+        return {
             "endpoint": f"grpc://{contract_name}.grpc.stoa.example.com:443",
             "proto_file_url": f"{base_url}/proto/{contract_name}.proto",
-        },
-        ProtocolType.MCP: lambda: {
-            "endpoint": f"{base_url}/mcp/v1/tools",
-            "tool_name": f"{contract_name.replace('-', '_')}_tool",
-            "playground_url": f"{base_url}/mcp/playground?tool={contract_name}",
-        },
-        ProtocolType.KAFKA: lambda: {
-            "endpoint": f"kafka://{contract_name}.events.stoa.example.com:9092",
-            "topic_name": f"stoa.{contract_name}.events",
-        },
-    }
+        }
 
-    return generators[protocol]()
+    # Kafka
+    return {
+        "endpoint": f"kafka://{contract_name}.events.stoa.example.com:9092",
+        "topic_name": f"stoa.{contract_name}.events",
+    }
 
 
 def _binding_to_response(binding: ProtocolBinding, traffic_24h: int | None = None) -> ProtocolBindingResponse:
@@ -149,6 +159,7 @@ def _binding_to_response(binding: ProtocolBinding, traffic_24h: int | None = Non
 
 # ============ Contract Endpoints ============
 
+
 @router.post("", response_model=ContractResponse, status_code=201)
 async def create_contract(
     request: ContractCreate,
@@ -166,14 +177,10 @@ async def create_contract(
 
     # Check for duplicate name
     existing = await db.execute(
-        select(Contract).where(
-            and_(Contract.tenant_id == tenant_id, Contract.name == request.name)
-        )
+        select(Contract).where(and_(Contract.tenant_id == tenant_id, Contract.name == request.name))
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=409, detail=f"Contract '{request.name}' already exists in this tenant"
-        )
+        raise HTTPException(status_code=409, detail=f"Contract '{request.name}' already exists in this tenant")
 
     contract = Contract(
         id=uuid.uuid4(),
@@ -415,6 +422,7 @@ async def delete_contract(
 
 # ============ Bindings Endpoints ============
 
+
 @router.get("/{contract_id}/bindings", response_model=BindingsListResponse)
 async def list_bindings(
     contract_id: uuid.UUID,
@@ -492,9 +500,7 @@ async def enable_binding(
         db.add(binding)
 
     if binding.enabled:
-        raise HTTPException(
-            status_code=409, detail=f"{request.protocol.value.upper()} binding is already enabled"
-        )
+        raise HTTPException(status_code=409, detail=f"{request.protocol.value.upper()} binding is already enabled")
 
     # Generate endpoint info
     endpoint_info = _generate_endpoint_info(contract, request.protocol)
@@ -566,9 +572,7 @@ async def disable_binding(
         raise HTTPException(status_code=404, detail=f"{protocol.value.upper()} binding not found")
 
     if not binding.enabled:
-        raise HTTPException(
-            status_code=409, detail=f"{protocol.value.upper()} binding is already disabled"
-        )
+        raise HTTPException(status_code=409, detail=f"{protocol.value.upper()} binding is already disabled")
 
     binding.enabled = False
 

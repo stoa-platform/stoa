@@ -1,5 +1,7 @@
 """Mappers: translate Control Plane specs to stoa-gateway admin API format."""
 
+from __future__ import annotations
+
 
 def map_api_spec_to_stoa(api_spec: dict, tenant_id: str) -> dict:
     """Map CP desired_state / api_spec to stoa-gateway admin API payload.
@@ -90,4 +92,37 @@ def map_quota_to_policy(app_spec: dict, subscription_id: str) -> dict | None:
         "api_id": app_spec.get("api_id", ""),
         "config": config,
         "priority": 50,
+    }
+
+
+def map_uac_to_stoa_contract(contract_spec: dict) -> dict:
+    """Map a UacContractSpec dict to the stoa-gateway /admin/contracts payload.
+
+    The gateway expects:
+    {name, version, tenant_id, display_name, description, classification,
+     endpoints: [{path, methods, backend_url, operation_id, input_schema, output_schema}],
+     required_policies, status, source_spec_url, spec_hash}
+    """
+    return {
+        "name": contract_spec.get("name", ""),
+        "version": contract_spec.get("version", "1.0.0"),
+        "tenant_id": contract_spec.get("tenant_id", ""),
+        "display_name": contract_spec.get("display_name"),
+        "description": contract_spec.get("description"),
+        "classification": contract_spec.get("classification", "H"),
+        "endpoints": [
+            {
+                "path": ep.get("path", ""),
+                "methods": ep.get("methods", []),
+                "backend_url": ep.get("backend_url", ""),
+                "operation_id": ep.get("operation_id"),
+                "input_schema": ep.get("input_schema"),
+                "output_schema": ep.get("output_schema"),
+            }
+            for ep in contract_spec.get("endpoints", [])
+        ],
+        "required_policies": contract_spec.get("required_policies", []),
+        "status": contract_spec.get("status", "draft"),
+        "source_spec_url": contract_spec.get("source_spec_url"),
+        "spec_hash": contract_spec.get("spec_hash"),
     }

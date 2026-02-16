@@ -3083,14 +3083,36 @@
         "title": "DashboardStats",
         "type": "object"
       },
-      "DeploymentRequest": {
+      "DeploymentCreate": {
         "properties": {
           "api_id": {
             "title": "Api Id",
             "type": "string"
           },
+          "api_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Name"
+          },
           "environment": {
-            "$ref": "#/components/schemas/Environment"
+            "$ref": "#/components/schemas/EnvironmentEnum"
+          },
+          "gateway_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Id"
           },
           "version": {
             "anyOf": [
@@ -3108,7 +3130,38 @@
           "api_id",
           "environment"
         ],
-        "title": "DeploymentRequest",
+        "title": "DeploymentCreate",
+        "type": "object"
+      },
+      "DeploymentListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DeploymentResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 50,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "DeploymentListResponse",
         "type": "object"
       },
       "DeploymentResponse": {
@@ -3121,7 +3174,12 @@
             "title": "Api Name",
             "type": "string"
           },
-          "completed_at": {
+          "attempt_count": {
+            "default": 0,
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "commit_sha": {
             "anyOf": [
               {
                 "type": "string"
@@ -3130,14 +3188,32 @@
                 "type": "null"
               }
             ],
+            "title": "Commit Sha"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
           },
           "deployed_by": {
             "title": "Deployed By",
             "type": "string"
           },
           "environment": {
-            "$ref": "#/components/schemas/Environment"
+            "title": "Environment",
+            "type": "string"
           },
           "error_message": {
             "anyOf": [
@@ -3150,19 +3226,67 @@
             ],
             "title": "Error Message"
           },
+          "gateway_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Id"
+          },
           "id": {
+            "format": "uuid",
             "title": "Id",
             "type": "string"
           },
-          "started_at": {
-            "title": "Started At",
-            "type": "string"
+          "rollback_of": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rollback Of"
+          },
+          "rollback_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rollback Version"
+          },
+          "spec_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Hash"
           },
           "status": {
-            "$ref": "#/components/schemas/DeploymentStatus"
+            "title": "Status",
+            "type": "string"
           },
           "tenant_id": {
             "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
             "type": "string"
           },
           "version": {
@@ -3178,8 +3302,9 @@
           "environment",
           "version",
           "status",
-          "started_at",
-          "deployed_by"
+          "deployed_by",
+          "created_at",
+          "updated_at"
         ],
         "title": "DeploymentResponse",
         "type": "object"
@@ -3264,7 +3389,7 @@
         "title": "DeploymentResult",
         "type": "object"
       },
-      "DeploymentStatus": {
+      "DeploymentStatusEnum": {
         "enum": [
           "pending",
           "in_progress",
@@ -3272,7 +3397,7 @@
           "failed",
           "rolled_back"
         ],
-        "title": "DeploymentStatus",
+        "title": "DeploymentStatusEnum",
         "type": "string"
       },
       "DeploymentStatusSummary": {
@@ -3315,6 +3440,63 @@
           }
         },
         "title": "DeploymentStatusSummary",
+        "type": "object"
+      },
+      "DeploymentStatusUpdate": {
+        "properties": {
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Additional metadata from gateway callback",
+            "title": "Metadata"
+          },
+          "spec_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Hash"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeploymentStatusEnum"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "DeploymentStatusUpdate",
         "type": "object"
       },
       "DiffResource": {
@@ -3488,14 +3670,6 @@
         "title": "EnableBindingResponse",
         "type": "object"
       },
-      "Environment": {
-        "enum": [
-          "dev",
-          "staging"
-        ],
-        "title": "Environment",
-        "type": "string"
-      },
       "EnvironmentConfig": {
         "properties": {
           "color": {
@@ -3528,6 +3702,55 @@
         ],
         "title": "EnvironmentConfig",
         "type": "object"
+      },
+      "EnvironmentDeployment": {
+        "properties": {
+          "api_id": {
+            "title": "Api Id",
+            "type": "string"
+          },
+          "api_name": {
+            "title": "Api Name",
+            "type": "string"
+          },
+          "deployed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployed At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "api_id",
+          "api_name",
+          "version",
+          "status"
+        ],
+        "title": "EnvironmentDeployment",
+        "type": "object"
+      },
+      "EnvironmentEnum": {
+        "enum": [
+          "dev",
+          "staging",
+          "production"
+        ],
+        "title": "EnvironmentEnum",
+        "type": "string"
       },
       "EnvironmentInfo": {
         "description": "Kubernetes/runtime environment info.",
@@ -3605,6 +3828,32 @@
           "environments"
         ],
         "title": "EnvironmentListResponse",
+        "type": "object"
+      },
+      "EnvironmentStatusResponse": {
+        "properties": {
+          "deployments": {
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentDeployment"
+            },
+            "title": "Deployments",
+            "type": "array"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "healthy": {
+            "title": "Healthy",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "environment",
+          "healthy",
+          "deployments"
+        ],
+        "title": "EnvironmentStatusResponse",
         "type": "object"
       },
       "ErrorSnapshot": {
@@ -10372,7 +10621,7 @@
         "title": "ResponseSnapshot",
         "type": "object"
       },
-      "RollbackRequest": {
+      "RollbackCreate": {
         "properties": {
           "target_version": {
             "anyOf": [
@@ -10386,7 +10635,7 @@
             "title": "Target Version"
           }
         },
-        "title": "RollbackRequest",
+        "title": "RollbackCreate",
         "type": "object"
       },
       "RoutingInfo": {
@@ -26788,7 +27037,7 @@
     },
     "/v1/tenants/{tenant_id}/deployments": {
       "get": {
-        "description": "List deployment history",
+        "description": "List deployment history for a tenant",
         "operationId": "list_deployments_v1_tenants__tenant_id__deployments_get",
         "parameters": [
           {
@@ -26823,7 +27072,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Environment"
+                  "$ref": "#/components/schemas/EnvironmentEnum"
                 },
                 {
                   "type": "null"
@@ -26834,11 +27083,37 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
             "required": false,
             "schema": {
               "default": 50,
-              "title": "Limit",
+              "title": "Page Size",
               "type": "integer"
             }
           }
@@ -26848,11 +27123,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/DeploymentResponse"
-                  },
-                  "title": "Response List Deployments V1 Tenants  Tenant Id  Deployments Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/DeploymentListResponse"
                 }
               }
             },
@@ -26880,7 +27151,7 @@
         ]
       },
       "post": {
-        "description": "Deploy an API to an environment.\n\nThis will:\n1. Validate the API exists and is deployable\n2. Create a deploy-request event in Kafka\n3. Gateway adapter will process the deployment\n4. Status updates will be streamed via SSE",
+        "description": "Deploy an API to an environment.\n\nCreates a deployment record, emits a deploy-request Kafka event,\nand triggers webhook notifications.",
         "operationId": "create_deployment_v1_tenants__tenant_id__deployments_post",
         "parameters": [
           {
@@ -26897,14 +27168,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DeploymentRequest"
+                "$ref": "#/components/schemas/DeploymentCreate"
               }
             }
           },
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
@@ -26955,7 +27226,7 @@
             "name": "environment",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/Environment"
+              "$ref": "#/components/schemas/EnvironmentEnum"
             }
           }
         ],
@@ -26963,7 +27234,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentStatusResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -27009,6 +27282,7 @@
             "name": "deployment_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Deployment Id",
               "type": "string"
             }
@@ -27066,6 +27340,7 @@
             "name": "deployment_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Deployment Id",
               "type": "string"
             }
@@ -27121,6 +27396,7 @@
             "name": "deployment_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Deployment Id",
               "type": "string"
             }
@@ -27130,7 +27406,75 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RollbackRequest"
+                "$ref": "#/components/schemas/RollbackCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollback Deployment",
+        "tags": [
+          "Deployments"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/deployments/{deployment_id}/status": {
+      "patch": {
+        "description": "Update deployment status (gateway callback endpoint)",
+        "operationId": "update_deployment_status_v1_tenants__tenant_id__deployments__deployment_id__status_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "deployment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Deployment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentStatusUpdate"
               }
             }
           },
@@ -27163,7 +27507,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Rollback Deployment",
+        "summary": "Update Deployment Status",
         "tags": [
           "Deployments"
         ]

@@ -3,17 +3,10 @@
 from unittest.mock import patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from src.auth.dependencies import User, get_current_user
-
-app = FastAPI()
-
-
-@app.get("/test-auth")
-async def test_endpoint(user: User = pytest.importorskip("fastapi").Depends(get_current_user)):
-    return {"user_id": user.id, "roles": user.roles}
 
 
 @pytest.mark.asyncio
@@ -24,11 +17,10 @@ async def test_operator_key_bypass(mock_settings):
     mock_settings.LOG_DEBUG_AUTH_TOKENS = False
     mock_settings.LOG_DEBUG_AUTH_PAYLOAD = False
 
-    # Re-create app with the patched dependency
     test_app = FastAPI()
 
     @test_app.get("/test-auth")
-    async def endpoint(user: User = pytest.importorskip("fastapi").Depends(get_current_user)):
+    async def endpoint(user: User = Depends(get_current_user)):
         return {"user_id": user.id, "roles": user.roles, "username": user.username}
 
     transport = ASGITransport(app=test_app)
@@ -55,7 +47,7 @@ async def test_invalid_operator_key_rejected(mock_settings):
     test_app = FastAPI()
 
     @test_app.get("/test-auth")
-    async def endpoint(user: User = pytest.importorskip("fastapi").Depends(get_current_user)):
+    async def endpoint(user: User = Depends(get_current_user)):
         return {"user_id": user.id}
 
     transport = ASGITransport(app=test_app)
@@ -78,7 +70,7 @@ async def test_no_auth_returns_401(mock_settings):
     test_app = FastAPI()
 
     @test_app.get("/test-auth")
-    async def endpoint(user: User = pytest.importorskip("fastapi").Depends(get_current_user)):
+    async def endpoint(user: User = Depends(get_current_user)):
         return {"user_id": user.id}
 
     transport = ASGITransport(app=test_app)

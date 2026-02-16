@@ -128,7 +128,7 @@ class TestPersonalTenantProvisioning:
         assert response.status_code == 201
         data = response.json()
         # Should be sanitized: lowercase, special chars → hyphens
-        assert data["tenant_id"] == "free-john-doe-corp-"
+        assert data["tenant_id"] == "free-john-doe-corp"
         assert "!" not in data["tenant_id"]
         assert "@" not in data["tenant_id"]
 

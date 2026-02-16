@@ -122,6 +122,21 @@ async def get_current_user(
             )
             raise JWTError(f"Invalid audience: {token_aud}. Expected: {list(valid_audiences)}")
 
+        # Deprecation warning for legacy audiences (control-plane-ui, stoa-portal)
+        # These clients should configure Audience Mappers in Keycloak to include
+        # 'control-plane-api' in the 'aud' claim. Legacy support will be removed
+        # after all clients have migrated (target: Q2 2026).
+        legacy_audiences = {"control-plane-ui", "stoa-portal"}
+        primary_audience = {settings.KEYCLOAK_CLIENT_ID}
+        if any(aud in legacy_audiences for aud in token_aud) and not any(aud in primary_audience for aud in token_aud):
+            logger.warning(
+                "DEPRECATION: Token uses legacy audience, migrate to Audience Mapper",
+                token_aud=token_aud,
+                azp=payload.get("azp"),
+                expected_audience=settings.KEYCLOAK_CLIENT_ID,
+                migration_deadline="Q2 2026",
+            )
+
         email = payload.get("email", "")
         username = payload.get("preferred_username", "")
         roles = payload.get("realm_access", {}).get("roles", [])

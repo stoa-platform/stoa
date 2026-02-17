@@ -1,0 +1,72 @@
+# CAB-1305: CIS Benchmark Compliance via Kubescape
+# Weekly scan (Sunday 02:00 UTC) — NSA + MITRE frameworks
+# Pushes kubescape_compliance_score + controls passed/failed to Pushgateway
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kubescape-benchmark
+  namespace: stoa-system
+  labels:
+    app: kubescape-benchmark
+    component: security
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  schedule: "0 2 * * 0"  # Weekly, Sunday at 02:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 900  # 15 min max
+      template:
+        metadata:
+          labels:
+            app: kubescape-benchmark
+            component: security
+        spec:
+          serviceAccountName: security-scanner
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534  # nobody
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: kubescape
+              image: quay.io/kubescape/kubescape:v3.0.18
+              command:
+                - sh
+                - /scripts/kubescape-report.sh
+              env:
+                - name: PUSHGATEWAY_URL
+                  value: "http://pushgateway.monitoring.svc:9091"
+                - name: FRAMEWORKS
+                  value: "NSA MITRE"
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: security-scripts
+                defaultMode: 0755
+            - name: tmp
+              emptyDir: {}

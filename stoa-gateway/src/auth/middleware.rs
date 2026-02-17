@@ -7,8 +7,6 @@
 //! - Validate token and extract claims
 //! - Inject authenticated user into request extensions
 //! - Optional authentication (for public endpoints)
-#![allow(dead_code)]
-
 use axum::{
     body::Body,
     extract::{FromRequestParts, State},

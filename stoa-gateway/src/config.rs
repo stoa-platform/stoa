@@ -201,6 +201,22 @@ pub struct Config {
     #[serde(default)]
     pub k8s_enabled: bool,
 
+    // === Kafka CNS Event Bridge (CAB-1178) ===
+    /// Enable Kafka Cloud Notification Service consumer for real-time event bridge
+    /// Env: STOA_KAFKA_CNS_ENABLED (default: false)
+    #[serde(default)]
+    pub kafka_cns_enabled: bool,
+
+    /// Kafka topics to subscribe for CNS events (comma-separated)
+    /// Env: STOA_KAFKA_CNS_TOPICS
+    #[serde(default = "default_kafka_cns_topics")]
+    pub kafka_cns_topics: String,
+
+    /// Kafka consumer group for CNS event bridge
+    /// Env: STOA_KAFKA_CNS_CONSUMER_GROUP
+    #[serde(default = "default_kafka_cns_consumer_group")]
+    pub kafka_cns_consumer_group: String,
+
     // === mTLS Certificate Binding (CAB-864) ===
     /// mTLS configuration (nested struct, STOA_MTLS_ prefix)
     /// Env: STOA_MTLS_ENABLED, STOA_MTLS_REQUIRE_BINDING, etc.
@@ -271,6 +287,18 @@ pub struct Config {
     /// Env: STOA_CLASSIFICATION_ENFORCEMENT_ENABLED
     #[serde(default)]
     pub classification_enforcement_enabled: bool,
+
+    // === Tool Discovery (CAB-1317) ===
+    /// TTL in seconds before tenant tools are considered stale (default: 300s = 5 min).
+    /// Env: STOA_TOOL_REFRESH_TTL_SECS
+    #[serde(default = "default_tool_refresh_ttl_secs")]
+    pub tool_refresh_ttl_secs: u64,
+
+    /// Max staleness in seconds before degraded response (default: 1800s = 30 min).
+    /// Council adjustment #1: hard cap prevents serving indefinitely stale data.
+    /// Env: STOA_TOOL_MAX_STALENESS_SECS
+    #[serde(default = "default_tool_max_staleness_secs")]
+    pub tool_max_staleness_secs: u64,
 
     // === Per-Upstream Circuit Breaker (CAB-362) ===
     /// Failure threshold before opening circuit (default: 5)
@@ -502,6 +530,14 @@ fn default_fallback_timeout_ms() -> u64 {
     5000
 }
 
+fn default_tool_refresh_ttl_secs() -> u64 {
+    300
+}
+
+fn default_tool_max_staleness_secs() -> u64 {
+    1800
+}
+
 fn default_cb_failure_threshold() -> u32 {
     5
 }
@@ -512,6 +548,14 @@ fn default_cb_reset_timeout_secs() -> u64 {
 
 fn default_cb_success_threshold() -> u32 {
     2
+}
+
+fn default_kafka_cns_topics() -> String {
+    "stoa.api.lifecycle,stoa.deployment.events,stoa.security.alerts".to_string()
+}
+
+fn default_kafka_cns_consumer_group() -> String {
+    "stoa-gateway-cns".to_string()
 }
 
 impl Default for Config {
@@ -558,6 +602,9 @@ impl Default for Config {
             kafka_metering_topic: default_kafka_metering_topic(),
             kafka_errors_topic: default_kafka_errors_topic(),
             k8s_enabled: false,
+            kafka_cns_enabled: false,
+            kafka_cns_topics: default_kafka_cns_topics(),
+            kafka_cns_consumer_group: default_kafka_cns_consumer_group(),
             mtls: MtlsConfig::default(),
             quota_enforcement_enabled: false,
             quota_sync_interval_secs: default_quota_sync_interval(),
@@ -571,6 +618,8 @@ impl Default for Config {
             fallback_chains: None,
             fallback_timeout_ms: default_fallback_timeout_ms(),
             classification_enforcement_enabled: false,
+            tool_refresh_ttl_secs: default_tool_refresh_ttl_secs(),
+            tool_max_staleness_secs: default_tool_max_staleness_secs(),
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),
@@ -727,6 +776,13 @@ mod tests {
     fn test_default_classification_enforcement_disabled() {
         let config = Config::default();
         assert!(!config.classification_enforcement_enabled);
+    }
+
+    #[test]
+    fn test_default_tool_discovery_settings() {
+        let config = Config::default();
+        assert_eq!(config.tool_refresh_ttl_secs, 300);
+        assert_eq!(config.tool_max_staleness_secs, 1800);
     }
 
     #[test]

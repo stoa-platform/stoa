@@ -23,7 +23,7 @@ thiserror = "1"
 chrono = { version = "0.4", features = ["serde"] }
 prometheus = { version = "0.13", default-features = false }  # no protobuf (RUSTSEC-2024-0437)
 jsonwebtoken = "9"
-reqwest = { version = "0.11", features = ["json", "stream"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 async-trait = "0.1"
 
 # === NEW - Phase 1: Quality Fixes ===
@@ -35,6 +35,8 @@ hostname = "0.4"                         # Get local hostname for auto-registrat
 tokio-stream = "0.1"                    # SSE event streams
 futures = "0.3"                          # Stream combinators
 uuid = { version = "1", features = ["v4", "serde"] }  # Session IDs
+rand = "0.9"                                # Thread-local PRNG for traceparent (perf)
+socket2 = "0.6"                             # TCP backlog tuning (perf)
 urlencoding = "2"                           # URL encoding for query params
 
 # === NEW - Phase 3: Auth ===

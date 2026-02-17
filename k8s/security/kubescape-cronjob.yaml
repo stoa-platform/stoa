@@ -1,0 +1,159 @@
+# CAB-1305: CIS Benchmark Compliance via Kubescape
+# Weekly scan (Sunday 02:00 UTC) — NSA + MITRE frameworks
+# Pushes kubescape_compliance_score + controls passed/failed to Pushgateway
+#
+# Architecture: 2 init containers (kubescape-cli scan per framework) write JSON
+# to shared /results volume, then main container (alpine) parses + pushes.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kubescape-benchmark
+  namespace: stoa-system
+  labels:
+    app: kubescape-benchmark
+    component: security
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  schedule: "0 2 * * 0"  # Weekly, Sunday at 02:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 900  # 15 min max
+      template:
+        metadata:
+          labels:
+            app: kubescape-benchmark
+            component: security
+        spec:
+          serviceAccountName: security-scanner
+          restartPolicy: Never
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            # Scan NSA framework
+            - name: scan-nsa
+              image: quay.io/kubescape/kubescape-cli:v3.0.18
+              args:
+                - scan
+                - framework
+                - nsa
+                - --format
+                - json
+                - --output
+                - /results/NSA.json
+                - --logger
+                - error
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: results
+                  mountPath: /results
+                - name: tmp
+                  mountPath: /tmp
+            # Scan MITRE framework
+            - name: scan-mitre
+              image: quay.io/kubescape/kubescape-cli:v3.0.18
+              args:
+                - scan
+                - framework
+                - mitre
+                - --format
+                - json
+                - --output
+                - /results/MITRE.json
+                - --logger
+                - error
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: results
+                  mountPath: /results
+                - name: tmp
+                  mountPath: /tmp
+          containers:
+            - name: push-metrics
+              image: alpine:3.21
+              command:
+                - sh
+                - -c
+                - |
+                  apk add --no-cache curl jq
+                  PUSHGATEWAY_URL="${PUSHGATEWAY_URL}"
+                  JOB_NAME="kubescape_compliance"
+                  metrics=""
+                  for framework in NSA MITRE; do
+                    file="/results/${framework}.json"
+                    echo "=== Processing $framework ==="
+                    if [ ! -f "$file" ]; then
+                      echo "  WARN: no results for $framework"
+                      metrics="${metrics}kubescape_compliance_score{framework=\"${framework}\"} 0\nkubescape_controls_passed{framework=\"${framework}\"} 0\nkubescape_controls_failed{framework=\"${framework}\"} 0\n"
+                      continue
+                    fi
+                    score=$(jq -r '.summaryDetails.complianceScore // 0' "$file" 2>/dev/null || echo "0")
+                    passed=$(jq '[.summaryDetails.controls | to_entries[] | select(.value.status == "passed")] | length' "$file" 2>/dev/null || echo "0")
+                    failed=$(jq '[.summaryDetails.controls | to_entries[] | select(.value.status == "failed")] | length' "$file" 2>/dev/null || echo "0")
+                    echo "  Score: ${score}% | Passed: $passed | Failed: $failed"
+                    metrics="${metrics}kubescape_compliance_score{framework=\"${framework}\"} ${score}\nkubescape_controls_passed{framework=\"${framework}\"} ${passed}\nkubescape_controls_failed{framework=\"${framework}\"} ${failed}\n"
+                  done
+                  echo ""
+                  echo "=== Pushing metrics ==="
+                  printf "$metrics"
+                  printf "$metrics" | curl --fail --silent --show-error \
+                    --data-binary @- \
+                    "${PUSHGATEWAY_URL}/metrics/job/${JOB_NAME}" \
+                    && echo "Push OK" \
+                    || echo "Push FAILED (non-fatal)"
+              env:
+                - name: PUSHGATEWAY_URL
+                  value: "http://pushgateway.monitoring.svc:9091"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: results
+                  mountPath: /results
+                  readOnly: true
+          volumes:
+            - name: results
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}

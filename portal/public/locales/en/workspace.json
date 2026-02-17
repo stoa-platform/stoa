@@ -1,0 +1,10 @@
+{
+  "title": "My Workspace",
+  "subtitle": "Manage your apps, subscriptions, and contracts",
+  "tabs": {
+    "apps": "Apps",
+    "subscriptions": "Subscriptions",
+    "contracts": "Contracts",
+    "approvals": "Approvals"
+  }
+}

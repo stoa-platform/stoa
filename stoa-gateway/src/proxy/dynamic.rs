@@ -6,15 +6,55 @@
 use axum::{
     body::Body,
     extract::{Request, State},
-    http::{header, HeaderMap, HeaderValue, Method, StatusCode},
+    http::{HeaderMap, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
 };
 use std::net::IpAddr;
 use std::time::Duration;
 use tracing::{debug, error, instrument, warn};
 
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
+use std::cell::RefCell;
+
+use crate::proxy::credentials::{AuthType, BackendCredential};
 use crate::resilience::RetryConfig;
 use crate::state::AppState;
+
+/// Resolve a BackendCredential into a (header_name, header_value) tuple.
+/// For OAuth2ClientCredentials, fetches/caches a token via the credential store.
+async fn resolve_credential_header(
+    state: &AppState,
+    route_id: &str,
+    credential: Option<&BackendCredential>,
+) -> Option<(String, String)> {
+    let cred = credential?;
+    if cred.auth_type == AuthType::OAuth2ClientCredentials {
+        match state
+            .credential_store
+            .get_oauth2_token(route_id, get_proxy_client())
+            .await
+        {
+            Ok(token) => Some(("Authorization".to_string(), format!("Bearer {token}"))),
+            Err(e) => {
+                warn!(
+                    route_id = %route_id,
+                    error = %e,
+                    "OAuth2 token fetch failed — skipping credential injection"
+                );
+                None
+            }
+        }
+    } else {
+        Some((cred.header_name.clone(), cred.header_value.clone()))
+    }
+}
+
+thread_local! {
+    /// Thread-local fast PRNG for traceparent ID generation.
+    /// Avoids 2x `getrandom()` syscall per request (uuid::Uuid::new_v4).
+    static TRACE_RNG: RefCell<SmallRng> = RefCell::new(SmallRng::from_os_rng());
+}
 
 /// Shared reqwest client for dynamic proxy (created once, reused).
 static PROXY_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
@@ -24,12 +64,13 @@ fn get_proxy_client() -> &'static reqwest::Client {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(5))
-            .pool_max_idle_per_host(128)
+            .pool_max_idle_per_host(256)
             .pool_idle_timeout(Duration::from_secs(90))
             .tcp_keepalive(Duration::from_secs(60))
             .tcp_nodelay(true)
-            .http2_keep_alive_interval(Duration::from_secs(30))
-            .http2_keep_alive_timeout(Duration::from_secs(10))
+            // Force HTTP/1.1: echo-backend and most legacy APIs don't speak h2.
+            // Avoids ALPN negotiation overhead on every new connection.
+            .http1_only()
             .build()
             .expect("Failed to create proxy HTTP client")
     })
@@ -144,14 +185,16 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         "Dynamic proxy: forwarding request"
     );
 
-    // BYOK credential injection (CAB-1250): look up stored credential for this route
+    // BYOK credential injection (CAB-1250 + CAB-1317 OAuth2)
     let credential = state.credential_store.get(&route.id);
+    let resolved_header = resolve_credential_header(&state, &route.id, credential.as_ref()).await;
 
     // Clone headers before consuming the request (needed for potential retry)
     let saved_headers = request.headers().clone();
 
     let upstream_start = std::time::Instant::now();
-    let mut response = forward_request(request, &method, &target_url, credential.as_ref()).await;
+    let mut response =
+        forward_request(request, &method, &target_url, resolved_header.as_ref()).await;
 
     // Retry transient errors on idempotent methods (CAB-362)
     if is_retryable_status(response.status()) && is_idempotent(&method) {
@@ -172,8 +215,13 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
                 "Retrying transient upstream error"
             );
             tokio::time::sleep(delay).await;
-            response =
-                retry_forward(&method, &target_url, &saved_headers, credential.as_ref()).await;
+            response = retry_forward(
+                &method,
+                &target_url,
+                &saved_headers,
+                resolved_header.as_ref(),
+            )
+            .await;
             if !is_retryable_status(response.status()) {
                 break;
             }
@@ -201,13 +249,13 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
 
 /// Forward request to the backend, reusing the webMethods proxy pattern.
 ///
-/// When a `BackendCredential` is provided, its header is injected into the
-/// outgoing request (BYOK credential proxy — CAB-1250).
+/// When a resolved header tuple is provided, it is injected into the
+/// outgoing request (BYOK credential proxy — CAB-1250, OAuth2 — CAB-1317).
 async fn forward_request(
     request: Request<Body>,
     method: &Method,
     target_url: &str,
-    credential: Option<&super::credentials::BackendCredential>,
+    resolved_header: Option<&(String, String)>,
 ) -> Response {
     let client = get_proxy_client();
     let headers = request.headers().clone();
@@ -220,10 +268,7 @@ async fn forward_request(
         Method::DELETE => client.delete(target_url),
         Method::PATCH => client.patch(target_url),
         Method::HEAD => client.head(target_url),
-        Method::OPTIONS => {
-            let m = reqwest::Method::from_bytes(b"OPTIONS").unwrap();
-            client.request(m, target_url)
-        }
+        Method::OPTIONS => client.request(Method::OPTIONS, target_url),
         _ => {
             warn!(method = %method, "Unsupported HTTP method in dynamic proxy");
             return (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed").into_response();
@@ -238,18 +283,13 @@ async fn forward_request(
     // correlate their spans with the gateway's trace.
     req_builder = inject_traceparent(req_builder);
 
-    // BYOK: inject backend credential header (CAB-1250)
-    if let Some(cred) = credential {
-        if let (Ok(name), Ok(value)) = (
-            reqwest::header::HeaderName::from_bytes(cred.header_name.as_bytes()),
-            reqwest::header::HeaderValue::from_str(&cred.header_value),
+    // BYOK: inject resolved credential header (CAB-1250 + CAB-1317)
+    if let Some((name, value)) = resolved_header {
+        if let (Ok(header_name), Ok(header_value)) = (
+            reqwest::header::HeaderName::from_bytes(name.as_bytes()),
+            reqwest::header::HeaderValue::from_str(value),
         ) {
-            req_builder = req_builder.header(name, value);
-        } else {
-            warn!(
-                route_id = %cred.route_id,
-                "BYOK: invalid credential header name/value — skipping injection"
-            );
+            req_builder = req_builder.header(header_name, header_value);
         }
     }
 
@@ -282,19 +322,15 @@ async fn forward_request(
 
 /// Copy headers excluding hop-by-hop headers.
 ///
-/// HeaderName is already lowercase in http crate, so no `.to_lowercase()` needed.
+/// reqwest 0.12 and axum 0.7 share the same `http` 1.0 types,
+/// so HeaderName/HeaderValue can be cloned directly (no conversion needed).
 fn copy_headers(
     mut builder: reqwest::RequestBuilder,
     headers: &HeaderMap<HeaderValue>,
 ) -> reqwest::RequestBuilder {
     for (name, value) in headers.iter() {
         if !is_hop_by_hop(name.as_str()) {
-            if let Ok(header_name) = reqwest::header::HeaderName::from_bytes(name.as_ref()) {
-                if let Ok(header_value) = reqwest::header::HeaderValue::from_bytes(value.as_bytes())
-                {
-                    builder = builder.header(header_name, header_value);
-                }
-            }
+            builder = builder.header(name.clone(), value.clone());
         }
     }
 
@@ -318,21 +354,19 @@ fn is_hop_by_hop(name: &str) -> bool {
 }
 
 /// Convert a reqwest response to an axum response (streaming, zero-copy).
+///
+/// reqwest 0.12 shares `http` 1.0 types with axum 0.7, so StatusCode
+/// and HeaderName/HeaderValue pass through without conversion.
 fn convert_response(resp: reqwest::Response) -> Response {
     let status = resp.status();
     let headers = resp.headers().clone();
 
-    let mut response =
-        Response::builder().status(StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::OK));
+    let mut response = Response::builder().status(status);
 
-    // Copy response headers (excluding hop-by-hop)
+    // Copy response headers (excluding hop-by-hop) — direct clone, same types
     for (name, value) in headers.iter() {
         if !is_hop_by_hop(name.as_str()) {
-            if let Ok(header_name) = header::HeaderName::from_bytes(name.as_ref()) {
-                if let Ok(header_value) = header::HeaderValue::from_bytes(value.as_bytes()) {
-                    response = response.header(header_name, header_value);
-                }
-            }
+            response = response.header(name.clone(), value.clone());
         }
     }
 
@@ -365,7 +399,7 @@ async fn retry_forward(
     method: &Method,
     target_url: &str,
     headers: &HeaderMap<HeaderValue>,
-    credential: Option<&super::credentials::BackendCredential>,
+    resolved_header: Option<&(String, String)>,
 ) -> Response {
     let client = get_proxy_client();
     let mut builder = match *method {
@@ -381,13 +415,13 @@ async fn retry_forward(
     builder = copy_headers(builder, headers);
     builder = inject_traceparent(builder);
 
-    // BYOK credential injection
-    if let Some(cred) = credential {
-        if let (Ok(name), Ok(value)) = (
-            reqwest::header::HeaderName::from_bytes(cred.header_name.as_bytes()),
-            reqwest::header::HeaderValue::from_str(&cred.header_value),
+    // BYOK: inject resolved credential header (CAB-1250 + CAB-1317)
+    if let Some((name, value)) = resolved_header {
+        if let (Ok(header_name), Ok(header_value)) = (
+            reqwest::header::HeaderName::from_bytes(name.as_bytes()),
+            reqwest::header::HeaderValue::from_str(value),
         ) {
-            builder = builder.header(name, value);
+            builder = builder.header(header_name, header_value);
         }
     }
 
@@ -464,13 +498,37 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
 /// This propagates a trace context to downstream services,
 /// enabling end-to-end distributed tracing visible in Tempo/Grafana.
 ///
-/// Uses UUID v4 for random trace/span ID generation (no OpenTelemetry dependency).
+/// Uses thread-local SmallRng instead of uuid::Uuid::new_v4() to avoid
+/// 2x `getrandom()` syscalls per request. SmallRng is seeded from OS entropy
+/// once per thread, then generates IDs via fast Xoshiro256++ PRNG.
 /// CAB-1088: migrate to opentelemetry-propagator when OTel API stabilizes.
 fn inject_traceparent(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    let trace_id = uuid::Uuid::new_v4().as_simple().to_string(); // 32 hex chars
-    let span_id = &uuid::Uuid::new_v4().as_simple().to_string()[..16]; // 16 hex chars
-    let traceparent = format!("00-{}-{}-01", trace_id, span_id);
+    let traceparent = TRACE_RNG.with(|rng| {
+        let mut rng = rng.borrow_mut();
+        let mut trace_bytes = [0u8; 16];
+        let mut span_bytes = [0u8; 8];
+        rng.fill(&mut trace_bytes);
+        rng.fill(&mut span_bytes);
+
+        // Format directly as hex — no intermediate UUID allocation
+        format!(
+            "00-{}-{}-01",
+            hex_encode(&trace_bytes),
+            hex_encode(&span_bytes),
+        )
+    });
     builder.header("traceparent", traceparent)
+}
+
+/// Encode bytes as lowercase hex string (allocation-free for small buffers).
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        s.push(HEX_CHARS[(b >> 4) as usize] as char);
+        s.push(HEX_CHARS[(b & 0x0f) as usize] as char);
+    }
+    s
 }
 
 #[cfg(test)]

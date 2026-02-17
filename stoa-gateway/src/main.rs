@@ -7,6 +7,11 @@ use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
+/// TCP listen backlog size. Default Linux is 128 — too low for burst traffic
+/// (100 concurrent VUs overflow SYN queue → 200ms+ retries).
+/// 1024 matches nginx/envoy defaults.
+const TCP_BACKLOG: i32 = 1024;
+
 use stoa_gateway::config::Config;
 use stoa_gateway::control_plane::GatewayRegistrar;
 use stoa_gateway::state::AppState;
@@ -86,6 +91,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start background tasks
     state.start_background_tasks();
 
+    // Initialize Kafka CNS event bridge (CAB-1178: push Kafka events to SSE clients)
+    init_kafka_cns_consumer(&config, &state);
+
     // Initialize K8s CRD watcher (Phase 7: CAB-1105)
     init_k8s_watcher(&config, &state).await;
 
@@ -97,20 +105,85 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Tool registry initialized"
     );
 
+    // Pre-warm connection pool: establish TCP+TLS connections to Control Plane
+    // before the first real request, so ramp_up traffic doesn't pay cold-start cost.
+    if let Some(cp_url) = &config.control_plane_url {
+        prewarm_connections(cp_url).await;
+    }
+
     // Build router
     let app = stoa_gateway::build_router(state);
 
-    // Start server
+    // Start server with tuned TCP socket (CAB-1359 perf)
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-    info!(addr = %addr, "STOA Gateway listening");
+    let listener = create_tcp_listener(addr)?;
+    info!(
+        addr = %addr,
+        backlog = TCP_BACKLOG,
+        "STOA Gateway listening"
+    );
 
-    let listener = TcpListener::bind(addr).await?;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 
     info!("STOA Gateway shutdown complete");
     Ok(())
+}
+
+/// Pre-warm the HTTP connection pool by sending throwaway requests to the Control Plane.
+/// Establishes TCP connections before the first real request, avoiding cold-start latency
+/// during burst traffic (Arena ramp_up scenario).
+async fn prewarm_connections(cp_url: &str) {
+    let health_url = format!("{}/health", cp_url);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .pool_max_idle_per_host(4)
+        .build()
+        .unwrap_or_default();
+
+    for i in 1..=3 {
+        match client.get(&health_url).send().await {
+            Ok(_) => {
+                info!(attempt = i, "Connection pool pre-warmed");
+                break;
+            }
+            Err(e) => {
+                warn!(attempt = i, error = %e, "Pre-warm connection failed (non-fatal)");
+            }
+        }
+    }
+}
+
+/// Create a TCP listener with tuned socket options for high-concurrency workloads.
+///
+/// - `SO_REUSEADDR`: allow immediate rebind after restart
+/// - `SO_REUSEPORT`: kernel-level load balancing across threads (Linux 3.9+)
+/// - Backlog 1024: prevent SYN queue overflow under burst traffic
+///   (default 128 causes 200ms+ retries at 100 concurrent connections)
+fn create_tcp_listener(addr: SocketAddr) -> Result<TcpListener, Box<dyn std::error::Error>> {
+    use socket2::{Domain, Protocol, Socket, Type};
+
+    let domain = if addr.is_ipv4() {
+        Domain::IPV4
+    } else {
+        Domain::IPV6
+    };
+
+    let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
+    socket.set_reuse_address(true)?;
+
+    // SO_REUSEPORT: available on Linux 3.9+ and macOS.
+    // Enables kernel-level connection distribution across listeners.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    socket.set_reuse_port(true)?;
+
+    socket.set_nonblocking(true)?;
+    socket.bind(&addr.into())?;
+    socket.listen(TCP_BACKLOG)?;
+
+    let std_listener: std::net::TcpListener = socket.into();
+    Ok(TcpListener::from_std(std_listener)?)
 }
 
 /// Initialize tracing subscriber with optional OpenTelemetry export.
@@ -208,6 +281,38 @@ async fn shutdown_signal() {
         _ = ctrl_c => info!("Received Ctrl+C, initiating shutdown..."),
         _ = terminate => info!("Received SIGTERM, initiating shutdown..."),
     }
+}
+
+/// Initialize Kafka CNS event bridge (CAB-1178: Kafka -> SSE push via NotificationBus)
+#[allow(unused_variables)]
+fn init_kafka_cns_consumer(config: &Config, state: &AppState) {
+    if !config.kafka_cns_enabled {
+        info!("Kafka CNS event bridge disabled (STOA_KAFKA_CNS_ENABLED=false)");
+        return;
+    }
+
+    if !config.kafka_enabled {
+        warn!("Kafka CNS enabled but Kafka brokers not configured (STOA_KAFKA_ENABLED=false) -- skipping");
+        return;
+    }
+
+    let brokers = config.kafka_brokers.clone();
+    let topics = config.kafka_cns_topics.clone();
+    let group_id = config.kafka_cns_consumer_group.clone();
+    let session_manager = stoa_gateway::mcp::session::SessionManager::clone(&state.session_manager);
+
+    stoa_gateway::events::consumer::start_cns_consumer(
+        &brokers,
+        &topics,
+        &group_id,
+        session_manager,
+    );
+    info!(
+        brokers = %config.kafka_brokers,
+        topics = %config.kafka_cns_topics,
+        group = %config.kafka_cns_consumer_group,
+        "Kafka CNS event bridge started"
+    );
 }
 
 /// Initialize K8s CRD watcher for dynamic tool registration (Phase 7: CAB-1105)

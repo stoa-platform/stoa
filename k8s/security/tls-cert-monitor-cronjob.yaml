@@ -1,0 +1,70 @@
+# CAB-1305: TLS Certificate Expiry Monitoring
+# Daily check of all *.gostoa.dev HTTPS endpoints
+# Pushes tls_cert_expiry_days + tls_cert_valid to Pushgateway
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tls-cert-monitor
+  namespace: stoa-system
+  labels:
+    app: tls-cert-monitor
+    component: security
+    app.kubernetes.io/part-of: stoa-platform
+spec:
+  schedule: "0 6 * * *"  # Daily at 06:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300  # 5 min max
+      template:
+        metadata:
+          labels:
+            app: tls-cert-monitor
+            component: security
+        spec:
+          restartPolicy: Never
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: tls-check
+              image: alpine:3.21
+              command:
+                - sh
+                - -c
+                - "apk add --no-cache openssl curl coreutils && sh /scripts/tls-cert-check.sh"
+              env:
+                - name: PUSHGATEWAY_URL
+                  value: "http://pushgateway.monitoring.svc:9091"
+                - name: HOSTS
+                  value: "console.gostoa.dev portal.gostoa.dev api.gostoa.dev mcp.gostoa.dev auth.gostoa.dev vault.gostoa.dev argocd.gostoa.dev"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false  # apk add needs writable /lib/apk, /etc/apk
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: scripts
+              configMap:
+                name: security-scripts
+                defaultMode: 0755
+            - name: tmp
+              emptyDir: {}

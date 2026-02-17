@@ -15,6 +15,25 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => mockAuth(),
 }));
 
+// Mock i18n — disable to use fallback strings
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'en' },
+  }),
+}));
+
+vi.mock('../../i18n', () => ({
+  loadNamespace: vi.fn(),
+  LANGUAGE_KEY: 'stoa:language',
+}));
+
+vi.mock('../../config', () => ({
+  config: {
+    features: { enableI18n: false },
+  },
+}));
+
 // Mock lazy-loaded components
 vi.mock('../apps', () => ({
   MyApplications: () => <div data-testid="my-applications">My Applications Content</div>,

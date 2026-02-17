@@ -157,6 +157,36 @@ n8n workflow (`scripts/ai-ops/n8n-linear-to-claude.json`):
 3. n8n dispatches `repository_dispatch` to GitHub Actions
 4. n8n posts "Pipeline Started" to Slack
 
+### Dispatch Payload Schema
+
+The `repository_dispatch` `client_payload` includes phase-aware fields:
+
+```json
+{
+  "ticket_id": "CAB-1350",
+  "ticket_title": "Traceparent injection",
+  "ticket_description": "...",
+  "priority": 2,
+  "estimate": 5,
+  "mega_id": "CAB-1290",
+  "phase_hint": 1,
+  "component": "gateway"
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `ticket_id` | Yes | Linear issue identifier (e.g., `CAB-1350`) |
+| `ticket_title` | Yes | Issue title |
+| `ticket_description` | Yes | Full issue description + DoD |
+| `priority` | Yes | Linear priority (1=Urgent, 4=Low) |
+| `estimate` | No | Story points |
+| `mega_id` | No | Parent MEGA ticket ID. If present, the dispatched agent checks `.claude/claims/<mega_id>.json` for phase ownership before starting. Prevents L3-dispatched agents from conflicting with local instances. |
+| `phase_hint` | No | Suggested phase number within the MEGA. The agent uses this to claim the correct phase instead of scanning all MEGAs. |
+| `component` | No | Target component (api, gateway, ui, portal, e2e). Used to select the right CI quality gate. |
+
+**n8n enrichment**: When a ticket has a `parent` in Linear, n8n resolves the parent ID and includes it as `mega_id`. The `phase_hint` is extracted from the ticket's position in the parent's sub-issues list.
+
 ### Setup Requirements
 
 1. **n8n**: Import `n8n-linear-to-claude.json`

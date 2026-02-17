@@ -17,8 +17,38 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use std::cell::RefCell;
 
+use crate::proxy::credentials::{AuthType, BackendCredential};
 use crate::resilience::RetryConfig;
 use crate::state::AppState;
+
+/// Resolve a BackendCredential into a (header_name, header_value) tuple.
+/// For OAuth2ClientCredentials, fetches/caches a token via the credential store.
+async fn resolve_credential_header(
+    state: &AppState,
+    route_id: &str,
+    credential: Option<&BackendCredential>,
+) -> Option<(String, String)> {
+    let cred = credential?;
+    if cred.auth_type == AuthType::OAuth2ClientCredentials {
+        match state
+            .credential_store
+            .get_oauth2_token(route_id, get_proxy_client())
+            .await
+        {
+            Ok(token) => Some(("Authorization".to_string(), format!("Bearer {token}"))),
+            Err(e) => {
+                warn!(
+                    route_id = %route_id,
+                    error = %e,
+                    "OAuth2 token fetch failed — skipping credential injection"
+                );
+                None
+            }
+        }
+    } else {
+        Some((cred.header_name.clone(), cred.header_value.clone()))
+    }
+}
 
 thread_local! {
     /// Thread-local fast PRNG for traceparent ID generation.
@@ -155,14 +185,16 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
         "Dynamic proxy: forwarding request"
     );
 
-    // BYOK credential injection (CAB-1250): look up stored credential for this route
+    // BYOK credential injection (CAB-1250 + CAB-1317 OAuth2)
     let credential = state.credential_store.get(&route.id);
+    let resolved_header = resolve_credential_header(&state, &route.id, credential.as_ref()).await;
 
     // Clone headers before consuming the request (needed for potential retry)
     let saved_headers = request.headers().clone();
 
     let upstream_start = std::time::Instant::now();
-    let mut response = forward_request(request, &method, &target_url, credential.as_ref()).await;
+    let mut response =
+        forward_request(request, &method, &target_url, resolved_header.as_ref()).await;
 
     // Retry transient errors on idempotent methods (CAB-362)
     if is_retryable_status(response.status()) && is_idempotent(&method) {
@@ -183,8 +215,13 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
                 "Retrying transient upstream error"
             );
             tokio::time::sleep(delay).await;
-            response =
-                retry_forward(&method, &target_url, &saved_headers, credential.as_ref()).await;
+            response = retry_forward(
+                &method,
+                &target_url,
+                &saved_headers,
+                resolved_header.as_ref(),
+            )
+            .await;
             if !is_retryable_status(response.status()) {
                 break;
             }
@@ -212,13 +249,13 @@ pub async fn dynamic_proxy(State(state): State<AppState>, request: Request<Body>
 
 /// Forward request to the backend, reusing the webMethods proxy pattern.
 ///
-/// When a `BackendCredential` is provided, its header is injected into the
-/// outgoing request (BYOK credential proxy — CAB-1250).
+/// When a resolved header tuple is provided, it is injected into the
+/// outgoing request (BYOK credential proxy — CAB-1250, OAuth2 — CAB-1317).
 async fn forward_request(
     request: Request<Body>,
     method: &Method,
     target_url: &str,
-    credential: Option<&super::credentials::BackendCredential>,
+    resolved_header: Option<&(String, String)>,
 ) -> Response {
     let client = get_proxy_client();
     let headers = request.headers().clone();
@@ -246,18 +283,13 @@ async fn forward_request(
     // correlate their spans with the gateway's trace.
     req_builder = inject_traceparent(req_builder);
 
-    // BYOK: inject backend credential header (CAB-1250)
-    if let Some(cred) = credential {
-        if let (Ok(name), Ok(value)) = (
-            reqwest::header::HeaderName::from_bytes(cred.header_name.as_bytes()),
-            reqwest::header::HeaderValue::from_str(&cred.header_value),
+    // BYOK: inject resolved credential header (CAB-1250 + CAB-1317)
+    if let Some((name, value)) = resolved_header {
+        if let (Ok(header_name), Ok(header_value)) = (
+            reqwest::header::HeaderName::from_bytes(name.as_bytes()),
+            reqwest::header::HeaderValue::from_str(value),
         ) {
-            req_builder = req_builder.header(name, value);
-        } else {
-            warn!(
-                route_id = %cred.route_id,
-                "BYOK: invalid credential header name/value — skipping injection"
-            );
+            req_builder = req_builder.header(header_name, header_value);
         }
     }
 
@@ -367,7 +399,7 @@ async fn retry_forward(
     method: &Method,
     target_url: &str,
     headers: &HeaderMap<HeaderValue>,
-    credential: Option<&super::credentials::BackendCredential>,
+    resolved_header: Option<&(String, String)>,
 ) -> Response {
     let client = get_proxy_client();
     let mut builder = match *method {
@@ -383,13 +415,13 @@ async fn retry_forward(
     builder = copy_headers(builder, headers);
     builder = inject_traceparent(builder);
 
-    // BYOK credential injection
-    if let Some(cred) = credential {
-        if let (Ok(name), Ok(value)) = (
-            reqwest::header::HeaderName::from_bytes(cred.header_name.as_bytes()),
-            reqwest::header::HeaderValue::from_str(&cred.header_value),
+    // BYOK: inject resolved credential header (CAB-1250 + CAB-1317)
+    if let Some((name, value)) = resolved_header {
+        if let (Ok(header_name), Ok(header_value)) = (
+            reqwest::header::HeaderName::from_bytes(name.as_bytes()),
+            reqwest::header::HeaderValue::from_str(value),
         ) {
-            builder = builder.header(name, value);
+            builder = builder.header(header_name, header_value);
         }
     }
 

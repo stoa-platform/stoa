@@ -1,0 +1,30 @@
+# Helm chart packaging exclusions
+
+# Version control
+.git
+.gitignore
+
+# CI/CD
+.github/
+
+# Development files
+*.md
+!README.md
+*.bak
+*.tmp
+*.swp
+*~
+
+# Test fixtures and examples (too large for package)
+examples/
+test/
+tests/
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db

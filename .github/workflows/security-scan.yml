@@ -429,6 +429,7 @@ jobs:
   container-scan:
     name: Container Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # Rust build (~10 min) + Trivy scan
     continue-on-error: true  # Base image vulns — tracked, not blocking
     strategy:
       fail-fast: false
@@ -440,6 +441,10 @@ jobs:
             path: mcp-gateway
           - name: portal
             path: portal
+          - name: stoa-gateway
+            path: stoa-gateway
+          - name: control-plane-ui
+            path: control-plane-ui
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

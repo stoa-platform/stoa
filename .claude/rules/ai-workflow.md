@@ -242,6 +242,12 @@ See `crash-recovery.md` for checkpoint schema and lifecycle.
 | `PR-MERGED` | After successful merge | `task`, `pr`, `branch_lifetime_min` (optional) |
 | `CI-FIX` | After `/ci-fix` skill runs | `task`, `check`, `auto_fixed` (true/false) |
 | `STATE-DRIFT` | Stop hook detects misplaced items | `items_misplaced` (count) |
+| `PHASE-CLAIMED` | Instance claims a MEGA phase | `task` (MEGA ID), `phase`, `instance`, `mode` (sequential/multi-instance/multi-subagent/l3) |
+| `PHASE-COMPLETED` | Instance finishes a MEGA phase | `task` (MEGA ID), `phase`, `instance`, `pr`, `duration_min` (optional) |
+| `CLAIM-CONFLICT` | Two instances race for same phase | `task` (MEGA ID), `phase`, `winner`, `loser` |
+| `PHASE-CLAIMED` | Instance claims a MEGA phase | `task` (MEGA ID), `phase`, `instance`, `mode` (sequential/multi-instance/multi-subagent/l3) |
+| `PHASE-COMPLETED` | Instance finishes a MEGA phase | `task` (MEGA ID), `phase`, `instance`, `pr`, `duration_min` (optional) |
+| `CLAIM-CONFLICT` | Two instances race for same phase | `task` (MEGA ID), `phase`, `winner`, `loser` |
 
 ### Format
 Same as operations.log: `YYYY-MM-DDTHH:MM | EVENT | key=value ...`
@@ -250,6 +256,12 @@ Same as operations.log: `YYYY-MM-DDTHH:MM | EVENT | key=value ...`
 - **PR merged** — append `PR-MERGED` in the same step as STEP-DONE step=merged
 - **CI fix** — `/ci-fix` skill appends `CI-FIX` automatically (see skill prompt)
 - **State drift** — `stop-state-lint.sh` hook appends `STATE-DRIFT` automatically
+- **Phase claimed** — append `PHASE-CLAIMED` when claiming a MEGA phase (any execution mode)
+- **Phase completed** — append `PHASE-COMPLETED` when releasing a completed phase
+- **Claim conflict** — append `CLAIM-CONFLICT` when `mkdir` lock fails and another instance wins
+- **Phase claimed** — append `PHASE-CLAIMED` when claiming a MEGA phase (any execution mode)
+- **Phase completed** — append `PHASE-COMPLETED` when releasing a completed phase
+- **Claim conflict** — append `CLAIM-CONFLICT` when `mkdir` lock fails and another instance wins
 
 ### Log Rotation
 - Keep `metrics.log` under **500 lines** (same policy as operations.log)
@@ -262,6 +274,10 @@ Periodically review `metrics.log` to identify:
 - Average branch lifetime (PR-MERGED entries)
 - Most frequent CI failure types (CI-FIX entries)
 - State drift frequency (STATE-DRIFT entries)
+- Parallelization efficiency: phases claimed vs completed, conflict rate (PHASE-CLAIMED/PHASE-COMPLETED/CLAIM-CONFLICT)
+- Average phase duration (PHASE-COMPLETED `duration_min` field)
+- Parallelization efficiency: phases claimed vs completed, conflict rate (PHASE-CLAIMED/PHASE-COMPLETED/CLAIM-CONFLICT)
+- Average phase duration (PHASE-COMPLETED `duration_min` field)
 
 ## Anti-Drift Rules
 - **1 thing at a time** — never mix feature + refactor + fix

@@ -140,6 +140,7 @@ backups/
 
 # Phase Ownership claims (ephemeral, machine-local, contain PIDs)
 .claude/claims/*.json
+.claude/claims/*.lock
 
 # Infisical
 .infisical.json

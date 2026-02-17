@@ -124,6 +124,13 @@ Example: `2026-02-12T14-30-task-traceability.json`
     "files_modified": [".claude/rules/ai-workflow.md", ".claude/rules/session-startup.md"],
     "notes": "CI green, ready to merge"
   },
+  "progress": {
+    "files_completed": ["src/models/consumer.py", "src/schemas/consumer.py"],
+    "files_remaining": ["src/repositories/consumer.py", "tests/test_consumer.py"],
+    "last_commit_message": "feat(api): add consumer model + schema (CAB-XXXX)",
+    "decisions_made": ["Chose SQLAlchemy hybrid_property over computed column", "UUID7 for IDs"],
+    "blockers": []
+  },
   "claimed_phase": {
     "mega_id": "CAB-1290",
     "phase_id": 1,
@@ -132,7 +139,14 @@ Example: `2026-02-12T14-30-task-traceability.json`
 }
 ```
 
-The `claimed_phase` field is optional — only present when the session was working on a phase of a decomposed MEGA ticket. Used during crash recovery to verify and restore claim ownership.
+**Field descriptions**:
+- `claimed_phase` — optional. Present when working on a phase of a decomposed MEGA ticket. Used during crash recovery to verify and restore claim ownership.
+- `progress` — optional but recommended. Enables a recovering session to resume intelligently without re-exploring the codebase:
+  - `files_completed`: files already written/modified and committed
+  - `files_remaining`: files still needed per the plan
+  - `last_commit_message`: the most recent commit (helps orient the recovering session)
+  - `decisions_made`: architectural or implementation choices made during the session (prevents re-deliberation)
+  - `blockers`: any issues discovered that need resolution before continuing
 
 ### When to Create Checkpoints
 

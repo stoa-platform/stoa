@@ -16,13 +16,16 @@ Multiple Claude Code terminals can race on the same ticket because session-start
 
 **Inspired by**: Devin batch sessions, Cursor root planners, MetaGPT phase agents, Spotify squad ownership, SAFe parallel tracks, Boris Cherny 5-agent workflow.
 
-### 3 Execution Modes
+### 4 Execution Modes
 
 | Mode | When | Instances | Claim Mechanism |
 |------|------|-----------|-----------------|
-| **Sequential** | Default, single terminal | 1 | Claim one phase, finish it, claim next |
-| **Multi-instance** | User opens N terminals | 2-3 | Each terminal claims a different phase |
-| **Multi-subagent** | Agent Teams (Pattern 4) | 1 lead + N | Lead claims via TaskUpdate + writes claim file for cross-session visibility |
+| **Sequential** | Default, single terminal | 1 | Claim one phase, finish it, claim next (Step 4b chaining) |
+| **Multi-instance** | User opens N terminals | 2-3 | Each terminal claims a different phase via `mkdir` lock |
+| **Multi-subagent** | Agent Teams (Pattern 4) | 1 lead + N | Lead writes `.claude/claims/` file (Claim File Bridge) + TaskUpdate |
+| **L3 Pipeline** | Linear → n8n → GHA dispatch | 1 per ticket | Agent reads `mega_id` + `phase_hint` from dispatch payload, claims via same protocol |
+
+**Invariant**: `.claude/claims/<ID>.json` is the **single source of truth** for ownership across ALL modes. TaskUpdate (Agent Teams), operations.log (multi-instance), and plan.md `[owner: X]` markers are derived views.
 
 ## Claim File Format
 
@@ -42,8 +45,9 @@ Filename: `.claude/claims/<MEGA-ID>.json` (e.g., `CAB-1290.json`)
       "id": 1,
       "name": "API + Gateway (parallel)",
       "tickets": ["CAB-1350", "CAB-1351"],
-      "owner": "t4821",
+      "owner": "t48217-a3f2",
       "claimed_at": "2026-02-16T14:05",
+      "hostname": "macbook-pro.local",
       "branch": "feat/CAB-1350-traceparent-injection",
       "mode": "parallel",
       "deps": [],
@@ -55,6 +59,7 @@ Filename: `.claude/claims/<MEGA-ID>.json` (e.g., `CAB-1290.json`)
       "tickets": ["CAB-1352"],
       "owner": null,
       "claimed_at": null,
+      "hostname": null,
       "branch": null,
       "mode": "sequential",
       "deps": [1],
@@ -72,8 +77,9 @@ Filename: `.claude/claims/<CAB-XXXX>.json` (e.g., `CAB-1321.json`)
 {
   "ticket": "CAB-1321",
   "title": "Portal ToS link fix",
-  "owner": "t4821",
+  "owner": "t48217-a3f2",
   "pid": 12345,
+  "hostname": "macbook-pro.local",
   "claimed_at": "2026-02-16T14:10",
   "branch": "fix/CAB-1321-tos-link",
   "completed_at": null
@@ -83,9 +89,11 @@ Filename: `.claude/claims/<CAB-XXXX>.json` (e.g., `CAB-1321.json`)
 ### Instance Identity
 
 Each terminal session generates a short instance ID at startup:
-- **Format**: `t<N>` where N = epoch seconds mod 10000
+- **Format**: `t<N>-<R>` where N = epoch seconds mod 100000, R = 4 random hex chars
+- **Example**: `t48217-a3f2`
 - **Generated once** per session, logged in `SESSION-START`
 - **Purpose**: distinguish claim owners across terminals
+- **Why not shorter?**: Old format `t<mod 10000>` collides every ~2.8h with 4+ parallel instances. New format has ~1/6.5 billion collision probability per pair.
 
 ## Claim Lifecycle
 
@@ -94,12 +102,17 @@ Each terminal session generates a short instance ID at startup:
 ```
 1. Read .claude/claims/<ID>.json (or check if file exists for standalone)
 2. Find first unclaimed phase where: owner == null AND all deps satisfied
-3. Write owner + PID + timestamp to claim file
-4. Mark all phase tickets "In Progress" on Linear via MCP batch
-5. Log: CLAIM | task=<MEGA-ID> phase=<N> instance=<ID> tickets=<list>
+3. Acquire lock: mkdir .claude/claims/<ID>-phase-<N>.lock (atomic on POSIX)
+4. If mkdir succeeds → write owner + PID + hostname + timestamp to claim file → remove lockdir
+5. If mkdir fails → another instance holds the lock → wait 200ms → retry up to 3 times → backoff
+6. Mark all phase tickets "In Progress" on Linear via MCP batch
+7. Log: CLAIM | task=<MEGA-ID> phase=<N> instance=<ID> tickets=<list>
 ```
 
-**Atomicity**: Write claim → sleep 100ms → re-read → verify own PID → proceed or backoff.
+**Atomicity**: `mkdir` is atomic on all POSIX filesystems — it either succeeds or fails, no partial state.
+- Lock stale if lockdir `mtime > 30s` → safe to `rmdir` and retry (holder likely crashed during claim write)
+- Always `rmdir` the lockdir after writing the claim, even on error (use try/finally equivalent)
+- Lockdir naming: `.claude/claims/<MEGA-ID>-phase-<N>.lock` or `.claude/claims/<CAB-XXXX>.lock` for standalone
 
 ### 2. Execute
 
@@ -144,21 +157,30 @@ PID checks only work on the same machine. For truly distributed scenarios (multi
 
 ## Conflict Resolution
 
-**First-claim-wins** with filesystem verification:
+**First-claim-wins** with atomic `mkdir` locking:
 
 ```
 1. Check claim file → phase unclaimed
-2. Write own PID + timestamp as owner
-3. Sleep 100ms (filesystem sync window)
-4. Re-read claim file
-5. If own PID matches → proceed (claim successful)
-6. If different PID → backoff:
-   a. Log: CONFLICT | task=<ID> phase=<N> winner=<other_PID>
-   b. Notify user: "Phase N already claimed by <instance>. Available: Phase M."
-   c. Attempt to claim next available phase
+2. Attempt: mkdir .claude/claims/<ID>-phase-<N>.lock
+3. If mkdir SUCCEEDS:
+   a. Write own PID + hostname + timestamp as owner in claim JSON
+   b. rmdir the lockdir (release filesystem lock)
+   c. Re-read claim file → verify own PID matches
+   d. If own PID → proceed (claim successful)
+   e. If different PID → race lost (extremely unlikely), backoff
+4. If mkdir FAILS (EEXIST):
+   a. Check lockdir mtime — if > 30s, stale lock → rmdir → retry from step 2
+   b. If fresh lock → another instance is claiming right now
+   c. Wait 200ms → retry up to 3 times
+   d. After 3 retries → backoff:
+      - Log: CONFLICT | task=<ID> phase=<N> winner=<other_instance>
+      - Notify user: "Phase N already claimed by <instance>. Available: Phase M."
+      - Attempt to claim next available phase
 ```
 
-**Edge case**: If two instances write simultaneously and both see their own PID (filesystem race), the operations.log will show two CLAIM entries. The session-end lint detects this and flags it.
+**Why `mkdir`?** Unlike file writes, `mkdir` is truly atomic on POSIX — two concurrent calls will have exactly one succeed and one fail with EEXIST. This eliminates the race window that existed with the old sleep-based approach.
+
+**Stale lock cleanup**: A lockdir older than 30s means the holder crashed mid-claim. Safe to remove because claim writes take <1s.
 
 ## Phase Structure in plan.md
 

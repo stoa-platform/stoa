@@ -259,10 +259,24 @@ Tache a realiser ?
 | Jamais pour | Docs-only, single-file fix, config changes, memory updates |
 | Cost awareness | ~3-4x tokens pour 3 teammates, ~7x avec overhead plan mode |
 
+#### Claim File Bridge (MANDATORY)
+
+When Agent Teams works on a MEGA with phases, the lead MUST write `.claude/claims/` files alongside TaskUpdate:
+
+```
+1. Lead reads/creates .claude/claims/<MEGA-ID>.json
+2. For each teammate assignment → write owner=<teammate-name> in the claim file
+3. Teammates log CLAIM in operations.log (same as multi-instance protocol)
+4. On completion → teammate releases claim in file + logs RELEASE
+```
+
+**Why?** Claim files are the single source of truth visible to ALL execution modes (sequential, multi-instance, multi-subagent). Without this bridge, a local terminal running `session-startup.md` Step 2 cannot see what Agent Teams teammates are working on, leading to duplicate claims.
+
 #### Workflow Agent Teams
 ```
 1. [Lead/Opus] Analyser la tache, identifier N scopes independants
 2. [Lead/Opus] Creer le plan: quel teammate fait quoi
+2b. [Lead/Opus] Write .claude/claims/<MEGA-ID>.json with teammate assignments (Claim File Bridge)
 3. [Teammate 1/Sonnet] Scope A: branch → code → tests → quality gate
 4. [Teammate 2/Sonnet] Scope B: branch → code → tests → quality gate
 5. [Teammate 3/Sonnet] Scope C: branch → code → tests → quality gate

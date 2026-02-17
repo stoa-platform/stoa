@@ -42,6 +42,7 @@ class Topics:
     DEPLOYMENT_EVENTS = "stoa.deployment.events"
     RESOURCE_LIFECYCLE = "stoa.resource.lifecycle"
     METERING_EVENTS = "stoa.metering.events"
+    FEDERATION_EVENTS = "stoa.federation.events"
 
 
 class KafkaService:

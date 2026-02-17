@@ -41,6 +41,7 @@ from .routers import (
     deployments,
     environments,
     events,
+    federation,
     gateway,
     gateway_deployments,
     gateway_instances,
@@ -490,6 +491,9 @@ app.include_router(audit.router)
 # Backend APIs — SaaS self-service (CAB-1188)
 app.include_router(backend_apis.router)
 app.include_router(backend_apis.keys_router)
+
+# Federation — enterprise MCP multi-account (CAB-1313)
+app.include_router(federation.router)
 
 # Public — Portal email capture (no auth)
 app.include_router(access_requests.router)

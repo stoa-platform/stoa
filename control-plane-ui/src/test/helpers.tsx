@@ -219,7 +219,7 @@ export const mockWorkflowInstance = (
   template_id: 'wft-1',
   tenant_id: 'oasis-gunters',
   subject_id: 'user-1',
-  subject_email: 'alice@example.com',
+  subject_email: 'newuser@example.com',
   workflow_type: 'user_registration',
   status: 'pending',
   current_step_index: 0,

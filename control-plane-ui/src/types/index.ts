@@ -1192,9 +1192,16 @@ export interface WorkflowInstance {
   completed_at: string | null;
 }
 
+export interface WorkflowTemplateListResponse {
+  items: WorkflowTemplate[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface WorkflowListResponse {
   items: WorkflowInstance[];
   total: number;
-  skip: number;
-  limit: number;
+  page: number;
+  page_size: number;
 }

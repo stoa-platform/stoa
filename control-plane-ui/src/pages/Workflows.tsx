@@ -75,7 +75,7 @@ function ModeBadge({ mode }: { mode: WorkflowMode }) {
 const TYPE_LABELS: Record<WorkflowType, string> = {
   user_registration: 'User Registration',
   consumer_registration: 'Consumer Registration',
-  tenant_owner: 'Tenant Owner',
+  tenant_owner_onboarding: 'Tenant Owner',
 };
 
 // ---------------------------------------------------------------------------
@@ -248,7 +248,7 @@ function InstancesTab({ tenantId, canManage }: { tenantId: string; canManage: bo
 
   const handleApprove = async (id: string) => {
     try {
-      await apiService.approveWorkflowStep(tenantId, id);
+      await apiService.approveWorkflowStep(tenantId, id, {});
       await fetchInstances();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Approve failed');
@@ -257,7 +257,7 @@ function InstancesTab({ tenantId, canManage }: { tenantId: string; canManage: bo
 
   const handleReject = async (id: string) => {
     try {
-      await apiService.rejectWorkflowStep(tenantId, id);
+      await apiService.rejectWorkflowStep(tenantId, id, {});
       await fetchInstances();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Reject failed');

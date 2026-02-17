@@ -29,6 +29,7 @@ import type {
   WorkflowTemplateCreate,
   WorkflowTemplateUpdate,
   WorkflowInstance,
+  WorkflowTemplateListResponse,
   WorkflowListResponse,
 } from '../types';
 
@@ -666,7 +667,7 @@ class ApiService {
   }
 
   // Workflow Engine methods (CAB-593)
-  async listWorkflowTemplates(tenantId: string): Promise<WorkflowTemplate[]> {
+  async listWorkflowTemplates(tenantId: string): Promise<WorkflowTemplateListResponse> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/workflows/templates`);
     return data;
   }

@@ -865,6 +865,53 @@ class KeycloakService:
         roles = self._admin.get_realm_roles_of_user(user_id)
         return [r["name"] for r in roles if r["name"] not in system_roles]
 
+    async def setup_federation_client(
+        self,
+        sub_account_id: str,
+        master_account_id: str,
+        tenant_id: str,
+    ) -> str | None:
+        """Create a confidential KC client for federation Token Exchange (CAB-1313).
+
+        Best-effort: returns client_id on success, None on any failure.
+        Never raises — caller handles None gracefully.
+        """
+        try:
+            if not self._admin:
+                logger.warning("Keycloak not connected, skipping federation client setup")
+                return None
+
+            client_id = f"stoa-fed-{sub_account_id[:8]}"
+
+            client_data = {
+                "clientId": client_id,
+                "name": f"Federation: {sub_account_id[:8]}",
+                "description": f"Token Exchange client for federation sub-account in tenant {tenant_id}",
+                "enabled": True,
+                "protocol": "openid-connect",
+                "publicClient": False,
+                "serviceAccountsEnabled": True,
+                "authorizationServicesEnabled": False,
+                "standardFlowEnabled": False,
+                "directAccessGrantsEnabled": False,
+                "implicitFlowEnabled": False,
+                "redirectUris": [],
+                "webOrigins": [],
+                "attributes": {
+                    "tenant_id": tenant_id,
+                    "master_account_id": master_account_id,
+                    "sub_account_id": sub_account_id,
+                    "federation_client": "true",
+                },
+            }
+
+            self._admin.create_client(client_data)
+            logger.info("Created federation client %s for tenant %s", client_id, tenant_id)
+            return client_id
+        except Exception as e:
+            logger.warning("Failed to create federation client for sub-account %s: %s", sub_account_id, e)
+            return None
+
 
 # Global instance
 keycloak_service = KeycloakService()

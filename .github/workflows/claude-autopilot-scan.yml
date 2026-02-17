@@ -77,21 +77,35 @@ jobs:
           # Filter: priority <= 3, not already in progress
           # Note: estimate filter removed from GraphQL — applied client-side
           # so tickets without estimates can pass through (Council will estimate them)
+          # Linear PaginationOrderBy only supports createdAt|updatedAt (NOT priority)
+          # Using an invalid orderBy causes a silent GraphQL error → empty results
           RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
             -H "Authorization: ${LINEAR_API_KEY}" \
             -H "Content-Type: application/json" \
             -d '{
-              "query": "{ issues(filter: { team: { key: { eq: \"CAB\" } }, state: { type: { in: [\"unstarted\", \"backlog\"] } }, priority: { lte: 3 } }, orderBy: priority, first: 30) { nodes { id identifier title description priority estimate labels { nodes { name } } parent { identifier } } } }"
+              "query": "{ issues(filter: { team: { key: { eq: \"CAB\" } }, state: { type: { in: [\"unstarted\", \"backlog\"] } }, priority: { lte: 3 } }, orderBy: updatedAt, first: 30) { nodes { id identifier title description priority estimate labels { nodes { name } } parent { identifier } } } }"
             }')
+
+          # Check for GraphQL errors
+          GQL_ERROR=$(echo "$RESPONSE" | jq -r '.errors[0].message // empty' 2>/dev/null)
+          if [ -n "$GQL_ERROR" ]; then
+            echo "::error::Linear GraphQL error: ${GQL_ERROR}"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RAW_COUNT=$(echo "$RESPONSE" | jq '.data.issues.nodes | length' 2>/dev/null || echo "0")
+          echo "Raw tickets from Linear API: ${RAW_COUNT}"
 
           # Client-side filters:
           # 1. No "no-autopilot" label
           # 2. Not a sub-ticket (no parent)
           # 3. Estimate <= 13 OR no estimate (null) — MEGAs >13 need manual decomposition
+          # Sort by priority (1=Urgent first) then cap at REMAINING
           echo "$RESPONSE" | jq -c "[
             .data.issues.nodes[]
-            | select(.labels.nodes | map(.name) | index(\"no-autopilot\") | not)
-            | select(.parent == null or .parent == {})
+            | select((.labels.nodes // []) | map(.name) | index(\"no-autopilot\") | not)
+            | select(.parent == null)
             | select(.estimate == null or .estimate <= 13)
             | {
                 id: .id,
@@ -100,9 +114,9 @@ jobs:
                 description: (.description // \"\" | .[0:500]),
                 priority: .priority,
                 estimate: .estimate,
-                labels: [.labels.nodes[].name]
+                labels: [(.labels.nodes // [])[].name]
               }
-          ] | sort_by(-.priority) | .[0:${REMAINING}]" > eligible-tickets.json 2>/dev/null || echo "[]" > eligible-tickets.json
+          ] | sort_by(.priority) | .[0:${REMAINING}]" > eligible-tickets.json 2>/dev/null || echo "[]" > eligible-tickets.json
 
           TICKET_COUNT=$(jq 'length' eligible-tickets.json)
           echo "Found ${TICKET_COUNT} eligible tickets"

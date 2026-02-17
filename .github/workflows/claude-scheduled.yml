@@ -55,12 +55,6 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: |
-            Bash(gh issue *)
-            Bash(gh pr *)
-            Read
-            Glob
-            Grep
           prompt: |
             Daily triage task. Analyze the repository state:
 
@@ -76,7 +70,7 @@ jobs:
             - Open PRs count + stale PRs
             - Plan drift: any [~] items that should be [x] or vice versa
             - Recommendations: top 3 priorities for today
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
 
       - name: Notify Slack
         if: always()
@@ -105,13 +99,6 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: |
-            Bash
-            Read
-            Write
-            Edit
-            Glob
-            Grep
           prompt: |
             CI Health Check task. Analyze recent CI runs on main:
 
@@ -129,7 +116,7 @@ jobs:
             - Auto-fixed: N (PR #xxx)
             - Needs human: M (issues created)
             - Flaky checks: [list]
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Bash,Read,Write,Edit,Glob,Grep"
 
       - name: Notify Slack
         if: always()
@@ -158,13 +145,6 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: |
-            Bash
-            Read
-            Write
-            Edit
-            Glob
-            Grep
           prompt: |
             Weekly audit task:
 
@@ -190,7 +170,7 @@ jobs:
 
             Generate a weekly report as a GitHub issue titled
             "Weekly Audit — YYYY-MM-DD" with label "weekly-audit".
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 20"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 20 --allowedTools Bash,Read,Write,Edit,Glob,Grep"
 
       - name: Notify Slack
         if: always()
@@ -216,12 +196,6 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: |
-            Bash(gh pr *)
-            Bash(gh issue *)
-            Read
-            Glob
-            Grep
           prompt: |
             Generate a weekly digest of the STOA AI Factory:
 
@@ -232,7 +206,7 @@ jobs:
             5. Read metrics.log if it exists — extract PR-MERGED and CI-FIX counts
 
             Format as a Slack-friendly summary and post it.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Bash,Read,Glob,Grep"
 
   # ----- Weekly: Capacity Check -----
   weekly-capacity-check:
@@ -251,10 +225,6 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: |
-            Read
-            Glob
-            Grep
           prompt: |
             Weekly capacity check — read-only analysis of cycle health.
 
@@ -284,7 +254,7 @@ jobs:
 
             This is a READ-ONLY check. Do NOT modify any files.
             Suggest running `/fill-cycle` if utilization is below 70%.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10 --allowedTools Read,Glob,Grep"
 
       - name: Notify Slack
         if: always()
@@ -313,10 +283,6 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: |
-            Read
-            Glob
-            Grep
           prompt: |
             Weekly backlog stock check — scan the codebase for improvement opportunities.
 
@@ -340,7 +306,7 @@ jobs:
             Create a GitHub issue titled "Backlog Stock Check — YYYY-MM-DD" with label "daily-digest".
 
             IMPORTANT: This is a READ-ONLY check. Do NOT create Linear tickets or modify files.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Read,Glob,Grep"
 
       - name: Notify Slack
         if: always()

@@ -46,12 +46,6 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: |
-            Bash(gh issue *)
-            Bash(gh pr *)
-            Read
-            Glob
-            Grep
           prompt: |
             Multi-Agent Council Validation.
 
@@ -79,7 +73,7 @@ jobs:
             **Estimated Total LOC**: XXX
 
             Comment "/go-batch" to start parallel execution.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
 
       - name: Notify Slack — Batch Council
         env:
@@ -131,14 +125,6 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: |
-            Bash
-            Read
-            Write
-            Edit
-            Glob
-            Grep
-            WebFetch
           prompt: |
             Implement ticket: ${{ matrix.ticket }}
 
@@ -159,7 +145,7 @@ jobs:
             Only modify files in your component scope.
             Do NOT modify shared files (memory.md, plan.md, CLAUDE.md).
             Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 25"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 25 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
 
       - name: Notify Slack — Agent Complete
         if: always()

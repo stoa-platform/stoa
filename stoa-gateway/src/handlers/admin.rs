@@ -23,7 +23,8 @@ use axum::{
 use serde::Serialize;
 use tracing::warn;
 
-use crate::proxy::credentials::BackendCredential;
+use crate::proxy::credentials::{AuthType, BackendCredential};
+use crate::proxy::dynamic::is_blocked_url;
 use crate::routes::{ApiRoute, PolicyEntry};
 use crate::state::AppState;
 use crate::uac::binders::{mcp::McpBinder, rest::RestBinder, ProtocolBinder};
@@ -367,6 +368,44 @@ pub async fn upsert_backend_credential(
     State(state): State<AppState>,
     Json(cred): Json<BackendCredential>,
 ) -> impl IntoResponse {
+    // Validate OAuth2 credentials: require config, HTTPS, and SSRF check
+    if cred.auth_type == AuthType::OAuth2ClientCredentials {
+        match &cred.oauth2 {
+            None => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "status": "error",
+                        "message": "oauth2 config required for auth_type oauth2_client_credentials"
+                    })),
+                )
+                    .into_response();
+            }
+            Some(oauth2) => {
+                if !oauth2.token_url.starts_with("https://") {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({
+                            "status": "error",
+                            "message": "oauth2 token_url must use HTTPS"
+                        })),
+                    )
+                        .into_response();
+                }
+                if is_blocked_url(&oauth2.token_url) {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({
+                            "status": "error",
+                            "message": "oauth2 token_url is blocked (SSRF protection)"
+                        })),
+                    )
+                        .into_response();
+                }
+            }
+        }
+    }
+
     let route_id = cred.route_id.clone();
     let existed = state.credential_store.upsert(cred).is_some();
     let status = if existed {
@@ -378,6 +417,7 @@ pub async fn upsert_backend_credential(
         status,
         Json(serde_json::json!({"route_id": route_id, "status": "ok"})),
     )
+        .into_response()
 }
 
 /// GET /admin/backend-credentials — list all backend credentials

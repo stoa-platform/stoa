@@ -1,0 +1,24 @@
+# Dependabot configuration for stoa-web repository
+# Copy this file to stoa-web/.github/dependabot.yml
+
+version: 2
+updates:
+  # NPM - Astro site
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"

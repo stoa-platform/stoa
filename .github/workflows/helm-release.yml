@@ -1,0 +1,101 @@
+# Helm Chart Release — creates GitHub Release when Chart.yaml version changes
+# Triggers on push to main with changes in charts/ directory.
+# Creates a git tag helm-vX.Y.Z and attaches the helm package tarball.
+
+name: Helm Chart Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "charts/stoa-platform/Chart.yaml"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for tag detection
+
+      - name: Extract chart version
+        id: version
+        run: |
+          VERSION=$(grep '^version:' charts/stoa-platform/Chart.yaml | awk '{print $2}')
+          APP_VERSION=$(grep '^appVersion:' charts/stoa-platform/Chart.yaml | awk '{print $2}' | tr -d '"')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=helm-v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Chart version: $VERSION, App version: $APP_VERSION"
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if git tag -l "$TAG" | grep -q "$TAG"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists, skipping release"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG does not exist, will create release"
+          fi
+
+      - name: Install Helm
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Lint chart
+        if: steps.check_tag.outputs.exists == 'false'
+        run: helm lint charts/stoa-platform
+
+      - name: Package chart
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          helm package charts/stoa-platform --destination /tmp/helm-release/
+          echo "Package contents:"
+          ls -la /tmp/helm-release/
+
+      - name: Create tag and release
+        if: steps.check_tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          APP_VERSION="${{ steps.version.outputs.app_version }}"
+          TARBALL=$(ls /tmp/helm-release/stoa-platform-*.tgz)
+
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          gh release create "$TAG" "$TARBALL" \
+            --title "Helm Chart $VERSION" \
+            --notes "## stoa-platform Helm Chart v${VERSION}
+
+          **App Version**: ${APP_VERSION}
+
+          ### Install
+
+          \`\`\`bash
+          helm install stoa-platform $TARBALL -n stoa-system --create-namespace
+          \`\`\`
+
+          Or from source:
+
+          \`\`\`bash
+          git clone https://github.com/stoa-platform/stoa.git
+          cd stoa
+          git checkout ${TAG}
+          helm install stoa-platform ./charts/stoa-platform -n stoa-system --create-namespace
+          \`\`\`
+
+          ### License
+
+          Apache 2.0 — see [LICENSE](https://github.com/stoa-platform/stoa/blob/main/LICENSE)
+          "

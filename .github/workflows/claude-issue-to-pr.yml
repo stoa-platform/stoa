@@ -188,6 +188,12 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log.
+            Do NOT log SESSION-START or SESSION-END.
+            Do NOT run crash recovery checks.
+            Focus exclusively on implementing the task below.
+
             Implement the feature described in issue #${{ github.event.issue.number }}.
 
             Issue title: ${{ github.event.issue.title }}
@@ -196,7 +202,7 @@ jobs:
 
             Read the Council validation comment (posted earlier on this issue).
             Follow the implementation plan from the Council comment.
-            Follow all rules in CLAUDE.md and .claude/rules/.
+            Follow code style rules in CLAUDE.md and .claude/rules/ (but skip workflow/session rules).
 
             Steps:
             1. Create a feature branch: feat/issue-${{ github.event.issue.number }}-<slug>
@@ -210,7 +216,7 @@ jobs:
             If Ask: leave PR open for human review.
 
             IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 30 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
 
       # Notify Slack on completion
       - name: Notify Slack — Implementation Done

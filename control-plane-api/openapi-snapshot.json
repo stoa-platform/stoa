@@ -7855,6 +7855,275 @@
         "title": "MCPToolResponse",
         "type": "object"
       },
+      "MasterAccountCreate": {
+        "description": "Schema for creating a federation master account.",
+        "example": {
+          "description": "Master account for Acme developer program",
+          "display_name": "Acme Corp Federation",
+          "max_sub_accounts": 50,
+          "name": "acme-federation"
+        },
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "max_sub_accounts": {
+            "default": 10,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Max Sub Accounts",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "quota_config": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quota Config"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "MasterAccountCreate",
+        "type": "object"
+      },
+      "MasterAccountListResponse": {
+        "description": "Schema for paginated master account list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MasterAccountResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "MasterAccountListResponse",
+        "type": "object"
+      },
+      "MasterAccountResponse": {
+        "description": "Schema for master account response.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "max_sub_accounts": {
+            "title": "Max Sub Accounts",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quota_config": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quota Config"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MasterAccountStatusEnum"
+          },
+          "sub_account_count": {
+            "default": 0,
+            "description": "Number of sub-accounts",
+            "title": "Sub Account Count",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "display_name",
+          "description",
+          "status",
+          "max_sub_accounts",
+          "quota_config",
+          "created_at",
+          "updated_at",
+          "created_by"
+        ],
+        "title": "MasterAccountResponse",
+        "type": "object"
+      },
+      "MasterAccountStatusEnum": {
+        "description": "Master account lifecycle status.",
+        "enum": [
+          "active",
+          "suspended",
+          "disabled"
+        ],
+        "title": "MasterAccountStatusEnum",
+        "type": "string"
+      },
+      "MasterAccountUpdate": {
+        "description": "Schema for updating a federation master account.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "max_sub_accounts": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Sub Accounts"
+          },
+          "quota_config": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quota Config"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MasterAccountStatusEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "MasterAccountUpdate",
+        "type": "object"
+      },
       "MergeRequestCreate": {
         "properties": {
           "description": {
@@ -11412,6 +11681,263 @@
         ],
         "title": "SortOrder",
         "type": "string"
+      },
+      "SubAccountCreate": {
+        "description": "Schema for creating a federation sub-account.",
+        "example": {
+          "account_type": "agent",
+          "display_name": "Agent Alpha",
+          "name": "agent-alpha"
+        },
+        "properties": {
+          "account_type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SubAccountTypeEnum"
+              }
+            ],
+            "default": "developer"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SubAccountCreate",
+        "type": "object"
+      },
+      "SubAccountCreatedResponse": {
+        "description": "Schema returned once at creation \u2014 includes the plaintext API key.",
+        "example": {
+          "api_key": "stoa_fed_a1b2_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "api_key_prefix": "stoa_fed_a1b2",
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "name": "agent-alpha"
+        },
+        "properties": {
+          "api_key": {
+            "description": "Plaintext API key \u2014 shown only once",
+            "title": "Api Key",
+            "type": "string"
+          },
+          "api_key_prefix": {
+            "title": "Api Key Prefix",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "api_key",
+          "api_key_prefix"
+        ],
+        "title": "SubAccountCreatedResponse",
+        "type": "object"
+      },
+      "SubAccountListResponse": {
+        "description": "Schema for paginated sub-account list.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SubAccountResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "SubAccountListResponse",
+        "type": "object"
+      },
+      "SubAccountResponse": {
+        "description": "Schema for sub-account response (never exposes key hash).",
+        "properties": {
+          "account_type": {
+            "$ref": "#/components/schemas/SubAccountTypeEnum"
+          },
+          "api_key_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Prefix"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kc_client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kc Client Id"
+          },
+          "master_account_id": {
+            "format": "uuid",
+            "title": "Master Account Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubAccountStatusEnum"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "master_account_id",
+          "tenant_id",
+          "name",
+          "display_name",
+          "account_type",
+          "status",
+          "api_key_prefix",
+          "kc_client_id",
+          "created_at",
+          "updated_at",
+          "created_by"
+        ],
+        "title": "SubAccountResponse",
+        "type": "object"
+      },
+      "SubAccountStatusEnum": {
+        "description": "Sub-account lifecycle status.",
+        "enum": [
+          "active",
+          "suspended",
+          "revoked"
+        ],
+        "title": "SubAccountStatusEnum",
+        "type": "string"
+      },
+      "SubAccountTypeEnum": {
+        "description": "Sub-account type.",
+        "enum": [
+          "developer",
+          "agent"
+        ],
+        "title": "SubAccountTypeEnum",
+        "type": "string"
+      },
+      "SubAccountUpdate": {
+        "description": "Schema for updating a federation sub-account.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubAccountStatusEnum"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "SubAccountUpdate",
+        "type": "object"
       },
       "SubscriptionApprove": {
         "description": "Schema for approving a subscription",
@@ -20599,7 +21125,7 @@
     },
     "/v1/events/history/{tenant_id}": {
       "get": {
-        "description": "Get historical events from database/Kafka",
+        "description": "Get historical events for a tenant.\n\nEvent store (DB-backed) deferred \u2014 Kafka-only audit log has no query API.\nSee deployment history for recent activity.",
         "operationId": "get_event_history_v1_events_history__tenant_id__get",
         "parameters": [
           {
@@ -27510,6 +28036,701 @@
         "summary": "Update Deployment Status",
         "tags": [
           "Deployments"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/federation/accounts": {
+      "get": {
+        "description": "List federation master accounts for a tenant.",
+        "operationId": "list_master_accounts_v1_tenants__tenant_id__federation_accounts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by status",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterAccountListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Master Accounts",
+        "tags": [
+          "Federation"
+        ]
+      },
+      "post": {
+        "description": "Create a federation master account.",
+        "operationId": "create_master_account_v1_tenants__tenant_id__federation_accounts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterAccountCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterAccountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Master Account",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/federation/accounts/{account_id}": {
+      "delete": {
+        "description": "Delete a federation master account (cpi-admin only, cascades sub-accounts).",
+        "operationId": "delete_master_account_v1_tenants__tenant_id__federation_accounts__account_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Master Account",
+        "tags": [
+          "Federation"
+        ]
+      },
+      "get": {
+        "description": "Get a federation master account by ID.",
+        "operationId": "get_master_account_v1_tenants__tenant_id__federation_accounts__account_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterAccountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Master Account",
+        "tags": [
+          "Federation"
+        ]
+      },
+      "patch": {
+        "description": "Update a federation master account.",
+        "operationId": "update_master_account_v1_tenants__tenant_id__federation_accounts__account_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterAccountUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterAccountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Master Account",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/federation/accounts/{account_id}/sub-accounts": {
+      "get": {
+        "description": "List sub-accounts for a federation master account.",
+        "operationId": "list_sub_accounts_v1_tenants__tenant_id__federation_accounts__account_id__sub_accounts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by status",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAccountListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Sub Accounts",
+        "tags": [
+          "Federation"
+        ]
+      },
+      "post": {
+        "description": "Create a federation sub-account. The API key is returned only once.",
+        "operationId": "create_sub_account_v1_tenants__tenant_id__federation_accounts__account_id__sub_accounts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubAccountCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAccountCreatedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Sub Account",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/federation/accounts/{account_id}/sub-accounts/{sub_id}": {
+      "get": {
+        "description": "Get a sub-account by ID.",
+        "operationId": "get_sub_account_v1_tenants__tenant_id__federation_accounts__account_id__sub_accounts__sub_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sub_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAccountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Sub Account",
+        "tags": [
+          "Federation"
+        ]
+      },
+      "patch": {
+        "description": "Update a sub-account.",
+        "operationId": "update_sub_account_v1_tenants__tenant_id__federation_accounts__account_id__sub_accounts__sub_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sub_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubAccountUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAccountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Sub Account",
+        "tags": [
+          "Federation"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/federation/accounts/{account_id}/sub-accounts/{sub_id}/revoke": {
+      "post": {
+        "description": "Revoke a sub-account \u2014 clears API key and sets status to revoked.",
+        "operationId": "revoke_sub_account_v1_tenants__tenant_id__federation_accounts__account_id__sub_accounts__sub_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sub_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sub Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubAccountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Sub Account",
+        "tags": [
+          "Federation"
         ]
       }
     },

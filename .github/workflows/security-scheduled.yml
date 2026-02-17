@@ -1,0 +1,120 @@
+name: Scheduled Security Scan
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6am UTC
+  workflow_dispatch:  # Manual trigger
+
+permissions:
+  contents: read
+  security-events: write
+  issues: write
+
+jobs:
+  trivy-images:
+    name: Trivy Container Scan (All Images)
+    if: vars.DISABLE_L2_SCHEDULED != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        image:
+          - ghcr.io/stoa-platform/control-plane-api
+          - ghcr.io/stoa-platform/control-plane-ui
+          - ghcr.io/stoa-platform/stoa-portal
+          - ghcr.io/stoa-platform/stoa-gateway
+      fail-fast: false
+    steps:
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ matrix.image }}:latest'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Run Trivy (SARIF for GitHub Security)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ matrix.image }}:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+        continue-on-error: true
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
+  gitleaks-full:
+    name: Gitleaks Full History Scan
+    if: vars.DISABLE_L2_SCHEDULED != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks (full history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: detect --source . --config .gitleaks.toml --verbose
+        continue-on-error: true
+
+      - name: Create issue on findings
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Gitleaks: Secrets detected in full history scan (${new Date().toISOString().split('T')[0]})`;
+            const body = `Weekly Gitleaks full-history scan found potential secrets.\n\nSee workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nLabel: \`security\``;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['security', 'ci-failure']
+            });
+
+  dependency-audit:
+    name: Dependency Audit (All Ecosystems)
+    if: vars.DISABLE_L2_SCHEDULED != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Python audit
+        run: |
+          pip install pip-audit
+          cd control-plane-api && pip-audit -r requirements.txt --desc 2>&1 || true
+        continue-on-error: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Node audit
+        run: |
+          cd control-plane-ui && npm audit --audit-level=high 2>&1 || true
+          cd ../portal && npm audit --audit-level=high 2>&1 || true
+        continue-on-error: true
+
+      - name: Rust audit
+        run: |
+          cargo install cargo-audit 2>/dev/null || true
+          cd stoa-gateway && cargo audit 2>&1 || true
+        continue-on-error: true

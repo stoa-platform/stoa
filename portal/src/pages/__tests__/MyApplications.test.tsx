@@ -13,6 +13,14 @@ import {
 } from '../../test/helpers';
 import { MyApplications } from '../apps/MyApplications';
 
+// Mock i18n
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'en' },
+  }),
+}));
+
 // Mock AuthContext at module level
 const mockAuth = vi.fn();
 vi.mock('../../contexts/AuthContext', () => ({
@@ -71,18 +79,18 @@ describe('MyApplications', () => {
 
   it('renders the page heading', () => {
     renderWithProviders(<MyApplications />);
-    expect(screen.getByText('My Applications')).toBeInTheDocument();
+    expect(screen.getByText('title')).toBeInTheDocument();
   });
 
   it('renders Create Application button', () => {
     renderWithProviders(<MyApplications />);
-    expect(screen.getByText('Create Application')).toBeInTheDocument();
+    expect(screen.getByText('createApp')).toBeInTheDocument();
   });
 
   it('shows empty state when no applications exist', () => {
     renderWithProviders(<MyApplications />);
-    expect(screen.getByText('No Applications Yet')).toBeInTheDocument();
-    expect(screen.getByText('Create Your First Application')).toBeInTheDocument();
+    expect(screen.getByText('empty.title')).toBeInTheDocument();
+    expect(screen.getByText('empty.createFirst')).toBeInTheDocument();
   });
 
   it('renders applications when data exists', () => {
@@ -97,7 +105,7 @@ describe('MyApplications', () => {
 
     expect(screen.getByTestId('app-card-app-1')).toBeInTheDocument();
     expect(screen.getByTestId('app-card-app-2')).toBeInTheDocument();
-    expect(screen.getByText('2 applications')).toBeInTheDocument();
+    expect(screen.getByText('count')).toBeInTheDocument();
   });
 
   describe.each<PersonaRole>(['cpi-admin', 'tenant-admin', 'devops', 'viewer'])(
@@ -112,13 +120,13 @@ describe('MyApplications', () => {
       it('renders the page without error', async () => {
         renderWithProviders(<MyApplications />);
         await waitFor(() => {
-          expect(screen.getByText('My Applications')).toBeInTheDocument();
+          expect(screen.getByText('title')).toBeInTheDocument();
         });
       });
 
       it('shows empty state', () => {
         renderWithProviders(<MyApplications />);
-        expect(screen.getByText('No Applications Yet')).toBeInTheDocument();
+        expect(screen.getByText('empty.title')).toBeInTheDocument();
       });
     }
   );

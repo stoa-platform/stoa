@@ -3,6 +3,7 @@
  */
 
 import { Bot, Globe, Layers } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export type UseCase = 'mcp-agent' | 'rest-api' | 'both';
 
@@ -13,35 +14,37 @@ interface ChooseUseCaseProps {
 const USE_CASES = [
   {
     id: 'mcp-agent' as UseCase,
-    title: 'MCP Agent',
-    description: 'Connect an AI agent (Claude, GPT, custom) to enterprise APIs via MCP protocol.',
+    titleKey: 'chooseUseCase.mcpAgent',
+    descKey: 'chooseUseCase.mcpAgentDesc',
     icon: Bot,
     color: 'from-violet-500 to-violet-600',
   },
   {
     id: 'rest-api' as UseCase,
-    title: 'REST API',
-    description: 'Integrate with traditional REST APIs using OAuth2 credentials and API keys.',
+    titleKey: 'chooseUseCase.restApi',
+    descKey: 'chooseUseCase.restApiDesc',
     icon: Globe,
     color: 'from-emerald-500 to-emerald-600',
   },
   {
     id: 'both' as UseCase,
-    title: 'Both',
-    description: 'Use MCP tools for AI agents AND REST endpoints for traditional integration.',
+    titleKey: 'chooseUseCase.both',
+    descKey: 'chooseUseCase.bothDesc',
     icon: Layers,
     color: 'from-primary-500 to-primary-600',
   },
 ];
 
 export function ChooseUseCase({ onSelect }: ChooseUseCaseProps) {
+  const { t } = useTranslation('onboarding');
+
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">How will you use STOA?</h2>
-        <p className="mt-2 text-gray-500 dark:text-neutral-400">
-          Choose your primary integration pattern. You can always change this later.
-        </p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {t('chooseUseCase.title')}
+        </h2>
+        <p className="mt-2 text-gray-500 dark:text-neutral-400">{t('chooseUseCase.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
@@ -62,9 +65,9 @@ export function ChooseUseCase({ onSelect }: ChooseUseCaseProps) {
                 <Icon className="h-6 w-6" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                {uc.title}
+                {t(uc.titleKey)}
               </h3>
-              <p className="text-sm text-gray-500 dark:text-neutral-400">{uc.description}</p>
+              <p className="text-sm text-gray-500 dark:text-neutral-400">{t(uc.descKey)}</p>
             </button>
           );
         })}

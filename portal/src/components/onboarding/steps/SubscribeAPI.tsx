@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { Search, Check, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAPIs } from '../../../hooks/useAPIs';
 import type { API } from '../../../types';
 
@@ -14,6 +15,7 @@ interface SubscribeAPIProps {
 }
 
 export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) {
+  const { t } = useTranslation('onboarding');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data, isLoading } = useAPIs({ search, page: 1, pageSize: 6 });
@@ -24,10 +26,10 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Subscribe to an API</h2>
-        <p className="mt-2 text-gray-500 dark:text-neutral-400">
-          Pick an API from the catalog to connect your application to.
-        </p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {t('subscribeApi.title')}
+        </h2>
+        <p className="mt-2 text-gray-500 dark:text-neutral-400">{t('subscribeApi.subtitle')}</p>
       </div>
 
       {/* Search */}
@@ -37,7 +39,7 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search APIs..."
+          placeholder={t('subscribeApi.searchPlaceholder')}
           className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
         />
       </div>
@@ -49,7 +51,7 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
         </div>
       ) : apis.length === 0 ? (
         <p className="text-center text-gray-500 dark:text-neutral-400 py-8">
-          No APIs found. You can skip this step and subscribe later.
+          {t('subscribeApi.noApis')}
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -89,7 +91,7 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
           onClick={onBack}
           className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white transition-colors"
         >
-          Back
+          {t('subscribeApi.back')}
         </button>
         <div className="flex gap-3">
           <button
@@ -97,7 +99,7 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
             onClick={onSkip}
             className="px-4 py-2 text-sm font-medium text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 transition-colors"
           >
-            Skip for now
+            {t('subscribeApi.skip')}
           </button>
           <button
             type="button"
@@ -105,7 +107,7 @@ export function SubscribeAPI({ onSelected, onBack, onSkip }: SubscribeAPIProps) 
             disabled={!selected}
             className="px-6 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            Continue
+            {t('subscribeApi.continue')}
           </button>
         </div>
       </div>

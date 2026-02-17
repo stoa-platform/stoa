@@ -1,0 +1,64 @@
+{
+  "steps": {
+    "useCase": "Use Case",
+    "useCaseDesc": "Choose your path",
+    "createApp": "Create App",
+    "createAppDesc": "Register your application",
+    "subscribe": "Subscribe",
+    "subscribeDesc": "Pick an API",
+    "firstCall": "First Call",
+    "firstCallDesc": "Test your integration"
+  },
+  "chooseUseCase": {
+    "title": "How will you use STOA?",
+    "subtitle": "Choose your primary integration pattern. You can always change this later.",
+    "mcpAgent": "MCP Agent",
+    "mcpAgentDesc": "Connect an AI agent (Claude, GPT, custom) to enterprise APIs via MCP protocol.",
+    "restApi": "REST API",
+    "restApiDesc": "Integrate with traditional REST APIs using OAuth2 credentials and API keys.",
+    "both": "Both",
+    "bothDesc": "Use MCP tools for AI agents AND REST endpoints for traditional integration."
+  },
+  "createApp": {
+    "title": "Create your application",
+    "subtitle": "This registers an OAuth client that your integration will use to authenticate.",
+    "appName": "Application Name *",
+    "appNamePlaceholder": "My Integration",
+    "slug": "Slug",
+    "slugPlaceholder": "my-integration",
+    "description": "Description",
+    "descriptionPlaceholder": "Brief description of what this application does...",
+    "back": "Back",
+    "submit": "Create Application"
+  },
+  "subscribeApi": {
+    "title": "Subscribe to an API",
+    "subtitle": "Pick an API from the catalog to connect your application to.",
+    "searchPlaceholder": "Search APIs...",
+    "noApis": "No APIs found. You can skip this step and subscribe later.",
+    "back": "Back",
+    "skip": "Skip for now",
+    "continue": "Continue"
+  },
+  "firstCall": {
+    "title": "You're all set!",
+    "subtitle": "Your application is ready. Here's how to make your first API call.",
+    "credentials": "Application Credentials",
+    "appName": "App Name",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "secretWarning": "Save your client secret now — it won't be shown again.",
+    "mcpConfig": "MCP Configuration",
+    "exampleCall": "Example API Call",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copySecret": "Copy secret",
+    "trySandbox": "Try in Sandbox",
+    "documentation": "Documentation",
+    "goToDashboard": "Go to Dashboard"
+  },
+  "quickAction": {
+    "title": "Get Started",
+    "description": "Set up your first integration"
+  }
+}

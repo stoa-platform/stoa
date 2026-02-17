@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { Plus, AppWindow, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useApplications, useCreateApplication } from '../../hooks/useApplications';
 import { ApplicationCard } from '../../components/apps/ApplicationCard';
 import { CreateAppModal } from '../../components/apps/CreateAppModal';
@@ -13,6 +14,7 @@ import { CredentialsViewer } from '../../components/apps/CredentialsViewer';
 import type { Application, ApplicationCreateRequest } from '../../types';
 
 export function MyApplications() {
+  const { t } = useTranslation('apps');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newlyCreatedApp, setNewlyCreatedApp] = useState<Application | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -28,7 +30,7 @@ export function MyApplications() {
       setNewlyCreatedApp(newApp);
       setIsCreateModalOpen(false);
     } catch (err) {
-      setCreateError((err as Error)?.message || 'Failed to create application');
+      setCreateError((err as Error)?.message || t('error.createFailed'));
     }
   };
 
@@ -41,17 +43,15 @@ export function MyApplications() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Applications</h1>
-          <p className="text-gray-500 dark:text-neutral-400 mt-1">
-            Manage your API consumer applications
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+          <p className="text-gray-500 dark:text-neutral-400 mt-1">{t('subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => refetch()}
             disabled={isLoading}
             className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
-            title="Refresh"
+            title={t('refresh')}
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
@@ -60,7 +60,7 @@ export function MyApplications() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
           >
             <Plus className="h-4 w-4" />
-            Create Application
+            {t('createApp')}
           </button>
         </div>
       </div>
@@ -71,17 +71,17 @@ export function MyApplications() {
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-green-900 dark:text-green-400">
-                Application Created Successfully!
+                {t('created.title')}
               </h2>
               <p className="text-sm text-green-700 dark:text-green-400 mt-1">
-                Your application "{newlyCreatedApp.name}" has been created.
+                {t('created.subtitle', { name: newlyCreatedApp.name })}
               </p>
             </div>
             <button
               onClick={handleCloseCredentials}
               className="text-sm text-green-700 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300 font-medium"
             >
-              Dismiss
+              {t('created.dismiss')}
             </button>
           </div>
           <CredentialsViewer
@@ -96,7 +96,7 @@ export function MyApplications() {
       {isLoading && (
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-gray-200 dark:border-neutral-700 p-12 text-center">
           <Loader2 className="h-8 w-8 text-primary-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-neutral-400">Loading applications...</p>
+          <p className="text-gray-500 dark:text-neutral-400">{t('loading')}</p>
         </div>
       )}
 
@@ -107,16 +107,16 @@ export function MyApplications() {
             <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
             <div>
               <h3 className="font-medium text-red-800 dark:text-red-400">
-                Failed to load applications
+                {t('error.loadFailed')}
               </h3>
               <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                {(error as Error)?.message || 'An unexpected error occurred'}
+                {(error as Error)?.message || t('error.unexpected')}
               </p>
               <button
                 onClick={() => refetch()}
                 className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-medium transition-colors"
               >
-                Try Again
+                {t('error.tryAgain')}
               </button>
             </div>
           </div>
@@ -130,18 +130,17 @@ export function MyApplications() {
             <AppWindow className="h-8 w-8 text-gray-400 dark:text-neutral-500" />
           </div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            No Applications Yet
+            {t('empty.title')}
           </h2>
           <p className="text-gray-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
-            Create your first application to start using APIs. Each application gets its own
-            credentials for authentication.
+            {t('empty.description')}
           </p>
           <button
             onClick={() => setIsCreateModalOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
           >
             <Plus className="h-4 w-4" />
-            Create Your First Application
+            {t('empty.createFirst')}
           </button>
         </div>
       )}
@@ -150,9 +149,7 @@ export function MyApplications() {
       {!isLoading && !isError && applications && applications.items.length > 0 && (
         <>
           <div className="text-sm text-gray-500 dark:text-neutral-400">
-            {applications.items.length === 1
-              ? '1 application'
-              : `${applications.items.length} applications`}
+            {t('count', { count: applications.items.length })}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {applications.items.map((app: Application) => (

@@ -1,0 +1,25 @@
+{
+  "title": "Mes Applications",
+  "subtitle": "Gérez vos applications consommatrices d'API",
+  "refresh": "Actualiser",
+  "createApp": "Créer une application",
+  "createFirst": "Créer votre première application",
+  "created": {
+    "title": "Application créée avec succès !",
+    "message": "Votre application \"{{name}}\" a été créée.",
+    "dismiss": "Fermer"
+  },
+  "loading": "Chargement des applications...",
+  "error": {
+    "title": "Échec du chargement des applications",
+    "tryAgain": "Réessayer"
+  },
+  "empty": {
+    "title": "Aucune application",
+    "description": "Créez votre première application pour commencer à utiliser les APIs. Chaque application dispose de ses propres identifiants d'authentification."
+  },
+  "count": {
+    "one": "1 application",
+    "other": "{{count}} applications"
+  }
+}

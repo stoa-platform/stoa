@@ -1,0 +1,64 @@
+{
+  "steps": {
+    "useCase": "Cas d'usage",
+    "useCaseDesc": "Choisissez votre parcours",
+    "createApp": "Créer l'app",
+    "createAppDesc": "Enregistrez votre application",
+    "subscribe": "Souscrire",
+    "subscribeDesc": "Choisissez une API",
+    "firstCall": "Premier appel",
+    "firstCallDesc": "Testez votre intégration"
+  },
+  "chooseUseCase": {
+    "title": "Comment allez-vous utiliser STOA ?",
+    "subtitle": "Choisissez votre modèle d'intégration principal. Vous pourrez toujours changer plus tard.",
+    "mcpAgent": "Agent MCP",
+    "mcpAgentDesc": "Connectez un agent IA (Claude, GPT, personnalisé) aux APIs d'entreprise via le protocole MCP.",
+    "restApi": "API REST",
+    "restApiDesc": "Intégrez avec des APIs REST traditionnelles via OAuth2 et clés d'API.",
+    "both": "Les deux",
+    "bothDesc": "Utilisez les outils MCP pour les agents IA ET les endpoints REST pour l'intégration traditionnelle."
+  },
+  "createApp": {
+    "title": "Créez votre application",
+    "subtitle": "Ceci enregistre un client OAuth que votre intégration utilisera pour s'authentifier.",
+    "appName": "Nom de l'application *",
+    "appNamePlaceholder": "Mon Intégration",
+    "slug": "Identifiant",
+    "slugPlaceholder": "mon-integration",
+    "description": "Description",
+    "descriptionPlaceholder": "Brève description de ce que fait cette application...",
+    "back": "Retour",
+    "submit": "Créer l'application"
+  },
+  "subscribeApi": {
+    "title": "Souscrire à une API",
+    "subtitle": "Choisissez une API du catalogue pour connecter votre application.",
+    "searchPlaceholder": "Rechercher des APIs...",
+    "noApis": "Aucune API trouvée. Vous pouvez passer cette étape et souscrire plus tard.",
+    "back": "Retour",
+    "skip": "Passer pour l'instant",
+    "continue": "Continuer"
+  },
+  "firstCall": {
+    "title": "Vous êtes prêt !",
+    "subtitle": "Votre application est prête. Voici comment effectuer votre premier appel API.",
+    "credentials": "Identifiants de l'application",
+    "appName": "Nom de l'app",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "secretWarning": "Sauvegardez votre secret client maintenant — il ne sera plus affiché.",
+    "mcpConfig": "Configuration MCP",
+    "exampleCall": "Exemple d'appel API",
+    "copy": "Copier",
+    "copied": "Copié",
+    "copySecret": "Copier le secret",
+    "trySandbox": "Essayer dans le Sandbox",
+    "documentation": "Documentation",
+    "goToDashboard": "Aller au tableau de bord"
+  },
+  "quickAction": {
+    "title": "Commencer",
+    "description": "Configurez votre première intégration"
+  }
+}

@@ -69,6 +69,7 @@ from .routers import (
     usage,
     users,
     webhooks,
+    workflows,
 )
 from .routers.external_mcp_servers import (
     admin_router as external_mcp_servers_admin_router,
@@ -407,6 +408,7 @@ app.include_router(deployments.router)
 app.include_router(git.router)
 app.include_router(events.router)
 app.include_router(webhooks.router)
+app.include_router(workflows.router)
 app.include_router(traces.router)
 app.include_router(gateway.router)
 app.include_router(subscriptions.router)

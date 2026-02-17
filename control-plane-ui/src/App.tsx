@@ -91,6 +91,9 @@ const TokenOptimizer = lazy(() =>
 );
 const Policies = lazy(() => import('./pages/Policies').then((m) => ({ default: m.Policies })));
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })));
+const Workflows = lazy(() =>
+  import('./pages/Workflows').then((m) => ({ default: m.Workflows }))
+);
 
 // CAB-1251: SaaS Self-Service pages
 const backendApisModule = () => import('./pages/BackendApis');
@@ -386,6 +389,7 @@ function ProtectedRoutes() {
                 <Route path="/token-optimizer" element={<TokenOptimizer />} />
                 <Route path="/policies" element={<Policies />} />
                 <Route path="/audit-log" element={<AuditLog />} />
+                <Route path="/workflows" element={<Workflows />} />
                 {/* CAB-1251: SaaS Self-Service */}
                 <Route path="/backend-apis" element={<BackendApisList />} />
                 <Route path="/saas-api-keys" element={<SaasApiKeysList />} />

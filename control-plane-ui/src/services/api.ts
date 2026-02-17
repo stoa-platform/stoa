@@ -25,6 +25,11 @@ import type {
   ProspectDetail,
   Environment,
   EnvironmentConfig,
+  WorkflowTemplate,
+  WorkflowTemplateCreate,
+  WorkflowTemplateUpdate,
+  WorkflowInstance,
+  WorkflowListResponse,
 } from '../types';
 
 const API_BASE_URL = config.api.baseUrl;
@@ -657,6 +662,88 @@ class ApiService {
 
   async getTopAPIs(limit = 10): Promise<TopAPI[]> {
     const { data } = await this.client.get(`/v1/business/top-apis?limit=${limit}`);
+    return data;
+  }
+
+  // Workflow Engine methods (CAB-593)
+  async listWorkflowTemplates(tenantId: string): Promise<WorkflowTemplate[]> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/workflows/templates`);
+    return data;
+  }
+
+  async createWorkflowTemplate(
+    tenantId: string,
+    payload: WorkflowTemplateCreate
+  ): Promise<WorkflowTemplate> {
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/workflows/templates`, payload);
+    return data;
+  }
+
+  async updateWorkflowTemplate(
+    tenantId: string,
+    templateId: string,
+    payload: WorkflowTemplateUpdate
+  ): Promise<WorkflowTemplate> {
+    const { data } = await this.client.put(
+      `/v1/tenants/${tenantId}/workflows/templates/${templateId}`,
+      payload
+    );
+    return data;
+  }
+
+  async deleteWorkflowTemplate(tenantId: string, templateId: string): Promise<void> {
+    await this.client.delete(`/v1/tenants/${tenantId}/workflows/templates/${templateId}`);
+  }
+
+  async listWorkflowInstances(
+    tenantId: string,
+    params?: { status?: string; skip?: number; limit?: number }
+  ): Promise<WorkflowListResponse> {
+    const { data } = await this.client.get(`/v1/tenants/${tenantId}/workflows/instances`, {
+      params,
+    });
+    return data;
+  }
+
+  async startWorkflow(
+    tenantId: string,
+    payload: { template_id: string; subject_id: string; subject_email: string }
+  ): Promise<WorkflowInstance> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/workflows/instances`,
+      payload
+    );
+    return data;
+  }
+
+  async approveWorkflowStep(
+    tenantId: string,
+    instanceId: string,
+    payload: { comment?: string }
+  ): Promise<WorkflowInstance> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/workflows/instances/${instanceId}/approve`,
+      payload
+    );
+    return data;
+  }
+
+  async rejectWorkflowStep(
+    tenantId: string,
+    instanceId: string,
+    payload: { comment?: string }
+  ): Promise<WorkflowInstance> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/workflows/instances/${instanceId}/reject`,
+      payload
+    );
+    return data;
+  }
+
+  async seedWorkflowTemplates(tenantId: string): Promise<{ message: string }> {
+    const { data } = await this.client.post(
+      `/v1/tenants/${tenantId}/workflows/templates/seed`
+    );
     return data;
   }
 }

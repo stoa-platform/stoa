@@ -47,6 +47,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'users:delete',
     'audit:read',
     'admin:servers',
+    'workflows:read',
+    'workflows:manage',
   ],
   'tenant-admin': [
     'apis:create',
@@ -63,9 +65,19 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'users:update',
     'audit:read',
     'admin:servers',
+    'workflows:read',
+    'workflows:manage',
   ],
-  devops: ['apis:create', 'apis:read', 'apis:update', 'apis:deploy', 'apps:read', 'audit:read'],
-  viewer: ['apis:read', 'apps:read', 'audit:read'],
+  devops: [
+    'apis:create',
+    'apis:read',
+    'apis:update',
+    'apis:deploy',
+    'apps:read',
+    'audit:read',
+    'workflows:read',
+  ],
+  viewer: ['apis:read', 'apps:read', 'audit:read', 'workflows:read'],
 };
 
 // ============ Persona Factories ============

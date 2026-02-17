@@ -1115,3 +1115,83 @@ export interface AggregatedMetrics {
   };
   overall_status: string;
 }
+
+// Workflow Engine types (CAB-593)
+export type WorkflowType = 'user_registration' | 'consumer_registration' | 'tenant_owner_onboarding';
+export type WorkflowMode = 'auto' | 'manual' | 'approval_chain';
+export type WorkflowStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'approved'
+  | 'rejected'
+  | 'provisioning'
+  | 'completed'
+  | 'failed';
+export type Sector = 'fintech' | 'startup' | 'enterprise';
+export type StepAction = 'approved' | 'rejected' | 'skipped';
+
+export interface ApprovalStepDef {
+  step_index: number;
+  role: string;
+  label: string;
+}
+
+export interface WorkflowTemplate {
+  id: string;
+  tenant_id: string;
+  workflow_type: WorkflowType;
+  mode: WorkflowMode;
+  name: string;
+  description: string | null;
+  approval_steps: ApprovalStepDef[];
+  auto_provision: boolean;
+  notification_config: Record<string, unknown>;
+  sector: Sector | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowTemplateCreate {
+  workflow_type: WorkflowType;
+  mode: WorkflowMode;
+  name: string;
+  description?: string | null;
+  approval_steps?: ApprovalStepDef[];
+  auto_provision?: boolean;
+  notification_config?: Record<string, unknown>;
+  sector?: Sector | null;
+}
+
+export interface WorkflowTemplateUpdate {
+  mode?: WorkflowMode;
+  name?: string;
+  description?: string | null;
+  approval_steps?: ApprovalStepDef[];
+  auto_provision?: boolean;
+  notification_config?: Record<string, unknown>;
+  sector?: Sector | null;
+  is_active?: boolean;
+}
+
+export interface WorkflowInstance {
+  id: string;
+  template_id: string;
+  tenant_id: string;
+  subject_id: string;
+  subject_email: string;
+  workflow_type: WorkflowType;
+  status: WorkflowStatus;
+  current_step_index: number;
+  context: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface WorkflowListResponse {
+  items: WorkflowInstance[];
+  total: number;
+  skip: number;
+  limit: number;
+}

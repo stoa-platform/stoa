@@ -1,0 +1,33 @@
+# Patterns to ignore when building packages.
+# Matches .gitignore patterns.
+
+# VCS
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CI/CD
+.github/
+.claude/
+
+# Development
+*.md
+!README.md
+CLAUDE.md
+
+# Build artifacts
+*.tgz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test fixtures
+examples/
+tests/

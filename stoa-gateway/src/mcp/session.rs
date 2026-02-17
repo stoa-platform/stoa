@@ -1,13 +1,16 @@
 //! MCP Session Manager
 //!
 //! Manages stateful SSE sessions with automatic TTL expiration.
+//! Includes NotificationBus for pushing events to connected SSE clients (CAB-1178).
 
+use axum::response::sse::Event;
 use chrono::{DateTime, Duration, Utc};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use tokio::time::{interval, Duration as TokioDuration};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 /// MCP Session
 #[derive(Debug, Clone)]
@@ -43,9 +46,11 @@ impl Session {
     }
 }
 
-/// Session Manager with TTL-based expiration
+/// Session Manager with TTL-based expiration and NotificationBus
 pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<String, Session>>>,
+    /// NotificationBus: maps session_id -> SSE event sender (CAB-1178)
+    channels: Arc<RwLock<HashMap<String, mpsc::Sender<Event>>>>,
     ttl: Duration,
 }
 
@@ -53,6 +58,7 @@ impl SessionManager {
     pub fn new(ttl_minutes: i64) -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
+            channels: Arc::new(RwLock::new(HashMap::new())),
             ttl: Duration::minutes(ttl_minutes),
         }
     }
@@ -75,8 +81,9 @@ impl SessionManager {
         }
     }
 
-    /// Remove session
+    /// Remove session and its notification channel
     pub async fn remove(&self, id: &str) -> bool {
+        self.channels.write().remove(id);
         self.sessions.write().remove(id).is_some()
     }
 
@@ -98,27 +105,95 @@ impl SessionManager {
         sessions.get(id).and_then(|s| s.metadata.get(key).cloned())
     }
 
-    /// Cleanup expired sessions
-    pub fn cleanup_expired(&self) {
-        let mut sessions = self.sessions.write();
-        let before = sessions.len();
+    // === NotificationBus (CAB-1178) ===
 
-        sessions.retain(|id, session| {
-            let keep = !session.is_expired(self.ttl);
-            if !keep {
+    /// Register an SSE event channel for a session.
+    /// Called from handle_sse_get when a new SSE connection is established.
+    pub fn register_channel(&self, session_id: &str, tx: mpsc::Sender<Event>) {
+        self.channels.write().insert(session_id.to_string(), tx);
+        debug!(session_id = %session_id, "NotificationBus: channel registered");
+    }
+
+    /// Unregister an SSE event channel (on disconnect or session cleanup).
+    pub fn unregister_channel(&self, session_id: &str) {
+        if self.channels.write().remove(session_id).is_some() {
+            debug!(session_id = %session_id, "NotificationBus: channel unregistered");
+        }
+    }
+
+    /// Broadcast an SSE event to all sessions belonging to a tenant.
+    /// Uses try_send() for non-blocking delivery — slow consumers get events dropped.
+    /// Returns the number of sessions that received the event.
+    pub fn broadcast_to_tenant(&self, tenant_id: &str, event_type: &str, data: &str) -> usize {
+        // Phase 1: collect matching session IDs (read lock on sessions)
+        let matching_ids: Vec<String> = {
+            let sessions = self.sessions.read();
+            sessions
+                .iter()
+                .filter(|(_, s)| s.tenant_id == tenant_id)
+                .map(|(id, _)| id.clone())
+                .collect()
+        };
+
+        if matching_ids.is_empty() {
+            return 0;
+        }
+
+        // Phase 2: send to matching channels (read lock on channels)
+        let channels = self.channels.read();
+        let mut sent = 0;
+        for id in &matching_ids {
+            if let Some(tx) = channels.get(id) {
+                let evt = Event::default().event(event_type).data(data);
+                match tx.try_send(evt) {
+                    Ok(()) => sent += 1,
+                    Err(mpsc::error::TrySendError::Full(_)) => {
+                        warn!(
+                            session_id = %id,
+                            tenant_id = %tenant_id,
+                            "NotificationBus: channel full, event dropped"
+                        );
+                    }
+                    Err(mpsc::error::TrySendError::Closed(_)) => {
+                        debug!(
+                            session_id = %id,
+                            "NotificationBus: channel closed (client disconnected)"
+                        );
+                    }
+                }
+            }
+        }
+        sent
+    }
+
+    /// Cleanup expired sessions and their channels
+    pub fn cleanup_expired(&self) {
+        // Phase 1: collect expired IDs (read lock)
+        let expired_ids: Vec<String> = {
+            let sessions = self.sessions.read();
+            sessions
+                .iter()
+                .filter(|(_, session)| session.is_expired(self.ttl))
+                .map(|(id, _)| id.clone())
+                .collect()
+        };
+
+        if expired_ids.is_empty() {
+            return;
+        }
+
+        // Phase 2: remove expired (write locks)
+        {
+            let mut sessions = self.sessions.write();
+            let mut channels = self.channels.write();
+            for id in &expired_ids {
+                sessions.remove(id);
+                channels.remove(id);
                 debug!(session_id = %id, "Session expired");
             }
-            keep
-        });
-
-        let removed = before - sessions.len();
-        if removed > 0 {
-            info!(
-                removed = removed,
-                remaining = sessions.len(),
-                "Cleaned up expired sessions"
-            );
         }
+
+        info!(removed = expired_ids.len(), "Cleaned up expired sessions");
     }
 
     /// Start background cleanup task
@@ -154,6 +229,7 @@ impl Clone for SessionManager {
     fn clone(&self) -> Self {
         Self {
             sessions: self.sessions.clone(),
+            channels: self.channels.clone(),
             ttl: self.ttl,
         }
     }
@@ -304,5 +380,114 @@ mod tests {
     async fn test_get_nonexistent_session() {
         let manager = SessionManager::new(30);
         assert!(manager.get("does-not-exist").await.is_none());
+    }
+
+    // === NotificationBus Tests (CAB-1178) ===
+
+    #[tokio::test]
+    async fn test_register_and_unregister_channel() {
+        let manager = SessionManager::new(30);
+        let (tx, _rx) = mpsc::channel::<Event>(32);
+
+        manager
+            .create(Session::new("ch-1".into(), "t-1".into()))
+            .await;
+        manager.register_channel("ch-1", tx);
+        assert_eq!(manager.channels.read().len(), 1);
+
+        manager.unregister_channel("ch-1");
+        assert_eq!(manager.channels.read().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_remove_also_removes_channel() {
+        let manager = SessionManager::new(30);
+        let (tx, _rx) = mpsc::channel::<Event>(32);
+
+        manager
+            .create(Session::new("ch-2".into(), "t-1".into()))
+            .await;
+        manager.register_channel("ch-2", tx);
+
+        manager.remove("ch-2").await;
+        assert_eq!(manager.channels.read().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_to_tenant_sends_to_matching() {
+        let manager = SessionManager::new(30);
+
+        // Create sessions for two tenants
+        manager
+            .create(Session::new("s1".into(), "acme".into()))
+            .await;
+        manager
+            .create(Session::new("s2".into(), "acme".into()))
+            .await;
+        manager
+            .create(Session::new("s3".into(), "other".into()))
+            .await;
+
+        let (tx1, mut rx1) = mpsc::channel::<Event>(32);
+        let (tx2, mut rx2) = mpsc::channel::<Event>(32);
+        let (tx3, mut rx3) = mpsc::channel::<Event>(32);
+
+        manager.register_channel("s1", tx1);
+        manager.register_channel("s2", tx2);
+        manager.register_channel("s3", tx3);
+
+        let sent = manager.broadcast_to_tenant("acme", "test", "hello");
+
+        assert_eq!(sent, 2);
+        assert!(rx1.try_recv().is_ok());
+        assert!(rx2.try_recv().is_ok());
+        assert!(rx3.try_recv().is_err()); // "other" tenant — no event
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_no_matching_tenant() {
+        let manager = SessionManager::new(30);
+        manager
+            .create(Session::new("s1".into(), "acme".into()))
+            .await;
+
+        let sent = manager.broadcast_to_tenant("nonexistent", "test", "hello");
+        assert_eq!(sent, 0);
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_also_removes_channels() {
+        let manager = SessionManager::new(30);
+
+        let mut old = Session::new("old-ch".into(), "t".into());
+        old.last_activity = Utc::now() - Duration::hours(1);
+        manager.create(old).await;
+
+        let (tx, _rx) = mpsc::channel::<Event>(32);
+        manager.register_channel("old-ch", tx);
+
+        manager.cleanup_expired();
+        assert_eq!(manager.count(), 0);
+        assert_eq!(manager.channels.read().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_drops_for_full_channel() {
+        let manager = SessionManager::new(30);
+        manager
+            .create(Session::new("full".into(), "t".into()))
+            .await;
+
+        // Create channel with capacity 1
+        let (tx, _rx) = mpsc::channel::<Event>(1);
+        manager.register_channel("full", tx);
+
+        // Fill the channel
+        manager.broadcast_to_tenant("t", "e1", "d1");
+
+        // This should drop (channel full) but not panic
+        let sent = manager.broadcast_to_tenant("t", "e2", "d2");
+        // First call sent 1, second call: channel full → 0
+        assert_eq!(sent, 0);
     }
 }

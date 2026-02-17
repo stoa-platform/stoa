@@ -201,6 +201,22 @@ pub struct Config {
     #[serde(default)]
     pub k8s_enabled: bool,
 
+    // === Kafka CNS Event Bridge (CAB-1178) ===
+    /// Enable Kafka Cloud Notification Service consumer for real-time event bridge
+    /// Env: STOA_KAFKA_CNS_ENABLED (default: false)
+    #[serde(default)]
+    pub kafka_cns_enabled: bool,
+
+    /// Kafka topics to subscribe for CNS events (comma-separated)
+    /// Env: STOA_KAFKA_CNS_TOPICS
+    #[serde(default = "default_kafka_cns_topics")]
+    pub kafka_cns_topics: String,
+
+    /// Kafka consumer group for CNS event bridge
+    /// Env: STOA_KAFKA_CNS_CONSUMER_GROUP
+    #[serde(default = "default_kafka_cns_consumer_group")]
+    pub kafka_cns_consumer_group: String,
+
     // === mTLS Certificate Binding (CAB-864) ===
     /// mTLS configuration (nested struct, STOA_MTLS_ prefix)
     /// Env: STOA_MTLS_ENABLED, STOA_MTLS_REQUIRE_BINDING, etc.
@@ -514,6 +530,14 @@ fn default_cb_success_threshold() -> u32 {
     2
 }
 
+fn default_kafka_cns_topics() -> String {
+    "stoa.api.lifecycle,stoa.deployment.events,stoa.security.alerts".to_string()
+}
+
+fn default_kafka_cns_consumer_group() -> String {
+    "stoa-gateway-cns".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -558,6 +582,9 @@ impl Default for Config {
             kafka_metering_topic: default_kafka_metering_topic(),
             kafka_errors_topic: default_kafka_errors_topic(),
             k8s_enabled: false,
+            kafka_cns_enabled: false,
+            kafka_cns_topics: default_kafka_cns_topics(),
+            kafka_cns_consumer_group: default_kafka_cns_consumer_group(),
             mtls: MtlsConfig::default(),
             quota_enforcement_enabled: false,
             quota_sync_interval_secs: default_quota_sync_interval(),

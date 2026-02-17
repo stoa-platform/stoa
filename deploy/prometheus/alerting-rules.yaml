@@ -455,3 +455,52 @@ spec:
           annotations:
             summary: "SLO availability breach"
             description: "Platform availability is {{ $value | humanizePercentage }} - below 99.9% SLO target"
+
+    # ============================================
+    # TLS Certificate Alerts (CAB-1305)
+    # ============================================
+    - name: stoa.tls-certificates.rules
+      rules:
+        - alert: TlsCertExpiring30d
+          expr: |
+            tls_cert_expiry_days > 0 and tls_cert_expiry_days < 30
+          for: 1h
+          labels:
+            severity: warning
+            component: tls
+          annotations:
+            summary: "TLS certificate expiring within 30 days"
+            description: "Certificate for {{ $labels.host }} expires in {{ $value }} days"
+
+        - alert: TlsCertExpiring14d
+          expr: |
+            tls_cert_expiry_days > 0 and tls_cert_expiry_days < 14
+          for: 1h
+          labels:
+            severity: warning
+            component: tls
+          annotations:
+            summary: "TLS certificate expiring within 14 days"
+            description: "Certificate for {{ $labels.host }} expires in {{ $value }} days — renew urgently"
+
+        - alert: TlsCertExpiring7d
+          expr: |
+            tls_cert_expiry_days > 0 and tls_cert_expiry_days < 7
+          for: 30m
+          labels:
+            severity: critical
+            component: tls
+          annotations:
+            summary: "TLS certificate expiring within 7 days"
+            description: "Certificate for {{ $labels.host }} expires in {{ $value }} days — IMMEDIATE ACTION REQUIRED"
+
+        - alert: TlsCertInvalid
+          expr: |
+            tls_cert_valid == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: tls
+          annotations:
+            summary: "TLS certificate invalid or unreachable"
+            description: "Certificate for {{ $labels.host }} is expired or could not be retrieved"

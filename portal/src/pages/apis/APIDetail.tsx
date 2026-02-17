@@ -27,6 +27,7 @@ import {
 import { useAPI, useOpenAPISpec } from '../../hooks/useAPIs';
 import { useSubscribe, SubscribeToAPIResponse } from '../../hooks/useSubscriptions';
 import { SubscribeModal, SubscribeFormData } from '../../components/subscriptions/SubscribeModal';
+import { OpenAPIViewer } from '../../components/apis/OpenAPIViewer';
 import { config } from '../../config';
 import type { APIEndpoint } from '../../types';
 
@@ -504,9 +505,13 @@ export function APIDetail() {
                     )}
                   </button>
                 </div>
-                <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-auto max-h-[600px] text-sm">
-                  <code>{JSON.stringify(openApiSpec, null, 2)}</code>
-                </pre>
+                {config.features.enableOpenAPIViewer ? (
+                  <OpenAPIViewer spec={openApiSpec} />
+                ) : (
+                  <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-auto max-h-[600px] text-sm">
+                    <code>{JSON.stringify(openApiSpec, null, 2)}</code>
+                  </pre>
+                )}
               </div>
             ) : (
               <div className="text-center py-12">

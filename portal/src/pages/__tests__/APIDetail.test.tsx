@@ -38,8 +38,16 @@ vi.mock('../../config', () => ({
     features: {
       enableSubscriptions: true,
       enableAPITesting: true,
+      enableOpenAPIViewer: false,
     },
   },
+}));
+
+// Mock OpenAPIViewer
+vi.mock('../../components/apis/OpenAPIViewer', () => ({
+  OpenAPIViewer: ({ spec }: { spec: object }) => (
+    <div data-testid="openapi-viewer">Scalar Viewer: {JSON.stringify(spec).slice(0, 50)}</div>
+  ),
 }));
 
 // Mock SubscribeModal as stub
@@ -253,6 +261,72 @@ describe('APIDetail', () => {
 
       // Check for JSON content in the spec
       expect(screen.getByText(/"openapi": "3.0.0"/)).toBeInTheDocument();
+    });
+  });
+
+  describe('OpenAPI Viewer Feature Flag', () => {
+    it('should show raw JSON when enableOpenAPIViewer=false', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<APIDetail />, { route: '/apis/api-1' });
+
+      await user.click(screen.getByRole('button', { name: /OpenAPI Spec/ }));
+
+      // Raw JSON pre block should be present
+      expect(screen.getByText(/"openapi": "3.0.0"/)).toBeInTheDocument();
+      expect(screen.queryByTestId('openapi-viewer')).not.toBeInTheDocument();
+    });
+
+    it('should show Scalar viewer when enableOpenAPIViewer=true', async () => {
+      // Override the mock config for this test
+      const configMod = await import('../../config');
+      const originalFeatures = { ...configMod.config.features };
+      configMod.config.features.enableOpenAPIViewer = true;
+
+      const user = userEvent.setup();
+      renderWithProviders(<APIDetail />, { route: '/apis/api-1' });
+
+      await user.click(screen.getByRole('button', { name: /OpenAPI Spec/ }));
+
+      expect(screen.getByTestId('openapi-viewer')).toBeInTheDocument();
+
+      // Restore
+      configMod.config.features.enableOpenAPIViewer = originalFeatures.enableOpenAPIViewer;
+    });
+
+    it('should still show Copy button with viewer enabled', async () => {
+      const configMod = await import('../../config');
+      const originalFeatures = { ...configMod.config.features };
+      configMod.config.features.enableOpenAPIViewer = true;
+
+      const user = userEvent.setup();
+      renderWithProviders(<APIDetail />, { route: '/apis/api-1' });
+
+      await user.click(screen.getByRole('button', { name: /OpenAPI Spec/ }));
+
+      const copyButtons = screen.getAllByText('Copy');
+      expect(copyButtons.length).toBeGreaterThan(0);
+
+      configMod.config.features.enableOpenAPIViewer = originalFeatures.enableOpenAPIViewer;
+    });
+
+    it('should show empty state when no spec available with viewer enabled', async () => {
+      const configMod = await import('../../config');
+      const originalFeatures = { ...configMod.config.features };
+      configMod.config.features.enableOpenAPIViewer = true;
+      mockUseOpenAPISpec.mockReturnValue({
+        data: null,
+        isLoading: false,
+      });
+
+      const user = userEvent.setup();
+      renderWithProviders(<APIDetail />, { route: '/apis/api-1' });
+
+      await user.click(screen.getByRole('button', { name: /OpenAPI Spec/ }));
+
+      expect(screen.getByText('No OpenAPI specification available')).toBeInTheDocument();
+      expect(screen.queryByTestId('openapi-viewer')).not.toBeInTheDocument();
+
+      configMod.config.features.enableOpenAPIViewer = originalFeatures.enableOpenAPIViewer;
     });
   });
 

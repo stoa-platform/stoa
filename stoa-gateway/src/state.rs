@@ -13,6 +13,7 @@ use crate::cache::{SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
 use crate::control_plane::{OidcConfig, ToolProxyClient};
 use crate::events::polling::EventBuffer;
+use crate::federation::FederationCache;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
@@ -75,6 +76,8 @@ pub struct AppState {
     /// Classification-based enforcer for contract routes (CAB-1299)
     /// None when classification enforcement is disabled.
     pub classification_enforcer: Option<Arc<ClassificationEnforcer>>,
+    /// Federation allow-list cache for sub-account routing (CAB-1362)
+    pub federation_cache: Arc<FederationCache>,
 }
 
 impl AppState {
@@ -277,6 +280,22 @@ impl AppState {
             None
         };
 
+        // Initialize federation cache (CAB-1362)
+        let federation_cache = Arc::new(FederationCache::new(
+            config.federation_cache_ttl_secs,
+            config.federation_cache_max_entries,
+            control_plane.clone(),
+        ));
+        if config.federation_enabled {
+            tracing::info!(
+                ttl_secs = config.federation_cache_ttl_secs,
+                max_entries = config.federation_cache_max_entries,
+                "Federation routing enabled"
+            );
+        } else {
+            tracing::info!("Federation routing disabled (STOA_FEDERATION_ENABLED=false)");
+        }
+
         // Initialize mTLS stats (CAB-864)
         let mtls_stats = Arc::new(MtlsStats::new());
         if config.mtls.enabled {
@@ -317,6 +336,7 @@ impl AppState {
             event_buffer,
             contract_registry,
             classification_enforcer,
+            federation_cache,
         }
     }
 

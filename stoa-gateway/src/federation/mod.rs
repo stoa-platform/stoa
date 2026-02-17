@@ -8,6 +8,7 @@
 //! - **Tool Discovery**: Fetch tools from upstream via `tools/list`
 //! - **Federated Tool**: Proxy tool calls to upstream MCP server
 //! - **Tool Composition**: Combine multiple tools into compound tools
+//! - **Sub-Account Routing** (CAB-1362): Federation-aware tool allow-lists + quota isolation
 //!
 //! # Tenant Isolation
 //!
@@ -20,8 +21,13 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+pub mod cache;
 pub mod composition;
+pub mod context;
+pub mod middleware;
 pub mod upstream;
 
+pub use cache::FederationCache;
 pub use composition::{ComposedTool, CompositionStep};
+pub use context::SubAccountContext;
 pub use upstream::{FederatedTool, UpstreamMcpClient, UpstreamMcpConfig};

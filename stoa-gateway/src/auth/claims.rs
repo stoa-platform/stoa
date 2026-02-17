@@ -91,6 +91,14 @@ pub struct Claims {
     /// Contains x5t#S256 (base64url-encoded SHA-256 thumbprint)
     #[serde(default)]
     pub cnf: Option<CnfClaim>,
+
+    /// Federation: sub-account ID (set by Token Exchange protocol mapper)
+    #[serde(default)]
+    pub sub_account_id: Option<String>,
+
+    /// Federation: master account ID (set by Token Exchange protocol mapper)
+    #[serde(default)]
+    pub master_account_id: Option<String>,
 }
 
 /// RFC 8705 Confirmation claim for certificate-bound tokens.
@@ -356,6 +364,8 @@ mod tests {
             typ: Some("Bearer".to_string()),
             scope: Some("openid profile email stoa:write".to_string()),
             cnf: None,
+            sub_account_id: None,
+            master_account_id: None,
         }
     }
 
@@ -480,5 +490,33 @@ mod tests {
         assert!(StoaRole::TenantAdmin.can_write());
         assert!(StoaRole::DevOps.can_write());
         assert!(!StoaRole::Viewer.can_write());
+    }
+
+    #[test]
+    fn test_federation_claims_present() {
+        let json = r#"{
+            "sub": "user-1",
+            "exp": 9999999999,
+            "iat": 1000000000,
+            "iss": "https://auth.gostoa.dev/realms/stoa",
+            "sub_account_id": "sub-acct-123",
+            "master_account_id": "master-456"
+        }"#;
+        let claims: Claims = serde_json::from_str(json).unwrap();
+        assert_eq!(claims.sub_account_id.as_deref(), Some("sub-acct-123"));
+        assert_eq!(claims.master_account_id.as_deref(), Some("master-456"));
+    }
+
+    #[test]
+    fn test_federation_claims_absent() {
+        let json = r#"{
+            "sub": "user-1",
+            "exp": 9999999999,
+            "iat": 1000000000,
+            "iss": "https://auth.gostoa.dev/realms/stoa"
+        }"#;
+        let claims: Claims = serde_json::from_str(json).unwrap();
+        assert!(claims.sub_account_id.is_none());
+        assert!(claims.master_account_id.is_none());
     }
 }

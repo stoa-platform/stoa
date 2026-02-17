@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useCreateApplication } from '../../../hooks/useApplications';
 import type { Application } from '../../../types';
 
@@ -13,6 +14,7 @@ interface CreateAppProps {
 }
 
 export function CreateApp({ onCreated, onBack }: CreateAppProps) {
+  const { t } = useTranslation('onboarding');
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [description, setDescription] = useState('');
@@ -31,12 +33,8 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
   return (
     <div className="max-w-lg mx-auto space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Create your application
-        </h2>
-        <p className="mt-2 text-gray-500 dark:text-neutral-400">
-          This registers an OAuth client that your integration will use to authenticate.
-        </p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('createApp.title')}</h2>
+        <p className="mt-2 text-gray-500 dark:text-neutral-400">{t('createApp.subtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -45,7 +43,7 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
             htmlFor="displayName"
             className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
           >
-            Application Name *
+            {t('createApp.appName')}
           </label>
           <input
             id="displayName"
@@ -58,7 +56,7 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
                 setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'));
               }
             }}
-            placeholder="My Integration"
+            placeholder={t('createApp.appNamePlaceholder')}
             className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
           />
         </div>
@@ -68,14 +66,14 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
             htmlFor="slug"
             className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
           >
-            Slug
+            {t('createApp.slug')}
           </label>
           <input
             id="slug"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
-            placeholder="my-integration"
+            placeholder={t('createApp.slugPlaceholder')}
             className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none font-mono text-sm"
           />
         </div>
@@ -85,13 +83,13 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
             htmlFor="description"
             className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-1"
           >
-            Description
+            {t('createApp.description')}
           </label>
           <textarea
             id="description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Brief description of what this application does..."
+            placeholder={t('createApp.descriptionPlaceholder')}
             rows={3}
             className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none resize-none"
           />
@@ -110,7 +108,7 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
             onClick={onBack}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
-            Back
+            {t('createApp.back')}
           </button>
           <button
             type="submit"
@@ -118,7 +116,7 @@ export function CreateApp({ onCreated, onBack }: CreateAppProps) {
             className="px-6 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
             {createApp.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Create Application
+            {t('createApp.submit')}
           </button>
         </div>
       </form>

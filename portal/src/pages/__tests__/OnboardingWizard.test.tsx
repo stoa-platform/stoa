@@ -91,28 +91,28 @@ describe('OnboardingWizard', () => {
 
   it('renders step 1 — choose use case', () => {
     renderWithProviders(<OnboardingWizardPage />, { route: '/onboarding' });
-    expect(screen.getByText('How will you use STOA?')).toBeInTheDocument();
-    expect(screen.getByText('MCP Agent')).toBeInTheDocument();
-    expect(screen.getByText('REST API')).toBeInTheDocument();
-    expect(screen.getByText('Both')).toBeInTheDocument();
+    expect(screen.getByText('chooseUseCase.title')).toBeInTheDocument();
+    expect(screen.getByText('chooseUseCase.mcpAgent')).toBeInTheDocument();
+    expect(screen.getByText('chooseUseCase.restApi')).toBeInTheDocument();
+    expect(screen.getByText('chooseUseCase.both')).toBeInTheDocument();
   });
 
   it('navigates to step 2 when use case selected', () => {
     renderWithProviders(<OnboardingWizardPage />, { route: '/onboarding' });
-    fireEvent.click(screen.getByText('REST API'));
-    expect(screen.getByText('Create your application')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('chooseUseCase.restApi'));
+    expect(screen.getByText('createApp.title')).toBeInTheDocument();
   });
 
   it('creates app and moves to step 3', async () => {
     renderWithProviders(<OnboardingWizardPage />, { route: '/onboarding' });
 
     // Step 1 -> select use case
-    fireEvent.click(screen.getByText('MCP Agent'));
+    fireEvent.click(screen.getByText('chooseUseCase.mcpAgent'));
 
     // Step 2 -> fill form
-    const nameInput = screen.getByPlaceholderText('My Integration');
+    const nameInput = screen.getByPlaceholderText('createApp.appNamePlaceholder');
     fireEvent.change(nameInput, { target: { value: 'Test App' } });
-    fireEvent.click(screen.getByText('Create Application'));
+    fireEvent.click(screen.getByText('createApp.submit'));
 
     await waitFor(() => {
       expect(mockCreateApp).toHaveBeenCalledWith({
@@ -124,7 +124,7 @@ describe('OnboardingWizard', () => {
 
     // Should be on step 3
     await waitFor(() => {
-      expect(screen.getByText('Subscribe to an API')).toBeInTheDocument();
+      expect(screen.getByText('subscribeApi.title')).toBeInTheDocument();
     });
   });
 
@@ -132,10 +132,10 @@ describe('OnboardingWizard', () => {
     renderWithProviders(<OnboardingWizardPage />, { route: '/onboarding' });
 
     // Navigate to step 3
-    fireEvent.click(screen.getByText('Both'));
-    const nameInput = screen.getByPlaceholderText('My Integration');
+    fireEvent.click(screen.getByText('chooseUseCase.both'));
+    const nameInput = screen.getByPlaceholderText('createApp.appNamePlaceholder');
     fireEvent.change(nameInput, { target: { value: 'Test App' } });
-    fireEvent.click(screen.getByText('Create Application'));
+    fireEvent.click(screen.getByText('createApp.submit'));
 
     await waitFor(() => {
       expect(screen.getByText('Pet Store API')).toBeInTheDocument();
@@ -146,35 +146,35 @@ describe('OnboardingWizard', () => {
   it('allows skipping subscription step', async () => {
     renderWithProviders(<OnboardingWizardPage />, { route: '/onboarding' });
 
-    fireEvent.click(screen.getByText('REST API'));
-    const nameInput = screen.getByPlaceholderText('My Integration');
+    fireEvent.click(screen.getByText('chooseUseCase.restApi'));
+    const nameInput = screen.getByPlaceholderText('createApp.appNamePlaceholder');
     fireEvent.change(nameInput, { target: { value: 'Test App' } });
-    fireEvent.click(screen.getByText('Create Application'));
+    fireEvent.click(screen.getByText('createApp.submit'));
 
     await waitFor(() => {
-      expect(screen.getByText('Skip for now')).toBeInTheDocument();
+      expect(screen.getByText('subscribeApi.skip')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Skip for now'));
+    fireEvent.click(screen.getByText('subscribeApi.skip'));
 
     await waitFor(() => {
-      expect(screen.getByText("You're all set!")).toBeInTheDocument();
+      expect(screen.getByText('firstCall.title')).toBeInTheDocument();
     });
   });
 
   it('shows credentials on final step', async () => {
     renderWithProviders(<OnboardingWizardPage />, { route: '/onboarding' });
 
-    fireEvent.click(screen.getByText('REST API'));
-    const nameInput = screen.getByPlaceholderText('My Integration');
+    fireEvent.click(screen.getByText('chooseUseCase.restApi'));
+    const nameInput = screen.getByPlaceholderText('createApp.appNamePlaceholder');
     fireEvent.change(nameInput, { target: { value: 'Test App' } });
-    fireEvent.click(screen.getByText('Create Application'));
+    fireEvent.click(screen.getByText('createApp.submit'));
 
-    await waitFor(() => screen.getByText('Skip for now'));
-    fireEvent.click(screen.getByText('Skip for now'));
+    await waitFor(() => screen.getByText('subscribeApi.skip'));
+    fireEvent.click(screen.getByText('subscribeApi.skip'));
 
     await waitFor(() => {
-      expect(screen.getByText('Application Credentials')).toBeInTheDocument();
+      expect(screen.getByText('firstCall.credentials')).toBeInTheDocument();
       expect(screen.getByText('client-123')).toBeInTheDocument();
       expect(screen.getByText('secret-xyz')).toBeInTheDocument();
     });
@@ -183,41 +183,41 @@ describe('OnboardingWizard', () => {
   it('navigates to dashboard on finish', async () => {
     renderWithProviders(<OnboardingWizardPage />, { route: '/onboarding' });
 
-    fireEvent.click(screen.getByText('REST API'));
-    const nameInput = screen.getByPlaceholderText('My Integration');
+    fireEvent.click(screen.getByText('chooseUseCase.restApi'));
+    const nameInput = screen.getByPlaceholderText('createApp.appNamePlaceholder');
     fireEvent.change(nameInput, { target: { value: 'Test App' } });
-    fireEvent.click(screen.getByText('Create Application'));
+    fireEvent.click(screen.getByText('createApp.submit'));
 
-    await waitFor(() => screen.getByText('Skip for now'));
-    fireEvent.click(screen.getByText('Skip for now'));
+    await waitFor(() => screen.getByText('subscribeApi.skip'));
+    fireEvent.click(screen.getByText('subscribeApi.skip'));
 
-    await waitFor(() => screen.getByText('Go to Dashboard'));
-    fireEvent.click(screen.getByText('Go to Dashboard'));
+    await waitFor(() => screen.getByText('firstCall.goToDashboard'));
+    fireEvent.click(screen.getByText('firstCall.goToDashboard'));
 
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 
   it('shows back button on step 2', () => {
     renderWithProviders(<OnboardingWizardPage />, { route: '/onboarding' });
-    fireEvent.click(screen.getByText('MCP Agent'));
-    expect(screen.getByText('Back')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Back'));
-    expect(screen.getByText('How will you use STOA?')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('chooseUseCase.mcpAgent'));
+    expect(screen.getByText('createApp.back')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('createApp.back'));
+    expect(screen.getByText('chooseUseCase.title')).toBeInTheDocument();
   });
 
   it('shows MCP config for mcp-agent use case', async () => {
     renderWithProviders(<OnboardingWizardPage />, { route: '/onboarding' });
 
-    fireEvent.click(screen.getByText('MCP Agent'));
-    const nameInput = screen.getByPlaceholderText('My Integration');
+    fireEvent.click(screen.getByText('chooseUseCase.mcpAgent'));
+    const nameInput = screen.getByPlaceholderText('createApp.appNamePlaceholder');
     fireEvent.change(nameInput, { target: { value: 'Test App' } });
-    fireEvent.click(screen.getByText('Create Application'));
+    fireEvent.click(screen.getByText('createApp.submit'));
 
-    await waitFor(() => screen.getByText('Skip for now'));
-    fireEvent.click(screen.getByText('Skip for now'));
+    await waitFor(() => screen.getByText('subscribeApi.skip'));
+    fireEvent.click(screen.getByText('subscribeApi.skip'));
 
     await waitFor(() => {
-      expect(screen.getByText('MCP Configuration')).toBeInTheDocument();
+      expect(screen.getByText('firstCall.mcpConfig')).toBeInTheDocument();
     });
   });
 });

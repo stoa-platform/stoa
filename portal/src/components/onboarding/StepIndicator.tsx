@@ -3,17 +3,18 @@
  */
 
 import { Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface Step {
-  label: string;
-  description: string;
+  labelKey: string;
+  descKey: string;
 }
 
 const STEPS: Step[] = [
-  { label: 'Use Case', description: 'Choose your path' },
-  { label: 'Create App', description: 'Register your application' },
-  { label: 'Subscribe', description: 'Pick an API' },
-  { label: 'First Call', description: 'Test your integration' },
+  { labelKey: 'steps.useCase', descKey: 'steps.useCaseDesc' },
+  { labelKey: 'steps.createApp', descKey: 'steps.createAppDesc' },
+  { labelKey: 'steps.subscribe', descKey: 'steps.subscribeDesc' },
+  { labelKey: 'steps.firstCall', descKey: 'steps.firstCallDesc' },
 ];
 
 interface StepIndicatorProps {
@@ -21,6 +22,8 @@ interface StepIndicatorProps {
 }
 
 export function StepIndicator({ currentStep }: StepIndicatorProps) {
+  const { t } = useTranslation('onboarding');
+
   return (
     <nav aria-label="Onboarding progress" className="mb-8">
       <ol className="flex items-center w-full">
@@ -30,7 +33,7 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
 
           return (
             <li
-              key={step.label}
+              key={step.labelKey}
               className={`flex items-center ${index < STEPS.length - 1 ? 'flex-1' : ''}`}
             >
               <div className="flex flex-col items-center">
@@ -57,10 +60,10 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
                         : 'text-gray-500 dark:text-neutral-400'
                     }`}
                   >
-                    {step.label}
+                    {t(step.labelKey)}
                   </p>
                   <p className="text-xs text-gray-400 dark:text-neutral-500 hidden sm:block">
-                    {step.description}
+                    {t(step.descKey)}
                   </p>
                 </div>
               </div>

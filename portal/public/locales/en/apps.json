@@ -1,0 +1,25 @@
+{
+  "title": "My Applications",
+  "subtitle": "Manage your API consumer applications",
+  "refresh": "Refresh",
+  "createApp": "Create Application",
+  "createFirst": "Create Your First Application",
+  "created": {
+    "title": "Application Created Successfully!",
+    "message": "Your application \"{{name}}\" has been created.",
+    "dismiss": "Dismiss"
+  },
+  "loading": "Loading applications...",
+  "error": {
+    "title": "Failed to load applications",
+    "tryAgain": "Try Again"
+  },
+  "empty": {
+    "title": "No Applications Yet",
+    "description": "Create your first application to start using APIs. Each application gets its own credentials for authentication."
+  },
+  "count": {
+    "one": "1 application",
+    "other": "{{count}} applications"
+  }
+}

@@ -60,6 +60,7 @@ from .routers import (
     portal,
     portal_applications,
     quotas,
+    self_service,
     self_service_logs,
     service_accounts,
     subscriptions,
@@ -496,6 +497,9 @@ app.include_router(backend_apis.keys_router)
 
 # Federation — enterprise MCP multi-account (CAB-1313)
 app.include_router(federation.router)
+
+# Self-service tenant signup (CAB-1315) — public, rate-limited
+app.include_router(self_service.router)
 
 # Public — Portal email capture (no auth)
 app.include_router(access_requests.router)

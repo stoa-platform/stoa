@@ -315,6 +315,22 @@ pub struct Config {
     /// Env: STOA_CB_SUCCESS_THRESHOLD
     #[serde(default = "default_cb_success_threshold")]
     pub cb_success_threshold: u32,
+
+    // === Federation (CAB-1362) ===
+    /// Enable federation routing for sub-accounts (default: false)
+    /// Env: STOA_FEDERATION_ENABLED
+    #[serde(default)]
+    pub federation_enabled: bool,
+
+    /// TTL in seconds for federation allow-list cache (default: 300 = 5 min)
+    /// Env: STOA_FEDERATION_CACHE_TTL_SECS
+    #[serde(default = "default_federation_cache_ttl")]
+    pub federation_cache_ttl_secs: u64,
+
+    /// Max entries in federation allow-list cache (default: 10000)
+    /// Env: STOA_FEDERATION_CACHE_MAX_ENTRIES
+    #[serde(default = "default_federation_cache_max_entries")]
+    pub federation_cache_max_entries: u64,
 }
 
 fn default_port() -> u16 {
@@ -558,6 +574,14 @@ fn default_kafka_cns_consumer_group() -> String {
     "stoa-gateway-cns".to_string()
 }
 
+fn default_federation_cache_ttl() -> u64 {
+    300
+}
+
+fn default_federation_cache_max_entries() -> u64 {
+    10_000
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -623,6 +647,9 @@ impl Default for Config {
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),
+            federation_enabled: false,
+            federation_cache_ttl_secs: default_federation_cache_ttl(),
+            federation_cache_max_entries: default_federation_cache_max_entries(),
         }
     }
 }

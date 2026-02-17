@@ -111,6 +111,9 @@ pub fn build_router(state: AppState) -> Router {
             "/contracts/:key",
             get(admin::get_contract).delete(admin::delete_contract),
         )
+        // CAB-1362: Federation admin
+        .route("/federation/status", get(admin::federation_status))
+        .route("/federation/cache", get(admin::federation_cache_stats))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin::admin_auth,

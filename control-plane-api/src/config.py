@@ -122,6 +122,9 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # Tenant provisioning defaults (CAB-1315)
+    TENANT_DEFAULT_RATE_LIMIT_RPM: int = 100
+
     # Logging - Basic Configuration
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"  # json, text

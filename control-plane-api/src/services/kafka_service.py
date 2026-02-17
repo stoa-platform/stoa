@@ -44,6 +44,9 @@ class Topics:
     METERING_EVENTS = "stoa.metering.events"
     FEDERATION_EVENTS = "stoa.federation.events"
 
+    # Tenant provisioning (CAB-1315)
+    TENANT_PROVISIONING = "stoa.tenant.provisioning"
+
 
 class KafkaService:
     """Service for Kafka/Redpanda message handling"""

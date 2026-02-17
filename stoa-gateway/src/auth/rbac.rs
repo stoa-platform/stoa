@@ -404,6 +404,8 @@ mod tests {
             typ: None,
             scope: Some(scopes.to_string()),
             cnf: None,
+            sub_account_id: None,
+            master_account_id: None,
         };
 
         let token = ValidatedToken::new("token".to_string(), claims);

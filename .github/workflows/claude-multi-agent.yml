@@ -46,6 +46,12 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Bash(gh issue *)
+            Bash(gh pr *)
+            Read
+            Glob
+            Grep
           prompt: |
             Multi-Agent Council Validation.
 
@@ -125,6 +131,14 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Bash
+            Read
+            Write
+            Edit
+            Glob
+            Grep
+            WebFetch
           prompt: |
             Implement ticket: ${{ matrix.ticket }}
 

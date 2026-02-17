@@ -64,6 +64,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Read
+            Glob
+            Grep
           prompt: |
             Review this PR following CLAUDE.md and .claude/rules/ci-quality-gates.md.
 

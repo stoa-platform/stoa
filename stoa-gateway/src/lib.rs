@@ -7,6 +7,7 @@ pub mod auth;
 pub mod cache;
 pub mod config;
 pub mod control_plane;
+pub mod events;
 pub mod federation;
 pub mod git;
 pub mod governance;

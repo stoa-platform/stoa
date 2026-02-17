@@ -386,6 +386,11 @@ pub async fn handle_sse_get(
     // Create event stream
     let (tx, rx) = mpsc::channel::<Event>(32);
 
+    // Register channel for NotificationBus (CAB-1178: enables push events from Kafka consumer)
+    state
+        .session_manager
+        .register_channel(&session_id, tx.clone());
+
     // Send initial endpoint event
     let endpoint_event = Event::default()
         .event("endpoint")
@@ -418,6 +423,9 @@ pub async fn handle_sse_get(
                 break;
             }
         }
+        // Unregister NotificationBus channel on disconnect (CAB-1178)
+        session_manager.unregister_channel(&session_id_clone);
+
         // Track disconnect with duration
         let duration = connect_time.elapsed().as_secs_f64();
         metrics::track_sse_disconnect(&tenant_id_clone, duration);
@@ -440,6 +448,9 @@ pub async fn handle_sse_delete(
     Query(params): Query<SseQueryParams>,
 ) -> impl IntoResponse {
     if let Some(session_id) = params.session_id {
+        // Unregister NotificationBus channel before removing session (CAB-1178)
+        state.session_manager.unregister_channel(&session_id);
+
         if state.session_manager.remove(&session_id).await {
             info!(session_id = %session_id, "Session closed");
             metrics::update_session_count(state.session_manager.count());

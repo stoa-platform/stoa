@@ -77,7 +77,7 @@ Is it user-facing (customers, developers, partners)?
 ## ADR Numbering Rules
 
 - **stoa-docs owns ADR numbers** — never create an ADR number in stoa repo
-- Current range: ADR-001 through ADR-047. **Next available: ADR-048**
+- Current range: ADR-001 through ADR-048. **Next available: ADR-049**
 - Filename format: `adr-NNN-short-description.md`
 - Draft ADRs can live temporarily in stoa repo but MUST be renumbered when moved to stoa-docs
 - Always check `stoa-docs/docs/architecture/adr/` for the latest number before creating

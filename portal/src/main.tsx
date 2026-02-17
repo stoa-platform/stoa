@@ -10,6 +10,11 @@ import App from './App';
 import { config } from './config';
 import './index.css';
 
+// Initialize i18n (loads saved language preference)
+if (config.features.enableI18n) {
+  import('./i18n');
+}
+
 // Core Web Vitals monitoring can be added here if needed
 // Example: send metrics to analytics service
 

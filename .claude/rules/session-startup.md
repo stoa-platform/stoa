@@ -1,5 +1,6 @@
 ---
 description: Mandatory startup checklist for every Claude Code session. Read this FIRST before any work.
+globs: ".claude/**"
 ---
 
 # Session Startup — Single Entry Point

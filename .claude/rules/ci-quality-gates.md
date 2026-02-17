@@ -1,5 +1,6 @@
 ---
 description: CI quality gates — exact thresholds per component. Consult BEFORE committing.
+globs: ".github/**,*-ci.yml"
 ---
 
 # CI Quality Gates

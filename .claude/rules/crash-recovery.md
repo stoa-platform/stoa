@@ -1,5 +1,6 @@
 ---
 description: Crash recovery protocol — detect crashed sessions, recover from checkpoints, and resume work safely
+globs: ".claude/**"
 ---
 
 # Crash Recovery Protocol

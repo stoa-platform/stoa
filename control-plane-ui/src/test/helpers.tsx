@@ -22,6 +22,8 @@ import type {
   ExternalMCPServer,
   BackendApi,
   SaasApiKey,
+  WorkflowTemplate,
+  WorkflowInstance,
 } from '../types';
 
 // ============ Role-based Permissions (mirrors AuthContext.tsx L31-71) ============
@@ -188,6 +190,43 @@ export const mockTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
   status: 'active',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-02-01T00:00:00Z',
+  ...overrides,
+});
+
+export const mockWorkflowTemplate = (
+  overrides: Partial<WorkflowTemplate> = {}
+): WorkflowTemplate => ({
+  id: 'wft-1',
+  tenant_id: 'oasis-gunters',
+  workflow_type: 'user_registration',
+  mode: 'auto',
+  name: 'Default User Onboarding',
+  description: 'Auto-approve user registrations',
+  approval_steps: [],
+  auto_provision: true,
+  notification_config: {},
+  sector: 'startup',
+  is_active: true,
+  created_at: '2026-02-01T00:00:00Z',
+  updated_at: '2026-02-01T00:00:00Z',
+  ...overrides,
+});
+
+export const mockWorkflowInstance = (
+  overrides: Partial<WorkflowInstance> = {}
+): WorkflowInstance => ({
+  id: 'wfi-1',
+  template_id: 'wft-1',
+  tenant_id: 'oasis-gunters',
+  subject_id: 'user-1',
+  subject_email: 'alice@example.com',
+  workflow_type: 'user_registration',
+  status: 'pending',
+  current_step_index: 0,
+  context: {},
+  created_at: '2026-02-15T10:00:00Z',
+  updated_at: '2026-02-15T10:00:00Z',
+  completed_at: null,
   ...overrides,
 });
 

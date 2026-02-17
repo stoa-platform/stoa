@@ -709,10 +709,7 @@ class ApiService {
     tenantId: string,
     payload: { template_id: string; subject_id: string; subject_email: string }
   ): Promise<WorkflowInstance> {
-    const { data } = await this.client.post(
-      `/v1/tenants/${tenantId}/workflows/instances`,
-      payload
-    );
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/workflows/instances`, payload);
     return data;
   }
 
@@ -741,9 +738,7 @@ class ApiService {
   }
 
   async seedWorkflowTemplates(tenantId: string): Promise<{ message: string }> {
-    const { data } = await this.client.post(
-      `/v1/tenants/${tenantId}/workflows/templates/seed`
-    );
+    const { data } = await this.client.post(`/v1/tenants/${tenantId}/workflows/templates/seed`);
     return data;
   }
 }

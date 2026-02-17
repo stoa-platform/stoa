@@ -127,6 +127,8 @@ class WorkflowService:
         template = await self.repo.get_template_by_id_and_tenant(template_id, tenant_id)
         if not template:
             raise ValueError(f"Template {template_id} not found")
+        if template.is_active != "true":
+            raise ValueError(f"Template {template_id} is not active")
 
         instance = WorkflowInstance(
             template_id=template_id,

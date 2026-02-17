@@ -91,9 +91,7 @@ const TokenOptimizer = lazy(() =>
 );
 const Policies = lazy(() => import('./pages/Policies').then((m) => ({ default: m.Policies })));
 const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })));
-const Workflows = lazy(() =>
-  import('./pages/Workflows').then((m) => ({ default: m.Workflows }))
-);
+const Workflows = lazy(() => import('./pages/Workflows').then((m) => ({ default: m.Workflows })));
 
 // CAB-1251: SaaS Self-Service pages
 const backendApisModule = () => import('./pages/BackendApis');

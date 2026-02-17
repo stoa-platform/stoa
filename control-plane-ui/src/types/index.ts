@@ -1117,7 +1117,10 @@ export interface AggregatedMetrics {
 }
 
 // Workflow Engine types (CAB-593)
-export type WorkflowType = 'user_registration' | 'consumer_registration' | 'tenant_owner_onboarding';
+export type WorkflowType =
+  | 'user_registration'
+  | 'consumer_registration'
+  | 'tenant_owner_onboarding';
 export type WorkflowMode = 'auto' | 'manual' | 'approval_chain';
 export type WorkflowStatus =
   | 'pending'

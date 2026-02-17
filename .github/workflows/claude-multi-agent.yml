@@ -126,11 +126,17 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log.
+            Do NOT log SESSION-START or SESSION-END.
+            Do NOT run crash recovery checks.
+            Focus exclusively on implementing the task below.
+
             Implement ticket: ${{ matrix.ticket }}
 
             Find the GitHub issue matching this ticket ID.
             Read the issue description for requirements.
-            Follow CLAUDE.md and all .claude/rules/.
+            Follow code style rules in CLAUDE.md and .claude/rules/ (but skip workflow/session rules).
 
             Steps:
             1. Create branch: feat/${{ matrix.ticket }}-<slug>
@@ -145,7 +151,7 @@ jobs:
             Only modify files in your component scope.
             Do NOT modify shared files (memory.md, plan.md, CLAUDE.md).
             Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 25 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
 
       - name: Notify Slack — Agent Complete
         if: always()

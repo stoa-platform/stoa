@@ -55,6 +55,12 @@ helm template stoa-platform ./charts/stoa-platform  # Dry-run
 helm upgrade --install stoa-platform ./charts/stoa-platform -n stoa-system --create-namespace
 ```
 
+## Release Workflow
+- **Workflow**: `.github/workflows/helm-release.yml`
+- **Trigger**: Push to main changing `charts/stoa-platform/Chart.yaml`
+- **Creates**: Git tag `helm-vX.Y.Z` + GitHub Release with packaged `.tgz`
+- **Idempotent**: Skips if tag already exists
+
 ## Dependencies
 - **Depends on**: Container images (control-plane-api, mcp-gateway, stoa-gateway)
 - **Depended on by**: ArgoCD (GitOps deployment)

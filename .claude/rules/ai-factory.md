@@ -1,5 +1,6 @@
 ---
 description: Multi-agent workflow patterns, subagent delegation, cost awareness, plan structure, and binary DoD for STOA AI Factory
+globs: ".claude/agents/**,.claude/skills/**"
 ---
 
 # AI Factory — Multi-Agent Workflow

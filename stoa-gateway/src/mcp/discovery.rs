@@ -72,6 +72,14 @@ pub struct Capabilities {
     pub resources: ResourcesCapability,
     pub prompts: PromptsCapability,
     pub logging: LoggingCapability,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notifications: Option<NotificationsCapability>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct NotificationsCapability {
+    pub supported: bool,
+    pub types: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -114,6 +122,15 @@ pub async fn mcp_capabilities(State(state): State<AppState>) -> impl IntoRespons
                 list_changed: false,
             },
             logging: LoggingCapability {},
+            notifications: Some(NotificationsCapability {
+                supported: true,
+                types: vec![
+                    "stoa.api.lifecycle".to_string(),
+                    "stoa.deployment.events".to_string(),
+                    "stoa.security.alerts".to_string(),
+                    "stoa.subscription.events".to_string(),
+                ],
+            }),
         },
         server_info: ServerInfo {
             name: "STOA Gateway".to_string(),
@@ -191,6 +208,7 @@ mod tests {
                     list_changed: false,
                 },
                 logging: LoggingCapability {},
+                notifications: None,
             },
             server_info: ServerInfo {
                 name: "STOA Gateway".to_string(),
@@ -204,6 +222,32 @@ mod tests {
         assert_eq!(json["capabilities"]["tools"]["listChanged"], false);
         assert_eq!(json["capabilities"]["resources"]["subscribe"], false);
         assert_eq!(json["serverInfo"]["name"], "STOA Gateway");
+        // notifications is None → should be omitted
+        assert!(json["capabilities"]["notifications"].is_null());
+    }
+
+    #[test]
+    fn test_notifications_capability_serialization() {
+        let cap = Capabilities {
+            tools: ToolsCapability {
+                list_changed: false,
+            },
+            resources: ResourcesCapability {
+                subscribe: false,
+                list_changed: false,
+            },
+            prompts: PromptsCapability {
+                list_changed: false,
+            },
+            logging: LoggingCapability {},
+            notifications: Some(NotificationsCapability {
+                supported: true,
+                types: vec!["stoa.api.lifecycle".to_string()],
+            }),
+        };
+        let json = serde_json::to_value(&cap).unwrap();
+        assert_eq!(json["notifications"]["supported"], true);
+        assert_eq!(json["notifications"]["types"][0], "stoa.api.lifecycle");
     }
 
     #[test]

@@ -21,10 +21,11 @@ Before reading state files, check for crashed sessions and log this session:
    - Follow `.claude/rules/crash-recovery.md` protocol
 4. **Generate instance identity** (for multi-terminal coordination):
    ```
-   Instance ID: t<N> where N = epoch seconds mod 10000
-   Example: t4821
+   Instance ID: t<N>-<R> where N = epoch seconds mod 100000, R = 4 hex chars (random)
+   Example: t48217-a3f2
    ```
    Generated once per session. Used in claim files and operations.log.
+   Old format `t<mod 10000>` collides every ~2.8h with 4+ instances. New format: ~1/6.5B collision probability.
 5. If no crash detected → **log this session immediately**:
    ```
    Append to operations.log: SESSION-START | task=<TASK> branch=<BRANCH> instance=<ID>
@@ -83,6 +84,22 @@ Use `/clear` aggressively between unrelated tasks in the same session.
 
 Follow the appropriate pattern from `ai-factory.md` (Pattern 3/5/7 for features, Pattern 1/2 for reviews).
 
+## Step 4b — Phase Chaining (after PR merge, same MEGA)
+
+After merging a PR for a phase, check if the same MEGA has another unclaimed unblocked phase:
+
+1. **Context budget gate**: Only chain if context usage < **60%**. If over 60%, end session and let a fresh instance pick up the next phase (quality degrades with deep context).
+2. Read `.claude/claims/<MEGA-ID>.json` → find the phase you just completed
+3. Set `completed_at` on your phase, clear `owner` (release)
+4. Log: `RELEASE | task=<MEGA-ID> phase=<N> instance=<ID> reason=done`
+5. Scan remaining phases: find first where `owner == null` AND all `deps` phases have `completed_at != null`
+6. If found → claim it (follow Reserve protocol from `phase-ownership.md`), continue working in same session
+7. If none available → proceed to Step 5 (End Session)
+
+**Why chain?** Avoids the overhead of a full session restart (re-reading state files, crash detection, context loading). A session that just merged a PR already has warm context about the MEGA and its architecture.
+
+**Why gate on 60%?** Phase chaining reuses the existing context window. If context is already heavy, the next phase will suffer from degraded reasoning quality. Better to start fresh.
+
 ## Step 5 — End Session
 
 1. Update `memory.md` with results (PR merged, decisions, issues found)
@@ -125,7 +142,8 @@ Follow the appropriate pattern from `ai-factory.md` (Pattern 3/5/7 for features,
 | Context at 50% | Delegate research to subagents (Step 3) |
 | Context at 70% | `/compact` then continue (Step 3) |
 | Context at 80% | Wrap up, commit, fresh session (Step 3) |
-| PR merged | Update memory.md + plan.md + EXTRACT |
+| PR merged (same MEGA) | Step 4b — chain to next phase if context < 60% |
+| PR merged (standalone) | Update memory.md + plan.md + EXTRACT |
 | CI failure / bug found | Add to gotchas.md + consider EXTRACT (Step 5) |
 | Before merge/deploy | Create checkpoint (crash-recovery.md) |
 | After merge/deploy | Log STEP-DONE, delete checkpoint |

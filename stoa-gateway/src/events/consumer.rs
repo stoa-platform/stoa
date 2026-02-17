@@ -8,7 +8,9 @@
 //! - `kafka`: Enables rdkafka StreamConsumer for real Kafka consumption
 //! - Without `kafka`: Module compiles but `start_cns_consumer` is a no-op
 
+use crate::events::polling::EventBuffer;
 use crate::mcp::session::SessionManager;
+use std::sync::Arc;
 use tracing::warn;
 
 /// Start the CNS event consumer (Kafka feature enabled)
@@ -21,6 +23,7 @@ pub fn start_cns_consumer(
     topics: &str,
     group_id: &str,
     session_manager: SessionManager,
+    event_buffer: Arc<EventBuffer>,
 ) {
     use rdkafka::config::ClientConfig;
     use rdkafka::consumer::{Consumer, StreamConsumer};
@@ -62,7 +65,7 @@ pub fn start_cns_consumer(
                 Ok(message) => {
                     use rdkafka::Message;
                     if let Some(payload) = message.payload() {
-                        process_cns_message(payload, &session_manager);
+                        process_cns_message(payload, &session_manager, &event_buffer);
                     }
                 }
                 Err(e) => {
@@ -81,13 +84,23 @@ pub fn start_cns_consumer(
     _topics: &str,
     _group_id: &str,
     _session_manager: SessionManager,
+    _event_buffer: Arc<EventBuffer>,
 ) {
     warn!("Kafka CNS consumer requested but 'kafka' feature not enabled — events disabled");
 }
 
 /// Process a single CNS message payload
+///
+/// Converts event to MCP `notifications/send` format (CAB-1179),
+/// broadcasts to matching tenant SSE sessions, and pushes to
+/// the polling EventBuffer for clients without SSE support.
 #[allow(dead_code)]
-fn process_cns_message(payload: &[u8], session_manager: &SessionManager) {
+fn process_cns_message(
+    payload: &[u8],
+    session_manager: &SessionManager,
+    event_buffer: &EventBuffer,
+) {
+    use super::notifications::format_notification;
     use super::CnsEvent;
     use tracing::debug;
 
@@ -106,23 +119,22 @@ fn process_cns_message(payload: &[u8], session_manager: &SessionManager) {
         "Processing CNS event"
     );
 
-    // Serialize event payload for SSE delivery
-    let sse_data = match serde_json::to_string(&event) {
-        Ok(json) => json,
-        Err(e) => {
-            warn!(error = %e, "Failed to serialize CNS event for SSE");
-            return;
-        }
-    };
+    // Format as MCP notifications/send JSON-RPC envelope
+    let notification = format_notification(&event);
+    let sse_data = notification.to_string();
 
-    let sent = session_manager.broadcast_to_tenant(&event.tenant_id, "cns-event", &sse_data);
+    // Push to SSE sessions matching this tenant
+    let sent = session_manager.broadcast_to_tenant(&event.tenant_id, "notification", &sse_data);
+
+    // Push to polling buffer (for clients without SSE support)
+    event_buffer.push(event.clone());
 
     if sent > 0 {
         debug!(
             event_id = %event.id,
             tenant_id = %event.tenant_id,
             sessions = sent,
-            "CNS event delivered via SSE"
+            "MCP notification delivered via SSE"
         );
     }
 }
@@ -136,6 +148,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_cns_message_valid() {
         let manager = SessionManager::new(30);
+        let buffer = EventBuffer::new();
         manager
             .create(crate::mcp::session::Session::new(
                 "s-1".into(),
@@ -155,22 +168,28 @@ mod tests {
             "payload": {"api_id": "api-42"}
         });
 
-        process_cns_message(payload.to_string().as_bytes(), &manager);
+        process_cns_message(payload.to_string().as_bytes(), &manager, &buffer);
 
+        // SSE delivery
         let received = rx.try_recv();
         assert!(received.is_ok());
+        // Polling buffer
+        assert_eq!(buffer.count(), 1);
     }
 
     #[tokio::test]
     async fn test_process_cns_message_invalid_json() {
         let manager = SessionManager::new(30);
+        let buffer = EventBuffer::new();
         // Should not panic on invalid JSON
-        process_cns_message(b"not json", &manager);
+        process_cns_message(b"not json", &manager, &buffer);
+        assert_eq!(buffer.count(), 0);
     }
 
     #[tokio::test]
     async fn test_process_cns_message_no_matching_tenant() {
         let manager = SessionManager::new(30);
+        let buffer = EventBuffer::new();
         manager
             .create(crate::mcp::session::Session::new(
                 "s-1".into(),
@@ -189,9 +208,43 @@ mod tests {
             "timestamp": "2026-02-17T12:00:00Z"
         });
 
-        process_cns_message(payload.to_string().as_bytes(), &manager);
+        process_cns_message(payload.to_string().as_bytes(), &manager, &buffer);
 
-        // "other" tenant should NOT receive "acme" event
+        // "other" tenant should NOT receive "acme" event via SSE
         assert!(rx.try_recv().is_err());
+        // But event IS in the polling buffer (for acme tenant to poll later)
+        assert_eq!(buffer.count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_process_cns_message_notification_format() {
+        let manager = SessionManager::new(30);
+        let buffer = EventBuffer::new();
+        manager
+            .create(crate::mcp::session::Session::new(
+                "s-1".into(),
+                "acme".into(),
+            ))
+            .await;
+
+        let (tx, mut rx) = mpsc::channel::<Event>(32);
+        manager.register_channel("s-1", tx);
+
+        let payload = serde_json::json!({
+            "id": "evt-003",
+            "type": "api-created",
+            "source": "control-plane-api",
+            "tenant_id": "acme",
+            "timestamp": "2026-02-17T10:00:00Z",
+            "payload": {"api_id": "api-42"}
+        });
+
+        process_cns_message(payload.to_string().as_bytes(), &manager, &buffer);
+
+        // Verify SSE data is MCP JSON-RPC notification format
+        let event = rx.try_recv().expect("should receive SSE event");
+        let event_str = format!("{:?}", event);
+        assert!(event_str.contains("notifications/send"));
+        assert!(event_str.contains("jsonrpc"));
     }
 }

@@ -4,14 +4,12 @@
 //!
 //! Hystrix-style state machine: Closed → Open → HalfOpen → Closed
 //!
-//! Note: Infrastructure prepared for NativeTool wrapping (Phase 7).
-
-// Circuit breaker infrastructure - some fields used for future monitoring
-#![allow(dead_code)]
+//! Uses a rolling time window to count failures (not consecutive).
+//! Failures older than `window_size` are pruned automatically.
 
 use parking_lot::RwLock;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -43,13 +41,13 @@ impl std::fmt::Display for CircuitState {
 /// Circuit breaker configuration
 #[derive(Debug, Clone)]
 pub struct CircuitBreakerConfig {
-    /// Number of failures before opening circuit
+    /// Number of failures within window before opening circuit
     pub failure_threshold: u32,
     /// Time to wait before trying half-open
     pub reset_timeout: Duration,
     /// Number of successes needed to close from half-open
     pub success_threshold: u32,
-    /// Rolling window for failure counting
+    /// Rolling window duration for failure counting
     pub window_size: Duration,
 }
 
@@ -73,8 +71,8 @@ pub struct CircuitBreakerStats {
     pub success_count: u64,
     /// Total failed calls
     pub failure_count: u64,
-    /// Current consecutive failures
-    pub consecutive_failures: u32,
+    /// Failures within current rolling window
+    pub failures_in_window: u32,
     /// Number of times circuit opened
     pub open_count: u64,
     /// Number of rejected calls (fast-fail)
@@ -86,7 +84,8 @@ pub struct CircuitBreakerStats {
 /// Internal mutable state
 struct CircuitBreakerState {
     state: CircuitState,
-    consecutive_failures: u32,
+    /// Rolling window of (timestamp, is_failure) entries
+    window: VecDeque<(Instant, bool)>,
     half_open_successes: u32,
     last_failure_time: Option<Instant>,
     last_state_change: Option<Instant>,
@@ -112,7 +111,7 @@ impl CircuitBreaker {
             config,
             state: RwLock::new(CircuitBreakerState {
                 state: CircuitState::Closed,
-                consecutive_failures: 0,
+                window: VecDeque::new(),
                 half_open_successes: 0,
                 last_failure_time: None,
                 last_state_change: Some(Instant::now()),
@@ -133,11 +132,13 @@ impl CircuitBreaker {
     /// Get statistics
     pub fn stats(&self) -> CircuitBreakerStats {
         let state = self.state.read();
+        let failures_in_window =
+            Self::count_failures_in_window(&state.window, self.config.window_size);
         CircuitBreakerStats {
             state: self.effective_state(&state),
             success_count: self.success_count.load(Ordering::Relaxed),
             failure_count: self.failure_count.load(Ordering::Relaxed),
-            consecutive_failures: state.consecutive_failures,
+            failures_in_window,
             open_count: self.open_count.load(Ordering::Relaxed),
             rejected_count: self.rejected_count.load(Ordering::Relaxed),
             last_state_change: state.last_state_change,
@@ -157,6 +158,27 @@ impl CircuitBreaker {
                 CircuitState::Open
             }
             other => other,
+        }
+    }
+
+    /// Count failures within the rolling window (does not mutate)
+    fn count_failures_in_window(window: &VecDeque<(Instant, bool)>, window_size: Duration) -> u32 {
+        let cutoff = Instant::now() - window_size;
+        window
+            .iter()
+            .filter(|(ts, is_failure)| *is_failure && *ts >= cutoff)
+            .count() as u32
+    }
+
+    /// Prune entries older than window_size
+    fn prune_window(window: &mut VecDeque<(Instant, bool)>, window_size: Duration) {
+        let cutoff = Instant::now() - window_size;
+        while let Some(&(ts, _)) = window.front() {
+            if ts < cutoff {
+                window.pop_front();
+            } else {
+                break;
+            }
         }
     }
 
@@ -186,10 +208,13 @@ impl CircuitBreaker {
         let mut state = self.state.write();
         let effective = self.effective_state(&state);
 
+        // Add success entry to rolling window and prune old entries
+        state.window.push_back((Instant::now(), false));
+        Self::prune_window(&mut state.window, self.config.window_size);
+
         match effective {
             CircuitState::Closed => {
-                // Reset consecutive failures on success
-                state.consecutive_failures = 0;
+                // Rolling window handles failure decay — no explicit reset needed
             }
             CircuitState::HalfOpen => {
                 state.half_open_successes += 1;
@@ -201,7 +226,7 @@ impl CircuitBreaker {
                         state.half_open_successes
                     );
                     state.state = CircuitState::Closed;
-                    state.consecutive_failures = 0;
+                    state.window.clear();
                     state.half_open_successes = 0;
                     state.last_state_change = Some(Instant::now());
                     metrics::update_circuit_breaker_state(&self.name, 0.0);
@@ -222,20 +247,25 @@ impl CircuitBreaker {
         self.failure_count.fetch_add(1, Ordering::Relaxed);
 
         let mut state = self.state.write();
-        state.consecutive_failures += 1;
+
+        // Add failure entry to rolling window and prune old entries
+        state.window.push_back((Instant::now(), true));
+        Self::prune_window(&mut state.window, self.config.window_size);
         state.last_failure_time = Some(Instant::now());
 
         let effective = self.effective_state(&state);
+        let failures_in_window =
+            Self::count_failures_in_window(&state.window, self.config.window_size);
 
         match effective {
             CircuitState::Closed => {
-                if state.consecutive_failures >= self.config.failure_threshold {
+                if failures_in_window >= self.config.failure_threshold {
                     // Open the circuit
                     warn!(
                         circuit = %self.name,
-                        failures = state.consecutive_failures,
-                        "Circuit opening after {} consecutive failures",
-                        state.consecutive_failures
+                        failures = failures_in_window,
+                        "Circuit opening after {} failures in window",
+                        failures_in_window
                     );
                     state.state = CircuitState::Open;
                     state.last_state_change = Some(Instant::now());
@@ -302,7 +332,7 @@ impl CircuitBreaker {
         let mut state = self.state.write();
         info!(circuit = %self.name, "Circuit manually reset to closed");
         state.state = CircuitState::Closed;
-        state.consecutive_failures = 0;
+        state.window.clear();
         state.half_open_successes = 0;
         state.last_failure_time = None;
         state.last_state_change = Some(Instant::now());
@@ -360,6 +390,31 @@ impl CircuitBreakerRegistry {
         cb
     }
 
+    /// Get an existing circuit breaker or create one with a custom config.
+    pub fn get_or_create_with_config(
+        &self,
+        name: &str,
+        config: CircuitBreakerConfig,
+    ) -> Arc<CircuitBreaker> {
+        // Fast path: read lock
+        {
+            let breakers = self.breakers.read();
+            if let Some(cb) = breakers.get(name) {
+                return cb.clone();
+            }
+        }
+
+        // Slow path: write lock to insert with custom config
+        let mut breakers = self.breakers.write();
+        if let Some(cb) = breakers.get(name) {
+            return cb.clone();
+        }
+
+        let cb = CircuitBreaker::new(name, config);
+        breakers.insert(name.to_string(), cb.clone());
+        cb
+    }
+
     /// Check if the circuit breaker for the given name is open (fast-failing).
     ///
     /// Returns false if no circuit breaker exists for the name (optimistic).
@@ -383,7 +438,7 @@ impl CircuitBreakerRegistry {
                     state: stats.state.to_string(),
                     success_count: stats.success_count,
                     failure_count: stats.failure_count,
-                    consecutive_failures: stats.consecutive_failures,
+                    failures_in_window: stats.failures_in_window,
                     open_count: stats.open_count,
                     rejected_count: stats.rejected_count,
                 }
@@ -410,7 +465,7 @@ pub struct CircuitBreakerStatsEntry {
     pub state: String,
     pub success_count: u64,
     pub failure_count: u64,
-    pub consecutive_failures: u32,
+    pub failures_in_window: u32,
     pub open_count: u64,
     pub rejected_count: u64,
 }
@@ -461,7 +516,7 @@ mod tests {
         };
         let cb = CircuitBreaker::new("test", config);
 
-        // Record 3 failures
+        // Record 3 failures (within rolling window)
         cb.record_failure();
         assert_eq!(cb.state(), CircuitState::Closed);
         cb.record_failure();
@@ -474,21 +529,21 @@ mod tests {
     }
 
     #[test]
-    fn test_success_resets_failures() {
+    fn test_success_does_not_reset_window() {
         let config = CircuitBreakerConfig {
             failure_threshold: 3,
             ..Default::default()
         };
         let cb = CircuitBreaker::new("test", config);
 
+        // 2 failures, 1 success, then 1 more failure = 3 failures in window
         cb.record_failure();
         cb.record_failure();
-        cb.record_success(); // Should reset
-        cb.record_failure();
+        cb.record_success(); // Does NOT reset failures — they stay in window
         cb.record_failure();
 
-        // Still closed (1 failure after reset + 2 = 3, but success reset it)
-        assert_eq!(cb.state(), CircuitState::Closed);
+        // 3 failures in window → circuit opens
+        assert_eq!(cb.state(), CircuitState::Open);
     }
 
     #[test]
@@ -505,6 +560,7 @@ mod tests {
         cb.reset();
         assert_eq!(cb.state(), CircuitState::Closed);
         assert!(cb.allow_request());
+        assert_eq!(cb.stats().failures_in_window, 0);
     }
 
     #[test]
@@ -518,6 +574,7 @@ mod tests {
         let stats = cb.stats();
         assert_eq!(stats.success_count, 2);
         assert_eq!(stats.failure_count, 1);
+        assert_eq!(stats.failures_in_window, 1);
         assert_eq!(stats.state, CircuitState::Closed);
     }
 
@@ -571,7 +628,7 @@ mod tests {
             cb.call(async { Ok::<i32, &str>(42) }).await;
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 42);
+        assert_eq!(result.expect("should be ok"), 42);
         assert_eq!(cb.stats().success_count, 1);
     }
 
@@ -609,5 +666,54 @@ mod tests {
 
         assert!(matches!(result, Err(CircuitBreakerError::CircuitOpen)));
         assert_eq!(cb.stats().rejected_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_rolling_window_expiry() {
+        let config = CircuitBreakerConfig {
+            failure_threshold: 3,
+            window_size: Duration::from_millis(50),
+            ..Default::default()
+        };
+        let cb = CircuitBreaker::new("test", config);
+
+        // Record 2 failures
+        cb.record_failure();
+        cb.record_failure();
+        assert_eq!(cb.state(), CircuitState::Closed);
+
+        // Wait for window to expire
+        tokio::time::sleep(Duration::from_millis(60)).await;
+
+        // Record 1 more failure — old 2 are outside window
+        cb.record_failure();
+
+        // Should still be closed (only 1 failure in current window)
+        assert_eq!(cb.state(), CircuitState::Closed);
+        assert_eq!(cb.stats().failures_in_window, 1);
+    }
+
+    #[test]
+    fn test_get_or_create_with_config() {
+        let registry = CircuitBreakerRegistry::new(CircuitBreakerConfig::default());
+
+        let custom_config = CircuitBreakerConfig {
+            failure_threshold: 10,
+            reset_timeout: Duration::from_secs(120),
+            ..Default::default()
+        };
+
+        let cb = registry.get_or_create_with_config("custom-route", custom_config);
+        assert_eq!(cb.state(), CircuitState::Closed);
+
+        // Second call returns the same instance (not re-created)
+        let cb2 = registry.get_or_create_with_config(
+            "custom-route",
+            CircuitBreakerConfig {
+                failure_threshold: 99,
+                ..Default::default()
+            },
+        );
+        assert!(Arc::ptr_eq(&cb, &cb2));
     }
 }

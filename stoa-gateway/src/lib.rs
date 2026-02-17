@@ -38,6 +38,7 @@ use axum::{
 };
 use tracing::warn;
 
+use events::polling::poll_events;
 use handlers::admin;
 use mcp::{
     discovery::{mcp_capabilities, mcp_discovery, mcp_health},
@@ -188,6 +189,8 @@ pub fn build_router(state: AppState) -> Router {
                         .post(handle_sse_post)
                         .delete(handle_sse_delete),
                 )
+                // MCP Event Polling Fallback (CAB-1179)
+                .route("/mcp/events", get(poll_events))
                 // Dynamic proxy fallback — must be LAST
                 .fallback(dynamic_proxy)
                 // Quota enforcement: runs after auth, before handlers (CAB-1121 P4)

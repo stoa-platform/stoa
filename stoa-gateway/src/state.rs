@@ -12,6 +12,7 @@ use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
 use crate::cache::{SemanticCache, SemanticCacheConfig};
 use crate::config::Config;
 use crate::control_plane::{OidcConfig, ToolProxyClient};
+use crate::events::polling::EventBuffer;
 use crate::governance::zombie::{ZombieConfig, ZombieDetector};
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::ToolRegistry;
@@ -67,6 +68,8 @@ pub struct AppState {
     pub quota_manager: Arc<QuotaManager>,
     /// BYOK credential store for backend API auth (CAB-1250)
     pub credential_store: Arc<CredentialStore>,
+    /// Event buffer for polling fallback (CAB-1179)
+    pub event_buffer: Arc<EventBuffer>,
     /// UAC contract registry (CAB-1299)
     pub contract_registry: Arc<ContractRegistry>,
     /// Classification-based enforcer for contract routes (CAB-1299)
@@ -257,6 +260,9 @@ impl AppState {
         // Initialize BYOK credential store (CAB-1250)
         let credential_store = Arc::new(CredentialStore::new());
 
+        // Initialize event buffer for polling fallback (CAB-1179)
+        let event_buffer = Arc::new(EventBuffer::new());
+
         // Initialize UAC contract registry (CAB-1299)
         let contract_registry = Arc::new(ContractRegistry::new());
 
@@ -308,6 +314,7 @@ impl AppState {
             consumer_rate_limiter,
             quota_manager,
             credential_store,
+            event_buffer,
             contract_registry,
             classification_enforcer,
         }
@@ -326,6 +333,9 @@ impl AppState {
             self.consumer_rate_limiter.clone().start_cleanup_task();
             self.quota_manager.clone().start_reset_task();
         }
+
+        // Start event buffer cleanup (CAB-1179)
+        self.event_buffer.clone().start_cleanup_task();
 
         // Start zombie reaper (CAB-362)
         if let Some(ref zd) = self.zombie_detector {

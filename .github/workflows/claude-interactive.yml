@@ -38,4 +38,12 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Bash
+            Read
+            Write
+            Edit
+            Glob
+            Grep
+            WebFetch
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"

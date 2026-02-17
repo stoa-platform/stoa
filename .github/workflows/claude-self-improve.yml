@@ -45,6 +45,12 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Bash(gh run *)
+            Bash(gh issue *)
+            Read
+            Glob
+            Grep
           prompt: |
             You are the STOA AI Factory Self-Improvement Agent.
             Your job: find recurring problems and propose rule improvements.

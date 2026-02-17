@@ -548,6 +548,33 @@ pub async fn delete_contract(
 }
 
 // =============================================================================
+// Federation Admin (CAB-1362)
+// =============================================================================
+
+#[derive(Serialize)]
+pub struct FederationStatusResponse {
+    pub enabled: bool,
+    pub cache_size: u64,
+    pub cache_ttl_secs: u64,
+}
+
+/// GET /admin/federation/status
+pub async fn federation_status(State(state): State<AppState>) -> Json<FederationStatusResponse> {
+    Json(FederationStatusResponse {
+        enabled: state.config.federation_enabled,
+        cache_size: state.federation_cache.entry_count(),
+        cache_ttl_secs: state.config.federation_cache_ttl_secs,
+    })
+}
+
+/// GET /admin/federation/cache
+pub async fn federation_cache_stats(
+    State(state): State<AppState>,
+) -> Json<crate::federation::cache::FederationCacheStats> {
+    Json(state.federation_cache.stats())
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -760,6 +787,9 @@ mod tests {
             // CAB-1299: UAC contracts
             .route("/contracts", get(list_contracts).post(upsert_contract))
             .route("/contracts/:key", get(get_contract).delete(delete_contract))
+            // CAB-1362: Federation admin
+            .route("/federation/status", get(federation_status))
+            .route("/federation/cache", get(federation_cache_stats))
             .layer(middleware::from_fn_with_state(state.clone(), admin_auth))
             .with_state(state)
     }
@@ -1666,5 +1696,69 @@ mod tests {
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "uac:acme:payment-api:payment-api-0");
         assert_eq!(tools[0].tenant_id.as_deref(), Some("acme"));
+    }
+
+    // =========================================================================
+    // Federation Admin (CAB-1362)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_federation_status_disabled() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/federation/status"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["enabled"], false);
+        assert_eq!(data["cache_size"], 0);
+        assert_eq!(data["cache_ttl_secs"], 300);
+    }
+
+    #[tokio::test]
+    async fn test_federation_status_enabled() {
+        let config = Config {
+            admin_api_token: Some("secret".to_string()),
+            federation_enabled: true,
+            federation_cache_ttl_secs: 600,
+            ..Config::default()
+        };
+        let state = AppState::new(config);
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/federation/status"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["enabled"], true);
+        assert_eq!(data["cache_ttl_secs"], 600);
+    }
+
+    #[tokio::test]
+    async fn test_federation_cache_stats() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state);
+        let response = app
+            .oneshot(auth_req("GET", "/federation/cache"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(data["entries"], 0);
+        assert_eq!(data["hits"], 0);
+        assert_eq!(data["misses"], 0);
+        assert_eq!(data["hit_rate"], 0.0);
     }
 }

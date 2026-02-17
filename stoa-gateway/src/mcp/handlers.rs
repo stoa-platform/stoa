@@ -78,6 +78,10 @@ struct AuthContext {
     roles: Vec<String>,
     scopes: Vec<String>,
     raw_token: Option<String>,
+    /// Federation: sub-account ID (CAB-1362)
+    sub_account_id: Option<String>,
+    /// Federation: master account ID (CAB-1362)
+    master_account_id: Option<String>,
 }
 
 /// Extract and validate JWT from Authorization header (Phase 1: CAB-1105)
@@ -117,6 +121,8 @@ async fn extract_auth_context(state: &AppState, headers: &HeaderMap) -> AuthCont
                             roles,
                             scopes,
                             raw_token: Some(token_str.to_string()),
+                            sub_account_id: claims.sub_account_id.clone(),
+                            master_account_id: claims.master_account_id.clone(),
                         };
                     }
                     Err(e) => {
@@ -135,6 +141,8 @@ async fn extract_auth_context(state: &AppState, headers: &HeaderMap) -> AuthCont
         roles: vec![],
         scopes: vec!["stoa:read".to_string()],
         raw_token: None,
+        sub_account_id: None,
+        master_account_id: None,
     }
 }
 
@@ -401,6 +409,52 @@ pub async fn mcp_tools_call(
             }
         }
     };
+
+    // CAB-1362: Federation tool allow-list enforcement
+    if state.config.federation_enabled {
+        if let (Some(ref sub_id), Some(ref master_id)) =
+            (&auth.sub_account_id, &auth.master_account_id)
+        {
+            let allowed_tools = state
+                .federation_cache
+                .get_allowed_tools(sub_id, &auth.tenant_id, master_id)
+                .await;
+            if let Some(ref tools) = allowed_tools {
+                if !tools.contains(&request.name) {
+                    warn!(
+                        tool = %request.name,
+                        sub_account_id = %sub_id,
+                        "Federation: tool not in sub-account allow-list"
+                    );
+                    emit_metering_event(
+                        &state,
+                        &auth,
+                        &request.name,
+                        &format!("{:?}", tool.required_action()),
+                        EventStatus::PolicyDenied,
+                        start,
+                        0,
+                        request_size,
+                        0,
+                    );
+                    return (
+                        StatusCode::FORBIDDEN,
+                        Json(ToolsCallResponse {
+                            content: vec![ToolContent::Text {
+                                text: format!(
+                                    "Tool '{}' not allowed for this sub-account",
+                                    request.name
+                                ),
+                            }],
+                            is_error: Some(true),
+                        }),
+                    )
+                        .into_response();
+                }
+            }
+            // None = cache miss/error → permissive (logged in FederationCache)
+        }
+    }
 
     // Check rate limit
     let rate_result = state.rate_limiter.check(&auth.tenant_id);
@@ -767,7 +821,11 @@ fn emit_metering_event(
         .with_timing(latency_ms, t_gateway_ms, t_backend_ms)
         .with_status(status)
         .with_sizes(request_size, response_size)
-        .with_auth(auth.scopes.clone(), auth.roles.clone());
+        .with_auth(auth.scopes.clone(), auth.roles.clone())
+        .with_federation(
+            auth.sub_account_id.as_deref(),
+            auth.master_account_id.as_deref(),
+        );
 
         producer.send_metering_event(event);
     }

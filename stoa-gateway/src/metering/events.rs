@@ -93,6 +93,14 @@ pub struct ToolCallEvent {
     /// Gateway instance identifier
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gateway_id: Option<String>,
+
+    /// Federation: sub-account ID (CAB-1362)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub_account_id: Option<String>,
+
+    /// Federation: master account ID (CAB-1362)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub master_account_id: Option<String>,
 }
 
 impl ToolCallEvent {
@@ -115,6 +123,8 @@ impl ToolCallEvent {
             scopes: vec![],
             roles: vec![],
             gateway_id: None,
+            sub_account_id: None,
+            master_account_id: None,
         }
     }
 
@@ -150,6 +160,17 @@ impl ToolCallEvent {
     pub fn with_auth(mut self, scopes: Vec<String>, roles: Vec<String>) -> Self {
         self.scopes = scopes;
         self.roles = roles;
+        self
+    }
+
+    /// Set federation context (CAB-1362)
+    pub fn with_federation(
+        mut self,
+        sub_account_id: Option<&str>,
+        master_account_id: Option<&str>,
+    ) -> Self {
+        self.sub_account_id = sub_account_id.map(|s| s.to_string());
+        self.master_account_id = master_account_id.map(|s| s.to_string());
         self
     }
 }
@@ -309,5 +330,30 @@ mod tests {
         // t_gateway + t_backend should approximately equal latency
         // (allowing for measurement overhead)
         assert!(event.t_gateway_ms + event.t_backend_ms <= event.latency_ms + 10);
+    }
+
+    #[test]
+    fn test_with_federation_builder() {
+        let event =
+            ToolCallEvent::new("tenant".to_string(), "tool".to_string(), "Read".to_string())
+                .with_federation(Some("sub-acct-1"), Some("master-acct-1"));
+
+        assert_eq!(event.sub_account_id.as_deref(), Some("sub-acct-1"));
+        assert_eq!(event.master_account_id.as_deref(), Some("master-acct-1"));
+    }
+
+    #[test]
+    fn test_with_federation_none_skips_serialization() {
+        let event =
+            ToolCallEvent::new("tenant".to_string(), "tool".to_string(), "Read".to_string())
+                .with_federation(None, None);
+
+        assert!(event.sub_account_id.is_none());
+        assert!(event.master_account_id.is_none());
+
+        // skip_serializing_if = "Option::is_none" means these fields are absent from JSON
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(!json.contains("sub_account_id"));
+        assert!(!json.contains("master_account_id"));
     }
 }

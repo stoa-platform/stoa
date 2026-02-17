@@ -199,6 +199,7 @@ export function RevealKeyModal({ subscription, isOpen, onClose }: RevealKeyModal
                   setError(null);
                 }}
                 className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-neutral-800 dark:text-white"
+                // UX: autofocus on TOTP input improves keyboard accessibility for time-sensitive 2FA flow
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
               />

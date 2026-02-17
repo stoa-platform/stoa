@@ -91,6 +91,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start background tasks
     state.start_background_tasks();
 
+    // Initialize Kafka CNS event bridge (CAB-1178: push Kafka events to SSE clients)
+    init_kafka_cns_consumer(&config, &state);
+
     // Initialize K8s CRD watcher (Phase 7: CAB-1105)
     init_k8s_watcher(&config, &state).await;
 
@@ -278,6 +281,38 @@ async fn shutdown_signal() {
         _ = ctrl_c => info!("Received Ctrl+C, initiating shutdown..."),
         _ = terminate => info!("Received SIGTERM, initiating shutdown..."),
     }
+}
+
+/// Initialize Kafka CNS event bridge (CAB-1178: Kafka -> SSE push via NotificationBus)
+#[allow(unused_variables)]
+fn init_kafka_cns_consumer(config: &Config, state: &AppState) {
+    if !config.kafka_cns_enabled {
+        info!("Kafka CNS event bridge disabled (STOA_KAFKA_CNS_ENABLED=false)");
+        return;
+    }
+
+    if !config.kafka_enabled {
+        warn!("Kafka CNS enabled but Kafka brokers not configured (STOA_KAFKA_ENABLED=false) -- skipping");
+        return;
+    }
+
+    let brokers = config.kafka_brokers.clone();
+    let topics = config.kafka_cns_topics.clone();
+    let group_id = config.kafka_cns_consumer_group.clone();
+    let session_manager = stoa_gateway::mcp::session::SessionManager::clone(&state.session_manager);
+
+    stoa_gateway::events::consumer::start_cns_consumer(
+        &brokers,
+        &topics,
+        &group_id,
+        session_manager,
+    );
+    info!(
+        brokers = %config.kafka_brokers,
+        topics = %config.kafka_cns_topics,
+        group = %config.kafka_cns_consumer_group,
+        "Kafka CNS event bridge started"
+    );
 }
 
 /// Initialize K8s CRD watcher for dynamic tool registration (Phase 7: CAB-1105)

@@ -13,8 +13,18 @@ use std::net::IpAddr;
 use std::time::Duration;
 use tracing::{debug, error, instrument, warn};
 
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
+use std::cell::RefCell;
+
 use crate::resilience::RetryConfig;
 use crate::state::AppState;
+
+thread_local! {
+    /// Thread-local fast PRNG for traceparent ID generation.
+    /// Avoids 2x `getrandom()` syscall per request (uuid::Uuid::new_v4).
+    static TRACE_RNG: RefCell<SmallRng> = RefCell::new(SmallRng::from_os_rng());
+}
 
 /// Shared reqwest client for dynamic proxy (created once, reused).
 static PROXY_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
@@ -24,12 +34,13 @@ fn get_proxy_client() -> &'static reqwest::Client {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(5))
-            .pool_max_idle_per_host(128)
+            .pool_max_idle_per_host(256)
             .pool_idle_timeout(Duration::from_secs(90))
             .tcp_keepalive(Duration::from_secs(60))
             .tcp_nodelay(true)
-            .http2_keep_alive_interval(Duration::from_secs(30))
-            .http2_keep_alive_timeout(Duration::from_secs(10))
+            // Force HTTP/1.1: echo-backend and most legacy APIs don't speak h2.
+            // Avoids ALPN negotiation overhead on every new connection.
+            .http1_only()
             .build()
             .expect("Failed to create proxy HTTP client")
     })
@@ -464,13 +475,37 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
 /// This propagates a trace context to downstream services,
 /// enabling end-to-end distributed tracing visible in Tempo/Grafana.
 ///
-/// Uses UUID v4 for random trace/span ID generation (no OpenTelemetry dependency).
+/// Uses thread-local SmallRng instead of uuid::Uuid::new_v4() to avoid
+/// 2x `getrandom()` syscalls per request. SmallRng is seeded from OS entropy
+/// once per thread, then generates IDs via fast Xoshiro256++ PRNG.
 /// CAB-1088: migrate to opentelemetry-propagator when OTel API stabilizes.
 fn inject_traceparent(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    let trace_id = uuid::Uuid::new_v4().as_simple().to_string(); // 32 hex chars
-    let span_id = &uuid::Uuid::new_v4().as_simple().to_string()[..16]; // 16 hex chars
-    let traceparent = format!("00-{}-{}-01", trace_id, span_id);
+    let traceparent = TRACE_RNG.with(|rng| {
+        let mut rng = rng.borrow_mut();
+        let mut trace_bytes = [0u8; 16];
+        let mut span_bytes = [0u8; 8];
+        rng.fill(&mut trace_bytes);
+        rng.fill(&mut span_bytes);
+
+        // Format directly as hex — no intermediate UUID allocation
+        format!(
+            "00-{}-{}-01",
+            hex_encode(&trace_bytes),
+            hex_encode(&span_bytes),
+        )
+    });
     builder.header("traceparent", traceparent)
+}
+
+/// Encode bytes as lowercase hex string (allocation-free for small buffers).
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        s.push(HEX_CHARS[(b >> 4) as usize] as char);
+        s.push(HEX_CHARS[(b & 0x0f) as usize] as char);
+    }
+    s
 }
 
 #[cfg(test)]

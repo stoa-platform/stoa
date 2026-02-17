@@ -125,28 +125,36 @@ pub fn build_router(state: AppState) -> Router {
         // HTTP metrics middleware: records method, path, status, duration for ALL requests
         .layer(axum::middleware::from_fn(http_metrics_middleware));
 
-    // Build mTLS layers (CAB-864)
-    // Stage 1: extraction — runs first, extracts cert info from X-SSL-* headers
-    let mtls_config_s1 = state.config.mtls.clone();
-    let mtls_stats_s1 = state.mtls_stats.clone();
-    let mtls_extraction_layer = axum::middleware::from_fn(move |request, next| {
-        let config = mtls_config_s1.clone();
-        let stats = mtls_stats_s1.clone();
-        auth::mtls::mtls_extraction_middleware(config, stats, request, next)
-    });
-    // Stage 3: binding — runs after extraction, verifies cert ↔ JWT cnf.x5t#S256
-    let mtls_config_s3 = state.config.mtls.clone();
-    let mtls_stats_s3 = state.mtls_stats.clone();
-    let mtls_binding_layer = axum::middleware::from_fn(move |request, next| {
-        let config = mtls_config_s3.clone();
-        let stats = mtls_stats_s3.clone();
-        auth::mtls::mtls_binding_middleware(config, stats, request, next)
-    });
+    // Build mTLS layers only when mTLS is enabled (CAB-864, CAB-1359 perf).
+    // When disabled, skip the middleware entirely — avoids 2 async fn calls per request.
+    let mtls_enabled = state.config.mtls.enabled;
+    let mtls_extraction_layer = if mtls_enabled {
+        let mtls_config_s1 = state.config.mtls.clone();
+        let mtls_stats_s1 = state.mtls_stats.clone();
+        Some(axum::middleware::from_fn(move |request, next| {
+            let config = mtls_config_s1.clone();
+            let stats = mtls_stats_s1.clone();
+            auth::mtls::mtls_extraction_middleware(config, stats, request, next)
+        }))
+    } else {
+        None
+    };
+    let mtls_binding_layer = if mtls_enabled {
+        let mtls_config_s3 = state.config.mtls.clone();
+        let mtls_stats_s3 = state.mtls_stats.clone();
+        Some(axum::middleware::from_fn(move |request, next| {
+            let config = mtls_config_s3.clone();
+            let stats = mtls_stats_s3.clone();
+            auth::mtls::mtls_binding_middleware(config, stats, request, next)
+        }))
+    } else {
+        None
+    };
 
     let mode_router = match state.config.gateway_mode {
         GatewayMode::EdgeMcp => {
             // Full MCP protocol: OAuth discovery, MCP tools, SSE transport
-            base
+            let edge_base = base
                 // OAuth Discovery + Proxy (RFC 9728, RFC 8414, OIDC, DCR)
                 .route(
                     "/.well-known/oauth-protected-resource",
@@ -185,12 +193,22 @@ pub fn build_router(state: AppState) -> Router {
                 .layer(axum::middleware::from_fn_with_state(
                     state.clone(),
                     quota::quota_middleware,
-                ))
-                // mTLS Stage 3: binding verification (RFC 8705 — cert ↔ JWT cnf)
-                .layer(mtls_binding_layer)
-                // mTLS Stage 1: extraction (cert info from X-SSL-* headers)
-                .layer(mtls_extraction_layer)
-                .with_state(state)
+                ));
+
+            // mTLS layers: only added when enabled (CAB-1359 perf — skip 2 async calls/req when off)
+            let edge_with_mtls = if let (Some(binding), Some(extraction)) =
+                (mtls_binding_layer, mtls_extraction_layer)
+            {
+                edge_base
+                    // mTLS Stage 3: binding verification (RFC 8705 — cert ↔ JWT cnf)
+                    .layer(binding)
+                    // mTLS Stage 1: extraction (cert info from X-SSL-* headers)
+                    .layer(extraction)
+            } else {
+                edge_base
+            };
+
+            edge_with_mtls.with_state(state)
         }
         GatewayMode::Sidecar => {
             // Sidecar: policy enforcement, ext_authz style

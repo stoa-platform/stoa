@@ -1,0 +1,271 @@
+# Level 3.5: Autopilot Scan — Daily backlog scan → Council → Slack approve → implement
+# Scans Linear backlog for autopilot-eligible tickets, runs Council validation,
+# creates GitHub issues with Slack "Approve & Start" buttons.
+# Kill-switch: set DISABLE_AUTOPILOT_SCAN=true in repo variables to disable.
+
+name: Claude Autopilot Scan
+
+on:
+  schedule:
+    - cron: '0 8 * * 1-5'  # 08:00 UTC, Mon-Fri
+  workflow_dispatch:
+    inputs:
+      max_tickets:
+        description: "Max tickets to process (default 3)"
+        default: '3'
+        type: string
+      dry_run:
+        description: "Dry run — scan only, no issues created"
+        default: false
+        type: boolean
+
+concurrency:
+  group: autopilot-scan
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  scan:
+    if: vars.DISABLE_AUTOPILOT_SCAN != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Check daily velocity cap before scanning
+      - name: Check Velocity Cap
+        id: velocity
+        run: |
+          MAX_DAILY=${{ inputs.max_tickets || '3' }}
+          TODAY=$(date -u +%Y-%m-%d)
+          COUNTER="${{ vars.AUTOPILOT_TODAY_COUNT }}"
+          COUNT_DATE=$(echo "$COUNTER" | cut -d: -f1 2>/dev/null || echo "")
+          COUNT_VAL=$(echo "$COUNTER" | cut -d: -f2 2>/dev/null || echo "0")
+
+          if [ "$COUNT_DATE" != "$TODAY" ]; then
+            COUNT_VAL=0
+          fi
+
+          REMAINING=$((MAX_DAILY - COUNT_VAL))
+          if [ "$REMAINING" -le 0 ]; then
+            echo "Daily velocity cap reached (${COUNT_VAL}/${MAX_DAILY})"
+            echo "capped=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Velocity: ${COUNT_VAL}/${MAX_DAILY} — ${REMAINING} slots available"
+            echo "capped=false" >> "$GITHUB_OUTPUT"
+            echo "remaining=${REMAINING}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Fetch eligible tickets from Linear API (no Claude needed for this)
+      - name: Fetch Linear Backlog
+        if: steps.velocity.outputs.capped == 'false'
+        id: linear
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then
+            echo "::error::LINEAR_API_KEY secret not configured"
+            exit 1
+          fi
+
+          REMAINING="${{ steps.velocity.outputs.remaining }}"
+
+          # Fetch Todo + Backlog tickets for team CAB-ING
+          # Filter: estimate <= 13, priority <= 3, not already in progress
+          RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "query": "{ issues(filter: { team: { key: { eq: \"CAB\" } }, state: { type: { in: [\"unstarted\", \"backlog\"] } }, estimate: { lte: 13 }, priority: { lte: 3 } }, orderBy: priority, first: 20) { nodes { id identifier title description priority estimate labels { nodes { name } } parent { identifier } } } }"
+            }')
+
+          # Filter out tickets with no-autopilot label and sub-tickets (has parent)
+          echo "$RESPONSE" | jq -c "[
+            .data.issues.nodes[]
+            | select(.labels.nodes | map(.name) | index(\"no-autopilot\") | not)
+            | select(.parent == null or .parent == {})
+            | {
+                id: .id,
+                identifier: .identifier,
+                title: .title,
+                description: (.description // \"\" | .[0:500]),
+                priority: .priority,
+                estimate: .estimate,
+                labels: [.labels.nodes[].name]
+              }
+          ] | .[0:${REMAINING}]" > eligible-tickets.json 2>/dev/null || echo "[]" > eligible-tickets.json
+
+          TICKET_COUNT=$(jq 'length' eligible-tickets.json)
+          echo "Found ${TICKET_COUNT} eligible tickets"
+          echo "count=${TICKET_COUNT}" >> "$GITHUB_OUTPUT"
+
+          if [ "$TICKET_COUNT" -eq 0 ]; then
+            echo "No eligible tickets found in backlog"
+          else
+            echo "=== Eligible tickets ==="
+            jq -r '.[] | "\(.identifier) (\(.estimate // 0) pts, P\(.priority)) — \(.title)"' eligible-tickets.json
+          fi
+
+      # Run Council validation via Claude (one invocation for all tickets)
+      - name: Council Validation
+        if: steps.velocity.outputs.capped == 'false' && steps.linear.outputs.count != '0'
+        id: council
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log.
+
+            You are the STOA Council. Validate each ticket below for autonomous implementation.
+
+            TICKETS (from Linear backlog):
+            $(cat eligible-tickets.json)
+
+            For EACH ticket, run a CONCISE 4-persona Council validation:
+            - Chucky (risk): is this safe for autonomous implementation?
+            - OSS Killer (value): does this deliver user value?
+            - Archi 50x50 (architecture): is the scope clear and well-bounded?
+            - Better Call Saul (legal): any compliance concerns?
+
+            Score each persona /10. Compute average. Threshold: >= 7.5 = Go.
+
+            IMPORTANT: Output ONLY a JSON array. No markdown, no explanation, no code fences.
+            Each element must have these exact fields:
+            [
+              {
+                "ticket_id": "CAB-XXXX",
+                "title": "...",
+                "score": 8.5,
+                "verdict": "Go",
+                "ship_show_ask": "Ship",
+                "council_body": "# Council: CAB-XXXX — Title\n**Score: 8.5/10 — Go**\n## Personas\n**Chucky**: 8/10 — ...\n**OSS Killer**: 9/10 — ...\n**Archi**: 8/10 — ...\n**Saul**: 9/10 — ...\n## Ship/Show/Ask: Ship\n## Plan\n...\n## DoD\n- [ ] ...\n---\nComment /go to start implementation."
+              }
+            ]
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Read,Glob,Grep"
+          show_full_output: true
+
+      # Parse Council output and create GitHub issues + Slack notifications
+      - name: Create Issues and Notify
+        if: steps.council.outcome == 'success' && inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
+          HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
+        run: |
+          EXEC_FILE="${{ steps.council.outputs.execution_file }}"
+          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
+
+          # Extract JSON array from Claude output
+          CANDIDATES="[]"
+          if [ -f "$EXEC_FILE" ]; then
+            # Try result field first
+            RAW=$(jq -r '.[] | select(.type == "result") | .result // empty' "$EXEC_FILE" 2>/dev/null || echo "")
+            if [ -z "$RAW" ]; then
+              RAW=$(jq -r '[.[] | select(.type == "assistant") | .message.content[] | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null || echo "")
+            fi
+
+            # Extract JSON array from response (may have surrounding text)
+            CANDIDATES=$(echo "$RAW" | python3 -c 'import sys,json,re;t=sys.stdin.read();m=re.search(r"\[.*\]",t,re.DOTALL);print(json.dumps(json.loads(m.group()))if m else"[]")' 2>/dev/null || echo "[]")
+          fi
+
+          CANDIDATE_COUNT=$(echo "$CANDIDATES" | jq 'length')
+          echo "Council validated ${CANDIDATE_COUNT} candidates"
+
+          CREATED=0
+          echo "$CANDIDATES" | jq -c '.[] | select(.verdict == "Go" and .score >= 7.5)' | while IFS= read -r ticket; do
+            TICKET_ID=$(echo "$ticket" | jq -r '.ticket_id')
+            TITLE=$(echo "$ticket" | jq -r '.title')
+            SCORE=$(echo "$ticket" | jq -r '.score')
+            COUNCIL_BODY=$(echo "$ticket" | jq -r '.council_body')
+
+            echo "Processing ${TICKET_ID} (score: ${SCORE})"
+
+            # Create labels (idempotent)
+            gh label create "${TICKET_ID}" --color "0075ca" --description "Linear ticket" --force 2>/dev/null || true
+            gh label create "autopilot-candidate" --color "7057ff" --description "Selected by autopilot scan" --force 2>/dev/null || true
+
+            # Create GitHub issue
+            ISSUE_URL=$(gh issue create \
+              --title "Council: ${TICKET_ID} — ${TITLE}" \
+              --label "council-review" \
+              --label "autopilot-candidate" \
+              --label "${TICKET_ID}" \
+              --body "$COUNCIL_BODY")
+
+            ISSUE_NUM=$(echo "$ISSUE_URL" | grep -oE '/issues/[0-9]+' | grep -oE '[0-9]+')
+            echo "Created issue #${ISSUE_NUM}: ${ISSUE_URL}"
+
+            # Send Slack notification with approve button
+            if [ -n "$SLACK_WEBHOOK" ]; then
+              if [ -n "$N8N_WEBHOOK" ] && [ -n "$HMAC_SECRET" ] && [ -n "$ISSUE_NUM" ]; then
+                HMAC=$(echo -n "$ISSUE_NUM" | openssl dgst -sha256 -hmac "$HMAC_SECRET" | awk '{print $NF}')
+                APPROVE_URL="${N8N_WEBHOOK}?issue=${ISSUE_NUM}&token=${HMAC}"
+                BUTTON_TEXT="Approve \\u0026 Start"
+              else
+                APPROVE_URL="$ISSUE_URL"
+                BUTTON_TEXT="Review \\u0026 Approve"
+              fi
+
+              curl -s -X POST "$SLACK_WEBHOOK" \
+                -H 'Content-Type: application/json' \
+                -d "{
+                  \"blocks\": [
+                    {
+                      \"type\": \"header\",
+                      \"text\": {\"type\": \"plain_text\", \"text\": \":robot_face: Autopilot: ${TICKET_ID} (${SCORE}/10)\", \"emoji\": true}
+                    },
+                    {
+                      \"type\": \"section\",
+                      \"text\": {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*${TITLE}*\n\nAutopilot scan found this ticket eligible for autonomous implementation.\nCouncil score: *${SCORE}/10* — Go\"
+                      },
+                      \"accessory\": {
+                        \"type\": \"button\",
+                        \"text\": {\"type\": \"plain_text\", \"text\": \"${BUTTON_TEXT}\"},
+                        \"url\": \"${APPROVE_URL}\",
+                        \"style\": \"primary\"
+                      }
+                    },
+                    {
+                      \"type\": \"context\",
+                      \"elements\": [{\"type\": \"mrkdwn\", \"text\": \"STOA AI Factory | Autopilot Scan | $(date -u +%H:%M) UTC\"}]
+                    }
+                  ]
+                }"
+            fi
+
+            CREATED=$((CREATED + 1))
+          done
+
+          echo "Created ${CREATED} autopilot candidate issues"
+
+      # Summary Slack notification
+      - name: Slack Summary
+        if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+
+          if [ "${{ steps.velocity.outputs.capped }}" = "true" ]; then
+            MSG=":pause_button: Autopilot scan skipped — daily velocity cap reached."
+          elif [ "${{ steps.linear.outputs.count }}" = "0" ]; then
+            MSG=":inbox_tray: Autopilot scan complete — no eligible tickets in backlog."
+          elif [ "${{ steps.council.outcome }}" != "success" ]; then
+            MSG=":warning: Autopilot scan — Council validation failed. Check <https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}|workflow logs>."
+          elif [ "${{ inputs.dry_run }}" = "true" ]; then
+            MSG=":mag: Autopilot scan (dry run) — found eligible tickets. No issues created."
+          else
+            MSG=":sunrise: Autopilot scan complete. Check above for candidate tickets."
+          fi
+
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"${MSG}\"}"

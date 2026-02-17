@@ -272,6 +272,18 @@ pub struct Config {
     #[serde(default)]
     pub classification_enforcement_enabled: bool,
 
+    // === Tool Discovery (CAB-1317) ===
+    /// TTL in seconds before tenant tools are considered stale (default: 300s = 5 min).
+    /// Env: STOA_TOOL_REFRESH_TTL_SECS
+    #[serde(default = "default_tool_refresh_ttl_secs")]
+    pub tool_refresh_ttl_secs: u64,
+
+    /// Max staleness in seconds before degraded response (default: 1800s = 30 min).
+    /// Council adjustment #1: hard cap prevents serving indefinitely stale data.
+    /// Env: STOA_TOOL_MAX_STALENESS_SECS
+    #[serde(default = "default_tool_max_staleness_secs")]
+    pub tool_max_staleness_secs: u64,
+
     // === Per-Upstream Circuit Breaker (CAB-362) ===
     /// Failure threshold before opening circuit (default: 5)
     /// Env: STOA_CB_FAILURE_THRESHOLD
@@ -502,6 +514,14 @@ fn default_fallback_timeout_ms() -> u64 {
     5000
 }
 
+fn default_tool_refresh_ttl_secs() -> u64 {
+    300
+}
+
+fn default_tool_max_staleness_secs() -> u64 {
+    1800
+}
+
 fn default_cb_failure_threshold() -> u32 {
     5
 }
@@ -571,6 +591,8 @@ impl Default for Config {
             fallback_chains: None,
             fallback_timeout_ms: default_fallback_timeout_ms(),
             classification_enforcement_enabled: false,
+            tool_refresh_ttl_secs: default_tool_refresh_ttl_secs(),
+            tool_max_staleness_secs: default_tool_max_staleness_secs(),
             cb_failure_threshold: default_cb_failure_threshold(),
             cb_reset_timeout_secs: default_cb_reset_timeout_secs(),
             cb_success_threshold: default_cb_success_threshold(),
@@ -727,6 +749,13 @@ mod tests {
     fn test_default_classification_enforcement_disabled() {
         let config = Config::default();
         assert!(!config.classification_enforcement_enabled);
+    }
+
+    #[test]
+    fn test_default_tool_discovery_settings() {
+        let config = Config::default();
+        assert_eq!(config.tool_refresh_ttl_secs, 300);
+        assert_eq!(config.tool_max_staleness_secs, 1800);
     }
 
     #[test]

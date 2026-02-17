@@ -16,16 +16,19 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::time::Instant;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tracing::{debug, error, instrument, warn};
 
 use crate::auth::jwt::JwtValidator;
-use crate::mcp::tools::{ToolContext, ToolDefinition};
+use crate::control_plane::ToolProxyClient;
+use crate::mcp::tools::{ToolContext, ToolDefinition, ToolRegistry};
 use crate::metering::{
     ErrorSnapshot, EventStatus, GatewaySnapshot, MeteringProducerTrait, ToolCallEvent,
 };
 use crate::metrics;
 use crate::optimization::{OptimizationLevel, OptimizationSettings, TokenOptimizer};
+use crate::resilience::CircuitBreaker;
 use crate::state::AppState;
 
 // === Request/Response Types ===
@@ -201,6 +204,21 @@ pub async fn mcp_rest_tools_list(
     let auth = extract_auth_context(&state, &headers).await;
     debug!(tenant_id = %auth.tenant_id, "REST v1: listing MCP tools");
 
+    // CAB-1317: stale-while-revalidate — return cached immediately, refresh in background
+    let ttl = Duration::from_secs(state.config.tool_refresh_ttl_secs);
+    if state.tool_registry.is_stale(&auth.tenant_id, ttl) {
+        let registry = state.tool_registry.clone();
+        let tenant_id = auth.tenant_id.clone();
+        let cp = state.control_plane.clone();
+        let cb = state.cp_circuit_breaker.clone();
+        tokio::spawn(async move {
+            debug!(tenant_id = %tenant_id, "Background tool refresh (stale-while-revalidate)");
+            if let Err(e) = refresh_tenant_tools(&registry, &cp, cb, &tenant_id).await {
+                warn!(tenant_id = %tenant_id, error = %e, "Background tool refresh failed");
+            }
+        });
+    }
+
     let tools = state.tool_registry.list(Some(&auth.tenant_id));
     Json(tools)
 }
@@ -233,6 +251,21 @@ pub async fn mcp_tools_list(
     let auth = extract_auth_context(&state, &headers).await;
 
     debug!(tenant_id = %auth.tenant_id, "Listing MCP tools");
+
+    // CAB-1317: stale-while-revalidate — return cached immediately, refresh in background
+    let ttl = Duration::from_secs(state.config.tool_refresh_ttl_secs);
+    if state.tool_registry.is_stale(&auth.tenant_id, ttl) {
+        let registry = state.tool_registry.clone();
+        let tenant_id = auth.tenant_id.clone();
+        let cp = state.control_plane.clone();
+        let cb = state.cp_circuit_breaker.clone();
+        tokio::spawn(async move {
+            debug!(tenant_id = %tenant_id, "Background tool refresh (stale-while-revalidate)");
+            if let Err(e) = refresh_tenant_tools(&registry, &cp, cb, &tenant_id).await {
+                warn!(tenant_id = %tenant_id, error = %e, "Background tool refresh failed");
+            }
+        });
+    }
 
     let tools = state.tool_registry.list(Some(&auth.tenant_id));
 
@@ -294,33 +327,78 @@ pub async fn mcp_tools_call(
         "Executing MCP tool"
     );
 
-    // Get tool from registry
+    // Get tool from registry (CAB-1317: sync refresh on cache miss if stale)
     let tool = match state.tool_registry.get(&request.name) {
         Some(t) => t,
         None => {
-            warn!(tool = %request.name, "Tool not found");
-            metrics::record_tool_call(&request.name, &auth.tenant_id, "not_found", 0.0);
-            emit_metering_event(
-                &state,
-                &auth,
-                &request.name,
-                "Read",
-                EventStatus::NotFound,
-                start,
-                0,
-                request_size,
-                0,
-            );
-            return (
-                StatusCode::NOT_FOUND,
-                Json(ToolsCallResponse {
-                    content: vec![ToolContent::Text {
-                        text: format!("Tool '{}' not found", request.name),
-                    }],
-                    is_error: Some(true),
-                }),
-            )
-                .into_response();
+            // CAB-1317: If tenant cache is stale, try a synchronous refresh before 404
+            let ttl = Duration::from_secs(state.config.tool_refresh_ttl_secs);
+            if state.tool_registry.is_stale(&auth.tenant_id, ttl) {
+                debug!(
+                    tool = %request.name,
+                    tenant_id = %auth.tenant_id,
+                    "Tool not found, attempting sync refresh (stale cache)"
+                );
+                let _ = refresh_tenant_tools(
+                    &state.tool_registry,
+                    &state.control_plane,
+                    state.cp_circuit_breaker.clone(),
+                    &auth.tenant_id,
+                )
+                .await;
+                // Retry lookup after refresh
+                if let Some(t) = state.tool_registry.get(&request.name) {
+                    t
+                } else {
+                    warn!(tool = %request.name, "Tool not found (after sync refresh)");
+                    metrics::record_tool_call(&request.name, &auth.tenant_id, "not_found", 0.0);
+                    emit_metering_event(
+                        &state,
+                        &auth,
+                        &request.name,
+                        "Read",
+                        EventStatus::NotFound,
+                        start,
+                        0,
+                        request_size,
+                        0,
+                    );
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(ToolsCallResponse {
+                            content: vec![ToolContent::Text {
+                                text: format!("Tool '{}' not found", request.name),
+                            }],
+                            is_error: Some(true),
+                        }),
+                    )
+                        .into_response();
+                }
+            } else {
+                warn!(tool = %request.name, "Tool not found");
+                metrics::record_tool_call(&request.name, &auth.tenant_id, "not_found", 0.0);
+                emit_metering_event(
+                    &state,
+                    &auth,
+                    &request.name,
+                    "Read",
+                    EventStatus::NotFound,
+                    start,
+                    0,
+                    request_size,
+                    0,
+                );
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ToolsCallResponse {
+                        content: vec![ToolContent::Text {
+                            text: format!("Tool '{}' not found", request.name),
+                        }],
+                        is_error: Some(true),
+                    }),
+                )
+                    .into_response();
+            }
         }
     };
 
@@ -725,6 +803,19 @@ fn extract_user(headers: &HeaderMap) -> Option<String> {
         .get("X-User-ID")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
+}
+
+/// Refresh tools for a tenant via CP discovery (CAB-1317 Phase 2).
+///
+/// Delegates to `stoa_tools::refresh_tools_for_tenant` which discovers
+/// tools from the Control Plane and registers any new ones.
+async fn refresh_tenant_tools(
+    registry: &Arc<ToolRegistry>,
+    cp: &Arc<ToolProxyClient>,
+    cb: Arc<CircuitBreaker>,
+    tenant_id: &str,
+) -> Result<usize, String> {
+    crate::mcp::tools::stoa_tools::refresh_tools_for_tenant(registry, cp, cb, tenant_id).await
 }
 
 #[cfg(test)]

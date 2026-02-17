@@ -10,6 +10,8 @@
 //! - Without `kafka`: Module compiles but consumer is a no-op
 
 pub mod consumer;
+pub mod notifications;
+pub mod polling;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

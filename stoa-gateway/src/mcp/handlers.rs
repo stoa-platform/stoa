@@ -566,9 +566,36 @@ pub async fn mcp_tools_call(
         }
     }
 
+    // CAB-1317: Per-tool circuit breaker — fast-fail if tool backend is unhealthy
+    let tool_cb_key = format!("tool:{}", request.name);
+    let tool_cb = state.circuit_breakers.get_or_create(&tool_cb_key);
+    if !tool_cb.allow_request() {
+        warn!(tool = %request.name, "Tool circuit breaker open — fast-failing");
+        metrics::record_tool_call(&request.name, &auth.tenant_id, "circuit_open", 0.0);
+        return with_rate_limit_headers(
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ToolsCallResponse {
+                content: vec![ToolContent::Text {
+                    text: format!(
+                        "Tool '{}' is temporarily unavailable (circuit breaker open)",
+                        request.name
+                    ),
+                }],
+                is_error: Some(true),
+            }),
+            &rate_result,
+        );
+    }
+
     // Execute tool (measure backend time separately)
     let t_backend_start = Instant::now();
     let primary_result = tool.execute(arguments.clone(), &ctx).await;
+
+    // Record success/failure on per-tool circuit breaker
+    match &primary_result {
+        Ok(_) => tool_cb.record_success(),
+        Err(_) => tool_cb.record_failure(),
+    }
 
     // CAB-708: Fallback chain — try alternate providers if primary failed
     let result = crate::resilience::execute_or_direct(

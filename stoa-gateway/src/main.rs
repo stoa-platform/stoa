@@ -306,6 +306,7 @@ fn init_kafka_cns_consumer(config: &Config, state: &AppState) {
         &topics,
         &group_id,
         session_manager,
+        state.event_buffer.clone(),
     );
     info!(
         brokers = %config.kafka_brokers,

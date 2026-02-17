@@ -173,7 +173,7 @@ pub struct CircuitBreakerStatsResponse {
     pub state: String,
     pub success_count: u64,
     pub failure_count: u64,
-    pub consecutive_failures: u32,
+    pub failures_in_window: u32,
     pub open_count: u64,
     pub rejected_count: u64,
 }
@@ -188,7 +188,7 @@ pub async fn circuit_breaker_stats(
         state: stats.state.to_string(),
         success_count: stats.success_count,
         failure_count: stats.failure_count,
-        consecutive_failures: stats.consecutive_failures,
+        failures_in_window: stats.failures_in_window,
         open_count: stats.open_count,
         rejected_count: stats.rejected_count,
     })

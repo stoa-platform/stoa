@@ -6,6 +6,15 @@ expression: json
 {
   "capabilities": {
     "logging": {},
+    "notifications": {
+      "supported": true,
+      "types": [
+        "stoa.api.lifecycle",
+        "stoa.deployment.events",
+        "stoa.security.alerts",
+        "stoa.subscription.events"
+      ]
+    },
     "prompts": {
       "listChanged": false
     },

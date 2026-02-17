@@ -28,7 +28,7 @@ def _app_with_override(user):
 class TestGetUserPermissions:
     def test_cpi_admin_has_all_permissions(self):
         perms = get_user_permissions([Role.CPI_ADMIN])
-        assert len(perms) == 16
+        assert len(perms) == 18
 
     def test_viewer_read_only(self):
         perms = get_user_permissions([Role.VIEWER])

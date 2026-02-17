@@ -1,0 +1,37 @@
+{
+  "nav": {
+    "home": "Accueil",
+    "apiCatalog": "Catalogue API",
+    "aiTools": "Outils IA",
+    "subscriptions": "Abonnements",
+    "applications": "Applications",
+    "usage": "Utilisation",
+    "workspace": "Espace de travail",
+    "documentation": "Documentation",
+    "gateways": "Passerelles"
+  },
+  "welcome": {
+    "greeting": "Bienvenue, {{name}}",
+    "greetingDefault": "Bienvenue sur STOA",
+    "subtitle": "Votre portail developpeur pour decouvrir, souscrire et tester des APIs."
+  },
+  "common": {
+    "loading": "Chargement...",
+    "error": "Une erreur est survenue",
+    "retry": "Reessayer",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Creer",
+    "search": "Rechercher",
+    "noResults": "Aucun resultat",
+    "viewAll": "Voir tout"
+  },
+  "footer": {
+    "documentation": "Documentation",
+    "support": "Support",
+    "terms": "Conditions d'utilisation",
+    "privacy": "Politique de confidentialite"
+  }
+}

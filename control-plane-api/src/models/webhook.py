@@ -20,6 +20,10 @@ class WebhookEventType(enum.StrEnum):
     DEPLOYMENT_SUCCEEDED = "deployment.succeeded"
     DEPLOYMENT_FAILED = "deployment.failed"
     DEPLOYMENT_ROLLED_BACK = "deployment.rolled_back"
+    WORKFLOW_CREATED = "workflow.created"
+    WORKFLOW_STEP_COMPLETED = "workflow.step_completed"
+    WORKFLOW_APPROVED = "workflow.approved"
+    WORKFLOW_REJECTED = "workflow.rejected"
 
 
 class WebhookDeliveryStatus(enum.StrEnum):

@@ -37,3 +37,6 @@ opentelemetry-exporter-otlp-proto-grpc>=1.27.0
 opentelemetry-instrumentation-fastapi>=0.48b0
 opentelemetry-instrumentation-httpx>=0.48b0
 opentelemetry-instrumentation-sqlalchemy>=0.48b0
+# Transitive dep pins — CVE fixes (Container Scan)
+jaraco.context>=6.1.0
+wheel>=0.46.2

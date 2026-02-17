@@ -47,6 +47,9 @@ class Topics:
     # Tenant provisioning (CAB-1315)
     TENANT_PROVISIONING = "stoa.tenant.provisioning"
 
+    # Onboarding workflows (CAB-593)
+    WORKFLOW_EVENTS = "stoa.workflow.events"
+
 
 class KafkaService:
     """Service for Kafka/Redpanda message handling"""

@@ -1,5 +1,6 @@
 ---
-globs: "**"
+description: Autonomous AI Factory levels, kill-switches, Council gate, Slack notifications, n8n integration
+globs: ".github/workflows/**"
 ---
 
 # Autonomous AI Factory — Continuous Improvement Loop

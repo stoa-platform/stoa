@@ -15,6 +15,14 @@ from .external_mcp_server import (
     ExternalMCPServerTool,
     ExternalMCPTransport,
 )
+from .federation import (
+    MasterAccount,
+    MasterAccountStatus,
+    SubAccount,
+    SubAccountStatus,
+    SubAccountTool,
+    SubAccountType,
+)
 from .gateway_deployment import (
     DeploymentSyncStatus,
     GatewayDeployment,

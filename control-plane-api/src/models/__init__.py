@@ -56,6 +56,6 @@ from .prospect_feedback import ProspectFeedback
 from .saas_api_key import SaasApiKey, SaasApiKeyStatus
 from .security_event import SecurityEvent
 from .subscription import Subscription, SubscriptionStatus
-from .tenant import Tenant, TenantStatus
+from .tenant import Tenant, TenantProvisioningStatus, TenantStatus
 from .traces import PipelineTrace, TraceStatus, TraceStep, trace_store
 from .webhook import TenantWebhook, WebhookDelivery, WebhookDeliveryStatus, WebhookEventType

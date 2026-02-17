@@ -4,7 +4,7 @@ Model for multi-tenant management stored in the database.
 """
 import enum
 
-from sqlalchemy import JSON, Column, DateTime, String, Text
+from sqlalchemy import JSON, Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
 
 from src.database import Base
@@ -15,6 +15,14 @@ class TenantStatus(enum.StrEnum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
     ARCHIVED = "archived"
+
+
+class TenantProvisioningStatus(enum.StrEnum):
+    """Tenant provisioning status enum."""
+    PENDING = "pending"
+    PROVISIONING = "provisioning"
+    READY = "ready"
+    FAILED = "failed"
 
 
 class Tenant(Base):
@@ -36,6 +44,15 @@ class Tenant(Base):
     # Tenant settings (JSON) - quotas, features, etc.
     settings = Column(JSON, default=dict, nullable=False)
 
+    # Provisioning fields (CAB-1315)
+    provisioning_status = Column(
+        String(32), default=TenantProvisioningStatus.PENDING.value, nullable=False
+    )
+    provisioning_error = Column(Text, nullable=True)
+    provisioning_started_at = Column(DateTime(timezone=True), nullable=True)
+    kc_group_id = Column(String(255), nullable=True)
+    provisioning_attempts = Column(Integer, default=0, nullable=False)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -52,6 +69,13 @@ class Tenant(Base):
             "description": self.description or "",
             "status": self.status,
             "settings": self.settings or {},
+            "provisioning_status": self.provisioning_status,
+            "provisioning_error": self.provisioning_error,
+            "provisioning_started_at": (
+                self.provisioning_started_at.isoformat() if self.provisioning_started_at else None
+            ),
+            "kc_group_id": self.kc_group_id,
+            "provisioning_attempts": self.provisioning_attempts,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

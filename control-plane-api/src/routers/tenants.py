@@ -1,47 +1,28 @@
 """Tenants router - Multi-tenant management using database"""
+import asyncio
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import Permission, Role, User, get_current_user, require_permission
 from ..database import get_db
-from ..models.tenant import Tenant, TenantStatus
+from ..models.tenant import Tenant, TenantProvisioningStatus, TenantStatus
 from ..repositories.tenant import TenantRepository
+from ..schemas.tenant import (
+    TenantCreate,
+    TenantProvisioningStatusResponse,
+    TenantResponse,
+    TenantUpdate,
+)
 from ..services.cache_service import tenant_cache
 from ..services.kafka_service import Topics, kafka_service
-from ..services.keycloak_service import keycloak_service
+from ..services.tenant_provisioning_service import deprovision_tenant, provision_tenant
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/tenants", tags=["Tenants"])
-
-
-class TenantCreate(BaseModel):
-    name: str
-    display_name: str
-    description: str = ""
-    owner_email: str
-
-
-class TenantUpdate(BaseModel):
-    display_name: str | None = None
-    description: str | None = None
-    owner_email: str | None = None
-
-
-class TenantResponse(BaseModel):
-    id: str
-    name: str
-    display_name: str
-    description: str = ""
-    owner_email: str = ""
-    status: str = "active"
-    api_count: int = 0
-    application_count: int = 0
-    created_at: str | None = None
-    updated_at: str | None = None
 
 
 def _tenant_to_response(tenant: Tenant, api_count: int = 0, app_count: int = 0) -> TenantResponse:
@@ -54,6 +35,7 @@ def _tenant_to_response(tenant: Tenant, api_count: int = 0, app_count: int = 0) 
         description=tenant.description or "",
         owner_email=settings.get("owner_email", ""),
         status=tenant.status,
+        provisioning_status=tenant.provisioning_status or "pending",
         api_count=api_count,
         application_count=app_count,
         created_at=tenant.created_at.isoformat() if tenant.created_at else None,
@@ -123,6 +105,33 @@ async def get_tenant(
         raise HTTPException(status_code=500, detail="Failed to retrieve tenant")
 
 
+@router.get("/{tenant_id}/provisioning-status", response_model=TenantProvisioningStatusResponse)
+async def get_provisioning_status(
+    tenant_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get tenant provisioning status."""
+    if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    repo = TenantRepository(db)
+    tenant = await repo.get_by_id(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    return TenantProvisioningStatusResponse(
+        tenant_id=tenant.id,
+        provisioning_status=tenant.provisioning_status or "pending",
+        provisioning_error=tenant.provisioning_error,
+        provisioning_started_at=(
+            tenant.provisioning_started_at.isoformat() if tenant.provisioning_started_at else None
+        ),
+        kc_group_id=tenant.kc_group_id,
+        provisioning_attempts=tenant.provisioning_attempts or 0,
+    )
+
+
 @router.post("", response_model=TenantResponse)
 @require_permission(Permission.TENANTS_CREATE)
 async def create_tenant(
@@ -134,9 +143,9 @@ async def create_tenant(
     Create a new tenant (CPI Admin only).
 
     This will:
-    1. Create tenant in database
-    2. Create Keycloak group for the tenant
-    3. Emit tenant-created event
+    1. Create tenant in database with provisioning_status=PENDING
+    2. Fire async provisioning saga (KC group + admin user + policy seed + Kafka events)
+    3. Return immediately — poll provisioning-status for progress
     """
     tenant_id = tenant_data.name.lower().replace(" ", "-")
 
@@ -148,22 +157,17 @@ async def create_tenant(
         if existing:
             raise HTTPException(status_code=409, detail=f"Tenant '{tenant_id}' already exists")
 
-        # Create tenant in database
+        # Create tenant in database with PENDING provisioning status
         tenant = Tenant(
             id=tenant_id,
             name=tenant_data.display_name,
             description=tenant_data.description,
             status=TenantStatus.ACTIVE.value,
+            provisioning_status=TenantProvisioningStatus.PENDING.value,
             settings={"owner_email": tenant_data.owner_email},
         )
 
         tenant = await repo.create(tenant)
-
-        # Create Keycloak group
-        try:
-            await keycloak_service.setup_tenant_group(tenant_id, tenant_data.display_name)
-        except Exception as e:
-            logger.warning(f"Failed to create Keycloak group for {tenant_id}: {e}")
 
         # Emit Kafka event
         await kafka_service.publish(
@@ -190,6 +194,17 @@ async def create_tenant(
         )
 
         logger.info(f"Created tenant {tenant_id} by {user.username}")
+
+        # Fire async provisioning saga
+        correlation_id = str(uuid.uuid4())
+        asyncio.create_task(
+            provision_tenant(
+                tenant_id=tenant_id,
+                owner_email=tenant_data.owner_email,
+                display_name=tenant_data.display_name,
+                correlation_id=correlation_id,
+            )
+        )
 
         return _tenant_to_response(tenant)
 
@@ -269,7 +284,8 @@ async def delete_tenant(
     """
     Delete tenant (CPI Admin only).
 
-    WARNING: This will archive the tenant (soft delete).
+    Triggers async deprovisioning saga: disables policies, deletes KC group,
+    emits namespace cleanup event, archives tenant.
     """
     try:
         repo = TenantRepository(db)
@@ -279,23 +295,7 @@ async def delete_tenant(
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
 
-        # Soft delete - set status to archived
-        tenant.status = TenantStatus.ARCHIVED.value
-        await repo.update(tenant)
-
-        # Invalidate cache
-        await tenant_cache.delete(f"tenant:{tenant_id}")
-
-        # Emit Kafka event
-        await kafka_service.publish(
-            topic=Topics.TENANT_EVENTS,
-            event_type="tenant-deleted",
-            tenant_id=tenant_id,
-            payload={"id": tenant_id},
-            user_id=user.id,
-        )
-
-        # Emit audit event
+        # Emit audit event before deprovision
         await kafka_service.emit_audit_event(
             tenant_id=tenant_id,
             action="delete",
@@ -305,9 +305,22 @@ async def delete_tenant(
             details={"name": tenant.name},
         )
 
-        logger.info(f"Archived tenant {tenant_id} by {user.username}")
+        logger.info(f"Triggering deprovisioning for tenant {tenant_id} by {user.username}")
 
-        return {"message": "Tenant archived", "id": tenant_id}
+        # Fire async deprovisioning saga
+        correlation_id = str(uuid.uuid4())
+        asyncio.create_task(
+            deprovision_tenant(
+                tenant_id=tenant_id,
+                user_id=user.id,
+                correlation_id=correlation_id,
+            )
+        )
+
+        # Invalidate cache
+        await tenant_cache.delete(f"tenant:{tenant_id}")
+
+        return {"message": "Tenant deprovisioning started", "id": tenant_id}
 
     except HTTPException:
         raise

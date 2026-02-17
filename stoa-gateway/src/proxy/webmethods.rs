@@ -3,7 +3,7 @@
 use axum::{
     body::Body,
     extract::Request,
-    http::{header, HeaderMap, HeaderValue, Method, StatusCode},
+    http::{HeaderMap, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
 };
 use std::time::Duration;
@@ -65,10 +65,7 @@ impl WebMethodsProxy {
             Method::DELETE => self.client.delete(&target_url),
             Method::PATCH => self.client.patch(&target_url),
             Method::HEAD => self.client.head(&target_url),
-            Method::OPTIONS => {
-                let m = reqwest::Method::from_bytes(b"OPTIONS").unwrap();
-                self.client.request(m, &target_url)
-            }
+            Method::OPTIONS => self.client.request(Method::OPTIONS, &target_url),
             _ => {
                 tracing::warn!(method = %method, "unsupported HTTP method");
                 return (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed").into_response();
@@ -116,6 +113,7 @@ impl WebMethodsProxy {
     /// Copy headers from the incoming request to the outgoing request.
     ///
     /// Excludes hop-by-hop headers that should not be forwarded.
+    /// reqwest 0.12 and axum 0.7 share `http` 1.0 types — direct clone, no conversion.
     fn copy_headers(
         mut builder: reqwest::RequestBuilder,
         headers: &HeaderMap<HeaderValue>,
@@ -134,15 +132,9 @@ impl WebMethodsProxy {
         ];
 
         for (name, value) in headers.iter() {
-            let name_str = name.as_str().to_lowercase();
-            if !HOP_BY_HOP.contains(&name_str.as_str()) {
-                if let Ok(header_name) = reqwest::header::HeaderName::from_bytes(name.as_ref()) {
-                    if let Ok(header_value) =
-                        reqwest::header::HeaderValue::from_bytes(value.as_bytes())
-                    {
-                        builder = builder.header(header_name, header_value);
-                    }
-                }
+            // HeaderName::as_str() already returns lowercase (http crate guarantee)
+            if !HOP_BY_HOP.contains(&name.as_str()) {
+                builder = builder.header(name.clone(), value.clone());
             }
         }
 
@@ -150,6 +142,8 @@ impl WebMethodsProxy {
     }
 
     /// Convert a reqwest response to an axum response.
+    ///
+    /// reqwest 0.12 shares `http` 1.0 types with axum 0.7 — direct pass-through.
     async fn convert_response(resp: reqwest::Response) -> Response {
         let status = resp.status();
         let headers = resp.headers().clone();
@@ -164,20 +158,14 @@ impl WebMethodsProxy {
             }
         };
 
-        // Build axum response
-        let mut response = Response::builder()
-            .status(StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::OK));
+        // Build axum response — same StatusCode type, no conversion needed
+        let mut response = Response::builder().status(status);
 
-        // Copy response headers
+        // Copy response headers — same types, direct clone
         for (name, value) in headers.iter() {
-            let name_str = name.as_str().to_lowercase();
-            // Skip hop-by-hop headers
-            if !["connection", "keep-alive", "transfer-encoding"].contains(&name_str.as_str()) {
-                if let Ok(header_name) = header::HeaderName::from_bytes(name.as_ref()) {
-                    if let Ok(header_value) = header::HeaderValue::from_bytes(value.as_bytes()) {
-                        response = response.header(header_name, header_value);
-                    }
-                }
+            // HeaderName::as_str() already returns lowercase (http crate guarantee)
+            if !["connection", "keep-alive", "transfer-encoding"].contains(&name.as_str()) {
+                response = response.header(name.clone(), value.clone());
             }
         }
 

@@ -6,7 +6,7 @@
 use axum::{
     body::Body,
     extract::{Request, State},
-    http::{header, HeaderMap, HeaderValue, Method, StatusCode},
+    http::{HeaderMap, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
 };
 use std::net::IpAddr;
@@ -231,10 +231,7 @@ async fn forward_request(
         Method::DELETE => client.delete(target_url),
         Method::PATCH => client.patch(target_url),
         Method::HEAD => client.head(target_url),
-        Method::OPTIONS => {
-            let m = reqwest::Method::from_bytes(b"OPTIONS").unwrap();
-            client.request(m, target_url)
-        }
+        Method::OPTIONS => client.request(Method::OPTIONS, target_url),
         _ => {
             warn!(method = %method, "Unsupported HTTP method in dynamic proxy");
             return (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed").into_response();
@@ -293,19 +290,15 @@ async fn forward_request(
 
 /// Copy headers excluding hop-by-hop headers.
 ///
-/// HeaderName is already lowercase in http crate, so no `.to_lowercase()` needed.
+/// reqwest 0.12 and axum 0.7 share the same `http` 1.0 types,
+/// so HeaderName/HeaderValue can be cloned directly (no conversion needed).
 fn copy_headers(
     mut builder: reqwest::RequestBuilder,
     headers: &HeaderMap<HeaderValue>,
 ) -> reqwest::RequestBuilder {
     for (name, value) in headers.iter() {
         if !is_hop_by_hop(name.as_str()) {
-            if let Ok(header_name) = reqwest::header::HeaderName::from_bytes(name.as_ref()) {
-                if let Ok(header_value) = reqwest::header::HeaderValue::from_bytes(value.as_bytes())
-                {
-                    builder = builder.header(header_name, header_value);
-                }
-            }
+            builder = builder.header(name.clone(), value.clone());
         }
     }
 
@@ -329,21 +322,19 @@ fn is_hop_by_hop(name: &str) -> bool {
 }
 
 /// Convert a reqwest response to an axum response (streaming, zero-copy).
+///
+/// reqwest 0.12 shares `http` 1.0 types with axum 0.7, so StatusCode
+/// and HeaderName/HeaderValue pass through without conversion.
 fn convert_response(resp: reqwest::Response) -> Response {
     let status = resp.status();
     let headers = resp.headers().clone();
 
-    let mut response =
-        Response::builder().status(StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::OK));
+    let mut response = Response::builder().status(status);
 
-    // Copy response headers (excluding hop-by-hop)
+    // Copy response headers (excluding hop-by-hop) — direct clone, same types
     for (name, value) in headers.iter() {
         if !is_hop_by_hop(name.as_str()) {
-            if let Ok(header_name) = header::HeaderName::from_bytes(name.as_ref()) {
-                if let Ok(header_value) = header::HeaderValue::from_bytes(value.as_bytes()) {
-                    response = response.header(header_name, header_value);
-                }
-            }
+            response = response.header(name.clone(), value.clone());
         }
     }
 

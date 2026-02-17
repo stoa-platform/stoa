@@ -55,6 +55,12 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Bash(gh issue *)
+            Bash(gh pr *)
+            Read
+            Glob
+            Grep
           prompt: |
             Daily triage task. Analyze the repository state:
 
@@ -99,6 +105,13 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Bash
+            Read
+            Write
+            Edit
+            Glob
+            Grep
           prompt: |
             CI Health Check task. Analyze recent CI runs on main:
 
@@ -145,6 +158,13 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Bash
+            Read
+            Write
+            Edit
+            Glob
+            Grep
           prompt: |
             Weekly audit task:
 
@@ -196,6 +216,12 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Bash(gh pr *)
+            Bash(gh issue *)
+            Read
+            Glob
+            Grep
           prompt: |
             Generate a weekly digest of the STOA AI Factory:
 
@@ -225,6 +251,10 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Read
+            Glob
+            Grep
           prompt: |
             Weekly capacity check — read-only analysis of cycle health.
 
@@ -283,6 +313,10 @@ jobs:
         continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Read
+            Glob
+            Grep
           prompt: |
             Weekly backlog stock check — scan the codebase for improvement opportunities.
 

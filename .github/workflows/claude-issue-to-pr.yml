@@ -41,6 +41,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Read
+            Glob
+            Grep
           prompt: |
             You are the STOA Council Gate. Read the issue description and run a 4-persona
             Council validation (Chucky, OSS Killer, Archi, Better Call Saul).
@@ -187,10 +191,22 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: |
+            Bash
+            Read
+            Write
+            Edit
+            Glob
+            Grep
+            WebFetch
           prompt: |
             Implement the feature described in issue #${{ github.event.issue.number }}.
 
-            Read the issue description and the Council validation comment (posted earlier).
+            Issue title: ${{ github.event.issue.title }}
+            Issue body:
+            ${{ github.event.issue.body }}
+
+            Read the Council validation comment (posted earlier on this issue).
             Follow the implementation plan from the Council comment.
             Follow all rules in CLAUDE.md and .claude/rules/.
 

@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-17 (session 19 — CAB-1292 Auth Completion — PRs #594 + #596)
+> Dernière MAJ: 2026-02-17 (session 20 — CAB-1359 Arena Perf Phase 3 — PR #632)
 
 ## ✅ DONE
 
@@ -129,6 +129,13 @@
   - Phase 2: PR #594 — 20 RBAC tests, 9 JWT tests, legacy audience deprecation warning, 2 pre-existing test fixes
   - Phase 1: PR #596 — 3 KC helpers (remove_user_from_group, delete_tenant_group, get_user_roles), 3 IAM sync TODOs resolved, 20 new tests
   - Coverage: 71.88% (above 70% threshold), 130 auth-related tests total
+- CAB-1300: API Runtime Completion — 7 runtime TODOs + MCP visibility RBAC (13 pts) — PR #599
+- CAB-1177: Kafka CNS Topic Naming + PII Masking (8 pts) — PR #601
+- CAB-1293: K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts) — PR #600
+- CAB-1359: Arena Performance Optimization — Close the Kong Gap (13 pts) — PRs #626 + #632
+  - Phase 1+2: PR #626 — thread-local PRNG, pre-computed security headers, conditional mTLS, TCP backlog 1024, SO_REUSEPORT, connection pre-warming
+  - Phase 3: PR #632 — reqwest 0.11→0.12 (hyper 1.0 lock-free pool), socket2 0.5→0.6, type unification (-20 LOC)
+  - 826 tests pass, zero clippy warnings. Phase 4: await Arena benchmark results (target ≥85/100)
 
 ## 🔴 IN PROGRESS
 
@@ -140,11 +147,7 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - [ ] Video backup filmée
 - Known: API creation requires GitLab → use Console UI; rate limiting not configured; httpbin flaky
 
-CAB-1292: API Auth Completion MEGA (21 pts) — Phase 1 done
-- ✅ PR #594: auth security fixes + RBAC/JWT tests
-- [ ] Phase 2: KC client sync, IAM integration (remaining scope TBD)
-
-## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 339 pts scoped | Done: 376 pts (43 issues)
+## 📋 NEXT — Cycle 8 (Feb 16-22) — 5 Tracks, 339 pts scoped | Done: 423 pts (48 issues)
 
 ### Track 1 — Demo Finale (6 pts)
 - CAB-1151: Dress Rehearsal (3 pts, P0)

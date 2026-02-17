@@ -46,7 +46,7 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 418 pts (44 issues) | **Velocity**: 40+ issues closed
+**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 465 pts (48 issues) | **Velocity**: 40+ issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
@@ -102,6 +102,10 @@
   - [x] PR #591: UAC transformer + contract adapter
 - [x] CAB-1358: [CI] AI Factory H24 Autonomous Activation (8 pts) — PR #589 (7 workflows hardened)
 - [x] CAB-1292: [MEGA] API Auth Completion — KC Clients, IAM Sync, Security Fix (21 pts) — PRs #594 + #596 (29 RBAC/JWT tests + 3 IAM sync TODOs + 20 KC/IAM tests)
+- [x] CAB-1300: [MEGA] API Runtime Completion — Events, Deployments, Contracts, MCP RBAC (13 pts) — PR #599 (7 runtime TODOs + MCP visibility RBAC)
+- [x] CAB-1177: Kafka CNS Topic Naming + PII Masking (8 pts) — PR #601
+- [x] CAB-1293: [MEGA] K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts) — PR #600
+- [x] CAB-1359: Arena Performance Optimization — Close the Kong Gap (13 pts) — PRs #626 + #632 (reqwest 0.12, lock-free pool, type unification)
 
 ### In Progress
 
@@ -161,8 +165,8 @@
 - [x] CAB-1299: [MEGA] Roadmap: UAC Spec + Protocol Binders + Dynamic Routing (34 pts, P3) — PRs #581-#591, 6 micro-PRs (Council 7.75/10)
 - [x] CAB-1292: [MEGA] Platform: API Auth Completion — KC Clients, IAM Sync, Security Fix (21 pts, P3) — PR #594 (Council 7.50/10)
 - [x] CAB-1295: [MEGA] DX: Console Test Coverage & UX Completion — 23 Untested Modules (21 pts, P3) — PR #590 (Council 7.50/10)
-- [ ] CAB-1300: [MEGA] Platform: API Runtime Completion — Events, Deployments, Contracts, MCP RBAC (13 pts, P3) — Council 7.50/10
-- [ ] CAB-1293: [MEGA] Platform: K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts, P3) — Council 7.25/10
+- [x] CAB-1300: [MEGA] Platform: API Runtime Completion — Events, Deployments, Contracts, MCP RBAC (13 pts, P3) — PR #599 (Council 7.50/10)
+- [x] CAB-1293: [MEGA] Platform: K8s Production Hardening — SecurityContext, NetworkPolicy, Rollout (13 pts, P3) — PR #600 (Council 7.25/10)
 - [ ] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts, P3) — Council 7.25/10
 - ~~CAB-1296: [MEGA] DX: E2E Test Expansion — Canceled (Council 5.50/10, fictional scope)~~
 

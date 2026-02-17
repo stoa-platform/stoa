@@ -6,8 +6,8 @@ globs: "memory.md,plan.md,.claude/**"
 # AI Workflow Rules
 
 > **HEGEMON Foundation**: Universal state files protocol and session lifecycle live in `hegemon/rules/state-files.md` + `hegemon/rules/session-lifecycle.md`.
-> This file contains STOA-specific extensions (feature dev patterns, context management, operation logging).
-> When hegemon is loaded as additional working dir, both rule sets apply.
+> This file contains STOA-specific extensions (feature dev patterns, context management, state files protocol).
+> **Shared behavioral rules** (State Machine, Logging, Anti-Drift): see `workflow-essentials.md`.
 
 ## Session Lifecycle
 1. Read `memory.md` for current state
@@ -22,7 +22,7 @@ globs: "memory.md,plan.md,.claude/**"
 3. **Choose** one option -> "Plan in 5 steps max, don't code"
 4. **Validate** the plan -> user says "Go"
 5. **Execute**: branch → code → micro-commits → local quality gate → push → PR → CI green → merge → verify
-6. Claude determines **Ship/Show/Ask** mode based on risk level (see `git-workflow.md`)
+6. Claude determines **Ship/Show/Ask** mode based on risk level (see `workflow-essentials.md`)
 7. **Ship/Show**: Claude handles the full lifecycle autonomously — no questions asked
 8. **Ask**: Claude stops after PR creation, waits for user to say "merge"
 
@@ -68,9 +68,9 @@ Update `memory.md` when:
 
 Update `plan.md` when:
 1. **PR merged** — mark ticket as `[x]` in the correct cycle section
-2. **`/sync-plan` run** — cycle-driven sync from Linear (adds missing tickets, updates markers)
+2. **`/sync-plan` run** — cycle-driven sync from Linear
 3. **Task blocked/unblocked** — update marker `[~]` ↔ `[!]`
-4. **Cycle rollover** — when a new cycle starts, current becomes historical, next becomes current
+4. **Cycle rollover** — current becomes historical, next becomes current
 
 ### plan.md Structure (Cycle-Driven)
 
@@ -112,15 +112,10 @@ Decomposed MEGA tickets in plan.md include phase sub-headers with ownership meta
     - [ ] CAB-1352 [e2e] Integration tests
 ```
 
-**Phase markers**:
-- `[owner: t4821]` — claimed by instance t4821 (from `.claude/claims/<MEGA-ID>.json`)
-- `[owner: —]` — unclaimed (available for any instance)
-- Phase dependency: `(parallel)`, `(after Phase 1)`, `(after Phase 1+2)`
+**Phase markers**: `[owner: t4821]` = claimed, `[owner: —]` = available.
+Phase dependency: `(parallel)`, `(after Phase 1)`, `(after Phase 1+2)`.
 
-**Rules**:
-- Phase ownership markers are local metadata, NOT derived from Linear
-- `/sync-plan` MUST preserve `[owner: X]` markers during regeneration
-- See `phase-ownership.md` for claim lifecycle and conflict resolution
+**Rules**: Phase ownership markers are local metadata, NOT from Linear. `/sync-plan` MUST preserve `[owner: X]` markers. See `phase-ownership.md`.
 
 Update private `MEMORY.md` when:
 1. **New ticket completed** — add to relevant section
@@ -134,158 +129,22 @@ Update private `MEMORY.md` when:
 - **Never delete DONE items** from memory.md — they serve as audit trail
 - **Archive** items older than 2 sprints to reduce noise
 
-### Item State Machine (MANDATORY)
+### Item State Machine, Session-End Lint, Operation Logging, Anti-Drift
 
-Every trackable item follows this lifecycle — no exceptions, no shortcuts:
-
-```
-PENDING ──→ CLAIMED ──→ IN_PROGRESS ──→ DONE ──→ ARCHIVED
-   │              │           │
-   └── BLOCKED ◄──┴───────────┘
-```
-
-**CLAIMED** is a transitional state for multi-instance coordination. An item is CLAIMED when an instance has reserved it (claim file written) but hasn't started producing artifacts yet. In single-instance mode, CLAIMED is implicit and transitions immediately to IN_PROGRESS.
-
-#### Markers by File
-
-| State | plan.md | memory.md text | memory.md section |
-|-------|---------|----------------|-------------------|
-| PENDING | `[ ]` | No bold marker | `📋 NEXT` |
-| CLAIMED | `[owner: tN]` metadata on phase | Claim file has owner | Phase in claimed MEGA |
-| IN_PROGRESS | `[~]` | Sub-items may be ✅ but parent has `[ ]` remaining | `🔴 IN PROGRESS` |
-| DONE | `[x]` | `— DONE` suffix or all sub-items ✅ | `✅ DONE` |
-| BLOCKED | `[!]` | `— BLOCKED` suffix + reason | `🚫 BLOCKED` |
-
-#### Structural Invariants (must be true at ALL times)
-
-These 5 rules are non-negotiable. Violating any one = state file drift.
-
-1. **No DONE in active sections** — if an item text contains `**DONE**`, `— DONE`, or has ALL sub-items marked ✅ with zero `[ ]` remaining, it MUST be in `✅ DONE` section. Never leave a completed item in `🔴 IN PROGRESS` or `📋 NEXT`.
-2. **Checkbox ↔ section parity** — `[x]` in plan.md = item in `✅ DONE` in memory.md. `[~]` = `🔴 IN PROGRESS`. `[ ]` = `📋 NEXT`. No cross-state mismatches.
-3. **Single home rule** — an item appears in exactly ONE section of memory.md. Duplicates across sections are forbidden.
-4. **Partial completion** — if a parent task has both ✅ and `[ ]` sub-items, the parent stays `[~]` in `🔴 IN PROGRESS`. Promote to `[x]` + `✅ DONE` only when ALL sub-items are complete.
-5. **Strikethrough = moved** — `~~item~~` in a section means it was relocated. Remove the strikethrough entry within 1 session to avoid clutter.
-
-#### Atomic State Transitions
-
-When an item changes state, perform ALL updates in a **single edit pass** — never split across separate tool calls or "I'll do it later":
-
-| Transition | plan.md | memory.md | MEMORY.md (private) |
-|------------|---------|-----------|---------------------|
-| Claim phase | none → `[owner: tN]` | — | Log CLAIM in operations.log |
-| Release phase | `[owner: tN]` → `[owner: —]` | — | Log RELEASE in operations.log |
-| Start work | `[ ]` → `[~]` | Move from `📋 NEXT` → `🔴 IN PROGRESS` | Update Active Tickets |
-| Complete | `[~]` → `[x]` | Add `— DONE (PR #N)` + move from `🔴 IN PROGRESS` → `✅ DONE` | Update Active Tickets |
-| Block | `[~]` → `[!]` | Move to `🚫 BLOCKED` + add reason | Update Active Tickets |
-| Unblock | `[!]` → `[~]` | Move back to `🔴 IN PROGRESS` | Update Active Tickets |
-
-**Root cause of past drift**: sessions marked items as `**DONE**` in the text but never moved them to the `✅ DONE` section. The text marker and the section move MUST happen together — always.
-
-### Session-End State Lint (MANDATORY before SESSION-END log)
-
-Before logging `SESSION-END`, run these 4 checks mentally. If any fails, fix it before ending.
-
-| # | Check | Scan target | Pass criteria |
-|---|-------|-------------|---------------|
-| 1 | No DONE in IN_PROGRESS | `🔴 IN PROGRESS` section of memory.md | Zero items with `**DONE**`, `— DONE`, or all-✅ sub-items |
-| 2 | No DONE in NEXT | `📋 NEXT` section of memory.md | Zero items with `**DONE**`, `— DONE`, or `~~strikethrough~~` |
-| 3 | Stale `[~]` check | plan.md | Every `[~]` item has at least one `[ ]` sub-item remaining |
-| 4 | Cross-file parity | plan.md vs memory.md | Each `[x]` in plan.md → matching entry in `✅ DONE`. Each `[~]` → in `🔴 IN PROGRESS` |
-
-**Enforcement**: failing this lint is equivalent to pushing code with broken tests. Fix before SESSION-END — no exceptions.
-
-## Operation Logging (Traceability)
-
-### Log Location
-`~/.claude/projects/.../memory/operations.log` — append-only, never edit existing entries.
-
-### Event Types
-
-| Event | Trigger | Required Fields |
-|-------|---------|----------------|
-| `SESSION-START` | Session begins work on a task | `task`, `branch` |
-| `SESSION-END` | Session ends (success, paused, or crash detected) | `task`, `status` |
-| `STEP-START` | Major step begins (code, test, pr, merge, cd) | `step`, `task` |
-| `STEP-DONE` | Major step completes | `step`, `task` |
-| `CHECKPOINT` | Pre-merge/deploy checkpoint created | `task`, `file` |
-| `ERROR` | Non-fatal error during execution | `task`, `error` |
-| `RECOVERY` | Crash recovery action taken | `task`, `action` |
-| `CLAIM` | Phase or ticket claimed by an instance | `task`, `phase`, `instance`, `tickets` |
-| `RELEASE` | Phase or ticket released (done or abandoned) | `task`, `phase`, `instance`, `reason` |
-
-### Format Rules
-- Timestamp: ISO 8601 short (`YYYY-MM-DDTHH:MM`)
-- Separator: ` | ` (space-pipe-space)
-- Fields: `key=value` pairs, space-separated
-- Append-only: never edit or delete existing log entries
-- One line per event, no multiline
-
-### Mandatory Events
-Every session MUST have at minimum:
-1. `SESSION-START` — logged when work begins on a task
-2. `SESSION-END` — logged when session ends, even on early exit
-
-Missing `SESSION-END` = crash indicator (see `crash-recovery.md`).
+→ See `workflow-essentials.md` for the single source of truth on:
+- Item State Machine (PENDING → CLAIMED → IN_PROGRESS → DONE → ARCHIVED)
+- Structural Invariants (5 non-negotiable rules)
+- Atomic State Transitions
+- Session-End State Lint (4 mandatory checks)
+- Operation Logging (event types, format, mandatory events)
+- Session Metrics (PR-MERGED, CI-FIX, STATE-DRIFT, PHASE-* events)
+- Anti-Drift Rules
 
 ### Checkpoint Directory
 `~/.claude/projects/.../memory/checkpoints/` — JSON files created before risky operations.
 See `crash-recovery.md` for checkpoint schema and lifecycle.
 
-## Session Metrics (Observability)
-
-### Log Location
-`~/.claude/projects/.../memory/metrics.log` — append-only, structured events for factory performance tracking.
-
-### Events
-
-| Event | When | Fields |
-|-------|------|--------|
-| `PR-MERGED` | After successful merge | `task`, `pr`, `branch_lifetime_min` (optional) |
-| `CI-FIX` | After `/ci-fix` skill runs | `task`, `check`, `auto_fixed` (true/false) |
-| `STATE-DRIFT` | Stop hook detects misplaced items | `items_misplaced` (count) |
-| `PHASE-CLAIMED` | Instance claims a MEGA phase | `task` (MEGA ID), `phase`, `instance`, `mode` (sequential/multi-instance/multi-subagent/l3) |
-| `PHASE-COMPLETED` | Instance finishes a MEGA phase | `task` (MEGA ID), `phase`, `instance`, `pr`, `duration_min` (optional) |
-| `CLAIM-CONFLICT` | Two instances race for same phase | `task` (MEGA ID), `phase`, `winner`, `loser` |
-| `PHASE-CLAIMED` | Instance claims a MEGA phase | `task` (MEGA ID), `phase`, `instance`, `mode` (sequential/multi-instance/multi-subagent/l3) |
-| `PHASE-COMPLETED` | Instance finishes a MEGA phase | `task` (MEGA ID), `phase`, `instance`, `pr`, `duration_min` (optional) |
-| `CLAIM-CONFLICT` | Two instances race for same phase | `task` (MEGA ID), `phase`, `winner`, `loser` |
-
-### Format
-Same as operations.log: `YYYY-MM-DDTHH:MM | EVENT | key=value ...`
-
-### When to Append
-- **PR merged** — append `PR-MERGED` in the same step as STEP-DONE step=merged
-- **CI fix** — `/ci-fix` skill appends `CI-FIX` automatically (see skill prompt)
-- **State drift** — `stop-state-lint.sh` hook appends `STATE-DRIFT` automatically
-- **Phase claimed** — append `PHASE-CLAIMED` when claiming a MEGA phase (any execution mode)
-- **Phase completed** — append `PHASE-COMPLETED` when releasing a completed phase
-- **Claim conflict** — append `CLAIM-CONFLICT` when `mkdir` lock fails and another instance wins
-- **Phase claimed** — append `PHASE-CLAIMED` when claiming a MEGA phase (any execution mode)
-- **Phase completed** — append `PHASE-COMPLETED` when releasing a completed phase
-- **Claim conflict** — append `CLAIM-CONFLICT` when `mkdir` lock fails and another instance wins
-
-### Log Rotation
-- Keep `metrics.log` under **500 lines** (same policy as operations.log)
-- When over 500 lines: move oldest entries to `metrics.log.1`
-- Keep `metrics.log.1` for 90 days, then delete
-- Clean up during session-end (Step 8 of session-startup.md)
-
-### Usage
-Periodically review `metrics.log` to identify:
-- Average branch lifetime (PR-MERGED entries)
-- Most frequent CI failure types (CI-FIX entries)
-- State drift frequency (STATE-DRIFT entries)
-- Parallelization efficiency: phases claimed vs completed, conflict rate (PHASE-CLAIMED/PHASE-COMPLETED/CLAIM-CONFLICT)
-- Average phase duration (PHASE-COMPLETED `duration_min` field)
-- Parallelization efficiency: phases claimed vs completed, conflict rate (PHASE-CLAIMED/PHASE-COMPLETED/CLAIM-CONFLICT)
-- Average phase duration (PHASE-COMPLETED `duration_min` field)
-
-## Anti-Drift Rules
-- **1 thing at a time** — never mix feature + refactor + fix
-- **Never code without a validated plan**
-- **Red flags** (broken tests, tech debt, security flaw) -> fix before continuing
-- **If > 10 min structuring manually** -> STOP, use Claude Code
-- **State files are mandatory** — skipping memory.md update is a workflow violation
-- **Operation log is mandatory** — every session MUST have SESSION-START and SESSION-END entries
-- **Atomic transitions only** — marking an item `**DONE**` without moving it to the `✅ DONE` section is forbidden (see Item State Machine above)
-- **Session-End State Lint** — run the 4-check lint before every SESSION-END. Inconsistent state files = workflow violation equivalent to broken tests on main
+### Metrics Log Rotation
+- Keep `metrics.log` under **500 lines**
+- When over 500 lines: move oldest to `metrics.log.1` (90-day retention)
+- Clean up during session-end

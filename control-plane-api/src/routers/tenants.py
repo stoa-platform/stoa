@@ -1,4 +1,5 @@
 """Tenants router - Multi-tenant management using database"""
+
 import asyncio
 import logging
 import uuid
@@ -44,10 +45,7 @@ def _tenant_to_response(tenant: Tenant, api_count: int = 0, app_count: int = 0) 
 
 
 @router.get("", response_model=list[TenantResponse])
-async def list_tenants(
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
+async def list_tenants(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
     List tenants from database.
 
@@ -58,10 +56,7 @@ async def list_tenants(
         repo = TenantRepository(db)
         is_admin = Role.CPI_ADMIN in user.roles
 
-        tenants = await repo.list_for_user(
-            tenant_id=user.tenant_id,
-            is_admin=is_admin
-        )
+        tenants = await repo.list_for_user(tenant_id=user.tenant_id, is_admin=is_admin)
 
         return [_tenant_to_response(t) for t in tenants]
 
@@ -71,11 +66,7 @@ async def list_tenants(
 
 
 @router.get("/{tenant_id}", response_model=TenantResponse)
-async def get_tenant(
-    tenant_id: str,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
+async def get_tenant(tenant_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Get tenant by ID from database (cached, TTL 30s)."""
     # Check access
     if Role.CPI_ADMIN not in user.roles and user.tenant_id != tenant_id:
@@ -135,9 +126,7 @@ async def get_provisioning_status(
 @router.post("", response_model=TenantResponse)
 @require_permission(Permission.TENANTS_CREATE)
 async def create_tenant(
-    tenant_data: TenantCreate,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    tenant_data: TenantCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     """
     Create a new tenant (CPI Admin only).
@@ -221,7 +210,7 @@ async def update_tenant(
     tenant_id: str,
     tenant_data: TenantUpdate,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Update tenant in database"""
     try:
@@ -276,11 +265,7 @@ async def update_tenant(
 
 @router.delete("/{tenant_id}")
 @require_permission(Permission.TENANTS_DELETE)
-async def delete_tenant(
-    tenant_id: str,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
+async def delete_tenant(tenant_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
     Delete tenant (CPI Admin only).
 

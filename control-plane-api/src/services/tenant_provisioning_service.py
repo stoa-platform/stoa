@@ -37,8 +37,7 @@ async def _retry_kc_group(tenant_id: str, display_name: str) -> str:
             if attempt < MAX_RETRIES - 1:
                 delay = RETRY_DELAYS[attempt]
                 logger.warning(
-                    f"KC group creation attempt {attempt + 1} failed for {tenant_id}: {e}, "
-                    f"retrying in {delay}s..."
+                    f"KC group creation attempt {attempt + 1} failed for {tenant_id}: {e}, " f"retrying in {delay}s..."
                 )
                 await asyncio.sleep(delay)
             else:

@@ -114,10 +114,7 @@ async def self_service_status(
                 raise HTTPException(status_code=404, detail="Tenant not found")
 
             ready_at = None
-            if (
-                tenant.provisioning_status == TenantProvisioningStatus.READY.value
-                and tenant.updated_at
-            ):
+            if tenant.provisioning_status == TenantProvisioningStatus.READY.value and tenant.updated_at:
                 ready_at = tenant.updated_at.isoformat()
 
             return SelfServiceStatusResponse(

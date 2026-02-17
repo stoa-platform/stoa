@@ -2,6 +2,7 @@
 
 Model for multi-tenant management stored in the database.
 """
+
 import enum
 
 from sqlalchemy import JSON, Column, DateTime, Integer, String, Text
@@ -12,6 +13,7 @@ from src.database import Base
 
 class TenantStatus(enum.StrEnum):
     """Tenant status enum."""
+
     ACTIVE = "active"
     SUSPENDED = "suspended"
     ARCHIVED = "archived"
@@ -19,6 +21,7 @@ class TenantStatus(enum.StrEnum):
 
 class TenantProvisioningStatus(enum.StrEnum):
     """Tenant provisioning status enum."""
+
     PENDING = "pending"
     PROVISIONING = "provisioning"
     READY = "ready"
@@ -27,6 +30,7 @@ class TenantProvisioningStatus(enum.StrEnum):
 
 class Tenant(Base):
     """Tenant model - represents an organization/tenant in the platform."""
+
     __tablename__ = "tenants"
 
     # Primary key - slug-style identifier (e.g., "oasis-gunters")
@@ -45,9 +49,7 @@ class Tenant(Base):
     settings = Column(JSON, default=dict, nullable=False)
 
     # Provisioning fields (CAB-1315)
-    provisioning_status = Column(
-        String(32), default=TenantProvisioningStatus.PENDING.value, nullable=False
-    )
+    provisioning_status = Column(String(32), default=TenantProvisioningStatus.PENDING.value, nullable=False)
     provisioning_error = Column(Text, nullable=True)
     provisioning_started_at = Column(DateTime(timezone=True), nullable=True)
     kc_group_id = Column(String(255), nullable=True)

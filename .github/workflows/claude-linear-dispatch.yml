@@ -1,6 +1,7 @@
 # Level 3: Linear → n8n → GitHub Actions → Council → Claude → PR
 # Receives repository_dispatch from n8n when a Linear ticket moves to "In Progress".
 # Runs Council validation, posts to Slack, waits for /go before implementing.
+# Also handles /go comments on council-review issues (self-contained pipeline).
 # Kill-switch: set DISABLE_L3_LINEAR=true in repo variables to disable.
 
 name: Claude Code Linear Dispatch
@@ -8,9 +9,11 @@ name: Claude Code Linear Dispatch
 on:
   repository_dispatch:
     types: [linear-ticket-started]
+  issue_comment:
+    types: [created]
 
 concurrency:
-  group: claude-linear-${{ github.event.client_payload.ticket_id }}
+  group: claude-linear-${{ github.event.client_payload.ticket_id || github.event.issue.number }}
   cancel-in-progress: false
 
 permissions:
@@ -20,9 +23,11 @@ permissions:
   id-token: write
 
 jobs:
-  # ----- Phase 1: Council Gate -----
+  # ----- Phase 1: Council Gate (triggered by n8n dispatch) -----
   council:
-    if: vars.DISABLE_L3_LINEAR != 'true'
+    if: |
+      vars.DISABLE_L3_LINEAR != 'true' &&
+      github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -167,3 +172,97 @@ jobs:
                 }
               ]
             }"
+
+  # ----- Phase 2: Implementation (triggered by /go on council-review issues) -----
+  implement:
+    if: |
+      vars.DISABLE_L3_LINEAR != 'true' &&
+      github.event_name == 'issue_comment' &&
+      (
+        github.event.comment.body == '/go' ||
+        github.event.comment.body == '/approve' ||
+        startsWith(github.event.comment.body, '/go ') ||
+        startsWith(github.event.comment.body, '/approve ')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # Guard: only run on issues created by L3 (council-review label)
+      - name: Verify L3 Council issue
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+
+          if echo "$LABELS" | grep -q "council-review"; then
+            echo "Council-review issue confirmed"
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not a council-review issue — skipping (L3 only handles its own issues)"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Implementation
+        if: steps.verify.outputs.valid == 'true'
+        continue-on-error: true
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log.
+            Do NOT log SESSION-START or SESSION-END.
+            Do NOT run crash recovery checks.
+            Focus exclusively on implementing the task below.
+
+            Implement the feature described in issue #${{ github.event.issue.number }}.
+
+            Issue title: ${{ github.event.issue.title }}
+            Issue body:
+            ${{ github.event.issue.body }}
+
+            The issue body contains a Council validation report with a plan and DoD.
+            Follow the implementation plan from the Council report.
+            Follow code style rules in CLAUDE.md and .claude/rules/ (but skip workflow/session rules).
+
+            Steps:
+            1. Create a feature branch: feat/issue-${{ github.event.issue.number }}-<slug>
+            2. Implement the code following the plan
+            3. Run quality gates (lint, test, format)
+            4. Commit with conventional messages
+            5. Create a PR referencing the issue
+
+            Use Ship/Show/Ask classification from the Council report.
+            If Ship or Show: merge after CI green.
+            If Ask: leave PR open for human review.
+
+            IMPORTANT: Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
+
+      # Notify Slack on completion
+      - name: Notify Slack — Implementation Done
+        if: always() && steps.verify.outputs.valid == 'true'
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          STATUS="${{ steps.claude.outcome || 'skipped' }}"
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          if [ "$STATUS" = "success" ]; then
+            EMOJI="white_check_mark"
+            MSG="Implementation complete for #${ISSUE_NUM}. PR created."
+          elif [ "$STATUS" = "skipped" ]; then
+            EMOJI="warning"
+            MSG="Implementation skipped for #${ISSUE_NUM}."
+          else
+            EMOJI="x"
+            MSG="Implementation failed for #${ISSUE_NUM}. Check GitHub Actions logs."
+          fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\":${EMOJI}: ${MSG}\"}"

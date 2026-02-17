@@ -5,8 +5,9 @@
  * Page principale /usage dans le Portal STOA
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Activity, CheckCircle, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
 import {
   StatCard,
@@ -17,12 +18,24 @@ import {
 } from '../../components/usage';
 import { usageService, formatLatency } from '../../services/usage';
 import { useAuth } from '../../contexts/AuthContext';
+import { config } from '../../config';
+import { loadNamespace } from '../../i18n';
 
 type Period = 'today' | 'week' | 'month';
 
 export function UsagePage() {
   const { isAuthenticated, isLoading: authLoading, accessToken } = useAuth();
   const queryClient = useQueryClient();
+  const { t, i18n: i18nInstance } = useTranslation('usage');
+  const i18nEnabled = config.features.enableI18n;
+
+  useEffect(() => {
+    if (i18nEnabled) {
+      const lng = i18nInstance.language;
+      loadNamespace(lng, 'usage');
+      if (lng !== 'en') loadNamespace('en', 'usage');
+    }
+  }, [i18nEnabled, i18nInstance.language]);
 
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('today');
 
@@ -81,9 +94,11 @@ export function UsagePage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Usage Dashboard</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {i18nEnabled ? t('title') : 'Usage Dashboard'}
+            </h1>
             <p className="text-gray-500 dark:text-neutral-400 mt-1">
-              Monitor your MCP tool consumption and performance
+              {i18nEnabled ? t('subtitle') : 'Monitor your MCP tool consumption and performance'}
             </p>
           </div>
 
@@ -92,7 +107,7 @@ export function UsagePage() {
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
-            Refresh
+            {i18nEnabled ? t('refresh') : 'Refresh'}
           </button>
         </div>
 
@@ -107,14 +122,20 @@ export function UsagePage() {
         {/* Stats Cards Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard
-            title="Total Calls"
+            title={i18nEnabled ? t('totalCalls') : 'Total Calls'}
             value={periodStats?.total_calls.toLocaleString() ?? '—'}
             subtitle={
               selectedPeriod === 'today'
-                ? 'Today'
+                ? i18nEnabled
+                  ? t('today')
+                  : 'Today'
                 : selectedPeriod === 'week'
-                  ? 'This week'
-                  : 'This month'
+                  ? i18nEnabled
+                    ? t('thisWeek')
+                    : 'This week'
+                  : i18nEnabled
+                    ? t('thisMonth')
+                    : 'This month'
             }
             icon={<Activity className="w-5 h-5" />}
             color="cyan"
@@ -122,9 +143,9 @@ export function UsagePage() {
           />
 
           <StatCard
-            title="Success Rate"
+            title={i18nEnabled ? t('successRate') : 'Success Rate'}
             value={periodStats ? `${periodStats.success_rate.toFixed(1)}%` : '—'}
-            subtitle="Successful calls"
+            subtitle={i18nEnabled ? t('successfulCalls') : 'Successful calls'}
             icon={<CheckCircle className="w-5 h-5" />}
             color={periodStats && periodStats.success_rate >= 95 ? 'emerald' : 'amber'}
             trend={periodStats ? { value: 2.3, isPositive: true } : undefined}
@@ -132,18 +153,18 @@ export function UsagePage() {
           />
 
           <StatCard
-            title="Avg Latency"
+            title={i18nEnabled ? t('avgLatency') : 'Avg Latency'}
             value={periodStats ? formatLatency(periodStats.avg_latency_ms) : '—'}
-            subtitle="Response time"
+            subtitle={i18nEnabled ? t('responseTime') : 'Response time'}
             icon={<Clock className="w-5 h-5" />}
             color={periodStats && periodStats.avg_latency_ms <= 200 ? 'emerald' : 'amber'}
             isLoading={summaryLoading}
           />
 
           <StatCard
-            title="Errors"
+            title={i18nEnabled ? t('errors') : 'Errors'}
             value={periodStats?.error_count.toString() ?? '—'}
-            subtitle="Failed calls"
+            subtitle={i18nEnabled ? t('failedCalls') : 'Failed calls'}
             icon={<AlertTriangle className="w-5 h-5" />}
             color={periodStats && periodStats.error_count > 10 ? 'red' : 'emerald'}
             isLoading={summaryLoading}
@@ -173,7 +194,9 @@ export function UsagePage() {
 
         {/* Period Selector */}
         <div className="mt-8 flex items-center justify-center gap-2">
-          <span className="text-sm text-gray-500 dark:text-neutral-400">View period:</span>
+          <span className="text-sm text-gray-500 dark:text-neutral-400">
+            {i18nEnabled ? t('viewPeriod') : 'View period:'}
+          </span>
           {(['today', 'week', 'month'] as const).map((period) => (
             <button
               key={period}
@@ -187,7 +210,17 @@ export function UsagePage() {
                 }
               `}
             >
-              {period === 'today' ? 'Today' : period === 'week' ? 'This Week' : 'This Month'}
+              {period === 'today'
+                ? i18nEnabled
+                  ? t('today')
+                  : 'Today'
+                : period === 'week'
+                  ? i18nEnabled
+                    ? t('thisWeek')
+                    : 'This Week'
+                  : i18nEnabled
+                    ? t('thisMonth')
+                    : 'This Month'}
             </button>
           ))}
         </div>

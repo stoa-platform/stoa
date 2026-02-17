@@ -4,7 +4,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: stoa-alerts
-  namespace: stoa-monitoring
+  namespace: monitoring
   labels:
     app.kubernetes.io/part-of: stoa-platform
     prometheus: kube-prometheus-stack

@@ -37,6 +37,27 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
+// Mock i18n — disable to use fallback strings
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'en' },
+  }),
+}));
+
+vi.mock('../../i18n', () => ({
+  loadNamespace: vi.fn(),
+  LANGUAGE_KEY: 'stoa:language',
+}));
+
+vi.mock('../../config', () => ({
+  config: {
+    api: { baseUrl: 'https://api.gostoa.dev', timeout: 30000 },
+    mcp: { baseUrl: 'https://mcp.gostoa.dev', timeout: 30000 },
+    features: { enableI18n: false },
+  },
+}));
+
 // Mock components as stubs
 vi.mock('../../components/apis/APICard', () => ({
   APICard: ({ api }: { api: API }) => <div data-testid={`api-card-${api.id}`}>{api.name}</div>,

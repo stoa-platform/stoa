@@ -1,7 +1,10 @@
 import { useSearchParams } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppWindow, CreditCard, FileCode2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { config } from '../../config';
+import { loadNamespace } from '../../i18n';
 
 const MyApplications = lazy(() => import('../apps').then((m) => ({ default: m.MyApplications })));
 const MySubscriptions = lazy(() =>
@@ -36,6 +39,16 @@ function TabSkeleton() {
 export function WorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasRole } = useAuth();
+  const { t, i18n: i18nInstance } = useTranslation('workspace');
+  const i18nEnabled = config.features.enableI18n;
+
+  useEffect(() => {
+    if (i18nEnabled) {
+      const lng = i18nInstance.language;
+      loadNamespace(lng, 'workspace');
+      if (lng !== 'en') loadNamespace('en', 'workspace');
+    }
+  }, [i18nEnabled, i18nInstance.language]);
   const activeTab = (searchParams.get('tab') as TabId) || 'apps';
 
   const isAdmin = hasRole('tenant-admin') || hasRole('cpi-admin');
@@ -48,9 +61,11 @@ export function WorkspacePage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Workspace</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {i18nEnabled ? t('title') : 'My Workspace'}
+        </h1>
         <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-          Manage your apps, subscriptions, and contracts
+          {i18nEnabled ? t('subtitle') : 'Manage your apps, subscriptions, and contracts'}
         </p>
       </div>
 
@@ -70,7 +85,7 @@ export function WorkspacePage() {
                 }`}
               >
                 <tab.icon className="h-4 w-4" />
-                {tab.label}
+                {i18nEnabled ? t(`tabs.${tab.id}`) : tab.label}
               </button>
             );
           })}

@@ -1,0 +1,25 @@
+{
+  "title": "Catalogue API",
+  "subtitle": "Parcourez et decouvrez les APIs disponibles",
+  "gridView": "Vue grille",
+  "listView": "Vue liste",
+  "refresh": "Actualiser",
+  "loadingApis": "Chargement des APIs...",
+  "failedToLoad": "Echec du chargement des APIs",
+  "tryAgain": "Reessayer",
+  "noApisFound": "Aucune API trouvee",
+  "noApisFiltered": "Aucune API ne correspond a vos filtres. Essayez de modifier vos criteres.",
+  "noApisYet": "Aucune API publiee pour le moment. Revenez plus tard !",
+  "clearFilters": "Effacer les filtres",
+  "matchingFilters": "correspondant a vos filtres",
+  "apiCount": {
+    "zero": "Aucune API trouvee",
+    "one": "1 API disponible",
+    "other": "{{count}} APIs disponibles"
+  },
+  "pagination": {
+    "page": "Page {{current}} sur {{total}}",
+    "previous": "Precedent",
+    "next": "Suivant"
+  }
+}

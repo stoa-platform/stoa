@@ -1,0 +1,10 @@
+{
+  "title": "Mon espace de travail",
+  "subtitle": "Gerez vos applications, abonnements et contrats",
+  "tabs": {
+    "apps": "Applications",
+    "subscriptions": "Abonnements",
+    "contracts": "Contrats",
+    "approvals": "Approbations"
+  }
+}

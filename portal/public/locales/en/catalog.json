@@ -1,0 +1,25 @@
+{
+  "title": "API Catalog",
+  "subtitle": "Browse and discover available APIs",
+  "gridView": "Grid view",
+  "listView": "List view",
+  "refresh": "Refresh",
+  "loadingApis": "Loading APIs...",
+  "failedToLoad": "Failed to load APIs",
+  "tryAgain": "Try Again",
+  "noApisFound": "No APIs Found",
+  "noApisFiltered": "No APIs match your current filters. Try adjusting your search criteria.",
+  "noApisYet": "There are no published APIs available yet. Check back later!",
+  "clearFilters": "Clear Filters",
+  "matchingFilters": "matching your filters",
+  "apiCount": {
+    "zero": "No APIs found",
+    "one": "1 API available",
+    "other": "{{count}} APIs available"
+  },
+  "pagination": {
+    "page": "Page {{current}} of {{total}}",
+    "previous": "Previous",
+    "next": "Next"
+  }
+}

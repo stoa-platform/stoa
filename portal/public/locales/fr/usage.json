@@ -1,0 +1,16 @@
+{
+  "title": "Tableau de bord d'utilisation",
+  "subtitle": "Surveillez votre consommation et performances MCP",
+  "refresh": "Actualiser",
+  "totalCalls": "Total appels",
+  "successRate": "Taux de succes",
+  "successfulCalls": "Appels reussis",
+  "avgLatency": "Latence moy.",
+  "responseTime": "Temps de reponse",
+  "errors": "Erreurs",
+  "failedCalls": "Appels echoues",
+  "viewPeriod": "Periode :",
+  "today": "Aujourd'hui",
+  "thisWeek": "Cette semaine",
+  "thisMonth": "Ce mois-ci"
+}

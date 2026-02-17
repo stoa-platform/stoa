@@ -1,0 +1,16 @@
+{
+  "title": "Usage Dashboard",
+  "subtitle": "Monitor your MCP tool consumption and performance",
+  "refresh": "Refresh",
+  "totalCalls": "Total Calls",
+  "successRate": "Success Rate",
+  "successfulCalls": "Successful calls",
+  "avgLatency": "Avg Latency",
+  "responseTime": "Response time",
+  "errors": "Errors",
+  "failedCalls": "Failed calls",
+  "viewPeriod": "View period:",
+  "today": "Today",
+  "thisWeek": "This Week",
+  "thisMonth": "This Month"
+}

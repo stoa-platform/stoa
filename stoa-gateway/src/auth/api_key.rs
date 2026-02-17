@@ -1,6 +1,7 @@
 //! API Key Authentication
 //!
 //! Validates API keys against Control Plane with moka cache.
+//! WIP: Not yet instantiated in AppState. Remove `dead_code` when wired.
 #![allow(dead_code)]
 
 use axum::{

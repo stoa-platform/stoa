@@ -2,7 +2,7 @@
 //!
 //! CAB-912 P2: Role-based access control with tenant isolation.
 //!
-//! Features:
+//! Features (WIP — not yet wired into handlers, remove `dead_code` when integrated):
 //! - Permission checking based on STOA roles
 //! - Tenant isolation enforcement
 //! - Scope-based authorization

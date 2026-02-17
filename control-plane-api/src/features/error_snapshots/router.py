@@ -175,10 +175,10 @@ async def get_snapshot(
     service: SnapshotService | None = Depends(get_snapshot_service),
 ) -> ErrorSnapshot:
     """Get detailed error snapshot by ID."""
-    _require_service(service)
+    svc = _require_service(service)
 
     tenant_id = user.tenant_id or "unknown"
-    snapshot = await service.get(snapshot_id, tenant_id)  # type: ignore[union-attr]
+    snapshot = await svc.get(snapshot_id, tenant_id)
 
     if not snapshot:
         raise HTTPException(
@@ -196,10 +196,10 @@ async def update_snapshot_resolution(
     service: SnapshotService | None = Depends(get_snapshot_service),
 ) -> ErrorSnapshot:
     """Update the resolution status of an error snapshot."""
-    _require_service(service)
+    svc = _require_service(service)
 
     tenant_id = user.tenant_id or "unknown"
-    snapshot = await service.get(snapshot_id, tenant_id)  # type: ignore[union-attr]
+    snapshot = await svc.get(snapshot_id, tenant_id)
 
     if not snapshot:
         raise HTTPException(
@@ -211,7 +211,7 @@ async def update_snapshot_resolution(
     if body.resolution_notes is not None:
         snapshot.resolution_notes = body.resolution_notes
 
-    await service.save(snapshot)  # type: ignore[union-attr]
+    await svc.save(snapshot)
     return snapshot
 
 
@@ -222,10 +222,10 @@ async def delete_snapshot(
     service: SnapshotService | None = Depends(get_snapshot_service),
 ) -> None:
     """Delete an error snapshot."""
-    _require_service(service)
+    svc = _require_service(service)
 
     tenant_id = user.tenant_id or "unknown"
-    deleted = await service.delete(snapshot_id, tenant_id)  # type: ignore[union-attr]
+    deleted = await svc.delete(snapshot_id, tenant_id)
 
     if not deleted:
         raise HTTPException(
@@ -241,10 +241,10 @@ async def generate_replay(
     service: SnapshotService | None = Depends(get_snapshot_service),
 ) -> ReplayResponse:
     """Generate cURL command to replay the captured request."""
-    _require_service(service)
+    svc = _require_service(service)
 
     tenant_id = user.tenant_id or "unknown"
-    snapshot = await service.get(snapshot_id, tenant_id)  # type: ignore[union-attr]
+    snapshot = await svc.get(snapshot_id, tenant_id)
 
     if not snapshot:
         raise HTTPException(
@@ -252,7 +252,7 @@ async def generate_replay(
             detail=f"Snapshot {snapshot_id} not found",
         )
 
-    curl_command = service.generate_replay_curl(snapshot)  # type: ignore[union-attr]
+    curl_command = svc.generate_replay_curl(snapshot)
 
     return ReplayResponse(
         curl_command=curl_command,
@@ -268,13 +268,14 @@ async def generate_replay(
 # ── Helpers ───────────────────────────────────────────────────────────
 
 
-def _require_service(service: SnapshotService | None) -> None:
-    """Raise 503 if service is unavailable (for write endpoints)."""
+def _require_service(service: SnapshotService | None) -> SnapshotService:
+    """Raise 503 if service is unavailable, otherwise return narrowed type."""
     if service is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Error snapshot storage not available",
         )
+    return service
 
 
 def _empty_list_response(page: int = 1, page_size: int = 20) -> SnapshotListResponse:

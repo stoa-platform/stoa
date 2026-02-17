@@ -1,0 +1,706 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Security Posture — TLS certificate monitoring + CIS Benchmark compliance (CAB-1305)",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["stoa"],
+      "targetBlank": true,
+      "title": "STOA Dashboards",
+      "type": "dashboards"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "panels": [],
+      "title": "TLS Certificate Status",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Closest TLS certificate expiry across all monitored endpoints",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 7},
+              {"color": "yellow", "value": 14},
+              {"color": "green", "value": 30}
+            ]
+          },
+          "unit": "d",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 1},
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "min(tls_cert_expiry_days{host=~\".+\"})",
+          "legendFormat": "Closest Expiry",
+          "refId": "A"
+        }
+      ],
+      "title": "Closest Certificate Expiry",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Number of endpoints with valid TLS certificates",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 5},
+              {"color": "green", "value": 7}
+            ]
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 1},
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "count(tls_cert_valid == 1)",
+          "legendFormat": "Valid Certs",
+          "refId": "A"
+        }
+      ],
+      "title": "Valid Certificates",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Number of endpoints with invalid or expired TLS certificates",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "red", "value": 1}
+            ]
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 1},
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "count(tls_cert_valid == 0) or vector(0)",
+          "legendFormat": "Invalid Certs",
+          "refId": "A"
+        }
+      ],
+      "title": "Invalid Certificates",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "TLS certificate expiry days per endpoint",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "custom": {
+            "align": "auto",
+            "cellOptions": {"type": "auto"},
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 7},
+              {"color": "yellow", "value": 14},
+              {"color": "green", "value": 30}
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Host"},
+            "properties": [{"id": "custom.width", "value": 250}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Days Until Expiry"},
+            "properties": [
+              {"id": "custom.cellOptions", "value": {"mode": "gradient", "type": "gauge"}},
+              {"id": "min", "value": 0},
+              {"id": "max", "value": 90}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Status"},
+            "properties": [
+              {"id": "custom.width", "value": 100},
+              {"id": "mappings", "value": [
+                {"options": {"0": {"color": "red", "text": "INVALID"}}, "type": "value"},
+                {"options": {"1": {"color": "green", "text": "VALID"}}, "type": "value"}
+              ]}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 6},
+      "id": 4,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false},
+        "showHeader": true,
+        "sortBy": [{"desc": false, "displayName": "Days Until Expiry"}]
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "tls_cert_expiry_days",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "tls_cert_valid",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "B"
+        }
+      ],
+      "title": "Certificate Details",
+      "transformations": [
+        {
+          "id": "seriesToColumns",
+          "options": {"byField": "host"}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true, "Time 1": true, "Time 2": true, "__name__": true, "__name__ 1": true, "__name__ 2": true, "instance": true, "instance 1": true, "instance 2": true, "job": true, "job 1": true, "job 2": true},
+            "renameByName": {"host": "Host", "Value #A": "Days Until Expiry", "Value #B": "Status"}
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+      "id": 200,
+      "panels": [],
+      "title": "TLS Expiry Trend (30 days)",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Certificate expiry countdown over time — shows renewal events as jumps",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Days until expiry",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {
+              "mode": "dashed+area",
+              "fill": "below"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 7},
+              {"color": "transparent", "value": 14}
+            ]
+          },
+          "unit": "d",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 15},
+      "id": 5,
+      "options": {
+        "legend": {"calcs": ["lastNotNull", "min"], "displayMode": "table", "placement": "right"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "tls_cert_expiry_days",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Certificate Expiry Trend",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 23},
+      "id": 300,
+      "panels": [],
+      "title": "CIS Benchmark Compliance (Kubescape)",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "NSA framework compliance score (0-100%)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 50},
+              {"color": "yellow", "value": 70},
+              {"color": "green", "value": 85}
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 24},
+      "id": 6,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "kubescape_compliance_score{framework=\"NSA\"}",
+          "legendFormat": "NSA",
+          "refId": "A"
+        }
+      ],
+      "title": "NSA Compliance",
+      "type": "gauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "MITRE ATT&CK framework compliance score (0-100%)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 50},
+              {"color": "yellow", "value": 70},
+              {"color": "green", "value": 85}
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 24},
+      "id": 7,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "kubescape_compliance_score{framework=\"MITRE\"}",
+          "legendFormat": "MITRE",
+          "refId": "A"
+        }
+      ],
+      "title": "MITRE Compliance",
+      "type": "gauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Total controls passed across all frameworks",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 4, "x": 12, "y": 24},
+      "id": 8,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "sum(kubescape_controls_passed)",
+          "legendFormat": "Passed",
+          "refId": "A"
+        }
+      ],
+      "title": "Controls Passed",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Total controls failed across all frameworks",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 5},
+              {"color": "red", "value": 10}
+            ]
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 4, "x": 16, "y": 24},
+      "id": 9,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "sum(kubescape_controls_failed)",
+          "legendFormat": "Failed",
+          "refId": "A"
+        }
+      ],
+      "title": "Controls Failed",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Total controls scanned across all frameworks",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "blue", "value": null}
+            ]
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 4, "x": 20, "y": 24},
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "sum(kubescape_controls_total)",
+          "legendFormat": "Total",
+          "refId": "A"
+        }
+      ],
+      "title": "Controls Total",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 30},
+      "id": 400,
+      "panels": [],
+      "title": "CIS Compliance Detail",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Per-framework compliance breakdown",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "custom": {
+            "align": "auto",
+            "cellOptions": {"type": "auto"},
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 70}
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Framework"},
+            "properties": [{"id": "custom.width", "value": 150}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Score (%)"},
+            "properties": [
+              {"id": "custom.cellOptions", "value": {"mode": "gradient", "type": "gauge"}},
+              {"id": "min", "value": 0},
+              {"id": "max", "value": 100}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 31},
+      "id": 11,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false},
+        "showHeader": true,
+        "sortBy": [{"desc": true, "displayName": "Score (%)"}]
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "kubescape_compliance_score",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "kubescape_controls_passed",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "B"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "kubescape_controls_failed",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "C"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "kubescape_controls_total",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "D"
+        }
+      ],
+      "title": "Framework Compliance Detail",
+      "transformations": [
+        {
+          "id": "seriesToColumns",
+          "options": {"byField": "framework"}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true, "Time 1": true, "Time 2": true, "Time 3": true, "Time 4": true, "__name__": true, "__name__ 1": true, "__name__ 2": true, "__name__ 3": true, "__name__ 4": true, "instance": true, "instance 1": true, "instance 2": true, "instance 3": true, "instance 4": true, "job": true, "job 1": true, "job 2": true, "job 3": true, "job 4": true},
+            "renameByName": {"framework": "Framework", "Value #A": "Score (%)", "Value #B": "Passed", "Value #C": "Failed", "Value #D": "Total"}
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Compliance score trend over time",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Compliance %",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": "off"}
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 37},
+      "id": 12,
+      "options": {
+        "legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "expr": "kubescape_compliance_score",
+          "legendFormat": "{{framework}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Compliance Score Trend",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["stoa", "security"],
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": false, "text": "Prometheus", "value": "prometheus"},
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "queryValue": "",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {"from": "now-7d", "to": "now"},
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Security Posture",
+  "uid": "security-posture",
+  "version": 1
+}

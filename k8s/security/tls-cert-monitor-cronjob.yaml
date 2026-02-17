@@ -36,7 +36,8 @@ spec:
               image: alpine:3.21
               command:
                 - sh
-                - /scripts/tls-cert-check.sh
+                - -c
+                - "apk add --no-cache openssl curl && sh /scripts/tls-cert-check.sh"
               env:
                 - name: PUSHGATEWAY_URL
                   value: "http://pushgateway.monitoring.svc:9091"
@@ -52,7 +53,7 @@ spec:
               securityContext:
                 privileged: false
                 allowPrivilegeEscalation: false
-                readOnlyRootFilesystem: true
+                readOnlyRootFilesystem: false  # apk add needs writable /lib/apk, /etc/apk
                 capabilities:
                   drop:
                     - ALL

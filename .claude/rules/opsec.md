@@ -1,3 +1,8 @@
+---
+description: Public/private repo security boundaries
+globs: ".gitignore,**/*.env*,stoa-strategy/**"
+---
+
 # OpSec — Dual Repo Security
 
 ## Architecture

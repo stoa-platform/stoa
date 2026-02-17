@@ -1,5 +1,6 @@
 ---
 description: Trunk-based git workflow — Ship/Show/Ask model inspired by GitHub, Stripe, Shopify
+globs: ".github/**"
 ---
 
 # Git Workflow — Trunk-Based Development

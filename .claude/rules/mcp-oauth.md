@@ -1,3 +1,8 @@
+---
+description: MCP OAuth 2.1 flow — discovery chain, DCR scope stripping, mTLS bypass, PKCE patch
+globs: "stoa-gateway/src/oauth/**,stoa-gateway/tests/**/oauth*"
+---
+
 # MCP OAuth 2.1 Flow — Critical Patterns
 
 > Lessons from PRs #528, #532, #541 (Feb 2026). Regression tests in `src/oauth/proxy.rs`.

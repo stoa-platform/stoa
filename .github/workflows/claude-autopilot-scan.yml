@@ -74,19 +74,25 @@ jobs:
           REMAINING="${{ steps.velocity.outputs.remaining }}"
 
           # Fetch Todo + Backlog tickets for team CAB-ING
-          # Filter: estimate <= 13, priority <= 3, not already in progress
+          # Filter: priority <= 3, not already in progress
+          # Note: estimate filter removed from GraphQL — applied client-side
+          # so tickets without estimates can pass through (Council will estimate them)
           RESPONSE=$(curl -s -X POST "https://api.linear.app/graphql" \
             -H "Authorization: ${LINEAR_API_KEY}" \
             -H "Content-Type: application/json" \
             -d '{
-              "query": "{ issues(filter: { team: { key: { eq: \"CAB\" } }, state: { type: { in: [\"unstarted\", \"backlog\"] } }, estimate: { lte: 13 }, priority: { lte: 3 } }, orderBy: priority, first: 20) { nodes { id identifier title description priority estimate labels { nodes { name } } parent { identifier } } } }"
+              "query": "{ issues(filter: { team: { key: { eq: \"CAB\" } }, state: { type: { in: [\"unstarted\", \"backlog\"] } }, priority: { lte: 3 } }, orderBy: priority, first: 30) { nodes { id identifier title description priority estimate labels { nodes { name } } parent { identifier } } } }"
             }')
 
-          # Filter out tickets with no-autopilot label and sub-tickets (has parent)
+          # Client-side filters:
+          # 1. No "no-autopilot" label
+          # 2. Not a sub-ticket (no parent)
+          # 3. Estimate <= 13 OR no estimate (null) — MEGAs >13 need manual decomposition
           echo "$RESPONSE" | jq -c "[
             .data.issues.nodes[]
             | select(.labels.nodes | map(.name) | index(\"no-autopilot\") | not)
             | select(.parent == null or .parent == {})
+            | select(.estimate == null or .estimate <= 13)
             | {
                 id: .id,
                 identifier: .identifier,
@@ -96,7 +102,7 @@ jobs:
                 estimate: .estimate,
                 labels: [.labels.nodes[].name]
               }
-          ] | .[0:${REMAINING}]" > eligible-tickets.json 2>/dev/null || echo "[]" > eligible-tickets.json
+          ] | sort_by(-.priority) | .[0:${REMAINING}]" > eligible-tickets.json 2>/dev/null || echo "[]" > eligible-tickets.json
 
           TICKET_COUNT=$(jq 'length' eligible-tickets.json)
           echo "Found ${TICKET_COUNT} eligible tickets"
@@ -134,6 +140,11 @@ jobs:
 
             Score each persona /10. Compute average. Threshold: >= 7.5 = Go.
 
+            IMPORTANT: If a ticket has NO estimate (null), you MUST provide one in the
+            "estimated_points" field using Fibonacci scale (1,2,3,5,8,13). Analyze the
+            scope from the title and description to estimate. Tickets > 13 pts are too
+            large for autopilot — set verdict to "Too Large" and skip.
+
             IMPORTANT: Output ONLY a JSON array. No markdown, no explanation, no code fences.
             Each element must have these exact fields:
             [
@@ -143,6 +154,7 @@ jobs:
                 "score": 8.5,
                 "verdict": "Go",
                 "ship_show_ask": "Ship",
+                "estimated_points": 5,
                 "council_body": "# Council: CAB-XXXX — Title\n**Score: 8.5/10 — Go**\n## Personas\n**Chucky**: 8/10 — ...\n**OSS Killer**: 9/10 — ...\n**Archi**: 8/10 — ...\n**Saul**: 9/10 — ...\n## Ship/Show/Ask: Ship\n## Plan\n...\n## DoD\n- [ ] ...\n---\nComment /go to start implementation."
               }
             ]
@@ -154,6 +166,7 @@ jobs:
         if: steps.council.outcome == 'success' && inputs.dry_run != true
         env:
           GH_TOKEN: ${{ github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           N8N_WEBHOOK: ${{ vars.N8N_APPROVE_WEBHOOK_URL }}
           HMAC_SECRET: ${{ secrets.APPROVE_HMAC_SECRET }}
@@ -183,6 +196,21 @@ jobs:
             TITLE=$(echo "$ticket" | jq -r '.title')
             SCORE=$(echo "$ticket" | jq -r '.score')
             COUNCIL_BODY=$(echo "$ticket" | jq -r '.council_body')
+            EST_POINTS=$(echo "$ticket" | jq -r '.estimated_points // empty')
+
+            # If Council estimated points for an unpointed ticket, update Linear
+            if [ -n "$EST_POINTS" ] && [ "$EST_POINTS" != "null" ]; then
+              # Find the Linear issue ID from eligible-tickets.json
+              LINEAR_ID=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .id' eligible-tickets.json)
+              LINEAR_EST=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .estimate' eligible-tickets.json)
+              if [ -n "$LINEAR_ID" ] && [ "$LINEAR_EST" = "null" ]; then
+                echo "Updating ${TICKET_ID} estimate to ${EST_POINTS} pts (was unpointed)"
+                curl -s -X POST "https://api.linear.app/graphql" \
+                  -H "Authorization: ${LINEAR_API_KEY}" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"query\": \"mutation { issueUpdate(id: \\\"${LINEAR_ID}\\\", input: { estimate: ${EST_POINTS} }) { success } }\"}" > /dev/null 2>&1 || true
+              fi
+            fi
 
             echo "Processing ${TICKET_ID} (score: ${SCORE})"
 

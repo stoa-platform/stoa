@@ -13,7 +13,7 @@ RUN groupadd -r -g 1000 stoa && useradd -r -u 1000 -g stoa -d /app stoa
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir --upgrade jaraco.context wheel
 
 # Copy source code
 COPY src/ ./src/

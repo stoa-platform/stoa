@@ -5,8 +5,6 @@
 //! - Stage 3: Certificate-token binding verification (RFC 8705)
 //!
 //! Design doc: docs/CAB-864-MTLS-DESIGN.md
-#![allow(dead_code)]
-
 use axum::{
     body::Body,
     http::{Request, StatusCode},

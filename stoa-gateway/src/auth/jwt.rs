@@ -8,8 +8,6 @@
 //! - Issuer validation
 //! - Audience validation
 //! - Claims extraction
-#![allow(dead_code)]
-
 use jsonwebtoken::{decode, decode_header, Algorithm, Validation};
 use std::sync::Arc;
 use thiserror::Error;

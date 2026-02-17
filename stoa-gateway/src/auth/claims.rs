@@ -9,8 +9,6 @@
 //! - tenant: Custom claim for tenant ID
 //! - realm_access.roles: Keycloak realm roles
 //! - resource_access: Client-specific roles
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

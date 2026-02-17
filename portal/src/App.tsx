@@ -53,6 +53,9 @@ const GatewaysPage = lazy(() =>
 const UnauthorizedPage = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.UnauthorizedPage }))
 );
+const OnboardingWizardPage = lazy(() =>
+  import('./pages/onboarding').then((m) => ({ default: m.OnboardingWizardPage }))
+);
 
 // Loading indicator for lazy-loaded pages
 function PageLoader() {
@@ -401,6 +404,7 @@ function AppContent() {
             <Route path="/" element={<HomePage />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/onboarding" element={<OnboardingWizardPage />} />
 
             {/* Workspace - tabbed view for apps, subscriptions, contracts */}
             <Route

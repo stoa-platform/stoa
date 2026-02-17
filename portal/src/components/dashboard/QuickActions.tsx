@@ -13,6 +13,7 @@ import {
   ArrowRight,
   ExternalLink,
   UserPlus,
+  Rocket,
 } from 'lucide-react';
 import { config } from '../../config';
 
@@ -27,6 +28,13 @@ interface QuickAction {
 }
 
 const actions: QuickAction[] = [
+  {
+    title: 'Get Started',
+    description: 'Set up your first integration',
+    href: '/onboarding',
+    icon: Rocket,
+    color: 'from-orange-500 to-orange-600',
+  },
   {
     title: 'API Catalog',
     description: 'Browse available APIs',

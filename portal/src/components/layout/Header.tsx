@@ -5,6 +5,7 @@ import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { ThemeToggle } from '@stoa/shared/components/ThemeToggle';
 import { useAuth } from '../../contexts/AuthContext';
 import { config } from '../../config';
+import { LanguageToggle } from './LanguageToggle';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -70,6 +71,9 @@ export function Header({ onMenuClick }: HeaderProps) {
 
           {/* Theme toggle */}
           <ThemeToggle size="md" />
+
+          {/* Language toggle */}
+          {config.features.enableI18n && <LanguageToggle />}
 
           {/* Notifications */}
           <button

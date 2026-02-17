@@ -5,6 +5,8 @@
  */
 
 import { Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { config } from '../../config';
 import type { User } from '../../types';
 
 interface WelcomeHeaderProps {
@@ -19,8 +21,18 @@ function getGreeting(): string {
 }
 
 export function WelcomeHeader({ user }: WelcomeHeaderProps) {
+  const { t } = useTranslation();
+  const i18nEnabled = config.features.enableI18n;
   const firstName = user?.name?.split(' ')[0] || 'Developer';
   const greeting = getGreeting();
+
+  const greetingText = i18nEnabled
+    ? t('welcome.greeting', { name: firstName })
+    : `${greeting}, ${firstName}!`;
+
+  const subtitleText = i18nEnabled
+    ? t('welcome.subtitle')
+    : 'Discover AI-powered tools, manage your subscriptions, and build amazing integrations.';
 
   return (
     <div className="relative overflow-hidden bg-gradient-to-r from-primary-700 via-primary-600 to-accent-600 dark:from-primary-800 dark:via-primary-700 dark:to-accent-700 rounded-2xl p-8">
@@ -34,13 +46,9 @@ export function WelcomeHeader({ user }: WelcomeHeaderProps) {
           <span className="text-primary-100 text-sm font-medium">STOA Developer Portal</span>
         </div>
 
-        <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
-          {greeting}, {firstName}!
-        </h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">{greetingText}</h1>
 
-        <p className="text-primary-100 text-lg max-w-xl">
-          Discover AI-powered tools, manage your subscriptions, and build amazing integrations.
-        </p>
+        <p className="text-primary-100 text-lg max-w-xl">{subtitleText}</p>
       </div>
     </div>
   );

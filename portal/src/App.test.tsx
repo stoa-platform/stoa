@@ -102,7 +102,30 @@ vi.mock('./config', () => ({
       console: { url: 'https://console.gostoa.dev' },
       docs: { url: 'https://docs.gostoa.dev' },
     },
+    features: {
+      enableI18n: false,
+      enableOnboarding: false,
+      enableMCPTools: true,
+      enableSubscriptions: true,
+      enableAPICatalog: true,
+      enableApplications: true,
+      enableAPITesting: true,
+      enableDebug: false,
+      enableGateways: true,
+    },
   },
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'en' },
+  }),
+}));
+
+vi.mock('./i18n', () => ({
+  loadNamespace: vi.fn(),
+  LANGUAGE_KEY: 'stoa:language',
 }));
 
 // We test the AppContent (routes) part, not the App wrapper

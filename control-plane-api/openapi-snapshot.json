@@ -601,8 +601,15 @@
             "type": "array"
           },
           "client_id": {
-            "title": "Client Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
           },
           "client_secret": {
             "anyOf": [
@@ -669,7 +676,6 @@
           "name",
           "display_name",
           "description",
-          "client_id",
           "created_at",
           "updated_at"
         ],
@@ -11377,6 +11383,93 @@
         "title": "SecurityEventsResponse",
         "type": "object"
       },
+      "SelfServiceSignupRequest": {
+        "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_email": {
+            "format": "email",
+            "title": "Owner Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "owner_email"
+        ],
+        "title": "SelfServiceSignupRequest",
+        "type": "object"
+      },
+      "SelfServiceSignupResponse": {
+        "properties": {
+          "poll_url": {
+            "title": "Poll Url",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "status",
+          "poll_url"
+        ],
+        "title": "SelfServiceSignupResponse",
+        "type": "object"
+      },
+      "SelfServiceStatusResponse": {
+        "properties": {
+          "provisioning_status": {
+            "title": "Provisioning Status",
+            "type": "string"
+          },
+          "ready_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ready At"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "provisioning_status"
+        ],
+        "title": "SelfServiceStatusResponse",
+        "type": "object"
+      },
       "ServiceAccountCreate": {
         "description": "Request to create a new service account",
         "example": {
@@ -12790,6 +12883,62 @@
         "title": "TenantCreate",
         "type": "object"
       },
+      "TenantProvisioningStatusResponse": {
+        "properties": {
+          "kc_group_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kc Group Id"
+          },
+          "provisioning_attempts": {
+            "default": 0,
+            "title": "Provisioning Attempts",
+            "type": "integer"
+          },
+          "provisioning_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provisioning Error"
+          },
+          "provisioning_started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provisioning Started At"
+          },
+          "provisioning_status": {
+            "title": "Provisioning Status",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "provisioning_status"
+        ],
+        "title": "TenantProvisioningStatusResponse",
+        "type": "object"
+      },
       "TenantResponse": {
         "properties": {
           "api_count": {
@@ -12833,6 +12982,11 @@
           "owner_email": {
             "default": "",
             "title": "Owner Email",
+            "type": "string"
+          },
+          "provisioning_status": {
+            "default": "pending",
+            "title": "Provisioning Status",
             "type": "string"
           },
           "status": {
@@ -18552,7 +18706,7 @@
         ]
       },
       "post": {
-        "description": "Create a new application.\n\nReturns the application with client_secret (only shown once!).\n\nTODO: Integrate with Keycloak to create actual OAuth client.",
+        "description": "Create a new application.\n\nReturns the application with client_secret (only shown once!).\nCreates a corresponding Keycloak OAuth client if KC is available.",
         "operationId": "create_application_v1_applications_post",
         "requestBody": {
           "content": {
@@ -18747,7 +18901,7 @@
     },
     "/v1/applications/{app_id}/regenerate-secret": {
       "post": {
-        "description": "Regenerate application client secret.\n\nReturns the new client_secret (only shown once!).\n\nTODO: Integrate with Keycloak to regenerate actual client secret.",
+        "description": "Regenerate application client secret.\n\nReturns the new client_secret (only shown once!).\nRequires Keycloak client to be linked.",
         "operationId": "regenerate_secret_v1_applications__app_id__regenerate_secret_post",
         "parameters": [
           {
@@ -25164,6 +25318,91 @@
         ]
       }
     },
+    "/v1/self-service/tenants": {
+      "post": {
+        "description": "Self-service tenant signup (public, rate-limited 5 req/min per IP).",
+        "operationId": "self_service_signup_v1_self_service_tenants_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelfServiceSignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelfServiceSignupResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Self Service Signup",
+        "tags": [
+          "Self-Service"
+        ]
+      }
+    },
+    "/v1/self-service/tenants/{tenant_id}/status": {
+      "get": {
+        "description": "Poll tenant provisioning status (public, rate-limited).",
+        "operationId": "self_service_status_v1_self_service_tenants__tenant_id__status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelfServiceStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Self Service Status",
+        "tags": [
+          "Self-Service"
+        ]
+      }
+    },
     "/v1/service-accounts": {
       "get": {
         "description": "List all service accounts owned by the current user.",
@@ -26672,7 +26911,7 @@
         ]
       },
       "post": {
-        "description": "Create a new tenant (CPI Admin only).\n\nThis will:\n1. Create tenant in database\n2. Create Keycloak group for the tenant\n3. Emit tenant-created event",
+        "description": "Create a new tenant (CPI Admin only).\n\nThis will:\n1. Create tenant in database with provisioning_status=PENDING\n2. Fire async provisioning saga (KC group + admin user + policy seed + Kafka events)\n3. Return immediately \u2014 poll provisioning-status for progress",
         "operationId": "create_tenant_v1_tenants_post",
         "requestBody": {
           "content": {
@@ -26719,7 +26958,7 @@
     },
     "/v1/tenants/{tenant_id}": {
       "delete": {
-        "description": "Delete tenant (CPI Admin only).\n\nWARNING: This will archive the tenant (soft delete).",
+        "description": "Delete tenant (CPI Admin only).\n\nTriggers async deprovisioning saga: disables policies, deletes KC group,\nemits namespace cleanup event, archives tenant.",
         "operationId": "delete_tenant_v1_tenants__tenant_id__delete",
         "parameters": [
           {
@@ -29390,6 +29629,54 @@
         "summary": "Get Tree",
         "tags": [
           "Git"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/provisioning-status": {
+      "get": {
+        "description": "Get tenant provisioning status.",
+        "operationId": "get_provisioning_status_v1_tenants__tenant_id__provisioning_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantProvisioningStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Provisioning Status",
+        "tags": [
+          "Tenants"
         ]
       }
     },

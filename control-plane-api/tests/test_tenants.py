@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
-from src.models.tenant import Tenant, TenantStatus
+
+from src.models.tenant import Tenant
 
 
 def _make_tenant(
@@ -19,6 +20,7 @@ def _make_tenant(
     description="Test tenant",
     status="active",
     owner_email="admin@acme.com",
+    provisioning_status="pending",
 ):
     """Create a mock Tenant ORM object."""
     tenant = MagicMock(spec=Tenant)
@@ -26,6 +28,7 @@ def _make_tenant(
     tenant.name = name
     tenant.description = description
     tenant.status = status
+    tenant.provisioning_status = provisioning_status
     tenant.settings = {"owner_email": owner_email}
     tenant.created_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
     tenant.updated_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
@@ -118,11 +121,12 @@ class TestTenantsRouter:
         mock_repo.get_by_id = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(return_value=created_tenant)
 
-        with patch("src.routers.tenants.TenantRepository", return_value=mock_repo), \
-             patch("src.routers.tenants.keycloak_service") as mock_keycloak, \
-             patch("src.routers.tenants.kafka_service") as mock_kafka:
+        with (
+            patch("src.routers.tenants.TenantRepository", return_value=mock_repo),
+            patch("src.routers.tenants.provision_tenant", new_callable=AsyncMock),
+            patch("src.routers.tenants.kafka_service") as mock_kafka,
+        ):
 
-            mock_keycloak.setup_tenant_group = AsyncMock(return_value=True)
             mock_kafka.publish = AsyncMock(return_value=True)
             mock_kafka.emit_audit_event = AsyncMock(return_value=True)
 
@@ -189,8 +193,10 @@ class TestTenantsRouter:
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
         mock_repo.update = AsyncMock(return_value=updated_tenant)
 
-        with patch("src.routers.tenants.TenantRepository", return_value=mock_repo), \
-             patch("src.routers.tenants.kafka_service") as mock_kafka:
+        with (
+            patch("src.routers.tenants.TenantRepository", return_value=mock_repo),
+            patch("src.routers.tenants.kafka_service") as mock_kafka,
+        ):
 
             mock_kafka.emit_audit_event = AsyncMock(return_value=True)
 
@@ -224,8 +230,10 @@ class TestTenantsRouter:
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
 
-        with patch("src.routers.tenants.TenantRepository", return_value=mock_repo), \
-             patch("src.routers.tenants.kafka_service") as mock_kafka:
+        with (
+            patch("src.routers.tenants.TenantRepository", return_value=mock_repo),
+            patch("src.routers.tenants.kafka_service") as mock_kafka,
+        ):
 
             mock_kafka.emit_audit_event = AsyncMock(return_value=True)
 
@@ -243,17 +251,18 @@ class TestTenantsRouter:
     # ============== Delete Tenant Tests ==============
 
     def test_delete_tenant_success(self, app_with_cpi_admin, mock_db_session):
-        """Test CPI Admin can archive tenant."""
+        """Test CPI Admin can trigger tenant deprovisioning."""
         tenant = _make_tenant("acme", "ACME Corporation")
 
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=tenant)
-        mock_repo.update = AsyncMock(return_value=tenant)
 
-        with patch("src.routers.tenants.TenantRepository", return_value=mock_repo), \
-             patch("src.routers.tenants.kafka_service") as mock_kafka:
+        with (
+            patch("src.routers.tenants.TenantRepository", return_value=mock_repo),
+            patch("src.routers.tenants.deprovision_tenant", new_callable=AsyncMock),
+            patch("src.routers.tenants.kafka_service") as mock_kafka,
+        ):
 
-            mock_kafka.publish = AsyncMock(return_value=True)
             mock_kafka.emit_audit_event = AsyncMock(return_value=True)
 
             with TestClient(app_with_cpi_admin) as client:
@@ -261,7 +270,7 @@ class TestTenantsRouter:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["message"] == "Tenant archived"
+        assert data["message"] == "Tenant deprovisioning started"
         assert data["id"] == "acme"
 
     def test_delete_tenant_404(self, app_with_cpi_admin, mock_db_session):
@@ -291,19 +300,20 @@ class TestTenantsRouter:
         data = response.json()
         assert data == []
 
-    def test_create_tenant_keycloak_failure(self, app_with_cpi_admin, mock_db_session):
-        """Test POST / succeeds even if Keycloak setup fails."""
+    def test_create_tenant_fires_provisioning(self, app_with_cpi_admin, mock_db_session):
+        """Test POST / fires async provisioning task."""
         created_tenant = _make_tenant("new-tenant", "New Tenant Corp", owner_email="owner@newtenant.com")
 
         mock_repo = MagicMock()
         mock_repo.get_by_id = AsyncMock(return_value=None)
         mock_repo.create = AsyncMock(return_value=created_tenant)
 
-        with patch("src.routers.tenants.TenantRepository", return_value=mock_repo), \
-             patch("src.routers.tenants.keycloak_service") as mock_keycloak, \
-             patch("src.routers.tenants.kafka_service") as mock_kafka:
+        with (
+            patch("src.routers.tenants.TenantRepository", return_value=mock_repo),
+            patch("src.routers.tenants.provision_tenant", new_callable=AsyncMock),
+            patch("src.routers.tenants.kafka_service") as mock_kafka,
+        ):
 
-            mock_keycloak.setup_tenant_group = AsyncMock(side_effect=Exception("Keycloak unavailable"))
             mock_kafka.publish = AsyncMock(return_value=True)
             mock_kafka.emit_audit_event = AsyncMock(return_value=True)
 
@@ -321,7 +331,7 @@ class TestTenantsRouter:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == "new-tenant"
-        assert data["status"] == "active"
+        assert data["provisioning_status"] == "pending"
 
     def test_update_tenant_error(self, app_with_cpi_admin, mock_db_session):
         """Test PUT /{id} when repo fails returns 500."""

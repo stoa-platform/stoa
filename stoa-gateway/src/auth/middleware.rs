@@ -336,6 +336,8 @@ mod tests {
             typ: None,
             scope: Some("openid profile email stoa:write".to_string()),
             cnf: None,
+            sub_account_id: None,
+            master_account_id: None,
         }
     }
 

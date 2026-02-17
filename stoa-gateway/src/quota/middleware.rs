@@ -118,9 +118,18 @@ pub async fn quota_middleware(
 /// Extract consumer_id from request extensions.
 ///
 /// Priority:
-/// 1. AuthenticatedUser.user_id (from JWT)
-/// 2. None (anonymous — skip quota)
+/// 1. SubAccountContext.sub_account_id (federation — isolated quota bucket)
+/// 2. AuthenticatedUser.user_id (from JWT)
+/// 3. None (anonymous — skip quota)
 fn extract_consumer_id(request: &Request<Body>) -> Option<String> {
+    // CAB-1362: Prefer federation sub-account (isolated quota bucket)
+    if let Some(fed_ctx) = request
+        .extensions()
+        .get::<crate::federation::SubAccountContext>()
+    {
+        return Some(format!("fed:{}", fed_ctx.sub_account_id));
+    }
+
     // Try JWT auth user
     if let Some(user) = request.extensions().get::<AuthenticatedUser>() {
         return Some(user.user_id.clone());
@@ -350,6 +359,8 @@ mod tests {
             typ: None,
             scope: Some("openid stoa:read".to_string()),
             cnf: None,
+            sub_account_id: None,
+            master_account_id: None,
         }
     }
 
@@ -362,5 +373,45 @@ mod tests {
             claims: test_claims(),
             raw_token: "token".to_string(),
         }
+    }
+
+    #[test]
+    fn test_extract_consumer_id_federation_preferred() {
+        use std::collections::HashSet;
+
+        let mut request = Request::builder().uri("/test").body(Body::empty()).unwrap();
+        // Insert both AuthenticatedUser and SubAccountContext
+        request.extensions_mut().insert(test_auth_user());
+        request
+            .extensions_mut()
+            .insert(crate::federation::SubAccountContext {
+                sub_account_id: "sub-acct-42".to_string(),
+                master_account_id: "master-1".to_string(),
+                tenant_id: "acme".to_string(),
+                allowed_tools: Some(HashSet::new()),
+            });
+
+        let consumer_id = extract_consumer_id(&request);
+        // Federation sub-account takes priority over AuthenticatedUser
+        assert_eq!(consumer_id, Some("fed:sub-acct-42".to_string()));
+    }
+
+    #[test]
+    fn test_extract_consumer_id_fallback_to_user() {
+        let mut request = Request::builder().uri("/test").body(Body::empty()).unwrap();
+        request.extensions_mut().insert(test_auth_user());
+        // No SubAccountContext
+
+        let consumer_id = extract_consumer_id(&request);
+        assert_eq!(consumer_id, Some("user-123".to_string()));
+    }
+
+    #[test]
+    fn test_extract_consumer_id_no_auth() {
+        let request = Request::builder().uri("/test").body(Body::empty()).unwrap();
+        // No extensions at all
+
+        let consumer_id = extract_consumer_id(&request);
+        assert_eq!(consumer_id, None);
     }
 }

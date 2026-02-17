@@ -108,6 +108,11 @@ impl ToolProxyClient {
         &self.base_url
     }
 
+    /// Get a reference to the inner HTTP client (for federation cache etc.)
+    pub fn http_client(&self) -> &Client {
+        &self.client
+    }
+
     /// Get a valid access token, refreshing if expired.
     async fn get_token(&self) -> Result<String, String> {
         let oidc = match &self.oidc {

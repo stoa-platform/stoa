@@ -76,7 +76,8 @@ pub async fn token_proxy(
         }
     };
 
-    let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    // reqwest 0.12 shares http 1.0 StatusCode with axum — no conversion needed
+    let status = resp.status();
 
     // Extract content-type from reqwest response before consuming body
     let resp_content_type = resp

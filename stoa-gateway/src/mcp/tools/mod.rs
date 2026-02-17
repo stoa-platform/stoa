@@ -276,15 +276,18 @@ pub enum ToolError {
     Internal(String),
 }
 
-/// Registry of available tools
+/// Registry of available tools with per-tenant staleness tracking (CAB-1317).
 pub struct ToolRegistry {
     tools: RwLock<HashMap<String, Arc<dyn Tool>>>,
+    /// Tracks when tools were last loaded for each tenant (CAB-1317 Phase 2).
+    tenant_loaded_at: RwLock<HashMap<String, std::time::Instant>>,
 }
 
 impl ToolRegistry {
     pub fn new() -> Self {
         Self {
             tools: RwLock::new(HashMap::new()),
+            tenant_loaded_at: RwLock::new(HashMap::new()),
         }
     }
 
@@ -349,6 +352,33 @@ impl ToolRegistry {
     #[allow(dead_code)] // Used by k8s::CrdWatcher when k8s feature enabled
     pub fn names(&self) -> Vec<String> {
         self.tools.read().keys().cloned().collect()
+    }
+
+    // === Staleness tracking (CAB-1317 Phase 2) ===
+
+    /// Check if tools for a tenant are stale (older than `max_age`).
+    /// Returns true if never loaded or if loaded longer than `max_age` ago.
+    pub fn is_stale(&self, tenant_id: &str, max_age: std::time::Duration) -> bool {
+        let loaded_at = self.tenant_loaded_at.read();
+        match loaded_at.get(tenant_id) {
+            None => true,
+            Some(instant) => instant.elapsed() > max_age,
+        }
+    }
+
+    /// Mark tools as freshly loaded for a tenant.
+    pub fn mark_loaded(&self, tenant_id: &str) {
+        self.tenant_loaded_at
+            .write()
+            .insert(tenant_id.to_string(), std::time::Instant::now());
+    }
+
+    /// Get the age of the tool cache for a tenant (None if never loaded).
+    pub fn tenant_cache_age(&self, tenant_id: &str) -> Option<std::time::Duration> {
+        self.tenant_loaded_at
+            .read()
+            .get(tenant_id)
+            .map(|instant| instant.elapsed())
     }
 
     /// Remove all tools whose name starts with a given prefix.
@@ -689,5 +719,56 @@ mod tests {
             StoaCreateApiTool::new(reqwest::Client::new(), "http://localhost:8000".to_string());
         let def = tool.definition();
         assert!(def.tenant_id.is_none());
+    }
+
+    // === Staleness Tracking Tests (CAB-1317 Phase 2) ===
+
+    #[test]
+    fn test_is_stale_when_never_loaded() {
+        let registry = ToolRegistry::new();
+        // Never loaded → always stale
+        assert!(registry.is_stale("acme", std::time::Duration::from_secs(300)));
+    }
+
+    #[test]
+    fn test_is_stale_after_mark_loaded() {
+        let registry = ToolRegistry::new();
+        registry.mark_loaded("acme");
+        // Just loaded → not stale with 5-min TTL
+        assert!(!registry.is_stale("acme", std::time::Duration::from_secs(300)));
+    }
+
+    #[test]
+    fn test_is_stale_with_zero_ttl() {
+        let registry = ToolRegistry::new();
+        registry.mark_loaded("acme");
+        // Zero TTL → always stale (edge case)
+        assert!(registry.is_stale("acme", std::time::Duration::from_secs(0)));
+    }
+
+    #[test]
+    fn test_is_stale_different_tenants_independent() {
+        let registry = ToolRegistry::new();
+        registry.mark_loaded("acme");
+        // acme loaded, other-tenant never loaded
+        assert!(!registry.is_stale("acme", std::time::Duration::from_secs(300)));
+        assert!(registry.is_stale("other-tenant", std::time::Duration::from_secs(300)));
+    }
+
+    #[test]
+    fn test_mark_loaded_updates_timestamp() {
+        let registry = ToolRegistry::new();
+        registry.mark_loaded("acme");
+        let age1 = registry.tenant_cache_age("acme").expect("should exist");
+        // Re-mark should produce a newer (or equal) timestamp
+        registry.mark_loaded("acme");
+        let age2 = registry.tenant_cache_age("acme").expect("should exist");
+        assert!(age2 <= age1);
+    }
+
+    #[test]
+    fn test_tenant_cache_age_none_when_never_loaded() {
+        let registry = ToolRegistry::new();
+        assert!(registry.tenant_cache_age("ghost").is_none());
     }
 }

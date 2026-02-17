@@ -192,6 +192,34 @@ pub fn start_tool_refresh_task(
     });
 }
 
+// ─── Per-Tenant Refresh (CAB-1317 Phase 2) ────────────────────────
+
+/// Refresh tools for a specific tenant by re-discovering from CP.
+///
+/// Only registers NEW tools that don't already have native implementations.
+/// Marks the tenant as freshly loaded in the registry (staleness tracking).
+/// Called by handlers.rs stale-while-revalidate logic.
+pub async fn refresh_tools_for_tenant(
+    registry: &Arc<ToolRegistry>,
+    cp: &Arc<ToolProxyClient>,
+    cb: Arc<CircuitBreaker>,
+    tenant_id: &str,
+) -> Result<usize, String> {
+    let defs = discover_with_resilience(cp, &cb).await?;
+    let mut new_count = 0;
+    for def in &defs {
+        if !has_native_implementation(&def.name) && registry.get(&def.name).is_none() {
+            register_remote_tool(registry, def, cp);
+            new_count += 1;
+        }
+    }
+    registry.mark_loaded(tenant_id);
+    if new_count > 0 {
+        tracing::info!(new_count, tenant_id = %tenant_id, "Tenant tool refresh: new proxy tools registered");
+    }
+    Ok(new_count)
+}
+
 // ─── Legacy Fallback (kept for compatibility) ─────────────────────
 
 /// Register the 12 STOA tools with ProxyTool (legacy fallback).

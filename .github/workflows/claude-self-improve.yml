@@ -45,12 +45,6 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: |
-            Bash(gh run *)
-            Bash(gh issue *)
-            Read
-            Glob
-            Grep
           prompt: |
             You are the STOA AI Factory Self-Improvement Agent.
             Your job: find recurring problems and propose rule improvements.
@@ -127,7 +121,7 @@ jobs:
             - Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
             - Label the issue "self-improve". Do NOT label it "claude-implement" automatically.
               A human must review and explicitly label "claude-implement" to trigger implementation.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 15 --allowedTools Bash,Read,Glob,Grep"
 
       # Fallback comment if Claude fails
       - name: Post fallback on failure

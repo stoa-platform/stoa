@@ -11,7 +11,7 @@ Write endpoints return 503 to clearly signal the storage is down.
 
 import logging
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, TypeGuard
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -178,7 +178,7 @@ async def get_snapshot(
     _require_service(service)
 
     tenant_id = user.tenant_id or "unknown"
-    snapshot = await service.get(snapshot_id, tenant_id)  # type: ignore[union-attr]
+    snapshot = await service.get(snapshot_id, tenant_id)
 
     if not snapshot:
         raise HTTPException(
@@ -199,7 +199,7 @@ async def update_snapshot_resolution(
     _require_service(service)
 
     tenant_id = user.tenant_id or "unknown"
-    snapshot = await service.get(snapshot_id, tenant_id)  # type: ignore[union-attr]
+    snapshot = await service.get(snapshot_id, tenant_id)
 
     if not snapshot:
         raise HTTPException(
@@ -211,7 +211,7 @@ async def update_snapshot_resolution(
     if body.resolution_notes is not None:
         snapshot.resolution_notes = body.resolution_notes
 
-    await service.save(snapshot)  # type: ignore[union-attr]
+    await service.save(snapshot)
     return snapshot
 
 
@@ -225,7 +225,7 @@ async def delete_snapshot(
     _require_service(service)
 
     tenant_id = user.tenant_id or "unknown"
-    deleted = await service.delete(snapshot_id, tenant_id)  # type: ignore[union-attr]
+    deleted = await service.delete(snapshot_id, tenant_id)
 
     if not deleted:
         raise HTTPException(
@@ -244,7 +244,7 @@ async def generate_replay(
     _require_service(service)
 
     tenant_id = user.tenant_id or "unknown"
-    snapshot = await service.get(snapshot_id, tenant_id)  # type: ignore[union-attr]
+    snapshot = await service.get(snapshot_id, tenant_id)
 
     if not snapshot:
         raise HTTPException(
@@ -252,7 +252,7 @@ async def generate_replay(
             detail=f"Snapshot {snapshot_id} not found",
         )
 
-    curl_command = service.generate_replay_curl(snapshot)  # type: ignore[union-attr]
+    curl_command = service.generate_replay_curl(snapshot)
 
     return ReplayResponse(
         curl_command=curl_command,
@@ -268,13 +268,17 @@ async def generate_replay(
 # ── Helpers ───────────────────────────────────────────────────────────
 
 
-def _require_service(service: SnapshotService | None) -> None:
-    """Raise 503 if service is unavailable (for write endpoints)."""
+def _require_service(service: SnapshotService | None) -> TypeGuard[SnapshotService]:
+    """Raise 503 if service is unavailable (for write endpoints).
+
+    Returns TypeGuard to help mypy understand service cannot be None after this call.
+    """
     if service is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Error snapshot storage not available",
         )
+    return True
 
 
 def _empty_list_response(page: int = 1, page_size: int = 20) -> SnapshotListResponse:

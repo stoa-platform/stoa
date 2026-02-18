@@ -538,7 +538,13 @@ export function APIDetail() {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div
             className="fixed inset-0 bg-black/50 transition-opacity"
+            role="button"
+            tabIndex={-1}
+            aria-label="Close modal"
             onClick={() => setSubscriptionResult(null)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setSubscriptionResult(null);
+            }}
           />
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-xl max-w-md w-full p-6">

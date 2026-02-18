@@ -22,4 +22,18 @@ module.exports = {
     'jsx-a11y/click-events-have-key-events': 'warn',
     'jsx-a11y/no-static-element-interactions': 'warn',
   },
+  overrides: [
+    {
+      files: ['**/*.test.ts', '**/*.test.tsx'],
+      rules: {
+        '@typescript-eslint/no-explicit-any': 'off',
+      },
+    },
+    {
+      files: ['**/contexts/*.tsx'],
+      rules: {
+        'react-refresh/only-export-components': 'off',
+      },
+    },
+  ],
 }

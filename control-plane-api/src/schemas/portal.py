@@ -44,3 +44,4 @@ class APIListItem(BaseModel):
     category: str | None = None
     tags: list[str] = []
     is_promoted: bool = True
+    audience: str = "public"

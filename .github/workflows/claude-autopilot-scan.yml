@@ -36,6 +36,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Record Start Time
+        run: echo "SCAN_START=$(date +%s)" >> "$GITHUB_ENV"
+
       # Check daily velocity cap before scanning
       - name: Check Velocity Cap
         id: velocity
@@ -294,7 +297,11 @@ jobs:
 
             # Send Slack notification with approve button
             source scripts/ai-ops/ai-factory-notify.sh
-            notify_council "$TICKET_ID" "$TITLE" "$SCORE" "Go" "$ISSUE_URL" "$ISSUE_NUM"
+            # Extract mode and LOC from council output
+            C_MODE=$(jq -r '.mode // empty' council-output.json 2>/dev/null || echo "")
+            C_LOC=$(jq -r '.loc // empty' council-output.json 2>/dev/null || echo "")
+            C_FILES=$(jq -r '.files // empty' council-output.json 2>/dev/null || echo "")
+            notify_council "$TICKET_ID" "$TITLE" "$SCORE" "Go" "$ISSUE_URL" "$ISSUE_NUM" "$C_MODE" "$C_LOC" "$C_FILES"
 
             CREATED=$((CREATED + 1))
           done
@@ -315,12 +322,13 @@ jobs:
           DRY="${{ inputs.dry_run }}"
           COUNCIL_OK="${{ steps.council.outcome }}"
 
+          DURATION=$(( $(date +%s) - ${SCAN_START:-$(date +%s)} ))
           if [ "$CAPPED" = "true" ]; then
             notify_scan "0" "0" "true"
           elif [ "$TOTAL" = "0" ]; then
             notify_scan "0" "0"
           elif [ "$COUNCIL_OK" != "success" ]; then
-            notify_error "claude-autopilot-scan" "council" "" ""
+            notify_error "claude-autopilot-scan" "council" "" "" "$DURATION"
           elif [ "$DRY" = "true" ]; then
             notify_scan "$TOTAL" "0"
           else

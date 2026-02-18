@@ -73,7 +73,8 @@ jobs:
             **Estimated Total LOC**: XXX
 
             Comment "/go-batch" to start parallel execution.
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
+          # Model tier: opus (Council gate decision — quality matters more than cost)
+          claude_args: "--model claude-opus-4-6 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
 
       - name: Notify Slack — Batch Council
         env:
@@ -151,6 +152,7 @@ jobs:
             Only modify files in your component scope.
             Do NOT modify shared files (memory.md, plan.md, CLAUDE.md).
             Rule changes (.claude/rules/) are ALWAYS Ask mode — never auto-merge.
+          # Model tier: sonnet (code generation, full tool access)
           claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 60 --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"
 
       - name: Notify Slack — Agent Complete

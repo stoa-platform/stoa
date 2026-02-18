@@ -173,7 +173,8 @@ jobs:
                 "council_body": "# Council: CAB-XXXX — Title\n**Score: 8.5/10 — Go**\n## Personas\n**Chucky**: 8/10 — ...\n**OSS Killer**: 9/10 — ...\n**Archi**: 8/10 — ...\n**Saul**: 9/10 — ...\n## Ship/Show/Ask: Ship\n## Plan\n...\n## DoD\n- [ ] ...\n---\nComment /go to start implementation."
               }
             ]
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Read,Glob,Grep"
+          # Model tier: haiku (read-only Council scan, no code generation)
+          claude_args: "--model claude-haiku-4-5-20251001 --max-turns 5 --allowedTools Read,Glob,Grep"
           show_full_output: true
 
       # Parse Council output and create GitHub issues + Slack notifications

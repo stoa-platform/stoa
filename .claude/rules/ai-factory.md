@@ -33,7 +33,19 @@ Full reference: `.claude/rules/mcp-integrations.md`
 
 **Rule**: MCP for **state changes**, local files for **context**. Batch reads, minimize writes.
 
-## Cost Awareness
+## Cost Awareness — CI Model Routing (Active)
+
+### CI Workflow Tiers
+
+| Tier | Model | $/MTok (in/out) | Invocations | Use Case |
+|------|-------|-----------------|-------------|----------|
+| 1 | haiku-4-5 | $1/$5 | 6 | Triage, digest, capacity, backlog, review, scan |
+| 2 | sonnet-4-5 | $3/$15 | 7 | Code gen, CI health, audit, interactive, implement, self-improve |
+| 3 | opus-4-6 | $5/$25 | 3 | Council gate (issue-to-pr, linear-dispatch, multi-agent) |
+
+Kill-switch: set repo variable `CLAUDE_DEFAULT_MODEL=claude-sonnet-4-5-20250929` to revert all tiers to Sonnet.
+
+### Local / Subagent Tiers
 
 | Task Type | Model | Rationale |
 |-----------|-------|-----------|

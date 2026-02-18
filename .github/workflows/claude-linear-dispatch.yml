@@ -1,7 +1,6 @@
 # Level 3: Linear → n8n → GitHub Actions → Council → Claude → PR → Close Loop
 # Receives repository_dispatch from n8n when a Linear ticket moves to "In Progress".
-# Runs Council validation, posts to Slack, waits for /go before implementing.
-# Also handles /go comments on council-review issues (self-contained pipeline).
+# Two-stage Council: Stage 1 (ticket pertinence) → /go → Stage 2 (plan validation) → /go-plan → implement.
 # Post-merge: closes GitHub issue + moves Linear ticket to Done + notifies Slack.
 # Kill-switch: set DISABLE_L3_LINEAR=true in repo variables to disable.
 
@@ -26,7 +25,7 @@ permissions:
   actions: write
 
 jobs:
-  # ----- Phase 1: Council Gate (triggered by n8n dispatch) -----
+  # ----- Stage 1: Council Gate (triggered by n8n dispatch) -----
   council:
     if: |
       vars.DISABLE_L3_LINEAR != 'true' &&
@@ -47,7 +46,7 @@ jobs:
             Do NOT read memory.md, plan.md, or operations.log for session state.
             Focus exclusively on the task below.
 
-            Council validation for a Linear ticket.
+            Council validation (Stage 1 — Ticket Pertinence) for a Linear ticket.
 
             Ticket: ${{ github.event.client_payload.ticket_id }}
             Title: ${{ github.event.client_payload.ticket_title }}
@@ -69,22 +68,18 @@ jobs:
             **Archi 50x50**: X/10 — summary
             **Better Call Saul**: X/10 — summary
             ## Ship/Show/Ask: MODE
-            ## Plan
-            scope, files, LOC estimate
-            ## DoD
-            - [ ] criteria
             ---
-            Comment /go to start implementation.
+            Comment /go to start plan validation (Stage 2).
 
             IMPORTANT: Do NOT write any files. Do NOT create issues or labels. Just output the report text above.
-          # Model tier: opus (Council gate decision — quality matters more than cost)
-          claude_args: "--model claude-opus-4-6 --max-turns 3 --allowedTools Read,Glob,Grep"
+          # Model tier: sonnet (Council gate — structured rubric evaluation, Sonnet sufficient)
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Read,Glob,Grep"
           show_full_output: true
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=5, Stage=council"
 
       # Extract Claude's report from execution log and create GitHub issue
       - name: Create Council Issue
@@ -129,7 +124,7 @@ jobs:
               "# Council: ${TICKET} — ${TITLE}" "" \
               "Council validation ran but the report could not be extracted from the execution log." \
               "Check the [workflow logs](https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}) for the full analysis." \
-              "" "---" "Comment /go to start implementation." > council-body.md
+              "" "---" "Comment /go to start plan validation (Stage 2)." > council-body.md
           fi
 
           echo "=== Council body preview ==="
@@ -148,6 +143,85 @@ jobs:
 
           echo "Created issue: ${ISSUE_URL}"
           echo "ISSUE_URL=${ISSUE_URL}" >> "$GITHUB_ENV"
+
+      # Sync Council result to Linear (apply council:ticket-* label + comment)
+      - name: Sync Council to Linear
+        if: steps.council.outcome == 'success'
+        continue-on-error: true
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then exit 0; fi
+
+          TICKET_ID="${{ github.event.client_payload.ticket_id }}"
+          if [ -z "$TICKET_ID" ]; then exit 0; fi
+
+          # Extract score from council-body.md
+          SCORE=""
+          if [ -f council-body.md ]; then
+            SCORE=$(grep -oE 'Score:?\s*[0-9]+\.?[0-9]*/10' council-body.md | head -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
+          fi
+          if [ -z "$SCORE" ]; then
+            echo "Could not extract score — skipping Linear sync"
+            exit 0
+          fi
+
+          # Map score → label name
+          LABEL_NAME=""
+          if echo "$SCORE >= 8.0" | bc -l | grep -q 1; then
+            LABEL_NAME="council:ticket-go"
+          elif echo "$SCORE >= 6.0" | bc -l | grep -q 1; then
+            LABEL_NAME="council:ticket-fix"
+          else
+            LABEL_NAME="council:ticket-redo"
+          fi
+
+          echo "Syncing to Linear: ${TICKET_ID} — score ${SCORE} → ${LABEL_NAME}"
+
+          # Find Linear issue ID
+          ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
+            | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+
+          if [ -z "$ISSUE_ID" ]; then
+            echo "::warning::Could not find Linear issue for ${TICKET_ID}"
+            exit 0
+          fi
+
+          # Find label ID
+          LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueLabels(filter: { name: { eq: \\\"${LABEL_NAME}\\\" } }) { nodes { id } } }\"}" \
+            | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
+
+          if [ -n "$LABEL_ID" ]; then
+            EXISTING=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"{ issue(id: \\\"${ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
+              | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:ticket-") | not) | .id]' 2>/dev/null || echo "[]")
+            LABEL_IDS=$(echo "$EXISTING" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
+
+            curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
+              > /dev/null 2>&1 || true
+            echo "Applied label ${LABEL_NAME} to ${TICKET_ID}"
+          fi
+
+          # Post Council comment on Linear
+          GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
+          COMMENT="Council validation (Stage 1): **${SCORE}/10** — ${LABEL_NAME}\n[GitHub Actions run](${GH_RUN})"
+          curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
+            > /dev/null 2>&1 || true
+          echo "Posted Council comment on ${TICKET_ID}"
 
       # Post Council report to Slack with Approve button
       # If N8N_APPROVE_WEBHOOK_URL + APPROVE_HMAC_SECRET are set, button goes through
@@ -171,12 +245,12 @@ jobs:
           if [ -n "$N8N_WEBHOOK" ] && [ -n "$HMAC_SECRET" ] && [ -n "$ISSUE_NUM" ]; then
             HMAC=$(echo -n "$ISSUE_NUM" | openssl dgst -sha256 -hmac "$HMAC_SECRET" | awk '{print $NF}')
             APPROVE_URL="${N8N_WEBHOOK}?issue=${ISSUE_NUM}&token=${HMAC}"
-            BUTTON_TEXT="Approve \\u0026 Start"
-            INSTRUCTIONS=":zap: Click *Approve & Start* to trigger implementation (1 click, no GitHub visit).\n:mag: Or open the <${ISSUE}|GitHub issue> to review the full plan first."
+            BUTTON_TEXT="Approve \\u0026 Start Stage 2"
+            INSTRUCTIONS=":zap: Click *Approve & Start Stage 2* to trigger plan validation (1 click, no GitHub visit).\n:mag: Or open the <${ISSUE}|GitHub issue> to review the full Stage 1 report first."
           else
             APPROVE_URL="$ISSUE"
             BUTTON_TEXT="Review \\u0026 Approve"
-            INSTRUCTIONS=":point_right: Comment \`/go\` on the GitHub issue to start autonomous implementation.\n:point_right: Comment \`/adjust <feedback>\` to request changes."
+            INSTRUCTIONS=":point_right: Comment \`/go\` on the GitHub issue to start plan validation (Stage 2).\n:point_right: Comment \`/adjust <feedback>\` to request changes."
           fi
 
           curl -s -X POST "$SLACK_WEBHOOK" \
@@ -185,13 +259,13 @@ jobs:
               \"blocks\": [
                 {
                   \"type\": \"header\",
-                  \"text\": {\"type\": \"plain_text\", \"text\": \"Council Report: ${TICKET}\", \"emoji\": true}
+                  \"text\": {\"type\": \"plain_text\", \"text\": \"Stage 1 Council: ${TICKET}\", \"emoji\": true}
                 },
                 {
                   \"type\": \"section\",
                   \"text\": {
                     \"type\": \"mrkdwn\",
-                    \"text\": \"*${TITLE}*\n\nCouncil validation complete.\n\n${INSTRUCTIONS}\"
+                    \"text\": \"*${TITLE}*\n\nStage 1 Council complete (ticket pertinence).\n\n${INSTRUCTIONS}\"
                   },
                   \"accessory\": {
                     \"type\": \"button\",
@@ -206,8 +280,8 @@ jobs:
               ]
             }"
 
-  # ----- Phase 2: Implementation (triggered by /go on council-review issues) -----
-  implement:
+  # ----- Stage 2: Plan Validation (triggered by /go on council-review issues) -----
+  plan-validate:
     if: |
       vars.DISABLE_L3_LINEAR != 'true' &&
       github.event_name == 'issue_comment' &&
@@ -218,11 +292,11 @@ jobs:
         startsWith(github.event.comment.body, '/approve ')
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
-      # Guard: only run on issues created by L3 (council-review label)
+      # Guard: only run on L3 council-review issues
       - name: Verify L3 Council issue
         id: verify
         env:
@@ -234,6 +308,222 @@ jobs:
           if echo "$LABELS" | grep -q "council-review"; then
             echo "Council-review issue confirmed"
             echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not a council-review issue — skipping (L3 only handles its own issues)"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Plan Validation (Stage 2 Council)
+        if: steps.verify.outputs.valid == 'true'
+        id: plan-council
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
+
+            You are running Stage 2 Council Plan Validation for issue #${{ github.event.issue.number }}.
+
+            Issue title: ${{ github.event.issue.title }}
+            Issue body (contains Stage 1 Council report):
+            ${{ github.event.issue.body }}
+
+            Stage 1 Council has already validated this ticket (pertinence check passed).
+            Now run Stage 2: validate the IMPLEMENTATION PLAN.
+
+            Steps:
+            1. Read the issue body (Stage 1 report) for context
+            2. Write a detailed implementation plan (files to modify, steps, LOC estimate)
+            3. Run 4-persona Council validation on THE PLAN (not the ticket):
+               - Chucky: Are risks documented? Edge cases covered by tests?
+               - OSS Killer: LOC justified? Delivers announced value? ROI of dev effort?
+               - Archi 50x50: Right level of abstraction? Existing patterns respected? Breaking changes?
+               - Better Call Saul: No secrets hardcoded in plan? GDPR/DORA impacts noted?
+            4. Score each persona /10, compute average
+            5. Post a structured comment on this issue with the plan + Stage 2 scores
+
+            Format the comment:
+            ## Stage 2: Plan Validation
+            ### Implementation Plan
+            <detailed plan with files, steps, LOC>
+            ### Stage 2 Council
+            | Persona | Score | Verdict |
+            |---------|-------|---------|
+            | Chucky | X/10 | Go/Fix/Redo |
+            | OSS Killer | X/10 | Go/Fix/Redo |
+            | Archi 50x50 | X/10 | Go/Fix/Redo |
+            | Better Call Saul | X/10 | Go/Fix/Redo |
+            ---
+            **Plan Score: X.XX/10 — [Go|Fix|Redo]**
+            Comment `/go-plan` to start implementation.
+
+            IMPORTANT: Do NOT implement anything. Only write the plan and validate it.
+          # Model tier: sonnet (Stage 2 Council — plan validation, Sonnet sufficient)
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10 --allowedTools Read,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=10, Stage=plan-validate"
+
+      - name: Mark Plan validated
+        if: steps.plan-council.outcome == 'success' && steps.verify.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "plan-validated" --color "006b75" --description "Stage 2 plan validation passed" --force 2>/dev/null || true
+          gh issue edit "${{ github.event.issue.number }}" --add-label "plan-validated"
+
+      # Sync Stage 2 result to Linear (apply council:plan-* label + comment)
+      - name: Sync Plan Council to Linear
+        if: steps.plan-council.outcome == 'success' && steps.verify.outputs.valid == 'true'
+        continue-on-error: true
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then exit 0; fi
+
+          # Extract CAB-XXXX from issue labels
+          TICKET_ID=$(gh issue view "${{ github.event.issue.number }}" --json labels --jq \
+            '[.labels[].name | select(test("^CAB-[0-9]+$"))][0] // empty' 2>/dev/null || echo "")
+          if [ -z "$TICKET_ID" ]; then
+            TICKET_ID=$(echo "${{ github.event.issue.title }}" | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
+          fi
+          if [ -z "$TICKET_ID" ]; then exit 0; fi
+
+          # Extract plan score
+          EXEC_FILE="${{ steps.plan-council.outputs.execution_file }}"
+          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
+          SCORE=""
+          if [ -f "$EXEC_FILE" ]; then
+            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
+              | grep -oE 'Plan Score:?\s*[0-9]+\.?[0-9]*/10' | head -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
+          fi
+          if [ -z "$SCORE" ] && [ -f "$EXEC_FILE" ]; then
+            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
+              | grep -oE 'Score:?\s*[0-9]+\.?[0-9]*/10' | tail -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
+          fi
+          if [ -z "$SCORE" ]; then
+            echo "Could not extract plan score — skipping Linear sync"
+            exit 0
+          fi
+
+          # Map score → plan label
+          if echo "$SCORE >= 8.0" | bc -l | grep -q 1; then
+            LABEL_NAME="council:plan-go"
+          elif echo "$SCORE >= 6.0" | bc -l | grep -q 1; then
+            LABEL_NAME="council:plan-fix"
+          else
+            LABEL_NAME="council:plan-redo"
+          fi
+
+          echo "Syncing plan to Linear: ${TICKET_ID} — score ${SCORE} → ${LABEL_NAME}"
+
+          ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
+            | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+          if [ -z "$ISSUE_ID" ]; then exit 0; fi
+
+          LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueLabels(filter: { name: { eq: \\\"${LABEL_NAME}\\\" } }) { nodes { id } } }\"}" \
+            | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
+
+          if [ -n "$LABEL_ID" ]; then
+            EXISTING=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"{ issue(id: \\\"${ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
+              | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:plan-") | not) | .id]' 2>/dev/null || echo "[]")
+            LABEL_IDS=$(echo "$EXISTING" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
+
+            curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
+              > /dev/null 2>&1 || true
+          fi
+
+          GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
+          COMMENT="Plan validation (Stage 2): **${SCORE}/10** — ${LABEL_NAME}\n[GitHub Actions run](${GH_RUN})"
+          curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
+            > /dev/null 2>&1 || true
+
+      - name: Notify Slack — Plan Validation
+        if: always() && steps.verify.outputs.valid == 'true'
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          ISSUE_URL="${{ github.event.issue.html_url }}"
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          STATUS="${{ steps.plan-council.outcome }}"
+          if [ "$STATUS" = "success" ]; then
+            EMOJI=":clipboard:"
+            TEXT="Stage 2 plan validation passed.\nComment \`/go-plan\` to start implementation."
+          else
+            EMOJI=":warning:"
+            TEXT="Stage 2 plan validation failed. Check the GitHub issue for details."
+          fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"blocks\": [
+                {\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"${EMOJI} Plan Validation: #${ISSUE_NUM}\",\"emoji\":true}},
+                {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*${ISSUE_TITLE}*\n${TEXT}\"},\"accessory\":{\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"Review Plan\"},\"url\":\"${ISSUE_URL}\",\"action_id\":\"plan-review\"}}
+              ]
+            }"
+
+  # ----- Stage 3: Implementation (triggered by /go-plan on council-review issues) -----
+  implement:
+    if: |
+      vars.DISABLE_L3_LINEAR != 'true' &&
+      github.event_name == 'issue_comment' &&
+      (
+        github.event.comment.body == '/go-plan' ||
+        startsWith(github.event.comment.body, '/go-plan ')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # Guard: only run on L3 issues with plan-validated label
+      - name: Verify L3 Plan validated
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+
+          if echo "$LABELS" | grep -q "council-review"; then
+            if echo "$LABELS" | grep -q "plan-validated"; then
+              echo "L3 issue with plan validation confirmed"
+              echo "valid=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::L3 issue but no plan-validated label"
+              # Fallback: check for Plan Score comment
+              PLAN_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Plan Score"))] | length')
+              if [ "$PLAN_COMMENT" -gt 0 ]; then
+                echo "Plan validation comment found"
+                echo "valid=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "valid=false" >> "$GITHUB_OUTPUT"
+                gh issue comment "$ISSUE_NUM" \
+                  --body "Implementation requires plan validation (Stage 2). Comment \`/go\` first, then \`/go-plan\` after Stage 2 passes."
+              fi
+            fi
           else
             echo "Not a council-review issue — skipping (L3 only handles its own issues)"
             echo "valid=false" >> "$GITHUB_OUTPUT"
@@ -257,8 +547,8 @@ jobs:
             Issue body:
             ${{ github.event.issue.body }}
 
-            The issue body contains a Council validation report with a plan and DoD.
-            Follow the implementation plan from the Council report.
+            Read the Stage 2 plan validation comment (posted earlier on this issue).
+            Follow the implementation plan from the Stage 2 comment.
             Follow code style rules in CLAUDE.md and .claude/rules/ (but skip workflow/session rules).
 
             Steps:
@@ -279,7 +569,7 @@ jobs:
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=60, Stage=implement"
 
       # ----- Close the Loop (post-merge feedback) -----
       # After implementation: find merged PR, close GitHub issue, update Linear, notify Slack

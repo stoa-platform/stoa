@@ -1,6 +1,6 @@
 # Level 1: Claude Code Issue-to-PR — assigns issue to Claude, creates a PR
 # Triggered when an issue is labeled "claude-implement" or assigned to claude bot.
-# Runs Council validation first, posts report, waits for approval.
+# Two-stage Council: Stage 1 (ticket pertinence) → /go → Stage 2 (plan validation) → /go-plan → implement.
 # Kill-switch: set DISABLE_L1_IMPLEMENT=true in repo variables to disable.
 
 name: Claude Code Issue-to-PR
@@ -22,7 +22,7 @@ permissions:
   id-token: write
 
 jobs:
-  # ----- Phase 1: Council Validation (runs on label or assignment) -----
+  # ----- Stage 1: Council Ticket Validation (runs on label or assignment) -----
   council-validate:
     if: |
       vars.DISABLE_L1_IMPLEMENT != 'true' &&
@@ -46,8 +46,9 @@ jobs:
             Do NOT read memory.md, plan.md, or operations.log for session state.
             Focus exclusively on the task below.
 
-            You are the STOA Council Gate. Read the issue description and run a 4-persona
-            Council validation (Chucky, OSS Killer, Archi, Better Call Saul).
+            You are the STOA Council Gate (Stage 1 — Ticket Pertinence).
+            Read the issue description and run a 4-persona Council validation
+            (Chucky, OSS Killer, Archi, Better Call Saul).
 
             Issue title: ${{ github.event.issue.title }}
             Issue body: ${{ github.event.issue.body }}
@@ -58,33 +59,23 @@ jobs:
             Then post a structured comment on this issue with:
             1. The full Council report (4 personas, scores, verdicts)
             2. The global verdict (Go/Fix/Redo) and average score
-            3. An implementation plan (files to modify, LOC estimate, phases)
-            4. Ship/Show/Ask classification
+            3. Ship/Show/Ask classification
 
             End the comment with:
             ---
             **Council Score: X.XX/10 — [Go|Fix|Redo]**
-            Comment `/go` to approve and start autonomous implementation.
+            Comment `/go` to approve and start plan validation (Stage 2).
 
-            Include a **Binary DoD** (Definition of Done) checklist in the comment:
-            - [ ] All modified files listed
-            - [ ] Each change is independently testable
-            - [ ] Total LOC < 300
-            - [ ] No new `any` types, `todo!()`, or `// TODO`
-            - [ ] Component quality gate passes
-            - [ ] CI green
-            - [ ] State files updated
-
-            IMPORTANT: Do NOT implement anything yet. Only validate and plan.
-          # Model tier: opus (Council gate decision — quality matters more than cost)
-          claude_args: "--model claude-opus-4-6 --max-turns 10 --allowedTools Read,Glob,Grep"
+            IMPORTANT: Do NOT implement anything yet. Only validate the ticket pertinence.
+          # Model tier: sonnet (Council gate — structured rubric evaluation, Sonnet sufficient)
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Read,Glob,Grep"
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=5, Stage=council-validate"
 
-      # Add council-validated label so implement job can verify
+      # Add council-validated label so plan-validate job can verify
       - name: Mark Council complete
         if: steps.council.outcome == 'success'
         env:
@@ -92,6 +83,96 @@ jobs:
         run: |
           gh label create "council-validated" --color "0e8a16" --description "Council validation passed" --force 2>/dev/null || true
           gh issue edit "${{ github.event.issue.number }}" --add-label "council-validated"
+
+      # Sync Council result to Linear (apply council:ticket-* label + comment)
+      - name: Sync Council to Linear
+        if: steps.council.outcome == 'success'
+        continue-on-error: true
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then exit 0; fi
+
+          # Extract CAB-XXXX from issue title or body
+          TICKET_ID=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" \
+            | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
+          if [ -z "$TICKET_ID" ]; then
+            echo "No CAB-XXXX found in issue — skipping Linear sync"
+            exit 0
+          fi
+
+          # Extract score from Council output (look for "Council Score: X.XX/10" pattern)
+          EXEC_FILE="${{ steps.council.outputs.execution_file }}"
+          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
+          SCORE=""
+          if [ -f "$EXEC_FILE" ]; then
+            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
+              | grep -oE 'Score:?\s*[0-9]+\.?[0-9]*/10' | head -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
+          fi
+          if [ -z "$SCORE" ]; then
+            echo "Could not extract score — skipping Linear sync"
+            exit 0
+          fi
+
+          # Map score → label name
+          LABEL_NAME=""
+          if echo "$SCORE >= 8.0" | bc -l | grep -q 1; then
+            LABEL_NAME="council:ticket-go"
+          elif echo "$SCORE >= 6.0" | bc -l | grep -q 1; then
+            LABEL_NAME="council:ticket-fix"
+          else
+            LABEL_NAME="council:ticket-redo"
+          fi
+
+          echo "Syncing to Linear: ${TICKET_ID} — score ${SCORE} → ${LABEL_NAME}"
+
+          # Find Linear issue ID
+          ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
+            | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+
+          if [ -z "$ISSUE_ID" ]; then
+            echo "::warning::Could not find Linear issue for ${TICKET_ID}"
+            exit 0
+          fi
+
+          # Find label ID
+          LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueLabels(filter: { name: { eq: \\\"${LABEL_NAME}\\\" } }) { nodes { id } } }\"}" \
+            | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
+
+          if [ -n "$LABEL_ID" ]; then
+            # Get existing labels and add the new one
+            EXISTING=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"{ issue(id: \\\"${ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
+              | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:ticket-") | not) | .id]' 2>/dev/null || echo "[]")
+
+            # Build label ID array: existing (minus old council:ticket-*) + new
+            LABEL_IDS=$(echo "$EXISTING" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
+
+            curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
+              > /dev/null 2>&1 || true
+            echo "Applied label ${LABEL_NAME} to ${TICKET_ID}"
+          fi
+
+          # Post Council comment on Linear
+          GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
+          COMMENT="Council validation (Stage 1): **${SCORE}/10** — ${LABEL_NAME}\n[GitHub Actions run](${GH_RUN})"
+          curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
+            > /dev/null 2>&1 || true
+          echo "Posted Council comment on ${TICKET_ID}"
 
       # Notify Slack with Council report
       - name: Notify Slack — Council Report
@@ -120,7 +201,7 @@ jobs:
                   \"type\": \"header\",
                   \"text\": {
                     \"type\": \"plain_text\",
-                    \"text\": \"${EMOJI} Council Validation: #${ISSUE_NUM}\",
+                    \"text\": \"${EMOJI} Stage 1 Council: #${ISSUE_NUM}\",
                     \"emoji\": true
                   }
                 },
@@ -128,7 +209,7 @@ jobs:
                   \"type\": \"section\",
                   \"text\": {
                     \"type\": \"mrkdwn\",
-                    \"text\": \"*${ISSUE_TITLE}*\nCouncil has validated the implementation plan.\nComment \`/go\` on the GitHub issue to start autonomous implementation.\"
+                    \"text\": \"*${ISSUE_TITLE}*\nStage 1 Council complete (ticket pertinence).\nComment \`/go\` to start plan validation (Stage 2).\"
                   },
                   \"accessory\": {
                     \"type\": \"button\",
@@ -140,25 +221,24 @@ jobs:
               ]
             }"
 
-  # ----- Phase 2: Implementation (runs on /go approval comment) -----
-  implement:
+  # ----- Stage 2: Plan Validation (runs on /go approval) -----
+  plan-validate:
     if: |
       vars.DISABLE_L1_IMPLEMENT != 'true' &&
       github.event_name == 'issue_comment' &&
       (
-        github.event.comment.body == '/approve' ||
         github.event.comment.body == '/go' ||
+        github.event.comment.body == '/approve' ||
         startsWith(github.event.comment.body, '/go ') ||
         startsWith(github.event.comment.body, '/approve ')
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
-      # Guard: verify Council validation ran before implementing
-      - name: Verify Council validation
-        id: verify-council
+      - name: Verify Stage 1 Council
+        id: verify-stage1
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -166,28 +246,239 @@ jobs:
           LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
 
           if echo "$LABELS" | grep -q "council-validated"; then
-            echo "Council validation confirmed"
+            echo "Stage 1 Council confirmed"
             echo "validated=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::No council-validated label found on issue #$ISSUE_NUM"
             echo "Checking for Council comment as fallback..."
             COUNCIL_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Council Score"))] | length')
             if [ "$COUNCIL_COMMENT" -gt 0 ]; then
               echo "Council comment found"
               echo "validated=true" >> "$GITHUB_OUTPUT"
             else
-              echo "::error::No Council validation found. Label the issue 'claude-implement' first."
+              echo "Not an L1 issue or no Stage 1 Council — skipping"
               echo "validated=false" >> "$GITHUB_OUTPUT"
             fi
           fi
 
-      - name: Abort if no Council
+      - name: Skip if not L1
+        if: steps.verify-stage1.outputs.validated != 'true'
+        run: |
+          echo "Not an L1 council-validated issue — exiting cleanly"
+          exit 0
+
+      - name: Run Plan Validation (Stage 2 Council)
+        if: steps.verify-stage1.outputs.validated == 'true'
+        id: plan-council
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
+            Do NOT read memory.md, plan.md, or operations.log for session state.
+            Focus exclusively on the task below.
+
+            You are running Stage 2 Council Plan Validation for issue #${{ github.event.issue.number }}.
+
+            Issue title: ${{ github.event.issue.title }}
+            Issue body: ${{ github.event.issue.body }}
+
+            Stage 1 Council has already validated this ticket (pertinence check passed).
+            Now run Stage 2: validate the IMPLEMENTATION PLAN.
+
+            Steps:
+            1. Read the issue description and the Stage 1 Council comment on this issue
+            2. Write a detailed implementation plan (files to modify, steps, LOC estimate)
+            3. Run 4-persona Council validation on THE PLAN (not the ticket):
+               - Chucky: Are risks documented? Edge cases covered by tests?
+               - OSS Killer: LOC justified? Delivers announced value? ROI of dev effort?
+               - Archi 50x50: Right level of abstraction? Existing patterns respected? Breaking changes?
+               - Better Call Saul: No secrets hardcoded in plan? GDPR/DORA impacts noted?
+            4. Score each persona /10, compute average
+            5. Post a structured comment on this issue with the plan + Stage 2 scores
+
+            Format the comment:
+            ## Stage 2: Plan Validation
+            ### Implementation Plan
+            <detailed plan with files, steps, LOC>
+            ### Stage 2 Council
+            | Persona | Score | Verdict |
+            |---------|-------|---------|
+            | Chucky | X/10 | Go/Fix/Redo |
+            | OSS Killer | X/10 | Go/Fix/Redo |
+            | Archi 50x50 | X/10 | Go/Fix/Redo |
+            | Better Call Saul | X/10 | Go/Fix/Redo |
+            ---
+            **Plan Score: X.XX/10 — [Go|Fix|Redo]**
+            Comment `/go-plan` to start implementation.
+
+            IMPORTANT: Do NOT implement anything. Only write the plan and validate it.
+          # Model tier: sonnet (Stage 2 Council — plan validation, Sonnet sufficient)
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 10 --allowedTools Read,Glob,Grep"
+
+      - name: Log token usage
+        if: always()
+        run: |
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=10, Stage=plan-validate"
+
+      - name: Mark Plan validated
+        if: steps.plan-council.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "plan-validated" --color "006b75" --description "Stage 2 plan validation passed" --force 2>/dev/null || true
+          gh issue edit "${{ github.event.issue.number }}" --add-label "plan-validated"
+
+      # Sync Stage 2 result to Linear (apply council:plan-* label + comment)
+      - name: Sync Plan Council to Linear
+        if: steps.plan-council.outcome == 'success'
+        continue-on-error: true
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then exit 0; fi
+
+          TICKET_ID=$(echo "${{ github.event.issue.title }} ${{ github.event.issue.body }}" \
+            | grep -oE 'CAB-[0-9]+' | head -1 || echo "")
+          if [ -z "$TICKET_ID" ]; then exit 0; fi
+
+          # Extract plan score from execution output
+          EXEC_FILE="${{ steps.plan-council.outputs.execution_file }}"
+          EXEC_FILE="${EXEC_FILE:-/home/runner/work/_temp/claude-execution-output.json}"
+          SCORE=""
+          if [ -f "$EXEC_FILE" ]; then
+            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
+              | grep -oE 'Plan Score:?\s*[0-9]+\.?[0-9]*/10' | head -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
+          fi
+          # Fallback: try generic "Score:" pattern (last match = plan score)
+          if [ -z "$SCORE" ] && [ -f "$EXEC_FILE" ]; then
+            SCORE=$(jq -r '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | join("\n")' "$EXEC_FILE" 2>/dev/null \
+              | grep -oE 'Score:?\s*[0-9]+\.?[0-9]*/10' | tail -1 | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "")
+          fi
+          if [ -z "$SCORE" ]; then
+            echo "Could not extract plan score — skipping Linear sync"
+            exit 0
+          fi
+
+          # Map score → plan label
+          if echo "$SCORE >= 8.0" | bc -l | grep -q 1; then
+            LABEL_NAME="council:plan-go"
+          elif echo "$SCORE >= 6.0" | bc -l | grep -q 1; then
+            LABEL_NAME="council:plan-fix"
+          else
+            LABEL_NAME="council:plan-redo"
+          fi
+
+          echo "Syncing plan to Linear: ${TICKET_ID} — score ${SCORE} → ${LABEL_NAME}"
+
+          ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
+            | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+          if [ -z "$ISSUE_ID" ]; then exit 0; fi
+
+          LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueLabels(filter: { name: { eq: \\\"${LABEL_NAME}\\\" } }) { nodes { id } } }\"}" \
+            | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
+
+          if [ -n "$LABEL_ID" ]; then
+            EXISTING=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"{ issue(id: \\\"${ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
+              | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:plan-") | not) | .id]' 2>/dev/null || echo "[]")
+            LABEL_IDS=$(echo "$EXISTING" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
+
+            curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
+              > /dev/null 2>&1 || true
+          fi
+
+          GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
+          COMMENT="Plan validation (Stage 2): **${SCORE}/10** — ${LABEL_NAME}\n[GitHub Actions run](${GH_RUN})"
+          curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
+            > /dev/null 2>&1 || true
+
+      - name: Notify Slack — Plan Validation
+        if: always() && steps.verify-stage1.outputs.validated == 'true'
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then exit 0; fi
+          ISSUE_URL="${{ github.event.issue.html_url }}"
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          STATUS="${{ steps.plan-council.outcome }}"
+          if [ "$STATUS" = "success" ]; then
+            EMOJI=":clipboard:"
+            TEXT="Stage 2 plan validation passed.\nComment \`/go-plan\` to start implementation."
+          else
+            EMOJI=":warning:"
+            TEXT="Stage 2 plan validation failed. Check the GitHub issue for details."
+          fi
+          curl -s -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"blocks\": [
+                {\"type\":\"header\",\"text\":{\"type\":\"plain_text\",\"text\":\"${EMOJI} Plan Validation: #${ISSUE_NUM}\",\"emoji\":true}},
+                {\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*${ISSUE_TITLE}*\n${TEXT}\"},\"accessory\":{\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"Review Plan\"},\"url\":\"${ISSUE_URL}\",\"action_id\":\"plan-review\"}}
+              ]
+            }"
+
+  # ----- Stage 3: Implementation (runs on /go-plan approval) -----
+  implement:
+    if: |
+      vars.DISABLE_L1_IMPLEMENT != 'true' &&
+      github.event_name == 'issue_comment' &&
+      (
+        github.event.comment.body == '/go-plan' ||
+        startsWith(github.event.comment.body, '/go-plan ')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # Guard: verify both Stage 1 and Stage 2 passed
+      - name: Verify Plan validation
+        id: verify-council
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUM="${{ github.event.issue.number }}"
+          LABELS=$(gh issue view "$ISSUE_NUM" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+
+          if echo "$LABELS" | grep -q "plan-validated"; then
+            echo "Stage 2 plan validation confirmed"
+            echo "validated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No plan-validated label found on issue #$ISSUE_NUM"
+            echo "Checking for Plan Score comment as fallback..."
+            PLAN_COMMENT=$(gh issue view "$ISSUE_NUM" --json comments --jq '[.comments[].body | select(contains("Plan Score"))] | length')
+            if [ "$PLAN_COMMENT" -gt 0 ]; then
+              echo "Plan validation comment found"
+              echo "validated=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::No plan validation found."
+              echo "validated=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Abort if no Plan validation
         if: steps.verify-council.outputs.validated != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh issue comment "${{ github.event.issue.number }}" \
-            --body "Implementation aborted: no Council validation found. Please label this issue \`claude-implement\` first, wait for the Council report, then comment \`/go\`."
+            --body "Implementation requires plan validation (Stage 2). Comment \`/go\` first to trigger plan validation, then \`/go-plan\` after it passes."
           exit 1
 
       - name: Run Implementation
@@ -208,8 +499,8 @@ jobs:
             Issue body:
             ${{ github.event.issue.body }}
 
-            Read the Council validation comment (posted earlier on this issue).
-            Follow the implementation plan from the Council comment.
+            Read the Stage 2 plan validation comment (posted earlier on this issue).
+            Follow the implementation plan from the Stage 2 comment.
             Follow code style rules in CLAUDE.md and .claude/rules/ (but skip workflow/session rules).
 
             Steps:
@@ -230,7 +521,7 @@ jobs:
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=60, Stage=implement"
 
       # Notify Slack on completion
       - name: Notify Slack — Implementation Done
@@ -246,7 +537,7 @@ jobs:
             MSG="Implementation complete for #${ISSUE_NUM}. PR created."
           elif [ "$STATUS" = "skipped" ]; then
             EMOJI="warning"
-            MSG="Implementation skipped for #${ISSUE_NUM}. No Council validation."
+            MSG="Implementation skipped for #${ISSUE_NUM}. No plan validation."
           else
             EMOJI="x"
             MSG="Implementation failed for #${ISSUE_NUM}. Check GitHub Actions logs."

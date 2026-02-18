@@ -23,7 +23,7 @@ expression: json
       "subscribe": false
     },
     "tools": {
-      "listChanged": false
+      "listChanged": true
     }
   },
   "protocolVersion": "2025-03-26",

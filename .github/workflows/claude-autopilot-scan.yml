@@ -40,7 +40,7 @@ jobs:
       - name: Check Velocity Cap
         id: velocity
         run: |
-          MAX_DAILY=${{ inputs.max_tickets || '3' }}
+          MAX_DAILY=${{ inputs.max_tickets || vars.AUTOPILOT_DAILY_MAX || '5' }}
           TODAY=$(date -u +%Y-%m-%d)
           COUNTER="${{ vars.AUTOPILOT_TODAY_COUNT }}"
           COUNT_DATE=$(echo "$COUNTER" | cut -d: -f1 2>/dev/null || echo "")
@@ -235,6 +235,13 @@ jobs:
             fi
 
             echo "Processing ${TICKET_ID} (score: ${SCORE})"
+
+            # Dedup guard: skip if GitHub issue already exists for this ticket
+            EXISTING_ISSUE=$(gh issue list --label "$TICKET_ID" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+            if [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
+              echo "Issue #${EXISTING_ISSUE} already exists for ${TICKET_ID} — skipping"
+              continue
+            fi
 
             # Sync council:ticket-go label to Linear
             if [ -n "$LINEAR_API_KEY" ]; then

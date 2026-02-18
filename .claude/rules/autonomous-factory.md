@@ -48,6 +48,66 @@ All workflows include these safety measures:
 - **Ask mode enforcement** — rule changes (`.claude/rules/`) are always Ask mode, never auto-merged
 - **Timeouts** — every job has an explicit `timeout-minutes` (15-60)
 - **Concurrency groups** — prevent parallel runs on the same issue/PR
+- **Council dedup guards** — label-based state machine prevents double Council runs (see below)
+
+### Council Label State Machine
+
+Labels track the Council pipeline state on each GitHub issue. Guards at each stage prevent re-runs:
+
+```
+[no labels]
+  → council-validated    (S1 passed — ticket pertinence)
+  → ship-fast-path       (optional — Ship ≤5pts, S2 will be skipped)
+  → plan-validated       (S2 passed — plan validation, or auto-set by fast-path)
+```
+
+| Guard | Workflow | Prevents |
+|-------|----------|----------|
+| Skip S1 if `council-validated` exists | L1 (issue-to-pr) | Re-labeling `claude-implement` re-runs Council |
+| Skip S2 if `plan-validated` exists | L1 (issue-to-pr) | Re-commenting `/go` re-runs plan validation |
+| Skip issue creation if ticket label exists | L3 (linear-dispatch) | n8n re-dispatch creates duplicate issues |
+| Skip issue creation if ticket label exists | L3.5 (autopilot-scan) | Daily scan creates duplicate issues |
+
+**Cross-workflow dedup**: L3 and L3.5 both create issues with `{TICKET_ID}` as a label. Before creating, they search for open issues with that label. If found, the new Council report is posted as a comment on the existing issue instead.
+
+## H24 Scaling — Progressive Velocity Control
+
+### Model Routing (Tiered)
+
+All implementation workflows use `scripts/ai-ops/model-router.sh` for cost-optimized model selection:
+
+| Estimate | Mode | Model | Max Turns | Est. Cost/Ticket |
+|----------|------|-------|-----------|-----------------|
+| ≤3 pts | Ship | Haiku | 15 | ~$2.50 |
+| ≤8 pts | Any | Sonnet | 30 | ~$9.50 |
+| >8 pts | Any | Sonnet | 60 | ~$16.50 |
+
+Weighted average: ~$6.50/ticket (vs $16.50 flat Sonnet-60).
+
+### Ship Fast Path (Skip Stage 2)
+
+For Ship-mode tickets ≤5 pts, Stage 2 (plan validation) is skipped entirely:
+- L3: `implement-fast` job runs directly after Council S1 (no `/go` needed)
+- L1: `ship-fast-path` label triggers auto-skip of plan-validate step
+
+Savings: ~$3/ticket (skips Sonnet S2 call) + ~5 min latency reduction.
+
+### Velocity Cap (`AUTOPILOT_DAILY_MAX`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUTOPILOT_DAILY_MAX` | `5` | Max tickets/day for autopilot + self-feeding loop |
+| `AUTOPILOT_TODAY_COUNT` | `YYYY-MM-DD:N` | Current day's counter (auto-managed) |
+
+Progressive scaling phases:
+| Phase | Duration | Daily Max | Monthly Est. |
+|-------|----------|-----------|-------------|
+| Ramp | Week 1 | 5 | ~$300 |
+| Cruise | Week 2 | 8 | ~$400 |
+| Full | Week 3 | 12 | ~$500 |
+| Sustain | Week 4+ | 10 | ~$400 |
+
+Adjust `AUTOPILOT_DAILY_MAX` via GitHub repo variables — no code change needed.
 
 ## Council Gate — Mandatory Validation
 
@@ -58,13 +118,16 @@ All workflows include these safety measures:
 **Two-Stage Gate** (L1 Issue-to-PR, L3 Linear Dispatch):
 - **Stage 1** — Ticket Pertinence: "Is this ticket worth implementing?" → `council:ticket-*` labels
 - **Stage 2** — Plan Validation: "Is this implementation plan correct?" → `council:plan-*` labels
+- **Ship Fast Path** — ≤5pt Ship tickets skip Stage 2 entirely
 
 | Trigger | Stage | Council Mode | Model | Threshold | Approval |
 |---------|-------|-------------|-------|-----------|----------|
 | Issue labeled `claude-implement` | Stage 1 | Full (4 personas, detailed) | Sonnet | >= 8.0 | `/go` → Stage 2 |
 | `/go` on Stage 1 issue | Stage 2 | Full (4 personas, plan-focused) | Sonnet | >= 8.0 | `/go-plan` → implement |
+| `/go` on Stage 1 (Ship ≤5pt) | Fast Path | Skipped | — | — | Auto → implement |
 | Linear ticket → In Progress | Stage 1 | Full (4 personas, detailed) | Sonnet | >= 8.0 | `/go` → Stage 2 |
 | `/go` on council-review issue | Stage 2 | Full (4 personas, plan-focused) | Sonnet | >= 8.0 | `/go-plan` → implement |
+| Linear dispatch (Ship ≤5pt) | Fast Path | Skipped | — | — | Auto → implement |
 | Multi-agent batch dispatch | Stage 1 only | Quick (4 personas, scores only) | Sonnet | >= 8.0 | `/go-batch` |
 | Autopilot backlog scan | Stage 1 only | Quick (4 personas, scores only) | Haiku | >= 8.0 | Slack → `/go` |
 | Scheduled CI auto-fix | Skip | — | — | N/A | Auto |
@@ -158,6 +221,7 @@ Message types are distinguished by emoji prefix:
 |-------|---------|-------------|
 | `claude-implement` | Added to issue | Council validates → Slack → wait for `/go` → implement |
 | `council-review` | Auto-added | Issue has a Council report pending review |
+| `ship-fast-path` | Auto-added by S1 | Ship ≤5pt ticket, Stage 2 skipped |
 | `self-improve` | Auto-added | Self-improvement proposal |
 | `daily-digest` | Auto-added | Daily triage digest |
 | `weekly-audit` | Auto-added | Weekly audit report |
@@ -226,14 +290,17 @@ The `repository_dispatch` `client_payload` includes phase-aware fields:
 
 | Guard | Value | Why |
 |-------|-------|-----|
-| Model routing | Haiku/Sonnet tiers | Haiku for read-only, Sonnet for Council + code gen |
-| Max turns per agent | 5 (Council), 60 (implementation) | Prevent runaway costs |
-| Default model | Sonnet (Council + code gen), Haiku (scan, digest, review) | Right model per task |
+| Model routing | `model-router.sh` — Haiku/Sonnet tiers by estimate | ~60% savings on small tickets |
+| Ship fast-path | Skip S2 for ≤5pt Ship tickets | ~$3 + 5min saved per ticket |
+| Velocity cap | `AUTOPILOT_DAILY_MAX` (default 5) | Daily budget ceiling |
+| Max turns per agent | 15/30/60 (tiered by estimate) | Prevent runaway costs |
+| Default model | Sonnet (code gen), Haiku (Ship ≤3pt) | Right model per task |
 | Council threshold | 8.0 (all levels) | Harmonized — no per-level exceptions |
 | Max parallel agents | 3 | Cost caps at ~3x single agent |
 | Timeout per job | 15-60 min | Hard stop on runaway jobs |
-| Skip Council for | Ship-mode, read-only | Avoid unnecessary validation |
+| Skip Council S2 for | Ship-mode ≤5 pts | Avoid unnecessary plan validation |
 | Schedule frequency | Daily/weekly (not hourly) | Control API usage |
+| Kill-switch model | `CLAUDE_DEFAULT_MODEL` repo var | Revert all tiers to Sonnet |
 
 ## Security
 

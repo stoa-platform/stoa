@@ -1,0 +1,113 @@
+# Auto-close Linear tickets when PRs with CAB-XXXX in the title are merged.
+# Covers ALL merge paths (manual, autopilot, Dependabot, etc.).
+# The L3 dispatch workflow has its own close-loop — this is the universal fallback.
+# Kill-switch: set DISABLE_LINEAR_CLOSE=true in repo variables.
+
+name: Linear Close on Merge
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  close-linear:
+    if: >-
+      github.event.pull_request.merged == true
+      && vars.DISABLE_LINEAR_CLOSE != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Extract ticket ID from PR title
+        id: extract
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          # Match CAB-NNN or CAB-NNNN in PR title
+          TICKET_ID=$(echo "$TITLE" | grep -oP 'CAB-\d{2,4}' | head -1)
+          if [ -z "$TICKET_ID" ]; then
+            echo "No CAB-XXXX found in PR title: $TITLE"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ticket_id=$TICKET_ID" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Found ticket: $TICKET_ID"
+
+      - name: Update Linear ticket to Done
+        if: steps.extract.outputs.skip != 'true'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          TICKET_ID: ${{ steps.extract.outputs.ticket_id }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then
+            echo "LINEAR_API_KEY not set — skipping Linear update"
+            exit 0
+          fi
+
+          # Find the issue by identifier
+          ISSUE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
+            -H "Authorization: $LINEAR_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"$TICKET_ID\\\" } }) { nodes { id identifier state { name type } } } }\"}")
+
+          ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.data.issueSearch.nodes[0].id // empty')
+          CURRENT_STATE=$(echo "$ISSUE_DATA" | jq -r '.data.issueSearch.nodes[0].state.type // empty')
+
+          if [ -z "$ISSUE_ID" ]; then
+            echo "Issue $TICKET_ID not found in Linear — skipping"
+            exit 0
+          fi
+
+          # Skip if already completed or cancelled
+          if [ "$CURRENT_STATE" = "completed" ] || [ "$CURRENT_STATE" = "canceled" ]; then
+            echo "$TICKET_ID already in terminal state ($CURRENT_STATE) — skipping"
+            exit 0
+          fi
+
+          # Get the "Done" state ID for the team
+          TEAM_ID=$(echo "$ISSUE_DATA" | jq -r '.data.issueSearch.nodes[0].id // empty')
+          DONE_STATE_QUERY='{ workflowStates(filter: { type: { eq: "completed" }, team: { issues: { identifier: { eq: "'"$TICKET_ID"'" } } } }) { nodes { id name } } }'
+          DONE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
+            -H "Authorization: $LINEAR_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"$DONE_STATE_QUERY\"}")
+
+          DONE_STATE_ID=$(echo "$DONE_DATA" | jq -r '.data.workflowStates.nodes[0].id // empty')
+
+          if [ -z "$DONE_STATE_ID" ]; then
+            echo "Could not find Done state for $TICKET_ID team — skipping"
+            exit 0
+          fi
+
+          # Move to Done
+          MUTATION='mutation { issueUpdate(id: "'"$ISSUE_ID"'", input: { stateId: "'"$DONE_STATE_ID"'" }) { success issue { identifier state { name } } } }'
+          RESULT=$(curl -s -X POST https://api.linear.app/graphql \
+            -H "Authorization: $LINEAR_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"$MUTATION\"}")
+
+          SUCCESS=$(echo "$RESULT" | jq -r '.data.issueUpdate.success // false')
+          NEW_STATE=$(echo "$RESULT" | jq -r '.data.issueUpdate.issue.state.name // "unknown"')
+
+          if [ "$SUCCESS" = "true" ]; then
+            echo "✅ $TICKET_ID → $NEW_STATE"
+          else
+            echo "Failed to update $TICKET_ID:"
+            echo "$RESULT" | jq .
+            exit 0  # Non-blocking — don't fail the workflow
+          fi
+
+          # Add comment with PR reference
+          COMMENT_BODY="Completed in PR #${PR_NUM} ([${PR_TITLE}](${PR_URL}))\n\n*Auto-closed by merge workflow*"
+          COMMENT_MUTATION='mutation { commentCreate(input: { issueId: "'"$ISSUE_ID"'", body: "'"$COMMENT_BODY"'" }) { success } }'
+          curl -s -X POST https://api.linear.app/graphql \
+            -H "Authorization: $LINEAR_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"$COMMENT_MUTATION\"}" > /dev/null
+
+          echo "Comment added to $TICKET_ID"

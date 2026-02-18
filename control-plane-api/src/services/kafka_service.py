@@ -50,6 +50,11 @@ class Topics:
     # Onboarding workflows (CAB-593)
     WORKFLOW_EVENTS = "stoa.workflow.events"
 
+    # Core topics with explicit sizing (CAB-498)
+    AUDIT_TRAIL = "stoa.audit.trail"  # 6 partitions, 90d retention
+    CATALOG_SYNC = "stoa.catalog.sync"  # 12 partitions, 7d retention
+    ERROR_SNAPSHOTS = "stoa.error.snapshots"  # 3 partitions, 30d retention
+
 
 class KafkaService:
     """Service for Kafka/Redpanda message handling"""

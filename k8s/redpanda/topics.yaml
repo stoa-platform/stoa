@@ -1,0 +1,153 @@
+---
+# Kafka/Redpanda Topic Definitions for STOA Platform
+# CAB-498: Topics Kafka STOA — Sizing & Configuration
+#
+# These topics support 3 core use cases:
+# 1. Audit trail (stoa.audit.trail) — compliance, 90d retention
+# 2. Catalog sync (stoa.catalog.sync) — API/MCP server changes, 7d retention
+# 3. Error snapshots (stoa.error.snapshots) — debugging, 30d retention
+#
+# NOTE: This is a declarative spec for documentation and GitOps.
+# Topics must be created via rpk CLI or Redpanda Admin API.
+# Partition count is IMMUTABLE after creation.
+#
+# Target cluster: Single-node Redpanda (replication_factor=1 for dev)
+# Production upgrade: Switch to RF=3 when cluster has 3+ brokers
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-topic-specs
+  namespace: stoa-system
+  labels:
+    app: redpanda
+    component: topic-config
+  annotations:
+    description: "Declarative topic specifications for STOA Kafka topics"
+    managed-by: "GitOps"
+    linear-issue: "CAB-498"
+data:
+  # Topic 1: Audit Trail
+  # Use case: Compliance audit log, all tenant actions
+  # Retention: 90 days (GDPR minimum)
+  # Partitions: 6 (2 per tenant tier: free/standard/enterprise)
+  audit-trail.yaml: |
+    name: stoa.audit.trail
+    partitions: 6
+    replication_factor: 1  # Use 3 for production cluster
+    configs:
+      retention.ms: 7776000000  # 90 days
+      segment.ms: 86400000      # 1 day segments
+      compression.type: lz4
+      cleanup.policy: delete
+      max.message.bytes: 1048576  # 1MB max event size
+      retention.bytes: -1       # No size limit, time-based only
+    producer_config:
+      acks: all
+      linger.ms: 10
+      compression.type: lz4
+      max.in.flight.requests.per.connection: 5
+      enable.idempotence: true
+    description: "Audit trail for compliance (API actions, admin ops, auth events)"
+
+  # Topic 2: Catalog Sync
+  # Use case: API/MCP server lifecycle events, gateway sync
+  # Retention: 7 days (short-lived operational events)
+  # Partitions: 12 (highest throughput: API CRUD + deployments)
+  catalog-sync.yaml: |
+    name: stoa.catalog.sync
+    partitions: 12
+    replication_factor: 1  # Use 3 for production cluster
+    configs:
+      retention.ms: 604800000   # 7 days
+      segment.ms: 3600000       # 1 hour segments (high churn)
+      compression.type: snappy  # Fast compression for high throughput
+      cleanup.policy: delete
+      max.message.bytes: 2097152  # 2MB (OpenAPI specs)
+      retention.bytes: -1
+    producer_config:
+      acks: 1  # Leader-only (lower latency for non-critical sync)
+      linger.ms: 5
+      compression.type: snappy
+      max.in.flight.requests.per.connection: 5
+      enable.idempotence: true
+    description: "API/MCP lifecycle events, gateway sync requests"
+
+  # Topic 3: Error Snapshots
+  # Use case: Failed requests, exceptions, debug context
+  # Retention: 30 days (debugging window)
+  # Partitions: 3 (lower volume, per-severity: error/warning/critical)
+  error-snapshots.yaml: |
+    name: stoa.error.snapshots
+    partitions: 3
+    replication_factor: 1  # Use 3 for production cluster
+    configs:
+      retention.ms: 2592000000  # 30 days
+      segment.ms: 86400000      # 1 day segments
+      compression.type: gzip    # Max compression (large stack traces)
+      cleanup.policy: delete
+      max.message.bytes: 5242880  # 5MB (full stack traces + context)
+      retention.bytes: -1
+    producer_config:
+      acks: all  # Critical error data, ensure delivery
+      linger.ms: 50  # Batch errors (not latency-sensitive)
+      compression.type: gzip
+      max.in.flight.requests.per.connection: 1  # Preserve error order
+      enable.idempotence: true
+    description: "Error snapshots with full context for debugging"
+
+  # Creation Script (rpk CLI)
+  create-topics.sh: |
+    #!/bin/bash
+    # Create STOA Kafka topics via rpk CLI
+    # Run from Redpanda pod: kubectl exec -n stoa-system redpanda-0 -- bash -c "$(cat create-topics.sh)"
+
+    set -e
+
+    BROKER="localhost:9092"
+
+    echo "Creating STOA Kafka topics..."
+
+    # Topic 1: Audit Trail
+    rpk topic create stoa.audit.trail \
+      --brokers="$BROKER" \
+      --partitions=6 \
+      --replicas=1 \
+      --config retention.ms=7776000000 \
+      --config segment.ms=86400000 \
+      --config compression.type=lz4 \
+      --config cleanup.policy=delete \
+      --config max.message.bytes=1048576
+
+    # Topic 2: Catalog Sync
+    rpk topic create stoa.catalog.sync \
+      --brokers="$BROKER" \
+      --partitions=12 \
+      --replicas=1 \
+      --config retention.ms=604800000 \
+      --config segment.ms=3600000 \
+      --config compression.type=snappy \
+      --config cleanup.policy=delete \
+      --config max.message.bytes=2097152
+
+    # Topic 3: Error Snapshots
+    rpk topic create stoa.error.snapshots \
+      --brokers="$BROKER" \
+      --partitions=3 \
+      --replicas=1 \
+      --config retention.ms=2592000000 \
+      --config segment.ms=86400000 \
+      --config compression.type=gzip \
+      --config cleanup.policy=delete \
+      --config max.message.bytes=5242880
+
+    echo "Topics created successfully."
+    echo ""
+    echo "Verifying topic configuration..."
+    rpk topic list --brokers="$BROKER" | grep "stoa\."
+
+    echo ""
+    echo "Detailed topic info:"
+    rpk topic describe stoa.audit.trail --brokers="$BROKER"
+    rpk topic describe stoa.catalog.sync --brokers="$BROKER"
+    rpk topic describe stoa.error.snapshots --brokers="$BROKER"

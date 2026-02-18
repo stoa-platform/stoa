@@ -103,6 +103,15 @@ const SaasApiKeysList = lazy(() =>
   saasApiKeysModule().then((m) => ({ default: m.SaasApiKeysList }))
 );
 
+// CAB-1372: Federation UI pages
+const federationModule = () => import('./pages/FederationAccounts');
+const FederationAccountsList = lazy(() =>
+  federationModule().then((m) => ({ default: m.FederationAccountsList }))
+);
+const FederationAccountDetail = lazy(() =>
+  federationModule().then((m) => ({ default: m.FederationAccountDetail }))
+);
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -391,6 +400,8 @@ function ProtectedRoutes() {
                 {/* CAB-1251: SaaS Self-Service */}
                 <Route path="/backend-apis" element={<BackendApisList />} />
                 <Route path="/saas-api-keys" element={<SaasApiKeysList />} />
+                <Route path="/federation/accounts" element={<FederationAccountsList />} />
+                <Route path="/federation/accounts/:id" element={<FederationAccountDetail />} />
               </Routes>
             </Suspense>
           )}

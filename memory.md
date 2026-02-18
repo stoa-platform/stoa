@@ -1,6 +1,6 @@
 # STOA Memory
 
-> Dernière MAJ: 2026-02-18 (CAB-1314 DONE — all 3 phases, PR #721)
+> Dernière MAJ: 2026-02-18 (CAB-1363 DONE — CAB-1313 MEGA complete)
 
 ## ✅ DONE
 
@@ -17,6 +17,8 @@
 - CAB-1381: API Stubs Cleanup (13 pts) — PR #718 (20 TODO stubs → real implementations, 40 new tests)
 - CAB-1323: Portal Multi-Audience + RBAC (34 pts MEGA) — PRs #697, #714, #719 (3 phases, ~917 LOC, 78 tests)
 - CAB-1314: MCP Skills System MEGA (21 pts) — P1 PR #702, P2 PR #721, P3 PR #710 (3 phases, skills CSS cascade + context injection)
+- CAB-1378: Test Coverage Blitz MEGA (34 pts) — PR #722 (fix only; DoD already met: API 74%, Portal 84%, Console 1105 tests)
+- CAB-1313: MCP Federation MEGA (34 pts) — P1 PR #709, P2 PR #713, P3 PR #723 (3 phases, federation UI + gateway routing + E2E)
 
 ## 🔴 IN PROGRESS
 
@@ -40,4 +42,4 @@ CAB-802: Dry Run + Script + Video Backup (3 pts)
 - Demo MVP: mardi 24 février 2026
 - docs.gostoa.dev = 37 articles, 0 "Coming Soon"
 - ADR numbering: stoa-docs owns numbers (001-048). Next: **ADR-049**
-- Velocity C8: 603 pts / 64 issues
+- Velocity C8: 671 pts / 68 issues

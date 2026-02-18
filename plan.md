@@ -46,12 +46,12 @@
 
 ## Cycle 8 (Feb 16–22) — CURRENT
 
-**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 559 pts (56 issues) | **Velocity**: 56+ issues closed
+**Scope**: 339 pts (active) + 89 pts backlog MEGAs | **Done**: 593 pts (57 issues) | **Velocity**: 56+ issues closed
 **Theme**: Demo finale + Staging V1++ + DX Remediation + Community Launch Prep + SaaS MVP
 **Fill-cycle**: +13 Quick Wins promoted (2026-02-15); +30 backlog items promoted to cycle (2026-02-16, 526 pts)
 **Backlog in cycle**: ~604 pts (18 new MEGAs + 12 strategic/business items + legacy parked)
 
-### Done (53 issues)
+### Done (54 issues)
 
 - [x] CAB-353: Go/No-Go Checklist 3 Months (5 pts) — PR #482 (9.00/10 → GO)
 - [x] CAB-1146: Baseline PROD — Documenter etat de reference avant freeze (P1)
@@ -110,6 +110,7 @@
 - [x] CAB-1381: [MEGA] Platform: API Stubs Cleanup — Applications CRUD & Legacy Routes (13 pts) — PR #718
 - [x] CAB-1323: [MEGA] DX: Portal Governance — Multi-Audience + RBAC Fine-Grained (34 pts) — PRs #697, #714, #719 (3 phases)
 - [x] CAB-1298: [MEGA] Platform: Tech Debt Cleanup — Lint Suppressions Audit & Auth Module Docs (13 pts) — PR #646
+- [x] CAB-1378: [MEGA] DX: Test Coverage Blitz — Console, Portal & API (34 pts) — PR #722 (DoD already met: API 74%, Portal 84%, Console 1105 tests)
 
 ### In Progress
 
@@ -193,7 +194,7 @@
 
 **Gateway** (97 pts):
 - [x] CAB-1305: [MEGA] Gateway: Security Jobs Pipeline — Trivy + Gitleaks + CIS Benchmarks (21 pts) — PRs #629, #630, #631
-- CAB-1313: [MEGA] Gateway: Enterprise MCP Federation — Multi-Dev/Agent Master Account (34 pts)
+- [x] CAB-1313: [MEGA] Gateway: Enterprise MCP Federation — Multi-Dev/Agent Master Account (34 pts) — PRs #709, #713, #723 (3 phases)
 - [x] CAB-1314: [MEGA] Gateway: MCP Skills System — Context Injection + Agent Integration (21 pts) — PRs #702, #721, #710 (3 phases)
 - CAB-1317: [MEGA] Gateway: MCP Proxy Hardening P3 — OAuth Flows + Lazy Discovery + CB (21 pts)
 

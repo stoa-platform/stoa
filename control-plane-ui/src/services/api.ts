@@ -209,6 +209,17 @@ class ApiService {
     await this.client.delete(`/v1/tenants/${tenantId}/apis/${apiId}`);
   }
 
+  async updateApiAudience(
+    tenantId: string,
+    apiId: string,
+    audience: string
+  ): Promise<{ api_id: string; tenant_id: string; audience: string; updated_by: string }> {
+    const { data } = await this.client.patch(`/v1/admin/catalog/${tenantId}/${apiId}/audience`, {
+      audience,
+    });
+    return data;
+  }
+
   // Applications
   async getApplications(tenantId: string): Promise<Application[]> {
     const { data } = await this.client.get(`/v1/tenants/${tenantId}/applications`, {

@@ -116,6 +116,11 @@ const FederationAccountDetail = lazy(() =>
 const skillsModule = () => import('./pages/Skills');
 const SkillsList = lazy(() => skillsModule().then((m) => ({ default: m.SkillsList })));
 
+// CAB-1323: Audience Governance page
+const AudienceGovernance = lazy(() =>
+  import('./pages/AudienceGovernance').then((m) => ({ default: m.AudienceGovernance }))
+);
+
 // Loading indicator for lazy-loaded pages and auth init
 function PageLoader() {
   return <StoaLoader variant="inline" />;
@@ -407,6 +412,7 @@ function ProtectedRoutes() {
                 <Route path="/federation/accounts" element={<FederationAccountsList />} />
                 <Route path="/federation/accounts/:id" element={<FederationAccountDetail />} />
                 <Route path="/skills" element={<SkillsList />} />
+                <Route path="/audience-governance" element={<AudienceGovernance />} />
               </Routes>
             </Suspense>
           )}

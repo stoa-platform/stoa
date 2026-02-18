@@ -3,6 +3,7 @@
 Provides endpoints for managing the catalog cache synchronization.
 These endpoints require admin role (cpi-admin or tenant-admin).
 """
+
 import json
 import logging
 from datetime import UTC, datetime
@@ -38,6 +39,7 @@ def _require_admin(user: User) -> None:
 # ============================================================================
 # Sync Operations
 # ============================================================================
+
 
 @router.post("/sync", response_model=SyncTriggerResponse)
 async def trigger_catalog_sync(
@@ -104,8 +106,10 @@ async def trigger_mcp_servers_sync(
     _require_admin(user)
 
     try:
+
         async def run_sync():
             from ..database import get_db as get_async_db_gen
+
             async for session in get_async_db_gen():
                 service = CatalogSyncService(session, git_service)
                 await service.sync_mcp_servers(tenant_id)
@@ -142,6 +146,7 @@ async def trigger_tenant_sync(
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
     try:
+
         async def run_sync():
             async with get_async_db() as session:
                 service = CatalogSyncService(session, git_service)
@@ -228,6 +233,7 @@ async def get_sync_history(
 # Catalog Stats
 # ============================================================================
 
+
 @router.get("/stats", response_model=CatalogStatsResponse)
 async def get_catalog_stats(
     user: User = Depends(get_current_user),
@@ -273,6 +279,7 @@ async def get_catalog_stats(
 # Cache Invalidation (for manual refresh)
 # ============================================================================
 
+
 @router.delete("/cache")
 async def invalidate_cache(
     user: User = Depends(get_current_user),
@@ -289,18 +296,17 @@ async def invalidate_cache(
         raise HTTPException(status_code=403, detail="Platform admin access required")
 
     logger.info(f"Cache invalidation requested by user {user.id}")
-    return {
-        "status": "ok",
-        "message": "Cache invalidated. Use POST /sync to refresh data from GitLab."
-    }
+    return {"status": "ok", "message": "Cache invalidated. Use POST /sync to refresh data from GitLab."}
 
 
 # ============================================================================
 # Direct Catalog Seed (offline mode — bypasses GitLab)
 # ============================================================================
 
+
 class CatalogSeedAPIEntry(BaseModel):
     """Single API entry for direct catalog seeding."""
+
     name: str
     display_name: str
     version: str = "1.0.0"
@@ -313,12 +319,14 @@ class CatalogSeedAPIEntry(BaseModel):
 
 class CatalogSeedRequest(BaseModel):
     """Request to seed APIs directly into catalog (bypasses GitLab)."""
+
     tenant_id: str
     apis: list[CatalogSeedAPIEntry]
 
 
 class CatalogSeedResponse(BaseModel):
     """Response from catalog seed operation."""
+
     seeded: int
     failed: int
     results: dict
@@ -372,35 +380,39 @@ async def seed_catalog_directly(
                 openapi_spec = None
 
         try:
-            stmt = insert(APICatalog).values(
-                tenant_id=data.tenant_id,
-                api_id=api_id,
-                api_name=api_entry.display_name,
-                version=api_entry.version,
-                status="active",
-                category=api_entry.category,
-                tags=tags,
-                portal_published=portal_published,
-                api_metadata=api_metadata,
-                openapi_spec=openapi_spec,
-                git_path=None,
-                git_commit_sha=None,
-                synced_at=datetime.now(UTC),
-                deleted_at=None,
-            ).on_conflict_do_update(
-                index_elements=["tenant_id", "api_id"],
-                set_={
-                    "api_name": api_entry.display_name,
-                    "version": api_entry.version,
-                    "status": "active",
-                    "category": api_entry.category,
-                    "tags": tags,
-                    "portal_published": portal_published,
-                    "metadata": api_metadata,  # DB column is "metadata" not "api_metadata"
-                    "openapi_spec": openapi_spec,
-                    "synced_at": datetime.now(UTC),
-                    "deleted_at": None,
-                },
+            stmt = (
+                insert(APICatalog)
+                .values(
+                    tenant_id=data.tenant_id,
+                    api_id=api_id,
+                    api_name=api_entry.display_name,
+                    version=api_entry.version,
+                    status="active",
+                    category=api_entry.category,
+                    tags=tags,
+                    portal_published=portal_published,
+                    api_metadata=api_metadata,
+                    openapi_spec=openapi_spec,
+                    git_path=None,
+                    git_commit_sha=None,
+                    synced_at=datetime.now(UTC),
+                    deleted_at=None,
+                )
+                .on_conflict_do_update(
+                    index_elements=["tenant_id", "api_id"],
+                    set_={
+                        "api_name": api_entry.display_name,
+                        "version": api_entry.version,
+                        "status": "active",
+                        "category": api_entry.category,
+                        "tags": tags,
+                        "portal_published": portal_published,
+                        "metadata": api_metadata,  # DB column is "metadata" not "api_metadata"
+                        "openapi_spec": openapi_spec,
+                        "synced_at": datetime.now(UTC),
+                        "deleted_at": None,
+                    },
+                )
             )
             await db.execute(stmt)
             seeded += 1
@@ -412,9 +424,71 @@ async def seed_catalog_directly(
 
     await db.commit()
 
-    logger.info(
-        f"Catalog seed by {user.username}: {seeded} seeded, {failed} failed "
-        f"(tenant: {data.tenant_id})"
-    )
+    logger.info(f"Catalog seed by {user.username}: {seeded} seeded, {failed} failed " f"(tenant: {data.tenant_id})")
 
     return CatalogSeedResponse(seeded=seeded, failed=failed, results=results)
+
+
+# ============================================================================
+# Audience Governance (CAB-1323 Phase 3)
+# ============================================================================
+
+
+class AudienceUpdateRequest(BaseModel):
+    """Request to update an API's audience visibility level."""
+
+    audience: str  # "public" | "internal" | "partner"
+
+
+class AudienceUpdateResponse(BaseModel):
+    """Response after updating an API's audience."""
+
+    api_id: str
+    tenant_id: str
+    audience: str
+    updated_by: str
+
+
+@router.patch("/{tenant_id}/{api_id}/audience", response_model=AudienceUpdateResponse)
+async def update_api_audience(
+    tenant_id: str,
+    api_id: str,
+    payload: AudienceUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Update the audience visibility level for an API.
+
+    Valid audiences: public, internal, partner.
+    Requires: cpi-admin (any tenant) or tenant-admin (own tenant only).
+    """
+    _require_admin(user)
+
+    # Tenant-admin scoped to own tenant
+    if "cpi-admin" not in user.roles and user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    valid_audiences = {"public", "internal", "partner"}
+    if payload.audience not in valid_audiences:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid audience '{payload.audience}'. Must be one of: {', '.join(sorted(valid_audiences))}",
+        )
+
+    repo = CatalogRepository(db)
+    api = await repo.get_api_by_id(tenant_id, api_id)
+    if not api:
+        raise HTTPException(status_code=404, detail=f"API '{api_id}' not found in tenant '{tenant_id}'")
+
+    api.audience = payload.audience
+    await db.commit()
+
+    logger.info(f"Audience updated for {tenant_id}/{api_id} to '{payload.audience}' by {user.username}")
+
+    return AudienceUpdateResponse(
+        api_id=api_id,
+        tenant_id=tenant_id,
+        audience=payload.audience,
+        updated_by=user.username,
+    )

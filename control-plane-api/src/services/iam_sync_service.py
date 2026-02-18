@@ -5,6 +5,7 @@ This service ensures consistency between GitOps repository and Keycloak:
 - User roles and permissions
 - Application clients (OAuth2)
 """
+
 import logging
 from datetime import datetime
 
@@ -57,10 +58,7 @@ class IAMSyncService:
 
             # Ensure tenant group exists in Keycloak
             try:
-                await keycloak_service.setup_tenant_group(
-                    tenant_id,
-                    tenant_data.get("display_name", tenant_id)
-                )
+                await keycloak_service.setup_tenant_group(tenant_id, tenant_data.get("display_name", tenant_id))
                 result["actions"].append(f"Ensured group exists: {tenant_id}")
             except Exception as e:
                 logger.warning(f"Group setup failed (may already exist): {e}")
@@ -76,7 +74,14 @@ class IAMSyncService:
                         result["errors"].append(f"Failed to sync user {user_config.get('email')}: {e}")
 
             # Sync applications (OAuth2 clients)
-            # TODO: Implement application sync
+            apps_config = await self._get_tenant_apps_config(tenant_id)
+            if apps_config:
+                for app_config in apps_config.get("applications", []):
+                    try:
+                        await self._sync_application(tenant_id, app_config)
+                        result["actions"].append(f"Synced application: {app_config.get('name')}")
+                    except Exception as e:
+                        result["errors"].append(f"Failed to sync app {app_config.get('name')}: {e}")
 
             logger.info(f"Synced tenant {tenant_id}: {len(result['actions'])} actions")
             return result
@@ -89,9 +94,7 @@ class IAMSyncService:
     async def _get_tenant_users_config(self, tenant_id: str) -> dict | None:
         """Get users configuration from GitOps for a tenant."""
         try:
-            content = await git_service.get_file(
-                f"tenants/{tenant_id}/iam/users.yaml"
-            )
+            content = await git_service.get_file(f"tenants/{tenant_id}/iam/users.yaml")
             if content:
                 return yaml.safe_load(content)
         except Exception:
@@ -115,10 +118,7 @@ class IAMSyncService:
 
         # Check if user exists in Keycloak
         users = await keycloak_service.get_users(tenant_id)
-        existing_user = next(
-            (u for u in users if u.get("email") == email),
-            None
-        )
+        existing_user = next((u for u in users if u.get("email") == email), None)
 
         roles = user_config.get("roles", ["viewer"])
 
@@ -144,6 +144,45 @@ class IAMSyncService:
             except Exception as e:
                 logger.error(f"Failed to create user {email}: {e}")
                 raise
+
+        return True
+
+    async def _get_tenant_apps_config(self, tenant_id: str) -> dict | None:
+        """Get applications configuration from GitOps for a tenant."""
+        try:
+            content = await git_service.get_file(f"tenants/{tenant_id}/iam/applications.yaml")
+            if content:
+                return yaml.safe_load(content)
+        except Exception:
+            pass
+        return None
+
+    async def _sync_application(self, tenant_id: str, app_config: dict) -> bool:
+        """Sync a single application (OAuth2 client) configuration."""
+        import json
+
+        name = app_config.get("name")
+        if not name:
+            return False
+
+        client_id = f"{tenant_id}-{name}"
+        existing = await keycloak_service.get_client(client_id)
+
+        if existing:
+            # Update existing client attributes
+            attrs = existing.get("attributes", {})
+            if "api_subscriptions" in app_config:
+                attrs["api_subscriptions"] = json.dumps(app_config["api_subscriptions"])
+            await keycloak_service.update_client(existing["id"], {"attributes": attrs})
+        else:
+            # Create new client
+            await keycloak_service.create_client(
+                tenant_id=tenant_id,
+                name=name,
+                display_name=app_config.get("display_name", name),
+                redirect_uris=app_config.get("redirect_uris", []),
+                description=app_config.get("description", ""),
+            )
 
         return True
 
@@ -221,21 +260,25 @@ class IAMSyncService:
             # Users in GitOps but not in Keycloak
             missing_in_kc = gitops_emails - kc_user_emails
             for email in missing_in_kc:
-                report["drift"].append({
-                    "type": "missing_user",
-                    "email": email,
-                    "message": f"User {email} defined in GitOps but not in Keycloak",
-                })
+                report["drift"].append(
+                    {
+                        "type": "missing_user",
+                        "email": email,
+                        "message": f"User {email} defined in GitOps but not in Keycloak",
+                    }
+                )
                 report["in_sync"] = False
 
             # Users in Keycloak but not in GitOps
             extra_in_kc = kc_user_emails - gitops_emails
             for email in extra_in_kc:
-                report["drift"].append({
-                    "type": "extra_user",
-                    "email": email,
-                    "message": f"User {email} exists in Keycloak but not in GitOps",
-                })
+                report["drift"].append(
+                    {
+                        "type": "extra_user",
+                        "email": email,
+                        "message": f"User {email} exists in Keycloak but not in GitOps",
+                    }
+                )
                 report["in_sync"] = False
 
             # Check role assignments for shared users
@@ -250,22 +293,26 @@ class IAMSyncService:
 
                 missing_roles = gitops_roles - kc_roles
                 for role in missing_roles:
-                    report["drift"].append({
-                        "type": "missing_role",
-                        "email": email,
-                        "role": role,
-                        "message": f"Role {role} defined in GitOps but not assigned in Keycloak for {email}",
-                    })
+                    report["drift"].append(
+                        {
+                            "type": "missing_role",
+                            "email": email,
+                            "role": role,
+                            "message": f"Role {role} defined in GitOps but not assigned in Keycloak for {email}",
+                        }
+                    )
                     report["in_sync"] = False
 
                 extra_roles = kc_roles - gitops_roles
                 for role in extra_roles:
-                    report["drift"].append({
-                        "type": "extra_role",
-                        "email": email,
-                        "role": role,
-                        "message": f"Role {role} assigned in Keycloak but not in GitOps for {email}",
-                    })
+                    report["drift"].append(
+                        {
+                            "type": "extra_role",
+                            "email": email,
+                            "role": role,
+                            "message": f"Role {role} assigned in Keycloak but not in GitOps for {email}",
+                        }
+                    )
                     report["in_sync"] = False
 
             logger.info(f"Reconciliation for {tenant_id}: in_sync={report['in_sync']}")

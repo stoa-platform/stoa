@@ -6,14 +6,16 @@ Provides endpoints for:
 
 Reference: External MCP Server Registration Plan
 """
+
 import logging
 import uuid
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..config import settings
 from ..database import get_db
 from ..models.external_mcp_server import (
     ExternalMCPAuthType,
@@ -143,10 +145,7 @@ def _convert_tool_to_response(tool: ExternalMCPServerTool) -> ExternalMCPServerT
 
 # ============ Admin Router ============
 
-admin_router = APIRouter(
-    prefix="/v1/admin/external-mcp-servers",
-    tags=["External MCP Servers - Admin"]
-)
+admin_router = APIRouter(prefix="/v1/admin/external-mcp-servers", tags=["External MCP Servers - Admin"])
 
 
 @admin_router.get("", response_model=ExternalMCPServerListResponse)
@@ -200,8 +199,7 @@ async def create_server(
     # Check tenant access
     if not _has_tenant_access(user, request.tenant_id):
         raise HTTPException(
-            status_code=403,
-            detail="Cannot create platform-wide servers (tenant_id=null) without CPI admin role"
+            status_code=403, detail="Cannot create platform-wide servers (tenant_id=null) without CPI admin role"
         )
 
     repo = ExternalMCPServerRepository(db)
@@ -235,10 +233,7 @@ async def create_server(
             server.credential_vault_path = vault_path
         except Exception as e:
             logger.error(f"Failed to store credentials in Vault: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to store credentials securely"
-            )
+            raise HTTPException(status_code=500, detail="Failed to store credentials securely")
 
     try:
         server = await repo.create(server)
@@ -319,10 +314,7 @@ async def update_server(
             server.credential_vault_path = vault_path
         except Exception as e:
             logger.error(f"Failed to update credentials in Vault: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to update credentials securely"
-            )
+            raise HTTPException(status_code=500, detail="Failed to update credentials securely")
 
     try:
         server = await repo.update(server)
@@ -399,10 +391,7 @@ async def test_connection(
             credentials = await vault.retrieve_credential(str(server.id))
         except Exception as e:
             logger.error(f"Failed to retrieve credentials from Vault: {e}")
-            return TestConnectionResponse(
-                success=False,
-                error="Failed to retrieve credentials"
-            )
+            return TestConnectionResponse(success=False, error="Failed to retrieve credentials")
 
     # Test connection
     mcp_client = get_mcp_client_service()
@@ -414,10 +403,7 @@ async def test_connection(
     )
 
     # Update health status
-    health_status = (
-        ExternalMCPHealthStatus.HEALTHY if result.success
-        else ExternalMCPHealthStatus.UNHEALTHY
-    )
+    health_status = ExternalMCPHealthStatus.HEALTHY if result.success else ExternalMCPHealthStatus.UNHEALTHY
     await repo.update_health_status(
         server_id=server.id,
         status=health_status,
@@ -460,10 +446,7 @@ async def sync_tools(
             credentials = await vault.retrieve_credential(str(server.id))
         except Exception as e:
             logger.error(f"Failed to retrieve credentials from Vault: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to retrieve credentials"
-            )
+            raise HTTPException(status_code=500, detail="Failed to retrieve credentials")
 
     # Discover tools
     mcp_client = get_mcp_client_service()
@@ -478,26 +461,25 @@ async def sync_tools(
         logger.error(f"Failed to discover tools: {e}")
         await repo.set_sync_error(server.id, str(e))
         await db.commit()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to discover tools: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to discover tools: {e}")
 
     # Convert to tool models with namespacing
     tool_prefix = server.tool_prefix or server.name
     tools_to_sync = []
     for tool in discovered_tools:
         namespaced_name = f"{tool_prefix}__{tool.name}" if tool_prefix else tool.name
-        tools_to_sync.append(ExternalMCPServerTool(
-            id=uuid.uuid4(),
-            server_id=server.id,
-            name=tool.name,
-            namespaced_name=namespaced_name,
-            display_name=tool.name.replace("_", " ").title(),
-            description=tool.description,
-            input_schema=tool.input_schema,
-            enabled=True,
-        ))
+        tools_to_sync.append(
+            ExternalMCPServerTool(
+                id=uuid.uuid4(),
+                server_id=server.id,
+                name=tool.name,
+                namespaced_name=namespaced_name,
+                display_name=tool.name.replace("_", " ").title(),
+                description=tool.description,
+                input_schema=tool.input_schema,
+                enabled=True,
+            )
+        )
 
     # Sync tools
     synced_count, removed_count = await repo.sync_tools(server.id, tools_to_sync)
@@ -506,9 +488,7 @@ async def sync_tools(
     # Refresh to get updated tools
     server = await repo.get_by_id(server_id)
 
-    logger.info(
-        f"Synced tools for '{server.name}': {synced_count} synced, {removed_count} removed by {user.email}"
-    )
+    logger.info(f"Synced tools for '{server.name}': {synced_count} synced, {removed_count} removed by {user.email}")
 
     return SyncToolsResponse(
         synced_count=synced_count,
@@ -544,26 +524,27 @@ async def update_tool(
         raise HTTPException(status_code=404, detail="Tool not found")
 
     await db.commit()
-    logger.info(
-        f"Updated tool '{tool.name}' enabled={request.enabled} for server '{server.name}' by {user.email}"
-    )
+    logger.info(f"Updated tool '{tool.name}' enabled={request.enabled} for server '{server.name}' by {user.email}")
 
     return _convert_tool_to_response(tool)
 
 
 # ============ Internal Router (for MCP Gateway) ============
 
-internal_router = APIRouter(
-    prefix="/v1/internal",
-    tags=["Internal - MCP Gateway"]
-)
+internal_router = APIRouter(prefix="/v1/internal", tags=["Internal - MCP Gateway"])
 
 
 @internal_router.get("/external-mcp-servers", response_model=ExternalMCPServersForGatewayResponse)
 async def list_servers_for_gateway(
     db: AsyncSession = Depends(get_db),
-    # TODO: Add service-to-service authentication
+    x_gateway_key: str = Header(..., alias="X-Gateway-Key"),
 ):
+    # Service-to-service authentication via X-Gateway-Key
+    valid_keys = settings.gateway_api_keys_list
+    if not valid_keys:
+        raise HTTPException(status_code=503, detail="Internal API not configured")
+    if x_gateway_key not in valid_keys:
+        raise HTTPException(status_code=401, detail="Invalid gateway key")
     """
     List all enabled external MCP servers with credentials for MCP Gateway.
 
@@ -585,28 +566,31 @@ async def list_servers_for_gateway(
             except Exception as e:
                 logger.warning(f"Failed to retrieve credentials for server {server.name}: {e}")
 
-        result.append(ExternalMCPServerForGateway(
-            id=server.id,
-            name=server.name,
-            base_url=server.base_url,
-            transport=TransportTypeEnum(server.transport.value),
-            auth_type=AuthTypeEnum(server.auth_type.value),
-            credentials=credentials,
-            tool_prefix=server.tool_prefix,
-            tenant_id=server.tenant_id,
-            tools=[
-                ExternalMCPServerToolResponse(
-                    id=tool.id,
-                    name=tool.name,
-                    namespaced_name=tool.namespaced_name,
-                    display_name=tool.display_name,
-                    description=tool.description,
-                    input_schema=tool.input_schema,
-                    enabled=tool.enabled,
-                    synced_at=tool.synced_at,
-                )
-                for tool in (server.tools or []) if tool.enabled
-            ],
-        ))
+        result.append(
+            ExternalMCPServerForGateway(
+                id=server.id,
+                name=server.name,
+                base_url=server.base_url,
+                transport=TransportTypeEnum(server.transport.value),
+                auth_type=AuthTypeEnum(server.auth_type.value),
+                credentials=credentials,
+                tool_prefix=server.tool_prefix,
+                tenant_id=server.tenant_id,
+                tools=[
+                    ExternalMCPServerToolResponse(
+                        id=tool.id,
+                        name=tool.name,
+                        namespaced_name=tool.namespaced_name,
+                        display_name=tool.display_name,
+                        description=tool.description,
+                        input_schema=tool.input_schema,
+                        enabled=tool.enabled,
+                        synced_at=tool.synced_at,
+                    )
+                    for tool in (server.tools or [])
+                    if tool.enabled
+                ],
+            )
+        )
 
     return ExternalMCPServersForGatewayResponse(servers=result)

@@ -80,6 +80,20 @@ Present each persona's evaluation:
 | 6.0 - 7.9 | **Fix** — List adjustments, ask user to confirm, then create ticket |
 | < 6.0 | **Redo** — Fundamental issues, do NOT create ticket. Propose alternatives. |
 
+## Step 3b: Apply Stage 1 Label on Linear
+
+After scoring, apply the appropriate **Stage 1** label to the Linear ticket (if one exists or is being created):
+
+| Score Range | Label | Color |
+|-------------|-------|-------|
+| >= 8.0 | `council:ticket-go` | green (#0e8a16) |
+| 6.0 - 7.9 | `council:ticket-fix` | amber (#e4b400) |
+| < 6.0 | `council:ticket-redo` | red (#d73a49) |
+
+Apply via: `linear.update_issue(id, labels: [existing_labels..., "council:ticket-go|fix|redo"])`
+
+If the ticket already has a `council:ticket-*` label, **replace** it (remove old, add new).
+
 ## Step 4: Auto-Create Linear Ticket
 
 If Council passes (Go or Fix-then-confirmed), create the ticket using Linear MCP:
@@ -93,7 +107,7 @@ linear.create_issue(
   assignee: "0543749d-ecde-4edf-aec1-6f372aafafce",
   estimate: <fibonacci points>,
   priority: <1=Urgent, 2=High, 3=Normal, 4=Low>,
-  labels: [<type label>, <priority label>, "hlfh:validated" if applicable],
+  labels: [<type label>, <priority label>, "hlfh:validated", "council:ticket-go|fix"],
   state: "Todo"
 )
 ```
@@ -149,6 +163,64 @@ linear.create_issue(
 | This sprint | 3 (Normal) | `P2-Medium` |
 | Backlog, nice-to-have | 4 (Low) | `P3-Low` |
 
+## Step 4b: Stage 2 — Plan Validation
+
+After ticket creation and before implementation begins, run **Stage 2** to validate the implementation plan.
+
+### When Stage 2 Runs
+
+| Level | Stage 2? | Trigger |
+|-------|----------|---------|
+| L1 Issue-to-PR | **Yes** | `/go` triggers Stage 2, `/go-plan` triggers implement |
+| L3 Linear Dispatch | **Yes** | `/go` triggers Stage 2, `/go-plan` triggers implement |
+| L3.5 Autopilot | No (batch, Stage 1 only) | Unchanged |
+| L5 Multi-Agent | No (batch, Stage 1 only) | Unchanged |
+| `/council` local | **Yes** | `/council plan "..."` triggers Stage 2 |
+
+### Stage 2 Rubric (same 4 personas, plan-focused questions)
+
+### 1. Chucky (Devil's Advocate) — Score /10
+- Risks documented? Edge cases covered by tests?
+- Failure modes identified? Rollback plan?
+- Hidden dependencies that could block?
+
+### 2. OSS Killer (VC Skeptique) — Score /10
+- LOC justified? Delivers the announced value?
+- ROI of dev effort vs. user impact?
+- Could this be done simpler?
+
+### 3. Archi 50x50 (Architecte Veteran) — Score /10
+- Right level of abstraction? Existing patterns respected?
+- Breaking changes documented? Migration path clear?
+- Test strategy adequate?
+
+### 4. Better Call Saul (Legal/IP) — Score /10
+- No secrets hardcoded in the plan? GDPR/DORA impacts noted?
+- License implications of new dependencies?
+- Content safety of any new user-facing text?
+
+### Stage 2 Labels
+
+| Score Range | Label | Color |
+|-------------|-------|-------|
+| >= 8.0 | `council:plan-go` | teal (#006b75) |
+| 6.0 - 7.9 | `council:plan-fix` | dark amber (#b45309) |
+| < 6.0 | `council:plan-redo` | dark red (#8b0000) |
+
+Apply via: `linear.update_issue(id, labels: [existing_labels..., "council:plan-go|fix|redo"])`
+
+### Stage 2 Flow
+
+```
+Stage 1 passes (council:ticket-go)
+  ↓ /go
+Claude writes implementation plan (posted as issue comment)
+  ↓ plan posted
+Stage 2 validates the plan (4 personas, plan-focused rubric)
+  ↓ council:plan-go applied to Linear
+Comment `/go-plan` to approve and start implementation
+```
+
 ## Step 5: Update plan.md
 
 After ticket creation, append to the appropriate section in `plan.md`:
@@ -176,3 +248,5 @@ Next: say "go" to start implementation, or "adjust <feedback>" to revise
 - **Score honestly** — don't inflate scores to pass the gate
 - For **ADRs**: use `/create-adr` skill after Council passes (ADR lives in stoa-docs)
 - For **mega-tickets** (>= 30 pts): add `mega-ticket` label automatically
+- **Stage 1 labels** (`council:ticket-*`) are applied after every Council scoring (Step 3b)
+- **Stage 2 labels** (`council:plan-*`) are applied after plan validation (Step 4b)

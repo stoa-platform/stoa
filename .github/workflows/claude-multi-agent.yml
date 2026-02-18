@@ -77,13 +77,77 @@ jobs:
             **Estimated Total LOC**: XXX
 
             Comment "/go-batch" to start parallel execution.
-          # Model tier: opus (Council gate decision — quality matters more than cost)
-          claude_args: "--model claude-opus-4-6 --max-turns 10 --allowedTools Bash,Read,Glob,Grep"
+          # Model tier: sonnet (Council gate — structured rubric, Sonnet sufficient. Bash removed for security)
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 5 --allowedTools Read,Glob,Grep"
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=5, Stage=council-batch"
+
+      # Sync Council results to Linear (apply council:ticket-go to batch tickets)
+      - name: Sync Batch Council to Linear
+        if: steps.council.outcome == 'success'
+        continue-on-error: true
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ]; then exit 0; fi
+
+          # Parse comma-separated tickets
+          TICKETS="${{ inputs.tickets }}"
+          GH_RUN="https://github.com/stoa-platform/stoa/actions/runs/${{ github.run_id }}"
+
+          # Find council:ticket-go label ID (batch only processes Go tickets)
+          LABEL_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"query": "{ issueLabels(filter: { name: { eq: \"council:ticket-go\" } }) { nodes { id } } }"}' \
+            | jq -r '.data.issueLabels.nodes[0].id // empty' 2>/dev/null || echo "")
+
+          if [ -z "$LABEL_ID" ]; then
+            echo "::warning::council:ticket-go label not found on Linear"
+            exit 0
+          fi
+
+          echo "$TICKETS" | tr ',' '\n' | while IFS= read -r TICKET_ID; do
+            TICKET_ID=$(echo "$TICKET_ID" | tr -d ' ')
+            [ -z "$TICKET_ID" ] && continue
+
+            ISSUE_ID=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"{ issueSearch(filter: { identifier: { eq: \\\"${TICKET_ID}\\\" } }) { nodes { id } } }\"}" \
+              | jq -r '.data.issueSearch.nodes[0].id // empty' 2>/dev/null || echo "")
+
+            if [ -z "$ISSUE_ID" ]; then
+              echo "::warning::${TICKET_ID} not found on Linear"
+              continue
+            fi
+
+            # Get existing labels (minus old council:ticket-*) + add new
+            EXISTING=$(curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"{ issue(id: \\\"${ISSUE_ID}\\\") { labels { nodes { id name } } } }\"}" \
+              | jq -r '[.data.issue.labels.nodes[] | select(.name | startswith("council:ticket-") | not) | .id]' 2>/dev/null || echo "[]")
+            LABEL_IDS=$(echo "$EXISTING" | jq -c ". + [\"${LABEL_ID}\"]" 2>/dev/null || echo "[\"${LABEL_ID}\"]")
+
+            curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"mutation { issueUpdate(id: \\\"${ISSUE_ID}\\\", input: { labelIds: ${LABEL_IDS} }) { success } }\"}" \
+              > /dev/null 2>&1 || true
+
+            COMMENT="Multi-Agent Council batch — council:ticket-go\n[GitHub Actions](${GH_RUN})"
+            curl -s -X POST "https://api.linear.app/graphql" \
+              -H "Authorization: ${LINEAR_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": \"mutation { commentCreate(input: { issueId: \\\"${ISSUE_ID}\\\", body: \\\"${COMMENT}\\\" }) { success } }\"}" \
+              > /dev/null 2>&1 || true
+
+            echo "Synced ${TICKET_ID} → council:ticket-go"
+          done
 
       - name: Notify Slack — Batch Council
         env:
@@ -165,7 +229,7 @@ jobs:
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=60, Stage=implement"
 
       - name: Notify Slack — Agent Complete
         if: always()

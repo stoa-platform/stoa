@@ -21,6 +21,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  checks: read
   id-token: write
   actions: write
 
@@ -296,30 +297,42 @@ jobs:
           PR_URL=$(echo "$PR_INFO" | jq -r '.url // empty' 2>/dev/null || echo "")
           PR_TITLE=$(echo "$PR_INFO" | jq -r '.title // empty' 2>/dev/null || echo "")
 
+          SKIP_CLOSE=""
           if [ -n "$PR_NUM" ]; then
             echo "Found merged PR #${PR_NUM}: ${PR_TITLE}"
             CLOSE_BODY="Completed via PR #${PR_NUM} (${PR_URL})."
           else
-            echo "No merged PR found — implementation may be in Ask mode (PR open for review)"
-            # Check for open PRs
-            OPEN_PR=$(gh pr list --state open --search "issue-${ISSUE_NUM}" \
+            echo "No merged PR found — checking for open PRs"
+            # Search open PRs by branch name pattern (feat/issue-NNN-*)
+            OPEN_PR=$(gh pr list --state open --head "feat/issue-${ISSUE_NUM}" \
               --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
+            # Fallback: search by issue mention
+            if [ -z "$OPEN_PR" ]; then
+              OPEN_PR=$(gh pr list --state open --search "#${ISSUE_NUM}" \
+                --json number,url --jq '.[0] // empty' 2>/dev/null || echo "")
+            fi
             OPEN_NUM=$(echo "$OPEN_PR" | jq -r '.number // empty' 2>/dev/null || echo "")
             if [ -n "$OPEN_NUM" ]; then
+              OPEN_URL=$(echo "$OPEN_PR" | jq -r '.url // empty' 2>/dev/null || echo "")
               echo "Open PR #${OPEN_NUM} found — Ask mode, leaving issue open"
-              echo "SKIP_CLOSE=true" >> "$GITHUB_ENV"
+              SKIP_CLOSE=true
             fi
             CLOSE_BODY="Implementation completed. No merged PR detected (may be in Ask mode)."
           fi
 
-          # Close GitHub issue (unless Ask mode with open PR)
-          if [ "${SKIP_CLOSE}" != "true" ]; then
+          # Close GitHub issue only if we found a merged PR.
+          # If no merged PR and no open PR, don't close — implementation may have failed.
+          if [ -n "$PR_NUM" ]; then
             gh issue close "$ISSUE_NUM" --comment "$CLOSE_BODY" || true
             echo "Closed issue #${ISSUE_NUM}"
+          elif [ "$SKIP_CLOSE" = "true" ]; then
+            echo "Skipping close — open PR #${OPEN_NUM} in Ask mode"
+          else
+            echo "No PRs found — not closing issue (implementation may have failed)"
           fi
 
-          # Update Linear ticket -> Done (if LINEAR_API_KEY is set)
-          if [ -n "$LINEAR_API_KEY" ] && [ -n "$TICKET_ID" ] && [ "${SKIP_CLOSE}" != "true" ]; then
+          # Update Linear ticket -> Done (only when we found a merged PR)
+          if [ -n "$LINEAR_API_KEY" ] && [ -n "$TICKET_ID" ] && [ -n "$PR_NUM" ]; then
             echo "Updating Linear ticket ${TICKET_ID} -> Done"
 
             # Fetch the "Done" state ID for team CAB-ING
@@ -368,6 +381,7 @@ jobs:
           echo "PR_NUM=${PR_NUM}" >> "$GITHUB_ENV"
           echo "PR_URL=${PR_URL}" >> "$GITHUB_ENV"
           echo "TICKET_ID=${TICKET_ID}" >> "$GITHUB_ENV"
+          echo "SKIP_CLOSE=${SKIP_CLOSE}" >> "$GITHUB_ENV"
 
       # Enhanced Slack notification (includes PR link + ticket status)
       - name: Notify Slack — Implementation Result

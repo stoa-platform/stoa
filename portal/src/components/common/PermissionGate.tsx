@@ -101,6 +101,7 @@ export function PermissionGate({
  * @example
  * const AdminOnlyComponent = withPermission(MyComponent, { role: 'cpi-admin' });
  */
+// eslint-disable-next-line react-refresh/only-export-components -- HOC intentionally co-located with component
 export function withPermission<P extends object>(
   WrappedComponent: React.ComponentType<P>,
   gateProps: Omit<PermissionGateProps, 'children'>

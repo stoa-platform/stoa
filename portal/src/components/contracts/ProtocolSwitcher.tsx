@@ -110,6 +110,7 @@ export const ProtocolSwitcher: React.FC<ProtocolSwitcherProps> = ({
         }
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- confirmDisable defined after this callback
     [enableBinding, onBindingEnabled]
   );
 

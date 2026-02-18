@@ -3,6 +3,7 @@ import { Suspense, lazy, useState } from 'react';
 import { Layout } from './components/layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ErrorBoundary, SkipLink } from './components/common';
+import { captureException } from './services/errorTracking';
 import { StoaLogo } from '@stoa/shared/components/StoaLogo';
 import { StoaLoader } from '@stoa/shared/components/StoaLoader';
 import { config } from './config';
@@ -563,12 +564,8 @@ function App() {
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {
-        // Log to console in development
         console.error('[App] Unhandled error:', error.message);
-        console.error('[App] Component stack:', errorInfo.componentStack);
-
-        // TODO: Send to error tracking service
-        // trackError(error, { componentStack: errorInfo.componentStack });
+        captureException(error, { componentStack: errorInfo.componentStack });
       }}
     >
       <SkipLink />

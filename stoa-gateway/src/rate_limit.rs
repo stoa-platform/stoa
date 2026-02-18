@@ -79,6 +79,29 @@ impl RateLimiter {
         }
     }
 
+    /// Check if request is allowed for a federated sub-account.
+    ///
+    /// Uses a composite key `{tenant_id}:{sub_account_id}` so that each
+    /// sub-account has its own isolated rate-limit bucket, independent
+    /// from the parent tenant bucket (CAB-1371).
+    pub fn check_sub_account(&self, tenant_id: &str, sub_account_id: &str) -> RateLimitResult {
+        let key = format!("{}:{}", tenant_id, sub_account_id);
+        let mut buckets = self.buckets.write();
+
+        let bucket = buckets.entry(key).or_insert_with(TenantBucket::new);
+
+        let allowed = bucket.check_and_record(self.default_limit, self.window);
+        let remaining = bucket.remaining(self.default_limit);
+        let reset_at = bucket.reset_at(self.window);
+
+        RateLimitResult {
+            allowed,
+            limit: self.default_limit,
+            remaining,
+            reset_at,
+        }
+    }
+
     /// Check if request is allowed for tenant
     pub fn check(&self, tenant_id: &str) -> RateLimitResult {
         let mut buckets = self.buckets.write();
@@ -236,6 +259,47 @@ mod tests {
         // Cleanup (none should be removed - not stale yet)
         limiter.cleanup_stale_buckets();
         assert_eq!(limiter.bucket_count(), 2);
+    }
+
+    #[test]
+    fn test_sub_account_isolated_from_tenant() {
+        let limiter = RateLimiter::new(&test_config());
+        // Exhaust tenant-1 bucket
+        for _ in 0..5 {
+            limiter.check("tenant-1");
+        }
+        assert!(!limiter.check("tenant-1").allowed);
+        // Sub-account should have its own isolated bucket
+        let result = limiter.check_sub_account("tenant-1", "sub-a");
+        assert!(result.allowed);
+        assert_eq!(result.remaining, 4);
+    }
+
+    #[test]
+    fn test_sub_accounts_isolated_from_each_other() {
+        let limiter = RateLimiter::new(&test_config());
+        // Exhaust sub-a bucket
+        for _ in 0..5 {
+            limiter.check_sub_account("tenant-1", "sub-a");
+        }
+        assert!(!limiter.check_sub_account("tenant-1", "sub-a").allowed);
+        // sub-b should be independent
+        let result = limiter.check_sub_account("tenant-1", "sub-b");
+        assert!(result.allowed);
+        assert_eq!(result.remaining, 4);
+    }
+
+    #[test]
+    fn test_sub_account_check_tracks_remaining() {
+        let limiter = RateLimiter::new(&test_config());
+        for i in 0..5 {
+            let result = limiter.check_sub_account("tenant-1", "sub-a");
+            assert!(result.allowed, "Request {} should be allowed", i + 1);
+            assert_eq!(result.remaining, 4 - i);
+        }
+        let result = limiter.check_sub_account("tenant-1", "sub-a");
+        assert!(!result.allowed);
+        assert_eq!(result.remaining, 0);
     }
 
     #[test]

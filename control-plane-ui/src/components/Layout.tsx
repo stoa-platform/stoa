@@ -253,6 +253,12 @@ const navigationSections: NavSection[] = [
         icon: ListChecks,
         permission: 'workflows:read',
       },
+      {
+        name: 'Audience',
+        href: '/audience-governance',
+        icon: Users,
+        permission: 'apis:update',
+      },
     ],
   },
 ];

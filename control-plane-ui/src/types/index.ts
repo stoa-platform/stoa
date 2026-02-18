@@ -44,6 +44,7 @@ export interface API {
   deployed_staging: boolean;
   tags?: string[];
   portal_promoted?: boolean; // Whether API is promoted to Developer Portal
+  audience?: 'public' | 'internal' | 'partner';
   created_at: string;
   updated_at: string;
 }

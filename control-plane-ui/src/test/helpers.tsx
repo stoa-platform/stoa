@@ -244,6 +244,7 @@ export const mockAPI = (overrides: Partial<API> = {}): API => ({
   deployed_dev: true,
   deployed_staging: false,
   tags: ['payments'],
+  audience: 'public',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-02-01T00:00:00Z',
   ...overrides,

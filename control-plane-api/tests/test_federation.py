@@ -2,7 +2,7 @@
 
 import hashlib
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -415,3 +415,232 @@ class TestFederationService:
                 account_type="developer",
                 created_by="test",
             )
+
+
+# ============== CAB-1370: Delegation Token + Usage Tests ==============
+
+
+class TestCAB1370Schemas:
+    """Tests for CAB-1370 new schemas."""
+
+    def test_delegation_token_request_defaults(self):
+        from src.schemas.federation import DelegationTokenRequest
+
+        req = DelegationTokenRequest()
+        assert req.scopes == ["stoa:read"]
+        assert req.ttl_seconds == 3600
+
+    def test_delegation_token_request_custom(self):
+        from src.schemas.federation import DelegationTokenRequest
+
+        req = DelegationTokenRequest(scopes=["stoa:read", "stoa:write"], ttl_seconds=7200)
+        assert req.scopes == ["stoa:read", "stoa:write"]
+        assert req.ttl_seconds == 7200
+
+    def test_delegation_token_request_ttl_validation(self):
+        from src.schemas.federation import DelegationTokenRequest
+
+        with pytest.raises(ValidationError):
+            DelegationTokenRequest(ttl_seconds=10)  # Below min 60
+        with pytest.raises(ValidationError):
+            DelegationTokenRequest(ttl_seconds=100000)  # Above max 86400
+
+    def test_delegation_token_response(self):
+        from src.schemas.federation import DelegationTokenResponse
+
+        resp = DelegationTokenResponse(
+            access_token="eyJhbGciOiJSUzI1NiJ9.test",  # noqa: S106
+            token_type="Bearer",  # noqa: S106
+            expires_in=3600,
+            scope="stoa:read",
+            sub_account_id=uuid4(),
+            sub_account_name="agent-alpha",
+        )
+        assert resp.token_type == "Bearer"
+        assert resp.expires_in == 3600
+
+    def test_delegation_token_request_with_sub_account_id(self):
+        """Chucky adjustment: verify sub_account_id is accepted as query param."""
+        from src.schemas.federation import DelegationTokenRequest
+
+        req = DelegationTokenRequest(scopes=["stoa:read", "stoa:write"])
+        assert req.scopes == ["stoa:read", "stoa:write"]
+
+    def test_usage_response(self):
+        from src.schemas.federation import UsageResponse, UsageStat
+
+        stat = UsageStat(
+            sub_account_id=uuid4(),
+            sub_account_name="test-sub",
+            request_count=100,
+            token_count=50,
+        )
+        resp = UsageResponse(
+            master_account_id=uuid4(),
+            period_days=7,
+            total_requests=100,
+            total_tokens=50,
+            sub_accounts=[stat],
+        )
+        assert resp.period_days == 7
+        assert len(resp.sub_accounts) == 1
+
+    def test_usage_stat_defaults(self):
+        from src.schemas.federation import UsageStat
+
+        stat = UsageStat(sub_account_id=uuid4(), sub_account_name="test")
+        assert stat.request_count == 0
+        assert stat.token_count == 0
+        assert stat.error_count == 0
+        assert stat.last_active_at is None
+
+    def test_bulk_revoke_response(self):
+        from src.schemas.federation import FederationBulkRevokeResponse
+
+        resp = FederationBulkRevokeResponse(revoked_count=3, already_revoked=1, total=5)
+        assert resp.revoked_count == 3
+        assert resp.total == 5
+
+    def test_tool_allow_list_update(self):
+        from src.schemas.federation import ToolAllowListUpdate
+
+        update = ToolAllowListUpdate(tools=["weather-tool", "search-tool"])
+        assert len(update.tools) == 2
+
+    def test_tool_allow_list_response(self):
+        from src.schemas.federation import ToolAllowListResponse
+
+        resp = ToolAllowListResponse(sub_account_id=uuid4(), tools=["a-tool", "b-tool"])
+        assert resp.tools == ["a-tool", "b-tool"]
+
+    def test_tool_allow_list_update_required(self):
+        from src.schemas.federation import ToolAllowListUpdate
+
+        with pytest.raises(ValidationError):
+            ToolAllowListUpdate()  # tools is required
+
+    def test_tool_allow_list_empty(self):
+        from src.schemas.federation import ToolAllowListUpdate
+
+        update = ToolAllowListUpdate(tools=[])
+        assert update.tools == []
+
+
+class TestCAB1370Service:
+    """Tests for CAB-1370 service methods."""
+
+    @pytest.mark.asyncio
+    async def test_delegate_token_inactive_sub(self):
+        from src.services.federation_service import FederationService
+
+        session = AsyncMock()
+        svc = FederationService(session)
+        sub = _make_sub(status=SubAccountStatus.SUSPENDED)
+        sub.kc_client_id = "test-client"
+
+        with pytest.raises(ValueError, match="not active"):
+            await svc.delegate_token(sub, scopes=["stoa:read"], ttl_seconds=3600)
+
+    @pytest.mark.asyncio
+    async def test_delegate_token_no_kc_client(self):
+        from src.services.federation_service import FederationService
+
+        session = AsyncMock()
+        svc = FederationService(session)
+        sub = _make_sub()
+        sub.kc_client_id = None
+
+        with pytest.raises(ValueError, match="no Keycloak client"):
+            await svc.delegate_token(sub, scopes=["stoa:read"], ttl_seconds=3600)
+
+    @pytest.mark.asyncio
+    async def test_delegate_token_kc_returns_none(self):
+        from src.services.federation_service import FederationService
+
+        session = AsyncMock()
+        svc = FederationService(session)
+        sub = _make_sub()
+        sub.kc_client_id = "test-client"
+
+        with patch("src.services.federation_service.keycloak_service") as mock_kc:
+            mock_kc.exchange_federation_token = AsyncMock(return_value=None)
+            with pytest.raises(ValueError, match="Token exchange failed"):
+                await svc.delegate_token(sub, scopes=["stoa:read"], ttl_seconds=3600)
+
+    @pytest.mark.asyncio
+    async def test_delegate_token_success(self):
+        from src.services.federation_service import FederationService
+
+        session = AsyncMock()
+        svc = FederationService(session)
+        sub = _make_sub()
+        sub.kc_client_id = "test-client"
+
+        token_data = {
+            "access_token": "eyJ.test.token",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "scope": "stoa:read",
+        }
+        with patch("src.services.federation_service.keycloak_service") as mock_kc:
+            mock_kc.exchange_federation_token = AsyncMock(return_value=token_data)
+            result = await svc.delegate_token(sub, scopes=["stoa:read"], ttl_seconds=3600)
+
+        assert result["access_token"] == "eyJ.test.token"
+        assert result["token_type"] == "Bearer"
+
+    @pytest.mark.asyncio
+    async def test_usage_aggregation_stub(self):
+        from src.services.federation_service import FederationService
+
+        session = AsyncMock()
+        svc = FederationService(session)
+
+        sub1 = _make_sub(name="sub-1")
+        sub2 = _make_sub(name="sub-2")
+        svc.sub_repo.list_by_master = AsyncMock(return_value=([sub1, sub2], 2))
+
+        result = await svc.get_usage_aggregation(uuid4(), period_days=7)
+        assert len(result) == 2
+        assert all(s["request_count"] == 0 for s in result)
+        assert all(s["token_count"] == 0 for s in result)
+
+    @pytest.mark.asyncio
+    async def test_bulk_revoke(self):
+        from src.services.federation_service import FederationService
+
+        session = AsyncMock()
+        svc = FederationService(session)
+        master_id = uuid4()
+
+        svc.master_repo.count_sub_accounts = AsyncMock(return_value=5)
+        svc.sub_repo.bulk_revoke = AsyncMock(return_value=(3, 1))
+
+        newly, already, total = await svc.bulk_revoke(master_id)
+        assert newly == 3
+        assert already == 1
+        assert total == 5
+
+    @pytest.mark.asyncio
+    async def test_set_tool_allow_list(self):
+        from src.services.federation_service import FederationService
+
+        session = AsyncMock()
+        svc = FederationService(session)
+        sub_id = uuid4()
+
+        svc.sub_repo.set_tool_allow_list = AsyncMock(return_value=["a-tool", "b-tool"])
+        result = await svc.set_tool_allow_list(sub_id, ["b-tool", "a-tool"])
+        assert result == ["a-tool", "b-tool"]
+
+    @pytest.mark.asyncio
+    async def test_get_tool_allow_list(self):
+        from src.services.federation_service import FederationService
+
+        session = AsyncMock()
+        svc = FederationService(session)
+        sub_id = uuid4()
+
+        svc.sub_repo.get_tool_allow_list = AsyncMock(return_value=["weather-tool"])
+        result = await svc.get_tool_allow_list(sub_id)
+        assert result == ["weather-tool"]

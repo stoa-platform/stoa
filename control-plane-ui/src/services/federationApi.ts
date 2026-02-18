@@ -15,6 +15,8 @@ import type {
   SubAccountCreatedResponse,
   SubAccountListResponse,
   ToolAllowListResponse,
+  UsageResponse,
+  FederationBulkRevokeResponse,
 } from '../types';
 
 class FederationService {
@@ -150,6 +152,32 @@ class FederationService {
     const { data } = await apiService.put(
       `/v1/tenants/${tenantId}/federation/accounts/${masterId}/sub-accounts/${subId}/tools`,
       { allowed_tools: tools }
+    );
+    return data;
+  }
+  // ==========================================================================
+  // Usage & Bulk Operations
+  // ==========================================================================
+
+  /**
+   * Get usage stats for a master account.
+   * Endpoint: GET /v1/tenants/{tenant_id}/federation/accounts/{masterId}/usage
+   */
+  async getUsage(tenantId: string, masterId: string, days = 7): Promise<UsageResponse> {
+    const { data } = await apiService.get(
+      `/v1/tenants/${tenantId}/federation/accounts/${masterId}/usage`,
+      { params: { days } }
+    );
+    return data;
+  }
+
+  /**
+   * Bulk revoke all active sub-accounts.
+   * Endpoint: POST /v1/tenants/{tenant_id}/federation/accounts/{masterId}/bulk-revoke
+   */
+  async bulkRevoke(tenantId: string, masterId: string): Promise<FederationBulkRevokeResponse> {
+    const { data } = await apiService.post(
+      `/v1/tenants/${tenantId}/federation/accounts/${masterId}/bulk-revoke`
     );
     return data;
   }

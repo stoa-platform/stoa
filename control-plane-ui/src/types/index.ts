@@ -1277,3 +1277,27 @@ export interface ToolAllowListResponse {
   sub_account_id: string;
   allowed_tools: string[];
 }
+
+export interface UsageSubAccountStat {
+  sub_account_id: string;
+  sub_account_name: string;
+  total_requests: number;
+  total_tokens: number;
+  avg_latency_ms: number;
+  error_count: number;
+  last_active_at: string | null;
+}
+
+export interface UsageResponse {
+  master_account_id: string;
+  period_days: number;
+  total_requests: number;
+  total_tokens: number;
+  sub_accounts: UsageSubAccountStat[];
+}
+
+export interface FederationBulkRevokeResponse {
+  revoked_count: number;
+  already_revoked: number;
+  total: number;
+}

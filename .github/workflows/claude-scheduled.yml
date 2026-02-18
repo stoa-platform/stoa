@@ -184,39 +184,73 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"text":":shield: *Weekly Audit Complete* — check GitHub issues for full report"}'
 
-  # ----- Weekly Digest -----
+  # ----- Weekly Digest (Batch API — 50% cost reduction) -----
   weekly-digest:
     if: |
       vars.DISABLE_L2_SCHEDULED != 'true' &&
       (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-digest')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      - uses: anthropics/claude-code-action@v1
-        continue-on-error: true
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
-            Do NOT read memory.md, plan.md, or operations.log for session state.
-            Focus exclusively on the task below.
+      - name: Collect context
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr list --state merged --base main --limit 20 --json number,title,mergedAt > /tmp/prs.json
+          gh issue list --state closed --limit 20 --json number,title,closedAt > /tmp/issues.json
+          cat plan.md > /tmp/context.txt
+          echo "---" >> /tmp/context.txt
+          echo "PRs merged this week:" >> /tmp/context.txt
+          cat /tmp/prs.json >> /tmp/context.txt
+          echo "" >> /tmp/context.txt
+          echo "Issues closed this week:" >> /tmp/context.txt
+          cat /tmp/issues.json >> /tmp/context.txt
 
-            Weekly digest: summarize AI Factory activity.
-            1. Count PRs merged this week: gh pr list --state merged --base main --json number,title,mergedAt
-            2. Count issues closed: gh issue list --state closed --json number,title,closedAt
-            3. Read plan.md — calculate cycle progress (% done)
-            Format as a concise Slack-friendly summary.
-          # Model tier: haiku (read-only digest, no code generation)
-          claude_args: "--model claude-haiku-4-5-20251001 --max-turns 5 --allowedTools Bash,Read,Glob,Grep"
+      - name: Write prompt
+        run: |
+          cat > /tmp/prompt.txt << 'PROMPT'
+          Weekly digest: summarize AI Factory activity.
+          1. Count PRs merged this week from the provided JSON
+          2. Count issues closed from the provided JSON
+          3. Calculate cycle progress (% done) from plan.md
+          Format as markdown suitable for a GitHub issue body.
+          Include: PR count, issue count, cycle progress %, top 3 merged PRs.
+          PROMPT
+
+      # Model tier: haiku-batch (read-only digest, 50% batch discount)
+      - name: Run batch processor
+        continue-on-error: true
+        id: batch
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 scripts/ai-ops/batch-processor.py \
+            --prompt-file /tmp/prompt.txt \
+            --context-file /tmp/context.txt \
+            --model claude-haiku-4-5-20251001 \
+            --max-tokens 2048 \
+            --max-wait 1200 \
+            --output /tmp/result.json
+
+      - name: Post results
+        if: steps.batch.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BODY=$(python3 -c "import json; print(json.load(open('/tmp/result.json'))['text'])" 2>/dev/null || echo "Batch completed but no text output.")
+          gh issue create \
+            --title "Weekly Digest — $(date -u +%Y-%m-%d)" \
+            --label "daily-digest" \
+            --body "$BODY" || true
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Mode=batch"
 
-  # ----- Weekly: Capacity Check -----
+  # ----- Weekly: Capacity Check (Batch API — 50% cost reduction) -----
   weekly-capacity-check:
     if: |
       vars.DISABLE_L2_SCHEDULED != 'true' &&
@@ -225,33 +259,55 @@ jobs:
         (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-capacity-check')
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      - uses: anthropics/claude-code-action@v1
-        continue-on-error: true
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
-            Do NOT read memory.md, plan.md, or operations.log for session state.
-            Focus exclusively on the task below.
+      - name: Collect context
+        run: |
+          cat plan.md > /tmp/context.txt
 
-            Weekly capacity check — read-only cycle health analysis.
-            1. Read plan.md — find current cycle (marked "CURRENT"), extract scope/done pts
-            2. Velocity baseline: Cycle 7 = 505 pts / 7 days = 72.1 pts/day
-            3. Compute: capacity, target (80%), gap, utilization %
-            4. List top 5 backlog items that could fill the gap
-            5. Create issue "Weekly Capacity Check — YYYY-MM-DD" label "daily-digest"
-            READ-ONLY. Do NOT modify files.
-          # Model tier: haiku (read-only capacity analysis, no code generation)
-          claude_args: "--model claude-haiku-4-5-20251001 --max-turns 10 --allowedTools Read,Glob,Grep"
+      - name: Write prompt
+        run: |
+          cat > /tmp/prompt.txt << 'PROMPT'
+          Weekly capacity check — analyze cycle health from plan.md.
+          1. Find current cycle (marked "CURRENT"), extract scope/done pts
+          2. Velocity baseline: Cycle 7 = 505 pts / 7 days = 72.1 pts/day
+          3. Compute: capacity, target (80%), gap, utilization %
+          4. List top 5 backlog items that could fill the gap
+          Format as markdown for a GitHub issue body.
+          PROMPT
+
+      # Model tier: haiku-batch (read-only capacity, 50% batch discount)
+      - name: Run batch processor
+        continue-on-error: true
+        id: batch
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 scripts/ai-ops/batch-processor.py \
+            --prompt-file /tmp/prompt.txt \
+            --context-file /tmp/context.txt \
+            --model claude-haiku-4-5-20251001 \
+            --max-tokens 2048 \
+            --max-wait 1200 \
+            --output /tmp/result.json
+
+      - name: Post results
+        if: steps.batch.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BODY=$(python3 -c "import json; print(json.load(open('/tmp/result.json'))['text'])" 2>/dev/null || echo "Batch completed but no text output.")
+          gh issue create \
+            --title "Weekly Capacity Check — $(date -u +%Y-%m-%d)" \
+            --label "daily-digest" \
+            --body "$BODY" || true
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Mode=batch"
 
       - name: Notify Slack
         if: always()
@@ -263,7 +319,7 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"text":":chart_with_upwards_trend: *Weekly Capacity Check Complete* — check GitHub issues for cycle health report"}'
 
-  # ----- Weekly: Backlog Stock Check -----
+  # ----- Weekly: Backlog Stock Check (Batch API — 50% cost reduction) -----
   weekly-backlog-stock:
     if: |
       vars.DISABLE_L2_SCHEDULED != 'true' &&
@@ -272,34 +328,65 @@ jobs:
         (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'weekly-backlog-stock')
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      - uses: anthropics/claude-code-action@v1
-        continue-on-error: true
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
-            IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
-            Do NOT read memory.md, plan.md, or operations.log for session state.
-            Focus exclusively on the task below.
+      - name: Collect context
+        run: |
+          cat plan.md > /tmp/context.txt
+          echo "---" >> /tmp/context.txt
+          echo "TODO/FIXME counts by component:" >> /tmp/context.txt
+          for dir in control-plane-api control-plane-ui portal stoa-gateway; do
+            COUNT=$(grep -rn 'TODO\|FIXME' "$dir/src/" 2>/dev/null | wc -l || echo 0)
+            echo "  $dir: $COUNT" >> /tmp/context.txt
+          done
+          echo "---" >> /tmp/context.txt
+          echo "Lint suppressions:" >> /tmp/context.txt
+          grep -rn 'noqa\|eslint-disable\|allow(' control-plane-api/src/ control-plane-ui/src/ portal/src/ stoa-gateway/src/ 2>/dev/null | wc -l >> /tmp/context.txt || echo "0" >> /tmp/context.txt
 
-            Weekly backlog stock check — scan codebase for improvement opportunities.
-            1. Count backlog items from plan.md (non-[x] items, estimate total pts)
-            2. Scan codebase signals: TODO/FIXME counts, lint suppressions, untested files
-            3. Group findings by component (api, ui, portal, gateway)
-            4. Suggest MEGA-sized improvements (20-40 pts), NOT micro-tickets
-            5. If backlog < 400 pts: recommend `/generate-backlog`. Else: "Backlog healthy"
-            Create issue "Backlog Stock Check — YYYY-MM-DD" label "daily-digest".
-            READ-ONLY. Do NOT create Linear tickets or modify files.
-          # Model tier: haiku (read-only backlog scan, no code generation)
-          claude_args: "--model claude-haiku-4-5-20251001 --max-turns 15 --allowedTools Read,Glob,Grep"
+      - name: Write prompt
+        run: |
+          cat > /tmp/prompt.txt << 'PROMPT'
+          Weekly backlog stock check — analyze improvement opportunities.
+          1. Count backlog items from plan.md (non-[x] items, estimate total pts)
+          2. Review TODO/FIXME counts and lint suppressions from context
+          3. Group findings by component (api, ui, portal, gateway)
+          4. Suggest MEGA-sized improvements (20-40 pts), NOT micro-tickets
+          5. If backlog < 400 pts: recommend running generate-backlog. Else: "Backlog healthy"
+          Format as markdown for a GitHub issue body.
+          PROMPT
+
+      # Model tier: haiku-batch (read-only backlog scan, 50% batch discount)
+      - name: Run batch processor
+        continue-on-error: true
+        id: batch
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 scripts/ai-ops/batch-processor.py \
+            --prompt-file /tmp/prompt.txt \
+            --context-file /tmp/context.txt \
+            --model claude-haiku-4-5-20251001 \
+            --max-tokens 2048 \
+            --max-wait 1200 \
+            --output /tmp/result.json
+
+      - name: Post results
+        if: steps.batch.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BODY=$(python3 -c "import json; print(json.load(open('/tmp/result.json'))['text'])" 2>/dev/null || echo "Batch completed but no text output.")
+          gh issue create \
+            --title "Backlog Stock Check — $(date -u +%Y-%m-%d)" \
+            --label "daily-digest" \
+            --body "$BODY" || true
 
       - name: Log token usage
         if: always()
         run: |
-          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}"
+          echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Mode=batch"
 
       - name: Notify Slack
         if: always()

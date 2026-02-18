@@ -1,0 +1,380 @@
+"""Tests for External MCP Servers Admin Router — CAB-1378
+
+Endpoints:
+- GET /v1/admin/external-mcp-servers (list)
+- POST /v1/admin/external-mcp-servers (create, 201)
+- GET /v1/admin/external-mcp-servers/{server_id} (detail + tools)
+- PUT /v1/admin/external-mcp-servers/{server_id} (update)
+- DELETE /v1/admin/external-mcp-servers/{server_id} (204)
+- POST /v1/admin/external-mcp-servers/{server_id}/test-connection
+- POST /v1/admin/external-mcp-servers/{server_id}/sync-tools
+- PATCH /v1/admin/external-mcp-servers/{server_id}/tools/{tool_id}
+- GET /v1/internal/external-mcp-servers (gateway internal)
+
+Auth: get_current_user + _require_admin (cpi-admin or tenant-admin).
+"""
+
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
+
+from fastapi.testclient import TestClient
+
+REPO_PATH = "src.routers.external_mcp_servers.ExternalMCPServerRepository"
+TOOL_REPO_PATH = "src.routers.external_mcp_servers.ExternalMCPServerToolRepository"
+VAULT_PATH = "src.routers.external_mcp_servers.get_vault_client"
+MCP_CLIENT_PATH = "src.routers.external_mcp_servers.get_mcp_client_service"
+
+BASE = "/v1/admin/external-mcp-servers"
+INTERNAL_BASE = "/v1/internal/external-mcp-servers"
+
+
+def _mock_server(**overrides):
+    """Create a mock ExternalMCPServer matching _convert_server_to_response fields."""
+    mock = MagicMock()
+    transport_mock = MagicMock()
+    transport_mock.value = "sse"
+    auth_mock = MagicMock()
+    auth_mock.value = "none"
+    health_mock = MagicMock()
+    health_mock.value = "unknown"
+
+    defaults = {
+        "id": uuid4(),
+        "name": "linear-mcp",
+        "display_name": "Linear",
+        "description": "Linear issue tracking",
+        "icon": None,
+        "base_url": "https://mcp.linear.app/sse",
+        "transport": transport_mock,
+        "auth_type": auth_mock,
+        "tool_prefix": "linear",
+        "enabled": True,
+        "health_status": health_mock,
+        "last_health_check": None,
+        "last_sync_at": None,
+        "sync_error": None,
+        "tenant_id": "acme",
+        "tools": [],
+        "credential_vault_path": None,
+        "created_at": datetime(2026, 2, 1),
+        "updated_at": datetime(2026, 2, 1),
+        "created_by": "admin-user-id",
+    }
+    for k, v in {**defaults, **overrides}.items():
+        setattr(mock, k, v)
+    return mock
+
+
+def _mock_tool(**overrides):
+    """Create a mock ExternalMCPServerTool."""
+    mock = MagicMock()
+    defaults = {
+        "id": uuid4(),
+        "name": "create_issue",
+        "namespaced_name": "linear__create_issue",
+        "display_name": "Create Issue",
+        "description": "Create a Linear issue",
+        "input_schema": {"type": "object"},
+        "enabled": True,
+        "synced_at": datetime(2026, 2, 1),
+    }
+    for k, v in {**defaults, **overrides}.items():
+        setattr(mock, k, v)
+    return mock
+
+
+class TestListServers:
+    """GET /v1/admin/external-mcp-servers"""
+
+    def test_list_servers_cpi_admin(self, app_with_cpi_admin, mock_db_session):
+        """CPI admin sees all servers."""
+        items = [_mock_server()]
+
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.list_all = AsyncMock(return_value=(items, 1))
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(BASE)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_count"] == 1
+        assert len(data["servers"]) == 1
+
+    def test_list_servers_tenant_admin(self, app_with_tenant_admin, mock_db_session):
+        """Tenant admin sees own + platform servers."""
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.list_all = AsyncMock(return_value=([], 0))
+
+            with TestClient(app_with_tenant_admin) as client:
+                response = client.get(BASE)
+
+        assert response.status_code == 200
+
+    def test_list_servers_403_viewer(self, app_with_no_tenant_user, mock_db_session):
+        """Viewer gets 403 (not cpi-admin or tenant-admin)."""
+        with TestClient(app_with_no_tenant_user) as client:
+            response = client.get(BASE)
+
+        assert response.status_code == 403
+
+
+class TestCreateServer:
+    """POST /v1/admin/external-mcp-servers"""
+
+    def test_create_server_success(self, app_with_cpi_admin, mock_db_session):
+        """CPI admin creates a new server (201)."""
+        mock_srv = _mock_server()
+
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_name = AsyncMock(return_value=None)
+            MockRepo.return_value.create = AsyncMock(return_value=mock_srv)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    BASE,
+                    json={
+                        "name": "linear-mcp",
+                        "display_name": "Linear",
+                        "base_url": "https://mcp.linear.app/sse",
+                    },
+                )
+
+        assert response.status_code == 201
+
+    def test_create_server_409_duplicate(self, app_with_cpi_admin, mock_db_session):
+        """Returns 409 when name already exists."""
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_name = AsyncMock(return_value=_mock_server())
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(
+                    BASE,
+                    json={
+                        "name": "linear-mcp",
+                        "display_name": "Linear",
+                        "base_url": "https://mcp.linear.app/sse",
+                    },
+                )
+
+        assert response.status_code == 409
+
+
+class TestGetServer:
+    """GET /v1/admin/external-mcp-servers/{server_id}"""
+
+    def test_get_server_detail(self, app_with_cpi_admin, mock_db_session):
+        """Returns server detail with tools."""
+        server_id = uuid4()
+        tool = _mock_tool()
+        mock_srv = _mock_server(id=server_id, tools=[tool])
+
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(f"{BASE}/{server_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["tools"]) == 1
+        assert data["tools"][0]["name"] == "create_issue"
+
+    def test_get_server_404(self, app_with_cpi_admin, mock_db_session):
+        """Returns 404 when not found."""
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=None)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(f"{BASE}/{uuid4()}")
+
+        assert response.status_code == 404
+
+
+class TestUpdateServer:
+    """PUT /v1/admin/external-mcp-servers/{server_id}"""
+
+    def test_update_server_success(self, app_with_cpi_admin, mock_db_session):
+        """Updates server fields."""
+        server_id = uuid4()
+        mock_srv = _mock_server(id=server_id)
+
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+            MockRepo.return_value.update = AsyncMock(return_value=mock_srv)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.put(
+                    f"{BASE}/{server_id}",
+                    json={"display_name": "Updated Linear"},
+                )
+
+        assert response.status_code == 200
+
+
+class TestDeleteServer:
+    """DELETE /v1/admin/external-mcp-servers/{server_id}"""
+
+    def test_delete_server_success(self, app_with_cpi_admin, mock_db_session):
+        """Deletes server (204)."""
+        server_id = uuid4()
+        mock_srv = _mock_server(id=server_id)
+
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+            MockRepo.return_value.delete = AsyncMock()
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.delete(f"{BASE}/{server_id}")
+
+        assert response.status_code == 204
+
+    def test_delete_server_404(self, app_with_cpi_admin, mock_db_session):
+        """Returns 404 when not found."""
+        with patch(REPO_PATH) as MockRepo:
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=None)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.delete(f"{BASE}/{uuid4()}")
+
+        assert response.status_code == 404
+
+
+class TestTestConnection:
+    """POST /v1/admin/external-mcp-servers/{server_id}/test-connection"""
+
+    def test_test_connection_success(self, app_with_cpi_admin, mock_db_session):
+        """Successful connection test updates health."""
+        server_id = uuid4()
+        mock_srv = _mock_server(id=server_id)
+
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.latency_ms = 42
+        mock_result.error = None
+        mock_result.server_info = {"version": "1.0"}
+        mock_result.tools_discovered = 5
+
+        with (
+            patch(REPO_PATH) as MockRepo,
+            patch(MCP_CLIENT_PATH) as MockMCPClient,
+        ):
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+            MockRepo.return_value.update_health_status = AsyncMock()
+            MockMCPClient.return_value.test_connection = AsyncMock(return_value=mock_result)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(f"{BASE}/{server_id}/test-connection")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["latency_ms"] == 42
+
+
+class TestSyncTools:
+    """POST /v1/admin/external-mcp-servers/{server_id}/sync-tools"""
+
+    def test_sync_tools_success(self, app_with_cpi_admin, mock_db_session):
+        """Discovers and syncs tools from external server."""
+        server_id = uuid4()
+        mock_srv = _mock_server(id=server_id, tools=[_mock_tool()])
+        # Second call after sync returns server with tools
+        mock_srv_refreshed = _mock_server(id=server_id, tools=[_mock_tool()])
+
+        mock_discovered = MagicMock()
+        mock_discovered.name = "create_issue"
+        mock_discovered.description = "Create issue"
+        mock_discovered.input_schema = {"type": "object"}
+
+        with (
+            patch(REPO_PATH) as MockRepo,
+            patch(MCP_CLIENT_PATH) as MockMCPClient,
+        ):
+            MockRepo.return_value.get_by_id = AsyncMock(
+                side_effect=[mock_srv, mock_srv_refreshed]
+            )
+            MockRepo.return_value.sync_tools = AsyncMock(return_value=(1, 0))
+            MockMCPClient.return_value.list_tools = AsyncMock(
+                return_value=[mock_discovered]
+            )
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.post(f"{BASE}/{server_id}/sync-tools")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["synced_count"] == 1
+        assert data["removed_count"] == 0
+
+
+class TestUpdateTool:
+    """PATCH /v1/admin/external-mcp-servers/{server_id}/tools/{tool_id}"""
+
+    def test_update_tool_enabled(self, app_with_cpi_admin, mock_db_session):
+        """Enables/disables a tool."""
+        server_id = uuid4()
+        tool_id = uuid4()
+        mock_srv = _mock_server(id=server_id)
+        mock_t = _mock_tool(id=tool_id, enabled=False)
+
+        with (
+            patch(REPO_PATH) as MockRepo,
+            patch(TOOL_REPO_PATH) as MockToolRepo,
+        ):
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+            MockToolRepo.return_value.update_enabled = AsyncMock(return_value=mock_t)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.patch(
+                    f"{BASE}/{server_id}/tools/{tool_id}",
+                    json={"enabled": False},
+                )
+
+        assert response.status_code == 200
+
+    def test_update_tool_404(self, app_with_cpi_admin, mock_db_session):
+        """Returns 404 when tool not found."""
+        server_id = uuid4()
+        mock_srv = _mock_server(id=server_id)
+
+        with (
+            patch(REPO_PATH) as MockRepo,
+            patch(TOOL_REPO_PATH) as MockToolRepo,
+        ):
+            MockRepo.return_value.get_by_id = AsyncMock(return_value=mock_srv)
+            MockToolRepo.return_value.update_enabled = AsyncMock(return_value=None)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.patch(
+                    f"{BASE}/{server_id}/tools/{uuid4()}",
+                    json={"enabled": True},
+                )
+
+        assert response.status_code == 404
+
+
+class TestInternalGatewayEndpoint:
+    """GET /v1/internal/external-mcp-servers"""
+
+    def test_list_for_gateway_success(self, app_with_cpi_admin, mock_db_session):
+        """Internal endpoint returns enabled servers with credentials."""
+        tool = _mock_tool()
+        mock_srv = _mock_server(tools=[tool])
+
+        with (
+            patch(REPO_PATH) as MockRepo,
+            patch(VAULT_PATH) as MockVault,
+        ):
+            MockRepo.return_value.list_enabled_with_tools = AsyncMock(
+                return_value=[mock_srv]
+            )
+            MockVault.return_value.retrieve_credential = AsyncMock(return_value=None)
+
+            with TestClient(app_with_cpi_admin) as client:
+                response = client.get(INTERNAL_BASE)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["servers"]) == 1

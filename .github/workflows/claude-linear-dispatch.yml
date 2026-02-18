@@ -34,8 +34,8 @@ jobs:
     timeout-minutes: 15
     outputs:
       fast_path: ${{ steps.check-fast.outputs.fast_path }}
-      issue_num: ${{ steps.create-issue.outputs.issue_num }}
-      issue_url: ${{ steps.create-issue.outputs.issue_url }}
+      issue_num: ${{ steps.create-issue.outputs.issue_num || steps.dedup.outputs.issue_num }}
+      issue_url: ${{ steps.create-issue.outputs.issue_url || steps.dedup.outputs.issue_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -85,12 +85,10 @@ jobs:
         run: |
           echo "::notice title=AI Factory::Job=${{ github.job }}, Workflow=${{ github.workflow }}, Model=sonnet-4-5, MaxTurns=5, Stage=council"
 
-      # Extract Claude's report from execution log and create GitHub issue
-      - name: Create Council Issue
-        id: create-issue
+      # Extract Claude's Council report from execution log
+      - name: Extract Council Report
+        id: extract-report
         if: steps.council.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           TICKET="${{ github.event.client_payload.ticket_id }}"
           TITLE="${{ github.event.client_payload.ticket_title }}"
@@ -135,6 +133,41 @@ jobs:
           echo "=== Council body preview ==="
           head -15 council-body.md
           echo "=== ($(wc -l < council-body.md | tr -d ' ') lines total) ==="
+
+      # Check if a GitHub issue already exists for this ticket (dedup guard)
+      - name: Check Existing Issue
+        id: dedup
+        if: steps.council.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TICKET="${{ github.event.client_payload.ticket_id }}"
+          # Search for open issues with the ticket label
+          EXISTING=$(gh issue list --label "$TICKET" --state open --json number,title --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
+            echo "Issue #${EXISTING} already exists for ${TICKET} — skipping creation"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "issue_num=${EXISTING}" >> "$GITHUB_OUTPUT"
+            ISSUE_URL="https://github.com/stoa-platform/stoa/issues/${EXISTING}"
+            echo "issue_url=${ISSUE_URL}" >> "$GITHUB_OUTPUT"
+            # Post updated Council report as comment on existing issue
+            if [ -f council-body.md ] && [ -s council-body.md ]; then
+              gh issue comment "$EXISTING" --body "**Updated Council Report** (re-dispatch)\n\n$(cat council-body.md)" || true
+            fi
+          else
+            echo "No existing issue for ${TICKET}"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Create GitHub issue (only if no existing issue found)
+      - name: Create Council Issue
+        id: create-issue
+        if: steps.council.outcome == 'success' && steps.dedup.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TICKET="${{ github.event.client_payload.ticket_id }}"
+          TITLE="${{ github.event.client_payload.ticket_title }}"
 
           # Create label (idempotent)
           gh label create "${TICKET}" --color "0075ca" --description "Linear ticket" --force 2>/dev/null || true

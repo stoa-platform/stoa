@@ -236,6 +236,13 @@ jobs:
 
             echo "Processing ${TICKET_ID} (score: ${SCORE})"
 
+            # Dedup guard: skip if GitHub issue already exists for this ticket
+            EXISTING_ISSUE=$(gh issue list --label "$TICKET_ID" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+            if [ -n "$EXISTING_ISSUE" ] && [ "$EXISTING_ISSUE" != "null" ]; then
+              echo "Issue #${EXISTING_ISSUE} already exists for ${TICKET_ID} — skipping"
+              continue
+            fi
+
             # Sync council:ticket-go label to Linear
             if [ -n "$LINEAR_API_KEY" ]; then
               LINEAR_ISSUE_ID=$(jq -r --arg tid "$TICKET_ID" '.[] | select(.identifier == $tid) | .id' eligible-tickets.json)

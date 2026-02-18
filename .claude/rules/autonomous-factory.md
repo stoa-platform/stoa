@@ -48,6 +48,27 @@ All workflows include these safety measures:
 - **Ask mode enforcement** — rule changes (`.claude/rules/`) are always Ask mode, never auto-merged
 - **Timeouts** — every job has an explicit `timeout-minutes` (15-60)
 - **Concurrency groups** — prevent parallel runs on the same issue/PR
+- **Council dedup guards** — label-based state machine prevents double Council runs (see below)
+
+### Council Label State Machine
+
+Labels track the Council pipeline state on each GitHub issue. Guards at each stage prevent re-runs:
+
+```
+[no labels]
+  → council-validated    (S1 passed — ticket pertinence)
+  → ship-fast-path       (optional — Ship ≤5pts, S2 will be skipped)
+  → plan-validated       (S2 passed — plan validation, or auto-set by fast-path)
+```
+
+| Guard | Workflow | Prevents |
+|-------|----------|----------|
+| Skip S1 if `council-validated` exists | L1 (issue-to-pr) | Re-labeling `claude-implement` re-runs Council |
+| Skip S2 if `plan-validated` exists | L1 (issue-to-pr) | Re-commenting `/go` re-runs plan validation |
+| Skip issue creation if ticket label exists | L3 (linear-dispatch) | n8n re-dispatch creates duplicate issues |
+| Skip issue creation if ticket label exists | L3.5 (autopilot-scan) | Daily scan creates duplicate issues |
+
+**Cross-workflow dedup**: L3 and L3.5 both create issues with `{TICKET_ID}` as a label. Before creating, they search for open issues with that label. If found, the new Council report is posted as a comment on the existing issue instead.
 
 ## H24 Scaling — Progressive Velocity Control
 

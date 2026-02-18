@@ -29,6 +29,33 @@ GRAFANA_URL="https://console.${BASE_DOMAIN}/grafana"
 OPENSEARCH_URL="https://opensearch.${BASE_DOMAIN}"
 CERTS_DIR="${MTLS_CERTS_DIR:-$SCRIPT_DIR/certs}"
 
+# Demo persona passwords — sourced from Infisical vault (e2e-personas)
+# Fallback to env vars if Infisical unavailable
+INFISICAL_PROJECT_ID="97972ffc-990b-4d28-9c4d-0664d217f03b"
+_get_persona_password() {
+    local name="$1"
+    local secret_name
+    secret_name="$(echo "${name}_PASSWORD" | tr '[:lower:]' '[:upper:]')"
+    # Try env var first (CI injects these)
+    eval "local env_val=\"\${${secret_name}:-}\""
+    if [ -n "$env_val" ]; then echo "$env_val"; return; fi
+    # Try Infisical
+    local token="${INFISICAL_TOKEN:-$(infisical-token --raw 2>/dev/null || true)}"
+    if [ -n "$token" ]; then
+        INFISICAL_TOKEN="$token" infisical secrets get "$secret_name" \
+            --env=prod --path="/e2e-personas" \
+            --projectId="$INFISICAL_PROJECT_ID" \
+            --plain 2>/dev/null && return
+    fi
+    echo ""
+}
+ART3MIS_PASSWORD="$(_get_persona_password art3mis)"
+PARZIVAL_PASSWORD="$(_get_persona_password parzival)"
+
+if [ -z "$ART3MIS_PASSWORD" ]; then
+    echo -e "${YELLOW}[WARN]${NC} Could not fetch art3mis password from Infisical or env. Token checks will fail."
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -157,7 +184,7 @@ fi
 # Token issuance (art3mis — used throughout)
 TOKEN_START=$(date +%s%N)
 TOKEN_RESPONSE=$(curl -s -X POST "${AUTH_URL}/realms/stoa/protocol/openid-connect/token" \
-    -d "grant_type=password&client_id=control-plane-ui&username=art3mis&password=samantha2045" \
+    -d "grant_type=password&client_id=control-plane-ui&username=art3mis&password=${ART3MIS_PASSWORD}" \
     --max-time 10 2>/dev/null || echo '{}')
 TOKEN_END=$(date +%s%N)
 TOKEN_MS=$(( (TOKEN_END - TOKEN_START) / 1000000 ))

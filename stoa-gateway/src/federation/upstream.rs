@@ -14,7 +14,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
-use crate::mcp::tools::{Tool, ToolContext, ToolDefinition, ToolError, ToolResult, ToolSchema};
+use crate::mcp::tools::{
+    Tool, ToolAnnotations, ToolContext, ToolDefinition, ToolError, ToolResult, ToolSchema,
+};
 use crate::uac::Action;
 
 /// Configuration for upstream MCP client
@@ -277,8 +279,14 @@ fn parse_tool_definition(json: &Value) -> Option<ToolDefinition> {
                 .unwrap_or_default(),
         },
         output_schema: json.get("outputSchema").cloned(),
-        annotations: None, // TODO: Parse annotations from upstream
-        tenant_id: None,   // Upstream tools are global
+        annotations: json.get("annotations").map(|a| ToolAnnotations {
+            title: a.get("title").and_then(|v| v.as_str()).map(String::from),
+            read_only_hint: a.get("readOnlyHint").and_then(|v| v.as_bool()),
+            destructive_hint: a.get("destructiveHint").and_then(|v| v.as_bool()),
+            idempotent_hint: a.get("idempotentHint").and_then(|v| v.as_bool()),
+            open_world_hint: a.get("openWorldHint").and_then(|v| v.as_bool()),
+        }),
+        tenant_id: None, // Upstream tools are global
     })
 }
 
@@ -359,9 +367,11 @@ impl Tool for FederatedTool {
     }
 
     fn required_action(&self) -> Action {
-        // Default to Read for federated tools
-        // TODO: Infer from annotations if available
-        Action::Read
+        match &self.definition.annotations {
+            Some(ann) if ann.destructive_hint == Some(true) => Action::Delete,
+            Some(ann) if ann.read_only_hint == Some(true) => Action::Read,
+            _ => Action::Read, // Safe default
+        }
     }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
@@ -405,6 +415,7 @@ impl Tool for FederatedTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_transport_type_from_str() {
@@ -466,5 +477,138 @@ mod tests {
             error: "oops".to_string(),
         };
         assert!(err.to_string().contains("test"));
+    }
+
+    #[test]
+    fn test_parse_annotations_from_upstream() {
+        let json = json!({
+            "name": "delete_file",
+            "description": "Deletes a file permanently",
+            "inputSchema": {"type": "object"},
+            "annotations": {
+                "title": "Delete File",
+                "readOnlyHint": false,
+                "destructiveHint": true,
+                "idempotentHint": false,
+                "openWorldHint": true
+            }
+        });
+
+        let def = parse_tool_definition(&json).unwrap();
+        let ann = def.annotations.unwrap();
+        assert_eq!(ann.title, Some("Delete File".to_string()));
+        assert_eq!(ann.read_only_hint, Some(false));
+        assert_eq!(ann.destructive_hint, Some(true));
+        assert_eq!(ann.idempotent_hint, Some(false));
+        assert_eq!(ann.open_world_hint, Some(true));
+    }
+
+    #[test]
+    fn test_parse_annotations_missing() {
+        let json = json!({
+            "name": "simple_tool",
+            "description": "No annotations",
+            "inputSchema": {"type": "object"}
+        });
+
+        let def = parse_tool_definition(&json).unwrap();
+        assert!(def.annotations.is_none());
+    }
+
+    #[test]
+    fn test_federated_action_destructive() {
+        let config = UpstreamMcpConfig::default();
+        let client = Arc::new(UpstreamMcpClient::new(config));
+        let def = ToolDefinition {
+            name: "delete_tool".to_string(),
+            description: "Deletes stuff".to_string(),
+            input_schema: ToolSchema {
+                schema_type: "object".to_string(),
+                properties: HashMap::new(),
+                required: vec![],
+            },
+            output_schema: None,
+            annotations: Some(ToolAnnotations {
+                title: None,
+                read_only_hint: Some(false),
+                destructive_hint: Some(true),
+                idempotent_hint: None,
+                open_world_hint: None,
+            }),
+            tenant_id: None,
+        };
+
+        let tool = FederatedTool::new(
+            "test_delete".to_string(),
+            def,
+            client.clone(),
+            "delete_tool".to_string(),
+            "tenant-a".to_string(),
+        );
+
+        assert_eq!(tool.required_action(), Action::Delete);
+    }
+
+    #[test]
+    fn test_federated_action_read_only() {
+        let config = UpstreamMcpConfig::default();
+        let client = Arc::new(UpstreamMcpClient::new(config));
+        let def = ToolDefinition {
+            name: "read_tool".to_string(),
+            description: "Reads data".to_string(),
+            input_schema: ToolSchema {
+                schema_type: "object".to_string(),
+                properties: HashMap::new(),
+                required: vec![],
+            },
+            output_schema: None,
+            annotations: Some(ToolAnnotations {
+                title: None,
+                read_only_hint: Some(true),
+                destructive_hint: Some(false),
+                idempotent_hint: None,
+                open_world_hint: None,
+            }),
+            tenant_id: None,
+        };
+
+        let tool = FederatedTool::new(
+            "test_read".to_string(),
+            def,
+            client,
+            "read_tool".to_string(),
+            "tenant-a".to_string(),
+        );
+
+        assert_eq!(tool.required_action(), Action::Read);
+    }
+
+    #[test]
+    fn test_federated_action_default() {
+        let config = UpstreamMcpConfig::default();
+        let client = Arc::new(UpstreamMcpClient::new(config));
+        let def = ToolDefinition {
+            name: "unknown_tool".to_string(),
+            description: "No annotations".to_string(),
+            input_schema: ToolSchema {
+                schema_type: "object".to_string(),
+                properties: HashMap::new(),
+                required: vec![],
+            },
+            output_schema: None,
+            annotations: None,
+            tenant_id: None,
+        };
+
+        let tool = FederatedTool::new(
+            "test_unknown".to_string(),
+            def,
+            client,
+            "unknown_tool".to_string(),
+            "tenant-a".to_string(),
+        );
+
+        // No annotations → defaults to Read
+        assert_eq!(tool.required_action(), Action::Read);
     }
 }

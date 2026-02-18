@@ -133,9 +133,17 @@ impl Tool for ComposedTool {
     }
 
     fn required_action(&self) -> Action {
-        // Composed tools default to Read action
-        // TODO: Infer from step actions
-        Action::Read
+        // Return the most "dangerous" action from all steps
+        let mut max_action = Action::Read;
+        for step in &self.steps {
+            if let Some(tool) = self.registry.get(&step.tool_name) {
+                let action = tool.required_action();
+                if action_severity(&action) > action_severity(&max_action) {
+                    max_action = action;
+                }
+            }
+        }
+        max_action
     }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
@@ -217,6 +225,26 @@ impl Tool for ComposedTool {
             warn!(tool = %self.name, "Composed tool has no steps");
             Ok(ToolResult::text("{}"))
         }
+    }
+}
+
+/// Map action to severity level for escalation comparison
+fn action_severity(action: &Action) -> u8 {
+    match action {
+        Action::Read | Action::ViewMetrics | Action::ViewLogs | Action::ViewAudit => 0,
+        Action::List | Action::Search => 1,
+        Action::Create
+        | Action::Update
+        | Action::CreateApi
+        | Action::UpdateApi
+        | Action::PublishApi
+        | Action::DeprecateApi
+        | Action::Subscribe
+        | Action::ManageSubscription
+        | Action::ManageUsers
+        | Action::ManageTenants
+        | Action::ManageContracts => 2,
+        Action::Delete | Action::DeleteApi | Action::Unsubscribe => 3,
     }
 }
 
@@ -359,5 +387,104 @@ mod tests {
             .unwrap();
 
         assert_eq!(resolved["dest"], "from_step_0");
+    }
+
+    #[test]
+    fn test_action_severity_ordering() {
+        assert!(action_severity(&Action::Read) < action_severity(&Action::List));
+        assert!(action_severity(&Action::List) < action_severity(&Action::Create));
+        assert!(action_severity(&Action::Create) < action_severity(&Action::Delete));
+    }
+
+    #[test]
+    fn test_composed_action_escalation() {
+        use crate::mcp::tools::dynamic_tool::DynamicTool;
+
+        let registry = Arc::new(ToolRegistry::new());
+
+        // Register a read tool and a delete tool
+        let read_tool = DynamicTool::new(
+            "read_step",
+            "Reads data",
+            "http://localhost/read",
+            "GET",
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties: HashMap::new(),
+                required: vec![],
+            },
+            "test-tenant",
+        )
+        .with_action(Action::Read);
+
+        let delete_tool = DynamicTool::new(
+            "delete_step",
+            "Deletes data",
+            "http://localhost/delete",
+            "DELETE",
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties: HashMap::new(),
+                required: vec![],
+            },
+            "test-tenant",
+        )
+        .with_action(Action::Delete);
+
+        registry.register(Arc::new(read_tool));
+        registry.register(Arc::new(delete_tool));
+
+        let schema = ToolSchema {
+            schema_type: "object".to_string(),
+            properties: HashMap::new(),
+            required: vec![],
+        };
+
+        let composed = ComposedTool::new(
+            "read_then_delete",
+            "Reads then deletes",
+            schema,
+            vec![
+                CompositionStep {
+                    tool_name: "read_step".to_string(),
+                    input_mapping: HashMap::new(),
+                    description: None,
+                },
+                CompositionStep {
+                    tool_name: "delete_step".to_string(),
+                    input_mapping: HashMap::new(),
+                    description: None,
+                },
+            ],
+            registry,
+        );
+
+        // Should escalate to Delete (the most dangerous action)
+        assert_eq!(composed.required_action(), Action::Delete);
+    }
+
+    #[test]
+    fn test_composed_action_no_registered_tools() {
+        let registry = Arc::new(ToolRegistry::new());
+        let schema = ToolSchema {
+            schema_type: "object".to_string(),
+            properties: HashMap::new(),
+            required: vec![],
+        };
+
+        let composed = ComposedTool::new(
+            "orphan",
+            "Steps reference unknown tools",
+            schema,
+            vec![CompositionStep {
+                tool_name: "nonexistent".to_string(),
+                input_mapping: HashMap::new(),
+                description: None,
+            }],
+            registry,
+        );
+
+        // Unknown tools are skipped, defaults to Read
+        assert_eq!(composed.required_action(), Action::Read);
     }
 }

@@ -48,6 +48,7 @@ import {
   Users,
   KeyRound,
   Share2,
+  Sparkles,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
@@ -192,6 +193,12 @@ const navigationSections: NavSection[] = [
         name: 'Federation',
         href: '/federation/accounts',
         icon: Share2,
+        permission: 'apis:read',
+      },
+      {
+        name: 'Skills',
+        href: '/skills',
+        icon: Sparkles,
         permission: 'apis:read',
       },
     ],

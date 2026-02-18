@@ -112,7 +112,7 @@ pub async fn mcp_capabilities(State(state): State<AppState>) -> impl IntoRespons
         protocol_version: MCP_PROTOCOL_VERSION.to_string(),
         capabilities: Capabilities {
             tools: ToolsCapability {
-                list_changed: false, // We don't support dynamic tool changes yet
+                list_changed: true, // CRD watcher pushes notifications/tools/list_changed via SSE
             },
             resources: ResourcesCapability {
                 subscribe: false,

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# DEPRECATED: Use scripts/ai-ops/ai-factory-notify.sh instead.
+# This script is kept for backward compatibility but will be removed.
+#
 # council-slack-report.sh — Send a rich Council validation report to Slack
 # Usage: ./council-slack-report.sh <ticket> <score> <verdict> <summary> [issue_url]
 # Called by GitHub Actions after Council validation.

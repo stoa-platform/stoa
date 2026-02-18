@@ -213,6 +213,11 @@ impl SkillResolver {
         result
     }
 
+    /// Return all stored skills (cloned snapshot).
+    pub fn list_all(&self) -> Vec<StoredSkill> {
+        self.store.read().clone()
+    }
+
     /// Number of skills in the store.
     pub fn count(&self) -> usize {
         self.store.read().len()
